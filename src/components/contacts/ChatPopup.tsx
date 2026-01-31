@@ -780,7 +780,8 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               borderColor: `${colors.secondary}30`,
               background: isDark ? 
                 `linear-gradient(to top, ${colors.surfaceDark}, transparent)` : 
-                `linear-gradient(to top, ${colors.surfaceLight}, transparent)`
+                `linear-gradient(to top, ${colors.surfaceLight}, transparent)`,
+              paddingBottom: 'env(safe-area-inset-bottom, 0px)'
             }}
           >
             {/* single notice above input */}
@@ -813,8 +814,8 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               </div>
 
               {/* Hidden file inputs */}
-              <input ref={fileInputRef} type="file" accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" className="hidden" onChange={handleImageSelected} />
-              <input ref={pdfInputRef} type="file" accept=".pdf" className="hidden" onChange={handlePDFSelected} />
+              <input ref={fileInputRef} type="file" accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" className="hidden" onChange={handleImageSelected} aria-label="Upload image" />
+              <input ref={pdfInputRef} type="file" accept=".pdf" className="hidden" onChange={handlePDFSelected} aria-label="Upload PDF" />
 
               {/* Bottom: text input + send button */}
               <div className="flex items-center gap-2">

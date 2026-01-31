@@ -621,10 +621,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
           <WelcomeTrialPopup />
           <div className="h-[100dvh] bg-background app-layout-mobile overflow-hidden flex flex-col">
-            <div className="relative">
-              <AppHeader unreadTotal={unreadData.unreadTotal} />
-            </div>
-            <main className="flex-1">
+            <AppHeader unreadTotal={unreadData.unreadTotal} />
+            <main className="flex-1 pt-[var(--app-header-h)] overflow-hidden">
               {content}
             </main>
             <PresenceBeacon />

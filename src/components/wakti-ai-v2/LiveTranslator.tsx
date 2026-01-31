@@ -10,7 +10,8 @@ interface LiveTranslatorProps {
   onBack?: () => void;
 }
 
-const MAX_RECORD_SECONDS = 10;
+const MAX_USER_RECORD_SECONDS = 15;
+const MAX_AI_RESPONSE_SECONDS = 20;
 
 // Complete language list
 const TRANSLATION_LANGUAGES = [
@@ -112,7 +113,7 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
   const [status, setStatus] = useState<'idle' | 'connecting' | 'ready' | 'listening' | 'processing' | 'speaking'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [isHolding, setIsHolding] = useState(false);
-  const [countdown, setCountdown] = useState(MAX_RECORD_SECONDS);
+  const [countdown, setCountdown] = useState(MAX_USER_RECORD_SECONDS);
   const [userTranscript, setUserTranscript] = useState('');
   const [translatedText, setTranslatedText] = useState('');
 
@@ -130,6 +131,7 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const connectionLostTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isHoldingRef = useRef(false);
+  const aiResponseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const targetLanguageRef = useRef(initialTargetLanguage);
   const spokenLanguageRef = useRef(initialSpokenLanguage);
   const VALID_VOICES = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse'] as const;
@@ -167,6 +169,10 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
     if (connectionLostTimeoutRef.current) {
       clearTimeout(connectionLostTimeoutRef.current);
       connectionLostTimeoutRef.current = null;
+    }
+    if (aiResponseTimeoutRef.current) {
+      clearTimeout(aiResponseTimeoutRef.current);
+      aiResponseTimeoutRef.current = null;
     }
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
@@ -281,11 +287,27 @@ INSTRUCTIONS:
       case 'response.audio_transcript.delta':
         setStatus('speaking');
         if (msg.delta) setTranslatedText(prev => prev + msg.delta);
+        
+        // Start AI response timeout on first delta
+        if (!aiResponseTimeoutRef.current) {
+          aiResponseTimeoutRef.current = setTimeout(() => {
+            console.log('[LiveTranslator] AI response exceeded 20s, stopping');
+            if (dcRef.current?.readyState === 'open') {
+              dcRef.current.send(JSON.stringify({ type: 'response.cancel' }));
+            }
+            setStatus('ready');
+            aiResponseTimeoutRef.current = null;
+          }, MAX_AI_RESPONSE_SECONDS * 1000);
+        }
         break;
       case 'response.audio_transcript.done':
         if (msg.transcript) setTranslatedText(msg.transcript);
         break;
       case 'response.done':
+        if (aiResponseTimeoutRef.current) {
+          clearTimeout(aiResponseTimeoutRef.current);
+          aiResponseTimeoutRef.current = null;
+        }
         isProcessingResponseRef.current = false;
         setTimeout(() => setStatus('ready'), 300);
         setError(null);
@@ -483,14 +505,14 @@ INSTRUCTIONS:
     setStatus('listening');
     setUserTranscript('');
     setTranslatedText('');
-    setCountdown(MAX_RECORD_SECONDS);
+    setCountdown(MAX_USER_RECORD_SECONDS);
     holdStartRef.current = Date.now();
 
     dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
 
     countdownIntervalRef.current = setInterval(() => {
       const elapsed = Math.floor((Date.now() - holdStartRef.current) / 1000);
-      const remaining = Math.max(0, MAX_RECORD_SECONDS - elapsed);
+      const remaining = Math.max(0, MAX_USER_RECORD_SECONDS - elapsed);
       setCountdown(remaining);
       if (remaining <= 0) stopRecording();
     }, 200);

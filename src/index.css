@@ -105,16 +105,15 @@
     overflow: hidden !important;
   }
 
-  /* Mobile layout uses plain <main>. On this page we manage header spacing inside ProjectDetail. */
+  /* Mobile layout uses plain <main>. ProjectDetail manages its own internal scrolling. */
   @media (max-width: 767px) {
     body.project-detail-page main {
-      padding-top: 0 !important;
       padding-bottom: 0 !important;
-      height: 100dvh !important;
       overflow: hidden !important;
     }
     body.project-detail-page main > * {
       height: 100% !important;
+      max-height: 100% !important;
       overflow: hidden !important;
     }
   }

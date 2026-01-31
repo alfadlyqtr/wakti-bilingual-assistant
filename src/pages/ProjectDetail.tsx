@@ -5838,7 +5838,7 @@ ${fixInstructions}
   }
 
   return (
-    <div className={cn("h-full w-full flex flex-col bg-background overflow-hidden pt-[var(--app-header-h)]", isRTL && "rtl")}>
+    <div className={cn("h-full w-full flex flex-col bg-background overflow-hidden", isRTL && "rtl")}>
 
       {/* Celebratory Modal for Project Completion */}
       {showProjectCompleteModal && (
@@ -5872,7 +5872,7 @@ ${fixInstructions}
         </div>
       ) : (
       <>
-      {/* Builder Tab Content - Mobile Chat/Preview Toggle - FIXED at top, NO scroll */}
+      {/* Builder Tab Content - Mobile Chat/Preview Toggle */}
       <div className="md:hidden px-4 py-2 bg-background/95 dark:bg-[#0c0f14]/95 backdrop-blur-sm border-b border-border/40 shrink-0 z-20">
         <div className="relative flex p-1 bg-muted/30 dark:bg-white/5 rounded-2xl border border-border/50">
           {/* Animated sliding background pill */}
@@ -8418,7 +8418,7 @@ ${fixInstructions}
           </div>
 
           {/* Preview/Code Content - Full Height with top padding for fixed header - ONLY IFRAME SCROLLS */}
-          <div className="flex-1 min-h-0 sandpack-preview-container relative pt-[70px] md:pt-[112px] pb-0 overflow-hidden">
+          <div className="flex-1 min-h-0 sandpack-preview-container relative pt-[56px] pb-0 overflow-hidden">
             <Suspense fallback={
               <div className="w-full h-full flex items-center justify-center bg-zinc-950 text-white">
                 <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
@@ -8921,85 +8921,76 @@ ${fixInstructions}
             }
             
             // Apply direct edits to the code - NO AI PROMPTS, NO CREDITS!
-            const currentCode = generatedFiles['/App.js'] || '';
-            
-            // Use the direct style editor for ALL changes
-            const result = applyDirectEdits(currentCode, selectedElementInfo, changes);
-            
-            if (result.success) {
-              // Validate the resulting JSX before applying
-              if (validateJSX(result.code)) {
-                // Push current state to history before applying changes
-                visualEditHistory.pushState(generatedFiles, result.message);
-                
-                const newFiles = {
-                  ...generatedFiles,
-                  '/App.js': result.code
-                };
-                setGeneratedFiles(newFiles);
-                // IMPORTANT: keep editor content in sync; Save button uses codeContent
-                setCodeContent(result.code);
-                
-                // AUTO-SAVE: Persist changes immediately to database
-                (async () => {
-                  try {
-                    const rows = Object.entries(newFiles).map(([path, content]) => ({
-                      project_id: id,
-                      path,
-                      content,
-                    }));
-                    await (supabase
-                      .from('project_files' as any)
-                      .upsert(rows, { onConflict: 'project_id,path' }) as any);
-                    
-                    toast.success(
-                      isRTL
-                        ? `✓ تم الحفظ: ${result.message}`
-                        : `✓ Saved: ${result.message}`
-                    );
-                  } catch (err) {
-                    console.error('[Visual Edit] Auto-save failed:', err);
-                    toast.warning(
-                      isRTL
-                        ? `تم التطبيق: ${result.message} (اضغط حفظ يدوياً)`
-                        : `Applied: ${result.message} (click Save to persist)`
-                    );
-                  }
-                })();
-              } else {
-                // JSX validation failed - shouldn't happen but fallback to simple text replace
-                console.warn('[Visual Edits] JSX validation failed, trying simple replace');
-                if (changes.text && selectedElementInfo.innerText) {
-                  const simpleCode = currentCode.replace(selectedElementInfo.innerText, changes.text);
-                  const newFiles = {
-                    ...generatedFiles,
-                    '/App.js': simpleCode
-                  };
-                  setGeneratedFiles(newFiles);
-                  setCodeContent(simpleCode);
-                  
-                  // AUTO-SAVE fallback too
-                  (async () => {
-                    try {
-                      const rows = Object.entries(newFiles).map(([path, content]) => ({
-                        project_id: id,
-                        path,
-                        content,
-                      }));
-                      await (supabase
-                        .from('project_files' as any)
-                        .upsert(rows, { onConflict: 'project_id,path' }) as any);
-                      toast.success(isRTL ? '✓ تم حفظ النص!' : '✓ Text saved!');
-                    } catch (err) {
-                      toast.success(isRTL ? 'تم تحديث النص!' : 'Text updated!');
-                    }
-                  })();
-                } else {
-                  toast.error(isRTL ? 'فشل تطبيق التغييرات' : 'Failed to apply changes');
-                }
+            // FIX A: Try ALL code files (multi-file projects), not just /App.js
+            const candidatePaths = Object.keys(generatedFiles).filter((p) =>
+              /\.(jsx?|tsx?)$/.test(p)
+            );
+            // Prefer /App.js first if it exists, then the rest
+            candidatePaths.sort((a, b) => (a === '/App.js' ? -1 : b === '/App.js' ? 1 : 0));
+
+            let applied = false;
+            let appliedPath: string | null = null;
+            let result: { success: boolean; code: string; message: string } | null = null;
+
+            for (const path of candidatePaths) {
+              const currentCode = generatedFiles[path] || '';
+              const attempt = applyDirectEdits(currentCode, selectedElementInfo, changes);
+
+              if (attempt.success && validateJSX(attempt.code)) {
+                applied = true;
+                appliedPath = path;
+                result = attempt;
+                console.log('[Visual Edit] Found element in:', path);
+                break;
               }
+            }
+
+            if (applied && appliedPath && result) {
+              visualEditHistory.pushState(generatedFiles, result.message);
+
+              const newFiles = {
+                ...generatedFiles,
+                [appliedPath]: result.code,
+              };
+
+              setGeneratedFiles(newFiles);
+
+              // Keep editor content in sync ONLY if we edited /App.js
+              if (appliedPath === '/App.js') {
+                setCodeContent(result.code);
+              }
+
+              // AUTO-SAVE: Persist changes immediately to database
+              const finalResult = result; // capture for async
+              (async () => {
+                try {
+                  const rows = Object.entries(newFiles).map(([path, content]) => ({
+                    project_id: id,
+                    path,
+                    content,
+                  }));
+
+                  await (supabase
+                    .from('project_files' as any)
+                    .upsert(rows, { onConflict: 'project_id,path' }) as any);
+
+                  toast.success(
+                    isRTL
+                      ? `✓ تم الحفظ: ${finalResult.message}`
+                      : `✓ Saved: ${finalResult.message}`
+                  );
+                } catch (err) {
+                  console.error('[Visual Edit] Auto-save failed:', err);
+                  toast.warning(
+                    isRTL
+                      ? `تم التطبيق: ${finalResult.message} (اضغط حفظ يدوياً)`
+                      : `Applied: ${finalResult.message} (click Save to persist)`
+                  );
+                }
+              })();
             } else {
-              // Direct edit failed: do NOT auto-generate an AI prompt.
+              // Direct edit failed on ALL files: do NOT auto-generate an AI prompt.
+              console.warn('[Visual Edit] Could not find element in any file. Tried:', candidatePaths);
               toast.error(
                 isRTL
                   ? 'تعذر تطبيق التعديل مباشرة. جرّب اختيار عنصر آخر أو استخدم "تعديل بالذكاء الاصطناعي".'

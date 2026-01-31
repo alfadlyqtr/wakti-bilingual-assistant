@@ -60,24 +60,45 @@ serve(async (req) => {
                   },
                   {
                     type: 'text',
-                    text: `Extract contact and professional information from this resume/CV document. Return ONLY a valid JSON object with these fields:
+                    text: `Extract ALL information from this resume/CV document. Return ONLY a valid JSON object with these fields:
 {
   "firstName": "string or null",
   "lastName": "string or null", 
   "email": "string or null",
   "phone": "string or null",
-  "companyName": "most recent company or null",
-  "jobTitle": "most recent job title or null",
-  "website": "personal website or LinkedIn URL or null"
+  "location": "city, country or full address or null",
+  "linkedin": "LinkedIn URL or null",
+  "website": "personal website URL or null",
+  "summary": "professional summary/objective text or null",
+  "experience": [
+    {
+      "company": "company name",
+      "position": "job title",
+      "location": "job location or null",
+      "startDate": "start date (e.g., Jan 2020)",
+      "endDate": "end date or Present",
+      "description": "job description/responsibilities or null"
+    }
+  ],
+  "education": [
+    {
+      "school": "institution name",
+      "degree": "degree name (e.g., Bachelor of Science in Computer Science)",
+      "startDate": "start year or null",
+      "endDate": "graduation year or null",
+      "description": "additional details or null"
+    }
+  ],
+  "skills": ["skill1", "skill2", "skill3"]
 }
 
 Rules:
-- Extract ONLY what you can clearly identify
-- For names, split into first and last name
-- For phone, include country code if present
-- For company, use the most recent/current employer
-- For job title, use the most recent/current position
-- Return null for any field you cannot find
+- Extract EVERYTHING you can find from the document
+- For experience, include ALL jobs listed, ordered from most recent to oldest
+- For education, include ALL degrees/certifications
+- For skills, extract all technical and soft skills mentioned
+- For dates, use the format shown in the document
+- Return null or empty array [] for any field you cannot find
 - Return ONLY the JSON object, no other text`
                   }
                 ]
@@ -116,24 +137,22 @@ Rules:
           messages: [
             {
               role: 'system',
-              content: `You are a resume/CV data extractor. The user will provide a base64 encoded document. Try to decode and extract any readable text patterns (emails, phone numbers, names) and return ONLY a valid JSON object with these fields:
+              content: `You are a resume/CV data extractor. The user will provide a base64 encoded document. Try to decode and extract any readable text and return ONLY a valid JSON object with these fields:
 {
   "firstName": "string or null",
   "lastName": "string or null", 
   "email": "string or null",
   "phone": "string or null",
-  "companyName": "most recent company or null",
-  "jobTitle": "most recent job title or null",
-  "website": "personal website or LinkedIn URL or null"
+  "location": "city, country or full address or null",
+  "linkedin": "LinkedIn URL or null",
+  "website": "personal website URL or null",
+  "summary": "professional summary/objective text or null",
+  "experience": [{"company": "name", "position": "title", "location": "loc", "startDate": "date", "endDate": "date or Present", "description": "desc"}],
+  "education": [{"school": "name", "degree": "degree", "startDate": "year", "endDate": "year", "description": "details"}],
+  "skills": ["skill1", "skill2"]
 }
 
-Look for patterns like:
-- Email: anything@domain.com
-- Phone: +XX XXX XXX XXXX or similar
-- Names: usually at the top of the document
-- Job titles: Software Engineer, Manager, etc.
-
-Return null for any field you cannot find. Return ONLY the JSON object.`
+Extract EVERYTHING you can find. Return null or [] for missing fields. Return ONLY the JSON object.`
             },
             {
               role: 'user',

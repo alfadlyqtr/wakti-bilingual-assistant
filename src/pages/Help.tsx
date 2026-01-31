@@ -700,9 +700,8 @@ export default function Help() {
 
   return (
     <div className="w-full">
-      <main className="w-full">
-        <div className="w-full scrollbar-hide">
-          <div className="max-w-6xl mx-auto space-y-8">
+      <div className="w-full">
+        <div className="max-w-6xl mx-auto space-y-8 pb-8">
             {/* Header */}
             <div className="text-center">
               <div className="enhanced-card rounded-2xl p-8 md:p-10">
@@ -1024,7 +1023,6 @@ export default function Help() {
             onSubmitted={refreshSubmissions}
           />
         </div>
-      </main>
-    </div>
+      </div>
   );
 }

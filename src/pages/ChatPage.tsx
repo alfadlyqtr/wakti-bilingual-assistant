@@ -637,7 +637,7 @@ export default function ChatPage() {
 
   return (
     <div 
-      className="flex flex-col h-screen"
+      className="flex flex-col h-full min-h-0"
       style={{ background: colors.background }}
     >
       {/* Header with back button */}
@@ -687,7 +687,7 @@ export default function ChatPage() {
       </div>
 
       {/* Message area */}
-      <ScrollArea className="flex-1 px-3 py-2">
+      <ScrollArea className="flex-1 min-h-0 px-3 py-2">
         {isLoadingMessages ? (
           <div className="flex flex-col gap-3 p-4">
             {[...Array(3)].map((_, i) => (
@@ -721,12 +721,13 @@ export default function ChatPage() {
 
       {/* Composer area */}
       <div 
-        className="px-4 py-3 border-t safe-area-bottom"
+        className="px-4 py-3 border-t"
         style={{
           borderColor: `${colors.secondary}30`,
           background: isDark ? 
             `linear-gradient(to top, ${colors.surfaceDark}, transparent)` : 
-            `linear-gradient(to top, ${colors.surfaceLight}, transparent)`
+            `linear-gradient(to top, ${colors.surfaceLight}, transparent)`,
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)'
         }}
       >
         {/* Notice */}

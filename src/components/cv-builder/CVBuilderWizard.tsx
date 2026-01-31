@@ -12,7 +12,7 @@ import jsPDF from 'jspdf';
 import {
   ArrowLeft, Upload, User, Briefcase, GraduationCap, Award,
   Plus, X, Trash2, Mail, Phone, MapPin, Linkedin, Globe, FileText,
-  Loader2, Eye, ChevronDown, ChevronUp, ArrowRight, Star, Check, LayoutGrid, List, Share2, Download,
+  Loader2, Eye, ChevronDown, ChevronUp, ArrowRight, Star, Check, LayoutGrid, List, Share2, Download, Sparkles,
 } from 'lucide-react';
 
 // ============================================================================
@@ -59,22 +59,6 @@ interface CVTemplate {
   }>;
   layout: 'sidebar-left' | 'sidebar-right' | 'classic' | 'modern' | 'minimal';
 }
-
-// Background patterns for CV cards
-const CV_BACKGROUNDS = [
-  { id: 'none', name: 'None', pattern: '' },
-  { id: 'dots', name: 'Dots', pattern: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23e5e7eb'/%3E%3C/svg%3E")` },
-  { id: 'grid', name: 'Grid', pattern: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h40v40H0V0zm1 1v38h38V1H1z' fill='%23e5e7eb' fill-opacity='0.4'/%3E%3C/svg%3E")` },
-  { id: 'lines', name: 'Lines', pattern: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 20h40M20 0v40' stroke='%23e5e7eb' stroke-width='1' fill='none'/%3E%3C/svg%3E")` },
-  { id: 'diagonal', name: 'Diagonal', pattern: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 20L20 0' stroke='%23e5e7eb' stroke-width='1' fill='none'/%3E%3C/svg%3E")` },
-  { id: 'hexagons', name: 'Hexagons', pattern: `url("data:image/svg+xml,%3Csvg width='28' height='49' viewBox='0 0 28 49' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9z' fill='%23e5e7eb' fill-opacity='0.4'/%3E%3C/svg%3E")` },
-  { id: 'waves', name: 'Waves', pattern: `url("data:image/svg+xml,%3Csvg width='100' height='20' viewBox='0 0 100 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 10c25 0 25-10 50-10s25 10 50 10' stroke='%23e5e7eb' stroke-width='1' fill='none'/%3E%3C/svg%3E")` },
-  { id: 'circles', name: 'Circles', pattern: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='30' cy='30' r='20' stroke='%23e5e7eb' stroke-width='1' fill='none'/%3E%3C/svg%3E")` },
-  { id: 'triangles', name: 'Triangles', pattern: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 5l15 30H5z' stroke='%23e5e7eb' stroke-width='1' fill='none'/%3E%3C/svg%3E")` },
-  { id: 'squares', name: 'Squares', pattern: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='10' y='10' width='20' height='20' stroke='%23e5e7eb' stroke-width='1' fill='none'/%3E%3C/svg%3E")` },
-  { id: 'zigzag', name: 'Zigzag', pattern: `url("data:image/svg+xml,%3Csvg width='40' height='12' viewBox='0 0 40 12' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 6l10-6 10 6 10-6 10 6' stroke='%23e5e7eb' stroke-width='1' fill='none'/%3E%3C/svg%3E")` },
-  { id: 'plus', name: 'Plus', pattern: `url("data:image/svg+xml,%3Csvg width='30' height='30' viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M15 5v20M5 15h20' stroke='%23e5e7eb' stroke-width='1' fill='none'/%3E%3C/svg%3E")` },
-];
 
 // Standard color palette for all templates
 const STANDARD_COLORS = [
@@ -339,7 +323,6 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
   const [step, setStep] = useState<'my-cvs' | 'templates' | 'method' | 'builder' | 'preview'>('my-cvs');
   const [selectedTemplate, setSelectedTemplate] = useState<CVTemplate>(CV_TEMPLATES[0]);
   const [selectedColorIndex, setSelectedColorIndex] = useState(0);
-  const [selectedBgIndex, setSelectedBgIndex] = useState(0);
   const [templateView, setTemplateView] = useState<'grid' | 'list'>('grid');
   const [cvData, setCvData] = useState<CVData>({
     personalInfo: { fullName: '', jobTitle: '', email: user?.email || '', phone: '', location: '', linkedin: '', website: '', summary: '' },
@@ -400,15 +383,69 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
       if (error) throw error;
       if (data?.extracted) {
         const ex = data.extracted;
-        setCvData(p => ({
-          ...p,
-          personalInfo: { ...p.personalInfo, fullName: [ex.firstName, ex.lastName].filter(Boolean).join(' ') || p.personalInfo.fullName, email: ex.email || p.personalInfo.email, phone: ex.phone || p.personalInfo.phone, jobTitle: ex.jobTitle || p.personalInfo.jobTitle },
-          experience: ex.companyName ? [{ id: `e${Date.now()}`, company: ex.companyName, position: ex.jobTitle || '', location: '', startDate: '', endDate: '', current: true, description: '' }] : p.experience,
-        }));
+        
+        // Build experience array from extracted data
+        const extractedExperience: Experience[] = Array.isArray(ex.experience) 
+          ? ex.experience.map((exp: { company?: string; position?: string; location?: string; startDate?: string; endDate?: string; description?: string }, i: number) => ({
+              id: `e${Date.now()}_${i}`,
+              company: exp.company || '',
+              position: exp.position || '',
+              location: exp.location || '',
+              startDate: exp.startDate || '',
+              endDate: exp.endDate || '',
+              current: exp.endDate?.toLowerCase() === 'present' || exp.endDate?.toLowerCase() === 'current',
+              description: exp.description || '',
+            }))
+          : [];
+        
+        // Build education array from extracted data
+        const extractedEducation: Education[] = Array.isArray(ex.education)
+          ? ex.education.map((edu: { school?: string; degree?: string; startDate?: string; endDate?: string; description?: string }, i: number) => ({
+              id: `ed${Date.now()}_${i}`,
+              school: edu.school || '',
+              degree: edu.degree || '',
+              startDate: edu.startDate || '',
+              endDate: edu.endDate || '',
+              description: edu.description || '',
+            }))
+          : [];
+        
+        // Build skills array from extracted data
+        const extractedSkills: Skill[] = Array.isArray(ex.skills)
+          ? ex.skills.map((skill: string, i: number) => ({
+              id: `s${Date.now()}_${i}`,
+              name: skill,
+              level: 'intermediate' as const,
+            }))
+          : [];
+        
+        setCvData({
+          personalInfo: {
+            fullName: [ex.firstName, ex.lastName].filter(Boolean).join(' ') || '',
+            email: ex.email || user?.email || '',
+            phone: ex.phone || '',
+            jobTitle: ex.experience?.[0]?.position || '',
+            location: ex.location || '',
+            linkedin: ex.linkedin || '',
+            website: ex.website || '',
+            summary: ex.summary || '',
+          },
+          experience: extractedExperience.length > 0 ? extractedExperience : [],
+          education: extractedEducation.length > 0 ? extractedEducation : [],
+          skills: extractedSkills.length > 0 ? extractedSkills : [],
+        });
+        
         toast({ title: t.extracted, description: t.extractedDesc });
-        setStep('builder'); setExpanded(new Set(['personalInfo', 'experience']));
-      } else { toast({ title: t.extractFailed, description: t.extractFailedDesc, variant: 'destructive' }); setStep('builder'); }
-    } catch { toast({ title: t.extractFailed, description: t.extractFailedDesc, variant: 'destructive' }); setStep('builder'); }
+        setStep('builder'); 
+        setExpanded(new Set(['personalInfo', 'experience', 'education', 'skills']));
+      } else { 
+        toast({ title: t.extractFailed, description: t.extractFailedDesc, variant: 'destructive' }); 
+        setStep('builder'); 
+      }
+    } catch { 
+      toast({ title: t.extractFailed, description: t.extractFailedDesc, variant: 'destructive' }); 
+      setStep('builder'); 
+    }
     finally { setIsUploading(false); if (fileRef.current) fileRef.current.value = ''; }
   };
 
@@ -1292,14 +1329,10 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
                     </div>
                   )}
 
-                  {/* Template Preview Area with Background Pattern */}
+                  {/* Template Preview Area */}
                   <div 
                     className="relative h-[300px] overflow-hidden flex items-start justify-center pt-4" 
-                    style={{ 
-                      backgroundColor: '#f8fafc',
-                      backgroundImage: isSelected ? CV_BACKGROUNDS[selectedBgIndex].pattern : '',
-                      backgroundRepeat: 'repeat',
-                    }}
+                    style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.08) 100%)' }}
                   >
                     <div className="transition-transform duration-300">
                       <TemplatePreview
@@ -1358,40 +1391,6 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
                       ))}
                     </div>
 
-                    {/* Background Pattern Selector - Only show when selected */}
-                    {isSelected && (
-                      <div className="pt-3 border-t border-white/10">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-medium text-muted-foreground">{isRTL ? 'الخلفية' : 'Background'}</span>
-                          <span className="text-[10px] text-muted-foreground">{selectedBgIndex + 1}/{CV_BACKGROUNDS.length}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {CV_BACKGROUNDS.map((bg, idx) => (
-                            <button
-                              key={bg.id}
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedBgIndex(idx);
-                              }}
-                              className={`w-10 h-6 rounded-md border transition-all ${
-                                selectedBgIndex === idx
-                                  ? 'border-2 scale-110'
-                                  : 'border-white/20 hover:border-white/40'
-                              }`}
-                              style={{ 
-                                backgroundColor: '#f8fafc',
-                                backgroundImage: bg.pattern,
-                                backgroundRepeat: 'repeat',
-                                borderColor: selectedBgIndex === idx ? templateColor.primary : undefined,
-                              }}
-                              title={bg.name}
-                              aria-label={bg.name}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               );
@@ -1517,68 +1516,162 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
   );
 
   // =========================================================================
-  // SCREEN 2 - CREATE METHOD
+  // SCREEN 2 - CREATE METHOD - LUXURY PRADA/CHANEL/DIOR DESIGN
   // =========================================================================
 
   const CreateMethod = () => (
-    <div className="flex flex-col h-full">
-      <div className="shrink-0 px-4 pt-4 pb-3">
-        <button
-          onClick={() => setStep('templates')}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4"
+    <div className="flex flex-col h-full bg-gradient-to-br from-background via-background to-purple-950/30 overflow-hidden">
+      {/* Decorative Background Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 -right-32 w-96 h-96 rounded-full opacity-20" style={{ background: `radial-gradient(circle, ${currentColor.primary}40, transparent 70%)` }} />
+        <div className="absolute -bottom-20 -left-20 w-80 h-80 rounded-full opacity-15" style={{ background: `radial-gradient(circle, ${currentColor.accent}30, transparent 70%)` }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full opacity-5" style={{ background: `radial-gradient(circle, ${currentColor.primary}, transparent 60%)` }} />
+      </div>
+
+      {/* Premium Header */}
+      <div className="relative shrink-0 px-8 pt-8 pb-6">
+        {/* Back Button - Luxury Glass */}
+        <button 
+          onClick={() => setStep('templates')} 
+          className="group flex items-center gap-3 mb-10 px-5 py-3 rounded-2xl transition-all duration-300 hover:scale-105 active:scale-95"
+          style={{ 
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.03))',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(255,255,255,0.1), inset 0 1px 0 rgba(255,255,255,0.1)',
+            backdropFilter: 'blur(20px)',
+          }}
           title={t.back}
         >
-          <ArrowLeft className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} />
-          <span className="text-sm">{t.back}</span>
+          <div 
+            className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:scale-110" 
+            style={{ 
+              background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})`,
+              boxShadow: `0 4px 20px ${currentColor.primary}50`,
+            }}
+          >
+            <ArrowLeft className={`w-5 h-5 text-white ${isRTL ? 'rotate-180' : ''}`} />
+          </div>
+          <span className="text-sm font-semibold text-foreground tracking-wide">{t.back}</span>
         </button>
 
-        <div className="text-center">
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground leading-tight">
+        {/* Title - Luxury Typography */}
+        <div className="text-center max-w-2xl mx-auto">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <Sparkles className="w-4 h-4" style={{ color: currentColor.primary }} />
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-widest">
+              {isRTL ? 'الخطوة الثانية' : 'Step Two'}
+            </span>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-black tracking-tight text-foreground leading-tight mb-4" style={{ textShadow: '0 4px 30px rgba(0,0,0,0.3)' }}>
             {isRTL ? 'كيف تريد إنشاء سيرتك الذاتية؟' : 'How would you like to create your resume?'}
           </h1>
+          <p className="text-lg text-muted-foreground max-w-md mx-auto">
+            {isRTL ? 'اختر الطريقة التي تناسبك للبدء' : 'Choose the method that works best for you'}
+          </p>
         </div>
       </div>
 
-      <div className="flex-1 px-4 pt-2 pb-10">
-        <div className="max-w-xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+      {/* Method Cards - Luxury Design */}
+      <div className="relative flex-1 px-6 md:px-8 pb-16 flex items-center justify-center">
+        <div className="w-full max-w-3xl">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+            {/* Card 1: Start from Scratch */}
             <button
               type="button"
               onClick={() => setStep('builder')}
-              className="group w-full text-left rounded-3xl bg-background border border-white/10 hover:border-purple-500/40 shadow-sm hover:shadow-lg transition-all p-6"
+              className="group relative text-left rounded-[2rem] overflow-hidden transition-all duration-500 hover:scale-[1.03] active:scale-[0.98]"
+              style={{ 
+                background: 'linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))',
+                boxShadow: '0 25px 80px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.08), inset 0 1px 0 rgba(255,255,255,0.1)',
+                backdropFilter: 'blur(20px)',
+              }}
               title={isRTL ? 'ابدأ من الصفر' : 'Start from scratch'}
             >
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/15 to-fuchsia-500/15 border border-purple-500/20 flex items-center justify-center mb-5">
-                <FileText className="w-8 h-8" style={{ color: '#2563eb' }} />
+              {/* Hover Glow Effect */}
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{ background: `linear-gradient(135deg, ${currentColor.primary}10, ${currentColor.accent}05)` }} />
+              
+              {/* Card Content */}
+              <div className="relative p-8 md:p-10">
+                {/* Icon Container */}
+                <div 
+                  className="w-20 h-20 rounded-3xl flex items-center justify-center mb-8 transition-all duration-500 group-hover:scale-110 group-hover:rotate-3"
+                  style={{ 
+                    background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})`,
+                    boxShadow: `0 15px 40px ${currentColor.primary}40, 0 5px 15px ${currentColor.primary}30`,
+                  }}
+                >
+                  <FileText className="w-10 h-10 text-white" />
+                </div>
+                
+                {/* Text */}
+                <h3 className="text-2xl font-bold text-foreground mb-3 tracking-tight">
+                  {isRTL ? 'ابدأ من الصفر' : 'Start from scratch'}
+                </h3>
+                <p className="text-base text-muted-foreground leading-relaxed mb-6">
+                  {isRTL ? 'مساعدنا الذكي سيرشدك خطوة بخطوة لإنشاء سيرة ذاتية احترافية' : 'Our AI helper will guide you step by step to create a professional resume'}
+                </p>
+                
+                {/* CTA Arrow */}
+                <div className="flex items-center gap-2 text-sm font-semibold transition-all duration-300 group-hover:gap-4" style={{ color: currentColor.primary }}>
+                  <span>{isRTL ? 'ابدأ الآن' : 'Get Started'}</span>
+                  <ArrowRight className={`w-4 h-4 transition-transform duration-300 group-hover:translate-x-1 ${isRTL ? 'rotate-180 group-hover:-translate-x-1' : ''}`} />
+                </div>
               </div>
-              <div className="text-lg font-bold text-foreground mb-1">
-                {isRTL ? 'ابدأ من الصفر' : 'Start from scratch'}
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {isRTL ? 'مساعدنا الذكي سيرشدك خطوة بخطوة' : 'Our AI helper will guide you'}
-              </div>
+              
+              {/* Bottom Accent Line */}
+              <div className="absolute bottom-0 left-0 right-0 h-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{ background: `linear-gradient(90deg, ${currentColor.primary}, ${currentColor.accent})` }} />
             </button>
 
+            {/* Card 2: Upload Resume */}
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={isUploading}
-              className="group w-full text-left rounded-3xl bg-background border border-white/10 hover:border-purple-500/40 shadow-sm hover:shadow-lg transition-all p-6 disabled:opacity-70"
+              className="group relative text-left rounded-[2rem] overflow-hidden transition-all duration-500 hover:scale-[1.03] active:scale-[0.98] disabled:opacity-60 disabled:hover:scale-100"
+              style={{ 
+                background: 'linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))',
+                boxShadow: '0 25px 80px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.08), inset 0 1px 0 rgba(255,255,255,0.1)',
+                backdropFilter: 'blur(20px)',
+              }}
               title={isRTL ? 'لدي سيرة ذاتية بالفعل' : 'I already have a resume'}
             >
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/15 to-fuchsia-500/15 border border-purple-500/20 flex items-center justify-center mb-5">
-                {isUploading ? (
-                  <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#2563eb' }} />
-                ) : (
-                  <Upload className="w-8 h-8" style={{ color: '#2563eb' }} />
-                )}
+              {/* Hover Glow Effect */}
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{ background: `linear-gradient(135deg, ${currentColor.primary}10, ${currentColor.accent}05)` }} />
+              
+              {/* Card Content */}
+              <div className="relative p-8 md:p-10">
+                {/* Icon Container */}
+                <div 
+                  className="w-20 h-20 rounded-3xl flex items-center justify-center mb-8 transition-all duration-500 group-hover:scale-110 group-hover:-rotate-3"
+                  style={{ 
+                    background: `linear-gradient(135deg, ${currentColor.accent}, ${currentColor.primary})`,
+                    boxShadow: `0 15px 40px ${currentColor.accent}40, 0 5px 15px ${currentColor.accent}30`,
+                  }}
+                >
+                  {isUploading ? (
+                    <Loader2 className="w-10 h-10 text-white animate-spin" />
+                  ) : (
+                    <Upload className="w-10 h-10 text-white" />
+                  )}
+                </div>
+                
+                {/* Text */}
+                <h3 className="text-2xl font-bold text-foreground mb-3 tracking-tight">
+                  {isRTL ? 'لدي سيرة ذاتية بالفعل' : 'I already have a resume'}
+                </h3>
+                <p className="text-base text-muted-foreground leading-relaxed mb-6">
+                  {isRTL ? 'ارفع ملفك وسنقوم باستخراج البيانات تلقائياً' : 'Upload your document and we\'ll extract the data automatically'}
+                </p>
+                
+                {/* File Types Badge */}
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1.5 rounded-full text-xs font-medium" style={{ background: 'rgba(255,255,255,0.08)', color: currentColor.primary }}>PDF</span>
+                  <span className="px-3 py-1.5 rounded-full text-xs font-medium" style={{ background: 'rgba(255,255,255,0.08)', color: currentColor.primary }}>Word</span>
+                  <span className="px-3 py-1.5 rounded-full text-xs font-medium" style={{ background: 'rgba(255,255,255,0.08)', color: currentColor.primary }}>Image</span>
+                </div>
               </div>
-              <div className="text-lg font-bold text-foreground mb-1">
-                {isRTL ? 'لدي سيرة ذاتية بالفعل' : 'I already have a resume'}
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {isRTL ? 'ارفع ملفك (.pdf, .word)' : 'Upload your document (.pdf, .word)'}
-              </div>
+              
+              {/* Bottom Accent Line */}
+              <div className="absolute bottom-0 left-0 right-0 h-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{ background: `linear-gradient(90deg, ${currentColor.accent}, ${currentColor.primary})` }} />
             </button>
           </div>
 
