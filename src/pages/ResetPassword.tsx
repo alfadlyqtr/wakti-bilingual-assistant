@@ -188,7 +188,7 @@ export default function ResetPassword() {
       } else {
         // Sign out after password reset so user logs in fresh
         await supabase.auth.signOut();
-        navigate("/reset-success");
+        navigate("/login");
       }
     } catch (error: any) {
       setErrorMsg(error?.message || t.error_invalid_token);
@@ -202,12 +202,7 @@ export default function ResetPassword() {
       {/* Header */}
       <header className="mobile-header flex items-center justify-between border-b px-4 py-2">
         <div className="flex items-center">
-          <div
-            className="cursor-pointer flex items-center"
-            onClick={() => navigate("/home")}
-          >
-            <Logo3D size="sm" />
-          </div>
+          <Logo3D size="sm" />
         </div>
         <ThemeLanguageToggle />
       </header>
