@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 
 export default function AuthConfirm() {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { language } = useTheme();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -16,9 +17,89 @@ export default function AuthConfirm() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        const token_hash = searchParams.get('token_hash');
-        const type = searchParams.get('type');
+        // Supabase can send params in query string OR hash fragment
+        // Try query params first, then fall back to hash fragment
+        let token_hash = searchParams.get('token_hash');
+        let type = searchParams.get('type');
+        let access_token = searchParams.get('access_token');
+        let refresh_token = searchParams.get('refresh_token');
 
+        // If not in query params, check hash fragment
+        if (location.hash) {
+          const hashParams = new URLSearchParams(location.hash.substring(1));
+          
+          // Check for error in hash (Supabase sends errors this way)
+          const hashError = hashParams.get('error');
+          const errorCode = hashParams.get('error_code');
+          const errorDescription = hashParams.get('error_description');
+          
+          if (hashError || errorCode) {
+            console.error('Auth error from hash:', { hashError, errorCode, errorDescription });
+            setStatus('error');
+            
+            // Provide user-friendly error messages
+            if (errorCode === 'otp_expired' || errorDescription?.includes('expired')) {
+              setMessage(
+                language === 'ar'
+                  ? 'انتهت صلاحية الرابط. يرجى طلب رابط جديد.'
+                  : 'This link has expired. Please request a new one.'
+              );
+            } else if (errorCode === 'access_denied') {
+              setMessage(
+                language === 'ar'
+                  ? 'تم رفض الوصول. يرجى المحاولة مرة أخرى.'
+                  : 'Access denied. Please try again.'
+              );
+            } else {
+              setMessage(
+                language === 'ar'
+                  ? 'حدث خطأ. يرجى المحاولة مرة أخرى.'
+                  : 'An error occurred. Please try again.'
+              );
+            }
+            setTimeout(() => navigate('/forgot-password'), 3000);
+            return;
+          }
+          
+          // Get tokens from hash if not already set
+          if (!token_hash && !access_token) {
+            token_hash = hashParams.get('token_hash');
+            type = type || hashParams.get('type');
+            access_token = hashParams.get('access_token');
+            refresh_token = hashParams.get('refresh_token');
+          }
+        }
+
+        // If we have access_token (PKCE flow), set the session directly
+        if (access_token && refresh_token) {
+          const { error } = await supabase.auth.setSession({
+            access_token,
+            refresh_token,
+          });
+          
+          if (error) {
+            console.error('Session set error:', error);
+            setStatus('error');
+            setMessage(language === 'ar' ? 'فشل التحقق' : 'Verification failed');
+            setTimeout(() => navigate('/login'), 3000);
+            return;
+          }
+          
+          // Determine where to redirect based on type or default to dashboard
+          const redirectType = type || searchParams.get('type') || 'signup';
+          if (redirectType === 'recovery') {
+            setStatus('success');
+            setMessage(language === 'ar' ? 'يمكنك الآن إعادة تعيين كلمة المرور' : 'You can now reset your password');
+            setTimeout(() => navigate('/reset-password'), 2000);
+          } else {
+            setStatus('success');
+            setMessage(language === 'ar' ? 'تم التحقق بنجاح!' : 'Verified successfully!');
+            setTimeout(() => navigate('/dashboard'), 2000);
+          }
+          return;
+        }
+
+        // Original token_hash flow
         if (!token_hash || !type) {
           setStatus('error');
           setMessage(language === 'ar' ? 'رابط غير صالح' : 'Invalid link');
@@ -27,7 +108,7 @@ export default function AuthConfirm() {
         }
 
         // Verify the token with Supabase
-        const { error } = await supabase.auth.verifyOtp({
+        const { data, error } = await supabase.auth.verifyOtp({
           token_hash,
           type: type as any,
         });
@@ -42,6 +123,11 @@ export default function AuthConfirm() {
           );
           setTimeout(() => navigate('/login'), 3000);
           return;
+        }
+
+        // Ensure session is set (verifyOtp returns session data)
+        if (data?.session) {
+          console.log('Session set successfully after verifyOtp');
         }
 
         // Success!
@@ -61,7 +147,11 @@ export default function AuthConfirm() {
               ? 'يمكنك الآن إعادة تعيين كلمة المرور'
               : 'You can now reset your password'
           );
-          setTimeout(() => navigate('/reset-password'), 2000);
+          // For recovery, navigate immediately since session is already set
+          // Using replace to prevent back button issues
+          setTimeout(() => {
+            navigate('/reset-password', { replace: true });
+          }, 1500);
         } else if (type === 'email_change') {
           setMessage(
             language === 'ar'
@@ -97,7 +187,7 @@ export default function AuthConfirm() {
     };
 
     handleAuthCallback();
-  }, [searchParams, navigate, language]);
+  }, [searchParams, location.hash, navigate, language]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">

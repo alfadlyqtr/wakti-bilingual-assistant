@@ -10,6 +10,17 @@ import LettersBackdrop from '@/components/letters/LettersBackdrop';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 
+// Deterministic auto letter per round (same as in LettersPlay.tsx)
+function autoLetterForRound(c: string, lang: 'en'|'ar'|undefined, round: number) {
+  const alphabet = (lang === 'ar')
+    ? 'ابتثجحخدذرزسشصضطظعغفقكلمنهوي'
+    : 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let seed = 0;
+  for (let i = 0; i < c.length; i++) seed = (seed + c.charCodeAt(i) * (i + 1)) % alphabet.length;
+  const idx = (seed + Math.max(0, round - 1)) % alphabet.length;
+  return alphabet[idx] || alphabet[0];
+}
+
 export default function LettersWaiting() {
   const { language } = useTheme();
   const navigate = useNavigate();
@@ -28,6 +39,9 @@ export default function LettersWaiting() {
   const startChannelRef = useRef<any>(null);
   const [hintsEnabled, setHintsEnabled] = useState<boolean>(false);
   const [endOnFirstSubmit, setEndOnFirstSubmit] = useState<boolean>(false);
+  const [gameLang, setGameLang] = useState<'en'|'ar'>('en');
+  const [letterMode, setLetterMode] = useState<'auto'|'manual'>('auto');
+  const [manualLetter, setManualLetter] = useState<string|null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,7 +50,7 @@ export default function LettersWaiting() {
       // Try Supabase first
       const { data, error } = await supabase
         .from('letters_games')
-        .select('title, host_name, host_user_id, max_players, hints_enabled, end_on_first_submit, phase')
+        .select('title, host_name, host_user_id, max_players, hints_enabled, end_on_first_submit, phase, language, letter_mode, manual_letter')
         .eq('code', gameCode)
         .maybeSingle();
       if (!cancelled) {
@@ -47,6 +61,9 @@ export default function LettersWaiting() {
           if (typeof data.max_players === 'number' && !location.state?.maxPlayers) setMaxPlayers(data.max_players);
           if (typeof data.hints_enabled === 'boolean') setHintsEnabled(!!data.hints_enabled);
           if (typeof data.end_on_first_submit === 'boolean') setEndOnFirstSubmit(!!data.end_on_first_submit);
+          if (data.language) setGameLang(data.language as 'en'|'ar');
+          if (data.letter_mode) setLetterMode(data.letter_mode as 'auto'|'manual');
+          if (data.manual_letter) setManualLetter(data.manual_letter);
           if ((data as any)?.phase === 'countdown' && !navigated) {
             setNavigated(true);
             navigate(`/games/letters/play/${gameCode}`, { state: { lateJoin: true, hintsEnabled, endOnFirstSubmit } });
@@ -244,6 +261,9 @@ export default function LettersWaiting() {
                   const nowIso = new Date().toISOString();
                   // Start DB-driven countdown (Option B)
                   await supabase.from('letters_games').update({ phase: 'countdown', countdown_start_at: nowIso, countdown_sec: 3, current_round_no: 1, started_at: null }).eq('code', gameCode);
+                  // SYNC FIX: Create round row immediately so non-host can preview letter during countdown
+                  const letter = (letterMode === 'manual' && manualLetter) ? manualLetter : autoLetterForRound(gameCode, gameLang, 1);
+                  await supabase.from('letters_rounds').upsert({ game_code: gameCode, round_no: 1, letter, status: 'countdown' }, { onConflict: 'game_code,round_no' });
                 } catch {}
                 setNavigated(true);
                 navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: (location.state as any)?.roundDurationSec, hintsEnabled, endOnFirstSubmit, lateJoin: true } });

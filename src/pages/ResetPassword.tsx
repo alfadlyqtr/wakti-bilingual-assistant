@@ -1,6 +1,6 @@
 
-import React, { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff, Lock } from "lucide-react";
@@ -8,12 +8,13 @@ import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Logo3D } from "@/components/Logo3D";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { language } = useTheme();
-  const [searchParams] = useSearchParams();
-  const accessToken = searchParams.get("access_token") || searchParams.get("token");
+  const { session } = useAuth();
 
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -23,6 +24,103 @@ export default function ResetPassword() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Check if user came from a valid recovery flow
+  // Handle both: session already set OR tokens in URL hash (fallback)
+  useEffect(() => {
+    let isMounted = true;
+    let intervalId: NodeJS.Timeout | null = null;
+    
+    const setSessionFromHash = async () => {
+      // Check if there are tokens in the URL hash (PKCE flow fallback)
+      if (location.hash) {
+        const hashParams = new URLSearchParams(location.hash.substring(1));
+        const access_token = hashParams.get('access_token');
+        const refresh_token = hashParams.get('refresh_token');
+        
+        if (access_token && refresh_token) {
+          console.log('Found tokens in hash, setting session...');
+          const { error } = await supabase.auth.setSession({
+            access_token,
+            refresh_token,
+          });
+          
+          if (!error && isMounted) {
+            setIsAuthorized(true);
+            setIsCheckingAuth(false);
+            // Clear the hash from URL for security
+            window.history.replaceState(null, '', window.location.pathname);
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    
+    const checkAuth = async () => {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      
+      if (currentSession && isMounted) {
+        setIsAuthorized(true);
+        setIsCheckingAuth(false);
+        return true;
+      }
+      return false;
+    };
+    
+    const initAuth = async () => {
+      // First try to get existing session
+      let success = await checkAuth();
+      
+      if (!success) {
+        // Try to set session from hash if present
+        success = await setSessionFromHash();
+      }
+      
+      if (!success && isMounted) {
+        // Poll a few times for session (may still be propagating)
+        let attempts = 0;
+        const maxAttempts = 8;
+        
+        intervalId = setInterval(async () => {
+          attempts++;
+          const found = await checkAuth();
+          
+          if (found || attempts >= maxAttempts) {
+            if (intervalId) clearInterval(intervalId);
+            if (isMounted) {
+              setIsCheckingAuth(false);
+              if (!found) {
+                setErrorMsg(
+                  language === "en"
+                    ? "Invalid or expired reset link. Please request a new one."
+                    : "رابط إعادة التعيين غير صالح أو منتهي الصلاحية. يرجى طلب رابط جديد."
+                );
+              }
+            }
+          }
+        }, 500);
+      }
+    };
+    
+    initAuth();
+    
+    // Also listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session && isMounted) {
+        setIsAuthorized(true);
+        setIsCheckingAuth(false);
+      }
+    });
+    
+    return () => {
+      isMounted = false;
+      if (intervalId) clearInterval(intervalId);
+      subscription.unsubscribe();
+    };
+  }, [language, location.hash]);
 
   // Translations
   const translations = {
@@ -62,7 +160,7 @@ export default function ResetPassword() {
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!accessToken) {
+    if (!isAuthorized) {
       setErrorMsg(t.error_invalid_token);
       return;
     }
@@ -82,11 +180,14 @@ export default function ResetPassword() {
     setIsLoading(true);
 
     try {
-      await (supabase.auth as any).setSession({ access_token: accessToken, refresh_token: accessToken });
+      // User is already authenticated via the recovery flow (verifyOtp in AuthConfirm)
+      // Just update the password directly
       const { error } = await supabase.auth.updateUser({ password });
       if (error) {
         setErrorMsg(error.message || t.error_invalid_token);
       } else {
+        // Sign out after password reset so user logs in fresh
+        await supabase.auth.signOut();
         navigate("/reset-success");
       }
     } catch (error: any) {
@@ -117,12 +218,17 @@ export default function ResetPassword() {
             <h1 className="text-xl font-bold">{t.title}</h1>
             <p className="text-sm text-muted-foreground mt-1">{t.sub}</p>
           </div>
-          {errorMsg && (
+          {isCheckingAuth && (
+            <div className="text-center text-muted-foreground py-4">
+              {language === "en" ? "Verifying..." : "جاري التحقق..."}
+            </div>
+          )}
+          {errorMsg && !isCheckingAuth && (
             <div className="bg-red-100 text-red-700 rounded-lg text-sm py-2 px-3 text-center">
               {errorMsg}
             </div>
           )}
-          <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
+          {!isCheckingAuth && <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
             <div className="space-y-1">
               <label htmlFor="password" className="block text-base font-medium">
                 {t.password}
@@ -196,11 +302,11 @@ export default function ResetPassword() {
             <Button
               type="submit"
               className="w-full text-base py-5 shadow-md hover:shadow-lg"
-              disabled={isLoading}
+              disabled={isLoading || !isAuthorized}
             >
               {isLoading ? t.loading : t.submit}
             </Button>
-          </form>
+          </form>}
         </div>
       </div>
     </div>

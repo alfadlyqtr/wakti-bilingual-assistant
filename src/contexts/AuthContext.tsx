@@ -321,7 +321,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    // Determine the correct redirect URL based on environment
+    const baseUrl = window.location.origin;
+    const redirectTo = `${baseUrl}/auth/confirm`;
+    
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo,
+    });
     
     if (error) {
       toast.error(error.message);

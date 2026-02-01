@@ -101,6 +101,44 @@ export default function LettersPlay() {
     return () => { cancelled = true; };
   }, [code]);
 
+  // SYNC FIX: Polling fallback for letters_games to recover from missed realtime updates
+  // This ensures non-host clients stay in sync with phase/roundNo/countdown changes
+  React.useEffect(() => {
+    if (!code) return;
+    let active = true;
+    async function pollGameState() {
+      if (!active) return;
+      const { data } = await supabase
+        .from('letters_games')
+        .select('phase, current_round_no, started_at, countdown_start_at, countdown_sec, manual_letter')
+        .eq('code', code)
+        .maybeSingle();
+      if (!active || !data) return;
+      // Only update if values differ to avoid unnecessary re-renders
+      if (typeof data.current_round_no === 'number' && data.current_round_no !== roundNo) {
+        setRoundNo(data.current_round_no);
+      }
+      if (typeof data.phase === 'string' && data.phase !== phase) {
+        setPhase(data.phase as any);
+      }
+      if (data.started_at && data.started_at !== startedAt) {
+        setStartedAt(data.started_at);
+      }
+      if (data.countdown_start_at && data.countdown_start_at !== countdownStartAt) {
+        setCountdownStartAt(data.countdown_start_at);
+      }
+      if (typeof data.countdown_sec === 'number' && data.countdown_sec !== countdownSec) {
+        setCountdownSec(data.countdown_sec);
+      }
+      if (data.manual_letter && data.manual_letter !== manualLetter) {
+        setManualLetter(data.manual_letter);
+      }
+    }
+    // Poll every 2 seconds as a fallback
+    const id = window.setInterval(pollGameState, 2000) as unknown as number;
+    return () => { active = false; clearInterval(id); };
+  }, [code, roundNo, phase, startedAt, countdownStartAt, countdownSec, manualLetter]);
+
   // Load hint usage status per player per round
   React.useEffect(() => {
     (async () => {
@@ -296,25 +334,14 @@ export default function LettersPlay() {
   }, [letterMode, manualLetter, code, gameLang, roundNo, isHost]);
 
   // Ensure round row handling: host inserts, players fetch
-  // CRITICAL FIX: Host inserts letter first, then ALL players (including host) fetch to ensure sync
+  // SYNC FIX: Non-host can now fetch letter during countdown OR playing phase
   React.useEffect(() => {
     (async () => {
-      if (!code || !startedAt || !roundNo) return;
-      if (isHost) {
-        if (!currentLetter) return;
-        // Host: insert the computed letter into DB
-        const up = await supabase
-          .from('letters_rounds')
-          .upsert({ game_code: code, round_no: roundNo, letter: currentLetter, status: 'playing', started_at: startedAt }, { onConflict: 'game_code,round_no' })
-          .select('id, letter')
-          .single();
-        if (up.data?.id) setRoundId(up.data.id);
-        // Host also syncs from DB to ensure consistency
-        if (up.data?.letter && up.data.letter !== currentLetter) {
-          setCurrentLetter(up.data.letter);
-        }
-      } else {
-        // Non-host: ONLY fetch from DB, never compute locally
+      if (!code || !roundNo) return;
+      // Non-host: fetch letter from DB during countdown or playing (don't require startedAt)
+      if (!isHost) {
+        // Only fetch if we don't have the letter yet or roundNo changed
+        if (currentLetter && roundId) return;
         let attempts = 0;
         const maxAttempts = 10;
         // Retry until we get the letter (wait for host to insert)
@@ -336,12 +363,27 @@ export default function LettersPlay() {
             await new Promise(resolve => setTimeout(resolve, 500));
           }
         }
+        return;
+      }
+      // Host: only update round row when transitioning to playing (startedAt exists)
+      if (!startedAt || !currentLetter) return;
+      const up = await supabase
+        .from('letters_rounds')
+        .upsert({ game_code: code, round_no: roundNo, letter: currentLetter, status: 'playing', started_at: startedAt }, { onConflict: 'game_code,round_no' })
+        .select('id, letter')
+        .single();
+      if (up.data?.id) setRoundId(up.data.id);
+      // Host also syncs from DB to ensure consistency
+      if (up.data?.letter && up.data.letter !== currentLetter) {
+        setCurrentLetter(up.data.letter);
       }
     })();
-  }, [code, currentLetter, startedAt, roundNo, isHost]);
+  }, [code, currentLetter, startedAt, roundNo, isHost, roundId]);
 
 
   async function checkAllSubmitted() {
+    // CRITICAL: Only host can authoritatively flip phase to scoring
+    if (!isHost) return false;
     if (!roundId || players.length === 0) return false;
     // Prefer strict check by user_id when all players are authenticated, otherwise fallback to count-based check
     const allHaveIds = players.every(p => !!p.user_id);
@@ -359,7 +401,7 @@ export default function LettersPlay() {
       all = submittedCount >= players.length;
     }
     if (all && phase === 'playing' && code) {
-      // End early when everyone has submitted (any client may trigger; update is idempotent)
+      // Host-only: End early when everyone has submitted
       await supabase.from('letters_games').update({ phase: 'scoring' }).eq('code', code);
       await supabase.from('letters_rounds').update({ ended_at: new Date().toISOString(), status: 'scoring' }).eq('id', roundId);
       setPhase('scoring');
@@ -375,16 +417,16 @@ export default function LettersPlay() {
     return () => { clearInterval(id); };
   }, [phase, roundId, players.length]);
 
-  // When timer hits zero, transition to scoring (host only triggers the phase flip)
+  // When timer hits zero, transition to scoring (HOST ONLY triggers the phase flip)
   React.useEffect(() => {
-    if (remaining === 0 && phase === 'playing' && code) {
+    if (remaining === 0 && phase === 'playing' && code && isHost) {
       (async () => {
         await supabase.from('letters_games').update({ phase: 'scoring' }).eq('code', code);
         if (roundId) await supabase.from('letters_rounds').update({ ended_at: new Date().toISOString(), status: 'scoring' }).eq('id', roundId);
         setPhase('scoring');
       })();
     }
-  }, [remaining, phase, code, roundId]);
+  }, [remaining, phase, code, roundId, isHost]);
 
   // Safeguard: ensure roundId is present during scoring on all clients
   React.useEffect(() => {
@@ -517,6 +559,13 @@ export default function LettersPlay() {
           };
           if (letterMode === 'manual') updates.manual_letter = hostPick;
           await supabase.from('letters_games').update(updates).eq('code', code);
+          // SYNC FIX: Create round row immediately so non-host can preview letter during countdown
+          const roundRow = await supabase
+            .from('letters_rounds')
+            .upsert({ game_code: code, round_no: nextNo, letter, status: 'countdown' }, { onConflict: 'game_code,round_no' })
+            .select('id')
+            .single();
+          if (roundRow.data?.id) setRoundId(roundRow.data.id);
           // Update local state for host; others will sync via realtime
           setRoundNo(nextNo);
           setPhase('countdown');
@@ -634,7 +683,14 @@ export default function LettersPlay() {
     };
     if (letterMode === 'manual') updates.manual_letter = hostPick;
     await supabase.from('letters_games').update(updates).eq('code', code);
-    // Local state moves to countdown; actual round row and started_at will be set at T by host effect above
+    // SYNC FIX: Create round row immediately so non-host can preview letter during countdown
+    const roundRow = await supabase
+      .from('letters_rounds')
+      .upsert({ game_code: code, round_no: nextNo, letter, status: 'countdown' }, { onConflict: 'game_code,round_no' })
+      .select('id')
+      .single();
+    if (roundRow.data?.id) setRoundId(roundRow.data.id);
+    // Local state moves to countdown; actual started_at will be set when countdown ends
     setRoundNo(nextNo);
     setPhase('countdown');
     setStartedAt(undefined);
