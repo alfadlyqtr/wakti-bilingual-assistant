@@ -74,11 +74,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
     let subscription: { unsubscribe: () => void } | undefined;
     let loadingTimer: number;
 
-    // Force loading=false after 2s if getSession() hangs
-    loadingTimer = window.setTimeout(() => {
-      console.log('AuthContext: Forcing loading state to false after timeout.');
-      setLoading(false);
-    }, 2000);
+    // Fallback: if getSession() hangs, re-check session and only then allow loading to finish.
+    // IMPORTANT: Do not clear tokens here; the goal is to avoid false logouts on refresh.
+    loadingTimer = window.setTimeout(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          setSession(session);
+          setUser(session.user ?? null);
+        }
+      } catch (error) {
+        console.warn('AuthContext: getSession() fallback check failed:', error);
+      } finally {
+        console.log('AuthContext: Finishing loading state after fallback timeout.');
+        setLoading(false);
+      }
+    }, 15000);
 
     // 1) Try to get initial session with graceful 400/401 error handling
     try {

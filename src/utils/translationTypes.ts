@@ -1262,6 +1262,11 @@ export type TranslationKey =
   | "dueOn"
   | "hideSubtasks"
   | "showSubtasks"
+  | "autoDelete24hOn"
+  | "autoDelete24hOff"
+  | "autoDeleteTitle"
+  | "autoDeleteEnabledToast"
+  | "autoDeleteDisabledToast"
   
   // New translation keys for fixing build errors
   | "fontWeight"

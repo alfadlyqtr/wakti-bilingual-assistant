@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { 
   SandpackProvider, 
-  SandpackLayout, 
   SandpackCodeEditor, 
   SandpackPreview,
   useSandpack,
@@ -292,7 +291,11 @@ export default function SandpackStudio({
   // Enhanced validation to catch HTML error pages and malformed responses
   const hasValidFiles = useMemo(() => {
     if (Object.keys(files).length === 0) return false;
-    const appJs = files["/App.js"];
+    const appJs =
+      files["/App.js"] ??
+      files["/src/App.js"] ??
+      files["/src/App.jsx"] ??
+      files["/src/App.tsx"];
     if (!appJs || appJs.length < 50) return false;
     // Reject HTML error pages
     if (appJs.includes("<!DOCTYPE") || appJs.includes("<html")) return false;
@@ -305,19 +308,28 @@ export default function SandpackStudio({
 
   // Element selection is now handled by InspectablePreview component
 
-  // Fix files for Sandpack - ensure proper React 18 entry point
-  const formattedFiles: Record<string, string> = {};
-  
-  // Copy all files, fixing paths if needed
-  Object.entries(files).forEach(([path, content]) => {
-    // Ensure path starts with /
-    const fixedPath = path.startsWith('/') ? path : `/${path}`;
-    formattedFiles[fixedPath] = content;
-  });
-  
-  // ALWAYS inject our custom index.js with the WaktiInspector component
-  // This ensures the inspector runs inside the Sandpack iframe as a React component
-  formattedFiles["/index.js"] = `import React from "react";
+  // Build Sandpack files. Memoized to prevent SandpackProvider from re-initializing on every render.
+  const formattedFiles: Record<string, string> = useMemo(() => {
+    const next: Record<string, string> = {};
+
+    // Copy all files, fixing paths if needed
+    Object.entries(files).forEach(([path, content]) => {
+      // Ensure path starts with /
+      const fixedPath = path.startsWith('/') ? path : `/${path}`;
+      next[fixedPath] = content;
+    });
+
+    // Ensure /App.js exists so Sandpack always has a default entry file to open in Code view.
+    // Many generated projects place App under /src, which would leave Sandpack with no obvious active file.
+    if (!next["/App.js"]) {
+      if (next["/src/App.js"] || next["/src/App.jsx"] || next["/src/App.tsx"]) {
+        next["/App.js"] = "export { default } from './src/App';\n";
+      }
+    }
+
+    // ALWAYS inject our custom index.js with the WaktiInspector component
+    // This ensures the inspector runs inside the Sandpack iframe as a React component
+    next["/index.js"] = `import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 
@@ -330,51 +342,51 @@ root.render(
     <WaktiInspector />
   </>
 );`;
-  
-  // Add styles.css if not present
-  if (!formattedFiles["/styles.css"]) {
-    formattedFiles["/styles.css"] = "@tailwind base;\n@tailwind components;\n@tailwind utilities;";
-  }
 
-  // If project uses i18n, inject our pre-bundled version under the original package names
-  // This way Sandpack resolves imports to our bundle instead of trying to fetch from npm
-  if (formattedFiles["/i18n.js"]) {
+    // Add styles.css if not present
+    if (!next["/styles.css"]) {
+      next["/styles.css"] = "@tailwind base;\n@tailwind components;\n@tailwind utilities;";
+    }
+
+    // If project uses i18n, inject our pre-bundled version under the original package names
+    // This way Sandpack resolves imports to our bundle instead of trying to fetch from npm
+    if (next["/i18n.js"]) {
     // Create shim packages that re-export from our bundle
     const i18nShim = `// Pre-bundled i18n for Sandpack
 ${sandpackI18nBundle}
 `;
     
     // i18next package shim
-    formattedFiles["/node_modules/i18next/package.json"] = JSON.stringify({
+      next["/node_modules/i18next/package.json"] = JSON.stringify({
       name: "i18next",
       main: "./index.js",
       module: "./index.js"
     });
-    formattedFiles["/node_modules/i18next/index.js"] = `import { i18n } from './bundle.js';
+      next["/node_modules/i18next/index.js"] = `import { i18n } from './bundle.js';
 export default i18n;
 export * from './bundle.js';`;
-    formattedFiles["/node_modules/i18next/bundle.js"] = i18nShim;
+      next["/node_modules/i18next/bundle.js"] = i18nShim;
 
     // react-i18next package shim  
-    formattedFiles["/node_modules/react-i18next/package.json"] = JSON.stringify({
+      next["/node_modules/react-i18next/package.json"] = JSON.stringify({
       name: "react-i18next",
       main: "./index.js",
       module: "./index.js"
     });
-    formattedFiles["/node_modules/react-i18next/index.js"] = `export { useTranslation, Trans, I18nextProvider, initReactI18next } from '../i18next/bundle.js';`;
+      next["/node_modules/react-i18next/index.js"] = `export { useTranslation, Trans, I18nextProvider, initReactI18next } from '../i18next/bundle.js';`;
 
     // i18next-browser-languagedetector package shim
-    formattedFiles["/node_modules/i18next-browser-languagedetector/package.json"] = JSON.stringify({
+      next["/node_modules/i18next-browser-languagedetector/package.json"] = JSON.stringify({
       name: "i18next-browser-languagedetector",
       main: "./index.js",
       module: "./index.js"
     });
-    formattedFiles["/node_modules/i18next-browser-languagedetector/index.js"] = `export { LanguageDetector } from '../i18next/bundle.js';
+      next["/node_modules/i18next-browser-languagedetector/index.js"] = `export { LanguageDetector } from '../i18next/bundle.js';
 export { LanguageDetector as default } from '../i18next/bundle.js';`;
-  }
-  
-  // Set index.html (no script injection needed - inspector is now a React component)
-  const indexHtmlContent = `<!DOCTYPE html>
+    }
+    
+    // Set index.html (no script injection needed - inspector is now a React component)
+    const indexHtmlContent = `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8">
@@ -389,11 +401,12 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
     <div id="root"></div>
   </body>
 </html>`;
-  
-  formattedFiles["/public/index.html"] = indexHtmlContent;
-  formattedFiles["/index.html"] = indexHtmlContent;
-  
-  console.log('[SandpackStudio] Files:', Object.keys(formattedFiles));
+
+    next["/public/index.html"] = indexHtmlContent;
+    next["/index.html"] = indexHtmlContent;
+
+    return next;
+  }, [files, sandpackI18nBundle]);
 
   const Header = () => {
     const { sandpack } = useSandpack();
@@ -563,12 +576,15 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
       files={formattedFiles}
       options={{
         externalResources: ["https://cdn.tailwindcss.com"],
+        activeFile: "/App.js",
         classes: {
-          "sp-wrapper": "h-full w-full block",
-          "sp-layout": "h-full w-full flex",
-          "sp-stack": "h-full w-full flex flex-col",
-          "sp-code-editor": "flex-1 overflow-auto",
-          "sp-preview": "flex-1"
+          "sp-wrapper": "h-full w-full block min-h-0",
+          "sp-layout": "h-full w-full flex min-h-0",
+          "sp-stack": "h-full w-full flex flex-col min-h-0",
+          "sp-code-editor": "flex-1 overflow-auto min-h-0",
+          "sp-preview": "flex-1 h-full min-h-0",
+          "sp-preview-container": "h-full min-h-0",
+          "sp-preview-iframe": "h-full min-h-0"
         },
       }}
       customSetup={{
@@ -697,31 +713,61 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
 
         {/* SANDPACK ENGINE */}
         <div className="flex-1 relative min-h-0 overflow-hidden flex flex-col">
-          <div className="flex-1 min-h-0">
-            {/* CODE MODE: Use SandpackLayout for editor + file tree */}
-            {viewMode === 'code' && (
-              <SandpackLayout style={{ height: '100%', width: '100%', border: 'none', backgroundColor: '#0c0f14' }}>
-                <CollapsibleFileTree 
-                  isCollapsed={fileTreeCollapsed}
-                  onToggleCollapse={() => setFileTreeCollapsed(prev => !prev)}
-                />
-                <div className="flex-1 h-full min-w-0 border-r border-white/10 overflow-hidden">
-                  <SandpackCodeEditor 
-                    showTabs={false}
-                    showLineNumbers 
-                    showInlineErrors 
-                    wrapContent={false}
-                    style={{ height: '100%', overflow: 'auto' }} 
-                  />
-                </div>
-              </SandpackLayout>
-            )}
+          {/* Global CSS for Sandpack height fixes */}
+          <style dangerouslySetInnerHTML={{ __html: `
+            /* Force all Sandpack elements to fill available height */
+            .sp-layout, .sp-stack, .sp-wrapper, .sp-editor {
+              height: 100% !important;
+              min-height: 0 !important;
+            }
+            .sp-code-editor, .cm-editor, .cm-scroller {
+              height: 100% !important;
+              min-height: 0 !important;
+            }
+          `}} />
+          
+          {/* CODE MODE: Keep mounted; show/hide to avoid re-mounting the sandbox */}
+          <div className={clsx(
+            "absolute inset-0 flex flex-row bg-[#0c0f14] z-10",
+            viewMode === 'code' ? "flex" : "hidden"
+          )}>
+            <CollapsibleFileTree 
+              isCollapsed={fileTreeCollapsed}
+              onToggleCollapse={() => setFileTreeCollapsed(prev => !prev)}
+            />
+            <div className="flex-1 h-full min-w-0 overflow-hidden">
+              <SandpackCodeEditor 
+                showTabs
+                showLineNumbers 
+                showInlineErrors 
+                wrapContent={false}
+                style={{ height: '100%', width: '100%' }} 
+              />
+            </div>
+          </div>
 
-            {/* PREVIEW MODE: Render preview OUTSIDE SandpackLayout to avoid resize handle */}
-            {viewMode === 'preview' && (
-                <div className="flex-1 h-full min-w-0 relative bg-black overflow-hidden group">
+          {/* PREVIEW MODE: Keep mounted; show/hide to avoid iframe blanking on toggle */}
+          <div className={clsx(
+            "absolute inset-0 h-full w-full min-w-0 relative bg-black overflow-hidden group",
+            viewMode === 'preview' ? "block" : "hidden"
+          )}>
                   {/* CSS to hide the default Sandpack error screen and fix scrollbar styling */}
                   <style dangerouslySetInnerHTML={{ __html: `
+                    /* CRITICAL: Force Sandpack preview to fill full height */
+                    .sp-preview,
+                    .sp-preview-container,
+                    .sp-stack,
+                    .sp-wrapper {
+                      height: 100% !important;
+                      min-height: 0 !important;
+                      flex: 1 1 0% !important;
+                    }
+                    .sp-preview-container iframe,
+                    .sp-preview iframe {
+                      height: 100% !important;
+                      min-height: 0 !important;
+                      width: 100% !important;
+                    }
                     .sp-stack .sp-preview-actions, 
                     .sp-stack .sp-error-message,
                     .sp-stack .sp-error-list,
@@ -790,7 +836,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                   `}} />
 
                   {/* LOADING OVERLAY - Uses SandpackSkeleton component */}
-                  {(isLoading || !hasValidFiles) && (
+                  {viewMode === 'preview' && (isLoading || !hasValidFiles) && (
                     <SandpackSkeleton
                       isLoading={isLoading}
                       isError={!hasValidFiles && Object.keys(files).length > 0}
@@ -818,27 +864,25 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                       Click to select
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* INCREMENTAL FILE UPDATER - Prevents full rebuilds on code changes */}
-              <IncrementalFileUpdaterComponent files={formattedFiles} />
-
-              {/* ERROR LISTENER - Invisible component that detects crashes */}
-              {onRuntimeError && (
-                <SandpackErrorListener onErrorDetected={onRuntimeError} />
-              )}
           </div>
 
-          {/* CONSOLE PANEL - Integrated at bottom */}
-          {viewMode === 'preview' && (
-            <SandpackConsolePanel 
-              isOpen={consoleOpen}
-              onToggle={() => setConsoleOpen(prev => !prev)}
-              maxHeight={180}
-            />
+          {/* INCREMENTAL FILE UPDATER - Prevents full rebuilds on code changes */}
+          <IncrementalFileUpdaterComponent files={formattedFiles} />
+
+          {/* ERROR LISTENER - Invisible component that detects crashes */}
+          {onRuntimeError && (
+            <SandpackErrorListener onErrorDetected={onRuntimeError} />
           )}
         </div>
+
+        {/* CONSOLE PANEL - Integrated at bottom */}
+        {viewMode === 'preview' && (
+          <SandpackConsolePanel 
+            isOpen={consoleOpen}
+            onToggle={() => setConsoleOpen(prev => !prev)}
+            maxHeight={180}
+          />
+        )}
       </div>
     </SandpackProvider>
   );

@@ -99,6 +99,11 @@ async function validateRequest(projectId: string, origin: string | null): Promis
 
   // Allow all origins if array is empty (development mode) or check allowed origins
   const allowedOrigins = backend.allowed_origins || [];
+  if (allowedOrigins.length > 0 && !origin) {
+    console.log(`[project-backend-api] Missing origin header while allowed_origins is configured`);
+    return { valid: false, error: 'Origin not allowed' };
+  }
+
   if (allowedOrigins.length > 0 && origin) {
     const isAllowed = allowedOrigins.some((allowed: string) => 
       origin === allowed || 
@@ -433,7 +438,8 @@ async function handleSiteAuth(action: string, projectId: string, ownerId: string
       await supabase
         .from('project_site_users')
         .update({ last_login: new Date().toISOString() })
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .eq('project_id', projectId);
 
       const token = generateSiteToken(projectId, user.id, user.email);
       return { user: { id: user.id, email: user.email, name: user.display_name, role: user.role, permissions: user.permissions }, token };
@@ -823,6 +829,7 @@ async function handleBooking(action: string, projectId: string, ownerId: string,
       const { data: existingCalendarEntries } = await supabase
         .from('project_calendar_entries')
         .select('id, title, start_time, end_time, entry_date')
+        .eq('project_id', projectId)
         .eq('owner_id', ownerId)
         .eq('entry_date', date);
 
@@ -979,6 +986,7 @@ async function handleBooking(action: string, projectId: string, ownerId: string,
         .from('project_bookings')
         .select('calendar_entry_id, service_name')
         .eq('id', bookingId)
+        .eq('project_id', projectId)
         .single();
 
       const { data: booking, error } = await supabase
@@ -999,7 +1007,9 @@ async function handleBooking(action: string, projectId: string, ownerId: string,
             title: `❌ CANCELLED: ${currentBooking.service_name}`,
             color: '#6B7280', // Gray for cancelled
           })
-          .eq('id', currentBooking.calendar_entry_id);
+          .eq('id', currentBooking.calendar_entry_id)
+          .eq('project_id', projectId)
+          .eq('owner_id', ownerId);
       }
 
       return { booking };
@@ -1060,6 +1070,7 @@ async function handleChat(action: string, projectId: string, ownerId: string, da
       let query = supabase
         .from('project_chat_messages')
         .select('*')
+        .eq('project_id', projectId)
         .eq('room_id', roomId)
         .order('created_at', { ascending: false })
         .limit(limit as number);
@@ -1096,7 +1107,8 @@ async function handleChat(action: string, projectId: string, ownerId: string, da
       await supabase
         .from('project_chat_rooms')
         .update({ updated_at: new Date().toISOString() })
-        .eq('id', roomId);
+        .eq('id', roomId)
+        .eq('project_id', projectId);
 
       return { message };
     }
@@ -1529,11 +1541,11 @@ Deno.serve(async (req) => {
         );
       } else {
         // JSON body
-        body = await req.json();
-        projectId = body.projectId;
-        action = body.action;
-        collection = body.collection;
-        itemId = body.id;
+        body = (await req.json()) as RequestBody;
+        projectId = body.projectId || null;
+        action = body.action || null;
+        collection = body.collection || null;
+        itemId = body.id || null;
       }
     }
 
@@ -1564,37 +1576,37 @@ Deno.serve(async (req) => {
       result = await handleCollection(method, projectId, ownerId, collectionName, body?.data, itemId || body?.id);
     } else if (action?.startsWith('auth/')) {
       const authAction = action.replace('auth/', '');
-      result = await handleSiteAuth(authAction, projectId, ownerId, body?.data || body || {});
+      result = await handleSiteAuth(authAction, projectId, ownerId, (body?.data || {}) as Record<string, unknown>);
     } else if (action?.startsWith('cart/')) {
       const cartAction = action.replace('cart/', '');
-      result = await handleCart(cartAction, projectId, ownerId, body?.data || body || {});
+      result = await handleCart(cartAction, projectId, ownerId, (body?.data || {}) as Record<string, unknown>);
     } else if (action?.startsWith('order/')) {
       const orderAction = action.replace('order/', '');
-      result = await handleOrder(orderAction, projectId, ownerId, body?.data || body || {});
+      result = await handleOrder(orderAction, projectId, ownerId, (body?.data || {}) as Record<string, unknown>);
     } else if (action?.startsWith('inventory/')) {
       const inventoryAction = action.replace('inventory/', '');
-      result = await handleInventory(inventoryAction, projectId, ownerId, body?.data || body || {});
+      result = await handleInventory(inventoryAction, projectId, ownerId, (body?.data || {}) as Record<string, unknown>);
     } else if (action?.startsWith('booking/')) {
       const bookingAction = action.replace('booking/', '');
-      result = await handleBooking(bookingAction, projectId, ownerId, body?.data || body || {});
+      result = await handleBooking(bookingAction, projectId, ownerId, (body?.data || {}) as Record<string, unknown>);
     } else if (action?.startsWith('chat/')) {
       const chatAction = action.replace('chat/', '');
-      result = await handleChat(chatAction, projectId, ownerId, body?.data || body || {});
+      result = await handleChat(chatAction, projectId, ownerId, (body?.data || {}) as Record<string, unknown>);
     } else if (action?.startsWith('comments/')) {
       const commentsAction = action.replace('comments/', '');
-      result = await handleComments(commentsAction, projectId, ownerId, body?.data || body || {});
+      result = await handleComments(commentsAction, projectId, ownerId, (body?.data || {}) as Record<string, unknown>);
     } else if (action?.startsWith('roles/')) {
       const rolesAction = action.replace('roles/', '');
-      result = await handleRoles(rolesAction, projectId, ownerId, body?.data || body || {});
+      result = await handleRoles(rolesAction, projectId, ownerId, (body?.data || {}) as Record<string, unknown>);
     } else if (action?.startsWith('notifications/')) {
       const notificationsAction = action.replace('notifications/', '');
-      result = await handleNotifications(notificationsAction, projectId, ownerId, body?.data || body || {});
+      result = await handleNotifications(notificationsAction, projectId, ownerId, (body?.data || {}) as Record<string, unknown>);
     } else if (action?.startsWith('freepik/')) {
       const freepikAction = action.replace('freepik/', '');
-      result = await handleFreepik(freepikAction, projectId, ownerId, body?.data || body || {});
+      result = await handleFreepik(freepikAction, projectId, ownerId, (body?.data || {}) as Record<string, unknown>);
     } else if (action === 'submit' || action === 'subscribe') {
       const formName = body?.formName || (action === 'subscribe' ? 'newsletter' : 'contact');
-      result = await handleFormSubmit(projectId, ownerId, formName, body?.data || {}, origin);
+      result = await handleFormSubmit(projectId, ownerId, formName, (body?.data || {}) as Record<string, unknown>, origin);
     } else if (collection) {
       // Legacy format: ?collection=products
       result = await handleCollection(method, projectId, ownerId, collection, body?.data, itemId || body?.id);
@@ -1612,8 +1624,9 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('[project-backend-api] Error:', error);
+    const message = error instanceof Error ? error.message : 'Internal server error';
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal server error' }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

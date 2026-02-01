@@ -1554,9 +1554,29 @@ The foundation is set. Now build whatever the user wants:
 3. **ALWAYS handle empty states** - Beautiful CTAs when no data
 4. **ALWAYS use {{PROJECT_ID}}** - It's auto-injected, just use it
 5. **NEVER guess API formats** - Use the EXACT contracts above
-` : '';
 
-  const userMessage = `CURRENT CODEBASE:
+🗄️ PROJECT BACKEND (READY TO USE):
+API: https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
+
+The backend is available for EVERY project. Use it by default for any real data.
+
+**EXACT API CONTRACTS (copy-paste ready):**
+Submit form:   { projectId: "{{PROJECT_ID}}", action: "submit", formName: "contact", data: { name, email, message } }
+GET products:  { projectId: "{{PROJECT_ID}}", action: "collection/products" }
+GET services:  { projectId: "{{PROJECT_ID}}", action: "collection/services" }
+Create booking:{ projectId: "{{PROJECT_ID}}", action: "booking/create", data: { serviceName, date, startTime, customerInfo: { name, email, phone } } }
+Signup:        { projectId: "{{PROJECT_ID}}", action: "auth/signup", data: { email, password, name } }
+Login:         { projectId: "{{PROJECT_ID}}", action: "auth/login", data: { email, password } }
+
+**GOLDEN RULES:**
+1) ALWAYS fetch from API (no hardcoded products/services)
+2) ALWAYS use projectId via {{PROJECT_ID}} (it is auto-injected)
+3) Always show loading + empty states
+`;
+
+// ...
+
+const userMessage = `CURRENT CODEBASE:
 ${fileContext}
 ${imageContext}${uploadedAssetsContext}${backendContextStr}${screenshotAnchorsContext}
 USER REQUEST:
@@ -4091,7 +4111,25 @@ DO NOT extract project IDs from image URLs or storage paths! Always use exactly:
 
 When user asks to "add products", "create blog posts", "store data", etc., use the collection API.
 When user asks for "contact form", "newsletter", use the form submission API.
-` : '';
+` : `
+
+### 🗄️ PROJECT BACKEND (READY TO USE)
+Even if it looks "empty", the backend API is available. Use it by default.
+
+**API Endpoint:** https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
+
+**⚠️ CRITICAL - PROJECT ID (USE THIS EXACT VALUE):**
+The projectId for ALL API calls is: **${projectId}**
+
+**Available Actions (copy-paste):**
+1) Submit form: POST { projectId: '${projectId}', action: 'submit', formName: 'contact', data: {...} }
+2) Get collection: GET ?projectId=${projectId}&action=collection/{name}
+3) Create item: POST { projectId: '${projectId}', action: 'collection/{name}', data: {...} }
+
+**GOLDEN RULES:**
+- Always fetch from API (never hardcode products/services/data)
+- Always show loading + empty states
+`;
 
 
     // CHAT MODE: Smart Q&A - answers questions OR returns a plan if code changes are needed
@@ -6946,21 +6984,14 @@ Return ONLY the JSON object. No explanation.`;
         finalFilesToUpsert[path] = fixedContent;
       }
 
-      // Check if project uses backend API and auto-enable it
-      const allFilesContent = { ...existingFiles, ...finalFilesToUpsert };
-      const usesBackend = Object.values(allFilesContent).some(content => 
-        content.includes('project-backend-api')
-      );
-      if (usesBackend) {
-        console.log(`[Edit Mode] Project uses backend API, auto-enabling...`);
-        await supabase.from('project_backends').upsert({
-          project_id: projectId,
-          user_id: userId,
-          enabled: true,
-          enabled_at: new Date().toISOString(),
-          features: { forms: true }
-        }, { onConflict: 'project_id' });
-      }
+      // Option A: Always enable backend for every project (so generated projects are always "live")
+      await supabase.from('project_backends').upsert({
+        project_id: projectId,
+        user_id: userId,
+        enabled: true,
+        enabled_at: new Date().toISOString(),
+        features: { forms: true }
+      }, { onConflict: 'project_id' });
 
       await upsertProjectFiles(supabase, projectId, finalFilesToUpsert);
       

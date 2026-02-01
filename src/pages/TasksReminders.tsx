@@ -143,31 +143,29 @@ export default function TasksReminders() {
                   <Button
                     variant={autoDelete24h ? 'default' : 'outline'}
                     size="sm"
-                    onClick={() => {
-                      setAutoDelete24h((v) => {
-                        const next = !v;
-                        (async () => {
-                          try {
-                            const { data: { user } } = await supabase.auth.getUser();
-                            const uid = user?.id;
-                            if (uid) {
-                              const { error } = await supabase
-                                .from('tr_settings')
-                                .upsert({ user_id: uid, auto_delete_24h_enabled: next, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
-                              if (error) throw error;
-                            }
-                          } catch (e) {
-                            console.warn('Failed to persist auto-delete setting', e);
-                          }
-                          toast.success(next ? 'Auto-delete: ON (delete completed tasks after 24h)' : 'Auto-delete: OFF');
-                        })();
-                        return next;
-                      });
+                    onClick={async () => {
+                      const next = !autoDelete24h;
+                      setAutoDelete24h(next);
+                      
+                      try {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        const uid = user?.id;
+                        if (uid) {
+                          const { error } = await supabase
+                            .from('tr_settings')
+                            .upsert({ user_id: uid, auto_delete_24h_enabled: next, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+                          if (error) throw error;
+                        }
+                      } catch (e) {
+                        console.warn('Failed to persist auto-delete setting', e);
+                      }
+                      
+                      toast.success(next ? t('autoDeleteEnabledToast', language) : t('autoDeleteDisabledToast', language));
                     }}
                     className="h-8"
-                    title="Auto-delete completed tasks after 24 hours"
+                    title={t('autoDeleteTitle', language)}
                   >
-                    {autoDelete24h ? 'Auto-delete 24h: ON' : 'Auto-delete 24h: OFF'}
+                    {autoDelete24h ? t('autoDelete24hOn', language) : t('autoDelete24hOff', language)}
                   </Button>
                 </div>
                 <Button onClick={handleCreateTask} size="sm">

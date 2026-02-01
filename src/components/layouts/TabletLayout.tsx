@@ -14,12 +14,12 @@ export function TabletLayout({ children }: TabletLayoutProps) {
 
   return (
     <ProtectedRoute>
-      <div className="h-screen bg-background w-full app-layout-tablet" dir="ltr" data-layout-dir="ltr">
+      <div className="h-screen overflow-hidden flex bg-background w-full app-layout-tablet" dir="ltr" data-layout-dir="ltr">
         {/* Sidebar: use the same component as desktop for consistent visuals/behavior */}
         <DesktopSidebar />
         {/* Content column: full height, header/top + scrollable middle */}
         <div
-          className="w-full min-h-screen flex flex-col transition-all duration-300"
+          className="w-full h-full min-h-0 flex flex-col transition-all duration-300"
           style={{ paddingLeft: 'calc(var(--current-sidebar-width, 240px) + 0.75rem)' }}
         >
           {/* Header: fixed position, separate from scrollable content */}
@@ -27,7 +27,7 @@ export function TabletLayout({ children }: TabletLayoutProps) {
             <TabletHeader />
           </header>
           {/* Scrollable content area - starts below fixed header */}
-          <main className="flex-1 overflow-auto w-full p-3 sm:p-4 mt-[calc(var(--tablet-header-h,56px)+1.5rem)]">
+          <main className="min-h-0 flex-1 overflow-auto w-full p-3 sm:p-4 mt-[calc(var(--tablet-header-h,56px)+1.5rem)]">
             <div className="w-full max-w-full">
               {children}
             </div>

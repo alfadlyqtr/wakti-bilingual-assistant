@@ -71,5 +71,10 @@ export const tasksAr = {
   errorCopyingLink: "خطأ في نسخ الرابط",
   dueOn: "مستحق في",
   hideSubtasks: "إخفاء",
-  showSubtasks: "إظهار"
+  showSubtasks: "إظهار",
+  autoDelete24hOn: "حذف تلقائي 24 ساعة: مفعّل",
+  autoDelete24hOff: "حذف تلقائي 24 ساعة: معطّل",
+  autoDeleteTitle: "حذف المهام المكتملة تلقائياً بعد 24 ساعة",
+  autoDeleteEnabledToast: "الحذف التلقائي: مفعّل (حذف المهام المكتملة بعد 24 ساعة)",
+  autoDeleteDisabledToast: "الحذف التلقائي: معطّل"
 };

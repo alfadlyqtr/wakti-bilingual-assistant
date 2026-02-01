@@ -132,6 +132,7 @@ export function ChatInput({
   const cardRef = useRef<HTMLDivElement>(null);
   // Image2Image inline translation state
   const [isTranslatingI2I, setIsTranslatingI2I] = useState(false);
+  const [i2iDidTranslate, setI2iDidTranslate] = useState(false);
   const [isAmping, setIsAmping] = useState(false);
   // Chat/Study submode dropdown state
   const chatSubmodeBtnRef = useRef<HTMLButtonElement>(null);
@@ -171,6 +172,23 @@ export function ChatInput({
       onImageModeChange?.('text2image');
     }
   }, [activeTrigger, onImageModeChange]);
+
+  useEffect(() => {
+    if (!(activeTrigger === 'image' && imageMode === 'image2image' && language === 'ar')) {
+      setI2iDidTranslate(false);
+      return;
+    }
+
+    if (!message || message.trim().length === 0) {
+      setI2iDidTranslate(false);
+      return;
+    }
+
+    // If Arabic appears again, translation is needed again.
+    if (hasArabic(message)) {
+      setI2iDidTranslate(false);
+    }
+  }, [activeTrigger, imageMode, language, message]);
   const attachDebugOverlay = () => {
     try {
       const id = 'wakti-modes-debug-overlay';
@@ -1839,10 +1857,12 @@ export function ChatInput({
                     {activeTrigger === 'image' && imageMode === 'image2image' && (
                       <div className="mt-1 flex items-center gap-2">
                         {language === 'ar' && (
-                          <div className="text-[11px] font-bold text-blue-600 dark:text-blue-400 leading-tight">
+                          <div className="text-xs font-extrabold leading-tight text-amber-900 dark:text-amber-100 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/50 px-2 py-1 rounded-md">
                             {hasArabic(message)
-                              ? 'ترجم طلبك →'
-                              : 'ملاحظة: العربية غير مدعومة هنا؛ سنرسل النص بالإنجليزية.'}
+                              ? 'قبل الإرسال: اضغط "ترجمة".'
+                              : (i2iDidTranslate
+                                ? 'تمام — جاهز. اضغط إرسال.'
+                                : 'اكتب بالعربية. عند الإرسال سنحوّل النص للإنجليزية تلقائياً (لا تقلق).')}
                           </div>
                         )}
                       </div>
@@ -1856,7 +1876,7 @@ export function ChatInput({
                       <button
                         type="button"
                         className={`h-6 px-2 rounded-full text-[10px] font-semibold text-white shadow-md disabled:opacity-50 disabled:pointer-events-none 
-                          ${isTranslatingI2I ? 'bg-blue-500 animate-pulse' : 'bg-blue-600 hover:bg-blue-700'}`}
+                          ${isTranslatingI2I ? 'bg-blue-500 animate-pulse' : 'bg-blue-600 hover:bg-blue-700 animate-pulse ring-2 ring-blue-300/70 shadow-[0_0_18px_rgba(59,130,246,0.35)]'}`}
                         disabled={isTranslatingI2I}
                         onClick={async () => {
                           if (!message || isTranslatingI2I) return;
@@ -1865,6 +1885,7 @@ export function ChatInput({
                             const { data, error } = await supabase.functions.invoke('image2image-ar2en', { body: { text: message } });
                             if (!error && data?.text) {
                               setMessage(data.text as string);
+                              setI2iDidTranslate(true);
                             } else {
                               console.error('Translate failed:', error || data);
                             }

@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-// createClient no longer needed - returning Runware URLs directly
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
@@ -52,11 +52,13 @@ function detectMimeAndExt(bytes: Uint8Array, mimeHint?: string): { mime: string;
   return { mime: "image/png", ext: "png" };
 }
 
-// Supabase client no longer needed - returning Runware URLs directly
-// const supabase = createClient(
-//   Deno.env.get("SUPABASE_URL")!,
-//   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-// );
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const STORAGE_BUCKET = "generated-files";
+const SIGNED_URL_EXPIRES_SECONDS = 10 * 60;
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY")!;
 
@@ -103,23 +105,52 @@ async function safeJson(resp: Response): Promise<any> {
   try { return JSON.parse(text); } catch { return { __raw: text }; }
 }
 
-async function callRunwareI2I(finalPrompt: string, inputDataUrl: string): Promise<any> {
-  // Per Runware docs: taskType is "imageInference" with seedImage for image-to-image
-  // https://runware.ai/docs/en/image-inference/image-to-image
+async function uploadAndSignReferenceImage(params: {
+  base64: string;
+  mime: string;
+  ext: string;
+  userId: string;
+}): Promise<string> {
+  const { base64, mime, ext, userId } = params;
+  const bytes = decodeBase64ToUint8Array(base64);
+  const path = `i2i-input/${userId}/${genUUID()}.${ext}`;
+
+  const up = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(path, bytes, { contentType: mime, upsert: true });
+
+  if (up.error) {
+    throw new Error(JSON.stringify({ stage: "storage_upload", bucket: STORAGE_BUCKET, path, error: up.error }));
+  }
+
+  const signed = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .createSignedUrl(path, SIGNED_URL_EXPIRES_SECONDS);
+
+  if (signed.error || !signed.data?.signedUrl) {
+    throw new Error(JSON.stringify({ stage: "storage_signed_url", bucket: STORAGE_BUCKET, path, error: signed.error }));
+  }
+
+  return signed.data.signedUrl;
+}
+
+async function callRunwareI2I(finalPrompt: string, referenceImageUrl: string): Promise<any> {
+  // Using alibaba:wan@2.6-image model with referenceImages (signed URL)
   const payload = {
     taskType: "imageInference",
     taskUUID: genUUID(),
-    model: "runware:106@1",
+    model: "alibaba:wan@2.6-image",
     positivePrompt: finalPrompt,
-    seedImage: inputDataUrl, // Data URI, base64, URL, or UUID
-    strength: 0.55, // Lower strength preserves more of the original seed image
-    width: 1024,
-    height: 1024,
-    steps: 25,
+    height: 1280,
+    width: 1280,
     numberResults: 1,
-    outputType: ["URL"],
-    outputFormat: "WEBP",
+    outputType: ["dataURI", "URL"],
+    outputFormat: "JPEG",
     includeCost: true,
+    inputs: {
+      referenceImages: [referenceImageUrl],
+    },
+    outputQuality: 85,
   } as any;
 
   const doCreate = async () => {
@@ -194,29 +225,30 @@ serve(async (req: Request) => {
 
     const { base64, mimeHint } = stripDataUrlPrefix(image_base64_raw);
     const inputBytes = decodeBase64ToUint8Array(base64);
-    const { mime } = detectMimeAndExt(inputBytes, mimeHint);
-    const inputDataUrl = `data:${mime};base64,${base64}`;
+    const { mime, ext } = detectMimeAndExt(inputBytes, mimeHint);
 
-    const rw = await callRunwareI2I(user_prompt, inputDataUrl);
+    const referenceUrl = await uploadAndSignReferenceImage({ base64, mime, ext, userId: user_id });
+
+    const rw = await callRunwareI2I(user_prompt, referenceUrl);
     const node = pickFirstResultNode(rw) || rw;
 
-    // Extract the Runware URL directly (avoid Supabase storage upload which causes COEP issues)
-    const imageUrl = node?.imageURL || node?.URL || node?.url;
+    // Extract the Runware output URL
+    const outputImageUrl = node?.imageURL || node?.URL || node?.url;
     
-    console.log("🎨 Runware result:", { keys: Object.keys(node || {}), imageUrl: imageUrl?.slice(0, 80) });
+    console.log("🎨 Runware result:", { keys: Object.keys(node || {}), outputImageUrl: outputImageUrl?.slice(0, 80) });
 
-    if (imageUrl) {
+    if (outputImageUrl) {
       // Log successful AI usage
       await logAIFromRequest(req, {
         functionName: "wakti-image2image",
         provider: "runware",
-        model: "runware:106@1",
+        model: "alibaba:wan@2.6-image",
         inputText: user_prompt,
         status: "success"
       });
 
       return new Response(
-        JSON.stringify({ success: true, url: imageUrl, model: "runware:106@1" }),
+        JSON.stringify({ success: true, url: outputImageUrl, model: "alibaba:wan@2.6-image" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -227,18 +259,31 @@ serve(async (req: Request) => {
     );
   } catch (err: unknown) {
     const message = (err as Error)?.message || String(err);
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(message);
+    } catch {
+      parsed = null;
+    }
+
+    const stage = parsed?.stage as string | undefined;
+    console.error("[wakti-image2image] error", { stage, message, parsed });
     
     // Log failed AI usage
     await logAIFromRequest(req, {
       functionName: "wakti-image2image",
       provider: "runware",
-      model: "runware:106@1",
+      model: "alibaba:wan@2.6-image",
       status: "error",
       errorMessage: message
     });
 
     return new Response(
-      JSON.stringify({ error: message, code: "UNHANDLED" }),
+      JSON.stringify({
+        error: stage || message,
+        code: stage ? `I2I_${String(stage).toUpperCase()}` : "UNHANDLED",
+        details: parsed || undefined,
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

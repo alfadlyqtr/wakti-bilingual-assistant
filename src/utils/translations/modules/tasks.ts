@@ -73,5 +73,10 @@ export const tasks = {
   errorCopyingLink: "Error copying link",
   dueOn: "Due on",
   hideSubtasks: "Hide",
-  showSubtasks: "Show"
+  showSubtasks: "Show",
+  autoDelete24hOn: "Auto-delete 24h: ON",
+  autoDelete24hOff: "Auto-delete 24h: OFF",
+  autoDeleteTitle: "Auto-delete completed tasks after 24 hours",
+  autoDeleteEnabledToast: "Auto-delete: ON (delete completed tasks after 24h)",
+  autoDeleteDisabledToast: "Auto-delete: OFF"
 };

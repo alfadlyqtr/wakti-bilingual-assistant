@@ -89,7 +89,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = React.memo(({ langu
         <div className="flex items-center gap-2 mb-4">
           <Calendar className="h-5 w-5 text-blue-500" />
           <h3 className="font-semibold text-lg bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">
-            {format(new Date(), "MMMM yyyy")}
+            {format(new Date(), "MMMM yyyy", { locale: language === 'ar' ? ar : undefined })}
           </h3>
         </div>
 

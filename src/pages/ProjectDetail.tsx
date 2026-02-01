@@ -887,6 +887,14 @@ export default function ProjectDetail() {
   // Track if we've already started generation to prevent double-runs
   const generationStartedRef = useRef(false);
 
+  // Apply body class for full-height layout (CSS in index.css handles the rest)
+  useEffect(() => {
+    document.body.classList.add('project-detail-page');
+    return () => {
+      document.body.classList.remove('project-detail-page');
+    };
+  }, []);
+
   // Check if we need to generate on mount
   useEffect(() => {
     if (user && id) {
@@ -5837,7 +5845,10 @@ ${fixInstructions}
   }
 
   return (
-    <div className={cn("h-full w-full flex flex-col bg-background overflow-hidden", isRTL && "rtl")}>
+    <div 
+      className={cn("h-full w-full flex flex-col bg-background overflow-hidden", isRTL && "rtl")}
+      style={{ height: 'calc(100vh - 84px)', maxHeight: 'calc(100vh - 84px)' }}
+    >
 
       {/* Celebratory Modal for Project Completion */}
       {showProjectCompleteModal && (

@@ -422,6 +422,13 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     );
   }
 
+  // IMPORTANT: Never redirect to /login while AuthContext is still loading.
+  // On refresh, Supabase session restoration can complete AFTER initial render.
+  if (isLoading) {
+    if (DEV) console.log("ProtectedRoute: Auth still loading - suppressing login redirect");
+    return <>{children}</>;
+  }
+
   // Proper authentication check - redirect appropriately if not authenticated
   if (!effectiveHasSession) {
     if (DEV) console.log("ProtectedRoute: No valid user/session, redirecting to login");
