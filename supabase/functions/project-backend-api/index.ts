@@ -145,6 +145,11 @@ async function createOwnerNotification(
 async function handleFormSubmit(projectId: string, ownerId: string, formName: string, data: Record<string, unknown>, origin: string | null) {
   console.log(`[project-backend-api] Form submit: ${formName}`, data);
 
+  const isBookingForm = formName.toLowerCase().includes('booking') || 
+                        formName.toLowerCase().includes('appointment') ||
+                        formName.toLowerCase().includes('reservation') ||
+                        formName.toLowerCase().includes('حجز');
+
   const submittedEmail = typeof data.email === 'string' ? data.email : null;
   if (submittedEmail) {
     const emailError = validateEmail(submittedEmail);
@@ -172,11 +177,6 @@ async function handleFormSubmit(projectId: string, ownerId: string, formName: st
   }
 
   // AUTO-CREATE BOOKING: If form is a booking form, also create a booking record
-  const isBookingForm = formName.toLowerCase().includes('booking') || 
-                        formName.toLowerCase().includes('appointment') ||
-                        formName.toLowerCase().includes('reservation') ||
-                        formName.toLowerCase().includes('حجز');
-  
   if (isBookingForm) {
     console.log(`[project-backend-api] Detected booking form, auto-creating booking record`);
     
@@ -269,7 +269,95 @@ async function handleFormSubmit(projectId: string, ownerId: string, formName: st
     }
   }
 
+  try {
+    const name = (data.name || data.fullName || data.full_name || data.customerName || data.الاسم) as string | undefined;
+    const email = (data.email || data.البريد) as string | undefined;
+    const message = (data.message || data.notes || data.الرسالة || data.الملاحظات) as string | undefined;
+
+    if (!isBookingForm) {
+      await createOwnerNotification(
+        projectId,
+        ownerId,
+        'contact',
+        'New Contact Submission',
+        `${formName}${name ? ` - ${name}` : ''}${email ? ` (${email})` : ''}`,
+        {
+          formSubmissionId: result.id,
+          formName,
+          name: name || null,
+          email: email || null,
+          message: message || null,
+          origin: origin || 'unknown',
+        }
+      );
+    }
+  } catch (err) {
+    console.error('[project-backend-api] Failed to create contact notification:', err);
+  }
+
   return { success: true, id: result.id };
+}
+
+type InventorySnapshot = {
+  stock_quantity: number | null;
+  low_stock_threshold: number | null;
+  track_inventory: boolean | null;
+  collection_name: string | null;
+};
+
+type ProjectCollectionRow = {
+  data: Record<string, unknown> | null;
+};
+
+async function maybeNotifyLowStock(
+  projectId: string,
+  ownerId: string,
+  itemId: string,
+  prevQuantity: number | null,
+  nextQuantity: number | null,
+  inventory: InventorySnapshot | null
+) {
+  try {
+    const trackInventory = inventory?.track_inventory !== false;
+    const threshold = typeof inventory?.low_stock_threshold === 'number' ? inventory.low_stock_threshold : null;
+    const prevQty = typeof prevQuantity === 'number' ? prevQuantity : null;
+    const nextQty = typeof nextQuantity === 'number' ? nextQuantity : null;
+
+    if (!trackInventory || threshold === null || nextQty === null) return;
+
+    const crossed = (prevQty === null || prevQty >= threshold) && nextQty < threshold;
+    if (!crossed) return;
+
+    let productName: string | null = null;
+    const { data: productRow } = await supabase
+      .from('project_collections')
+      .select('data')
+      .eq('project_id', projectId)
+      .eq('id', itemId)
+      .maybeSingle();
+
+    const typedProductRow = productRow as ProjectCollectionRow | null;
+    if (typedProductRow?.data) {
+      productName = (typedProductRow.data.name as string | undefined) || (typedProductRow.data.title as string | undefined) || null;
+    }
+
+    await createOwnerNotification(
+      projectId,
+      ownerId,
+      'inventory_low',
+      'Low Stock',
+      `${productName || 'Product'} is low on stock (${nextQty}/${threshold})`,
+      {
+        collectionItemId: itemId,
+        collectionName: inventory?.collection_name || 'products',
+        stock_quantity: nextQty,
+        low_stock_threshold: threshold,
+        productName,
+      }
+    );
+  } catch (err) {
+    console.error('[project-backend-api] Failed low stock notification:', err);
+  }
 }
 
 // Handle collection operations (CRUD)
@@ -664,13 +752,34 @@ async function handleOrder(action: string, projectId: string, ownerId: string, d
       const orderItems = items as any[];
       for (const item of orderItems) {
         if (item.collectionItemId) {
+          const itemId = String(item.collectionItemId);
+          const { data: beforeInv } = await supabase
+            .from('project_inventory')
+            .select('stock_quantity, low_stock_threshold, track_inventory, collection_name')
+            .eq('project_id', projectId)
+            .eq('collection_item_id', itemId)
+            .maybeSingle();
+
+          const beforeSnapshot = beforeInv as InventorySnapshot | null;
+          const prevQty = beforeSnapshot?.stock_quantity ?? null;
+
           await supabase.rpc('decrement_inventory', {
             p_project_id: projectId,
-            p_item_id: item.collectionItemId,
+            p_item_id: itemId,
             p_quantity: item.quantity || 1,
           }).catch(() => {
-            // Ignore if no inventory tracking
           });
+
+          const { data: afterInv } = await supabase
+            .from('project_inventory')
+            .select('stock_quantity, low_stock_threshold, track_inventory, collection_name')
+            .eq('project_id', projectId)
+            .eq('collection_item_id', itemId)
+            .maybeSingle();
+
+          const afterSnapshot = afterInv as InventorySnapshot | null;
+          const nextQty = afterSnapshot?.stock_quantity ?? null;
+          await maybeNotifyLowStock(projectId, ownerId, itemId, prevQty, nextQty, afterSnapshot || beforeSnapshot);
         }
       }
 
@@ -766,6 +875,13 @@ async function handleInventory(action: string, projectId: string, ownerId: strin
       const { itemId, collectionName, quantity, lowStockThreshold, trackInventory } = data;
       if (!itemId) throw new Error('itemId required');
 
+      const { data: existing } = await supabase
+        .from('project_inventory')
+        .select('stock_quantity, low_stock_threshold, track_inventory, collection_name')
+        .eq('project_id', projectId)
+        .eq('collection_item_id', itemId)
+        .maybeSingle();
+
       const { data: inventory, error } = await supabase
         .from('project_inventory')
         .upsert({
@@ -783,6 +899,11 @@ async function handleInventory(action: string, projectId: string, ownerId: strin
         .single();
 
       if (error) throw new Error('Failed to set inventory');
+
+      const prevSnapshot = existing as InventorySnapshot | null;
+      const prevQty = prevSnapshot?.stock_quantity ?? null;
+      const nextQty = inventory.stock_quantity ?? null;
+      await maybeNotifyLowStock(projectId, ownerId, String(itemId), prevQty, nextQty, inventory);
       return { inventory };
     }
 
@@ -792,7 +913,7 @@ async function handleInventory(action: string, projectId: string, ownerId: strin
 
       const { data: current } = await supabase
         .from('project_inventory')
-        .select('stock_quantity')
+        .select('stock_quantity, low_stock_threshold, track_inventory, collection_name')
         .eq('project_id', projectId)
         .eq('collection_item_id', itemId)
         .single();
@@ -808,6 +929,10 @@ async function handleInventory(action: string, projectId: string, ownerId: strin
         .single();
 
       if (error) throw new Error('Failed to adjust inventory');
+
+      const prevQty = (current?.stock_quantity ?? null) as number | null;
+      const nextQty = inventory.stock_quantity ?? null;
+      await maybeNotifyLowStock(projectId, ownerId, String(itemId), prevQty, nextQty, inventory);
       return { inventory };
     }
 
