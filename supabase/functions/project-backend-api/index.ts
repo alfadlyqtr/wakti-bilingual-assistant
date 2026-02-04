@@ -8,6 +8,8 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID') || '';
+const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY') || '';
 
 // Create admin client for backend operations
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -120,7 +122,52 @@ async function validateRequest(projectId: string, origin: string | null): Promis
   return { valid: true, ownerId: backend.user_id };
 }
 
-// Create notification for project owner
+// Send push notification via OneSignal (real-time)
+async function sendPushToOwner(
+  ownerId: string,
+  title: string,
+  message: string,
+  pushData: Record<string, unknown> = {}
+): Promise<{ success: boolean; onesignalId?: string }> {
+  if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
+    console.log('[project-backend-api] OneSignal not configured, skipping push');
+    return { success: false };
+  }
+
+  try {
+    const payload = {
+      app_id: ONESIGNAL_APP_ID,
+      include_aliases: { external_id: [ownerId] },
+      target_channel: 'push',
+      headings: { en: title },
+      contents: { en: message || '' },
+      data: pushData,
+    };
+
+    const res = await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Basic ${ONESIGNAL_REST_API_KEY}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const resJson = await res.json();
+    if (res.ok && resJson.id) {
+      console.log(`[project-backend-api] Push sent to ${ownerId}, onesignal_id=${resJson.id}`);
+      return { success: true, onesignalId: String(resJson.id) };
+    } else {
+      console.error('[project-backend-api] OneSignal error:', resJson);
+      return { success: false };
+    }
+  } catch (err) {
+    console.error('[project-backend-api] Push send failed:', err);
+    return { success: false };
+  }
+}
+
+// Create notification for project owner AND send push in real-time
 async function createOwnerNotification(
   projectId: string,
   ownerId: string,
@@ -129,7 +176,8 @@ async function createOwnerNotification(
   message: string,
   data: Record<string, unknown> = {}
 ) {
-  await supabase
+  // Insert notification row
+  const { data: inserted, error } = await supabase
     .from('project_notifications')
     .insert({
       project_id: projectId,
@@ -138,7 +186,35 @@ async function createOwnerNotification(
       title,
       message,
       data,
-    });
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('[project-backend-api] Failed to insert notification:', error);
+    return;
+  }
+
+  // Send push immediately (real-time)
+  const pushResult = await sendPushToOwner(ownerId, title, message, {
+    ...data,
+    notification_id: inserted.id,
+    project_id: projectId,
+    type,
+  });
+
+  // Mark as push_sent if successful
+  if (pushResult.success) {
+    await supabase
+      .from('project_notifications')
+      .update({
+        push_sent: true,
+        push_sent_at: new Date().toISOString(),
+        onesignal_notification_id: pushResult.onesignalId || null,
+      })
+      .eq('id', inserted.id)
+      .eq('user_id', ownerId);
+  }
 }
 
 // Handle form submissions

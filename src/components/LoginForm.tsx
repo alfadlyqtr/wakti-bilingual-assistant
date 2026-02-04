@@ -79,6 +79,24 @@ export function LoginForm({
             try { setAuthLoading(false); } catch {}
             try { setLastLoginTimestamp(loginTimestamp); } catch {}
             
+            // === REGISTER ACTIVE SESSION FOR SINGLE-DEVICE LOGIN ===
+            // This ensures only one device can be logged in at a time
+            try {
+              const sessionId = at; // Use access token as unique session identifier
+              await supabase
+                .from('user_active_sessions')
+                .upsert({ 
+                  user_id: data.user.id,
+                  session_id: sessionId,
+                  last_login: new Date().toISOString(),
+                  device_info: navigator.userAgent || 'Unknown Device'
+                });
+              console.log("LoginForm: Session registered as active device");
+            } catch (sessionErr) {
+              console.error("LoginForm: Failed to register active session (non-blocking):", sessionErr);
+              // Don't block login on session registration error
+            }
+            
             // === DELAYED NAVIGATION ===
             // Small delay to let React finish state update before ProtectedRoute checks
             console.log("LoginForm: Scheduling navigation to", redirectTo);

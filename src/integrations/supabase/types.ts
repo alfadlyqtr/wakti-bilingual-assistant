@@ -3849,6 +3849,27 @@ export type Database = {
         }
         Relationships: []
       }
+      user_active_sessions: {
+        Row: {
+          user_id: string
+          session_id: string
+          last_login: string | null
+          device_info: string | null
+        }
+        Insert: {
+          user_id: string
+          session_id: string
+          last_login?: string | null
+          device_info?: string | null
+        }
+        Update: {
+          user_id?: string
+          session_id?: string
+          last_login?: string | null
+          device_info?: string | null
+        }
+        Relationships: []
+      }
       user_business_cards: {
         Row: {
           address: string | null

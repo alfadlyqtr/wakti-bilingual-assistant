@@ -211,6 +211,61 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [user?.id]);
 
+  // === SINGLE-DEVICE LOGIN: Realtime Session Monitoring ===
+  // Uses Supabase Realtime to instantly detect when user logs in on another device
+  // No polling required - server pushes changes to client via WebSocket
+  useEffect(() => {
+    if (!user?.id || !session?.access_token) return;
+    
+    console.log('[AuthContext] Setting up realtime single-device session monitoring');
+    
+    // Subscribe to changes on this user's session record
+    const channel = supabase
+      .channel(`user-session-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'user_active_sessions',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          // Check if the session ID changed (someone logged in elsewhere)
+          const newSessionId = (payload.new as any)?.session_id;
+          
+          if (newSessionId && newSessionId !== session.access_token) {
+            console.log('[AuthContext] Session replaced by another device (realtime)');
+            toast.info('You have been signed out because you logged in on another device');
+            
+            // Unsubscribe first to prevent any further events
+            supabase.removeChannel(channel);
+            
+            // Clear session and redirect to login
+            supabase.auth.signOut({ scope: 'local' as any }).catch(() => {});
+            setUser(null);
+            setSession(null);
+            
+            // Redirect to login
+            try {
+              window.location.replace('/login');
+            } catch {}
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[AuthContext] Realtime session monitoring active');
+        }
+      });
+    
+    // Cleanup subscription on unmount or dependency change
+    return () => {
+      console.log('[AuthContext] Cleaning up realtime session monitoring');
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, session?.access_token]);
+
   // Identify logged-in user in RevenueCat (via Natively SDK). No-op on web.
   // Also check subscription status via RevenueCat REST API
   useEffect(() => {

@@ -98,7 +98,7 @@ import TextGenerator from "./pages/TextGenerator";
 import TextTranslationView from "./pages/TextTranslationView";
 import GameMode from "./pages/GameMode";
 import Games from "./pages/Games";
-import FitnessHealth from "./pages/FitnessHealth";
+import Vitality from "./pages/Vitality";
 import FitnessWhoopCallback from "./pages/FitnessWhoopCallback";
 import Journal from "./pages/Journal";
 import MusicStudio from "./pages/MusicStudio";
@@ -242,7 +242,7 @@ function App() {
                     </DebugContextProvider>
                   } />
                   <Route path="/help" element={<Help />} />
-                  <Route path="/fitness" element={<FitnessHealth />} />
+                  <Route path="/fitness" element={<Vitality />} />
                   <Route path="/fitness/callback" element={<FitnessWhoopCallback />} />
                   <Route path="/whoop/callback" element={<FitnessWhoopCallback />} />
                 </Route>
