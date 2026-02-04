@@ -1,156 +1,258 @@
 
+# Fix: wakti-co-draw Edge Function - Deprecated Model Error
 
-# Fix: Header Positioning and Sandpack Iframe Layout
+## Problem
 
-## Problem Summary
+The `wakti-co-draw` edge function is failing with a **404 Not Found** error because the model `gemini-2.0-flash-exp` has been removed from Google's API.
 
-Two layout issues on the ProjectDetail page:
-1. **Header scrolling**: The header in HeroScene uses `absolute` positioning instead of `fixed`, causing it to scroll with the page content
-2. **Sandpack cutoff**: The preview container's padding and height constraints are causing the Sandpack iframe to be clipped
-
----
-
-## Technical Analysis
-
-### Issue 1: Header Positioning (HeroScene)
-
-**Current State:**
-The header in `src/components/landing/HeroScene.tsx` (lines 60-89) uses:
-```css
-className="absolute top-4 right-4 z-20..."
-style={{ top: "calc(env(safe-area-inset-top, 0px) + 1rem)" }}
+**Error message:**
 ```
-
-**Problem:**
-`absolute` positioning places the header relative to its parent `<section>`, so when the landing page scroll-snaps between scenes, the header scrolls away.
-
-**Solution:**
-Change to `fixed` positioning so the header stays at the top of the viewport regardless of scroll position.
-
-### Issue 2: Sandpack Iframe Cutoff
-
-**Current State:**
-In `src/pages/ProjectDetail.tsx` (line 8421):
-```jsx
-<div className="flex-1 min-h-0 sandpack-preview-container relative pt-[56px] pb-0 overflow-hidden">
-```
-
-**Problem:**
-The `pt-[56px]` padding-top reduces available height, but the inner Sandpack container expects `h-full` which doesn't account for this padding.
-
-**Solution:**
-Use a CSS calculation to ensure proper height: `h-[calc(100%-56px)]` on the inner container, or adjust the layout to use margin instead of padding.
-
----
-
-## Files to Modify
-
-### File 1: `src/components/landing/HeroScene.tsx`
-
-**Change:** Update header from `absolute` to `fixed` positioning
-
-**Before (lines 60-65):**
-```tsx
-<motion.div 
-  initial={{ opacity: 0, y: -20 }}
-  animate={{ opacity: 1, y: 0 }}
-  transition={{ delay: 0.5, duration: 0.6 }}
-  className="absolute top-4 right-4 z-20 flex items-center gap-2..."
-  style={{ top: "calc(env(safe-area-inset-top, 0px) + 1rem)" }}
->
-```
-
-**After:**
-```tsx
-<motion.div 
-  initial={{ opacity: 0, y: -20 }}
-  animate={{ opacity: 1, y: 0 }}
-  transition={{ delay: 0.5, duration: 0.6 }}
-  className="fixed top-4 right-4 z-50 flex items-center gap-2..."
-  style={{ top: "calc(env(safe-area-inset-top, 0px) + 1rem)" }}
->
-```
-
-**Key Changes:**
-- `absolute` → `fixed` (stays at viewport top)
-- `z-20` → `z-50` (ensure it stays above all content)
-
----
-
-### File 2: `src/pages/ProjectDetail.tsx`
-
-**Change:** Fix the Sandpack container height calculation
-
-**Before (line 8421):**
-```tsx
-<div className="flex-1 min-h-0 sandpack-preview-container relative pt-[56px] pb-0 overflow-hidden">
-```
-
-**After:**
-```tsx
-<div className="flex-1 min-h-0 sandpack-preview-container relative mt-[56px] overflow-hidden" style={{ height: 'calc(100% - 56px)' }}>
-```
-
-**Key Changes:**
-- `pt-[56px]` → `mt-[56px]` (use margin instead of padding)
-- Add `style={{ height: 'calc(100% - 56px)' }}` to explicitly set height
-
-**Alternative approach (if the above doesn't work):**
-Change the inner Sandpack wrapper to use explicit height calculation:
-
-**Line 8428-8431:**
-```tsx
-<div className="w-full h-full flex items-center justify-center relative">
-```
-to:
-```tsx
-<div className="absolute inset-0 flex items-center justify-center">
+[GoogleGenerativeAI Error]: Error fetching from 
+https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent: 
+[404 Not Found] models/gemini-2.0-flash-exp is not found for API version v1beta
 ```
 
 ---
 
-## CSS Additions (if needed)
+## Solution
 
-Add to `src/index.css` to ensure proper Sandpack container sizing:
+Switch from the direct Google Generative AI SDK to the **Lovable AI Gateway**, which provides access to `google/gemini-2.5-flash-image` (also called "Nano banana") for image generation and editing.
 
-```css
-/* Fix Sandpack container height in ProjectDetail */
-.sandpack-preview-container > div {
-  height: 100% !important;
-}
+---
 
-.sandpack-preview-container .sp-wrapper {
-  height: 100% !important;
-}
+## Technical Changes
 
-.sandpack-preview-container .sp-layout {
-  height: 100% !important;
-}
+### File: `supabase/functions/wakti-co-draw/index.ts`
 
-.sandpack-preview-container .sp-preview-container {
-  height: 100% !important;
-}
+**Current approach (broken):**
+- Uses `npm:@google/generative-ai` SDK directly
+- Calls deprecated model `gemini-2.0-flash-exp`
+- Requires `GEMINI_API_KEY`
+
+**New approach (fixed):**
+- Uses Lovable AI Gateway at `https://ai.gateway.lovable.dev/v1/chat/completions`
+- Calls supported model `google/gemini-2.5-flash-image`
+- Uses `LOVABLE_API_KEY` (already auto-provisioned)
+
+**Key code changes:**
+
+```typescript
+// REMOVE: Direct Google SDK import
+// import { GoogleGenerativeAI } from "npm:@google/generative-ai@0.21.0";
+
+// ADD: Use Lovable AI Gateway
+const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+
+// Call the gateway with image editing request
+const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${LOVABLE_API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    model: "google/gemini-2.5-flash-image",
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          { 
+            type: "image_url", 
+            image_url: { url: `data:image/png;base64,${base64Data}` } 
+          }
+        ]
+      }
+    ],
+    modalities: ["image", "text"]
+  })
+});
+
+// Extract generated image from response
+const data = await response.json();
+const editedImageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
 ```
 
 ---
 
-## Summary of Changes
+## Complete Rewritten Edge Function
 
-| File | Change | Purpose |
-|------|--------|---------|
-| `HeroScene.tsx` | `absolute` → `fixed` | Keep header at viewport top during scroll |
-| `HeroScene.tsx` | `z-20` → `z-50` | Ensure header stays above all scenes |
-| `ProjectDetail.tsx` | `pt-[56px]` → `mt-[56px]` + explicit height | Fix iframe cutoff |
-| `index.css` (optional) | Add Sandpack height rules | Ensure full height rendering |
+```typescript
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  if (!LOVABLE_API_KEY) {
+    console.error('❌ LOVABLE_API_KEY not configured');
+    return new Response(JSON.stringify({ 
+      success: false,
+      error: 'LOVABLE_API_KEY not configured' 
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
+    const { imageBase64, prompt } = await req.json();
+
+    if (!imageBase64 || !prompt) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Missing imageBase64 or prompt'
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log(`🎨 Co-Drawing via Lovable AI: ${prompt}`);
+
+    // Strip data URL prefix if present
+    let base64Data = imageBase64;
+    if (imageBase64.includes(',')) {
+      base64Data = imageBase64.split(',')[1];
+    }
+
+    // Build the editing prompt
+    const editingPrompt = `You are a collaborative drawing assistant. 
+The user has drawn something and wants you to modify or enhance it.
+
+YOUR TASK: "${prompt}"
+
+RULES:
+1. FOLLOW THE USER'S REQUEST LITERALLY
+2. Keep the user's original drawing as the base/foundation
+3. When the user says "add X" - actually ADD that element
+4. When the user says "enhance" or "improve" - make the drawing look better
+5. When the user says "add colors" - colorize the existing drawing
+6. You CAN add new elements when requested
+7. The result should look like a natural extension of their drawing`;
+
+    // Call Lovable AI Gateway for image editing
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-image",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: editingPrompt },
+              { 
+                type: "image_url", 
+                image_url: { url: `data:image/png;base64,${base64Data}` } 
+              }
+            ]
+          }
+        ],
+        modalities: ["image", "text"]
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Lovable AI error:', response.status, errorText);
+      throw new Error(`AI Gateway error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('✅ Lovable AI response received');
+
+    // Extract generated image
+    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    
+    if (!imageUrl) {
+      console.error('❌ No image in response:', JSON.stringify(data));
+      throw new Error('No image returned from AI');
+    }
+
+    console.log('✅ Image generated successfully');
+
+    // Log successful AI usage
+    await logAIFromRequest(req, {
+      functionName: "wakti-co-draw",
+      provider: "lovable-ai",
+      model: "google/gemini-2.5-flash-image",
+      inputText: prompt,
+      status: "success"
+    });
+
+    return new Response(JSON.stringify({
+      success: true,
+      imageUrl: imageUrl
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+
+  } catch (err: unknown) {
+    const error = err as Error;
+    console.error('❌ Error:', error);
+    
+    await logAIFromRequest(req, {
+      functionName: "wakti-co-draw",
+      provider: "lovable-ai",
+      model: "google/gemini-2.5-flash-image",
+      status: "error",
+      errorMessage: error.message
+    });
+
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message || 'Failed'
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
+```
 
 ---
 
-## Testing Checklist
+## Build Error Fix
+
+The build error about `npm:openai@^4.52.5` in `deno.lock` is unrelated to this function - it's a transient issue from JSR type definitions. Removing or regenerating `deno.lock` will resolve it.
+
+---
+
+## Summary
+
+| Change | Before | After |
+|--------|--------|-------|
+| API | Direct Google SDK | Lovable AI Gateway |
+| Model | `gemini-2.0-flash-exp` (deprecated) | `google/gemini-2.5-flash-image` |
+| Auth | `GEMINI_API_KEY` | `LOVABLE_API_KEY` (auto-provisioned) |
+| SDK Import | `npm:@google/generative-ai` | Native fetch |
+
+---
+
+## Testing
 
 After implementation:
-1. Verify the landing page header stays fixed at top when scrolling between scenes
-2. Verify the Sandpack preview fills the full available height
-3. Test on both mobile and desktop viewports
-4. Ensure the visual edit mode banner still appears correctly
-5. Check that the console panel at the bottom doesn't get cut off
-
+1. Open WAKTI AI → Image Mode → Draw
+2. Draw something on the canvas
+3. Type a prompt like "enhance" or "add colors"
+4. Click generate - should return an AI-enhanced image
