@@ -2855,7 +2855,10 @@ export type Database = {
           data: Json | null
           id: string
           message: string | null
+          onesignal_notification_id: string | null
           project_id: string
+          push_sent: boolean | null
+          push_sent_at: string | null
           read: boolean | null
           title: string
           type: string
@@ -2866,7 +2869,10 @@ export type Database = {
           data?: Json | null
           id?: string
           message?: string | null
+          onesignal_notification_id?: string | null
           project_id: string
+          push_sent?: boolean | null
+          push_sent_at?: string | null
           read?: boolean | null
           title: string
           type: string
@@ -2877,7 +2883,10 @@ export type Database = {
           data?: Json | null
           id?: string
           message?: string | null
+          onesignal_notification_id?: string | null
           project_id?: string
+          push_sent?: boolean | null
+          push_sent_at?: string | null
           read?: boolean | null
           title?: string
           type?: string
