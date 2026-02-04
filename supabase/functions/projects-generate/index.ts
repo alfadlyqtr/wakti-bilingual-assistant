@@ -1572,11 +1572,9 @@ Login:         { projectId: "{{PROJECT_ID}}", action: "auth/login", data: { emai
 1) ALWAYS fetch from API (no hardcoded products/services)
 2) ALWAYS use projectId via {{PROJECT_ID}} (it is auto-injected)
 3) Always show loading + empty states
-`;
+` : '';
 
-// ...
-
-const userMessage = `CURRENT CODEBASE:
+  const userMessage = `CURRENT CODEBASE:
 ${fileContext}
 ${imageContext}${uploadedAssetsContext}${backendContextStr}${screenshotAnchorsContext}
 USER REQUEST:
