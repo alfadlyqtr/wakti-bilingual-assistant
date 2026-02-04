@@ -644,7 +644,7 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
   }, [handleUndo, handleRedo]);
 
   return (
-    <div className="flex flex-col gap-4 w-full h-full p-4">
+    <div className="flex flex-col gap-4 w-full h-full p-4 pb-20">
       {/* Status Banner */}
       <div className="flex items-center justify-between bg-muted p-3 rounded-lg">
         <div className="flex items-center gap-2">
