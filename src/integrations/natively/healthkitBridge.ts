@@ -92,53 +92,88 @@ export interface HealthKitWorkout {
 }
 
 interface NativelyHealthInstance {
+  // Check if HealthKit is available on device
   available: (callback: (result: HealthKitAvailabilityResult, error?: string) => void) => void;
+  
+  // Request permissions - write types first, then read types
   requestAuthorization: (
     write: HealthKitDataType[],
     read: HealthKitDataType[],
     callback: (result: HealthKitPermissionResult, error?: string) => void
   ) => void;
+  
+  // Check permission status for a specific type
   getPermissionStatus?: (
     type: HealthKitDataType,
     callback: (result: { status: boolean }, error?: string) => void
   ) => void;
+  
+  // Get all user characteristics (age, sex, blood type, etc.)
   getAllCharacteristics?: (
     callback: (result: HealthKitCharacteristics, error?: string) => void
   ) => void;
+  
+  // Get quantity data (steps, heart rate, etc.)
+  // Per Natively docs: getStatisticQuantityValues(dataType, interval, startDate, endDate, callback)
+  getStatisticQuantityValues?: (
+    dataType: HealthKitQuantityType,
+    interval: HealthKitInterval,
+    startDate: Date,
+    endDate: Date,
+    callback: (result: { result: HealthKitQuantityData[] }, error?: string) => void
+  ) => void;
+  
+  // Legacy alias - some SDK versions use this name
   getQuantity?: (
     dataType: HealthKitQuantityType,
     interval: HealthKitInterval,
     startDate: Date,
     endDate: Date,
-    callback: (result: { data: HealthKitQuantityData[] }, error?: string) => void
+    callback: (result: { result: HealthKitQuantityData[] }, error?: string) => void
   ) => void;
+  
+  // Get sleep analysis - per docs: getDailySleepAnalysis(limit, endDate, startDate, callback)
+  getDailySleepAnalysis?: (
+    limit: number,
+    endDate: Date,
+    startDate: Date,
+    callback: (result: { result: HealthKitSleepAnalysis[] }, error?: string) => void
+  ) => void;
+  
+  // Legacy alias
   getSleepAnalysis?: (
     startDate: Date,
     endDate: Date,
     limit: number,
-    callback: (result: { data: HealthKitSleepAnalysis[] }, error?: string) => void
+    callback: (result: { result: HealthKitSleepAnalysis[] }, error?: string) => void
   ) => void;
+  
+  // Get activity summary - per docs: getActivitySummary(endDate, startDate, callback)
   getActivitySummary?: (
-    startDate: Date,
     endDate: Date,
-    callback: (result: { data: HealthKitActivitySummary[] }, error?: string) => void
+    startDate: Date,
+    callback: (result: { result: HealthKitActivitySummary[] }, error?: string) => void
   ) => void;
+  
+  // Get workouts - per docs: getWorkouts(endDate, startDate, limit, callback)
+  // Note: endDate comes BEFORE startDate in Natively SDK!
   getWorkouts?: (
-    startDate: Date,
     endDate: Date,
+    startDate: Date,
     limit: number,
-    callback: (result: { data: HealthKitWorkout[] }, error?: string) => void
+    callback: (result: { result: HealthKitWorkout[] }, error?: string) => void
   ) => void;
 }
 
 /**
  * Get HealthKit SDK instance
+ * Per Natively docs: const health = NativelyHealth() - it's a function call, not a constructor
  */
 function getInstance(): NativelyHealthInstance | null {
   if (typeof window === 'undefined') return null;
   
   try {
-    const natively = window.natively;
+    const natively = (window as any).natively;
     const isNativeApp = natively?.isNativeApp === true || natively?.isIOSApp === true;
     
     console.log('[NativelyHealth] Environment check:', {
@@ -155,21 +190,41 @@ function getInstance(): NativelyHealthInstance | null {
       return null;
     }
     
-    // Try NativelyHealth constructor
-    const Ctor = (window as any).NativelyHealth;
-    if (Ctor) {
+    // Per Natively docs: const health = NativelyHealth() - function call, not constructor
+    const NativelyHealthFn = (window as any).NativelyHealth;
+    if (typeof NativelyHealthFn === 'function') {
       try {
-        const instance = new Ctor();
-        console.log('[NativelyHealth] Created instance from NativelyHealth class');
-        return instance;
-      } catch (e) {
-        console.warn('[NativelyHealth] Failed to create instance:', e);
+        // Try as function call first (per docs)
+        const instance = NativelyHealthFn();
+        if (instance) {
+          console.log('[NativelyHealth] Created instance via NativelyHealth() function call');
+          // Log available methods
+          const methods = Object.keys(instance).filter(k => typeof instance[k] === 'function');
+          console.log('[NativelyHealth] Instance methods:', methods);
+          return instance;
+        }
+      } catch (e1) {
+        console.log('[NativelyHealth] Function call failed, trying constructor...');
+        try {
+          // Fallback to constructor pattern
+          const instance = new NativelyHealthFn();
+          if (instance) {
+            console.log('[NativelyHealth] Created instance via new NativelyHealth()');
+            const methods = Object.keys(instance).filter(k => typeof instance[k] === 'function');
+            console.log('[NativelyHealth] Instance methods:', methods);
+            return instance;
+          }
+        } catch (e2) {
+          console.warn('[NativelyHealth] Both patterns failed:', e1, e2);
+        }
       }
     }
     
     // Try natively.health direct property
     if (natively?.health) {
       console.log('[NativelyHealth] Using natively.health instance');
+      const methods = Object.keys(natively.health).filter(k => typeof natively.health[k] === 'function');
+      console.log('[NativelyHealth] natively.health methods:', methods);
       return natively.health;
     }
     
@@ -196,6 +251,61 @@ export function isNativelyIOSApp(): boolean {
   if (typeof window === 'undefined') return false;
   const natively = window.natively;
   return !!(natively?.isIOSApp || natively?.isNativeApp);
+}
+
+/**
+ * Debug function to log all available SDK info
+ * Call this from console to diagnose issues
+ */
+export function debugHealthKitSDK(): void {
+  console.log('=== HealthKit SDK Debug ===');
+  
+  if (typeof window === 'undefined') {
+    console.log('Window not available');
+    return;
+  }
+  
+  const natively = (window as any).natively;
+  console.log('natively object:', natively);
+  console.log('natively.isIOSApp:', natively?.isIOSApp);
+  console.log('natively.isNativeApp:', natively?.isNativeApp);
+  console.log('natively.isAndroidApp:', natively?.isAndroidApp);
+  console.log('natively.health:', natively?.health);
+  
+  const NativelyHealth = (window as any).NativelyHealth;
+  console.log('NativelyHealth class:', NativelyHealth);
+  
+  if (NativelyHealth) {
+    try {
+      const instance = new NativelyHealth();
+      console.log('NativelyHealth instance:', instance);
+      console.log('Instance keys:', Object.keys(instance));
+      console.log('Prototype keys:', Object.getOwnPropertyNames(Object.getPrototypeOf(instance)));
+      
+      // Check each expected method
+      const methods = ['available', 'requestAuthorization', 'getQuantity', 'getSleepAnalysis', 'getActivitySummary', 'getWorkouts', 'getAllCharacteristics'];
+      methods.forEach(m => {
+        console.log(`  ${m}:`, typeof instance[m]);
+      });
+    } catch (e) {
+      console.log('Failed to create instance:', e);
+    }
+  }
+  
+  // Check for any health-related globals
+  const healthKeys = Object.keys(window).filter(k => 
+    k.toLowerCase().includes('health') || 
+    k.toLowerCase().includes('natively') ||
+    k.toLowerCase().includes('native')
+  );
+  console.log('Health-related window keys:', healthKeys);
+  
+  console.log('=== End Debug ===');
+}
+
+// Expose to window for console debugging
+if (typeof window !== 'undefined') {
+  (window as any).debugHealthKitSDK = debugHealthKitSDK;
 }
 
 /**
@@ -286,6 +396,7 @@ export async function getCharacteristics(): Promise<HealthKitCharacteristics | n
 
 /**
  * Get quantity data (steps, heart rate, etc.)
+ * Per Natively docs: getStatisticQuantityValues(dataType, interval, startDate, endDate, callback)
  */
 export async function getQuantityData(
   dataType: HealthKitQuantityType,
@@ -294,20 +405,58 @@ export async function getQuantityData(
   endDate: Date
 ): Promise<HealthKitQuantityData[]> {
   const instance = getInstance();
-  if (!instance?.getQuantity) return [];
+  
+  // Try both method names - getStatisticQuantityValues (per docs) or getQuantity (legacy)
+  const quantityMethod = instance?.getStatisticQuantityValues || instance?.getQuantity;
+  
+  console.log(`[NativelyHealth] getQuantityData called:`, {
+    dataType,
+    interval,
+    startDate: startDate.toISOString(),
+    endDate: endDate.toISOString(),
+    hasInstance: !!instance,
+    hasGetStatisticQuantityValues: !!instance?.getStatisticQuantityValues,
+    hasGetQuantity: !!instance?.getQuantity,
+  });
+  
+  if (!quantityMethod) {
+    console.warn(`[NativelyHealth] No quantity method available on instance`);
+    return [];
+  }
   
   return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      console.warn(`[NativelyHealth] ${dataType} callback timeout after 10s`);
+      resolve([]);
+    }, 10000);
+    
     try {
-      instance.getQuantity!(dataType, interval, startDate, endDate, (result, error) => {
+      console.log(`[NativelyHealth] Calling quantity method for ${dataType}...`);
+      quantityMethod.call(instance, dataType, interval, startDate, endDate, (res: any, error: string | undefined) => {
+        clearTimeout(timeout);
+        
+        // Per Natively docs, result comes in res.result, not res.data
+        const data = res?.result || res?.data || [];
+        
+        console.log(`[NativelyHealth] ${dataType} callback received:`, {
+          hasRes: !!res,
+          hasResult: !!res?.result,
+          hasData: !!res?.data,
+          dataLength: data?.length,
+          error,
+          rawResult: JSON.stringify(res).substring(0, 500),
+        });
+        
         if (error) {
           console.warn(`[NativelyHealth] ${dataType} error:`, error);
           resolve([]);
           return;
         }
-        console.log(`[NativelyHealth] ${dataType} data:`, result.data?.length || 0, 'records');
-        resolve(result.data || []);
+        console.log(`[NativelyHealth] ${dataType} data:`, data?.length || 0, 'records');
+        resolve(data || []);
       });
     } catch (err) {
+      clearTimeout(timeout);
       console.error(`[NativelyHealth] Error getting ${dataType}:`, err);
       resolve([]);
     }
@@ -375,6 +524,7 @@ export async function getTodayHRV(): Promise<number | null> {
 
 /**
  * Get sleep analysis data
+ * Per Natively docs: getDailySleepAnalysis(limit, endDate, startDate, callback)
  */
 export async function getSleepAnalysis(
   startDate: Date,
@@ -382,20 +532,52 @@ export async function getSleepAnalysis(
   limit: number = 7
 ): Promise<HealthKitSleepAnalysis[]> {
   const instance = getInstance();
-  if (!instance?.getSleepAnalysis) return [];
+  
+  // Try both method names
+  const sleepMethod = instance?.getDailySleepAnalysis || instance?.getSleepAnalysis;
+  
+  if (!sleepMethod) {
+    console.warn('[NativelyHealth] No sleep analysis method available');
+    return [];
+  }
   
   return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      console.warn('[NativelyHealth] Sleep analysis callback timeout after 10s');
+      resolve([]);
+    }, 10000);
+    
     try {
-      instance.getSleepAnalysis!(startDate, endDate, limit, (result, error) => {
-        if (error) {
-          console.warn('[NativelyHealth] Sleep analysis error:', error);
-          resolve([]);
-          return;
-        }
-        console.log('[NativelyHealth] Sleep data:', result.data?.length || 0, 'records');
-        resolve(result.data || []);
-      });
+      // Per docs: getDailySleepAnalysis(limit, endDate, startDate, callback)
+      // Note the reversed date order!
+      if (instance?.getDailySleepAnalysis) {
+        instance.getDailySleepAnalysis(limit, endDate, startDate, (res: any, error: string | undefined) => {
+          clearTimeout(timeout);
+          const data = res?.result || res?.data || [];
+          if (error) {
+            console.warn('[NativelyHealth] Sleep analysis error:', error);
+            resolve([]);
+            return;
+          }
+          console.log('[NativelyHealth] Sleep data:', data?.length || 0, 'records');
+          resolve(data);
+        });
+      } else {
+        // Legacy method signature
+        instance!.getSleepAnalysis!(startDate, endDate, limit, (res: any, error: string | undefined) => {
+          clearTimeout(timeout);
+          const data = res?.result || res?.data || [];
+          if (error) {
+            console.warn('[NativelyHealth] Sleep analysis error:', error);
+            resolve([]);
+            return;
+          }
+          console.log('[NativelyHealth] Sleep data:', data?.length || 0, 'records');
+          resolve(data);
+        });
+      }
     } catch (err) {
+      clearTimeout(timeout);
       console.error('[NativelyHealth] Error getting sleep:', err);
       resolve([]);
     }
@@ -404,26 +586,61 @@ export async function getSleepAnalysis(
 
 /**
  * Get activity summary (rings data)
+ * Per Natively docs: getActivitySummary(endDate, startDate, callback)
+ * Note: endDate comes BEFORE startDate!
  */
 export async function getActivitySummary(
   startDate: Date,
   endDate: Date
 ): Promise<HealthKitActivitySummary[]> {
   const instance = getInstance();
-  if (!instance?.getActivitySummary) return [];
+  
+  console.log('[NativelyHealth] getActivitySummary called:', {
+    startDate: startDate.toISOString(),
+    endDate: endDate.toISOString(),
+    hasInstance: !!instance,
+    hasMethod: !!instance?.getActivitySummary,
+  });
+  
+  if (!instance?.getActivitySummary) {
+    console.warn('[NativelyHealth] getActivitySummary method not available');
+    return [];
+  }
   
   return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      console.warn('[NativelyHealth] Activity summary callback timeout after 10s');
+      resolve([]);
+    }, 10000);
+    
     try {
-      instance.getActivitySummary!(startDate, endDate, (result, error) => {
+      console.log('[NativelyHealth] Calling getActivitySummary...');
+      // Per docs: getActivitySummary(endDate, startDate, callback) - dates reversed!
+      instance.getActivitySummary!(endDate, startDate, (res: any, error: string | undefined) => {
+        clearTimeout(timeout);
+        
+        // Per Natively docs, result comes in res.result
+        const data = res?.result || res?.data || [];
+        
+        console.log('[NativelyHealth] Activity summary callback:', {
+          hasRes: !!res,
+          hasResult: !!res?.result,
+          hasData: !!res?.data,
+          dataLength: data?.length,
+          error,
+          rawResult: JSON.stringify(res).substring(0, 500),
+        });
+        
         if (error) {
           console.warn('[NativelyHealth] Activity summary error:', error);
           resolve([]);
           return;
         }
-        console.log('[NativelyHealth] Activity data:', result.data?.length || 0, 'records');
-        resolve(result.data || []);
+        console.log('[NativelyHealth] Activity data:', data?.length || 0, 'records');
+        resolve(data);
       });
     } catch (err) {
+      clearTimeout(timeout);
       console.error('[NativelyHealth] Error getting activity:', err);
       resolve([]);
     }
@@ -432,6 +649,8 @@ export async function getActivitySummary(
 
 /**
  * Get workouts
+ * Per Natively docs: getWorkouts(endDate, startDate, limit, callback)
+ * Note: endDate comes BEFORE startDate!
  */
 export async function getWorkouts(
   startDate: Date,
@@ -439,20 +658,35 @@ export async function getWorkouts(
   limit: number = 10
 ): Promise<HealthKitWorkout[]> {
   const instance = getInstance();
-  if (!instance?.getWorkouts) return [];
+  if (!instance?.getWorkouts) {
+    console.warn('[NativelyHealth] getWorkouts method not available');
+    return [];
+  }
   
   return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      console.warn('[NativelyHealth] Workouts callback timeout after 10s');
+      resolve([]);
+    }, 10000);
+    
     try {
-      instance.getWorkouts!(startDate, endDate, limit, (result, error) => {
+      // Per docs: getWorkouts(endDate, startDate, limit, callback) - dates reversed!
+      instance.getWorkouts!(endDate, startDate, limit, (res: any, error: string | undefined) => {
+        clearTimeout(timeout);
+        
+        // Per Natively docs, result comes in res.result
+        const data = res?.result || res?.data || [];
+        
         if (error) {
           console.warn('[NativelyHealth] Workouts error:', error);
           resolve([]);
           return;
         }
-        console.log('[NativelyHealth] Workouts data:', result.data?.length || 0, 'records');
-        resolve(result.data || []);
+        console.log('[NativelyHealth] Workouts data:', data?.length || 0, 'records');
+        resolve(data);
       });
     } catch (err) {
+      clearTimeout(timeout);
       console.error('[NativelyHealth] Error getting workouts:', err);
       resolve([]);
     }
@@ -470,10 +704,18 @@ export async function getTodayHealthSummary(): Promise<{
   restingHeartRate: number | null;
   hrv: number | null;
 }> {
+  console.log('[NativelyHealth] getTodayHealthSummary called');
+  
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   
-  const [steps, heartRate, activeEnergyData, activityData, restingHeartRate, hrv] = await Promise.all([
+  console.log('[NativelyHealth] Date range:', {
+    startOfDay: startOfDay.toISOString(),
+    now: now.toISOString(),
+  });
+  
+  // Fetch all data in parallel
+  const results = await Promise.allSettled([
     getTodaySteps(),
     getTodayHeartRate(),
     getQuantityData('ACTIVE_ENERGY', 'DAY', startOfDay, now),
@@ -482,7 +724,24 @@ export async function getTodayHealthSummary(): Promise<{
     getTodayHRV(),
   ]);
   
-  return {
+  // Log each result
+  const labels = ['steps', 'heartRate', 'activeEnergy', 'activity', 'restingHeartRate', 'hrv'];
+  results.forEach((result, i) => {
+    console.log(`[NativelyHealth] ${labels[i]} result:`, {
+      status: result.status,
+      value: result.status === 'fulfilled' ? result.value : undefined,
+      reason: result.status === 'rejected' ? result.reason : undefined,
+    });
+  });
+  
+  const steps = results[0].status === 'fulfilled' ? results[0].value as number : 0;
+  const heartRate = results[1].status === 'fulfilled' ? results[1].value as { avg: number; latest: number } | null : null;
+  const activeEnergyData = results[2].status === 'fulfilled' ? results[2].value as HealthKitQuantityData[] : [];
+  const activityData = results[3].status === 'fulfilled' ? results[3].value as HealthKitActivitySummary[] : [];
+  const restingHeartRate = results[4].status === 'fulfilled' ? results[4].value as number | null : null;
+  const hrv = results[5].status === 'fulfilled' ? results[5].value as number | null : null;
+  
+  const summary = {
     steps,
     heartRate,
     activeEnergy: activeEnergyData.length > 0 ? Math.round(activeEnergyData[0].value) : 0,
@@ -490,4 +749,8 @@ export async function getTodayHealthSummary(): Promise<{
     restingHeartRate,
     hrv,
   };
+  
+  console.log('[NativelyHealth] Final summary:', summary);
+  
+  return summary;
 }

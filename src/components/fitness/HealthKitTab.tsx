@@ -169,8 +169,52 @@ export function HealthKitTab() {
       return;
     }
 
-    // SDK available, needs permission
-    setPermissionStatus('needs_permission');
+    // SDK available - try to fetch data directly
+    // If we can get data, permission was already granted
+    // This handles the case where user already granted permission in a previous session
+    console.log('[HealthKitTab] SDK available, attempting to fetch data to check permission status...');
+    
+    try {
+      const summary = await getTodayHealthSummary();
+      console.log('[HealthKitTab] Health summary result:', {
+        steps: summary.steps,
+        hasHeartRate: !!summary.heartRate,
+        activeEnergy: summary.activeEnergy,
+        hasActivity: !!summary.activity,
+      });
+      
+      // If we got any data, permission is granted
+      // Note: Even with permission, some data might be 0 if user hasn't moved today
+      // So we check if the call succeeded, not if values are > 0
+      setPermissionStatus('granted');
+      
+      // Set the data we already fetched
+      const now = new Date();
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      
+      const [sleep, workouts, characteristics] = await Promise.all([
+        getSleepAnalysis(weekAgo, now, 7),
+        getWorkouts(weekAgo, now, 10),
+        getCharacteristics()
+      ]);
+      
+      setHealthData({
+        steps: summary.steps,
+        heartRate: summary.heartRate,
+        activeEnergy: summary.activeEnergy,
+        activity: summary.activity,
+        sleep,
+        workouts,
+        characteristics,
+        restingHeartRate: summary.restingHeartRate,
+        hrv: summary.hrv
+      });
+      setLastUpdated(new Date());
+      
+    } catch (err) {
+      console.log('[HealthKitTab] Could not fetch data, needs permission:', err);
+      setPermissionStatus('needs_permission');
+    }
   };
 
   const requestPermissions = async () => {
@@ -629,7 +673,7 @@ export function HealthKitTab() {
           <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
             <Footprints className="w-6 h-6 text-blue-500 mb-2" />
             <span className="text-2xl font-bold text-gray-800 dark:text-white">
-              {healthData?.steps?.toLocaleString() || '—'}
+              {healthData?.steps !== undefined && healthData?.steps !== null ? healthData.steps.toLocaleString() : '—'}
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {isArabic ? 'خطوة' : 'steps'}
@@ -640,7 +684,7 @@ export function HealthKitTab() {
           <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
             <Heart className="w-6 h-6 text-red-500 mb-2" />
             <span className="text-2xl font-bold text-gray-800 dark:text-white">
-              {healthData?.heartRate?.latest || '—'}
+              {healthData?.heartRate?.latest !== undefined && healthData?.heartRate?.latest !== null ? healthData.heartRate.latest : '—'}
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {isArabic ? 'نبضة/د' : 'bpm'}
@@ -651,7 +695,7 @@ export function HealthKitTab() {
           <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
             <Flame className="w-6 h-6 text-orange-500 mb-2" />
             <span className="text-2xl font-bold text-gray-800 dark:text-white">
-              {healthData?.activeEnergy?.toLocaleString() || '—'}
+              {healthData?.activeEnergy !== undefined && healthData?.activeEnergy !== null ? healthData.activeEnergy.toLocaleString() : '—'}
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {isArabic ? 'سعرة' : 'kcal'}
@@ -665,7 +709,7 @@ export function HealthKitTab() {
           <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
             <Heart className="w-5 h-5 text-pink-500 mb-2" />
             <span className="text-xl font-bold text-gray-800 dark:text-white">
-              {healthData?.restingHeartRate || '—'}
+              {healthData?.restingHeartRate !== undefined && healthData?.restingHeartRate !== null ? healthData.restingHeartRate : '—'}
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {isArabic ? 'نبض الراحة' : 'Resting HR'}
@@ -676,7 +720,7 @@ export function HealthKitTab() {
           <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
             <Activity className="w-5 h-5 text-purple-500 mb-2" />
             <span className="text-xl font-bold text-gray-800 dark:text-white">
-              {healthData?.hrv ? `${healthData.hrv}ms` : '—'}
+              {healthData?.hrv !== undefined && healthData?.hrv !== null ? `${healthData.hrv}ms` : '—'}
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {isArabic ? 'تقلب النبض' : 'HRV'}
