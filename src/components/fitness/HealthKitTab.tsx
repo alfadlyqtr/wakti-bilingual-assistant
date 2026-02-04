@@ -89,6 +89,8 @@ interface HealthData {
   sleep: HealthKitSleepAnalysis[];
   workouts: HealthKitWorkout[];
   characteristics: HealthKitCharacteristics | null;
+  restingHeartRate: number | null;
+  hrv: number | null;
 }
 
 export function HealthKitTab() {
@@ -219,7 +221,9 @@ export function HealthKitTab() {
         activity: summary.activity,
         sleep,
         workouts,
-        characteristics
+        characteristics,
+        restingHeartRate: summary.restingHeartRate,
+        hrv: summary.hrv
       });
       setLastUpdated(new Date());
     } catch (err) {
@@ -651,6 +655,31 @@ export function HealthKitTab() {
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {isArabic ? 'سعرة' : 'kcal'}
+            </span>
+          </div>
+        </div>
+
+        {/* Additional Heart Metrics Row */}
+        <div className="grid grid-cols-2 gap-4 mt-4">
+          {/* Resting Heart Rate */}
+          <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
+            <Heart className="w-5 h-5 text-pink-500 mb-2" />
+            <span className="text-xl font-bold text-gray-800 dark:text-white">
+              {healthData?.restingHeartRate || '—'}
+            </span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {isArabic ? 'نبض الراحة' : 'Resting HR'}
+            </span>
+          </div>
+
+          {/* HRV */}
+          <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
+            <Activity className="w-5 h-5 text-purple-500 mb-2" />
+            <span className="text-xl font-bold text-gray-800 dark:text-white">
+              {healthData?.hrv ? `${healthData.hrv}ms` : '—'}
+            </span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {isArabic ? 'تقلب النبض' : 'HRV'}
             </span>
           </div>
         </div>

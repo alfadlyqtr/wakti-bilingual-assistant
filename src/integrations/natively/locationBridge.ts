@@ -341,12 +341,13 @@ async function getBrowserLocation(timeoutMs: number): Promise<NativeLocationResu
 
 /**
  * Detect if user query contains "near me" patterns (EN/AR)
+ * AGGRESSIVE detection - when in doubt, get fresh location
  */
 export function containsNearMePattern(query: string): boolean {
   if (!query || typeof query !== 'string') return false;
   const lower = query.toLowerCase();
   
-  // English patterns
+  // English patterns - expanded for better coverage
   const enPatterns = [
     'near me',
     'nearby',
@@ -358,9 +359,24 @@ export function containsNearMePattern(query: string): boolean {
     'where is the',
     'find me',
     'locate',
+    'around here',
+    'close by',
+    'in this area',
+    'local',
+    'walking distance',
+    'within',
+    'miles from',
+    'km from',
+    'minutes away',
+    'here',
+    'my location',
+    'current location',
+    'where i am',
+    'from here',
+    'to here',
   ];
   
-  // Arabic patterns
+  // Arabic patterns - expanded
   const arPatterns = [
     'قريب',
     'بالقرب',
@@ -371,6 +387,14 @@ export function containsNearMePattern(query: string): boolean {
     'في منطقتي',
     'وين أقرب',
     'فين أقرب',
+    'هنا',
+    'من هنا',
+    'الى هنا',
+    'موقعي',
+    'مكاني',
+    'حوالين',
+    'جنبي',
+    'قدامي',
   ];
   
   for (const p of enPatterns) {
@@ -469,8 +493,105 @@ export function containsTrafficPattern(query: string): boolean {
 }
 
 /**
- * Check if query needs fresh location (near me, weather, traffic)
+ * Detect if user query is asking about places/establishments (EN/AR)
+ * These queries almost always need location context
+ */
+export function containsPlacePattern(query: string): boolean {
+  if (!query || typeof query !== 'string') return false;
+  const lower = query.toLowerCase();
+  
+  // English place patterns
+  const enPatterns = [
+    'restaurant',
+    'cafe',
+    'coffee',
+    'hotel',
+    'hospital',
+    'pharmacy',
+    'gas station',
+    'petrol',
+    'atm',
+    'bank',
+    'supermarket',
+    'grocery',
+    'mall',
+    'shop',
+    'store',
+    'gym',
+    'park',
+    'beach',
+    'airport',
+    'station',
+    'mosque',
+    'church',
+    'school',
+    'university',
+    'clinic',
+    'dentist',
+    'barber',
+    'salon',
+    'spa',
+    'cinema',
+    'theater',
+    'museum',
+    'library',
+    'post office',
+    'police',
+    'fire station',
+    'parking',
+  ];
+  
+  // Arabic place patterns
+  const arPatterns = [
+    'مطعم',
+    'كافيه',
+    'قهوة',
+    'فندق',
+    'مستشفى',
+    'صيدلية',
+    'محطة بنزين',
+    'صراف',
+    'بنك',
+    'سوبرماركت',
+    'بقالة',
+    'مول',
+    'محل',
+    'جيم',
+    'حديقة',
+    'شاطئ',
+    'مطار',
+    'محطة',
+    'مسجد',
+    'كنيسة',
+    'مدرسة',
+    'جامعة',
+    'عيادة',
+    'طبيب',
+    'حلاق',
+    'صالون',
+    'سينما',
+    'مسرح',
+    'متحف',
+    'مكتبة',
+    'بريد',
+    'شرطة',
+    'مواقف',
+  ];
+  
+  for (const p of enPatterns) {
+    if (lower.includes(p)) return true;
+  }
+  for (const p of arPatterns) {
+    if (query.includes(p)) return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Check if query needs fresh location (near me, weather, traffic, places)
+ * ALWAYS call the bridge for location-dependent queries
  */
 export function queryNeedsFreshLocation(query: string): boolean {
-  return containsNearMePattern(query) || containsWeatherPattern(query) || containsTrafficPattern(query);
+  return containsNearMePattern(query) || containsWeatherPattern(query) || containsTrafficPattern(query) || containsPlacePattern(query);
 }

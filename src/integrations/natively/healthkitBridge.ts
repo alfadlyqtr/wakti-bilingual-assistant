@@ -348,6 +348,32 @@ export async function getTodayHeartRate(): Promise<{ avg: number; latest: number
 }
 
 /**
+ * Get today's resting heart rate
+ */
+export async function getTodayRestingHeartRate(): Promise<number | null> {
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  const data = await getQuantityData('RHR', 'DAY', startOfDay, now);
+  if (data.length === 0) return null;
+  
+  return Math.round(data[0].value);
+}
+
+/**
+ * Get today's heart rate variability (HRV)
+ */
+export async function getTodayHRV(): Promise<number | null> {
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  const data = await getQuantityData('HRV', 'DAY', startOfDay, now);
+  if (data.length === 0) return null;
+  
+  return Math.round(data[0].value);
+}
+
+/**
  * Get sleep analysis data
  */
 export async function getSleepAnalysis(
@@ -441,15 +467,19 @@ export async function getTodayHealthSummary(): Promise<{
   heartRate: { avg: number; latest: number } | null;
   activeEnergy: number;
   activity: HealthKitActivitySummary | null;
+  restingHeartRate: number | null;
+  hrv: number | null;
 }> {
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   
-  const [steps, heartRate, activeEnergyData, activityData] = await Promise.all([
+  const [steps, heartRate, activeEnergyData, activityData, restingHeartRate, hrv] = await Promise.all([
     getTodaySteps(),
     getTodayHeartRate(),
     getQuantityData('ACTIVE_ENERGY', 'DAY', startOfDay, now),
     getActivitySummary(startOfDay, now),
+    getTodayRestingHeartRate(),
+    getTodayHRV(),
   ]);
   
   return {
@@ -457,5 +487,7 @@ export async function getTodayHealthSummary(): Promise<{
     heartRate,
     activeEnergy: activeEnergyData.length > 0 ? Math.round(activeEnergyData[0].value) : 0,
     activity: activityData.length > 0 ? activityData[0] : null,
+    restingHeartRate,
+    hrv,
   };
 }

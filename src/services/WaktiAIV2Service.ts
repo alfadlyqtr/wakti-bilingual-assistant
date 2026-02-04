@@ -40,7 +40,7 @@ type UserLocationContext = {
   updatedAt?: number;
 };
 
-const LOCATION_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const LOCATION_CACHE_TTL = 30 * 60 * 1000; // 30 minutes - people move around!
 
 class WaktiAIV2ServiceClass {
   private personalTouchCache: any = null;
@@ -1617,8 +1617,13 @@ class WaktiAIV2ServiceClass {
         }
       } catch {}
 
-      // Load user location once (country, city) to include in metadata
-      const location = await this.getUserLocation(userId);
+      // Load user location (country, city) to include in metadata
+      // If query contains "near me", weather, traffic, or place patterns, force fresh location
+      const needsFreshLocation = activeTrigger === 'search' || queryNeedsFreshLocation(message);
+      if (needsFreshLocation) {
+        console.log(`📍 LOCATION (non-streaming): Query needs fresh location - "${message.substring(0, 50)}..."`);
+      }
+      const location = await this.getUserLocation(userId, needsFreshLocation);
 
       // Enhanced message handling with 100-message memory window
       // CRITICAL: Strip large data to avoid huge request bodies that crash Edge Functions
