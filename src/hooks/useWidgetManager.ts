@@ -6,14 +6,25 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import React from "react";
 
-const DEFAULT_WIDGET_ORDER = ["calendar", "journal", "tr", "whoop", "maw3d", "quote"];
+const DEFAULT_WIDGET_ORDER = ["nav", "calendar", "journal", "tr", "whoop", "maw3d", "quote"];
 
 const mergeOrder = (order: string[]): string[] => {
+  // Keep user's order for widgets they already have
   const filtered = order.filter(
     (id, index) => DEFAULT_WIDGET_ORDER.includes(id) && order.indexOf(id) === index
   );
-  const remaining = DEFAULT_WIDGET_ORDER.filter((id) => !filtered.includes(id));
-  return [...filtered, ...remaining];
+  // Find new widgets not in user's order
+  const missing = DEFAULT_WIDGET_ORDER.filter((id) => !filtered.includes(id));
+  
+  // Insert missing widgets at their default positions
+  const result = [...filtered];
+  for (const id of missing) {
+    const defaultIndex = DEFAULT_WIDGET_ORDER.indexOf(id);
+    // Insert at the default position, clamped to current length
+    const insertAt = Math.min(defaultIndex, result.length);
+    result.splice(insertAt, 0, id);
+  }
+  return result;
 };
 
 const sanitizeOrderInput = (value: unknown): string[] | null => {
@@ -55,6 +66,7 @@ type WidgetType = {
 };
 
 type WidgetVisibilitySettings = {
+  showNavWidget: boolean;
   showCalendarWidget: boolean;
   showTRWidget: boolean;
   showMaw3dWidget: boolean;
@@ -67,6 +79,7 @@ export const useWidgetManager = (language: "en" | "ar") => {
   const { user } = useAuth();
   const [widgets, setWidgets] = useState<WidgetType[]>([]);
   const [widgetSettings, setWidgetSettings] = useState<WidgetVisibilitySettings>({
+    showNavWidget: true,
     showCalendarWidget: true,
     showTRWidget: true,
     showMaw3dWidget: true,
@@ -104,6 +117,7 @@ export const useWidgetManager = (language: "en" | "ar") => {
 
         const widgetPrefs = settingsPayload.widgets ?? {};
         setWidgetSettings({
+          showNavWidget: widgetPrefs.showNavWidget !== false,
           showCalendarWidget: widgetPrefs.showCalendarWidget !== false,
           showTRWidget: widgetPrefs.showTRWidget !== false,
           showMaw3dWidget: widgetPrefs.showMaw3dWidget !== false,
@@ -125,6 +139,7 @@ export const useWidgetManager = (language: "en" | "ar") => {
         if (!active) return;
         // Ensure default widget settings are applied even on error
         setWidgetSettings({
+          showNavWidget: true,
           showCalendarWidget: true,
           showTRWidget: true,
           showMaw3dWidget: true,
@@ -149,8 +164,8 @@ export const useWidgetManager = (language: "en" | "ar") => {
     const handleWidgetSettingsChanged = (e: any) => {
       const prefs = (e && e.detail) || {};
       setWidgetSettings({
+        showNavWidget: prefs.showNavWidget !== false,
         showCalendarWidget: prefs.showCalendarWidget !== false,
-        // Respect the single combined toggle strictly on live changes
         showTRWidget: prefs.showTRWidget !== false,
         showMaw3dWidget: prefs.showMaw3dWidget !== false,
         showQuoteWidget: prefs.showQuoteWidget !== false,
@@ -181,10 +196,20 @@ export const useWidgetManager = (language: "en" | "ar") => {
           Maw3dWidget,
           WhoopWidget,
           JournalWidget,
+          NavWidget,
         } = await import("@/components/dashboard/widgets");
         const { QuoteWidget } = await import("@/components/dashboard/QuoteWidget");
 
         const widgetMap: Record<string, WidgetType> = {
+          nav: {
+            id: "nav",
+            title: "dashboard",
+            visible: widgetSettings.showNavWidget,
+            component: React.createElement(NavWidget, {
+              language,
+              key: `nav-${language}`,
+            }),
+          },
           calendar: {
             id: "calendar",
             title: "calendar",
@@ -245,6 +270,7 @@ export const useWidgetManager = (language: "en" | "ar") => {
         // Fallback: if all widgets in ordered list are invisible but some toggles are ON,
         // rebuild from widgetMap ensuring visible ones are present
         const anyVisibleFlag = (
+          widgetSettings.showNavWidget ||
           widgetSettings.showCalendarWidget ||
           widgetSettings.showTRWidget ||
           widgetSettings.showMaw3dWidget ||
@@ -273,6 +299,7 @@ export const useWidgetManager = (language: "en" | "ar") => {
   }, [
     language,
     user,
+    widgetSettings.showNavWidget,
     widgetSettings.showCalendarWidget,
     widgetSettings.showTRWidget,
     widgetSettings.showMaw3dWidget,

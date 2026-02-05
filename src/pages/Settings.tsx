@@ -40,6 +40,7 @@ export default function Settings() {
 
   // Widget visibility settings
   const [widgetSettings, setWidgetSettings] = useState({
+    showNavWidget: true,
     showCalendarWidget: true,
     showEventsWidget: true,
     showQuoteWidget: true,
@@ -351,6 +352,18 @@ export default function Settings() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="flex items-center justify-between rounded-md border p-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      {language === "ar" ? "إظهار الوصول السريع" : "Show Quick Access"}
+                    </p>
+                  </div>
+                  <Switch 
+                    checked={widgetSettings.showNavWidget}
+                    onCheckedChange={(checked) => updateWidgetSetting('showNavWidget', checked)}
+                  />
+                </div>
+
                 <div className="flex items-center justify-between rounded-md border p-4">
                   <div className="space-y-1">
                     <p className="text-sm font-medium">

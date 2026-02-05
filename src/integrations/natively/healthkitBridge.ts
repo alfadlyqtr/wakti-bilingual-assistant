@@ -107,6 +107,12 @@ interface NativelyHealthInstance {
     type: HealthKitDataType,
     callback: (result: { status: boolean }, error?: string) => void
   ) => void;
+
+  // On your device it's exposed as permissionStatus
+  permissionStatus?: (
+    type: HealthKitDataType,
+    callback: (result: { status: boolean }, error?: string) => void
+  ) => void;
   
   // Get all user characteristics (age, sex, blood type, etc.)
   getAllCharacteristics?: (
@@ -114,7 +120,17 @@ interface NativelyHealthInstance {
   ) => void;
   
   // Get quantity data (steps, heart rate, etc.)
-  // Per Natively docs: getStatisticQuantityValues(dataType, interval, startDate, endDate, callback)
+  // SDKs differ by version. On your device it's getStatisticQuantity.
+  // Keep multiple aliases to support multiple SDK versions.
+  getStatisticQuantity?: (
+    dataType: HealthKitQuantityType,
+    interval: HealthKitInterval,
+    startDate: Date,
+    endDate: Date,
+    callback: (result: { result: HealthKitQuantityData[] }, error?: string) => void
+  ) => void;
+
+  // Older/other SDK versions
   getStatisticQuantityValues?: (
     dataType: HealthKitQuantityType,
     interval: HealthKitInterval,
@@ -410,10 +426,14 @@ export async function runHealthKitDiagnostics(): Promise<HealthKitDiagnosticsRes
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   out.dates = { startOfDay: startOfDay.toISOString(), now: now.toISOString() };
 
-  const quantityMethod = instance.getStatisticQuantityValues || instance.getQuantity;
+  const quantityMethod =
+    instance.getStatisticQuantity ||
+    instance.getStatisticQuantityValues ||
+    instance.getQuantity;
   out.quantity = {
-    hasGetStatisticQuantityValues: typeof instance.getStatisticQuantityValues,
-    hasGetQuantity: typeof instance.getQuantity,
+    hasGetStatisticQuantity: typeof (instance as any).getStatisticQuantity,
+    hasGetStatisticQuantityValues: typeof (instance as any).getStatisticQuantityValues,
+    hasGetQuantity: typeof (instance as any).getQuantity,
   };
 
   if (quantityMethod) {
@@ -421,7 +441,7 @@ export async function runHealthKitDiagnostics(): Promise<HealthKitDiagnosticsRes
       const r1 = await promisify(`quantity_${dataType}_${interval}_start_end`, (cb) =>
         quantityMethod.call(instance, dataType, interval, startOfDay, now, (res: any, err: any) => cb(res, err))
       );
-      const normalized1 = r1.res?.result ?? r1.res?.data ?? null;
+      const normalized1 = r1.res?.result?.data ?? r1.res?.result ?? r1.res?.data ?? null;
 
       let r2: any = null;
       if (Array.isArray(normalized1) && normalized1.length === 0) {
@@ -434,7 +454,7 @@ export async function runHealthKitDiagnostics(): Promise<HealthKitDiagnosticsRes
         first: r1,
         firstNormalized: normalized1,
         second: r2,
-        secondNormalized: r2 ? r2.res?.result ?? r2.res?.data ?? null : null,
+        secondNormalized: r2 ? r2.res?.result?.data ?? r2.res?.result ?? r2.res?.data ?? null : null,
       };
     };
 
@@ -556,8 +576,11 @@ export async function getQuantityData(
 ): Promise<HealthKitQuantityData[]> {
   const instance = getInstance();
   
-  // Try both method names - getStatisticQuantityValues (per docs) or getQuantity (legacy)
-  const quantityMethod = instance?.getStatisticQuantityValues || instance?.getQuantity;
+  // Try all known method names (device SDK uses getStatisticQuantity)
+  const quantityMethod =
+    instance?.getStatisticQuantity ||
+    instance?.getStatisticQuantityValues ||
+    instance?.getQuantity;
   
   console.log(`[NativelyHealth] getQuantityData called:`, {
     dataType,
@@ -565,8 +588,9 @@ export async function getQuantityData(
     startDate: startDate.toISOString(),
     endDate: endDate.toISOString(),
     hasInstance: !!instance,
-    hasGetStatisticQuantityValues: !!instance?.getStatisticQuantityValues,
-    hasGetQuantity: !!instance?.getQuantity,
+    hasGetStatisticQuantity: !!(instance as any)?.getStatisticQuantity,
+    hasGetStatisticQuantityValues: !!(instance as any)?.getStatisticQuantityValues,
+    hasGetQuantity: !!(instance as any)?.getQuantity,
   });
   
   if (!quantityMethod) {
@@ -585,14 +609,17 @@ export async function getQuantityData(
       quantityMethod.call(instance, dataType, interval, startDate, endDate, (res: any, error: string | undefined) => {
         clearTimeout(timeout);
         
-        // Per Natively docs, result comes in res.result, not res.data
-        const data = res?.result || res?.data || [];
+        // Normalize across SDK versions:
+        // - res.result may be an array OR an object containing .data
+        // - res.data may exist on older versions
+        const data = res?.result?.data ?? res?.result ?? res?.data ?? [];
         
         console.log(`[NativelyHealth] ${dataType} callback received:`, {
           hasRes: !!res,
           hasResult: !!res?.result,
           hasData: !!res?.data,
-          dataLength: data?.length,
+          hasResultData: !!res?.result?.data,
+          dataLength: Array.isArray(data) ? data.length : undefined,
           error,
           rawResult: JSON.stringify(res).substring(0, 500),
         });
@@ -602,8 +629,13 @@ export async function getQuantityData(
           resolve([]);
           return;
         }
-        console.log(`[NativelyHealth] ${dataType} data:`, data?.length || 0, 'records');
-        resolve(data || []);
+        if (Array.isArray(data)) {
+          console.log(`[NativelyHealth] ${dataType} data:`, data.length || 0, 'records');
+          resolve(data);
+          return;
+        }
+        console.warn(`[NativelyHealth] ${dataType} returned unexpected shape (not array)`, typeof data);
+        resolve([]);
       });
     } catch (err) {
       clearTimeout(timeout);
