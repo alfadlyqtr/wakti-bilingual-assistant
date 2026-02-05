@@ -44,6 +44,7 @@ import {
   getSleepAnalysis,
   getWorkouts,
   getCharacteristics,
+  type HealthKitDataType,
   type HealthKitActivitySummary,
   type HealthKitSleepAnalysis,
   type HealthKitWorkout,
@@ -169,12 +170,38 @@ export function HealthKitTab() {
       return;
     }
 
-    // SDK available - try to fetch data directly
-    // If we can get data, permission was already granted
-    // This handles the case where user already granted permission in a previous session
-    console.log('[HealthKitTab] SDK available, attempting to fetch data to check permission status...');
+    // SDK available - per Natively docs, we MUST request permissions before fetching data
+    // Even if user previously granted, we need to call requestAuthorization each session
+    console.log('[HealthKitTab] SDK available, requesting permissions and fetching data...');
     
     try {
+      // Request permissions for all data types we need
+      const permissionTypes: HealthKitDataType[] = [
+        'STEPS',
+        'HEART_RATE',
+        'ACTIVE_ENERGY',
+        'SLEEP_ANALYSIS',
+        'ACTIVITY_SUMMARY',
+        'WORKOUTS',
+        'HRV',
+        'RHR'
+      ];
+      
+      console.log('[HealthKitTab] Requesting permissions for:', permissionTypes);
+      const granted = await requestHealthKitPermissions(permissionTypes);
+      console.log('[HealthKitTab] Permission result:', granted);
+      
+      // Per Natively docs: After requesting permission once, it might return YES every time
+      // It doesn't guarantee that the user has provided access to their data
+      // So we proceed to fetch data regardless
+      
+      setPermissionStatus('granted');
+      
+      // Now fetch data
+      const now = new Date();
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      
+      console.log('[HealthKitTab] Fetching health summary...');
       const summary = await getTodayHealthSummary();
       console.log('[HealthKitTab] Health summary result:', {
         steps: summary.steps,
@@ -182,15 +209,6 @@ export function HealthKitTab() {
         activeEnergy: summary.activeEnergy,
         hasActivity: !!summary.activity,
       });
-      
-      // If we got any data, permission is granted
-      // Note: Even with permission, some data might be 0 if user hasn't moved today
-      // So we check if the call succeeded, not if values are > 0
-      setPermissionStatus('granted');
-      
-      // Set the data we already fetched
-      const now = new Date();
-      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       
       const [sleep, workouts, characteristics] = await Promise.all([
         getSleepAnalysis(weekAgo, now, 7),
@@ -212,7 +230,7 @@ export function HealthKitTab() {
       setLastUpdated(new Date());
       
     } catch (err) {
-      console.log('[HealthKitTab] Could not fetch data, needs permission:', err);
+      console.log('[HealthKitTab] Error during permission/fetch:', err);
       setPermissionStatus('needs_permission');
     }
   };

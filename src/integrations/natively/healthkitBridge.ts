@@ -193,30 +193,51 @@ function getInstance(): NativelyHealthInstance | null {
     // Per Natively docs: const health = NativelyHealth() - function call, not constructor
     const NativelyHealthFn = (window as any).NativelyHealth;
     if (typeof NativelyHealthFn === 'function') {
+      let instance: any = null;
+      
       try {
         // Try as function call first (per docs)
-        const instance = NativelyHealthFn();
-        if (instance) {
-          console.log('[NativelyHealth] Created instance via NativelyHealth() function call');
-          // Log available methods
-          const methods = Object.keys(instance).filter(k => typeof instance[k] === 'function');
-          console.log('[NativelyHealth] Instance methods:', methods);
-          return instance;
-        }
+        instance = NativelyHealthFn();
+        console.log('[NativelyHealth] Created instance via NativelyHealth() function call');
       } catch (e1) {
-        console.log('[NativelyHealth] Function call failed, trying constructor...');
+        console.log('[NativelyHealth] Function call failed, trying constructor...', e1);
         try {
-          // Fallback to constructor pattern
-          const instance = new NativelyHealthFn();
-          if (instance) {
-            console.log('[NativelyHealth] Created instance via new NativelyHealth()');
-            const methods = Object.keys(instance).filter(k => typeof instance[k] === 'function');
-            console.log('[NativelyHealth] Instance methods:', methods);
-            return instance;
-          }
+          instance = new NativelyHealthFn();
+          console.log('[NativelyHealth] Created instance via new NativelyHealth()');
         } catch (e2) {
           console.warn('[NativelyHealth] Both patterns failed:', e1, e2);
         }
+      }
+      
+      if (instance) {
+        // Log ALL available methods - both own and prototype
+        const ownMethods = Object.keys(instance).filter(k => typeof instance[k] === 'function');
+        const protoMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(instance) || {})
+          .filter(k => k !== 'constructor' && typeof instance[k] === 'function');
+        const allMethods = [...new Set([...ownMethods, ...protoMethods])];
+        
+        console.log('[NativelyHealth] === SDK METHODS AVAILABLE ===');
+        console.log('[NativelyHealth] Own methods:', ownMethods);
+        console.log('[NativelyHealth] Prototype methods:', protoMethods);
+        console.log('[NativelyHealth] All methods:', allMethods);
+        
+        // Check for specific methods we need
+        const methodChecks = {
+          'available': typeof instance.available,
+          'requestAuthorization': typeof instance.requestAuthorization,
+          'getStatisticQuantityValues': typeof instance.getStatisticQuantityValues,
+          'getQuantity': typeof instance.getQuantity,
+          'getDailySleepAnalysis': typeof instance.getDailySleepAnalysis,
+          'getSleepAnalysis': typeof instance.getSleepAnalysis,
+          'getActivitySummary': typeof instance.getActivitySummary,
+          'getWorkouts': typeof instance.getWorkouts,
+          'getAllCharacteristics': typeof instance.getAllCharacteristics,
+          'getPermissionStatus': typeof instance.getPermissionStatus,
+        };
+        console.log('[NativelyHealth] Method type checks:', methodChecks);
+        console.log('[NativelyHealth] ===========================');
+        
+        return instance;
       }
     }
     
