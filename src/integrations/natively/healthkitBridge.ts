@@ -184,12 +184,21 @@ interface NativelyHealthInstance {
   ) => void;
 }
 
+// Cache the SDK instance so we reuse the same instance that was authorized
+let cachedInstance: NativelyHealthInstance | null = null;
+
 /**
  * Get HealthKit SDK instance
  * Per Natively docs: const health = NativelyHealth() - it's a function call, not a constructor
+ * We cache the instance to ensure the same authorized instance is used for all calls
  */
 function getInstance(): NativelyHealthInstance | null {
   if (typeof window === 'undefined') return null;
+  
+  // Return cached instance if available
+  if (cachedInstance) {
+    return cachedInstance;
+  }
   
   try {
     const natively = (window as any).natively;
@@ -256,6 +265,8 @@ function getInstance(): NativelyHealthInstance | null {
         console.log('[NativelyHealth] Method type checks:', methodChecks);
         console.log('[NativelyHealth] ===========================');
         
+        // Cache the instance for reuse
+        cachedInstance = instance;
         return instance;
       }
     }
@@ -611,12 +622,16 @@ export async function getQuantityData(
   endDate: Date
 ): Promise<HealthKitQuantityData[]> {
   const instance = getInstance();
+  if (!instance) {
+    console.warn('[NativelyHealth] No instance available for getQuantityData');
+    return [];
+  }
   
-  // Try all known method names
+  // Try all known method names - match diagnostics pattern exactly
   const quantityMethod =
-    (instance as any)?.getStatisticQuantity ||
-    (instance as any)?.getStatisticQuantityValues ||
-    (instance as any)?.getQuantity;
+    instance.getStatisticQuantity ||
+    instance.getStatisticQuantityValues ||
+    (instance as any).getQuantity;
   
   console.log(`[NativelyHealth] getQuantityData called:`, {
     dataType,
@@ -640,10 +655,12 @@ export async function getQuantityData(
     }, 15000);
     
     try {
-      console.log(`[NativelyHealth] Calling getStatisticQuantity for ${dataType} with interval ${interval}...`);
+      console.log(`[NativelyHealth] Calling getStatisticQuantity for ${dataType} with interval ${interval}...`, {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      });
       
       // Per Natively Bubble docs for getStatisticQuantity: (data_type, interval, start_date, end_date, callback)
-      // Note: Other methods like getWorkouts use (end_date, start_date) but quantity uses (start, end)
       quantityMethod.call(instance, dataType, interval, startDate, endDate, (res: any, error: string | undefined) => {
         clearTimeout(timeout);
         
@@ -694,10 +711,25 @@ export async function getTodaySteps(): Promise<number> {
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   
+  console.log('[NativelyHealth] getTodaySteps called:', {
+    startOfDay: startOfDay.toISOString(),
+    now: now.toISOString(),
+  });
+  
   const data = await getQuantityData('STEPS', 'DAY', startOfDay, now);
-  if (data.length > 0) {
-    return Math.round(data[0].value);
+  
+  console.log('[NativelyHealth] getTodaySteps data:', {
+    dataLength: data.length,
+    firstItem: data[0] || null,
+    allValues: data.map(d => d.value),
+  });
+  
+  if (data.length > 0 && data[0].value !== null && data[0].value !== undefined) {
+    const steps = Math.round(data[0].value);
+    console.log('[NativelyHealth] getTodaySteps returning:', steps);
+    return steps;
   }
+  console.log('[NativelyHealth] getTodaySteps returning 0 (no data)');
   return 0;
 }
 

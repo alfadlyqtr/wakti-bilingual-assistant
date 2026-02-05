@@ -851,9 +851,9 @@ const WaktiAIV2 = () => {
         className="wakti-ai-messages-area"
         ref={scrollAreaRef}
         style={{
-          height: `calc(100dvh - var(--app-header-h) - ${inputReservePx}px)`,
+          height: `calc(100dvh - var(--app-header-h))`,
           overflowY: 'auto',
-          paddingBottom: '6px'
+          paddingBottom: `${inputReservePx + 12}px`
         }}
       >
         {activeTrigger === 'image' && activeImageMode === 'draw-after-bg' ? (
