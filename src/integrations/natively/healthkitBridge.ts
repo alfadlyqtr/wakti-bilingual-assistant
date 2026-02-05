@@ -298,7 +298,7 @@ export function debugHealthKitSDK(): void {
   
   if (NativelyHealth) {
     try {
-      const instance = new NativelyHealth();
+      const instance = typeof NativelyHealth === 'function' ? (NativelyHealth() || new NativelyHealth()) : new NativelyHealth();
       console.log('NativelyHealth instance:', instance);
       console.log('Instance keys:', Object.keys(instance));
       console.log('Prototype keys:', Object.getOwnPropertyNames(Object.getPrototypeOf(instance)));
@@ -322,6 +322,135 @@ export function debugHealthKitSDK(): void {
   console.log('Health-related window keys:', healthKeys);
   
   console.log('=== End Debug ===');
+}
+
+type HealthKitDiagnosticsResult = {
+  text: string;
+  data: any;
+};
+
+export async function runHealthKitDiagnostics(): Promise<HealthKitDiagnosticsResult> {
+  const out: any = {
+    timestamp: new Date().toISOString(),
+    env: {
+      hasWindow: typeof window !== 'undefined',
+      hasNatively: typeof window !== 'undefined' ? !!(window as any).natively : false,
+      isIOSApp: typeof window !== 'undefined' ? !!(window as any).natively?.isIOSApp : false,
+      isNativeApp: typeof window !== 'undefined' ? !!(window as any).natively?.isNativeApp : false,
+      isAndroidApp: typeof window !== 'undefined' ? !!(window as any).natively?.isAndroidApp : false,
+      hasNativelyHealthGlobal: typeof window !== 'undefined' ? typeof (window as any).NativelyHealth !== 'undefined' : false,
+    },
+  };
+
+  const instance: any = getInstance();
+  out.instance = {
+    exists: !!instance,
+    ownKeys: instance ? Object.keys(instance) : [],
+    protoKeys: instance ? Object.getOwnPropertyNames(Object.getPrototypeOf(instance) || {}) : [],
+    methods: instance
+      ? [...new Set([
+          ...Object.keys(instance).filter((k) => typeof instance[k] === 'function'),
+          ...Object.getOwnPropertyNames(Object.getPrototypeOf(instance) || {}).filter((k) => typeof instance[k] === 'function'),
+        ])]
+      : [],
+  };
+
+  if (!instance) {
+    const text = JSON.stringify(out, null, 2);
+    return { text, data: out };
+  }
+
+  const promisify = <T>(
+    label: string,
+    fn: (cb: (res: any, err?: any) => void) => void,
+    timeoutMs: number = 15000
+  ): Promise<{ label: string; res: any; err: any; timedOut: boolean; ms: number }> => {
+    const started = Date.now();
+    return new Promise((resolve) => {
+      let done = false;
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        resolve({ label, res: null, err: `timeout_${timeoutMs}ms`, timedOut: true, ms: Date.now() - started });
+      }, timeoutMs);
+      try {
+        fn((res, err) => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          resolve({ label, res, err: err ?? null, timedOut: false, ms: Date.now() - started });
+        });
+      } catch (e) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve({ label, res: null, err: e, timedOut: false, ms: Date.now() - started });
+      }
+    });
+  };
+
+  out.available = await promisify('available', (cb) => instance.available((res: any, err: any) => cb(res, err)));
+
+  const types: HealthKitDataType[] = [
+    'STEPS',
+    'HEART_RATE',
+    'ACTIVE_ENERGY',
+    'HRV',
+    'RHR',
+    'SLEEP_ANALYSIS',
+    'ACTIVITY_SUMMARY',
+    'WORKOUTS',
+  ];
+
+  out.requestAuthorization = await promisify('requestAuthorization', (cb) =>
+    instance.requestAuthorization([], types, (res: any, err: any) => cb(res, err))
+  );
+
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  out.dates = { startOfDay: startOfDay.toISOString(), now: now.toISOString() };
+
+  const quantityMethod = instance.getStatisticQuantityValues || instance.getQuantity;
+  out.quantity = {
+    hasGetStatisticQuantityValues: typeof instance.getStatisticQuantityValues,
+    hasGetQuantity: typeof instance.getQuantity,
+  };
+
+  if (quantityMethod) {
+    const q = async (dataType: HealthKitQuantityType, interval: HealthKitInterval) => {
+      const r1 = await promisify(`quantity_${dataType}_${interval}_start_end`, (cb) =>
+        quantityMethod.call(instance, dataType, interval, startOfDay, now, (res: any, err: any) => cb(res, err))
+      );
+      const normalized1 = r1.res?.result ?? r1.res?.data ?? null;
+
+      let r2: any = null;
+      if (Array.isArray(normalized1) && normalized1.length === 0) {
+        r2 = await promisify(`quantity_${dataType}_${interval}_end_start`, (cb) =>
+          quantityMethod.call(instance, dataType, interval, now, startOfDay, (res: any, err: any) => cb(res, err))
+        );
+      }
+
+      return {
+        first: r1,
+        firstNormalized: normalized1,
+        second: r2,
+        secondNormalized: r2 ? r2.res?.result ?? r2.res?.data ?? null : null,
+      };
+    };
+
+    out.samples = {
+      steps: await q('STEPS', 'DAY'),
+      activeEnergy: await q('ACTIVE_ENERGY', 'DAY'),
+      heartRate: await q('HEART_RATE', 'HOUR'),
+      restingHeartRate: await q('RHR', 'DAY'),
+      hrv: await q('HRV', 'DAY'),
+    };
+  } else {
+    out.samples = { error: 'no_quantity_method' };
+  }
+
+  const text = JSON.stringify(out, null, 2);
+  return { text, data: out };
 }
 
 // Expose to window for console debugging

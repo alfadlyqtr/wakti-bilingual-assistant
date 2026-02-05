@@ -40,6 +40,7 @@ import {
   isHealthKitSDKAvailable,
   checkHealthKitAvailability,
   requestHealthKitPermissions,
+  runHealthKitDiagnostics,
   getTodayHealthSummary,
   getSleepAnalysis,
   getWorkouts,
@@ -104,6 +105,10 @@ export function HealthKitTab() {
   const [activeView, setActiveView] = useState<MetricView>('overview');
   const [timeRange, setTimeRange] = useState<TimeRange>('daily');
   const [showGoalEditor, setShowGoalEditor] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
+  const [debugRunning, setDebugRunning] = useState(false);
+  const [debugText, setDebugText] = useState<string>('');
+  const [debugCopied, setDebugCopied] = useState(false);
   const [goals, setGoals] = useState(() => {
     try {
       const saved = localStorage.getItem('healthkit_goals');
@@ -128,6 +133,42 @@ export function HealthKitTab() {
     localStorage.setItem('healthkit_goals', JSON.stringify(newGoals));
     setShowGoalEditor(false);
   };
+
+  const runDebug = useCallback(async () => {
+    setDebugRunning(true);
+    setDebugCopied(false);
+    try {
+      const result = await runHealthKitDiagnostics();
+      setDebugText(result.text || '');
+    } catch (e) {
+      setDebugText(JSON.stringify({ error: String((e as any)?.message || e) }, null, 2));
+    } finally {
+      setDebugRunning(false);
+    }
+  }, []);
+
+  const copyDebug = useCallback(async () => {
+    try {
+      if (!debugText) return;
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(debugText);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = debugText;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      setDebugCopied(true);
+      setTimeout(() => setDebugCopied(false), 1500);
+    } catch {
+      setDebugCopied(false);
+    }
+  }, [debugText]);
 
   // Get chart data based on time range
   const getChartData = useCallback(() => {
@@ -666,16 +707,66 @@ export function HealthKitTab() {
             )}
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={fetchHealthData}
-          disabled={refreshing}
-          className="rounded-full"
-        >
-          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowDebug((v) => !v)}
+            className="rounded-full"
+            aria-label="HealthKit Debug"
+          >
+            <Settings className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={fetchHealthData}
+            disabled={refreshing}
+            className="rounded-full"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
       </div>
+
+      {showDebug && (
+        <Card className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-white/5 p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+              {isArabic ? 'تشخيص HealthKit' : 'HealthKit Debug'}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={runDebug}
+                disabled={debugRunning}
+                className="rounded-full"
+              >
+                {debugRunning ? (isArabic ? 'جاري...' : 'Running...') : (isArabic ? 'تشغيل' : 'Run')}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={copyDebug}
+                disabled={!debugText}
+                className="rounded-full"
+              >
+                {debugCopied ? (isArabic ? 'تم النسخ' : 'Copied') : (isArabic ? 'نسخ' : 'Copy')}
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+              {isArabic ? 'اضغط تشغيل ثم نسخ وأرسل النص هنا.' : 'Tap Run, then Copy, then paste the text here.'}
+            </div>
+            <pre className="text-[11px] leading-relaxed whitespace-pre-wrap break-words max-h-64 overflow-auto rounded-2xl bg-black/5 dark:bg-black/30 p-3 text-gray-800 dark:text-gray-200">
+              {debugText || (isArabic ? 'لا توجد نتائج بعد.' : 'No output yet.')}
+            </pre>
+          </div>
+        </Card>
+      )}
 
       {/* Activity Summary Card */}
       <Card className="relative overflow-hidden rounded-3xl border border-blue-200 dark:border-blue-500/20 bg-gradient-to-br from-blue-50 via-cyan-50 to-teal-50 dark:from-blue-900/20 dark:via-cyan-900/20 dark:to-teal-900/20 p-5 shadow-lg">
