@@ -474,6 +474,7 @@ const WaktiAIV2 = () => {
           return finalMessages;
         });
       } else if (inputType === 'vision') {
+        console.log('🔍 VISION PATH ENTERED:', { inputType, trigger, attachedFilesCount: attachedFiles?.length });
         let streamed = '';
         let streamMeta: any = {};
         let firstToken = false;
@@ -489,17 +490,22 @@ const WaktiAIV2 = () => {
           '', // conversationSummary
           attachedFiles,
           (token: string) => {
+            console.log('🎯 VISION TOKEN RECEIVED:', token.substring(0, 50));
             streamed += token;
             if (!firstToken) {
               firstToken = true;
+              console.log('🎯 VISION FIRST TOKEN - clearing loading state');
               setIsLoading(false);
               setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, metadata: { ...(m.metadata || {}), loading: false } } : m));
             }
             setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: streamed } : m));
           },
-          (metadata: any) => { streamMeta = metadata || {}; },
+          (metadata: any) => { 
+            console.log('🎯 VISION METADATA:', metadata);
+            streamMeta = metadata || {}; 
+          },
           (err: string) => { 
-            console.error('Vision stream error:', err);
+            console.error('❌ Vision stream error:', err);
             // CRITICAL: Clear loading state on error to prevent "I'm on it..." stuck forever
             setIsLoading(false);
             setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { 
@@ -511,6 +517,7 @@ const WaktiAIV2 = () => {
           controller.signal,
           effectiveChatSubmode // Pass chatSubmode for Study mode support in Vision
         );
+        console.log('✅ VISION STREAM COMPLETED:', { responseLength: streamedResp?.response?.length, streamed: streamed.length });
 
         const visionEndTime = Date.now();
         const visionThinkingDuration = Math.round((visionEndTime - startTime) / 1000);

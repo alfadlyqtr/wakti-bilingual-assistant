@@ -218,11 +218,12 @@ export function HealthKitTab() {
     
     try {
       // Request permissions for all data types we need
+      // Per Natively docs: only these are valid quantity types
+      // BASAL_ENERGY is NOT valid - it only exists in WORKOUTS data
       const permissionTypes: HealthKitDataType[] = [
         'STEPS',
         'HEART_RATE',
         'ACTIVE_ENERGY',
-        'BASAL_ENERGY',
         'SLEEP_ANALYSIS',
         'ACTIVITY_SUMMARY',
         'WORKOUTS',
@@ -286,7 +287,6 @@ export function HealthKitTab() {
         'STEPS',
         'HEART_RATE',
         'ACTIVE_ENERGY',
-        'BASAL_ENERGY',
         'SLEEP_ANALYSIS',
         'ACTIVITY_SUMMARY',
         'WORKOUTS',
@@ -813,33 +813,6 @@ export function HealthKitTab() {
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {isArabic ? 'نشطة' : 'active'}
-            </span>
-          </div>
-        </div>
-
-        {/* Energy Row - Option A: Added Resting Energy */}
-        <div className="grid grid-cols-2 gap-4 mt-4">
-          {/* Resting/Basal Energy */}
-          <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
-            <Zap className="w-5 h-5 text-amber-500 mb-2" />
-            <span className="text-xl font-bold text-gray-800 dark:text-white">
-              {healthData?.basalEnergy !== undefined && healthData?.basalEnergy !== null && healthData.basalEnergy > 0 ? healthData.basalEnergy.toLocaleString() : '—'}
-            </span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {isArabic ? 'طاقة الراحة' : 'Resting kcal'}
-            </span>
-          </div>
-
-          {/* Total Energy (Active + Basal) */}
-          <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
-            <Flame className="w-5 h-5 text-red-500 mb-2" />
-            <span className="text-xl font-bold text-gray-800 dark:text-white">
-              {((healthData?.activeEnergy || 0) + (healthData?.basalEnergy || 0)) > 0 
-                ? ((healthData?.activeEnergy || 0) + (healthData?.basalEnergy || 0)).toLocaleString() 
-                : '—'}
-            </span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {isArabic ? 'إجمالي السعرات' : 'Total kcal'}
             </span>
           </div>
         </div>

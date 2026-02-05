@@ -9,8 +9,10 @@
  */
 
 // HealthKit data types
+// Per Natively docs, these are the ONLY valid Quantity Types:
+// https://docs.buildnatively.com/guides/integration/healthkit
 export type HealthKitQuantityType = 
-  | 'HRV'           // Heart Rate Variability (milliseconds)
+  | 'HRV'           // Heart Rate Variability SDNN (milliseconds)
   | 'RHR'           // Resting Heart Rate (count/s)
   | 'BMI'           // Body Mass Index (count)
   | 'HEIGHT'        // Height (centimeters)
@@ -18,8 +20,8 @@ export type HealthKitQuantityType =
   | 'STEPS'         // Steps (count)
   | 'HEART_RATE'    // Heart Rate (count/min)
   | 'ACTIVE_ENERGY' // Active Energy Burned (kilocalories)
-  | 'BASAL_ENERGY'  // Basal/Resting Energy Burned (kilocalories)
   | 'BLOOD_OXYGEN'; // Blood Oxygen (percent)
+// NOTE: Basal/Resting Energy is ONLY available in WORKOUTS data, not as a standalone quantity type
 
 export type HealthKitCharacteristicType = 
   | 'DATE_OF_BIRTH' // Age in years
@@ -360,16 +362,39 @@ export async function runHealthKitDiagnostics(): Promise<HealthKitDiagnosticsRes
   };
 
   const instance: any = getInstance();
+  
+  // Get ALL methods including inherited ones
+  const getAllMethods = (obj: any): string[] => {
+    const methods: string[] = [];
+    let current = obj;
+    while (current && current !== Object.prototype) {
+      const names = Object.getOwnPropertyNames(current);
+      for (const name of names) {
+        if (typeof obj[name] === 'function' && name !== 'constructor') {
+          methods.push(name);
+        }
+      }
+      current = Object.getPrototypeOf(current);
+    }
+    return [...new Set(methods)];
+  };
+  
   out.instance = {
     exists: !!instance,
     ownKeys: instance ? Object.keys(instance) : [],
     protoKeys: instance ? Object.getOwnPropertyNames(Object.getPrototypeOf(instance) || {}) : [],
-    methods: instance
-      ? [...new Set([
-          ...Object.keys(instance).filter((k) => typeof instance[k] === 'function'),
-          ...Object.getOwnPropertyNames(Object.getPrototypeOf(instance) || {}).filter((k) => typeof instance[k] === 'function'),
-        ])]
-      : [],
+    allMethods: instance ? getAllMethods(instance) : [],
+    // Check specific method names
+    methodChecks: instance ? {
+      available: typeof instance.available,
+      requestAuthorization: typeof instance.requestAuthorization,
+      getStatisticQuantity: typeof instance.getStatisticQuantity,
+      getStatisticQuantityValues: typeof instance.getStatisticQuantityValues,
+      getQuantity: typeof instance.getQuantity,
+      getActivitySummary: typeof instance.getActivitySummary,
+      getDailySleepAnalysis: typeof instance.getDailySleepAnalysis,
+      getWorkouts: typeof instance.getWorkouts,
+    } : null,
   };
 
   if (!instance) {
@@ -567,7 +592,10 @@ export async function getCharacteristics(): Promise<HealthKitCharacteristics | n
 
 /**
  * Get quantity data (steps, heart rate, etc.)
- * Per Natively docs: getStatisticQuantityValues(dataType, interval, startDate, endDate, callback)
+ * Per Natively Bubble docs: getStatisticQuantity(data_type, interval, start_date, end_date, callback)
+ * 
+ * IMPORTANT: The Natively SDK uses HKStatisticsCollectionQuery which aggregates data
+ * over time intervals. For DAY interval, it returns one value per day.
  */
 export async function getQuantityData(
   dataType: HealthKitQuantityType,
@@ -577,11 +605,11 @@ export async function getQuantityData(
 ): Promise<HealthKitQuantityData[]> {
   const instance = getInstance();
   
-  // Try all known method names (device SDK uses getStatisticQuantity)
+  // Try all known method names
   const quantityMethod =
-    instance?.getStatisticQuantity ||
-    instance?.getStatisticQuantityValues ||
-    instance?.getQuantity;
+    (instance as any)?.getStatisticQuantity ||
+    (instance as any)?.getStatisticQuantityValues ||
+    (instance as any)?.getQuantity;
   
   console.log(`[NativelyHealth] getQuantityData called:`, {
     dataType,
@@ -589,9 +617,8 @@ export async function getQuantityData(
     startDate: startDate.toISOString(),
     endDate: endDate.toISOString(),
     hasInstance: !!instance,
-    hasGetStatisticQuantity: !!(instance as any)?.getStatisticQuantity,
-    hasGetStatisticQuantityValues: !!(instance as any)?.getStatisticQuantityValues,
-    hasGetQuantity: !!(instance as any)?.getQuantity,
+    methodFound: !!quantityMethod,
+    availableMethods: instance ? Object.getOwnPropertyNames(Object.getPrototypeOf(instance) || {}).filter(k => k !== 'constructor') : [],
   });
   
   if (!quantityMethod) {
@@ -601,42 +628,49 @@ export async function getQuantityData(
   
   return new Promise((resolve) => {
     const timeout = setTimeout(() => {
-      console.warn(`[NativelyHealth] ${dataType} callback timeout after 10s`);
+      console.warn(`[NativelyHealth] ${dataType} callback timeout after 15s`);
       resolve([]);
-    }, 10000);
+    }, 15000);
     
     try {
-      console.log(`[NativelyHealth] Calling quantity method for ${dataType}...`);
+      console.log(`[NativelyHealth] Calling getStatisticQuantity for ${dataType} with interval ${interval}...`);
+      
+      // Per Natively Bubble docs for getStatisticQuantity: (data_type, interval, start_date, end_date, callback)
+      // Note: Other methods like getWorkouts use (end_date, start_date) but quantity uses (start, end)
       quantityMethod.call(instance, dataType, interval, startDate, endDate, (res: any, error: string | undefined) => {
         clearTimeout(timeout);
         
-        // Normalize across SDK versions:
-        // - res.result may be an array OR an object containing .data
-        // - res.data may exist on older versions
-        const data = res?.result?.data ?? res?.result ?? res?.data ?? [];
-        
-        console.log(`[NativelyHealth] ${dataType} callback received:`, {
-          hasRes: !!res,
-          hasResult: !!res?.result,
-          hasData: !!res?.data,
-          hasResultData: !!res?.result?.data,
-          dataLength: Array.isArray(data) ? data.length : undefined,
-          error,
-          rawResult: JSON.stringify(res).substring(0, 500),
-        });
+        console.log(`[NativelyHealth] ${dataType} RAW response:`, JSON.stringify(res).substring(0, 1000));
         
         if (error) {
           console.warn(`[NativelyHealth] ${dataType} error:`, error);
           resolve([]);
           return;
         }
-        if (Array.isArray(data)) {
-          console.log(`[NativelyHealth] ${dataType} data:`, data.length || 0, 'records');
-          resolve(data);
-          return;
+        
+        // Normalize across SDK versions:
+        // The response structure can vary:
+        // - { result: [...] }
+        // - { result: { data: [...] } }
+        // - { data: [...] }
+        // - [...] (direct array)
+        let data: any[] = [];
+        if (Array.isArray(res)) {
+          data = res;
+        } else if (Array.isArray(res?.result)) {
+          data = res.result;
+        } else if (Array.isArray(res?.result?.data)) {
+          data = res.result.data;
+        } else if (Array.isArray(res?.data)) {
+          data = res.data;
         }
-        console.warn(`[NativelyHealth] ${dataType} returned unexpected shape (not array)`, typeof data);
-        resolve([]);
+        
+        console.log(`[NativelyHealth] ${dataType} normalized data:`, {
+          count: data.length,
+          firstItem: data[0] || null,
+        });
+        
+        resolve(data);
       });
     } catch (err) {
       clearTimeout(timeout);
@@ -883,7 +917,7 @@ export async function getTodayHealthSummary(): Promise<{
   steps: number;
   heartRate: { avg: number; latest: number } | null;
   activeEnergy: number;
-  basalEnergy: number;
+  basalEnergy: number; // Derived from activity summary or workouts, not a standalone quantity
   activity: HealthKitActivitySummary | null;
   restingHeartRate: number | null;
   hrv: number | null;
@@ -901,7 +935,8 @@ export async function getTodayHealthSummary(): Promise<{
     now: now.toISOString(),
   });
   
-  // Fetch all data in parallel (Option A: added BASAL_ENERGY)
+  // Fetch all data in parallel
+  // NOTE: BASAL_ENERGY is NOT a valid Natively quantity type - it only exists in WORKOUTS data
   const results = await Promise.allSettled([
     getTodaySteps(),
     getTodayHeartRate(),
@@ -909,11 +944,10 @@ export async function getTodayHealthSummary(): Promise<{
     getActivitySummary(startOfDay, endOfDay),
     getTodayRestingHeartRate(),
     getTodayHRV(),
-    getQuantityData('BASAL_ENERGY', 'DAY', startOfDay, endOfDay),
   ]);
   
   // Log each result
-  const labels = ['steps', 'heartRate', 'activeEnergy', 'activity', 'restingHeartRate', 'hrv', 'basalEnergy'];
+  const labels = ['steps', 'heartRate', 'activeEnergy', 'activity', 'restingHeartRate', 'hrv'];
   results.forEach((result, i) => {
     console.log(`[NativelyHealth] ${labels[i]} result:`, {
       status: result.status,
@@ -928,13 +962,14 @@ export async function getTodayHealthSummary(): Promise<{
   const activityData = results[3].status === 'fulfilled' ? results[3].value as HealthKitActivitySummary[] : [];
   const restingHeartRate = results[4].status === 'fulfilled' ? results[4].value as number | null : null;
   const hrv = results[5].status === 'fulfilled' ? results[5].value as number | null : null;
-  const basalEnergyData = results[6].status === 'fulfilled' ? results[6].value as HealthKitQuantityData[] : [];
   
+  // basalEnergy is not available as a standalone quantity in Natively SDK
+  // It would need to be calculated from workouts or estimated
   const summary = {
     steps,
     heartRate,
     activeEnergy: activeEnergyData.length > 0 ? Math.round(activeEnergyData[0].value) : 0,
-    basalEnergy: basalEnergyData.length > 0 ? Math.round(basalEnergyData[0].value) : 0,
+    basalEnergy: 0, // Not available as standalone - only in WORKOUTS data
     activity: activityData.length > 0 ? activityData[0] : null,
     restingHeartRate,
     hrv,

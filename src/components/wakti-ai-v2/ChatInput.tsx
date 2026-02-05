@@ -370,7 +370,17 @@ export function ChatInput({
   useEffect(() => {
     // Only auto-reset if we previously auto-switched to vision mode
     // AND we're not currently loading (request in-flight)
-    if (isLoading) return; // Don't reset during active request
+    console.log('🔄 AUTO-RESET CHECK:', { 
+      isLoading, 
+      wasAutoSwitchedToVision, 
+      activeTrigger, 
+      uploadedFilesCount: uploadedFiles?.length 
+    });
+    
+    if (isLoading) {
+      console.log('🔄 AUTO-RESET: Skipping - request is loading');
+      return; // Don't reset during active request
+    }
     
     const hasAnyImage = Array.isArray(uploadedFiles) && uploadedFiles.some((f: any) => {
       const t = (f?.type || '') as string;
@@ -379,6 +389,9 @@ export function ChatInput({
       const isImageUrl = typeof url === 'string' && (url.startsWith('http') || url.startsWith('data:'));
       return isImageType || isImageUrl;
     });
+    
+    console.log('🔄 AUTO-RESET: hasAnyImage =', hasAnyImage);
+    
     if (wasAutoSwitchedToVision && activeTrigger === 'vision' && !hasAnyImage) {
       console.log('🔄 AUTO-RESET: No images present, switching back to chat mode');
       if (onTriggerChange) {
@@ -587,22 +600,38 @@ export function ChatInput({
       // PROPERLY CONVERT UPLOADED FILES TO ATTACHED FILES FORMAT
       // Include raw base64 as `data` and `content` for backend VisionSystem (Claude/OpenAI)
       const enhancedFiles = uploadedFiles.length > 0 ? uploadedFiles.map(file => {
-        const dataUrl = file.base64 || file.url || '';
+        // Try multiple sources for base64 data
+        const dataUrl = file.base64 || file.url || file.preview || '';
         const commaIdx = typeof dataUrl === 'string' ? dataUrl.indexOf(',') : -1;
+        // Extract raw base64 (strip data:image/...;base64, prefix if present)
         const rawB64 = commaIdx !== -1 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+        
+        // Debug: Log what we're extracting
+        console.log('🖼️ FILE EXTRACT:', {
+          name: file.name,
+          type: file.type,
+          hasBase64: !!file.base64,
+          hasUrl: !!file.url,
+          hasPreview: !!file.preview,
+          dataUrlLength: dataUrl?.length || 0,
+          rawB64Length: rawB64?.length || 0,
+          rawB64Start: rawB64?.substring(0, 50)
+        });
+        
         return {
           name: file.name,
           type: file.type,
           size: file.size,
           url: file.url,
           preview: file.preview,
+          base64: dataUrl, // Keep full data URL for fallback
           imageType: file.imageType || { id: 'general', name: 'General' },
           data: rawB64,
           content: rawB64
         };
       }) : undefined;
 
-      console.log('📎 ENHANCED FILES:', enhancedFiles);
+      console.log('📎 ENHANCED FILES COUNT:', enhancedFiles?.length, 'First file data length:', enhancedFiles?.[0]?.data?.length);
 
       // Clear input immediately for snappier UX, while sending uses captured values
       // IMPORTANT: Do NOT clear files for Vision mode - keep images visible
@@ -611,8 +640,11 @@ export function ChatInput({
       setMessage('');
       // Only clear files for non-vision modes (Image generation, etc.)
       // Vision mode keeps images visible throughout the conversation
+      console.log('🧹 CLEAR FILES CHECK:', { finalTrigger, willClear: finalTrigger !== 'vision' });
       if (finalTrigger !== 'vision') {
         clearFiles();
+      } else {
+        console.log('✅ VISION MODE: Keeping images visible (not clearing)');
       }
 
       // If Search + YouTube submode, prefix with lightweight marker for routing in service
@@ -620,7 +652,7 @@ export function ChatInput({
         ? `yt: ${outgoingMessage}`
         : outgoingMessage;
 
-      await onSendMessage(
+      const sendPromise = onSendMessage(
         maybePrefixed, 
         finalTrigger, // Use the final trigger (could be auto-switched to vision)
         outgoingFiles,
@@ -629,6 +661,17 @@ export function ChatInput({
         activeTrigger === 'chat' ? chatSubmode : undefined, // Pass chatSubmode for Chat mode (chat vs study)
         replyContext || undefined // Pass reply context if replying to a message
       );
+
+      // Vision UX: clear the uploader area after sending, but keep the image in the thread.
+      // Also prevent auto-reset to Chat when we intentionally clear the uploader.
+      if (finalTrigger === 'vision') {
+        try {
+          setWasAutoSwitchedToVision(false);
+          clearFiles();
+        } catch {}
+      }
+
+      await sendPromise;
       
       // Clear reply context after sending
       if (replyContext && onClearReply) {

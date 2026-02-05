@@ -1526,13 +1526,24 @@ class WaktiAIV2ServiceClass {
       // Try Claude first, then auto-fallback to OpenAI on 529/overloaded errors (text/search or fallback vision)
       try {
         // If we have images from Chat upload, attempt the new Vision endpoint first (Option A)
+        console.log('🔍 VISION CHECK:', { 
+          hasAttachedFiles: !!attachedFiles, 
+          attachedFilesLength: attachedFiles?.length,
+          activeTrigger,
+          firstFileDataLength: attachedFiles?.[0]?.data?.length,
+          firstFileContentLength: attachedFiles?.[0]?.content?.length
+        });
+        
         if (attachedFiles && attachedFiles.length > 0 && activeTrigger !== 'image') {
+          console.log('✅ VISION PATH: Entering vision processing with', attachedFiles.length, 'files');
           // Preflight: size-check and downscale large images client-side to avoid gateway aborts
           let processedFiles: any[] = [];
           try {
             processedFiles = await this.prepareVisionAttachments(attachedFiles);
+            console.log('✅ VISION PREFLIGHT: Processed', processedFiles.length, 'files');
           } catch (prepErr: any) {
             const msg = (prepErr?.message || 'Images too large. Please upload smaller images.');
+            console.error('❌ VISION PREFLIGHT FAILED:', msg);
             onError?.(msg);
             return { response: msg, conversationId, metadata: { vision: 'client_preflight_reject' } } as any;
           }
