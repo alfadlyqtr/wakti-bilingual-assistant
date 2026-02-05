@@ -102,6 +102,7 @@ export function HealthKitTab() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [healthData, setHealthData] = useState<HealthData | null>(null);
+  const [lastUiSummary, setLastUiSummary] = useState<any>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [activeView, setActiveView] = useState<MetricView>('overview');
   const [timeRange, setTimeRange] = useState<TimeRange>('daily');
@@ -247,6 +248,7 @@ export function HealthKitTab() {
       
       console.log('[HealthKitTab] Fetching health summary...');
       const summary = await getTodayHealthSummary();
+      setLastUiSummary(summary);
       console.log('[HealthKitTab] Health summary result:', {
         steps: summary.steps,
         hasHeartRate: !!summary.heartRate,
@@ -307,6 +309,15 @@ export function HealthKitTab() {
       setLoading(false);
     }
   };
+
+  const getUiSummarySnapshot = useCallback(async () => {
+    try {
+      const summary = await getTodayHealthSummary();
+      setLastUiSummary(summary);
+    } catch (e) {
+      setLastUiSummary({ error: String((e as any)?.message || e) });
+    }
+  }, []);
 
   const fetchHealthData = useCallback(async () => {
     setRefreshing(true);
@@ -753,6 +764,14 @@ export function HealthKitTab() {
               <Button
                 variant="secondary"
                 size="sm"
+                onClick={getUiSummarySnapshot}
+                className="rounded-full"
+              >
+                {isArabic ? 'ملخص' : 'Summary'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={copyDebug}
                 disabled={!debugText}
                 className="rounded-full"
@@ -760,6 +779,15 @@ export function HealthKitTab() {
                 {debugCopied ? (isArabic ? 'تم النسخ' : 'Copied') : (isArabic ? 'نسخ' : 'Copy')}
               </Button>
             </div>
+          </div>
+
+          <div className="mt-3">
+            <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+              {isArabic ? 'آخر ملخص تم جلبه من الواجهة (getTodayHealthSummary).' : 'Last UI summary fetched (getTodayHealthSummary).'}
+            </div>
+            <pre className="text-[11px] leading-relaxed whitespace-pre-wrap break-words max-h-40 overflow-auto rounded-2xl bg-black/5 dark:bg-black/30 p-3 text-gray-800 dark:text-gray-200">
+              {lastUiSummary ? JSON.stringify(lastUiSummary, null, 2) : (isArabic ? 'لا توجد نتائج بعد.' : 'No output yet.')}
+            </pre>
           </div>
 
           <div className="mt-3">
@@ -801,7 +829,7 @@ export function HealthKitTab() {
               {healthData?.heartRate?.latest !== undefined && healthData?.heartRate?.latest !== null ? healthData.heartRate.latest : '—'}
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              {healthData?.heartRate?.latest ? (isArabic ? 'نبضة/د' : 'bpm') : (isArabic ? 'يحتاج ساعة' : 'Needs Watch')}
+              {(healthData?.heartRate?.latest !== undefined && healthData?.heartRate?.latest !== null) ? (isArabic ? 'نبضة/د' : 'bpm') : (isArabic ? 'يحتاج ساعة' : 'Needs Watch')}
             </span>
           </div>
 
@@ -826,7 +854,7 @@ export function HealthKitTab() {
               {healthData?.restingHeartRate !== undefined && healthData?.restingHeartRate !== null ? healthData.restingHeartRate : '—'}
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              {healthData?.restingHeartRate ? (isArabic ? 'نبض الراحة' : 'Resting HR') : (isArabic ? 'يحتاج ساعة' : 'Needs Watch')}
+              {(healthData?.restingHeartRate !== undefined && healthData?.restingHeartRate !== null) ? (isArabic ? 'نبض الراحة' : 'Resting HR') : (isArabic ? 'يحتاج ساعة' : 'Needs Watch')}
             </span>
           </div>
 
@@ -837,7 +865,7 @@ export function HealthKitTab() {
               {healthData?.hrv !== undefined && healthData?.hrv !== null ? `${healthData.hrv}ms` : '—'}
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              {healthData?.hrv ? (isArabic ? 'تقلب النبض' : 'HRV') : (isArabic ? 'يحتاج ساعة' : 'Needs Watch')}
+              {(healthData?.hrv !== undefined && healthData?.hrv !== null) ? (isArabic ? 'تقلب النبض' : 'HRV') : (isArabic ? 'يحتاج ساعة' : 'Needs Watch')}
             </span>
           </div>
         </div>

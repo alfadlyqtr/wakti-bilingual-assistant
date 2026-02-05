@@ -12,9 +12,6 @@ import { Logo3D } from "@/components/Logo3D";
 import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, CalendarIcon, Globe } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { EmailConfirmationDialog } from "@/components/EmailConfirmationDialog";
 import { validateDisplayName, validateEmail, validatePassword, validateConfirmPassword } from "@/utils/validations";
@@ -416,33 +413,27 @@ export default function Signup() {
                 {/* Date of Birth (optional) */}
                 <div className="space-y-2">
                   <Label htmlFor="dateOfBirth" className="text-base">{t.dateOfBirth} <span className="text-xs text-muted-foreground font-normal">{language === 'ar' ? '(اختياري)' : '(optional)'}</span></Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full max-w-full justify-start text-left font-normal py-6 text-base shadow-sm",
-                          !dateOfBirth && "text-muted-foreground"
-                        )}
-                        disabled={isLoading}
-                      >
-                        <CalendarIcon className="mr-2 h-5 w-5 flex-shrink-0" />
-                        {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t.dobPlaceholder}</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 max-w-[calc(100vw-2rem)]" align="center">
-                      <Calendar
-                        mode="single"
-                        selected={dateOfBirth}
-                        onSelect={setDateOfBirth}
-                        disabled={(date) =>
-                          date > new Date() || date < new Date("1900-01-01")
-                        }
-                        initialFocus
-                        className="p-3 pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10">
+                      <CalendarIcon className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <Input
+                      id="dateOfBirth"
+                      type="date"
+                      disabled={isLoading}
+                      value={dateOfBirth ? dateOfBirth.toISOString().slice(0, 10) : ""}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setDateOfBirth(v ? new Date(`${v}T00:00:00`) : undefined);
+                      }}
+                      className={cn(
+                        "pl-10 py-6 text-base shadow-sm",
+                        !dateOfBirth && "text-muted-foreground"
+                      )}
+                      min="1900-01-01"
+                      max={new Date().toISOString().slice(0, 10)}
+                    />
+                  </div>
                 </div>
 
                 {/* Country + City in one row (optional) */}

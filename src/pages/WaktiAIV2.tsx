@@ -312,10 +312,11 @@ const WaktiAIV2 = () => {
     const effectiveChatSubmode: ChatSubmode = chatSubmodeParam || chatSubmode;
     const usedStudyThisRequest = effectiveChatSubmode === 'study';
 
-    // Route to Vision path if: explicit vision trigger OR Study mode with images
+    // Route to Vision path if: explicit vision trigger (NOT Study mode - Study uses brain-stream with OCR→Wolfram)
     const hasImages = attachedFiles && attachedFiles.length > 0 && attachedFiles.some((f: any) => f.type?.startsWith('image/'));
-    const isStudyWithImages = trigger === 'chat' && effectiveChatSubmode === 'study' && hasImages;
-    const inputType = (trigger === 'vision' || isStudyWithImages) ? 'vision' : 'text';
+    // Study mode with images: stays as 'text' inputType but passes images to brain-stream for OCR→Wolfram pipeline
+    // Regular vision trigger: uses 'vision' inputType for general image analysis
+    const inputType = (trigger === 'vision' && effectiveChatSubmode !== 'study') ? 'vision' : 'text';
     // Per-message language override: if user explicitly asks for Arabic translation, force 'ar' for this request
     const wantsArabic = /translate.+to\s+arabic/i.test(messageContent || '') || /إلى العربية/.test(messageContent || '');
     const requestLanguage = wantsArabic ? 'ar' : language;

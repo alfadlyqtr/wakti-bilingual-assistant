@@ -1516,6 +1516,108 @@ async function queryWolframSummaryBox(input: string, timeoutMs: number = 3000): 
   }
 }
 
+// === STUDY MODE OCR: Extract text/math from images using Gemini Vision ===
+interface StudyOCRResult {
+  success: boolean;
+  extractedText?: string;
+  questionType?: 'math' | 'science' | 'language' | 'history' | 'general';
+  error?: string;
+}
+
+async function extractTextFromImageForStudy(
+  imageBase64: string,
+  mimeType: string,
+  userPrompt: string,
+  language: string
+): Promise<StudyOCRResult> {
+  try {
+    const key = getGeminiApiKey();
+    // Use Gemini 2.0 Flash for fast, accurate OCR
+    const model = 'gemini-2.0-flash';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+
+    const ocrPrompt = language === 'ar'
+      ? `أنت خبير في استخراج النصوص من الصور التعليمية. مهمتك:
+1. استخرج كل النص والأرقام والمعادلات والرموز من الصورة بدقة تامة
+2. إذا كانت معادلة رياضية، اكتبها بصيغة نصية واضحة (مثل: 2x + 3 = 7)
+3. إذا كان سؤال اختيار من متعدد، اكتب السؤال وجميع الخيارات
+4. حافظ على التنسيق الأصلي قدر الإمكان
+
+سياق المستخدم: "${userPrompt}"
+
+أعد النص المستخرج فقط، بدون شرح أو تحليل.`
+      : `You are an expert at extracting text from educational images. Your task:
+1. Extract ALL text, numbers, equations, and symbols from the image with perfect accuracy
+2. If it's a math equation, write it in clear text format (e.g., 2x + 3 = 7)
+3. If it's a multiple choice question, include the question and ALL options
+4. Preserve the original formatting as much as possible
+
+User context: "${userPrompt}"
+
+Return ONLY the extracted text, no explanations or analysis.`;
+
+    const requestBody = {
+      contents: [{
+        parts: [
+          { text: ocrPrompt },
+          {
+            inline_data: {
+              mime_type: mimeType || 'image/jpeg',
+              data: imageBase64
+            }
+          }
+        ]
+      }],
+      generationConfig: {
+        temperature: 0.1, // Low temp for accurate extraction
+        maxOutputTokens: 2000
+      }
+    };
+
+    console.log('📸 STUDY OCR: Extracting text from image...');
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      console.error('❌ STUDY OCR: Gemini error', response.status, errText.slice(0, 200));
+      return { success: false, error: `Gemini OCR error: ${response.status}` };
+    }
+
+    const data = await response.json();
+    const extractedText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    if (!extractedText || extractedText.length < 5) {
+      console.log('⚠️ STUDY OCR: No text extracted from image');
+      return { success: false, error: 'No text found in image' };
+    }
+
+    // Detect question type for better Wolfram routing
+    const lower = extractedText.toLowerCase();
+    let questionType: StudyOCRResult['questionType'] = 'general';
+    if (/[+\-*/=^√∫∑∏]|equation|solve|calculate|x\s*[=+\-]|[0-9]+\s*[+\-*/]/.test(extractedText)) {
+      questionType = 'math';
+    } else if (/atom|molecule|element|chemical|physics|force|energy|velocity|acceleration/i.test(lower)) {
+      questionType = 'science';
+    } else if (/history|war|century|king|queen|empire|dynasty|revolution/i.test(lower)) {
+      questionType = 'history';
+    } else if (/grammar|verb|noun|sentence|translate|language/i.test(lower)) {
+      questionType = 'language';
+    }
+
+    console.log(`✅ STUDY OCR: Extracted ${extractedText.length} chars, type=${questionType}`);
+    return { success: true, extractedText: extractedText.trim(), questionType };
+
+  } catch (err) {
+    const errMessage = err instanceof Error ? err.message : String(err);
+    console.error('❌ STUDY OCR: Error:', errMessage);
+    return { success: false, error: errMessage };
+  }
+}
+
 // Detect if query is better suited for Summary Boxes (entity lookups)
 function isSummaryBoxQuery(q: string): boolean {
   if (!q) return false;
@@ -1902,8 +2004,9 @@ serve(async (req) => {
           activeTrigger = 'general',
           chatSubmode = 'chat', // 'chat' or 'study'
           location = null,
-          clientTimezone = 'UTC'
-        } = body as { message?: string; language?: string; recentMessages?: unknown[]; personalTouch?: unknown; activeTrigger?: string; chatSubmode?: string; location?: any; clientTimezone?: string };
+          clientTimezone = 'UTC',
+          attachedFiles = [] // Images for Study mode OCR→Wolfram pipeline
+        } = body as { message?: string; language?: string; recentMessages?: unknown[]; personalTouch?: unknown; activeTrigger?: string; chatSubmode?: string; location?: unknown; clientTimezone?: string; attachedFiles?: unknown[] };
 
         // Store for logging
         requestMessage = typeof message === 'string' ? message : '';
@@ -2637,20 +2740,81 @@ If you are running out of space, keep this order and drop the rest:
           if (chatSubmode === 'study') {
             try {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { studyMode: true } })}\n\n`));
-            } catch {}
+            } catch { /* ignore */ }
           }
+
+          // === STUDY MODE OCR→WOLFRAM PIPELINE ===
+          // If Study mode has attached images, extract text first, then send to Wolfram
+          let ocrExtractedText = '';
+          let ocrQuestionType: string | undefined;
+          const studyHasImages = chatSubmode === 'study' && Array.isArray(attachedFiles) && attachedFiles.length > 0;
+          
+          if (studyHasImages) {
+            console.log(`📸 STUDY+IMAGE: Detected ${attachedFiles.length} image(s), starting OCR→Wolfram pipeline...`);
+            
+            // Send keepalive ping during OCR
+            try {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ keepalive: true, stage: 'ocr' })}\n\n`));
+            } catch { /* ignore */ }
+            
+            // Extract text from the first image (most homework photos are single images)
+            const firstImage = attachedFiles[0] as { data?: string; content?: string; type?: string; mimeType?: string } | undefined;
+            const imageBase64 = firstImage?.data || firstImage?.content || '';
+            let imageMimeType = firstImage?.type || firstImage?.mimeType || 'image/jpeg';
+            // Normalize mime type
+            if (imageMimeType === 'image/jpg') imageMimeType = 'image/jpeg';
+            
+            if (imageBase64 && imageBase64.length > 100) {
+              const ocrResult = await extractTextFromImageForStudy(imageBase64, imageMimeType, message || '', language);
+              
+              if (ocrResult.success && ocrResult.extractedText) {
+                ocrExtractedText = ocrResult.extractedText;
+                ocrQuestionType = ocrResult.questionType;
+                console.log(`✅ STUDY OCR: Extracted "${ocrExtractedText.substring(0, 100)}..." (type: ${ocrQuestionType})`);
+                
+                // Emit OCR metadata for frontend
+                try {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+                    metadata: { 
+                      studyOCR: { 
+                        extracted: true, 
+                        textPreview: ocrExtractedText.substring(0, 200),
+                        questionType: ocrQuestionType 
+                      } 
+                    } 
+                  })}\n\n`));
+                } catch { /* ignore */ }
+              } else {
+                console.log('⚠️ STUDY OCR: Failed to extract text:', ocrResult.error);
+              }
+            } else {
+              console.log('⚠️ STUDY OCR: No valid image data found in attachedFiles');
+            }
+          }
+
+          // Determine the query to send to Wolfram:
+          // - If OCR extracted text, use that (combined with user prompt if provided)
+          // - Otherwise, use the original message
+          const wolframQuery = ocrExtractedText 
+            ? (message?.trim() 
+                ? `${message}\n\n[Extracted from image]:\n${ocrExtractedText}` 
+                : ocrExtractedText)
+            : message;
 
           // Study mode ALWAYS tries Wolfram; Chat mode for academic/math/science queries
           let wolframContext = '';
           let fullResultsData = '';
           let summaryBoxData = '';
           let wolframMetaBase: Record<string, unknown> | null = null;
-          const useWolfram = chatSubmode === 'study' || isWolframQuery(message);
-          const useSummaryBox = isSummaryBoxQuery(message);
+          const useWolfram = chatSubmode === 'study' || isWolframQuery(wolframQuery);
+          const useSummaryBox = isSummaryBoxQuery(wolframQuery);
           
           // For academic queries: run BOTH APIs in parallel for maximum knowledge
           if (useWolfram) {
             console.log(`🔢 WOLFRAM: ${chatSubmode === 'study' ? 'Study mode' : 'Academic query'} - querying BOTH APIs in parallel...`);
+            if (ocrExtractedText) {
+              console.log(`🔢 WOLFRAM: Using OCR-extracted text: "${ocrExtractedText.substring(0, 80)}..."`);
+            }
             
             // Send keepalive ping to prevent connection timeout during Wolfram calls
             try {
@@ -2659,9 +2823,9 @@ If you are running out of space, keep this order and drop the rest:
             
             // Run both APIs in parallel for speed
             // Study mode needs longer timeout (8s) since Wolfram is the primary source
-            const summaryBoxInput = normalizeSummaryBoxQuery(message);
+            const summaryBoxInput = normalizeSummaryBoxQuery(wolframQuery);
             const [fullResultsResult, summaryBoxResult] = await Promise.all([
-              queryWolfram(message, chatSubmode === 'study' ? 8000 : 4000),
+              queryWolfram(wolframQuery, chatSubmode === 'study' ? 8000 : 4000),
               useSummaryBox ? queryWolframSummaryBox(summaryBoxInput, 5000) : Promise.resolve<SummaryBoxResult>({ success: false })
             ]);
             
@@ -2758,8 +2922,18 @@ If you are running out of space, keep this order and drop the rest:
           }
 
           // Build final user message
+          // Include OCR-extracted text context for Study mode with images
+          const ocrContext = ocrExtractedText 
+            ? (language === 'ar'
+                ? `\n\n[نص مستخرج من الصورة]:\n${ocrExtractedText}`
+                : `\n\n[Text extracted from image]:\n${ocrExtractedText}`)
+            : '';
+          
           if (wolframContext) {
-            messages.push({ role: 'user', content: `${wolframContext}\n\nUser question: ${message}` });
+            messages.push({ role: 'user', content: `${wolframContext}${ocrContext}\n\nUser question: ${message}` });
+          } else if (ocrExtractedText) {
+            // Study mode with image but no Wolfram result - still include OCR context
+            messages.push({ role: 'user', content: `${ocrContext}\n\nUser question: ${message || (language === 'ar' ? 'اشرح هذا' : 'Explain this')}` });
           } else {
             messages.push({ role: 'user', content: message });
           }

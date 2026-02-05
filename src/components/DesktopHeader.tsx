@@ -156,6 +156,12 @@ export function DesktopHeader() {
   const pageInfo = getPageTitleWithIcon();
   const PageIcon = pageInfo.icon;
 
+  const shouldGlowLogo = location.pathname !== '/dashboard';
+  const logoGlowClassName = cn(
+    "wakti-logo-glow",
+    shouldGlowLogo && "wakti-logo-glow--pulse"
+  );
+
   // Define menu items with icons and vibrant colors
   const menuItems = [
     { 
@@ -211,7 +217,21 @@ export function DesktopHeader() {
         
         <div className="flex items-center gap-3 relative z-10">
           <Link to="/dashboard" className="flex items-center">
-            <Logo3D size="sm" />
+            <div
+              className={cn(
+                "relative rounded-xl p-[2px] transition-all",
+                logoGlowClassName,
+                shouldGlowLogo
+                  ? theme === 'dark'
+                    ? "bg-[linear-gradient(135deg,rgba(147,197,253,0.75)_0%,rgba(168,85,247,0.70)_50%,rgba(59,130,246,0.75)_100%)] shadow-[0_0_18px_rgba(59,130,246,0.28),0_0_32px_rgba(168,85,247,0.20)]"
+                    : "bg-[linear-gradient(135deg,rgba(6,5,65,0.78)_0%,rgba(233,206,176,0.82)_55%,rgba(6,5,65,0.74)_100%)] shadow-[0_0_22px_rgba(6,5,65,0.28),0_0_44px_rgba(233,206,176,0.30)]"
+                  : "bg-transparent shadow-none"
+              )}
+            >
+              <div className="rounded-[0.70rem] overflow-hidden">
+                <Logo3D size="sm" />
+              </div>
+            </div>
           </Link>
           {pageInfo.title && (
             <div className="flex items-center gap-2">
