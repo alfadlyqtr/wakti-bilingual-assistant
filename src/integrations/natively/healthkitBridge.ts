@@ -289,8 +289,15 @@ function getInstance(): NativelyHealthInstance | null {
  */
 export function isNativelyIOSApp(): boolean {
   if (typeof window === 'undefined') return false;
-  const natively = window.natively;
-  return !!(natively?.isIOSApp || natively?.isNativeApp);
+  const natively = (window as any).natively;
+  const result = !!(natively?.isIOSApp || natively?.isNativeApp);
+  console.log('[NativelyHealth] isNativelyIOSApp:', { 
+    hasNatively: !!natively, 
+    isIOSApp: natively?.isIOSApp, 
+    isNativeApp: natively?.isNativeApp,
+    result 
+  });
+  return result;
 }
 
 /**
