@@ -18,6 +18,7 @@ export type HealthKitQuantityType =
   | 'STEPS'         // Steps (count)
   | 'HEART_RATE'    // Heart Rate (count/min)
   | 'ACTIVE_ENERGY' // Active Energy Burned (kilocalories)
+  | 'BASAL_ENERGY'  // Basal/Resting Energy Burned (kilocalories)
   | 'BLOOD_OXYGEN'; // Blood Oxygen (percent)
 
 export type HealthKitCharacteristicType = 
@@ -882,6 +883,7 @@ export async function getTodayHealthSummary(): Promise<{
   steps: number;
   heartRate: { avg: number; latest: number } | null;
   activeEnergy: number;
+  basalEnergy: number;
   activity: HealthKitActivitySummary | null;
   restingHeartRate: number | null;
   hrv: number | null;
@@ -890,24 +892,28 @@ export async function getTodayHealthSummary(): Promise<{
   
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // Option B: Use end of day for DAY interval queries to get full day aggregates
+  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
   
   console.log('[NativelyHealth] Date range:', {
     startOfDay: startOfDay.toISOString(),
+    endOfDay: endOfDay.toISOString(),
     now: now.toISOString(),
   });
   
-  // Fetch all data in parallel
+  // Fetch all data in parallel (Option A: added BASAL_ENERGY)
   const results = await Promise.allSettled([
     getTodaySteps(),
     getTodayHeartRate(),
-    getQuantityData('ACTIVE_ENERGY', 'DAY', startOfDay, now),
-    getActivitySummary(startOfDay, now),
+    getQuantityData('ACTIVE_ENERGY', 'DAY', startOfDay, endOfDay),
+    getActivitySummary(startOfDay, endOfDay),
     getTodayRestingHeartRate(),
     getTodayHRV(),
+    getQuantityData('BASAL_ENERGY', 'DAY', startOfDay, endOfDay),
   ]);
   
   // Log each result
-  const labels = ['steps', 'heartRate', 'activeEnergy', 'activity', 'restingHeartRate', 'hrv'];
+  const labels = ['steps', 'heartRate', 'activeEnergy', 'activity', 'restingHeartRate', 'hrv', 'basalEnergy'];
   results.forEach((result, i) => {
     console.log(`[NativelyHealth] ${labels[i]} result:`, {
       status: result.status,
@@ -922,11 +928,13 @@ export async function getTodayHealthSummary(): Promise<{
   const activityData = results[3].status === 'fulfilled' ? results[3].value as HealthKitActivitySummary[] : [];
   const restingHeartRate = results[4].status === 'fulfilled' ? results[4].value as number | null : null;
   const hrv = results[5].status === 'fulfilled' ? results[5].value as number | null : null;
+  const basalEnergyData = results[6].status === 'fulfilled' ? results[6].value as HealthKitQuantityData[] : [];
   
   const summary = {
     steps,
     heartRate,
     activeEnergy: activeEnergyData.length > 0 ? Math.round(activeEnergyData[0].value) : 0,
+    basalEnergy: basalEnergyData.length > 0 ? Math.round(basalEnergyData[0].value) : 0,
     activity: activityData.length > 0 ? activityData[0] : null,
     restingHeartRate,
     hrv,

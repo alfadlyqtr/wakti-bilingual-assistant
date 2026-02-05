@@ -366,8 +366,12 @@ export function ChatInput({
   } = useSimplifiedFileUpload();
 
   // Auto-reset vision mode when no images are present
+  // CRITICAL: Do NOT reset while a request is loading (isLoading=true)
   useEffect(() => {
     // Only auto-reset if we previously auto-switched to vision mode
+    // AND we're not currently loading (request in-flight)
+    if (isLoading) return; // Don't reset during active request
+    
     const hasAnyImage = Array.isArray(uploadedFiles) && uploadedFiles.some((f: any) => {
       const t = (f?.type || '') as string;
       const url = (f?.url || '') as string;
@@ -382,7 +386,7 @@ export function ChatInput({
       }
       setWasAutoSwitchedToVision(false);
     }
-  }, [uploadedFiles, activeTrigger, wasAutoSwitchedToVision, onTriggerChange]);
+  }, [uploadedFiles, activeTrigger, wasAutoSwitchedToVision, onTriggerChange, isLoading]);
 
   // When in Image mode and switching to Text2Image, clear any seed uploads from other submodes
   useEffect(() => {
@@ -601,10 +605,15 @@ export function ChatInput({
       console.log('📎 ENHANCED FILES:', enhancedFiles);
 
       // Clear input immediately for snappier UX, while sending uses captured values
+      // IMPORTANT: Do NOT clear files for Vision mode - keep images visible
       const outgoingMessage = message;
       const outgoingFiles = enhancedFiles;
       setMessage('');
-      clearFiles();
+      // Only clear files for non-vision modes (Image generation, etc.)
+      // Vision mode keeps images visible throughout the conversation
+      if (finalTrigger !== 'vision') {
+        clearFiles();
+      }
 
       // If Search + YouTube submode, prefix with lightweight marker for routing in service
       const maybePrefixed = (finalTrigger === 'search' && searchSubmode === 'youtube')

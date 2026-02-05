@@ -498,7 +498,16 @@ const WaktiAIV2 = () => {
             setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: streamed } : m));
           },
           (metadata: any) => { streamMeta = metadata || {}; },
-          (err: string) => { console.error('Vision stream error:', err); },
+          (err: string) => { 
+            console.error('Vision stream error:', err);
+            // CRITICAL: Clear loading state on error to prevent "I'm on it..." stuck forever
+            setIsLoading(false);
+            setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { 
+              ...m, 
+              content: language === 'ar' ? 'عذراً، حدث خطأ في تحليل الصورة. يرجى المحاولة مرة أخرى.' : 'Sorry, an error occurred analyzing the image. Please try again.',
+              metadata: { ...(m.metadata || {}), loading: false, error: true }
+            } : m));
+          },
           controller.signal,
           effectiveChatSubmode // Pass chatSubmode for Study mode support in Vision
         );

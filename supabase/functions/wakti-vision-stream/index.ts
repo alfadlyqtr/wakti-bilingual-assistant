@@ -285,6 +285,8 @@ async function tryGemini(
   const GEMINI_MODEL = "gemini-3-pro-image-preview";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${key}`;
 
+  const enableGrounding = (Deno.env.get("GEMINI_ENABLE_GROUNDING") || "").toLowerCase() === "true";
+
   const langPrefix = language === 'ar'
     ? 'يرجى الرد باللغة العربية فقط. لا تستخدم الإنجليزية.'
     : 'Please respond in English only. Do not use Arabic.';
@@ -320,7 +322,7 @@ async function tryGemini(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents,
-      tools: [{ google_search: {} }],
+      ...(enableGrounding ? { tools: [{ google_search: {} }] } : {}),
       generationConfig: { temperature: 0.1, maxOutputTokens: maxTokens }
     })
   });

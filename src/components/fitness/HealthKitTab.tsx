@@ -87,6 +87,7 @@ interface HealthData {
   steps: number;
   heartRate: { avg: number; latest: number } | null;
   activeEnergy: number;
+  basalEnergy: number;
   activity: HealthKitActivitySummary | null;
   sleep: HealthKitSleepAnalysis[];
   workouts: HealthKitWorkout[];
@@ -221,6 +222,7 @@ export function HealthKitTab() {
         'STEPS',
         'HEART_RATE',
         'ACTIVE_ENERGY',
+        'BASAL_ENERGY',
         'SLEEP_ANALYSIS',
         'ACTIVITY_SUMMARY',
         'WORKOUTS',
@@ -261,6 +263,7 @@ export function HealthKitTab() {
         steps: summary.steps,
         heartRate: summary.heartRate,
         activeEnergy: summary.activeEnergy,
+        basalEnergy: summary.basalEnergy,
         activity: summary.activity,
         sleep,
         workouts,
@@ -283,6 +286,7 @@ export function HealthKitTab() {
         'STEPS',
         'HEART_RATE',
         'ACTIVE_ENERGY',
+        'BASAL_ENERGY',
         'SLEEP_ANALYSIS',
         'ACTIVITY_SUMMARY',
         'WORKOUTS',
@@ -321,6 +325,7 @@ export function HealthKitTab() {
         steps: summary.steps,
         heartRate: summary.heartRate,
         activeEnergy: summary.activeEnergy,
+        basalEnergy: summary.basalEnergy,
         activity: summary.activity,
         sleep,
         workouts,
@@ -782,21 +787,21 @@ export function HealthKitTab() {
           <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
             <Footprints className="w-6 h-6 text-blue-500 mb-2" />
             <span className="text-2xl font-bold text-gray-800 dark:text-white">
-              {healthData?.steps !== undefined && healthData?.steps !== null ? healthData.steps.toLocaleString() : '—'}
+              {healthData?.steps !== undefined && healthData?.steps !== null ? healthData.steps.toLocaleString() : '0'}
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {isArabic ? 'خطوة' : 'steps'}
             </span>
           </div>
 
-          {/* Heart Rate */}
+          {/* Heart Rate - Option C: friendly null message */}
           <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
             <Heart className="w-6 h-6 text-red-500 mb-2" />
             <span className="text-2xl font-bold text-gray-800 dark:text-white">
               {healthData?.heartRate?.latest !== undefined && healthData?.heartRate?.latest !== null ? healthData.heartRate.latest : '—'}
             </span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {isArabic ? 'نبضة/د' : 'bpm'}
+            <span className="text-xs text-gray-500 dark:text-gray-400 text-center">
+              {healthData?.heartRate?.latest ? (isArabic ? 'نبضة/د' : 'bpm') : (isArabic ? 'يحتاج ساعة' : 'Needs Watch')}
             </span>
           </div>
 
@@ -804,15 +809,42 @@ export function HealthKitTab() {
           <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
             <Flame className="w-6 h-6 text-orange-500 mb-2" />
             <span className="text-2xl font-bold text-gray-800 dark:text-white">
-              {healthData?.activeEnergy !== undefined && healthData?.activeEnergy !== null ? healthData.activeEnergy.toLocaleString() : '—'}
+              {healthData?.activeEnergy !== undefined && healthData?.activeEnergy !== null ? healthData.activeEnergy.toLocaleString() : '0'}
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {isArabic ? 'سعرة' : 'kcal'}
+              {isArabic ? 'نشطة' : 'active'}
             </span>
           </div>
         </div>
 
-        {/* Additional Heart Metrics Row */}
+        {/* Energy Row - Option A: Added Resting Energy */}
+        <div className="grid grid-cols-2 gap-4 mt-4">
+          {/* Resting/Basal Energy */}
+          <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
+            <Zap className="w-5 h-5 text-amber-500 mb-2" />
+            <span className="text-xl font-bold text-gray-800 dark:text-white">
+              {healthData?.basalEnergy !== undefined && healthData?.basalEnergy !== null && healthData.basalEnergy > 0 ? healthData.basalEnergy.toLocaleString() : '—'}
+            </span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {isArabic ? 'طاقة الراحة' : 'Resting kcal'}
+            </span>
+          </div>
+
+          {/* Total Energy (Active + Basal) */}
+          <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
+            <Flame className="w-5 h-5 text-red-500 mb-2" />
+            <span className="text-xl font-bold text-gray-800 dark:text-white">
+              {((healthData?.activeEnergy || 0) + (healthData?.basalEnergy || 0)) > 0 
+                ? ((healthData?.activeEnergy || 0) + (healthData?.basalEnergy || 0)).toLocaleString() 
+                : '—'}
+            </span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {isArabic ? 'إجمالي السعرات' : 'Total kcal'}
+            </span>
+          </div>
+        </div>
+
+        {/* Heart Metrics Row - Option C: friendly null messages */}
         <div className="grid grid-cols-2 gap-4 mt-4">
           {/* Resting Heart Rate */}
           <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
@@ -820,8 +852,8 @@ export function HealthKitTab() {
             <span className="text-xl font-bold text-gray-800 dark:text-white">
               {healthData?.restingHeartRate !== undefined && healthData?.restingHeartRate !== null ? healthData.restingHeartRate : '—'}
             </span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {isArabic ? 'نبض الراحة' : 'Resting HR'}
+            <span className="text-xs text-gray-500 dark:text-gray-400 text-center">
+              {healthData?.restingHeartRate ? (isArabic ? 'نبض الراحة' : 'Resting HR') : (isArabic ? 'يحتاج ساعة' : 'Needs Watch')}
             </span>
           </div>
 
@@ -831,8 +863,8 @@ export function HealthKitTab() {
             <span className="text-xl font-bold text-gray-800 dark:text-white">
               {healthData?.hrv !== undefined && healthData?.hrv !== null ? `${healthData.hrv}ms` : '—'}
             </span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {isArabic ? 'تقلب النبض' : 'HRV'}
+            <span className="text-xs text-gray-500 dark:text-gray-400 text-center">
+              {healthData?.hrv ? (isArabic ? 'تقلب النبض' : 'HRV') : (isArabic ? 'يحتاج ساعة' : 'Needs Watch')}
             </span>
           </div>
         </div>
