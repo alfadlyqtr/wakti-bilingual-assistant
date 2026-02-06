@@ -58,7 +58,10 @@ export interface HealthKitCharacteristics {
 
 export interface HealthKitQuantityData {
   date: string;
+  startDate: number;
+  endDate: number;
   value: number;
+  source?: any[];
 }
 
 export interface HealthKitSleepAnalysis {
@@ -92,6 +95,14 @@ export interface HealthKitWorkout {
   activeBurned?: number;    // kilocalories (iOS 16+)
   basalBurned?: number;     // kilocalories (iOS 16+)
   heartRate?: number;       // count/min (iOS 16+)
+}
+
+export const HEALTHKIT_BRIDGE_BUILD_STAMP = 'healthkit-bridge-2026-02-06-01';
+
+let lastTodayHealthSummaryTrace: any = null;
+
+export function getLastTodayHealthSummaryTrace() {
+  return lastTodayHealthSummaryTrace;
 }
 
 interface NativelyHealthInstance {
@@ -966,10 +977,17 @@ export async function getTodayHealthSummary(): Promise<{
   hrv: number | null;
 }> {
   console.log('[NativelyHealth] getTodayHealthSummary called (direct SDK pattern)');
+
+  const trace: any = {
+    build: HEALTHKIT_BRIDGE_BUILD_STAMP,
+    startedAt: new Date().toISOString(),
+    steps: [],
+  };
   
   const instance: any = getInstance();
   if (!instance) {
     console.warn('[NativelyHealth] No instance for getTodayHealthSummary');
+    lastTodayHealthSummaryTrace = { ...trace, error: 'no_instance' };
     return { steps: 0, heartRate: null, activeEnergy: 0, basalEnergy: 0, activity: null, restingHeartRate: null, hrv: null };
   }
   
@@ -1014,20 +1032,45 @@ export async function getTodayHealthSummary(): Promise<{
     instance.available((res: any, err: any) => cb(res, err))
   );
   console.log('[NativelyHealth] Summary pre-auth available:', { status: availResult.res?.status, err: availResult.err, ms: availResult.ms });
+  trace.steps.push({
+    label: 'available',
+    status: availResult.res?.status,
+    err: availResult.err,
+    timedOut: availResult.timedOut,
+    ms: availResult.ms,
+  });
   
   const authTypes: HealthKitDataType[] = ['STEPS', 'HEART_RATE', 'ACTIVE_ENERGY', 'HRV', 'RHR', 'SLEEP_ANALYSIS', 'ACTIVITY_SUMMARY', 'WORKOUTS'];
   const authResult = await promisify('summary_requestAuthorization', (cb) =>
     instance.requestAuthorization([], authTypes, (res: any, err: any) => cb(res, err))
   );
   console.log('[NativelyHealth] Summary pre-auth requestAuthorization:', { status: authResult.res?.status, err: authResult.err, ms: authResult.ms });
+  trace.steps.push({
+    label: 'requestAuthorization',
+    status: authResult.res?.status,
+    err: authResult.err,
+    timedOut: authResult.timedOut,
+    ms: authResult.ms,
+  });
   
   // Get the quantity method - same as diagnostics
   const quantityMethod = instance.getStatisticQuantity || instance.getStatisticQuantityValues || instance.getQuantity;
   
   if (!quantityMethod) {
     console.warn('[NativelyHealth] No quantity method found on instance');
+    lastTodayHealthSummaryTrace = { ...trace, error: 'no_quantity_method' };
     return { steps: 0, heartRate: null, activeEnergy: 0, basalEnergy: 0, activity: null, restingHeartRate: null, hrv: null };
   }
+
+  trace.steps.push({
+    label: 'quantityMethod',
+    type: typeof quantityMethod,
+    methodName:
+      instance.getStatisticQuantity ? 'getStatisticQuantity' :
+      instance.getStatisticQuantityValues ? 'getStatisticQuantityValues' :
+      instance.getQuantity ? 'getQuantity' :
+      'unknown',
+  });
   
   // Helper to fetch a quantity - EXACT same call pattern as diagnostics
   const fetchQuantity = async (dataType: string, interval: string): Promise<any[]> => {
@@ -1047,6 +1090,19 @@ export async function getTodayHealthSummary(): Promise<{
     
     // Normalize - same as diagnostics: res.result.data ?? res.result ?? res.data
     const normalized = result.res?.result?.data ?? result.res?.result ?? result.res?.data ?? null;
+
+    trace.steps.push({
+      label: `quantity_${dataType}`,
+      interval,
+      timedOut: result.timedOut,
+      err: result.err,
+      ms: result.ms,
+      rawType: typeof result.res,
+      rawKeys: result.res ? Object.keys(result.res) : null,
+      normalizedIsArray: Array.isArray(normalized),
+      normalizedLength: Array.isArray(normalized) ? normalized.length : null,
+      normalizedFirstValue: Array.isArray(normalized) && normalized.length > 0 ? normalized[0]?.value : null,
+    });
     
     console.log(`[NativelyHealth] summary_${dataType} normalized:`, {
       isArray: Array.isArray(normalized),
@@ -1089,6 +1145,8 @@ export async function getTodayHealthSummary(): Promise<{
     restingHeartRate,
     hrv,
   };
+
+  lastTodayHealthSummaryTrace = { ...trace, finishedAt: new Date().toISOString(), summary };
   
   console.log('[NativelyHealth] Final summary (direct SDK):', JSON.stringify(summary));
   

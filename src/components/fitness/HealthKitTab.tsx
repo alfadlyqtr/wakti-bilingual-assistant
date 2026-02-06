@@ -42,6 +42,8 @@ import {
   requestHealthKitPermissions,
   runHealthKitDiagnostics,
   getTodayHealthSummary,
+  getLastTodayHealthSummaryTrace,
+  HEALTHKIT_BRIDGE_BUILD_STAMP,
   getSleepAnalysis,
   getWorkouts,
   getCharacteristics,
@@ -103,6 +105,7 @@ export function HealthKitTab() {
   const [refreshing, setRefreshing] = useState(false);
   const [healthData, setHealthData] = useState<HealthData | null>(null);
   const [lastUiSummary, setLastUiSummary] = useState<any>(null);
+  const [lastUiSummaryTrace, setLastUiSummaryTrace] = useState<any>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [activeView, setActiveView] = useState<MetricView>('overview');
   const [timeRange, setTimeRange] = useState<TimeRange>('daily');
@@ -249,6 +252,7 @@ export function HealthKitTab() {
       console.log('[HealthKitTab] Fetching health summary...');
       const summary = await getTodayHealthSummary();
       setLastUiSummary(summary);
+      setLastUiSummaryTrace(getLastTodayHealthSummaryTrace());
       console.log('[HealthKitTab] Health summary result:', {
         steps: summary.steps,
         hasHeartRate: !!summary.heartRate,
@@ -314,8 +318,10 @@ export function HealthKitTab() {
     try {
       const summary = await getTodayHealthSummary();
       setLastUiSummary(summary);
+      setLastUiSummaryTrace(getLastTodayHealthSummaryTrace());
     } catch (e) {
       setLastUiSummary({ error: String((e as any)?.message || e) });
+      setLastUiSummaryTrace(getLastTodayHealthSummaryTrace());
     }
   }, []);
 
@@ -328,6 +334,7 @@ export function HealthKitTab() {
       console.log('[HealthKitTab] fetchHealthData: calling getTodayHealthSummary...');
       const summary = await getTodayHealthSummary();
       setLastUiSummary(summary);
+      setLastUiSummaryTrace(getLastTodayHealthSummaryTrace());
       console.log('[HealthKitTab] fetchHealthData summary:', JSON.stringify(summary));
 
       const [sleep, workouts, characteristics] = await Promise.all([
@@ -788,11 +795,23 @@ export function HealthKitTab() {
           </div>
 
           <div className="mt-3">
+            <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-2">
+              {isArabic ? 'إصدار الجسر:' : 'Bridge build:'} <span className="font-mono">{HEALTHKIT_BRIDGE_BUILD_STAMP}</span>
+            </div>
             <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
               {isArabic ? 'آخر ملخص تم جلبه من الواجهة (getTodayHealthSummary).' : 'Last UI summary fetched (getTodayHealthSummary).'}
             </div>
             <pre className="text-[11px] leading-relaxed whitespace-pre-wrap break-words max-h-40 overflow-auto rounded-2xl bg-black/5 dark:bg-black/30 p-3 text-gray-800 dark:text-gray-200">
               {lastUiSummary ? JSON.stringify(lastUiSummary, null, 2) : (isArabic ? 'لا توجد نتائج بعد.' : 'No output yet.')}
+            </pre>
+          </div>
+
+          <div className="mt-3">
+            <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+              {isArabic ? 'تتبّع الواجهة (خطوة بخطوة):' : 'UI trace (step-by-step):'}
+            </div>
+            <pre className="text-[11px] leading-relaxed whitespace-pre-wrap break-words max-h-64 overflow-auto rounded-2xl bg-black/5 dark:bg-black/30 p-3 text-gray-800 dark:text-gray-200">
+              {lastUiSummaryTrace ? JSON.stringify(lastUiSummaryTrace, null, 2) : (isArabic ? 'لا توجد نتائج بعد.' : 'No output yet.')}
             </pre>
           </div>
 
