@@ -183,11 +183,13 @@ export async function getNativeLocation(options?: {
   const {
     timeoutMs = 10000,
     minAccuracy = 100,
-    accuracyType = 'HundredMeters',
-    priority = 'BALANCED',
     fallbackToSettings = true,
     skipCache = false,
   } = options || {};
+
+  // When skipCache (forceFresh), use higher accuracy settings for real GPS
+  const accuracyType = options?.accuracyType || (skipCache ? 'Best' : 'HundredMeters');
+  const priority = options?.priority || (skipCache ? 'HIGH' : 'BALANCED');
 
   logNativelyRuntimeStatus('getNativeLocation');
 
@@ -207,12 +209,12 @@ export async function getNativeLocation(options?: {
     return getBrowserLocation(timeoutMs);
   }
 
-  return new Promise((resolve) => {
+  const sdkResult = await new Promise<NativeLocationResult | null>((resolve) => {
     let settled = false;
     const timer = setTimeout(() => {
       if (!settled) {
         settled = true;
-        console.warn('[NativelyLocation] Timeout waiting for location');
+        console.warn('[NativelyLocation] Timeout waiting for SDK location');
         resolve(null);
       }
     }, timeoutMs);
@@ -222,7 +224,7 @@ export async function getNativeLocation(options?: {
       settled = true;
       clearTimeout(timer);
 
-      console.log('[NativelyLocation] Response:', resp);
+      console.log('[NativelyLocation] SDK Response:', JSON.stringify(resp));
 
       if (resp.status === 'Success' || resp.status === 'Timeout') {
         const lat = resp.latitude;
@@ -242,14 +244,14 @@ export async function getNativeLocation(options?: {
         }
       }
 
-      console.warn('[NativelyLocation] Failed to get location:', resp.status);
+      console.warn('[NativelyLocation] SDK failed to get location:', resp.status);
       resolve(null);
     };
 
     try {
       // Try new SDK method first
       if (typeof instance.current === 'function') {
-        console.log('[NativelyLocation] Using current() method');
+        console.log('[NativelyLocation] Using current() method with accuracy:', accuracyType, 'priority:', priority);
         instance.current(
           minAccuracy,
           accuracyType,
@@ -278,13 +280,13 @@ export async function getNativeLocation(options?: {
           }
         );
       } else {
-        console.warn('[NativelyLocation] No location method available');
+        console.warn('[NativelyLocation] No location method available on SDK instance');
         settled = true;
         clearTimeout(timer);
         resolve(null);
       }
     } catch (err) {
-      console.error('[NativelyLocation] Error calling location method:', err);
+      console.error('[NativelyLocation] Error calling SDK location method:', err);
       if (!settled) {
         settled = true;
         clearTimeout(timer);
@@ -292,6 +294,15 @@ export async function getNativeLocation(options?: {
       }
     }
   });
+
+  // If SDK succeeded, return the result
+  if (sdkResult) {
+    return sdkResult;
+  }
+
+  // SDK failed/timed out — try browser geolocation as fallback
+  console.log('[NativelyLocation] SDK failed, trying browser geolocation fallback...');
+  return getBrowserLocation(timeoutMs);
 }
 
 /**

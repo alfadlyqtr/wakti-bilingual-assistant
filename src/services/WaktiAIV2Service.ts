@@ -280,13 +280,15 @@ class WaktiAIV2ServiceClass {
       updatedAt: now,
     };
 
-    // Try native location first (Natively SDK)
+    // Try native location first (Natively SDK + browser geolocation fallback)
     // If forceFresh, request fresh location with skipCache
+    let hasDeviceGPS = false;
     try {
       console.log('[WaktiAIV2Service] Attempting to get native location, forceFresh:', forceFresh);
       const nativeLoc = await getNativeLocation({ skipCache: forceFresh });
-      console.log('[WaktiAIV2Service] Native location result:', nativeLoc);
+      console.log('[WaktiAIV2Service] Native location result:', JSON.stringify(nativeLoc));
       if (nativeLoc && typeof nativeLoc.latitude === 'number' && typeof nativeLoc.longitude === 'number') {
+        hasDeviceGPS = true;
         resolved = {
           ...resolved,
           latitude: nativeLoc.latitude,
@@ -296,7 +298,7 @@ class WaktiAIV2ServiceClass {
           country: nativeLoc.country || resolved.country,
           source: 'native',
         };
-        console.log('[WaktiAIV2Service] ✅ Using native location:', resolved.latitude, resolved.longitude);
+        console.log(`[WaktiAIV2Service] ✅ Device GPS: [${resolved.latitude}, ${resolved.longitude}] source=${nativeLoc.source} accuracy=${nativeLoc.accuracy}`);
       } else {
         console.log('[WaktiAIV2Service] ⚠️ Native location returned null or invalid');
       }
@@ -304,10 +306,7 @@ class WaktiAIV2ServiceClass {
       console.warn('[WaktiAIV2Service] Native location error:', err);
     }
 
-    // NOTE: Browser geolocation removed per user request - Wakti native app users rely on Natively SDK.
-    // Fallback chain: Natively → profile → IP geo (no browser GPS prompts)
-
-    // Fetch from profiles as fallback for city/country
+    // Fetch from profiles as fallback for city/country text ONLY (not coordinates)
     if (!resolved.city || !resolved.country) {
       try {
         const { data: prof } = await supabase
@@ -325,19 +324,28 @@ class WaktiAIV2ServiceClass {
       }
     }
 
-    // IP-based fallback for coordinates/city/country if still missing
-    if (!resolved.latitude || !resolved.longitude || !resolved.city || !resolved.country) {
+    // IP-based fallback: ONLY use for city/country text when device GPS is unavailable.
+    // NEVER use IP coordinates — they give wrong results (e.g., Doha instead of Al Khor)
+    // due to ISP routing all traffic through a central location.
+    if (!hasDeviceGPS && (!resolved.latitude || !resolved.longitude || !resolved.city || !resolved.country)) {
+      console.log('[WaktiAIV2Service] ⚠️ No device GPS available, using IP fallback for city/country only');
       const ipLoc = await this.fetchIpLocation();
       if (ipLoc) {
         resolved = {
           ...resolved,
-          latitude: resolved.latitude ?? ipLoc.latitude ?? null,
-          longitude: resolved.longitude ?? ipLoc.longitude ?? null,
+          // Only use IP coordinates if we have absolutely nothing (non-search fallback)
+          latitude: resolved.latitude ?? (forceFresh ? null : (ipLoc.latitude ?? null)),
+          longitude: resolved.longitude ?? (forceFresh ? null : (ipLoc.longitude ?? null)),
           city: resolved.city || ipLoc.city || null,
           country: resolved.country || ipLoc.country || null,
-          source: resolved.source || ipLoc.source || 'ip',
+          source: resolved.source || 'ip',
         };
+        if (forceFresh) {
+          console.log('[WaktiAIV2Service] 🚫 forceFresh=true, IP coordinates BLOCKED (would give wrong location)');
+        }
       }
+    } else if (hasDeviceGPS) {
+      console.log('[WaktiAIV2Service] ✅ Device GPS available, skipping IP fallback entirely');
     }
 
     resolved.timezone = timezone;
