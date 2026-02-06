@@ -204,6 +204,11 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
           background: 'linear-gradient(180deg, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.45) 100%)'
         }}></div>
       )}
+
+      {/* TEMP DEBUG — remove after fixing */}
+      <div className="absolute bottom-1 left-1 right-1 z-50 bg-black/80 text-[9px] text-green-400 p-1 rounded font-mono break-all">
+        type={backgroundType} | img={isImageBg ? 'Y' : 'N'} | val={backgroundValue ? backgroundValue.substring(0, 60) : 'EMPTY'}
+      </div>
       
       <div className="relative z-10 flex flex-col h-full">
         {/* Event Title */}
