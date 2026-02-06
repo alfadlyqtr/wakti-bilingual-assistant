@@ -496,16 +496,20 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 40 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed inset-x-4 z-50 flex flex-col overflow-hidden"
+              onContextMenu={(e) => e.preventDefault()}
+              className="fixed inset-x-4 z-50 flex flex-col overflow-hidden select-none"
               style={{
                 top: '17.5%',
                 height: '65%',
                 borderRadius: '1.5rem',
                 background: isDark
-                  ? 'linear-gradient(135deg, rgba(12,15,20,0.92) 0%, rgba(30,33,45,0.95) 100%)'
-                  : 'linear-gradient(135deg, rgba(252,254,253,0.95) 0%, rgba(240,242,248,0.97) 100%)',
+                  ? 'linear-gradient(135deg, rgba(12,15,20,0.82) 0%, rgba(30,33,45,0.85) 100%)'
+                  : 'linear-gradient(135deg, rgba(252,254,253,0.80) 0%, rgba(240,242,248,0.82) 100%)',
                 backdropFilter: 'blur(24px)',
                 WebkitBackdropFilter: 'blur(24px)',
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'none',
+                touchAction: 'manipulation',
                 border: isDark
                   ? '1px solid rgba(255,255,255,0.08)'
                   : '1px solid rgba(6,5,65,0.1)',
@@ -589,7 +593,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                         whileTap={{ scale: 0.9 }}
                         onClick={toggleListening}
                         aria-label={t('Stop listening', 'إيقاف الاستماع')}
-                        className="relative z-10 rounded-full h-20 w-20 flex items-center justify-center"
+                        className="relative z-10 rounded-full h-20 w-20 flex items-center justify-center select-none"
                         style={{
                           background: isDark
                             ? 'linear-gradient(135deg, hsl(210,100%,65%) 0%, hsl(280,70%,65%) 100%)'

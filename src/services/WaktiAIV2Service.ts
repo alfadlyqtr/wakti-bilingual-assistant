@@ -1408,6 +1408,7 @@ class WaktiAIV2ServiceClass {
         }
 
         // Otherwise fallback to SSE streaming parsing
+        console.log('📡 VISION SSE: Starting SSE parsing, content-type:', ct);
         const reader = respNonNull.body?.getReader();
         if (!reader) throw new Error('No response body reader for vision');
 
@@ -1417,6 +1418,7 @@ class WaktiAIV2ServiceClass {
         let metadata: any = {};
         let encounteredError: string | null = null;
         let isCompleted = false;
+        let chunkCount = 0;
 
         const abortHandler = async () => { try { await reader.cancel(); } catch {} };
         if (signal) {
@@ -1463,7 +1465,12 @@ class WaktiAIV2ServiceClass {
               console.log(`✅ VISION: Stream closed cleanly [${requestId}] (primary=${primary})`);
               break;
             }
-            buffer += decoder.decode(value, { stream: true });
+            chunkCount++;
+            const rawChunk = decoder.decode(value, { stream: true });
+            buffer += rawChunk;
+            if (chunkCount <= 3) {
+              console.log(`📡 VISION SSE chunk #${chunkCount}:`, rawChunk.substring(0, 200));
+            }
             const lines = buffer.split('\n');
             buffer = lines.pop() || '';
             for (const line of lines) {
