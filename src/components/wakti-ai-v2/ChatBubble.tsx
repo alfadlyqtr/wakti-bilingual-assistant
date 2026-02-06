@@ -1,9 +1,9 @@
 
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
-import { User, Bot, Image as ImageIcon, Search, MessageSquare, Copy, Save, Expand, Play, Pause } from 'lucide-react';
+import { User, Bot, Image as ImageIcon, Search, MessageSquare, Copy, Save, Expand, Play, Pause, Loader2, Volume2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useState } from 'react';
@@ -32,6 +32,7 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
   const isUser = message.role === 'user';
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [isFetchingAudio, setIsFetchingAudio] = useState(false);
 
   // Format message content with enhanced buddy-chat features
   const formatContent = (content: string) => {
@@ -64,19 +65,84 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
     }
   };
 
-  // Google Cloud TTS via Edge Function (align with ChatMessages)
+  // === iOS-SAFE TTS (aligned with ChatMessages.tsx) ===
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const audioUnlockedRef = useRef(false);
   const ttsRunIdRef = useRef(0);
-  const ttsQueueRef = useRef<{ runId: number; urls: string[]; index: number; chunks: string[] } | null>(null);
+  const ttsQueueRef = useRef<{ runId: number; chunks: string[]; index: number; objectUrls: string[] } | null>(null);
+
+  // Create persistent audio element once (iOS requires reuse)
+  useEffect(() => {
+    if (!audioRef.current) {
+      const audio = new Audio();
+      audio.preload = 'auto';
+      try { (audio as any).playsInline = true; } catch {}
+      audioRef.current = audio;
+    }
+    return () => {
+      if (audioRef.current) {
+        try { audioRef.current.pause(); } catch {}
+        audioRef.current.src = '';
+      }
+    };
+  }, []);
+
+  const bufferToBase64 = (buffer: ArrayBuffer) => {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  };
+
   const cleanupQueue = () => {
     const q = ttsQueueRef.current;
-    if (q?.urls?.length) {
-      for (const u of q.urls) {
+    if (q?.objectUrls?.length) {
+      for (const u of q.objectUrls) {
         try { URL.revokeObjectURL(u); } catch {}
       }
     }
     ttsQueueRef.current = null;
   };
+
+  const stopCurrentAudio = () => {
+    if (audioSourceRef.current) {
+      try { audioSourceRef.current.stop(); audioSourceRef.current.disconnect(); } catch {}
+      audioSourceRef.current = null;
+    }
+    if (audioRef.current && !audioRef.current.paused) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+  };
+
+  const getAudioContext = (): AudioContext => {
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return audioContextRef.current;
+  };
+
+  const sanitizeForTTS = (raw: string) => {
+    try {
+      let t = raw || '';
+      t = t.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+      t = t.replace(/#{1,6}\s*/g, '');
+      t = t.replace(/\*{1,3}([^*]+)\*{1,3}/g, '$1');
+      t = t.replace(/`{1,3}[^`]*`{1,3}/g, ' ');
+      t = t.replace(/`/g, ' ');
+      t = t.replace(/^[>\-*+]\s*/gm, '');
+      t = t.replace(/\|+/g, ', ');
+      t = t.replace(/[:;]+/g, ', ');
+      t = t.replace(/[\r\n]+/g, '. ');
+      t = t.replace(/\s{2,}/g, ' ');
+      return t.trim().slice(0, 1000);
+    } catch {
+      return (raw || '').slice(0, 1000);
+    }
+  };
+
   const splitTtsText = (input: string, maxChars: number = 240): string[] => {
     try {
       const cleaned = String(input || '').replace(/\s+/g, ' ').trim();
@@ -112,16 +178,15 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
 
   const handleSpeak = async () => {
     try {
-      const text = String(message.content || '').trim();
-      if (!text) return;
-
-      // If audio already exists, toggle pause/resume
-      if (audioRef.current && isSpeaking) {
-        const a = audioRef.current;
-        if (a.paused) {
-          try { await a.play(); setIsPaused(false); } catch {}
-        } else {
-          try { a.pause(); setIsPaused(true); } catch {}
+      // If already speaking, toggle pause/resume
+      if (isSpeaking) {
+        const el = audioRef.current;
+        if (el) {
+          if (el.paused) {
+            try { await el.play(); setIsPaused(false); } catch {}
+          } else {
+            try { el.pause(); setIsPaused(true); } catch {}
+          }
         }
         return;
       }
@@ -129,77 +194,182 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
       // Stop any current playback
       ttsRunIdRef.current += 1;
       cleanupQueue();
-      if (audioRef.current) {
-        try { audioRef.current.pause(); } catch {}
-        try { audioRef.current.currentTime = 0; } catch {}
+      stopCurrentAudio();
+
+      let cleanText = sanitizeForTTS(message.content || '');
+      if (!cleanText || cleanText.length < 3) {
+        console.warn('[TTS-Bubble] No readable text after sanitization');
+        return;
       }
+
       setIsSpeaking(true);
       setIsPaused(false);
+      setIsFetchingAudio(true);
+
+      // Mobile AudioContext unlock
+      if (!audioUnlockedRef.current) {
+        try {
+          const ctx = getAudioContext();
+          if (ctx.state === 'suspended') await ctx.resume();
+          audioUnlockedRef.current = true;
+        } catch {}
+      }
 
       // Determine voice from TalkBack settings
-      const isArabicText = /[\u0600-\u06FF]/.test(text);
+      const isArabicText = /[\u0600-\u06FF]/.test(cleanText);
       const { ar, en } = getSelectedVoices();
       const voice_id = (isArabicText || language === 'ar') ? ar : en;
+      const gender = voice_id.toLowerCase().includes('female') ? 'female' : 'male';
 
       // Auth + endpoint
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
-      const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
+      const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co';
 
       const runId = ttsRunIdRef.current;
-      const chunks = splitTtsText(text, 240);
-      const urls: string[] = [];
-      ttsQueueRef.current = { runId, urls, index: 0, chunks };
+      const chunks = splitTtsText(cleanText, 240);
 
-      const fetchChunk = async (chunkText: string) => {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || ((navigator.platform === 'MacIntel') && (navigator.maxTouchPoints > 1));
+
+      // --- WebAudio playback (primary) ---
+      const playWithWebAudio = async (arrayBuffer: ArrayBuffer): Promise<boolean> => {
+        try {
+          const ctx = getAudioContext();
+          if (ctx.state === 'suspended') await ctx.resume();
+          const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+          const source = ctx.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(ctx.destination);
+          audioSourceRef.current = source;
+          source.onended = () => {
+            setIsSpeaking(false); setIsPaused(false);
+            audioSourceRef.current = null;
+          };
+          source.start(0);
+          return true;
+        } catch (err) {
+          console.warn('[TTS-Bubble] WebAudio decode failed, trying HTML5:', err);
+          return false;
+        }
+      };
+
+      // --- HTML5 Audio fallback (iOS-safe with data URI) ---
+      const playWithHTML5 = async (blob: Blob, contentType: string) => {
+        const el = audioRef.current;
+        if (!el) return;
+        try { el.muted = false; el.volume = 1.0; } catch {}
+
+        let audioUrl: string;
+        if (isIOS) {
+          try {
+            const buf = await blob.arrayBuffer();
+            const b64 = bufferToBase64(buf);
+            audioUrl = `data:${contentType || 'audio/wav'};base64,${b64}`;
+          } catch {
+            audioUrl = URL.createObjectURL(blob);
+          }
+        } else {
+          audioUrl = URL.createObjectURL(blob);
+        }
+
+        el.src = audioUrl;
+        try { el.load(); } catch {}
+        el.onended = () => { setIsSpeaking(false); setIsPaused(false); };
+        el.onerror = () => { setIsSpeaking(false); setIsPaused(false); };
+        try { await el.play(); } catch (err) {
+          console.error('[TTS-Bubble] HTML5 play() rejected:', err);
+          setIsSpeaking(false); setIsPaused(false);
+        }
+      };
+
+      // --- Fetch audio from voice-tts ---
+      const fetchChunkBytes = async (chunkText: string) => {
         const resp = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Accept': 'audio/mpeg, audio/*',
+            'Accept': 'audio/wav, audio/mpeg, audio/*',
             ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
           },
-          body: JSON.stringify({ text: chunkText, voice_id, style: 'neutral' })
+          body: JSON.stringify({ text: chunkText, voice_id, gender, style: 'neutral' })
         });
         if (!resp.ok) {
           const errText = await resp.text().catch(() => '');
           throw new Error(`TTS failed: ${resp.status} ${errText}`);
         }
-        const blob = await resp.blob();
-        return blob;
+        const mime = resp.headers.get('content-type') || 'audio/mpeg';
+        const buf = await resp.arrayBuffer();
+        return { mime, buf };
       };
 
-      const audio = new Audio();
-      audioRef.current = audio;
-      audio.onpause = () => setIsPaused(true);
-      audio.onplay = () => setIsPaused(false);
-      audio.onerror = () => { setIsSpeaking(false); setIsPaused(false); cleanupQueue(); };
+      // Single chunk: use WebAudio (fast) with HTML5 fallback
+      if (chunks.length <= 1) {
+        const { mime, buf } = await fetchChunkBytes(cleanText);
+        setIsFetchingAudio(false);
+        if (!buf || buf.byteLength === 0) {
+          setIsSpeaking(false);
+          return;
+        }
+        const webOk = await playWithWebAudio(buf);
+        if (!webOk) {
+          const blob = new Blob([buf], { type: mime });
+          await playWithHTML5(blob, mime);
+        }
+        return;
+      }
 
-      const promises = chunks.map((c) => fetchChunk(c));
-      const playAt = async (idx: number) => {
+      // Multi-chunk: sequential playback via HTML5 audio element
+      const queue = { runId, chunks, index: 0, objectUrls: [] as string[] };
+      ttsQueueRef.current = queue;
+      const chunkPromises = chunks.map(c => fetchChunkBytes(c));
+
+      const playChunkAt = async (idx: number) => {
         const q = ttsQueueRef.current;
         if (!q || q.runId !== runId) return;
         if (idx >= q.chunks.length) {
-          setIsSpeaking(false);
-          setIsPaused(false);
+          setIsSpeaking(false); setIsPaused(false);
           cleanupQueue();
           return;
         }
+        if (idx === 0) setIsFetchingAudio(false);
         q.index = idx;
-        const blob = await promises[idx];
-        const url = URL.createObjectURL(blob);
-        q.urls.push(url);
-        audio.src = url;
-        try { audio.load(); } catch {}
-        audio.onended = () => { playAt(idx + 1).catch(() => { setIsSpeaking(false); setIsPaused(false); cleanupQueue(); }); };
-        await audio.play();
+        const { mime, buf } = await chunkPromises[idx];
+        const blob = new Blob([buf], { type: mime || 'audio/mpeg' });
+
+        const el = audioRef.current;
+        if (!el) return;
+
+        let audioUrl: string;
+        if (isIOS) {
+          try {
+            const b64 = bufferToBase64(buf);
+            audioUrl = `data:${mime || 'audio/wav'};base64,${b64}`;
+          } catch {
+            audioUrl = URL.createObjectURL(blob);
+          }
+        } else {
+          audioUrl = URL.createObjectURL(blob);
+          q.objectUrls.push(audioUrl);
+        }
+
+        el.onended = () => {
+          const cur = ttsQueueRef.current;
+          if (!cur || cur.runId !== runId) return;
+          playChunkAt(idx + 1).catch(() => { setIsSpeaking(false); setIsPaused(false); cleanupQueue(); });
+        };
+        el.onerror = () => { setIsSpeaking(false); setIsPaused(false); cleanupQueue(); };
+        el.src = audioUrl;
+        try { el.load(); } catch {}
+        try { await el.play(); } catch { setIsSpeaking(false); setIsPaused(false); cleanupQueue(); }
       };
 
-      await playAt(0);
+      await playChunkAt(0);
+
     } catch (error) {
-      console.error('Failed to play TTS:', error);
+      console.error('[TTS-Bubble] Failed:', error);
       setIsSpeaking(false);
       setIsPaused(false);
+      setIsFetchingAudio(false);
       cleanupQueue();
     }
   };
@@ -431,9 +601,9 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                   <Copy className={`w-3 h-3 ${isUser ? 'text-white/70 hover:text-white' : 'text-muted-foreground'}`} />
                 </button>
                 
-                {/* ENHANCED: Mini Speak Button for ALL messages with Arabic support */}
+                {/* ENHANCED: Mini Speak Button - iOS-safe with WebAudio + HTML5 fallback */}
                 <button
-                  onClick={handleSpeak}
+                  onPointerUp={handleSpeak}
                   className={`p-1 rounded-md transition-colors ${
                     isSpeaking 
                       ? 'text-green-600 bg-green-500/15 shadow-[0_0_8px_rgba(34,197,94,0.7)]' 
@@ -441,7 +611,9 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                   }`}
                   title={isSpeaking && !isPaused ? (language==='ar'?'إيقاف مؤقت':'Pause') : (language==='ar'?'تشغيل':'Play')}
                 >
-                  {isSpeaking && !isPaused ? (
+                  {isFetchingAudio ? (
+                    <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+                  ) : isSpeaking && !isPaused ? (
                     <Pause className="w-3 h-3" />
                   ) : (
                     <Play className={`w-3 h-3 ${isUser ? 'text-white/70 hover:text-white' : 'text-muted-foreground'}`} />

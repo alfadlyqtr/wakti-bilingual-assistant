@@ -325,14 +325,18 @@ export function HealthKitTab() {
       const now = new Date();
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-      const [summary, sleep, workouts, characteristics] = await Promise.all([
-        getTodayHealthSummary(),
+      console.log('[HealthKitTab] fetchHealthData: calling getTodayHealthSummary...');
+      const summary = await getTodayHealthSummary();
+      setLastUiSummary(summary);
+      console.log('[HealthKitTab] fetchHealthData summary:', JSON.stringify(summary));
+
+      const [sleep, workouts, characteristics] = await Promise.all([
         getSleepAnalysis(weekAgo, now, 7),
         getWorkouts(weekAgo, now, 10),
         getCharacteristics()
       ]);
 
-      setHealthData({
+      const newHealthData = {
         steps: summary.steps,
         heartRate: summary.heartRate,
         activeEnergy: summary.activeEnergy,
@@ -343,7 +347,9 @@ export function HealthKitTab() {
         characteristics,
         restingHeartRate: summary.restingHeartRate,
         hrv: summary.hrv
-      });
+      };
+      console.log('[HealthKitTab] Setting healthData:', JSON.stringify({ steps: newHealthData.steps, activeEnergy: newHealthData.activeEnergy }));
+      setHealthData(newHealthData);
       setLastUpdated(new Date());
     } catch (err) {
       console.error('[HealthKitTab] Fetch error:', err);
