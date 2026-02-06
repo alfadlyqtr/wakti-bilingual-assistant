@@ -1008,6 +1008,19 @@ export async function getTodayHealthSummary(): Promise<{
     });
   };
   
+  // CRITICAL: The Natively SDK requires available() + requestAuthorization() to be called
+  // BEFORE each batch of data queries. The diagnostics do this and work. Without it, queries return empty.
+  const availResult = await promisify('summary_available', (cb) =>
+    instance.available((res: any, err: any) => cb(res, err))
+  );
+  console.log('[NativelyHealth] Summary pre-auth available:', { status: availResult.res?.status, err: availResult.err, ms: availResult.ms });
+  
+  const authTypes: HealthKitDataType[] = ['STEPS', 'HEART_RATE', 'ACTIVE_ENERGY', 'HRV', 'RHR', 'SLEEP_ANALYSIS', 'ACTIVITY_SUMMARY', 'WORKOUTS'];
+  const authResult = await promisify('summary_requestAuthorization', (cb) =>
+    instance.requestAuthorization([], authTypes, (res: any, err: any) => cb(res, err))
+  );
+  console.log('[NativelyHealth] Summary pre-auth requestAuthorization:', { status: authResult.res?.status, err: authResult.err, ms: authResult.ms });
+  
   // Get the quantity method - same as diagnostics
   const quantityMethod = instance.getStatisticQuantity || instance.getStatisticQuantityValues || instance.getQuantity;
   
