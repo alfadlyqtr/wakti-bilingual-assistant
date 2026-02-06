@@ -109,6 +109,7 @@ export function VoiceSignup({ onSignupComplete, onError }: VoiceSignupProps) {
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'ready' | 'listening' | 'processing' | 'speaking'>('idle');
   const [aiTranscript, setAiTranscript] = useState('');
   const [isSigningUp, setIsSigningUp] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
 
   // ─── Password visibility ───────────────────────────────────────────────────
   const [showPassword, setShowPassword] = useState(false);
@@ -135,6 +136,29 @@ export function VoiceSignup({ onSignupComplete, onError }: VoiceSignupProps) {
 
   const currentStep = STEPS[stepIndex];
   const MAX_RECORD_SECONDS = 10;
+
+  const unlockAudio = useCallback(async () => {
+    if (audioUnlocked) return;
+
+    try {
+      if (audioContextRef.current?.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+    } catch (e) {
+      console.warn('[VoiceSignup] Failed to resume AudioContext:', e);
+    }
+
+    try {
+      if (audioRef.current) {
+        audioRef.current.muted = false;
+        audioRef.current.volume = 1;
+        await audioRef.current.play();
+      }
+      setAudioUnlocked(true);
+    } catch (e) {
+      console.warn('[VoiceSignup] Audio play blocked (needs user gesture):', e);
+    }
+  }, [audioUnlocked]);
 
   // ─── Cleanup ───────────────────────────────────────────────────────────────
   const cleanup = useCallback(() => {
@@ -177,7 +201,11 @@ export function VoiceSignup({ onSignupComplete, onError }: VoiceSignupProps) {
       pc.ontrack = (event) => {
         if (audioRef.current && event.streams[0]) {
           audioRef.current.srcObject = event.streams[0];
-          audioRef.current.play().catch(() => {});
+          audioRef.current.muted = false;
+          audioRef.current.volume = 1;
+          audioRef.current.play().catch((e) => {
+            console.warn('[VoiceSignup] Remote audio autoplay blocked:', e);
+          });
         }
       };
 
@@ -227,12 +255,8 @@ export function VoiceSignup({ onSignupComplete, onError }: VoiceSignupProps) {
       const offer = pc.localDescription;
       if (!offer) throw new Error('Failed to create SDP offer');
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const response = await supabase.functions.invoke('openai-realtime-session', {
+      const response = await supabase.functions.invoke('live-voice-signup', {
         body: { sdp_offer: offer.sdp, language },
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
 
       if (response.error || !response.data?.sdp_answer) {
@@ -408,12 +432,13 @@ export function VoiceSignup({ onSignupComplete, onError }: VoiceSignupProps) {
 
   const handleHoldStart = useCallback((e: React.TouchEvent | React.MouseEvent) => {
     e.preventDefault();
+    unlockAudio();
     if (connectionStatus === 'ready' && currentStep?.voice && (phase === 'asking' || phase === 'editing')) {
       setIsHolding(true);
       isHoldingRef.current = true;
       startRecording();
     }
-  }, [connectionStatus, currentStep, phase, startRecording]);
+  }, [connectionStatus, currentStep, phase, startRecording, unlockAudio]);
 
   const handleHoldEnd = useCallback((e: React.TouchEvent | React.MouseEvent) => {
     e.preventDefault();
@@ -606,7 +631,10 @@ export function VoiceSignup({ onSignupComplete, onError }: VoiceSignupProps) {
   const progressPercent = Math.max(0, Math.min(100, (currentVoiceStep / totalVoiceSteps) * 100));
 
   return (
-    <div className="flex flex-col items-center gap-4 py-6 px-4 max-w-md mx-auto select-none">
+    <div
+      className="flex flex-col items-center gap-4 py-6 px-4 max-w-md mx-auto select-none"
+      onPointerDown={() => { unlockAudio(); }}
+    >
       {/* Hidden audio element */}
       <audio ref={audioRef} autoPlay playsInline className="hidden" />
 

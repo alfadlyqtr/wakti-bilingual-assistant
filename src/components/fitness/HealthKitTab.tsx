@@ -186,10 +186,18 @@ export function HealthKitTab() {
     }
   }, [timeRange]);
 
-  // Check availability on mount
+  // Check availability on mount + auto-refresh every 5 minutes
   useEffect(() => {
     checkAvailability();
-  }, []);
+    
+    const interval = setInterval(() => {
+      if (permissionStatus === 'granted') {
+        fetchHealthData();
+      }
+    }, 5 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, [permissionStatus]);
 
   const checkAvailability = async () => {
     setPermissionStatus('checking');
@@ -405,9 +413,25 @@ export function HealthKitTab() {
     const config = configs[metric];
     const Icon = config.icon;
     const goal = goals[metric];
+    const hasData = permissionStatus === 'granted' && healthData;
+
+    // Get the current value for this metric
+    const getCurrentValue = () => {
+      if (!healthData) return null;
+      switch (metric) {
+        case 'steps': return healthData.steps;
+        case 'heart': return healthData.heartRate?.latest ?? null;
+        case 'energy': return healthData.activeEnergy;
+        case 'sleep': return healthData.sleep?.[0]?.asleep ? Math.round(healthData.sleep[0].asleep / 60 * 10) / 10 : null;
+        default: return null;
+      }
+    };
+
+    const currentValue = getCurrentValue();
+    const progress = currentValue != null && goal > 0 ? Math.min(100, (currentValue / goal) * 100) : 0;
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 p-2">
         {/* Header with back button */}
         <div className="flex items-center gap-4">
           <Button
@@ -425,103 +449,210 @@ export function HealthKitTab() {
             <div>
               <h2 className="text-xl font-bold text-slate-900 dark:text-white">{config.title}</h2>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                {isArabic ? 'البيانات متاحة في تطبيق iOS فقط' : 'Data available in iOS app only'}
+                {hasData 
+                  ? (isArabic ? 'بيانات اليوم' : "Today's data")
+                  : (isArabic ? 'البيانات متاحة في تطبيق iOS فقط' : 'Data available in iOS app only')}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Main Info Card */}
-        <Card className={`relative overflow-hidden rounded-3xl border-0 bg-gradient-to-br ${config.bgGradient} p-6 shadow-xl`}>
-          <div className="flex flex-col items-center text-center gap-4 py-8">
-            <div className={`w-20 h-20 rounded-xl bg-gradient-to-br ${config.gradient} flex items-center justify-center shadow-lg`}>
-              <Icon className="w-10 h-10 text-white" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-1">
-                {config.title}
-              </h3>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                {isArabic ? 'بيانات متاحة فقط في تطبيق iOS' : 'Data only available in iOS app'}
-              </p>
-            </div>
-          </div>
+        {hasData ? (
+          <>
+            {/* Main Value Card */}
+            <Card className={`relative overflow-hidden rounded-3xl border-0 bg-gradient-to-br ${config.bgGradient} p-6 shadow-xl`}>
+              <div className="absolute -top-10 -right-10 w-32 h-32 bg-gradient-to-br from-white/10 to-white/5 rounded-full blur-2xl" />
+              <div className="relative flex flex-col items-center text-center gap-3">
+                <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${config.gradient} flex items-center justify-center shadow-lg`}>
+                  <Icon className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <span className="text-4xl font-bold text-slate-900 dark:text-white">
+                    {currentValue != null ? (typeof currentValue === 'number' ? currentValue.toLocaleString() : currentValue) : '—'}
+                  </span>
+                  <span className="text-lg text-slate-500 dark:text-slate-400 ml-2">{config.unit}</span>
+                </div>
 
-          {/* iOS-only notice */}
-          <div className="bg-white/50 dark:bg-slate-800/50 rounded-xl p-4 mt-4">
-            <div className="flex items-center gap-3 justify-center">
-              <Smartphone className="w-5 h-5 text-slate-500" />
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                {isArabic ? 'متاح حصريًا على تطبيق Wakti iOS' : 'Exclusively available on Wakti iOS app'}
-              </span>
-            </div>
-          </div>
-        </Card>
-
-        {/* Feature description */}
-        <Card className="rounded-2xl p-6 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-lg">
-          <h3 className="font-bold text-slate-900 dark:text-white mb-4">
-            {isArabic ? 'ما يمكنك تتبعه' : 'What you can track'}
-          </h3>
-          
-          {metric === 'steps' && (
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              {isArabic
-                ? 'تتبع خطواتك اليومية ومراقبة نشاطك البدني على مدار اليوم والأسبوع. قم بتعيين أهداف شخصية وتتبع التقدم المحرز.'  
-                : 'Track your daily steps and monitor your physical activity throughout the day and week. Set personal goals and track progress.'}
-            </p>
-          )}
-
-          {metric === 'heart' && (
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              {isArabic
-                ? 'مراقبة معدل ضربات قلبك في الوقت الفعلي ومتوسطات الراحة والنشاط. تتبع الاتجاهات على مدار اليوم والأسبوع.'  
-                : 'Monitor your heart rate in real-time and track resting and active averages. Track trends throughout the day and week.'}
-            </p>
-          )}
-
-          {metric === 'energy' && (
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              {isArabic
-                ? 'تتبع السعرات الحرارية النشطة المحروقة خلال اليوم. راقب معدل النشاط والتقدم نحو أهدافك اليومية.'  
-                : 'Track active calories burned throughout the day. Monitor your activity rate and progress toward daily goals.'}
-            </p>
-          )}
-
-          {metric === 'sleep' && (
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              {isArabic
-                ? 'تحليل أنماط نومك، بما في ذلك مراحل النوم العميق والخفيف. مراقبة مدة النوم والجودة لتحسين صحتك.'  
-                : 'Analyze your sleep patterns, including deep and light sleep phases. Monitor duration and quality to improve your health.'}
-            </p>
-          )}
-        </Card>
-
-        {/* Download CTA */}
-        <Card className="relative overflow-hidden rounded-2xl border-0 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 p-5 shadow-xl">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <Smartphone className="w-6 h-6 text-white" />
+                {/* Progress bar toward goal */}
+                {goal > 0 && currentValue != null && (
+                  <div className="w-full max-w-xs mt-2">
+                    <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+                      <span>{isArabic ? 'التقدم' : 'Progress'}</span>
+                      <span>{Math.round(progress)}% {isArabic ? 'من الهدف' : 'of goal'} ({goal.toLocaleString()})</span>
+                    </div>
+                    <div className="w-full h-3 bg-white/50 dark:bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full bg-gradient-to-r ${config.gradient} transition-all duration-500`}
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
-              <div>
-                <h3 className="text-white font-bold text-base">
-                  {isArabic ? 'احصل على تطبيق Wakti' : 'Get the Wakti App'}
-                </h3>
-                <p className="text-emerald-100/80 text-xs">
-                  {isArabic ? 'لتفعيل HealthKit' : 'To enable HealthKit'}
-                </p>
+            </Card>
+
+            {/* Extra info per metric */}
+            {metric === 'steps' && (
+              <Card className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 p-5 shadow-sm">
+                <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3 flex items-center gap-2">
+                  <Target className="w-4 h-4 text-blue-500" />
+                  {isArabic ? 'ملخص' : 'Summary'}
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-center">
+                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{healthData.steps?.toLocaleString() || 0}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{isArabic ? 'خطوات اليوم' : "Today's Steps"}</p>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-cyan-50 dark:bg-cyan-900/20 text-center">
+                    <p className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">{goal.toLocaleString()}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{isArabic ? 'الهدف' : 'Goal'}</p>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {metric === 'heart' && (
+              <Card className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 p-5 shadow-sm">
+                <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3 flex items-center gap-2">
+                  <Heart className="w-4 h-4 text-pink-500" />
+                  {isArabic ? 'تفاصيل القلب' : 'Heart Details'}
+                </h4>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-900/20 text-center">
+                    <p className="text-xl font-bold text-rose-600 dark:text-rose-400">
+                      {healthData.heartRate?.latest ?? '—'}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{isArabic ? 'الأخير' : 'Latest'}</p>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-pink-50 dark:bg-pink-900/20 text-center">
+                    <p className="text-xl font-bold text-pink-600 dark:text-pink-400">
+                      {healthData.heartRate?.avg ?? '—'}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{isArabic ? 'المتوسط' : 'Average'}</p>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-red-50 dark:bg-red-900/20 text-center">
+                    <p className="text-xl font-bold text-red-600 dark:text-red-400">
+                      {healthData.restingHeartRate ?? '—'}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{isArabic ? 'الراحة' : 'Resting'}</p>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {metric === 'energy' && (
+              <Card className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 p-5 shadow-sm">
+                <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3 flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-orange-500" />
+                  {isArabic ? 'ملخص الطاقة' : 'Energy Summary'}
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-2xl bg-orange-50 dark:bg-orange-900/20 text-center">
+                    <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{healthData.activeEnergy?.toLocaleString() || 0}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{isArabic ? 'سعرات نشطة' : 'Active kcal'}</p>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-900/20 text-center">
+                    <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{goal.toLocaleString()}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{isArabic ? 'الهدف' : 'Goal'}</p>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {metric === 'sleep' && healthData.sleep && healthData.sleep.length > 0 && (
+              <Card className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 p-5 shadow-sm">
+                <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3 flex items-center gap-2">
+                  <Moon className="w-4 h-4 text-indigo-500" />
+                  {isArabic ? 'تفاصيل النوم' : 'Sleep Details'}
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {healthData.sleep[0]?.asleep != null && (
+                    <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 text-center">
+                      <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
+                        {Math.round(healthData.sleep[0].asleep / 60 * 10) / 10}h
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{isArabic ? 'نوم' : 'Asleep'}</p>
+                    </div>
+                  )}
+                  {healthData.sleep[0]?.inBed != null && (
+                    <div className="p-3 rounded-2xl bg-purple-50 dark:bg-purple-900/20 text-center">
+                      <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                        {Math.round(healthData.sleep[0].inBed / 60 * 10) / 10}h
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{isArabic ? 'في السرير' : 'In Bed'}</p>
+                    </div>
+                  )}
+                  {healthData.sleep[0]?.asleepDeep != null && (
+                    <div className="p-3 rounded-2xl bg-violet-50 dark:bg-violet-900/20 text-center">
+                      <p className="text-xl font-bold text-violet-600 dark:text-violet-400">
+                        {Math.round(healthData.sleep[0].asleepDeep / 60 * 10) / 10}h
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{isArabic ? 'عميق' : 'Deep'}</p>
+                    </div>
+                  )}
+                  {healthData.sleep[0]?.asleepRem != null && (
+                    <div className="p-3 rounded-2xl bg-fuchsia-50 dark:bg-fuchsia-900/20 text-center">
+                      <p className="text-xl font-bold text-fuchsia-600 dark:text-fuchsia-400">
+                        {Math.round(healthData.sleep[0].asleepRem / 60 * 10) / 10}h
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">REM</p>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Fallback: iOS-only promo for non-iOS users */}
+            <Card className={`relative overflow-hidden rounded-3xl border-0 bg-gradient-to-br ${config.bgGradient} p-6 shadow-xl`}>
+              <div className="flex flex-col items-center text-center gap-4 py-8">
+                <div className={`w-20 h-20 rounded-xl bg-gradient-to-br ${config.gradient} flex items-center justify-center shadow-lg`}>
+                  <Icon className="w-10 h-10 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-1">{config.title}</h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    {isArabic ? 'بيانات متاحة فقط في تطبيق iOS' : 'Data only available in iOS app'}
+                  </p>
+                </div>
               </div>
-            </div>
-            <Button
-              onClick={openAppStore}
-              className="bg-white text-emerald-600 font-bold px-5 py-2.5 rounded-xl shadow-lg active:scale-95 active:bg-gray-50 transition-all"
-            >
-              <span className="mr-1.5"></span>
-              App Store
-            </Button>
-          </div>
-        </Card>
+              <div className="bg-white/50 dark:bg-slate-800/50 rounded-xl p-4 mt-4">
+                <div className="flex items-center gap-3 justify-center">
+                  <Smartphone className="w-5 h-5 text-slate-500" />
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    {isArabic ? 'متاح حصريًا على تطبيق Wakti iOS' : 'Exclusively available on Wakti iOS app'}
+                  </span>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="relative overflow-hidden rounded-2xl border-0 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 p-5 shadow-xl">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                    <Smartphone className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-white font-bold text-base">
+                      {isArabic ? 'احصل على تطبيق Wakti' : 'Get the Wakti App'}
+                    </h3>
+                    <p className="text-emerald-100/80 text-xs">
+                      {isArabic ? 'لتفعيل HealthKit' : 'To enable HealthKit'}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={openAppStore}
+                  className="bg-white text-emerald-600 font-bold px-5 py-2.5 rounded-xl shadow-lg active:scale-95 active:bg-gray-50 transition-all"
+                >
+                  <span className="mr-1.5"></span>
+                  App Store
+                </Button>
+              </div>
+            </Card>
+          </>
+        )}
       </div>
     );
   };
@@ -715,6 +846,11 @@ export function HealthKitTab() {
     );
   }
 
+  // If user tapped a metric card, show the detail view with real data
+  if (activeView !== 'overview') {
+    return renderMetricDetail(activeView as 'steps' | 'heart' | 'energy' | 'sleep');
+  }
+
   // Render connected state with health data
   return (
     <div className="space-y-4 p-2">
@@ -837,7 +973,7 @@ export function HealthKitTab() {
 
         <div className="grid grid-cols-3 gap-4">
           {/* Steps */}
-          <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
+          <button onClick={() => setActiveView('steps')} className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm active:scale-95 transition-transform cursor-pointer">
             <Footprints className="w-6 h-6 text-blue-500 mb-2" />
             <span className="text-2xl font-bold text-gray-800 dark:text-white">
               {healthData?.steps !== undefined && healthData?.steps !== null ? healthData.steps.toLocaleString() : '0'}
@@ -845,10 +981,10 @@ export function HealthKitTab() {
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {isArabic ? 'خطوة' : 'steps'}
             </span>
-          </div>
+          </button>
 
           {/* Heart Rate - Option C: friendly null message */}
-          <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
+          <button onClick={() => setActiveView('heart')} className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm active:scale-95 transition-transform cursor-pointer">
             <Heart className="w-6 h-6 text-red-500 mb-2" />
             <span className="text-2xl font-bold text-gray-800 dark:text-white">
               {healthData?.heartRate?.latest !== undefined && healthData?.heartRate?.latest !== null ? healthData.heartRate.latest : '—'}
@@ -856,10 +992,10 @@ export function HealthKitTab() {
             <span className="text-xs text-gray-500 dark:text-gray-400 text-center">
               {(healthData?.heartRate?.latest !== undefined && healthData?.heartRate?.latest !== null) ? (isArabic ? 'نبضة/د' : 'bpm') : (isArabic ? 'يحتاج ساعة' : 'Needs Watch')}
             </span>
-          </div>
+          </button>
 
           {/* Active Energy */}
-          <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
+          <button onClick={() => setActiveView('energy')} className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm active:scale-95 transition-transform cursor-pointer">
             <Flame className="w-6 h-6 text-orange-500 mb-2" />
             <span className="text-2xl font-bold text-gray-800 dark:text-white">
               {healthData?.activeEnergy !== undefined && healthData?.activeEnergy !== null ? healthData.activeEnergy.toLocaleString() : '0'}
@@ -867,13 +1003,13 @@ export function HealthKitTab() {
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {isArabic ? 'نشطة' : 'active'}
             </span>
-          </div>
+          </button>
         </div>
 
         {/* Heart Metrics Row - Option C: friendly null messages */}
         <div className="grid grid-cols-2 gap-4 mt-4">
           {/* Resting Heart Rate */}
-          <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
+          <button onClick={() => setActiveView('heart')} className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm active:scale-95 transition-transform cursor-pointer">
             <Heart className="w-5 h-5 text-pink-500 mb-2" />
             <span className="text-xl font-bold text-gray-800 dark:text-white">
               {healthData?.restingHeartRate !== undefined && healthData?.restingHeartRate !== null ? healthData.restingHeartRate : '—'}
@@ -881,10 +1017,10 @@ export function HealthKitTab() {
             <span className="text-xs text-gray-500 dark:text-gray-400 text-center">
               {(healthData?.restingHeartRate !== undefined && healthData?.restingHeartRate !== null) ? (isArabic ? 'نبض الراحة' : 'Resting HR') : (isArabic ? 'يحتاج ساعة' : 'Needs Watch')}
             </span>
-          </div>
+          </button>
 
           {/* HRV */}
-          <div className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm">
+          <button onClick={() => setActiveView('heart')} className="flex flex-col items-center p-4 rounded-2xl bg-white/70 dark:bg-white/5 border border-white/50 dark:border-white/10 shadow-sm active:scale-95 transition-transform cursor-pointer">
             <Activity className="w-5 h-5 text-purple-500 mb-2" />
             <span className="text-xl font-bold text-gray-800 dark:text-white">
               {healthData?.hrv !== undefined && healthData?.hrv !== null ? `${healthData.hrv}ms` : '—'}
@@ -892,7 +1028,7 @@ export function HealthKitTab() {
             <span className="text-xs text-gray-500 dark:text-gray-400 text-center">
               {(healthData?.hrv !== undefined && healthData?.hrv !== null) ? (isArabic ? 'تقلب النبض' : 'HRV') : (isArabic ? 'يحتاج ساعة' : 'Needs Watch')}
             </span>
-          </div>
+          </button>
         </div>
       </Card>
 
