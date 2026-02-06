@@ -32,6 +32,20 @@ function generateUID(id: string, type: string): string {
   return `${type}-${id}@wakti.app`;
 }
 
+function normalizeTimeToHHMMSS(time: string): string {
+  const t = (time || '').trim();
+  if (!t) return '00:00:00';
+  // Accept HH:mm or HH:mm:ss
+  if (/^\d{2}:\d{2}$/.test(t)) return `${t}:00`;
+  if (/^\d{2}:\d{2}:\d{2}$/.test(t)) return t;
+  // Fallback: try to split and pad
+  const parts = t.split(':');
+  const hh = String(parseInt(parts[0] || '0', 10)).padStart(2, '0');
+  const mm = String(parseInt(parts[1] || '0', 10)).padStart(2, '0');
+  const ss = String(parseInt(parts[2] || '0', 10)).padStart(2, '0');
+  return `${hh}:${mm}:${ss}`;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -127,29 +141,41 @@ serve(async (req) => {
     const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
     const oneYearFromNow = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
 
+    // TR stores due_date as a local day string (YYYY-MM-DD). Use day strings for filtering.
+    const threeMonthsAgoDay = threeMonthsAgo.toISOString().split('T')[0];
+    const oneYearFromNowDay = oneYearFromNow.toISOString().split('T')[0];
+
     // Fetch tasks from tr_tasks table
     const { data: tasks } = await supabase
       .from("tr_tasks")
       .select("*")
       .eq("user_id", userId)
-      .gte("due_date", threeMonthsAgo.toISOString())
-      .lte("due_date", oneYearFromNow.toISOString());
+      .gte("due_date", threeMonthsAgoDay)
+      .lte("due_date", oneYearFromNowDay);
 
     // Fetch reminders from tr_reminders table
     const { data: reminders } = await supabase
       .from("tr_reminders")
       .select("*")
       .eq("user_id", userId)
-      .gte("due_date", threeMonthsAgo.toISOString())
-      .lte("due_date", oneYearFromNow.toISOString());
+      .gte("due_date", threeMonthsAgoDay)
+      .lte("due_date", oneYearFromNowDay);
 
     // Fetch maw3d events
     const { data: maw3dEvents } = await supabase
       .from("maw3d_events")
       .select("*")
-      .eq("user_id", userId)
+      .eq("created_by", userId)
       .gte("event_date", threeMonthsAgo.toISOString().split('T')[0])
       .lte("event_date", oneYearFromNow.toISOString().split('T')[0]);
+
+    // Fetch project calendar entries (DB-backed manual/project items)
+    const { data: projectCalendarEntries } = await supabase
+      .from("project_calendar_entries")
+      .select("*")
+      .eq("owner_id", userId)
+      .gte("entry_date", threeMonthsAgoDay)
+      .lte("entry_date", oneYearFromNowDay);
 
     // Fetch events from events table (uses organizer_id and start_time)
     const { data: manualEntries } = await supabase
@@ -267,6 +293,49 @@ DTEND:${formatDateToICS(endDate)}
 SUMMARY:${escapeICS(entry.title || 'Event')}
 DESCRIPTION:${escapeICS(entry.description || '')}
 CATEGORIES:EVENT
+END:VEVENT`);
+      }
+    }
+
+    // Add project calendar entries (DB-backed manual/project items)
+    if (projectCalendarEntries) {
+      for (const entry of projectCalendarEntries) {
+        if (!entry.entry_date) continue;
+
+        const uid = generateUID(entry.id, "project");
+        const title = entry.title || 'Calendar Entry';
+        const description = entry.description || '';
+
+        if (entry.is_all_day) {
+          const day = new Date(entry.entry_date);
+          events.push(`BEGIN:VEVENT
+UID:${uid}
+DTSTAMP:${formatDateToICS(now)}
+DTSTART;VALUE=DATE:${formatDateOnlyToICS(day)}
+DTEND;VALUE=DATE:${formatDateOnlyToICS(new Date(day.getTime() + 24 * 60 * 60 * 1000))}
+SUMMARY:${escapeICS(title)}
+DESCRIPTION:${escapeICS(description)}
+CATEGORIES:PROJECT_BOOKING
+END:VEVENT`);
+          continue;
+        }
+
+        const startTime = entry.start_time ? normalizeTimeToHHMMSS(entry.start_time) : '09:00:00';
+        const endTime = entry.end_time ? normalizeTimeToHHMMSS(entry.end_time) : '';
+
+        const startDate = new Date(`${entry.entry_date}T${startTime}`);
+        const endDate = endTime
+          ? new Date(`${entry.entry_date}T${endTime}`)
+          : new Date(startDate.getTime() + 60 * 60 * 1000);
+
+        events.push(`BEGIN:VEVENT
+UID:${uid}
+DTSTAMP:${formatDateToICS(now)}
+DTSTART:${formatDateToICS(startDate)}
+DTEND:${formatDateToICS(endDate)}
+SUMMARY:${escapeICS(title)}
+DESCRIPTION:${escapeICS(description)}
+CATEGORIES:PROJECT_BOOKING
 END:VEVENT`);
       }
     }

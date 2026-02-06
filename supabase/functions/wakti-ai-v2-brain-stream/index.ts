@@ -758,7 +758,7 @@ async function streamGemini3WithSearch(
   recentMessages: unknown[] | undefined,
   onToken: (token: string) => void,
   onGroundingMetadata: (meta: Gemini3SearchResult['groundingMetadata']) => void,
-  _userLocation?: { latitude: number; longitude: number } | null
+  userLocation?: { latitude: number; longitude: number; city?: string; country?: string } | null
 ): Promise<string> {
   const key = getGeminiApiKey();
   const model = 'gemini-3-flash-preview';
@@ -774,7 +774,22 @@ async function streamGemini3WithSearch(
   const nhlSeason = `${nhlSeasonStart}-${nhlSeasonStart + 1}`;
   const isNhlLive = /\bnhl\b/i.test(query) && /(standings?|scores?|results?|schedule|wild\s*card|conference|division|points|gp|games\s*played)/i.test(query);
   const nhlHint = isNhlLive ? ` Current NHL season: ${nhlSeason}.` : '';
-  const latestQuery = `${query} (as of ${todayStr}).${nhlHint}\n\nLATEST-FIRST RULE (CRITICAL): Today is ${todayStr}.${nhlHint} Use the newest available sources/snippets. Prefer results updated today/this hour when present. If sources conflict, choose the most recently updated. If any result refers to an older season (example: \"2023-24\"), treat it as STALE and re-search with a stricter query. Do not use memory for live facts.`;
+  // Inject device GPS location into the query so google_search returns hyper-local results
+  let locationHint = '';
+  if (userLocation?.latitude && userLocation?.longitude) {
+    const city = userLocation.city || '';
+    const country = userLocation.country || '';
+    const place = city && country ? `${city}, ${country}` : (city || country || '');
+    if (place) {
+      locationHint = ` User is at [${userLocation.latitude.toFixed(4)}, ${userLocation.longitude.toFixed(4)}] in ${place}. Prioritize results local to ${place} for all "near me", location, and time-sensitive queries.`;
+    } else {
+      locationHint = ` User is at coordinates [${userLocation.latitude.toFixed(4)}, ${userLocation.longitude.toFixed(4)}]. Prioritize results near these coordinates for all "near me" and location queries.`;
+    }
+  }
+  if (locationHint) {
+    console.log('📍 SEARCH QUERY LOCATION INJECTION:', locationHint.slice(0, 120));
+  }
+  const latestQuery = `${query} (as of ${todayStr}).${nhlHint}${locationHint}\n\nLATEST-FIRST RULE (CRITICAL): Today is ${todayStr}.${nhlHint} Use the newest available sources/snippets. Prefer results updated today/this hour when present. If sources conflict, choose the most recently updated. If any result refers to an older season (example: \"2023-24\"), treat it as STALE and re-search with a stricter query. Do not use memory for live facts.`;
 
   const body: Record<string, unknown> = {
     contents: buildSearchFollowupContents(query, latestQuery, recentMessages),
@@ -2054,9 +2069,11 @@ serve(async (req) => {
 
         const stayHotSummary = buildStayHotSummary(Array.isArray(recentMessages) ? recentMessages : []);
 
-        // IP-based geo (fast + cached). Used only as fallback when client doesn't send location.
+        // IP-based geo: DEMOTED — used ONLY for timezone fallback.
+        // Device GPS (via Natively SDK) is the source of truth for city/coordinates.
+        // IP geo was giving wrong results (e.g., Doha instead of Al Khor) due to ISP routing.
         const clientIp = extractClientIp(req);
-        const ipGeo = (!location || (!location?.city && !location?.country && !location?.latitude && !location?.longitude))
+        const ipGeo = (!clientTimezone || clientTimezone === 'UTC')
           ? await lookupIpGeo(clientIp)
           : null;
 
@@ -2118,17 +2135,13 @@ serve(async (req) => {
         })();
 
         // Build full location context (for Chat + Search modes)
-        // Prioritize native location from client, fallback to IP geo
+        // Device GPS only — no IP geo fallback for city/coordinates
         let fullLocationContext = '';
         {
           let userCity = location?.city || '';
           let userCountry = location?.country || '';
           const userLat = location?.latitude;
           const userLng = location?.longitude;
-          
-          // Fallback to IP geo if native location missing city/country
-          if (!userCity && ipGeo?.city) userCity = ipGeo.city;
-          if (!userCountry && ipGeo?.country) userCountry = ipGeo.country;
           
           // Reverse geocode if we have coordinates but no city
           if (userLat && userLng && !userCity) {
@@ -2294,11 +2307,9 @@ serve(async (req) => {
               hour12: true
             });
 
-            // Get accurate city from coordinates if available
+            // Get accurate city from device GPS (no IP geo fallback — it gives wrong city)
             let userCity = location?.city || '';
             let userCountry = location?.country || '';
-            if (!userCity && ipGeo?.city) userCity = ipGeo.city;
-            if (!userCountry && ipGeo?.country) userCountry = ipGeo.country;
             
             if (location?.latitude && location?.longitude && !userCity) {
               console.log('📍 Reverse geocoding to get accurate city...');
@@ -2564,9 +2575,9 @@ If you are running out of space, keep this order and drop the rest:
             let fullResponseText = '';
             let groundingMetadata: Gemini3SearchResult['groundingMetadata'] | null = null;
 
-            // Prepare location for Maps grounding (for business queries)
-            const userLocationForMaps = (searchIntent === 'business' && location?.latitude && location?.longitude) 
-              ? { latitude: location.latitude, longitude: location.longitude }
+            // Prepare device GPS location for search query injection (all queries, not just business)
+            const userLocationForSearch = (location?.latitude && location?.longitude) 
+              ? { latitude: location.latitude, longitude: location.longitude, city: userCity || '', country: userCountry || '' }
               : null;
 
             // Stream tokens to client
@@ -2582,7 +2593,7 @@ If you are running out of space, keep this order and drop the rest:
               (meta: Gemini3SearchResult['groundingMetadata']) => {
                 groundingMetadata = meta;
               },
-              userLocationForMaps
+              userLocationForSearch
             );
 
             // Emit grounding metadata for frontend citation injection

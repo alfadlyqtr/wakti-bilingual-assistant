@@ -51,6 +51,7 @@ import {
 import { AppleLogo } from "./AppleLogo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { VoiceAssistant } from "@/components/voice/VoiceAssistant";
 import { motion } from "framer-motion";
 import {
   Select,
@@ -1272,6 +1273,18 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
         onDelete={editEntry ? deleteManualEntry : undefined}
         initialDate={selectedDate || new Date()}
         entry={editEntry}
+      />
+
+      {/* Voice Assistant — tap mic orb to add calendar entry by voice */}
+      <VoiceAssistant
+        onSaveEntry={(entry) => {
+          addManualEntry({
+            title: entry.title,
+            date: entry.date,
+            description: entry.description,
+            type: EntryType.MANUAL_NOTE,
+          });
+        }}
       />
 
       {/* Subscribe to Calendar Dialog - iOS Optimized */}
