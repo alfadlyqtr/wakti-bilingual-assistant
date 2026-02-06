@@ -51,7 +51,6 @@ import {
 import { AppleLogo } from "./AppleLogo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { VoiceAssistant } from "@/components/voice/VoiceAssistant";
 import { motion } from "framer-motion";
 import {
   Select,
@@ -418,6 +417,29 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
       </div>
     );
   };
+
+  // Listen for voice assistant entries from the header
+  const manualEntriesRef = useRef(manualEntries);
+  manualEntriesRef.current = manualEntries;
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.title && detail?.date) {
+        const newEntry: CalendarEntry = {
+          id: `manual-${Date.now()}`,
+          title: detail.title,
+          date: detail.date,
+          description: detail.description || '',
+          type: EntryType.MANUAL_NOTE,
+        };
+        console.log('[UnifiedCalendar] Voice entry received:', newEntry);
+        setManualEntries([...manualEntriesRef.current, newEntry]);
+      }
+    };
+    window.addEventListener('wakti-voice-add-entry', handler);
+    return () => window.removeEventListener('wakti-voice-add-entry', handler);
+  }, [setManualEntries]);
 
   // Add a new manual calendar entry - optimized to prevent freezing
   const addManualEntry = useCallback((entry: Omit<CalendarEntry, 'id'>) => {
@@ -1273,18 +1295,6 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
         onDelete={editEntry ? deleteManualEntry : undefined}
         initialDate={selectedDate || new Date()}
         entry={editEntry}
-      />
-
-      {/* Voice Assistant — tap mic orb to add calendar entry by voice */}
-      <VoiceAssistant
-        onSaveEntry={(entry) => {
-          addManualEntry({
-            title: entry.title,
-            date: entry.date,
-            description: entry.description,
-            type: EntryType.MANUAL_NOTE,
-          });
-        }}
       />
 
       {/* Subscribe to Calendar Dialog - iOS Optimized */}

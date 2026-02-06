@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, X, Check, Loader2, Type } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -455,34 +456,30 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
       {/* Hidden audio element for AI speech */}
       <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />
 
-      {/* Floating Orb Button */}
-      <AnimatePresence>
-        {!isOpen && (
-          <motion.button
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={handleOpen}
-            className="fixed bottom-24 left-4 z-50 rounded-full shadow-lg h-14 w-14 flex items-center justify-center"
-            style={{
-              background: isDark
-                ? 'linear-gradient(135deg, hsl(210, 100%, 65%) 0%, hsl(280, 70%, 65%) 100%)'
-                : 'linear-gradient(135deg, #060541 0%, hsl(260, 70%, 25%) 100%)',
-              boxShadow: isDark
-                ? '0 0 25px hsla(210, 100%, 65%, 0.5), 0 4px 16px hsla(0, 0%, 0%, 0.4)'
-                : '0 4px 20px hsla(243, 84%, 14%, 0.3)',
-            }}
-          >
-            <Mic className="h-6 w-6 text-white" />
-          </motion.button>
-        )}
-      </AnimatePresence>
+      {/* Inline mic button — meant to sit in the header */}
+      {!isOpen && (
+        <button
+          onClick={handleOpen}
+          aria-label={t('Voice assistant', 'المساعد الصوتي')}
+          className="rounded-full flex items-center justify-center h-8 w-8 transition-transform active:scale-90"
+          style={{
+            background: isDark
+              ? 'linear-gradient(135deg, hsl(210, 100%, 65%) 0%, hsl(280, 70%, 65%) 100%)'
+              : 'linear-gradient(135deg, #060541 0%, hsl(260, 70%, 25%) 100%)',
+            boxShadow: isDark
+              ? '0 0 12px hsla(210, 100%, 65%, 0.4)'
+              : '0 2px 8px hsla(243, 84%, 14%, 0.25)',
+          }}
+        >
+          <Mic className="h-4 w-4 text-white" />
+        </button>
+      )}
 
-      {/* Voice Modal */}
-      <AnimatePresence>
-        {isOpen && (
-          <>
+      {/* Voice Modal — portaled to body so it renders above header */}
+      {createPortal(
+        <AnimatePresence>
+          {isOpen && (
+            <>
             {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -814,7 +811,9 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
             </motion.div>
           </>
         )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
     </>
   );
 };

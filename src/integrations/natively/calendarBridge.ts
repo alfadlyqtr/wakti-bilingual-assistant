@@ -386,9 +386,9 @@ export function createCalendarEvent(
     let endDateStr: string | Date = endDate;
     
     if (isIOS) {
-      // iOS expects ISO strings
-      startDateStr = startDate.toISOString();
-      endDateStr = endDate.toISOString();
+      // iOS: pass Date objects (some SDK builds call .toISOString internally)
+      startDateStr = startDate;
+      endDateStr = endDate;
     } else if (isAndroid) {
       // Android expects yyyy-MM-dd HH:mm:ss.SSS
       startDateStr = formatDateForNatively(startDate);

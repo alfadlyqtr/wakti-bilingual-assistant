@@ -25,6 +25,7 @@ import { UnreadBadge } from "./UnreadBadge";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { WeatherButton } from "@/components/WeatherButton";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { VoiceAssistant } from "@/components/voice/VoiceAssistant";
 
 interface AppHeaderProps {
   unreadTotal?: number;
@@ -340,16 +341,16 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
               </div>
             </Link>
           )}
-          {pageInfo.title && (
-            <div className="flex items-center gap-2">
-              {IconComponent && (
-                <IconComponent className={cn("h-5 w-5", pageInfo.colorClass)} />
-              )}
-              <h1 className={cn("text-lg font-medium", pageInfo.colorClass)}>{pageInfo.title}</h1>
-            </div>
-          )}
+          {/* Page title removed — clean header */}
         </div>
         <div className="flex items-center space-x-2">
+          {/* Voice Assistant mic button */}
+          <VoiceAssistant
+            onSaveEntry={(entry) => {
+              window.dispatchEvent(new CustomEvent('wakti-voice-add-entry', { detail: entry }));
+            }}
+          />
+
           {/* Weather Button - Made smaller */}
           <WeatherButton />
           
