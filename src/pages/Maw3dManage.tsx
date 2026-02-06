@@ -174,8 +174,11 @@ export default function Maw3dManage() {
           <div className="w-full max-w-md mx-auto">
             <div 
               className="relative rounded-lg overflow-hidden shadow-lg h-32 flex items-center justify-center"
-              style={getBackgroundStyle(event)}
+              style={(event.background_type === 'image' || event.background_type === 'ai') ? { backgroundColor: 'transparent' } : getBackgroundStyle(event)}
             >
+              {(event.background_type === 'image' || event.background_type === 'ai') && event.background_value && (
+                <img src={event.background_value} alt="" className="absolute inset-0 w-full h-full object-cover" />
+              )}
               <div className="absolute inset-0 bg-black/20" />
               <h1 
                 className="relative font-bold text-2xl text-center px-4"

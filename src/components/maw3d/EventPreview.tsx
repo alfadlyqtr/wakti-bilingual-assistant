@@ -89,6 +89,8 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
     const rgb = hexToRgb(color || '#000000') || { r: 0, g: 0, b: 0 };
     return `2px 2px 4px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
   };
+  const isImageBg = backgroundType === 'image' || backgroundType === 'ai';
+
   const getBackgroundStyle = () => {
     switch (backgroundType) {
       case 'color':
@@ -97,27 +99,13 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
         return { background: backgroundValue };
       case 'image':
       case 'ai':
-        return {
-          backgroundImage: `url(${backgroundValue})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center'
-        };
+        // Use transparent bg; actual image rendered via <img> tag for iOS WebView reliability
+        return { backgroundColor: 'transparent' };
       default:
         return { backgroundColor: '#3b82f6' };
     }
   };
 
-  const getBlurredBackgroundStyle = () => {
-    if ((backgroundType === 'image' || backgroundType === 'ai') && imageBlur > 0) {
-      return {
-        backgroundImage: `url(${backgroundValue})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        filter: `blur(${imageBlur}px)`
-      };
-    }
-    return {};
-  };
 
   const getTextStyle = () => {
     return {
@@ -194,16 +182,24 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
       className={`relative ${bare ? '' : 'rounded-lg overflow-hidden shadow-lg'} min-h-[400px] p-6 flex flex-col`}
       style={getBackgroundStyle()}
     >
-      {/* Blurred background layer for images only */}
-      {(backgroundType === 'image' || backgroundType === 'ai') && imageBlur > 0 && (
-        <div 
-          className="absolute inset-0 rounded-lg"
-          style={getBlurredBackgroundStyle()}
-        ></div>
+      {/* Image background rendered as <img> for iOS WebView reliability */}
+      {isImageBg && backgroundValue && (
+        <img
+          src={backgroundValue}
+          alt=""
+          className="absolute inset-0 w-full h-full rounded-lg"
+          style={{
+            objectFit: 'cover',
+            objectPosition: 'center',
+            filter: imageBlur > 0 ? `blur(${imageBlur}px)` : 'none',
+            // Slight scale-up when blurred to avoid white edges
+            transform: imageBlur > 0 ? 'scale(1.1)' : 'none',
+          }}
+        />
       )}
       
       {/* Gradient overlay for better readability */}
-      {(backgroundType === 'image' || backgroundType === 'ai') && (
+      {isImageBg && (
         <div className="absolute inset-0 rounded-lg" style={{
           background: 'linear-gradient(180deg, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.45) 100%)'
         }}></div>
