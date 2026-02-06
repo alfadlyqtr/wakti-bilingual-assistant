@@ -4,7 +4,7 @@
  * Follows WAKTI design system with premium aesthetics
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -98,7 +98,7 @@ interface HealthData {
   hrv: number | null;
 }
 
-export function HealthKitTab() {
+export default function HealthKitTab() {
   const { language } = useTheme();
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('unknown');
   const [loading, setLoading] = useState(false);
@@ -114,6 +114,8 @@ export function HealthKitTab() {
   const [debugRunning, setDebugRunning] = useState(false);
   const [debugText, setDebugText] = useState<string>('');
   const [debugCopied, setDebugCopied] = useState(false);
+
+  const availabilityCheckInFlightRef = useRef(false);
   const [goals, setGoals] = useState(() => {
     try {
       const saved = localStorage.getItem('healthkit_goals');
@@ -186,26 +188,21 @@ export function HealthKitTab() {
     }
   }, [timeRange]);
 
-  // Check availability on mount + auto-refresh every 5 minutes
+  // Check availability on mount
   useEffect(() => {
     checkAvailability();
-    
-    const interval = setInterval(() => {
-      if (permissionStatus === 'granted') {
-        fetchHealthData();
-      }
-    }, 5 * 60 * 1000);
-    
-    return () => clearInterval(interval);
-  }, [permissionStatus]);
+  }, []);
 
   const checkAvailability = async () => {
+    if (availabilityCheckInFlightRef.current) return;
+    availabilityCheckInFlightRef.current = true;
     setPermissionStatus('checking');
     
     // First check if we're in Natively iOS app
     if (!isNativelyIOSApp()) {
       console.log('[HealthKitTab] Not running in Natively iOS app');
       setPermissionStatus('unavailable');
+      availabilityCheckInFlightRef.current = false;
       return;
     }
 
@@ -213,6 +210,7 @@ export function HealthKitTab() {
     if (!isHealthKitSDKAvailable()) {
       console.log('[HealthKitTab] HealthKit SDK not available');
       setPermissionStatus('unavailable');
+      availabilityCheckInFlightRef.current = false;
       return;
     }
 
@@ -221,6 +219,7 @@ export function HealthKitTab() {
     if (!available) {
       console.log('[HealthKitTab] HealthKit not available on this device');
       setPermissionStatus('unavailable');
+      availabilityCheckInFlightRef.current = false;
       return;
     }
 
@@ -288,9 +287,11 @@ export function HealthKitTab() {
       });
       setLastUpdated(new Date());
       
-    } catch (err) {
-      console.log('[HealthKitTab] Error during permission/fetch:', err);
-      setPermissionStatus('needs_permission');
+    } catch (error) {
+      console.error('[HealthKitTab] Error requesting permissions:', error);
+      setPermissionStatus('denied');
+    } finally {
+      availabilityCheckInFlightRef.current = false;
     }
   };
 
@@ -314,8 +315,8 @@ export function HealthKitTab() {
       } else {
         setPermissionStatus('denied');
       }
-    } catch (err) {
-      console.error('[HealthKitTab] Permission error:', err);
+    } catch (error) {
+      console.error('[HealthKitTab] Permission error:', error);
       setPermissionStatus('denied');
     } finally {
       setLoading(false);
@@ -372,6 +373,26 @@ export function HealthKitTab() {
       setRefreshing(false);
     }
   }, []);
+
+  // Auto refresh when the app/page becomes active again (no polling)
+  useEffect(() => {
+    const handleActive = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (availabilityCheckInFlightRef.current) return;
+      if (permissionStatus === 'granted') {
+        fetchHealthData();
+      } else {
+        checkAvailability();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleActive);
+    window.addEventListener('focus', handleActive);
+    return () => {
+      document.removeEventListener('visibilitychange', handleActive);
+      window.removeEventListener('focus', handleActive);
+    };
+  }, [permissionStatus, fetchHealthData]);
 
   // Metric detail view component
   const renderMetricDetail = (metric: 'steps' | 'heart' | 'energy' | 'sleep') => {

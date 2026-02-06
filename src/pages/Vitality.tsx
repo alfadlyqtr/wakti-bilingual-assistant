@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Activity, Smartphone } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { HealthKitTab } from '@/components/fitness/HealthKitTab';
+import HealthKitTab from '@/components/fitness/HealthKitTab';
 import FitnessHealth from './FitnessHealth';
 
 type DataSource = 'whoop' | 'healthkit';
