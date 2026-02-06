@@ -338,7 +338,7 @@ textarea::placeholder {
 }
 
 .wakti-logo-glow--pulse {
-  animation: wakti-logo-pulse 12s ease-in-out infinite;
+  animation: wakti-logo-pulse 5s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
