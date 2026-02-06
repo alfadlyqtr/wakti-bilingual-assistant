@@ -1112,15 +1112,15 @@ export async function getTodayHealthSummary(): Promise<{
     
     return Array.isArray(normalized) ? normalized : [];
   };
-  
-  // Fetch all quantities in parallel - EXACT same types/intervals as diagnostics
-  const [stepsData, activeEnergyData, heartRateData, rhrData, hrvData] = await Promise.all([
-    fetchQuantity('STEPS', 'DAY'),
-    fetchQuantity('ACTIVE_ENERGY', 'DAY'),
-    fetchQuantity('HEART_RATE', 'HOUR'),
-    fetchQuantity('RHR', 'DAY'),
-    fetchQuantity('HRV', 'DAY'),
-  ]);
+
+  // Fetch quantities SEQUENTIALLY.
+  // On-device evidence shows parallel requests can cause the SDK bridge to drop/stall calls,
+  // resulting in zeros even when diagnostics can fetch real values.
+  const stepsData = await fetchQuantity('STEPS', 'DAY');
+  const activeEnergyData = await fetchQuantity('ACTIVE_ENERGY', 'DAY');
+  const heartRateData = await fetchQuantity('HEART_RATE', 'HOUR');
+  const rhrData = await fetchQuantity('RHR', 'DAY');
+  const hrvData = await fetchQuantity('HRV', 'DAY');
   
   // Extract values
   const steps = stepsData.length > 0 && stepsData[0]?.value != null ? Math.round(stepsData[0].value) : 0;

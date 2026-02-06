@@ -9,13 +9,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Logo3D } from "@/components/Logo3D";
-import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, CalendarIcon, Globe } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, CalendarIcon, Globe, Mic, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { EmailConfirmationDialog } from "@/components/EmailConfirmationDialog";
 import { validateDisplayName, validateEmail, validatePassword, validateConfirmPassword } from "@/utils/validations";
 import { countries, getCountryByCode } from "@/utils/countries";
+import { VoiceSignup } from "@/components/auth/VoiceSignup";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -39,6 +40,7 @@ export default function Signup() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isEmailConfirmationDialogOpen, setIsEmailConfirmationDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'voice' | 'normal'>('voice');
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -250,12 +252,14 @@ export default function Signup() {
               className="w-full max-w-2xl mx-auto"
             >
               <div className="mb-6 text-center">
-                <div 
-                  className="inline-block cursor-pointer mb-4"
-                  onClick={() => navigate("/")}
-                >
-                  <Logo3D size="lg" />
-                </div>
+                {activeTab === 'normal' && (
+                  <div 
+                    className="inline-block cursor-pointer mb-4"
+                    onClick={() => navigate("/")}
+                  >
+                    <Logo3D size="lg" />
+                  </div>
+                )}
                 <h1 className="text-2xl font-bold">{t.createAccount}</h1>
                 
                 {errorMsg && (
@@ -265,6 +269,61 @@ export default function Signup() {
                 )}
               </div>
 
+              {/* Tab Switcher */}
+              <div className="flex items-center justify-center mb-6">
+                <div className="flex items-center gap-1 p-1 rounded-full bg-muted/60 backdrop-blur-sm">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('voice')}
+                    className={cn(
+                      "flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-medium transition-all",
+                      activeTab === 'voice'
+                        ? "bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(180,85%,60%)] text-white shadow-lg dark:shadow-[0_0_15px_hsla(210,100%,65%,0.3)]"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Mic className="w-4 h-4" />
+                    {language === 'ar' ? 'تسجيل صوتي' : 'Voice Sign Up'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('normal')}
+                    className={cn(
+                      "flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-medium transition-all",
+                      activeTab === 'normal'
+                        ? "bg-primary text-primary-foreground shadow-lg"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <FileText className="w-4 h-4" />
+                    {language === 'ar' ? 'تسجيل عادي' : 'Normal Sign Up'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Voice Sign Up Tab */}
+              {activeTab === 'voice' && (
+                <VoiceSignup
+                  onSignupComplete={(needsEmailConfirmation) => {
+                    if (needsEmailConfirmation) {
+                      toast.success(language === 'en' 
+                        ? 'Please check your email and click the confirmation link to verify your account.' 
+                        : 'يرجى فحص بريدك الإلكتروني والنقر على رابط التأكيد للتحقق من حسابك.'
+                      );
+                      setIsEmailConfirmationDialogOpen(true);
+                    } else {
+                      navigate("/dashboard");
+                    }
+                  }}
+                  onError={(msg) => {
+                    setErrorMsg(msg);
+                    toast.error(msg);
+                  }}
+                />
+              )}
+
+              {/* Normal Sign Up Tab */}
+              {activeTab === 'normal' && (
               <form onSubmit={handleSignup} className="space-y-6 w-full overflow-x-hidden">
                 {/* REQUIRED FIELDS FIRST */}
                 
@@ -524,6 +583,7 @@ export default function Signup() {
                   {isLoading ? t.loading : t.signup}
                 </Button>
               </form>
+              )}
 
               <div className="mt-6 text-center">
                 <p className="text-sm text-muted-foreground">
