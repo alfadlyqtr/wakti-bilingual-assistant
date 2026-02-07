@@ -77,13 +77,33 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
   // Amp: generate a cinematic prompt from the uploaded image using OpenAI vision
   const handleAmp = useCallback(async () => {
-    if (!imagePreview || isAmping || isGenerating) return;
+    if (!imagePreview || isAmping || isGenerating || !user) return;
     setIsAmping(true);
     try {
+      // Upload image to storage first to avoid sending large base64 to edge function (mobile timeout fix)
+      let ampImageUrl = imagePreview;
+      if (imageFile) {
+        const ext = imageFile.name.split('.').pop() || 'png';
+        const storagePath = `${user.id}/ai-video-input/${crypto.randomUUID()}.${ext}`;
+        const { error: uploadErr } = await supabase.storage
+          .from('message_attachments')
+          .upload(storagePath, imageFile, {
+            contentType: imageFile.type,
+            cacheControl: '3600',
+            upsert: true,
+          });
+        if (!uploadErr) {
+          const { data: pubData } = supabase.storage
+            .from('message_attachments')
+            .getPublicUrl(storagePath);
+          if (pubData?.publicUrl) ampImageUrl = pubData.publicUrl;
+        }
+      }
+
       const { data, error } = await supabase.functions.invoke('prompt-amp', {
         body: {
           mode: 'image2video',
-          image_url: imagePreview,
+          image_url: ampImageUrl,
           brand_details: prompt.trim() || '',
           environment: 'auto',
           duration,
@@ -102,7 +122,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       setIsAmping(false);
     }
-  }, [imagePreview, isAmping, isGenerating, prompt, duration, language]);
+  }, [imagePreview, imageFile, isAmping, isGenerating, prompt, duration, language, user]);
 
   // Load quota on mount
   const loadQuota = useCallback(async () => {
@@ -276,7 +296,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setIsGenerating(false);
       setTaskId(null);
       setGenerationProgress(0);
-      toast.error(e?.message || (language === 'ar' ? 'فشل إنشاء الفيديو' : 'Failed to generate video'));
+      setGenerationStatus('');
+      const msg = e?.message || '';
+      const userMsg = msg.includes('generation failed')
+        ? (language === 'ar' ? 'فشل إنشاء الفيديو. حاول بصورة أو وصف مختلف.' : 'Video generation failed. Try a different image or prompt.')
+        : (msg || (language === 'ar' ? 'فشل إنشاء الفيديو' : 'Failed to generate video'));
+      toast.error(userMsg);
     } finally {
       pollInFlightRef.current = false;
     }
@@ -314,10 +339,37 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     usageIncrementedRef.current = false;
 
     try {
-      // Start task in async mode
+      // Step 1: Upload image to Supabase Storage directly (avoids sending large base64 to edge function)
+      let imageUrl = imagePreview;
+      if (imageFile) {
+        const ext = imageFile.name.split('.').pop() || 'png';
+        const storagePath = `${user.id}/ai-video-input/${crypto.randomUUID()}.${ext}`;
+        const { error: uploadErr } = await supabase.storage
+          .from('message_attachments')
+          .upload(storagePath, imageFile, {
+            contentType: imageFile.type,
+            cacheControl: '3600',
+            upsert: true,
+          });
+        if (uploadErr) {
+          console.error('[AIVideomaker] Image upload error:', uploadErr);
+          throw new Error(language === 'ar' ? 'فشل رفع الصورة' : 'Failed to upload image');
+        }
+        const { data: pubData } = supabase.storage
+          .from('message_attachments')
+          .getPublicUrl(storagePath);
+        if (pubData?.publicUrl) {
+          imageUrl = pubData.publicUrl;
+        }
+      }
+
+      setGenerationProgress(10);
+      setGenerationStatus(language === 'ar' ? 'جاري بدء الإنشاء...' : 'Starting generation...');
+
+      // Step 2: Call edge function with the public URL (lightweight request, no timeout)
       const { data, error } = await supabase.functions.invoke('freepik-image2video', {
         body: {
-          image: imagePreview,
+          image: imageUrl,
           prompt: prompt.trim() || undefined,
           negative_prompt: negativePrompt.trim() || undefined,
           duration,
@@ -407,10 +459,33 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         throw new Error(importData?.error || 'Failed to save video');
       }
 
+      // Generate a clean short title from the prompt
+      const generateTitle = (raw: string): string => {
+        if (!raw || !raw.trim()) return 'AI Video';
+        let t = raw.trim();
+        // Strip JSON-like prefixes
+        t = t.replace(/^\{?\s*"?description"?\s*:\s*"?/i, '');
+        // Strip leading "Style:", "Camera:", etc labels if that's all we have
+        t = t.replace(/^(Style|Camera|Lighting|Environment|Elements|Motion|Ending|Keywords):\s*/i, '');
+        // Take first sentence or up to 60 chars
+        const sentenceEnd = t.search(/[.!?]/);
+        if (sentenceEnd > 0 && sentenceEnd <= 80) {
+          t = t.slice(0, sentenceEnd + 1);
+        } else {
+          t = t.slice(0, 60);
+          // Don't cut mid-word
+          const lastSpace = t.lastIndexOf(' ');
+          if (lastSpace > 30) t = t.slice(0, lastSpace);
+        }
+        // Clean up trailing quotes/braces
+        t = t.replace(/["{}]+$/g, '').trim();
+        return t || 'AI Video';
+      };
+
       // Save into unified user_videos table
       const { error } = await (supabase as any).from('user_videos').insert({
         user_id: user.id,
-        title: prompt.trim().slice(0, 100) || 'AI Video',
+        title: generateTitle(prompt),
         description: prompt.trim() || null,
         storage_path: storagePath,
         video_url: null,

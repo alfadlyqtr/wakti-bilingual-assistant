@@ -35,6 +35,7 @@ import {
   Share2,
   Save,
   AlertCircle,
+  Pencil,
 } from 'lucide-react';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import { useLocation } from 'react-router-dom';
@@ -246,6 +247,8 @@ const handleDownload = async (url: string, filename: string) => {
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pendingDeleteVideo, setPendingDeleteVideo] = useState<SavedVideo | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
 
   const loadSavedVideos = async () => {
     if (!user) return;
@@ -423,6 +426,30 @@ const handleDownload = async (url: string, filename: string) => {
     setDeleteDialogOpen(true);
   };
 
+  const handleRenameVideo = async (v: SavedVideo) => {
+    const newTitle = editingTitle.trim();
+    if (!user || !newTitle || newTitle === (v.title || '')) {
+      setEditingId(null);
+      return;
+    }
+    try {
+      const updateTable = v.source === 'ai' ? 'user_ai_videos' : 'user_videos';
+      const { error } = await (supabase as any)
+        .from(updateTable)
+        .update({ title: newTitle })
+        .eq('id', v.id)
+        .eq('user_id', user.id);
+      if (error) throw error;
+      setSavedVideos((prev) => prev.map((x) => (x.id === v.id ? { ...x, title: newTitle } : x)));
+      toast.success(language === 'ar' ? 'تم تحديث العنوان' : 'Title updated');
+    } catch (e) {
+      console.error('Rename failed:', e);
+      toast.error(language === 'ar' ? 'فشل تحديث العنوان' : 'Rename failed');
+    } finally {
+      setEditingId(null);
+    }
+  };
+
   const handleShareSavedVideo = async (v: SavedVideo) => {
     if (!v.storage_path || v.source === 'ai') {
       toast.error(language === 'ar' ? 'احفظ الفيديو للتشغيل أولاً' : 'Save for playback first');
@@ -546,7 +573,36 @@ const handleDownload = async (url: string, filename: string) => {
 
                 <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
                   <div>
-                    <h3 className="font-medium truncate">{v.title || (language === 'ar' ? 'بدون عنوان' : 'Untitled')}</h3>
+                    {editingId === v.id ? (
+                      <input
+                        autoFocus
+                        className="font-medium text-sm w-full bg-transparent border-b-2 border-primary outline-none py-0.5"
+                        value={editingTitle}
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        onBlur={() => handleRenameVideo(v)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleRenameVideo(v);
+                          if (e.key === 'Escape') setEditingId(null);
+                        }}
+                        maxLength={100}
+                        aria-label={language === 'ar' ? 'عنوان الفيديو' : 'Video title'}
+                        placeholder={language === 'ar' ? 'أدخل عنوان...' : 'Enter title...'}
+                      />
+                    ) : (
+                      <div className="flex items-center gap-1.5 group/title">
+                        <h3 className="font-medium truncate">{v.title || (language === 'ar' ? 'بدون عنوان' : 'Untitled')}</h3>
+                        <button
+                          className="opacity-0 group-hover/title:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted"
+                          onClick={() => {
+                            setEditingId(v.id);
+                            setEditingTitle(v.title || '');
+                          }}
+                          title={language === 'ar' ? 'تعديل العنوان' : 'Edit title'}
+                        >
+                          <Pencil className="h-3 w-3 text-muted-foreground" />
+                        </button>
+                      </div>
+                    )}
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {new Date(v.created_at).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', {
                         month: 'short',
