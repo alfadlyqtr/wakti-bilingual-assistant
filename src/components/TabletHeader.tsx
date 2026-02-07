@@ -21,6 +21,7 @@ import { UnreadBadge } from "./UnreadBadge";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { WeatherButton } from "@/components/WeatherButton";
+import { VoiceAssistant } from "@/components/voice/VoiceAssistant";
 
 export function TabletHeader() {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
@@ -204,17 +205,17 @@ export function TabletHeader() {
               </div>
             </div>
           </Link>
-          {pageInfo.title && (
-            <div className="flex items-center gap-2">
-              {IconComponent && (
-                <IconComponent className={cn("h-5 w-5", pageInfo.colorClass)} />
-              )}
-              <h1 className={cn("text-lg font-medium", pageInfo.colorClass)}>{pageInfo.title}</h1>
-            </div>
-          )}
+          {/* Page title removed — clean header */}
         </div>
 
         <div className="flex items-center space-x-3 relative z-10">
+          {/* Voice Assistant mic button */}
+          <VoiceAssistant
+            onSaveEntry={(entry) => {
+              window.dispatchEvent(new CustomEvent('wakti-voice-add-entry', { detail: entry }));
+            }}
+          />
+
           {/* Weather Button */}
           <div className="relative">
             <WeatherButton />

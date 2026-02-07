@@ -423,8 +423,7 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
   manualEntriesRef.current = manualEntries;
 
   useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
+    const addVoiceEntry = (detail: { title: string; date: string; description?: string }) => {
       if (detail?.title && detail?.date) {
         const newEntry: CalendarEntry = {
           id: `manual-${Date.now()}`,
@@ -433,9 +432,29 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
           description: detail.description || '',
           type: EntryType.MANUAL_NOTE,
         };
-        console.log('[UnifiedCalendar] Voice entry received:', newEntry);
+        console.log('[UnifiedCalendar] Voice entry added:', newEntry);
         setManualEntries([...manualEntriesRef.current, newEntry]);
       }
+    };
+
+    // Check for pending entry from sessionStorage (navigated from another page)
+    const pendingEntry = sessionStorage.getItem('wakti-pending-voice-entry');
+    if (pendingEntry) {
+      try {
+        const entry = JSON.parse(pendingEntry);
+        console.log('[UnifiedCalendar] Found pending voice entry:', entry);
+        addVoiceEntry(entry);
+        sessionStorage.removeItem('wakti-pending-voice-entry');
+      } catch (e) {
+        console.error('[UnifiedCalendar] Failed to parse pending entry:', e);
+        sessionStorage.removeItem('wakti-pending-voice-entry');
+      }
+    }
+
+    // Listen for live events (when already on calendar page)
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      addVoiceEntry(detail);
     };
     window.addEventListener('wakti-voice-add-entry', handler);
     return () => window.removeEventListener('wakti-voice-add-entry', handler);

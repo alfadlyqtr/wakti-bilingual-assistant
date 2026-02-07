@@ -347,6 +347,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
           {/* Voice Assistant mic button */}
           <VoiceAssistant
             onSaveEntry={(entry) => {
+              console.log('[AppHeader] Dispatching voice entry event:', entry);
               window.dispatchEvent(new CustomEvent('wakti-voice-add-entry', { detail: entry }));
             }}
           />

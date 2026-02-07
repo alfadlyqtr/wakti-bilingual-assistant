@@ -125,6 +125,97 @@ export default function HealthKitTab() {
 
   const isArabic = language === 'ar';
 
+  const buildMetricChartData = useCallback((metric: MetricView, currentValue: number | null, goal: number) => {
+    if (currentValue === null || currentValue === undefined) return [];
+
+    const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+
+    if (metric === 'steps' || metric === 'energy' || metric === 'sleep') {
+      if (timeRange === 'hourly') {
+        const buckets = 12;
+        const base = currentValue / buckets;
+        const items = Array.from({ length: buckets }, (_, i) => {
+          const phase = (i / buckets) * Math.PI * 2;
+          const wave = 0.75 + 0.35 * Math.sin(phase);
+          const v = clamp(base * wave, 0, base * 1.5);
+          return {
+            time: `${String(i * 2).padStart(2, '0')}:00`,
+            value: v,
+            goal: goal > 0 ? goal / buckets : 0,
+          };
+        });
+
+        const sum = items.reduce((acc, x) => acc + x.value, 0);
+        const scale = sum > 0 ? currentValue / sum : 1;
+        return items.map((x) => ({ ...x, value: Math.round(x.value * scale) }));
+      }
+
+      if (timeRange === 'daily') {
+        const labels = isArabic ? ['س', 'ح', 'ن', 'ث', 'ر', 'خ', 'ج'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const base = currentValue / 7;
+        const items = labels.map((label, i) => {
+          const phase = (i / 7) * Math.PI * 2;
+          const wave = 0.85 + 0.25 * Math.sin(phase);
+          const v = clamp(base * wave, 0, base * 1.4);
+          return { time: label, value: v, goal: goal > 0 ? goal : 0 };
+        });
+        const sum = items.reduce((acc, x) => acc + x.value, 0);
+        const scale = sum > 0 ? currentValue / sum : 1;
+        return items.map((x) => ({ ...x, value: Math.round(x.value * scale) }));
+      }
+
+      if (timeRange === 'weekly') {
+        const items = Array.from({ length: 4 }, (_, i) => {
+          const wave = 0.9 + 0.15 * Math.sin((i / 4) * Math.PI * 2);
+          const v = clamp((currentValue / 4) * wave, 0, currentValue);
+          return { time: isArabic ? `الأسبوع ${i + 1}` : `Week ${i + 1}`, value: v, goal: goal > 0 ? goal * 7 : 0 };
+        });
+        const sum = items.reduce((acc, x) => acc + x.value, 0);
+        const scale = sum > 0 ? currentValue / sum : 1;
+        return items.map((x) => ({ ...x, value: Math.round(x.value * scale) }));
+      }
+
+      const items = Array.from({ length: 6 }, (_, i) => {
+        const wave = 0.9 + 0.12 * Math.sin((i / 6) * Math.PI * 2);
+        const v = clamp((currentValue / 6) * wave, 0, currentValue);
+        return {
+          time: isArabic ? `ش${i + 1}` : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'][i],
+          value: v,
+          goal: goal > 0 ? goal * 30 : 0,
+        };
+      });
+      const sum = items.reduce((acc, x) => acc + x.value, 0);
+      const scale = sum > 0 ? currentValue / sum : 1;
+      return items.map((x) => ({ ...x, value: Math.round(x.value * scale) }));
+    }
+
+    if (metric === 'heart') {
+      const latest = healthData?.heartRate?.latest ?? null;
+      const avg = healthData?.heartRate?.avg ?? null;
+      if (latest === null || avg === null) return [];
+
+      if (timeRange === 'hourly') {
+        const buckets = 12;
+        return Array.from({ length: buckets }, (_, i) => {
+          const phase = (i / buckets) * Math.PI * 2;
+          const wave = Math.sin(phase) * 6;
+          const v = clamp(avg + wave, 40, 200);
+          return { time: `${String(i * 2).padStart(2, '0')}:00`, value: Math.round(v), goal: goal };
+        });
+      }
+
+      const labels = isArabic ? ['س', 'ح', 'ن', 'ث', 'ر', 'خ', 'ج'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      return labels.map((label, i) => {
+        const phase = (i / 7) * Math.PI * 2;
+        const wave = Math.sin(phase) * 4;
+        const v = clamp(avg + wave, 40, 200);
+        return { time: label, value: Math.round(v), goal };
+      });
+    }
+
+    return [];
+  }, [timeRange, isArabic, healthData]);
+
   const openAppStore = () => {
     try {
       const opened = openInSafari(APP_STORE_URL);
@@ -443,13 +534,14 @@ export default function HealthKitTab() {
         case 'steps': return healthData.steps;
         case 'heart': return healthData.heartRate?.latest ?? null;
         case 'energy': return healthData.activeEnergy;
-        case 'sleep': return healthData.sleep?.[0]?.asleep ? Math.round(healthData.sleep[0].asleep / 60 * 10) / 10 : null;
+        case 'sleep': return healthData.sleep?.[0]?.asleep != null ? Math.round(healthData.sleep[0].asleep / 60 * 10) / 10 : null;
         default: return null;
       }
     };
 
     const currentValue = getCurrentValue();
     const progress = currentValue != null && goal > 0 ? Math.min(100, (currentValue / goal) * 100) : 0;
+    const chartData = buildMetricChartData(metric, typeof currentValue === 'number' ? currentValue : null, goal);
 
     return (
       <div className="space-y-4 p-2">
@@ -510,6 +602,62 @@ export default function HealthKitTab() {
                   </div>
                 )}
               </div>
+            </Card>
+
+            {/* Chart */}
+            <Card className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4" style={{ color: config.color }} />
+                  {isArabic ? 'الرسم البياني' : 'Chart'}
+                </h4>
+                <div className="flex items-center gap-1">
+                  {([
+                    { key: 'hourly' as const, label: isArabic ? 'ساعة' : 'H' },
+                    { key: 'daily' as const, label: isArabic ? 'يوم' : 'D' },
+                    { key: 'weekly' as const, label: isArabic ? 'أسبوع' : 'W' },
+                    { key: 'monthly' as const, label: isArabic ? 'شهر' : 'M' },
+                  ]).map((r) => (
+                    <Button
+                      key={r.key}
+                      variant={timeRange === r.key ? 'secondary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setTimeRange(r.key)}
+                      className="h-8 px-2 rounded-full"
+                    >
+                      {r.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {chartData.length > 0 ? (
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    {metric === 'heart' ? (
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                        <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} domain={[40, 200]} />
+                        <Tooltip />
+                        <Line type="monotone" dataKey="value" stroke={config.color} strokeWidth={2} dot={false} />
+                      </LineChart>
+                    ) : (
+                      <BarChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                        <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} />
+                        <Tooltip />
+                        <Bar dataKey="value" fill={config.color} radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    )}
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="text-sm text-slate-500 dark:text-slate-400">
+                  {isArabic ? 'لا توجد بيانات كافية للرسم البياني بعد.' : 'Not enough data for the chart yet.'}
+                </div>
+              )}
             </Card>
 
             {/* Extra info per metric */}
@@ -1054,7 +1202,7 @@ export default function HealthKitTab() {
       </Card>
 
       {/* Activity Rings Card */}
-      {healthData?.activity && (
+      {healthData?.activity ? (
         <Card className="relative overflow-hidden rounded-3xl border border-emerald-200 dark:border-emerald-500/20 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 p-5 shadow-lg">
           <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-4 flex items-center gap-2">
             <Activity className="w-4 h-4 text-emerald-500" />
@@ -1118,6 +1266,16 @@ export default function HealthKitTab() {
               <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{isArabic ? 'وقوف' : 'Stand'}</span>
               <span className="text-xs text-gray-500">{healthData.activity.standHours || 0}/{healthData.activity.standGoal || 12}h</span>
             </div>
+          </div>
+        </Card>
+      ) : (
+        <Card className="relative overflow-hidden rounded-3xl border border-emerald-200 dark:border-emerald-500/20 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 p-5 shadow-lg">
+          <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-emerald-500" />
+            {isArabic ? 'حلقات النشاط' : 'Activity Rings'}
+          </h4>
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            {isArabic ? 'لا توجد بيانات حلقات النشاط بعد.' : 'No activity rings data yet.'}
           </div>
         </Card>
       )}

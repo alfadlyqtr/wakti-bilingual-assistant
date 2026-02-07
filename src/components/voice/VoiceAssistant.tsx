@@ -94,33 +94,50 @@ function extractEntryFromTranscript(transcript: string): ExtractedEntry {
   // Try to separate title from date words
   let title = transcript.trim();
 
+  // Remove common command phrases (with optional comma/punctuation after)
+  const commandPatterns = [
+    /^(create|add|make|set|new|put)\s+(a\s+)?(calendar\s+)?(entry|event|appointment|reminder)?[,.]?\s*/i,
+    /^calendar\s+entry[,.]?\s*/i,
+    /^(أضف|أنشئ|سجل|اعمل)\s+(موعد|حدث|تذكير)?[,.]?\s*/i,
+  ];
+  for (const pattern of commandPatterns) {
+    title = title.replace(pattern, '');
+  }
+
+  // Remove time patterns (e.g., "10 p.m.", "at 3pm", "10:30", "today 10pm")
+  const timePatterns = [
+    /\b\d{1,2}\s*(:|\.)\s*\d{2}\s*(am|pm|a\.m\.|p\.m\.)?[,.]?\s*/gi,
+    /\b\d{1,2}\s*(am|pm|a\.m\.|p\.m\.)[,.]?\s*/gi,
+    /\b(at|@)\s*\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.)?[,.]?\s*/gi,
+    /\btoday\s+\d{1,2}\s*(am|pm|a\.m\.|p\.m\.)?[,.]?\s*/gi,
+    /\btomorrow\s+\d{1,2}\s*(am|pm|a\.m\.|p\.m\.)?[,.]?\s*/gi,
+  ];
+  for (const pattern of timePatterns) {
+    title = title.replace(pattern, '');
+  }
+
   // Remove common date phrases from the title
   const datePatterns = [
-    /\b(today|tomorrow|day after tomorrow)\b/gi,
-    /\b(next\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/gi,
-    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}\b/gi,
-    /\b\d{1,2}\s+(january|february|march|april|may|june|july|august|september|october|november|december)\b/gi,
-    /\b\d{4}-\d{1,2}-\d{1,2}\b/g,
-    /\b(اليوم|غدا|غداً|بكرة|بكره|بعد غد|بعد بكرة|بعد بكره)\b/g,
-    /\b(الأحد|الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت)\b/g,
-    /\b(on|at|for|في|يوم)\b/gi,
+    /\b(today|tomorrow|day after tomorrow)[,.]?\s*/gi,
+    /\b(next\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)[,.]?\s*/gi,
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}[,.]?\s*/gi,
+    /\b\d{1,2}\s+(january|february|march|april|may|june|july|august|september|october|november|december)[,.]?\s*/gi,
+    /\b\d{4}-\d{1,2}-\d{1,2}[,.]?\s*/g,
+    /\b(اليوم|غدا|غداً|بكرة|بكره|بعد غد|بعد بكرة|بعد بكره)[,.]?\s*/g,
+    /\b(الأحد|الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت)[,.]?\s*/g,
   ];
-
   for (const pattern of datePatterns) {
     title = title.replace(pattern, '');
   }
 
-  // Clean up extra spaces
-  title = title.replace(/\s+/g, ' ').trim();
-
-  // Remove leading "add", "create", "new", etc.
-  title = title.replace(/^(add|create|new|make|set|put|أضف|أنشئ|سجل)\s+/i, '').trim();
-
-  // Remove trailing prepositions
-  title = title.replace(/\s+(on|for|at|في)$/i, '').trim();
+  // Remove filler words
+  title = title.replace(/\b(on|at|for|في|يوم|will|add|the|a|an)\b/gi, '');
+  
+  // Clean up extra spaces and punctuation
+  title = title.replace(/^[,.:;\s]+/, '').replace(/[,.:;\s]+$/, '').replace(/\s+/g, ' ').trim();
 
   // If title is empty after cleanup, use original
-  if (!title) {
+  if (!title || title.length < 2) {
     title = transcript.trim();
   }
 
@@ -136,11 +153,13 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
   const { language, theme } = useTheme();
   const { user } = useAuth();
   const isDark = theme === 'dark';
+  const portalTarget = typeof document !== 'undefined' ? document.body : null;
   const t = (en: string, ar: string) => language === 'ar' ? ar : en;
 
   // UI state
   const [isOpen, setIsOpen] = useState(false);
-  const [voiceState, setVoiceState] = useState<VoiceState>('idle');
+  const [voiceState, _setVoiceState] = useState<VoiceState>('idle');
+  const setVoiceState = useCallback((s: VoiceState) => { voiceStateRef.current = s; _setVoiceState(s); }, []);
   const [transcript, setTranscript] = useState('');
   const [aiTranscript, setAiTranscript] = useState('');
   const [extractedEntry, setExtractedEntry] = useState<ExtractedEntry | null>(null);
@@ -148,6 +167,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
   const [errorMsg, setErrorMsg] = useState('');
   const [typeMode, setTypeMode] = useState(false);
   const [typedText, setTypedText] = useState('');
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
 
   // WebRTC refs
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -157,6 +177,42 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
   const intentionalSpeechRef = useRef(false);
   const greetingDoneRef = useRef(false);
   const initializingRef = useRef(false);
+  const displayNameRef = useRef('');
+  const dcReadyRef = useRef(false);
+  const voiceStateRef = useRef<VoiceState>('idle');
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const waitingForGreetingEndRef = useRef(false);
+
+  // ─── Unlock Audio (iOS requires user gesture) ────────────────────────────
+
+  const unlockAudio = useCallback(async () => {
+    if (audioUnlocked) return;
+    
+    try {
+      // Create/resume AudioContext
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContext();
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+    } catch (e) {
+      console.warn('[VoiceAssistant] Failed to resume AudioContext:', e);
+    }
+
+    try {
+      if (audioRef.current) {
+        audioRef.current.muted = false;
+        audioRef.current.volume = 1;
+        // Play a silent sound to unlock audio
+        await audioRef.current.play().catch(() => {});
+      }
+      setAudioUnlocked(true);
+      console.log('[VoiceAssistant] Audio unlocked');
+    } catch (e) {
+      console.warn('[VoiceAssistant] Audio play blocked:', e);
+    }
+  }, [audioUnlocked]);
 
   // ─── Cleanup ────────────────────────────────────────────────────────────
 
@@ -167,6 +223,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
     intentionalSpeechRef.current = false;
     greetingDoneRef.current = false;
     initializingRef.current = false;
+    dcReadyRef.current = false;
     setVoiceState('idle');
     setTranscript('');
     setAiTranscript('');
@@ -181,6 +238,11 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
   // ─── Handle Realtime events ─────────────────────────────────────────────
 
   const handleRealtimeEvent = useCallback((msg: any) => {
+    // Log ALL incoming messages for debugging
+    if (msg.type !== 'input_audio_buffer.speech_started' && msg.type !== 'input_audio_buffer.speech_stopped') {
+      console.log('[VoiceAssistant] Realtime event:', msg.type, msg);
+    }
+    
     switch (msg.type) {
       case 'conversation.item.input_audio_transcription.completed': {
         const text = msg.transcript?.trim() || '';
@@ -191,18 +253,49 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
           }
         } catch {}
 
-        if (text.length > 0) {
-          console.log('[VoiceAssistant] User said:', text);
-          setTranscript(text);
-          setVoiceState('thinking');
-
-          // Extract entry from transcript
-          const entry = extractEntryFromTranscript(text);
-          setExtractedEntry(entry);
-          setVoiceState('confirming');
-        } else {
-          setVoiceState('listening');
+        // Ignore very short transcriptions (likely garbage/noise)
+        if (text.length < 5) {
+          console.log('[VoiceAssistant] Ignoring short transcription:', text);
+          return;
         }
+
+        // Don't overwrite a longer transcript with a shorter one
+        if (extractedEntry && text.length < 10) {
+          console.log('[VoiceAssistant] Ignoring short follow-up transcription:', text);
+          return;
+        }
+
+        console.log('[VoiceAssistant] User said:', text);
+        setTranscript(text);
+        setVoiceState('thinking');
+
+        // Extract entry from transcript
+        const entry = extractEntryFromTranscript(text);
+        setExtractedEntry(entry);
+        
+        // Voice confirmation: AI speaks back what it heard
+        if (dcRef.current?.readyState === 'open') {
+          const confirmMsg = language === 'ar'
+            ? `فهمت: ${entry.title}`
+            : `Got it: ${entry.title}`;
+          
+          intentionalSpeechRef.current = true;
+          setAiTranscript('');
+          
+          dcRef.current.send(JSON.stringify({
+            type: 'session.update',
+            session: {
+              instructions: `Say EXACTLY this and nothing else: "${confirmMsg}"`
+            }
+          }));
+          dcRef.current.send(JSON.stringify({ type: 'response.create' }));
+          
+          // After AI speaks, show confirming state
+          // The response.done handler will NOT reset to idle because we have extractedEntry
+        }
+        
+        // Show confirming UI immediately (AI speaks in background)
+        setVoiceState('confirming');
         break;
       }
 
@@ -213,34 +306,66 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
         break;
       }
 
-      case 'response.done': {
-        intentionalSpeechRef.current = false;
-        // After greeting finishes, switch to listening
-        if (!greetingDoneRef.current) {
+      case 'response.audio.done': {
+        console.log('[VoiceAssistant] Server audio generation done');
+        break;
+      }
+
+      case 'output_audio_buffer.stopped': {
+        // This fires when the AI audio actually finishes playing on the client
+        console.log('[VoiceAssistant] Audio playback stopped (client)');
+        if (waitingForGreetingEndRef.current) {
+          waitingForGreetingEndRef.current = false;
           greetingDoneRef.current = true;
+          intentionalSpeechRef.current = false;
           setTimeout(() => {
-            setVoiceState('listening');
+            setVoiceState('idle');
             setAiTranscript('');
-          }, 600);
+          }, 300);
         }
-        // Kill any follow-up chatbot response
-        try {
-          if (dcRef.current?.readyState === 'open') {
-            dcRef.current.send(JSON.stringify({ type: 'response.cancel' }));
-            dcRef.current.send(JSON.stringify({
-              type: 'session.update',
-              session: {
-                instructions: 'Do NOT speak. Do NOT respond. Only transcribe audio input silently. Say absolutely nothing.',
-              }
-            }));
-          }
-        } catch {}
+        break;
+      }
+
+      case 'response.done': {
+        const wasIntentionalSpeech = intentionalSpeechRef.current;
+        
+        // For greeting: mark waiting and set a fallback timer
+        if (!greetingDoneRef.current && wasIntentionalSpeech) {
+          waitingForGreetingEndRef.current = true;
+          // Fallback: if output_audio_buffer.stopped never fires, transition after 4s
+          setTimeout(() => {
+            if (waitingForGreetingEndRef.current) {
+              console.log('[VoiceAssistant] Fallback: greeting audio timeout, transitioning to idle');
+              waitingForGreetingEndRef.current = false;
+              greetingDoneRef.current = true;
+              intentionalSpeechRef.current = false;
+              setVoiceState('idle');
+              setAiTranscript('');
+            }
+          }, 4000);
+        }
+        
+        // Only kill follow-up responses if this was NOT an intentional speech (greeting or confirmation)
+        if (!wasIntentionalSpeech) {
+          intentionalSpeechRef.current = false;
+          try {
+            if (dcRef.current?.readyState === 'open') {
+              dcRef.current.send(JSON.stringify({ type: 'response.cancel' }));
+              dcRef.current.send(JSON.stringify({
+                type: 'session.update',
+                session: {
+                  instructions: 'Do NOT speak. Do NOT respond. Only transcribe audio input silently. Say absolutely nothing.',
+                }
+              }));
+            }
+          } catch {}
+        }
         break;
       }
 
       case 'error':
         if (!msg.error?.message?.includes('buffer too small') && !msg.error?.message?.includes('response.cancel')) {
-          console.error('[VoiceAssistant] Realtime error:', msg.error);
+          console.error('[VoiceAssistant] Realtime error:', JSON.stringify(msg.error, null, 2));
         }
         break;
 
@@ -261,6 +386,10 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
+      
+      // Mute mic initially - only enable when user holds the button
+      stream.getAudioTracks().forEach(track => track.enabled = false);
+      console.log('[VoiceAssistant] Mic muted initially');
 
       const pc = new RTCPeerConnection();
       pcRef.current = pc;
@@ -280,6 +409,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
 
       dc.onopen = () => {
         console.log('[VoiceAssistant] Data channel open');
+        dcReadyRef.current = true;
 
         const instructions = t(
           `You are a voice-controlled assistant for the Wakti app. You are NOT a chatbot. You do NOT have conversations. You NEVER offer help or ask follow-up questions on your own. You ONLY speak when given an explicit instruction that starts with "Say EXACTLY this". If you receive any audio input, do NOT respond to it — just transcribe it silently. NEVER generate any response unless explicitly instructed.`,
@@ -298,26 +428,12 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
           }
         }));
 
-        // Speak greeting
-        const name = displayName || '';
-        const greeting = name
-          ? t(`Hey ${name}! How can I help?`, `أهلاً ${name}! كيف أقدر أساعدك؟`)
-          : t(`Hey! How can I help?`, `أهلاً! كيف أقدر أساعدك؟`);
+        // Mute mic initially — user must hold to speak
+        if (streamRef.current) {
+          streamRef.current.getAudioTracks().forEach(t => t.enabled = false);
+        }
 
-        setAiTranscript('');
-        setVoiceState('greeting');
-        intentionalSpeechRef.current = true;
-
-        dc.send(JSON.stringify({
-          type: 'session.update',
-          session: {
-            instructions: t(
-              `Say EXACTLY this and nothing else: "${greeting}"`,
-              `قل بالضبط هذا ولا شيء آخر: "${greeting}"`
-            )
-          }
-        }));
-        dc.send(JSON.stringify({ type: 'response.create' }));
+        // Greeting will be sent after we get display_name from edge function
       };
 
       dc.onmessage = (event) => {
@@ -342,19 +458,76 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
       const offer = pc.localDescription;
       if (!offer) throw new Error('Failed to create SDP offer');
 
+      console.log('[VoiceAssistant] Calling edge function...');
       const response = await supabase.functions.invoke('voice-assistant-session', {
         body: { sdp_offer: offer.sdp },
       });
+      console.log('[VoiceAssistant] Edge function response:', response.error ? 'ERROR' : 'OK', response.data ? 'has data' : 'no data');
 
       if (response.error || !response.data?.sdp_answer) {
+        console.error('[VoiceAssistant] Edge function failed:', response.error);
         throw new Error(response.error?.message || 'Failed to get SDP answer');
       }
 
-      if (response.data.display_name) {
-        setDisplayName(response.data.display_name);
+      // Guard: never use email as display name
+      let fetchedName = response.data.display_name || '';
+      console.log('[VoiceAssistant] Edge function returned display_name:', fetchedName);
+      if (fetchedName.includes('@')) {
+        console.log('[VoiceAssistant] Email detected in display_name, discarding');
+        fetchedName = '';
       }
+      displayNameRef.current = fetchedName;
+      if (fetchedName) setDisplayName(fetchedName);
 
+      console.log('[VoiceAssistant] Setting remote description...');
       await pc.setRemoteDescription({ type: 'answer', sdp: response.data.sdp_answer });
+      console.log('[VoiceAssistant] Remote description set, waiting for data channel...');
+
+      // Wait for data channel to open, then go straight to idle (no voice greeting for speed)
+      let dcRetries = 0;
+      const waitForDataChannel = () => {
+        dcRetries++;
+        if (dcRetries <= 30) {
+          console.log('[VoiceAssistant] Waiting for data channel, attempt', dcRetries, 'state:', dcRef.current?.readyState);
+        }
+        if (!dcRef.current || dcRef.current.readyState !== 'open') {
+          if (dcRetries > 50) { // 10 seconds max
+            console.error('[VoiceAssistant] Data channel never opened after 10s');
+            setVoiceState('error');
+            setErrorMsg('Connection timeout');
+            initializingRef.current = false;
+            return;
+          }
+          setTimeout(waitForDataChannel, 200);
+          return;
+        }
+        
+        // Data channel is open - speak greeting with voice
+        console.log('[VoiceAssistant] Data channel open, speaking greeting');
+        initializingRef.current = false;
+        
+        const name = displayNameRef.current;
+        const greeting = name
+          ? t(`Hey ${name}! What can I do for you?`, `أهلاً ${name}! كيف أقدر أساعدك؟`)
+          : t(`Hey! What can I do for you?`, `أهلاً! كيف أقدر أساعدك؟`);
+        
+        setAiTranscript('');
+        setVoiceState('greeting');
+        intentionalSpeechRef.current = true;
+        
+        // Send voice greeting via OpenAI Realtime
+        dcRef.current!.send(JSON.stringify({
+          type: 'session.update',
+          session: {
+            instructions: t(
+              `Say EXACTLY this and nothing else: "${greeting}"`,
+              `قل بالضبط هذا ولا شيء آخر: "${greeting}"`
+            )
+          }
+        }));
+        dcRef.current!.send(JSON.stringify({ type: 'response.create' }));
+      };
+      waitForDataChannel();
 
     } catch (err: any) {
       console.error('[VoiceAssistant] Connection failed:', err);
@@ -362,49 +535,88 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
       setErrorMsg(t('Failed to connect. Please try again.', 'فشل الاتصال. حاول مرة أخرى.'));
       initializingRef.current = false;
     }
-  }, [language, t, displayName, handleRealtimeEvent, voiceState]);
+  }, [language, t, handleRealtimeEvent, voiceState]);
 
   // ─── Open / Close ───────────────────────────────────────────────────────
 
   const handleOpen = useCallback(() => {
+    // Unlock audio (iOS requires user gesture) - don't await, just fire
+    unlockAudio().catch(() => {});
     setIsOpen(true);
     initializeConnection();
-  }, [initializeConnection]);
+  }, [initializeConnection, unlockAudio]);
 
   const handleClose = useCallback(() => {
     cleanup();
     setIsOpen(false);
   }, [cleanup]);
 
-  // ─── Toggle listening ───────────────────────────────────────────────────
+  // ─── Hold-to-talk: press = start, release = stop ──────────────────────
 
-  const toggleListening = useCallback(() => {
-    if (voiceState === 'listening') {
-      // Stop listening (mute mic)
-      if (streamRef.current) {
-        streamRef.current.getAudioTracks().forEach(t => t.enabled = false);
-      }
-      setVoiceState('idle');
-    } else if (voiceState === 'idle' || voiceState === 'confirming') {
-      // Start listening (unmute mic)
-      if (streamRef.current) {
-        streamRef.current.getAudioTracks().forEach(t => t.enabled = true);
-      }
-      setTranscript('');
-      setExtractedEntry(null);
-      setVoiceState('listening');
+  const startListening = useCallback(() => {
+    const s = voiceStateRef.current;
+    console.log('[VoiceAssistant] startListening called, current state:', s);
+    if (s !== 'idle' && s !== 'confirming') {
+      console.log('[VoiceAssistant] startListening blocked, state is not idle/confirming');
+      return;
     }
-  }, [voiceState]);
+    if (streamRef.current) {
+      const tracks = streamRef.current.getAudioTracks();
+      tracks.forEach(t => t.enabled = true);
+      console.log('[VoiceAssistant] Mic unmuted, tracks:', tracks.length, 'enabled:', tracks.map(t => t.enabled));
+    } else {
+      console.log('[VoiceAssistant] WARNING: No stream ref!');
+    }
+    setTranscript('');
+    setExtractedEntry(null);
+    setVoiceState('listening');
+  }, [setVoiceState]);
+
+  const stopListening = useCallback(() => {
+    if (voiceStateRef.current !== 'listening') return;
+    console.log('[VoiceAssistant] stopListening called');
+    
+    if (streamRef.current) {
+      streamRef.current.getAudioTracks().forEach(t => t.enabled = false);
+      console.log('[VoiceAssistant] Mic muted');
+    }
+    
+    // With turn_detection=null, we must manually commit the audio buffer
+    // This tells OpenAI "user is done speaking, process the audio now"
+    if (dcRef.current?.readyState === 'open') {
+      console.log('[VoiceAssistant] Committing audio buffer...');
+      dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+    }
+    
+    // Stay in listening state briefly to wait for transcription
+    // The transcription event handler will move us to 'thinking' then 'confirming'
+    // If no transcription comes in 3 seconds, go back to idle
+    setTimeout(() => {
+      if (voiceStateRef.current === 'listening') {
+        console.log('[VoiceAssistant] No transcription received, going back to idle');
+        setVoiceState('idle');
+      }
+    }, 3000);
+  }, [setVoiceState]);
+
+  // Legacy toggle for retry button in confirming state
+  const retryListening = useCallback(() => {
+    setTranscript('');
+    setExtractedEntry(null);
+    setVoiceState('idle');
+  }, [setVoiceState]);
 
   // ─── Confirm & Save ─────────────────────────────────────────────────────
 
   const handleConfirm = useCallback(() => {
     if (!extractedEntry) return;
+    console.log('[VoiceAssistant] Saving entry:', extractedEntry);
     onSaveEntry({
       title: extractedEntry.title,
       date: extractedEntry.date,
       description: extractedEntry.description,
     });
+    console.log('[VoiceAssistant] Entry saved, dispatching event');
     setVoiceState('done');
     setTimeout(() => {
       handleClose();
@@ -454,14 +666,31 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
   return (
     <>
       {/* Hidden audio element for AI speech */}
-      <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />
+      <audio
+        ref={audioRef}
+        autoPlay
+        playsInline
+        style={{ display: 'none' }}
+        onEnded={() => {
+          console.log('[VoiceAssistant] Audio element playback ended');
+          if (waitingForGreetingEndRef.current) {
+            waitingForGreetingEndRef.current = false;
+            greetingDoneRef.current = true;
+            intentionalSpeechRef.current = false;
+            setTimeout(() => {
+              setVoiceState('idle');
+              setAiTranscript('');
+            }, 300);
+          }
+        }}
+      />
 
       {/* Inline mic button — meant to sit in the header */}
       {!isOpen && (
         <button
           onClick={handleOpen}
           aria-label={t('Voice assistant', 'المساعد الصوتي')}
-          className="rounded-full flex items-center justify-center h-8 w-8 transition-transform active:scale-90"
+          className="rounded-full flex items-center justify-center h-9 w-9 transition-transform active:scale-90"
           style={{
             background: isDark
               ? 'linear-gradient(135deg, hsl(210, 100%, 65%) 0%, hsl(280, 70%, 65%) 100%)'
@@ -476,10 +705,11 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
       )}
 
       {/* Voice Modal — portaled to body so it renders above header */}
-      {createPortal(
-        <AnimatePresence>
-          {isOpen && (
-            <>
+      {portalTarget
+        ? createPortal(
+            <AnimatePresence>
+              {isOpen && (
+                <>
             {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -487,26 +717,31 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
               exit={{ opacity: 0 }}
               onClick={handleClose}
               className="fixed inset-0 z-50"
-              style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+              style={{ backgroundColor: 'rgba(0,0,0,0.25)' }}
             />
 
-            {/* Modal */}
+            {/* Modal centering wrapper */}
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+            >
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 40 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 40 }}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
               onContextMenu={(e) => e.preventDefault()}
-              className="fixed inset-x-4 z-50 flex flex-col overflow-hidden select-none"
+              className="flex flex-col overflow-hidden select-none pointer-events-auto"
               style={{
-                top: '17.5%',
-                height: '65%',
+                width: '92vw',
+                maxWidth: '420px',
+                height: '55vh',
+                maxHeight: '500px',
                 borderRadius: '1.5rem',
                 background: isDark
-                  ? 'linear-gradient(135deg, rgba(12,15,20,0.82) 0%, rgba(30,33,45,0.85) 100%)'
-                  : 'linear-gradient(135deg, rgba(252,254,253,0.80) 0%, rgba(240,242,248,0.82) 100%)',
-                backdropFilter: 'blur(24px)',
-                WebkitBackdropFilter: 'blur(24px)',
+                  ? 'linear-gradient(135deg, rgba(12,15,20,0.45) 0%, rgba(30,33,45,0.50) 100%)'
+                  : 'linear-gradient(135deg, rgba(252,254,253,0.45) 0%, rgba(240,242,248,0.50) 100%)',
+                backdropFilter: 'blur(30px)',
+                WebkitBackdropFilter: 'blur(30px)',
                 WebkitTouchCallout: 'none',
                 WebkitUserSelect: 'none',
                 touchAction: 'manipulation',
@@ -566,7 +801,63 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                   </motion.div>
                 )}
 
-                {/* Listening state */}
+                {/* Idle state — hold mic to speak */}
+                {voiceState === 'idle' && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="flex flex-col items-center gap-4"
+                  >
+                    <div className="relative">
+                      <motion.button
+                        onPointerDown={(e) => { e.preventDefault(); startListening(); }}
+                        onPointerUp={stopListening}
+                        onPointerCancel={stopListening}
+                        onPointerLeave={stopListening}
+                        onTouchStart={(e) => { e.preventDefault(); startListening(); }}
+                        onTouchEnd={(e) => { e.preventDefault(); stopListening(); }}
+                        onTouchCancel={stopListening}
+                        onContextMenu={(e) => e.preventDefault()}
+                        aria-label={t('Hold to speak', 'اضغط مع الاستمرار للتحدث')}
+                        className="relative z-10 rounded-full h-20 w-20 flex items-center justify-center select-none"
+                        style={{
+                          background: isDark
+                            ? 'linear-gradient(135deg, hsl(210,100%,65%) 0%, hsl(280,70%,65%) 100%)'
+                            : 'linear-gradient(135deg, #060541 0%, hsl(260,70%,25%) 100%)',
+                          boxShadow: isDark
+                            ? '0 0 20px hsla(210,100%,65%,0.3)'
+                            : '0 4px 16px hsla(243,84%,14%,0.2)',
+                          WebkitTouchCallout: 'none',
+                          WebkitUserSelect: 'none',
+                          touchAction: 'manipulation',
+                        }}
+                      >
+                        <Mic className="h-8 w-8 text-white" />
+                      </motion.button>
+                    </div>
+                    <p className="text-sm" style={{ color: isDark ? '#858384' : '#606062' }}>
+                      {t('Hold mic to speak', 'اضغط مع الاستمرار للتحدث')}
+                    </p>
+                    
+                    {/* Example hint */}
+                    <div 
+                      className="mt-2 px-4 py-2 rounded-lg text-center"
+                      style={{
+                        background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(6,5,65,0.04)',
+                        border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(6,5,65,0.08)',
+                      }}
+                    >
+                      <p className="text-xs mb-1" style={{ color: isDark ? '#858384' : '#606062' }}>
+                        {t('📅 Calendar Entry', '📅 إدخال تقويم')}
+                      </p>
+                      <p className="text-sm italic" style={{ color: isDark ? '#f2f2f2' : '#060541' }}>
+                        {t('"Doctor appointment tomorrow at 10am"', '"موعد الطبيب غداً الساعة 10 صباحاً"')}
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Listening state — user is holding the button */}
                 {voiceState === 'listening' && (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -590,9 +881,13 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                         }}
                       />
                       <motion.button
-                        whileTap={{ scale: 0.9 }}
-                        onClick={toggleListening}
-                        aria-label={t('Stop listening', 'إيقاف الاستماع')}
+                        onPointerUp={stopListening}
+                        onPointerCancel={stopListening}
+                        onPointerLeave={stopListening}
+                        onTouchEnd={(e) => { e.preventDefault(); stopListening(); }}
+                        onTouchCancel={stopListening}
+                        onContextMenu={(e) => e.preventDefault()}
+                        aria-label={t('Release to stop', 'ارفع إصبعك للتوقف')}
                         className="relative z-10 rounded-full h-20 w-20 flex items-center justify-center select-none"
                         style={{
                           background: isDark
@@ -601,6 +896,9 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                           boxShadow: isDark
                             ? '0 0 30px hsla(210,100%,65%,0.5)'
                             : '0 4px 20px hsla(243,84%,14%,0.3)',
+                          WebkitTouchCallout: 'none',
+                          WebkitUserSelect: 'none',
+                          touchAction: 'manipulation',
                         }}
                       >
                         <Mic className="h-8 w-8 text-white" />
@@ -655,9 +953,18 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                           {t('Title', 'العنوان')}
                         </span>
                       </div>
-                      <p className="text-base font-semibold" style={{ color: isDark ? '#f2f2f2' : '#060541' }}>
-                        {extractedEntry.title}
-                      </p>
+                      <input
+                        type="text"
+                        value={extractedEntry.title}
+                        onChange={(e) => setExtractedEntry({ ...extractedEntry, title: e.target.value })}
+                        placeholder={t('Enter title', 'أدخل العنوان')}
+                        aria-label={t('Title', 'العنوان')}
+                        className="w-full text-base font-semibold bg-transparent border-b border-dashed focus:outline-none focus:border-solid px-1 py-0.5"
+                        style={{ 
+                          color: isDark ? '#f2f2f2' : '#060541',
+                          borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(6,5,65,0.2)',
+                        }}
+                      />
 
                       <div className="flex items-center gap-2 mt-2">
                         <span className="text-xs font-medium" style={{ color: isDark ? '#858384' : '#606062' }}>
@@ -685,7 +992,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                     {/* Confirm / Retry buttons */}
                     <div className="flex gap-3 pt-2">
                       <button
-                        onClick={toggleListening}
+                        onClick={retryListening}
                         className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors"
                         style={{
                           background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(6,5,65,0.06)',
@@ -813,11 +1120,13 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                 )}
               </div>
             </motion.div>
+            </div>
           </>
         )}
-        </AnimatePresence>,
-        document.body
-      )}
+              </AnimatePresence>,
+            portalTarget
+          )
+        : null}
     </>
   );
 };

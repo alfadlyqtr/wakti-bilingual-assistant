@@ -2333,6 +2333,18 @@ serve(async (req) => {
               }
             }
 
+            const eliteIntroRule = (() => {
+              if (language === 'ar') {
+                const variants = [
+                  `ابدأ دائماً بتحية عربية رسمية بهذا النمط بالضبط:\n"تحياتي يا ${userNick || 'صديقي'} — أنا ${aiNick || 'وقتي'}. ${localTime} (بتوقيت الدوحة). جهّزت لك أحدث النتائج — [ثم أكمل]."`,
+                  `ابدأ دائماً بتحية عربية ودّية (خليجية) بهذا النمط بالضبط:\n"هلا ${userNick || 'صديقي'} — أنا ${aiNick || 'وقتي'}. ${localTime} (بتوقيت الدوحة). جبت لك أحدث النتائج — [ثم أكمل]."`,
+                ];
+                const pick = variants[Math.floor(Math.random() * variants.length)];
+                return pick;
+              }
+              return `ALWAYS start with a personalized greeting using this EXACT pattern:\n"Greetings, ${userNick || 'friend'} — ${aiNick || 'Wakti'} here. ${localTime} (Doha time). I've pulled the latest for you — [then continue]."`;
+            })();
+
             // Intent detection is now built into the system prompt itself
             // (searchIntent is still used for Maps grounding below)
 
@@ -2393,10 +2405,7 @@ If ambiguous, choose the closest intent and proceed without asking questions unl
 ============================================================
 2) ELITE INTRO (ALWAYS) + SMART WEATHER RULE
 ============================================================
-ALWAYS start with a personalized greeting using this EXACT pattern:
-"Greetings, ${userNick || 'friend'} — ${aiNick || 'Wakti'} here. ${localTime} (Doha time). I've pulled the latest for you — [then continue with weather/context if relevant, or go straight to the answer]."
-
-Example: "Greetings, abdullah — wakto here. Friday, December 26, 2025 — 3:05 PM (Doha time). I've pulled the latest for you — Doha's at a pleasant 22°C, a perfect backdrop for tracking the mid-season ice."
+${eliteIntroRule}
 
 This greeting makes the user feel the response is crafted personally for them. Keep it warm but professional.
 

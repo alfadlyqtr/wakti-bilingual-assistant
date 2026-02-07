@@ -50,16 +50,29 @@ serve(async (req: Request) => {
       });
     }
 
-    // Fetch user display name for greeting
+    // Fetch user display name for greeting (never use email)
     let displayName = "";
     try {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("display_name")
+        .select("display_name, username, full_name")
         .eq("id", user.id)
         .single();
-      displayName = profile?.display_name || "";
-    } catch {}
+      
+      // Try profiles table first, then user_metadata
+      displayName = profile?.display_name || profile?.full_name || profile?.username || "";
+      
+      // Fallback to user_metadata if profiles didn't have a name
+      if (!displayName && user.user_metadata) {
+        displayName = user.user_metadata.full_name || user.user_metadata.display_name || user.user_metadata.name || "";
+      }
+      
+      console.log("[voice-assistant-session] Profile data:", profile);
+      console.log("[voice-assistant-session] User metadata:", user.user_metadata);
+      console.log("[voice-assistant-session] Final displayName:", displayName);
+    } catch (e) {
+      console.error("[voice-assistant-session] Error fetching profile:", e);
+    }
 
     console.log("[voice-assistant-session] Creating session for user:", user.id);
 
