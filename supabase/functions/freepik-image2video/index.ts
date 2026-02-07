@@ -8,31 +8,42 @@ const corsHeaders = {
 };
 
 // ============================================================
-// Provider: Fal.ai  |  Model: Kling 2.5 Turbo Pro (Image→Video)
+// Provider: KIE.ai  |  Model: Grok Imagine (Image→Video)
 // ============================================================
-const FAL_KEY = Deno.env.get("FAL_KEY") || "";
-const FAL_MODEL = "fal-ai/kling-video/v2.5-turbo/pro/image-to-video";
-const FAL_SUBMIT_URL = `https://queue.fal.run/${FAL_MODEL}`;
-// Status: GET https://queue.fal.run/fal-ai/kling-video/requests/{request_id}/status
-// Result: GET https://queue.fal.run/fal-ai/kling-video/requests/{request_id}
+const KIE_API_KEY = Deno.env.get("KIE_API_KEY") || "";
+const KIE_MODEL = "grok-imagine/image-to-video";
+const KIE_CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
+const KIE_STATUS_URL = "https://api.kie.ai/api/v1/jobs/recordInfo";
 
 // Poll interval and max attempts
 const POLL_INTERVAL_MS = 5000; // 5 seconds
-const MAX_POLL_ATTEMPTS = 60; // 5 minutes max
+const MAX_POLL_ATTEMPTS = 72; // 6 minutes max (KIE can take a bit longer)
 
-interface FalSubmitResponse {
-  request_id: string;
-  status?: string;
+// KIE.ai response types
+interface KieCreateResponse {
+  code: number;
+  msg?: string;
+  message?: string;
+  data?: {
+    taskId: string;
+  };
 }
 
-interface FalStatusResponse {
-  status: string; // IN_QUEUE, IN_PROGRESS, COMPLETED, FAILED
-  error?: string;
-}
-
-interface FalResultResponse {
-  video?: {
-    url: string;
+interface KieStatusResponse {
+  code: number;
+  msg?: string;
+  message?: string;
+  data?: {
+    taskId: string;
+    model: string;
+    state: string; // waiting, queuing, generating, success, fail
+    param?: string;
+    resultJson?: string; // JSON string: {"resultUrls":["https://..."]}
+    failCode?: string;
+    failMsg?: string;
+    costTime?: number;
+    completeTime?: number;
+    createTime?: number;
   };
 }
 
@@ -95,124 +106,155 @@ async function uploadImageDataUriToPublicUrl(
 async function createVideoTask(
   imageUrl: string,
   prompt?: string,
-  negativePrompt?: string
+  duration?: string,
 ): Promise<{ task_id: string; status: string }> {
-  const body: Record<string, unknown> = {
-    image_url: imageUrl, // Fal uses image_url (accepts base64 data URI too)
-    duration: "5",
+  const validDuration = duration === "10" ? "10" : "6";
+  const input: Record<string, unknown> = {
+    image_urls: [imageUrl],
+    mode: "normal",
+    duration: validDuration,
   };
 
   if (prompt) {
-    body.prompt = prompt.slice(0, 2500);
-  }
-  if (negativePrompt) {
-    body.negative_prompt = negativePrompt.slice(0, 2500);
-  } else {
-    body.negative_prompt = "blur, distort, and low quality"; // Fal default
+    input.prompt = prompt.slice(0, 5000);
   }
 
-  console.log("[fal-image2video] Creating task, model:", FAL_MODEL);
+  const requestBody = {
+    model: KIE_MODEL,
+    input,
+  };
 
-  const response = await fetch(FAL_SUBMIT_URL, {
+  console.log("[kie-image2video] Creating task, model:", KIE_MODEL);
+
+  const response = await fetch(KIE_CREATE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Key ${FAL_KEY}`,
+      "Authorization": `Bearer ${KIE_API_KEY}`,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("[fal-image2video] Create task failed:", response.status, errorText);
-    throw new Error(`Fal API error: ${response.status} - ${errorText}`);
+    console.error("[kie-image2video] Create task failed:", response.status, errorText);
+    throw new Error(`KIE API error: ${response.status} - ${errorText}`);
   }
 
-  const result: FalSubmitResponse = await response.json();
-  console.log("[fal-image2video] Task created, request_id:", result.request_id);
-  return { task_id: result.request_id, status: result.status || "IN_QUEUE" };
+  const result: KieCreateResponse = await response.json();
+  console.log("[kie-image2video] Create response:", JSON.stringify(result));
+
+  if (result.code !== 200 || !result.data?.taskId) {
+    throw new Error(`KIE API error: ${result.msg || result.message || "Failed to create task"}`);
+  }
+
+  console.log("[kie-image2video] Task created, taskId:", result.data.taskId);
+  return { task_id: result.data.taskId, status: "waiting" };
+}
+
+// Map KIE state to frontend-expected status
+function mapKieState(state: string): string {
+  switch (state?.toLowerCase()) {
+    case "success":
+      return "COMPLETED";
+    case "fail":
+      return "FAILED";
+    case "waiting":
+    case "queuing":
+      return "IN_QUEUE";
+    case "generating":
+      return "IN_PROGRESS";
+    default:
+      return "IN_PROGRESS";
+  }
 }
 
 async function getTaskStatus(taskId: string): Promise<TaskStatusData> {
-  // First check status
-  const statusUrl = `https://queue.fal.run/fal-ai/kling-video/requests/${encodeURIComponent(taskId)}/status`;
-  console.log("[fal-image2video] Checking status for task:", taskId);
-  console.log("[fal-image2video] Status URL:", statusUrl);
-  console.log("[fal-image2video] FAL_KEY present:", !!FAL_KEY, "length:", FAL_KEY?.length || 0);
+  const statusUrl = `${KIE_STATUS_URL}?taskId=${encodeURIComponent(taskId)}`;
+  console.log("[kie-image2video] Checking status for task:", taskId);
 
   const statusRes = await fetch(statusUrl, {
     method: "GET",
-    headers: { "Authorization": `Key ${FAL_KEY}` },
+    headers: { "Authorization": `Bearer ${KIE_API_KEY}` },
   });
 
   if (!statusRes.ok) {
     const errorText = await statusRes.text();
-    console.error("[fal-image2video] Get status failed:", statusRes.status, errorText);
-    throw new Error(`Fal API error: ${statusRes.status} - ${errorText}`);
+    console.error("[kie-image2video] Get status failed:", statusRes.status, errorText);
+    throw new Error(`KIE API error: ${statusRes.status} - ${errorText}`);
   }
 
-  const statusData: FalStatusResponse = await statusRes.json();
-  const normalizedStatus = statusData.status?.toUpperCase() || "IN_PROGRESS";
+  const statusData: KieStatusResponse = await statusRes.json();
+  console.log("[kie-image2video] Status response state:", statusData.data?.state);
 
-  // If completed, fetch result to get video URL
-  if (normalizedStatus === "COMPLETED") {
-    const resultUrl = `https://queue.fal.run/fal-ai/kling-video/requests/${taskId}`;
-    const resultRes = await fetch(resultUrl, {
-      method: "GET",
-      headers: { "Authorization": `Key ${FAL_KEY}` },
-    });
+  if (statusData.code !== 200 || !statusData.data) {
+    throw new Error(`KIE API error: ${statusData.msg || statusData.message || "Failed to get status"}`);
+  }
 
-    if (!resultRes.ok) {
-      const errorText = await resultRes.text();
-      console.error("[fal-image2video] Get result failed:", resultRes.status, errorText);
-      throw new Error(`Fal API error: ${resultRes.status} - ${errorText}`);
+  const kieState = statusData.data.state?.toLowerCase() || "generating";
+  const mappedStatus = mapKieState(kieState);
+
+  // If completed, parse resultJson to get video URLs
+  if (mappedStatus === "COMPLETED" && statusData.data.resultJson) {
+    try {
+      const resultData = JSON.parse(statusData.data.resultJson);
+      const urls: string[] = resultData.resultUrls || [];
+      const videoUrl = urls[0];
+
+      if (videoUrl) {
+        return {
+          task_id: taskId,
+          status: "COMPLETED",
+          generated: [videoUrl],
+          video: { url: videoUrl },
+        };
+      }
+    } catch (e) {
+      console.error("[kie-image2video] Failed to parse resultJson:", e, statusData.data.resultJson);
     }
 
-    const resultData: FalResultResponse = await resultRes.json();
-    const videoUrl = resultData.video?.url;
-
+    // Completed but no URL found
     return {
       task_id: taskId,
       status: "COMPLETED",
-      generated: videoUrl ? [videoUrl] : undefined,
-      video: videoUrl ? { url: videoUrl } : undefined,
+      error: "Video completed but no URL returned",
     };
   }
 
-  if (normalizedStatus === "FAILED") {
+  if (mappedStatus === "FAILED") {
     return {
       task_id: taskId,
       status: "FAILED",
-      error: statusData.error || "Video generation failed",
+      error: statusData.data.failMsg || "Video generation failed",
     };
   }
 
   // Still processing
   return {
     task_id: taskId,
-    status: normalizedStatus, // IN_QUEUE or IN_PROGRESS
+    status: mappedStatus,
   };
 }
 
 async function pollUntilComplete(taskId: string): Promise<{ videoUrl: string } | { error: string }> {
   for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
-    console.log(`[fal-image2video] Poll attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS} for task ${taskId}`);
+    console.log(`[kie-image2video] Poll attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS} for task ${taskId}`);
 
     const status = await getTaskStatus(taskId);
-    console.log(`[fal-image2video] Status: ${status.status}`);
+    console.log(`[kie-image2video] Status: ${status.status}`);
 
     if (status.status === "COMPLETED") {
       const videoUrl = status.generated?.[0] || status.video?.url;
       if (videoUrl) {
-        console.log("[fal-image2video] Video ready:", videoUrl);
+        console.log("[kie-image2video] Video ready:", videoUrl);
         return { videoUrl };
       }
-      console.error("[fal-image2video] No video URL in response:", JSON.stringify(status));
-      return { error: "Video completed but no URL returned" };
+      console.error("[kie-image2video] No video URL in response:", JSON.stringify(status));
+      return { error: status.error || "Video completed but no URL returned" };
     }
 
     if (status.status === "FAILED" || status.error) {
-      console.error("[fal-image2video] Task failed:", status.error);
+      console.error("[kie-image2video] Task failed:", status.error);
       return { error: status.error || "Video generation failed" };
     }
 
@@ -253,13 +295,13 @@ serve(async (req) => {
       });
     }
 
-    console.log("[fal-image2video] User:", user.id);
+    console.log("[kie-image2video] User:", user.id);
 
     // Parse request body
     const body = await req.json();
-    const { image, prompt, negative_prompt, mode } = body;
+    const { image, prompt, mode, duration: reqDuration } = body;
 
-    // Mode: 'create' to start task, 'status' to check status
+    // Mode: 'status' to check task status
     if (mode === "status") {
       const { task_id, increment_usage } = body;
       if (!task_id) {
@@ -281,7 +323,7 @@ serve(async (req) => {
           p_user_id: user.id,
         });
         if (usageError) {
-          console.error("[fal-image2video] Usage increment error (status):", usageError);
+          console.error("[kie-image2video] Usage increment error (status):", usageError);
         }
       }
 
@@ -290,7 +332,7 @@ serve(async (req) => {
       });
     }
 
-    // Default mode: create and poll
+    // Default mode: create task
     if (!image) {
       return new Response(JSON.stringify({ error: "Missing image (URL or base64)" }), {
         status: 400,
@@ -304,7 +346,7 @@ serve(async (req) => {
     });
 
     if (quotaError) {
-      console.error("[fal-image2video] Quota check error:", quotaError);
+      console.error("[kie-image2video] Quota check error:", quotaError);
       return new Response(JSON.stringify({ error: "Failed to check quota" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -329,13 +371,14 @@ serve(async (req) => {
       );
     }
 
-    let imageForFal: string = image;
+    // KIE.ai requires a public image URL — upload data URI if needed
+    let imageUrl: string = image;
     if (typeof image === "string" && image.startsWith("data:image/")) {
       try {
-        imageForFal = await uploadImageDataUriToPublicUrl(supabase, user.id, image);
-        console.log("[fal-image2video] Uploaded data URI to public URL for Fal");
+        imageUrl = await uploadImageDataUriToPublicUrl(supabase, user.id, image);
+        console.log("[kie-image2video] Uploaded data URI to public URL for KIE");
       } catch (e) {
-        console.error("[fal-image2video] Failed to upload image for Fal:", e);
+        console.error("[kie-image2video] Failed to upload image:", e);
         return new Response(
           JSON.stringify({ error: e instanceof Error ? e.message : "Failed to prepare image" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -344,7 +387,7 @@ serve(async (req) => {
     }
 
     // Create the task
-    const task = await createVideoTask(imageForFal, prompt, negative_prompt);
+    const task = await createVideoTask(imageUrl, prompt, reqDuration);
 
     // If mode is 'async', return task_id immediately for frontend polling
     if (mode === "async") {
@@ -374,7 +417,7 @@ serve(async (req) => {
     });
 
     if (usageError) {
-      console.error("[fal-image2video] Usage increment error:", usageError);
+      console.error("[kie-image2video] Usage increment error:", usageError);
       // Don't fail the request, video was generated
     }
 
@@ -387,7 +430,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("[fal-image2video] Error:", error);
+    console.error("[kie-image2video] Error:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       {

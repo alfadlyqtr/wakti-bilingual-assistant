@@ -348,7 +348,15 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
           <VoiceAssistant
             onSaveEntry={(entry) => {
               console.log('[AppHeader] Dispatching voice entry event:', entry);
+              // Store entry in sessionStorage so calendar can pick it up after navigation
+              try {
+                sessionStorage.setItem('wakti-pending-voice-entry', JSON.stringify(entry));
+              } catch {}
               window.dispatchEvent(new CustomEvent('wakti-voice-add-entry', { detail: entry }));
+              // Navigate to calendar if not already there
+              if (!window.location.pathname.includes('/calendar')) {
+                navigate('/calendar');
+              }
             }}
           />
 

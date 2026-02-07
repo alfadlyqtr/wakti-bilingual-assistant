@@ -278,6 +278,143 @@ async function ampPromptWithDeepSeek(
   throw new Error("deepseek_empty_response");
 }
 
+// ─── Image-to-Video Amp (OpenAI gpt-4o-mini vision) ───
+const IMAGE2VIDEO_SYSTEM_PROMPT = `You are a cinematic video prompt engineer. You analyze an uploaded image and generate a production-ready video prompt for a 6–10 second cinematic reveal spot.
+
+Your job:
+1. Analyze the uploaded image: colors, shapes, style, aesthetic cues, product/category hints, visible text/symbols.
+2. Combine image analysis with any brand details and environment provided by the user.
+3. Output ONLY a pure JSON block using exactly these keys:
+
+{
+  "description": "A vivid one-sentence cinematic synopsis of the full transformation (under 120 words)",
+  "style": "comma-separated visual aesthetics inferred from the image (e.g., cinematic, colourful, high-tech, 4K)",
+  "camera": "one line describing the shot type and camera movement",
+  "lighting": "one line describing the lighting progression",
+  "environment": "concise description of the starting environment",
+  "elements": ["ordered list of visible props and inferred hero items"],
+  "motion": "one line describing how objects assemble or unfold",
+  "ending": "one line describing the final cinematic tableau",
+  "text": "none",
+  "keywords": ["9:16", "<derived-brand-name>", "fast assembly", "no text", "cinematic", "...additional inferred tags"]
+}
+
+Rules:
+- Write in present tense, active voice.
+- Keep description under ~120 words.
+- One seamless, visually satisfying build-up from emptiness to full reveal.
+- Keep the hero item visible throughout, or at minimum at start and end.
+- Decide props, mood, pacing, and any people or animals independently based on image style and brand details.
+- If brand direction is unclear, default to cinematic magical realism.
+- The aspect ratio is ALWAYS 9:16 (vertical/portrait).
+- Output ONLY the JSON block. No preamble, no explanation, no follow-up.`;
+
+async function ampImage2VideoWithOpenAI(
+  imageUrl: string,
+  brandDetails?: string,
+  environment?: string,
+  duration?: string,
+): Promise<string> {
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
+
+  const userParts: string[] = [];
+  if (brandDetails && brandDetails.trim()) {
+    userParts.push(`Brand/business details: ${brandDetails.trim()}`);
+  }
+  if (environment && environment.trim() && environment.trim().toLowerCase() !== "auto") {
+    userParts.push(`Desired environment/setting: ${environment.trim()}`);
+  }
+  if (duration) {
+    userParts.push(`Video duration: ${duration} seconds`);
+  }
+  userParts.push("Analyze the attached image and generate the JSON video prompt.");
+
+  const userText = userParts.join("\n");
+
+  const payload = {
+    model: "gpt-4o-mini",
+    temperature: 0.5,
+    max_tokens: 1000,
+    messages: [
+      {
+        role: "system",
+        content: IMAGE2VIDEO_SYSTEM_PROMPT,
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "image_url",
+            image_url: { url: imageUrl, detail: "low" },
+          },
+          {
+            type: "text",
+            text: userText,
+          },
+        ],
+      },
+    ],
+  };
+
+  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await resp.json().catch(() => null);
+  if (!resp.ok) {
+    throw new Error(
+      JSON.stringify({
+        stage: "openai-image2video",
+        status: resp.status,
+        body: data || null,
+      }),
+    );
+  }
+
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== "string" || content.trim().length === 0) {
+    throw new Error("openai_empty_response");
+  }
+
+  // Parse the JSON to extract a flat prompt string for the video model
+  try {
+    // Strip markdown code fences if present
+    let jsonStr = content.trim();
+    if (jsonStr.startsWith("```")) {
+      jsonStr = jsonStr.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    }
+    const parsed = JSON.parse(jsonStr);
+
+    // Build a single descriptive prompt from the JSON fields
+    const parts: string[] = [];
+    if (parsed.description) parts.push(parsed.description);
+    if (parsed.style) parts.push(`Style: ${parsed.style}.`);
+    if (parsed.camera) parts.push(`Camera: ${parsed.camera}.`);
+    if (parsed.lighting) parts.push(`Lighting: ${parsed.lighting}.`);
+    if (parsed.environment) parts.push(`Environment: ${parsed.environment}.`);
+    if (Array.isArray(parsed.elements) && parsed.elements.length > 0) {
+      parts.push(`Elements: ${parsed.elements.join(", ")}.`);
+    }
+    if (parsed.motion) parts.push(`Motion: ${parsed.motion}.`);
+    if (parsed.ending) parts.push(`Ending: ${parsed.ending}.`);
+    if (Array.isArray(parsed.keywords) && parsed.keywords.length > 0) {
+      parts.push(`Keywords: ${parsed.keywords.join(", ")}.`);
+    }
+
+    return parts.join(" ");
+  } catch {
+    // If JSON parsing fails, return the raw content as-is (still useful)
+    return content.trim();
+  }
+}
+// ─── End Image-to-Video Amp ───
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -309,6 +446,59 @@ serve(async (req) => {
     const text = (body?.text ?? "").toString();
     mode = typeof body?.mode === "string" ? (body.mode as string) : undefined;
     inputText = text;
+
+    // ─── Image-to-Video Amp route ───
+    if (mode === "image2video") {
+      const imageUrl = (body?.image_url ?? "").toString();
+      const brandDetails = (body?.brand_details ?? "").toString();
+      const environment = (body?.environment ?? "").toString();
+      const duration = (body?.duration ?? "6").toString();
+      inputText = `[image2video] brand: ${brandDetails}, env: ${environment}, dur: ${duration}`;
+
+      if (!imageUrl || imageUrl.trim().length === 0) {
+        return new Response(
+          JSON.stringify({
+            error: "Missing 'image_url' for image2video mode",
+            code: "BAD_REQUEST_MISSING_IMAGE",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      const improved = await ampImage2VideoWithOpenAI(imageUrl, brandDetails, environment, duration);
+
+      await logAI({
+        functionName: "prompt-amp",
+        userId,
+        model: "gpt-4o-mini",
+        inputText,
+        outputText: improved,
+        durationMs: Date.now() - startTime,
+        status: "success",
+        metadata: {
+          provider: "openai",
+          mode: "image2video",
+          language: "en",
+        },
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          text: improved,
+          language: "en",
+          mode: "image2video",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    // ─── End Image-to-Video route ───
 
     if (!text || text.trim().length === 0) {
       return new Response(

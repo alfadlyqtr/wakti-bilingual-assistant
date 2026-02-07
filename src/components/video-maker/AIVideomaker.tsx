@@ -58,6 +58,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('');
+  const [duration, setDuration] = useState<'6' | '10'>('6');
+  const [isAmping, setIsAmping] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState('');
@@ -72,6 +74,35 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const pollInFlightRef = useRef(false);
   const usageIncrementedRef = useRef(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Amp: generate a cinematic prompt from the uploaded image using OpenAI vision
+  const handleAmp = useCallback(async () => {
+    if (!imagePreview || isAmping || isGenerating) return;
+    setIsAmping(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('prompt-amp', {
+        body: {
+          mode: 'image2video',
+          image_url: imagePreview,
+          brand_details: prompt.trim() || '',
+          environment: 'auto',
+          duration,
+        },
+      });
+      if (error) throw new Error(error.message || 'Amp failed');
+      if (data?.success && data?.text) {
+        setPrompt(data.text);
+        toast.success(language === 'ar' ? 'تم تحسين الوصف ✨' : 'Prompt amped ✨');
+      } else {
+        throw new Error(data?.error || 'No improved prompt returned');
+      }
+    } catch (err) {
+      console.error('[AIVideomaker] Amp error:', err);
+      toast.error(language === 'ar' ? 'فشل تحسين الوصف' : 'Failed to amp prompt');
+    } finally {
+      setIsAmping(false);
+    }
+  }, [imagePreview, isAmping, isGenerating, prompt, duration, language]);
 
   // Load quota on mount
   const loadQuota = useCallback(async () => {
@@ -289,6 +320,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           image: imagePreview,
           prompt: prompt.trim() || undefined,
           negative_prompt: negativePrompt.trim() || undefined,
+          duration,
           mode: 'async',
         },
       });
@@ -436,9 +468,30 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-[hsl(210,100%,65%)]/20 to-[hsl(280,70%,65%)]/20 border border-primary/20">
-                <Clock className="h-3.5 w-3.5 text-primary" />
-                <span className="text-xs font-medium">{language === 'ar' ? '5 ثوانٍ' : '5 sec'}</span>
+              <div className="flex items-center gap-0.5 rounded-full border border-primary/20 overflow-hidden">
+                <Clock className="h-3.5 w-3.5 text-primary ml-2.5" />
+                <button
+                  onClick={() => !isGenerating && setDuration('6')}
+                  disabled={isGenerating}
+                  className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                    duration === '6'
+                      ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(280,70%,65%)]/30 text-primary font-bold'
+                      : 'text-muted-foreground hover:text-primary'
+                  }`}
+                >
+                  {language === 'ar' ? '6 ث' : '6s'}
+                </button>
+                <button
+                  onClick={() => !isGenerating && setDuration('10')}
+                  disabled={isGenerating}
+                  className={`px-2.5 py-1.5 text-xs font-medium transition-all mr-0.5 ${
+                    duration === '10'
+                      ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(280,70%,65%)]/30 text-primary font-bold'
+                      : 'text-muted-foreground hover:text-primary'
+                  }`}
+                >
+                  {language === 'ar' ? '10 ث' : '10s'}
+                </button>
               </div>
               <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${limitReached ? 'bg-red-500/20 border-red-500/30' : 'bg-gradient-to-r from-[hsl(142,76%,55%)]/20 to-[hsl(160,80%,55%)]/20 border-green-500/20'}`}>
                 <Sparkles className={`h-3.5 w-3.5 ${limitReached ? 'text-red-500' : 'text-green-500'}`} />
@@ -549,7 +602,23 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   maxLength={2500}
                   disabled={isGenerating || limitReached}
                 />
-                <div className="absolute bottom-2 right-3 text-[10px] text-muted-foreground/50">{prompt.length}/2500</div>
+                <div className="absolute bottom-2 right-3 flex items-center gap-2">
+                  {imagePreview && (
+                    <button
+                      onClick={handleAmp}
+                      disabled={isAmping || isGenerating || !imagePreview}
+                      className={`p-1 rounded-md transition-all ${
+                        isAmping
+                          ? 'text-primary animate-spin'
+                          : 'text-muted-foreground/50 hover:text-primary hover:bg-primary/10'
+                      }`}
+                      title={language === 'ar' ? 'تحسين الوصف بالذكاء الاصطناعي' : 'AI Amp: generate cinematic prompt'}
+                    >
+                      <Wand2 className="h-4 w-4" />
+                    </button>
+                  )}
+                  <span className="text-[10px] text-muted-foreground/50">{prompt.length}/2500</span>
+                </div>
               </div>
 
               {/* Advanced toggle */}

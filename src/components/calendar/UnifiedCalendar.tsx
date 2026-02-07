@@ -423,12 +423,13 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
   manualEntriesRef.current = manualEntries;
 
   useEffect(() => {
-    const addVoiceEntry = (detail: { title: string; date: string; description?: string }) => {
+    const addVoiceEntry = (detail: { title: string; date: string; time?: string; description?: string }) => {
       if (detail?.title && detail?.date) {
         const newEntry: CalendarEntry = {
           id: `manual-${Date.now()}`,
           title: detail.title,
           date: detail.date,
+          time: detail.time,
           description: detail.description || '',
           type: EntryType.MANUAL_NOTE,
         };

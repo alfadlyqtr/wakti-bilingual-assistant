@@ -7,40 +7,78 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { format, addDays, nextDay, parse as dateParse } from 'date-fns';
 import { CALENDAR_ADD_ENTRY_SCHEMA } from '@/schemas/calendarAddEntrySchema';
+import {
+  detectTRIntent,
+  validateTaskDraft,
+  validateReminderDraft,
+  mapTaskDraftToPayload,
+  mapReminderDraftToPayload,
+  mapSubtaskDraftToPayload,
+  buildClarificationMessage,
+  type TaskDraft,
+  type ReminderDraft,
+  type VoiceIntent,
+} from '@/schemas/tasksDraftMapper';
+import { TRService } from '@/services/trService';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type VoiceState = 'idle' | 'connecting' | 'greeting' | 'listening' | 'thinking' | 'confirming' | 'done' | 'error';
 
+/** What the voice input was detected as */
+type DetectedMode = 'calendar' | 'task' | 'reminder';
+
 interface ExtractedEntry {
   title: string;
   date: string; // yyyy-MM-dd
+  time?: string; // HH:mm
   description?: string;
+  clarificationQuestion?: string;
+  needsDateConfirm?: boolean;
+  needsTimeConfirm?: boolean;
+  /** Which mode was detected from the transcript */
+  mode?: DetectedMode;
+  /** Task-specific: priority */
+  priority?: 'normal' | 'high' | 'urgent';
+  /** Task-specific: subtask titles extracted from transcript */
+  subtasks?: string[];
 }
 
 interface VoiceAssistantProps {
-  onSaveEntry: (entry: { title: string; date: string; description?: string }) => void;
+  onSaveEntry: (entry: { title: string; date: string; time?: string; description?: string }) => void;
 }
 
 // ─── Date parsing helper ────────────────────────────────────────────────────
 
-function parseDateFromText(text: string): string {
+function parseDateFromText(text: string): { date: string | null; isConfident: boolean } {
   const lower = text.toLowerCase().trim();
   const today = new Date();
 
   // "today"
   if (lower.includes('today') || lower.includes('اليوم')) {
-    return format(today, 'yyyy-MM-dd');
+    return { date: format(today, 'yyyy-MM-dd'), isConfident: true };
+  }
+
+  // "tonight" / "this evening" (treat as today)
+  if (
+    lower.includes('tonight') ||
+    lower.includes('this evening') ||
+    lower.includes('this night') ||
+    lower.includes('الليلة') ||
+    lower.includes('ليله') ||
+    lower.includes('مساء')
+  ) {
+    return { date: format(today, 'yyyy-MM-dd'), isConfident: true };
   }
 
   // "tomorrow"
   if (lower.includes('tomorrow') || lower.includes('غدا') || lower.includes('غداً') || lower.includes('بكرة') || lower.includes('بكره')) {
-    return format(addDays(today, 1), 'yyyy-MM-dd');
+    return { date: format(addDays(today, 1), 'yyyy-MM-dd'), isConfident: true };
   }
 
   // "day after tomorrow"
   if (lower.includes('day after tomorrow') || lower.includes('بعد غد') || lower.includes('بعد بكرة') || lower.includes('بعد بكره')) {
-    return format(addDays(today, 2), 'yyyy-MM-dd');
+    return { date: format(addDays(today, 2), 'yyyy-MM-dd'), isConfident: true };
   }
 
   // "next monday", "next tuesday", etc.
@@ -52,14 +90,17 @@ function parseDateFromText(text: string): string {
   for (const [name, dayIndex] of Object.entries(dayNames)) {
     if (lower.includes(name)) {
       const next = nextDay(today, dayIndex);
-      return format(next, 'yyyy-MM-dd');
+      return { date: format(next, 'yyyy-MM-dd'), isConfident: true };
     }
   }
 
   // Try to find a date pattern like "February 10" or "10 February" or "2026-02-10"
   const isoMatch = lower.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (isoMatch) {
-    return `${isoMatch[1]}-${isoMatch[2].padStart(2, '0')}-${isoMatch[3].padStart(2, '0')}`;
+    return {
+      date: `${isoMatch[1]}-${isoMatch[2].padStart(2, '0')}-${isoMatch[3].padStart(2, '0')}`,
+      isConfident: true,
+    };
   }
 
   const monthNames: Record<string, number> = {
@@ -78,33 +119,116 @@ function parseDateFromText(text: string): string {
     const dayNum = m1 ? parseInt(m1[1]) : m2 ? parseInt(m2[1]) : null;
     if (dayNum && dayNum >= 1 && dayNum <= 31) {
       const year = today.getFullYear();
-      return `${year}-${String(mNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+      return {
+        date: `${year}-${String(mNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`,
+        isConfident: true,
+      };
     }
   }
 
-  // Fallback: today
-  return format(today, 'yyyy-MM-dd');
+  // Not found
+  return { date: null, isConfident: false };
 }
 
 // ─── Extract structured data from transcript ────────────────────────────────
 
-function extractEntryFromTranscript(transcript: string): ExtractedEntry {
-  const date = parseDateFromText(transcript);
+function extractTimeFromText(text: string): { time: string | null; isConfident: boolean } {
+  const lower = text.toLowerCase();
 
-  // Try to separate title from date words
-  let title = transcript.trim();
+  // 24h: 21:30 / 9:05
+  const hhmm = lower.match(/\b(\d{1,2})\s*:\s*(\d{2})\b/);
+  if (hhmm) {
+    const h = Math.max(0, Math.min(23, parseInt(hhmm[1], 10)));
+    const m = Math.max(0, Math.min(59, parseInt(hhmm[2], 10)));
+    return { time: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`, isConfident: true };
+  }
+
+  // 9 pm / 9 p.m. / 9pm
+  const ampm = lower.match(/\b(\d{1,2})(?:\s*[:.]\s*(\d{2}))?\s*(a\.?m\.?|p\.?m\.?|am|pm)\b/);
+  if (ampm) {
+    let h = Math.max(1, Math.min(12, parseInt(ampm[1], 10)));
+    const m = ampm[2] ? Math.max(0, Math.min(59, parseInt(ampm[2], 10))) : 0;
+    const mer = ampm[3].replace(/\./g, '');
+    if (mer === 'pm' && h !== 12) h += 12;
+    if (mer === 'am' && h === 12) h = 0;
+    return { time: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`, isConfident: true };
+  }
+
+  // Arabic: "9 مساء" / "9 م" / "9 صباحا" / "9 ص"
+  const ar = lower.match(/\b(\d{1,2})(?:\s*[:.]\s*(\d{2}))?\s*(ص|صباح|صباحاً|صباحا|م|مساء|مساءً|مساءا)\b/);
+  if (ar) {
+    let h = Math.max(1, Math.min(12, parseInt(ar[1], 10)));
+    const m = ar[2] ? Math.max(0, Math.min(59, parseInt(ar[2], 10))) : 0;
+    const mer = ar[3];
+    const isPm = mer.includes('م') || mer.includes('مساء');
+    const isAm = mer.includes('ص') || mer.includes('صباح');
+    if (isPm && h !== 12) h += 12;
+    if (isAm && h === 12) h = 0;
+    return { time: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`, isConfident: true };
+  }
+
+  return { time: null, isConfident: false };
+}
+
+function pickPrimaryClause(transcript: string): string {
+  const raw = (transcript || '').trim();
+  if (!raw) return '';
+
+  const pieces = raw
+    .split(/[\n\r]+/)
+    .flatMap((line) => line.split(/[.?!؛;]+/))
+    .flatMap((part) => part.split(/\s*,\s*/))
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (pieces.length <= 1) return raw;
+
+  const keywords = [
+    'appointment', 'meeting', 'call', 'dinner', 'doctor', 'with', 'calendar', 'remind',
+    'موعد', 'اجتماع', 'مكالمة', 'عشاء', 'طبيب', 'مع', 'تقويم', 'ذكر',
+  ];
+
+  const scored = pieces.map((p) => {
+    const lower = p.toLowerCase();
+    const score = keywords.reduce((acc, k) => (lower.includes(k) ? acc + 1 : acc), 0);
+    return { p, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  if (scored[0]?.score > 0) return scored[0].p;
+  return pieces[0];
+}
+
+// ─── Priority extraction helper ──────────────────────────────────────────────
+
+function extractPriorityFromText(text: string): 'normal' | 'high' | 'urgent' {
+  const lower = text.toLowerCase();
+  const urgentWords = ['urgent', 'asap', 'emergency', 'critical', 'عاجل', 'فوري', 'طارئ'];
+  const highWords = ['important', 'high priority', 'مهم', 'أولوية عالية'];
+  for (const w of urgentWords) { if (lower.includes(w)) return 'urgent'; }
+  for (const w of highWords) { if (lower.includes(w)) return 'high'; }
+  return 'normal';
+}
+
+// ─── Clean title helper (shared between calendar & task) ─────────────────────
+
+function cleanTitle(rawTitle: string, transcript: string): string {
+  let title = rawTitle.trim();
 
   // Remove common command phrases (with optional comma/punctuation after)
   const commandPatterns = [
-    /^(create|add|make|set|new|put)\s+(a\s+)?(calendar\s+)?(entry|event|appointment|reminder)?[,.]?\s*/i,
+    /^(create|add|make|set|new|put)\s+(a\s+)?(calendar\s+)?(entry|event|appointment|reminder|task|subtask|todo)?[,.]?\s*/i,
     /^calendar\s+entry[,.]?\s*/i,
-    /^(أضف|أنشئ|سجل|اعمل)\s+(موعد|حدث|تذكير)?[,.]?\s*/i,
+    /^(أضف|أنشئ|سجل|اعمل)\s+(موعد|حدث|تذكير|مهمة)?[,.]?\s*/i,
+    /^(create|add|new|set)\s+(task|reminder|todo)[,.]?\s*/i,
+    /^(remind\s+me\s+(to|about)?)[,.]?\s*/i,
+    /^(ذكرني\s*(بـ?|أن)?)[,.]?\s*/i,
   ];
   for (const pattern of commandPatterns) {
     title = title.replace(pattern, '');
   }
 
-  // Remove time patterns (e.g., "10 p.m.", "at 3pm", "10:30", "today 10pm")
+  // Remove time patterns
   const timePatterns = [
     /\b\d{1,2}\s*(:|\.)\s*\d{2}\s*(am|pm|a\.m\.|p\.m\.)?[,.]?\s*/gi,
     /\b\d{1,2}\s*(am|pm|a\.m\.|p\.m\.)[,.]?\s*/gi,
@@ -130,6 +254,10 @@ function extractEntryFromTranscript(transcript: string): ExtractedEntry {
     title = title.replace(pattern, '');
   }
 
+  // Remove priority keywords from title
+  title = title.replace(/\b(urgent|asap|emergency|critical|important|high priority)\b/gi, '');
+  title = title.replace(/\b(عاجل|فوري|طارئ|مهم|أولوية عالية)\b/g, '');
+
   // Remove filler words
   title = title.replace(/\b(on|at|for|في|يوم|will|add|the|a|an)\b/gi, '');
   
@@ -143,8 +271,194 @@ function extractEntryFromTranscript(transcript: string): ExtractedEntry {
 
   // Capitalize first letter
   title = title.charAt(0).toUpperCase() + title.slice(1);
+  return title;
+}
 
-  return { title, date };
+// ─── Smart task extraction: title + subtasks from natural language ────────────
+
+function extractTaskDetails(transcript: string): { title: string; subtasks: string[] } {
+  const lower = transcript.toLowerCase();
+
+  // Step 1: Strip command prefixes and date/time phrases to get the "body"
+  let body = transcript;
+  // Remove "create a task for tomorrow at 9am" type prefixes
+  body = body.replace(/^(create|add|make|new)\s+(a\s+)?(task|todo)\s*/i, '');
+  // Remove date/time phrases
+  body = body.replace(/\b(for\s+)?(today|tomorrow|day after tomorrow)\b/gi, '');
+  body = body.replace(/\b(at|@)\s*\d{1,2}(:\d{2})?\s*(a\.?m\.?|p\.?m\.?|am|pm)?\b/gi, '');
+  body = body.replace(/\b\d{1,2}\s*(a\.?m\.?|p\.?m\.?|am|pm)\b/gi, '');
+  body = body.replace(/\b(next\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/gi, '');
+  body = body.replace(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}\b/gi, '');
+  body = body.replace(/\b\d{4}-\d{1,2}-\d{1,2}\b/g, '');
+  // Arabic date/time
+  body = body.replace(/\b(أنشئ|أضف|اعمل)\s+(مهمة)?\s*/g, '');
+  body = body.replace(/\b(اليوم|غدا|غداً|بكرة|بكره|بعد غد)\b/g, '');
+  body = body.replace(/\b(الساعة)\s*\d{1,2}/g, '');
+  // Priority words
+  body = body.replace(/\b(urgent|asap|emergency|critical|important|high priority)\b/gi, '');
+  body = body.replace(/\b(عاجل|فوري|طارئ|مهم)\b/g, '');
+  body = body.trim();
+
+  // Step 2: Detect subtask items using "buy/get/need X, Y, Z and W" patterns
+  const subtasks: string[] = [];
+
+  // English patterns: "buy eggs, rice, milk and water" / "need to buy eggs, rice, milk and water"
+  const buyPatterns = [
+    /\b(?:buy|get|pick up|purchase|grab|need to buy|need to get|i need to buy)\s+(.+)/i,
+    /\b(?:اشتري|اشتر|شراء|أحتاج|محتاج)\s+(.+)/i,
+  ];
+
+  let listPart = '';
+  for (const pattern of buyPatterns) {
+    const match = body.match(pattern);
+    if (match) {
+      listPart = match[1].trim();
+      // Remove the list part from body so it doesn't pollute the title
+      body = body.replace(match[0], '').trim();
+      break;
+    }
+  }
+
+  // If no "buy X" pattern, try generic list after "and I need" / "I also need" / colon
+  if (!listPart) {
+    const genericListPatterns = [
+      /\b(?:and\s+)?(?:i\s+)?(?:need|want)\s+(?:to\s+)?(?:buy|get)?\s*:?\s*(.+)/i,
+      /\b(?:و?أحتاج|ومحتاج)\s+(.+)/i,
+    ];
+    for (const pattern of genericListPatterns) {
+      const match = body.match(pattern);
+      if (match) {
+        listPart = match[1].trim();
+        body = body.replace(match[0], '').trim();
+        break;
+      }
+    }
+  }
+
+  // Parse the list part into individual items
+  if (listPart) {
+    // Remove trailing punctuation
+    listPart = listPart.replace(/[.!?]+$/, '').trim();
+    // Split by comma, "and", "و", or "&"
+    const items = listPart
+      .split(/\s*(?:,\s*(?:and\s+)?|,?\s+and\s+|,?\s+و\s*|&\s*)\s*/i)
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && s.length < 100);
+    subtasks.push(...items);
+  }
+
+  // Step 3: Extract a clean title from the remaining body
+  // Remove connectors left over
+  body = body.replace(/\b(and\s+)?i\s+need\s+to\b/gi, '');
+  body = body.replace(/\b(and|و)\s*$/gi, '');
+  body = body.replace(/\bi\s+need\s+to\s+(go\s+)?/gi, '');
+  body = body.replace(/\b(i\s+want\s+to\s+(go\s+)?)/gi, '');
+  // Clean up
+  body = body.replace(/^[,.:;\s]+/, '').replace(/[,.:;\s]+$/, '').replace(/\s+/g, ' ').trim();
+
+  // Extract activity: look for "shopping at X", "go to X", "visit X" etc.
+  let title = body;
+  const activityMatch = body.match(/\b(shopping|go\s+shopping|visit|go\s+to|meeting|workout|gym|work|study|clean|cook)\s*(at|in|to)?\s*(the\s+)?(.+)/i);
+  if (activityMatch) {
+    const activity = activityMatch[1].trim();
+    const location = activityMatch[4]?.trim() || '';
+    title = location ? `${activity} at ${location}` : activity;
+  }
+
+  // Arabic activity patterns
+  const arActivityMatch = body.match(/\b(تسوق|زيارة|اذهب|روح)\s*(في|إلى|عند)?\s*(.+)/i);
+  if (arActivityMatch && !activityMatch) {
+    const activity = arActivityMatch[1].trim();
+    const location = arActivityMatch[3]?.trim() || '';
+    title = location ? `${activity} ${arActivityMatch[2] || 'في'} ${location}` : activity;
+  }
+
+  // If title is still too long or empty, take first meaningful chunk
+  if (title.length > 60) {
+    title = title.substring(0, 60).replace(/\s+\S*$/, '');
+  }
+  if (!title || title.length < 2) {
+    title = 'New Task';
+  }
+
+  // Capitalize first letter
+  title = title.charAt(0).toUpperCase() + title.slice(1);
+
+  // Capitalize each subtask
+  const cleanSubtasks = subtasks.map(s => s.charAt(0).toUpperCase() + s.slice(1));
+
+  return { title, subtasks: cleanSubtasks };
+}
+
+// ─── Main extraction: detects mode (calendar / task / reminder) ──────────────
+
+function extractEntryFromTranscript(transcript: string): ExtractedEntry {
+  const { date, isConfident: isDateConfident } = parseDateFromText(transcript);
+  const { time, isConfident: isTimeConfident } = extractTimeFromText(transcript);
+
+  // Detect task/reminder intent using the schema mapper
+  const trIntent = detectTRIntent(transcript);
+  let mode: DetectedMode = 'calendar';
+  if (trIntent === 'create_task' || trIntent === 'add_subtask' || trIntent === 'complete_task' || trIntent === 'complete_subtask' || trIntent === 'share_task') {
+    mode = 'task';
+  } else if (trIntent === 'schedule_reminder') {
+    mode = 'reminder';
+  }
+
+  // For tasks: use smart extraction that pulls out title + subtasks
+  // For calendar/reminder: use the existing clause-based extraction
+  let title: string;
+  let subtasks: string[] | undefined;
+
+  if (mode === 'task') {
+    const taskDetails = extractTaskDetails(transcript);
+    title = taskDetails.title;
+    subtasks = taskDetails.subtasks.length > 0 ? taskDetails.subtasks : undefined;
+  } else {
+    const primaryClause = pickPrimaryClause(transcript);
+    title = cleanTitle(primaryClause, transcript);
+  }
+
+  const missingDate = !date || !isDateConfident;
+  const missingTime = !time || !isTimeConfident;
+
+  let clarificationQuestion: string | undefined = undefined;
+
+  if (mode === 'reminder') {
+    if (missingDate && missingTime) {
+      clarificationQuestion = 'Please confirm the date and time for this reminder.';
+    } else if (missingDate) {
+      clarificationQuestion = 'When should I remind you? Please confirm the date.';
+    } else if (missingTime) {
+      clarificationQuestion = 'What time should I remind you?';
+    }
+  } else if (mode === 'task') {
+    if (missingDate) {
+      clarificationQuestion = 'When is this task due? Please confirm the date.';
+    }
+  } else {
+    if (missingDate && missingTime) {
+      clarificationQuestion = 'Please confirm the date and time.';
+    } else if (missingDate) {
+      clarificationQuestion = 'Please confirm the date.';
+    } else if (missingTime) {
+      clarificationQuestion = 'Please confirm the time.';
+    }
+  }
+
+  const priority = (mode === 'task') ? extractPriorityFromText(transcript) : undefined;
+
+  return {
+    title,
+    date: date || format(new Date(), 'yyyy-MM-dd'),
+    time: time || undefined,
+    clarificationQuestion,
+    needsDateConfirm: missingDate,
+    needsTimeConfirm: (mode === 'reminder') ? missingTime : (mode === 'calendar' ? missingTime : false),
+    mode,
+    priority,
+    subtasks,
+  };
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -275,9 +589,22 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
         
         // Voice confirmation: AI speaks back what it heard
         if (dcRef.current?.readyState === 'open') {
-          const confirmMsg = language === 'ar'
-            ? `فهمت: ${entry.title}`
-            : `Got it: ${entry.title}`;
+          const needsClarification = Boolean(entry.clarificationQuestion);
+          const modeLabel = entry.mode === 'task' ? (language === 'ar' ? 'مهمة' : 'task')
+            : entry.mode === 'reminder' ? (language === 'ar' ? 'تذكير' : 'reminder')
+            : (language === 'ar' ? 'إدخال تقويم' : 'calendar entry');
+          const isTR = entry.mode === 'task' || entry.mode === 'reminder';
+          const confirmMsg = needsClarification
+            ? (language === 'ar'
+                ? `تمام — ${modeLabel} بس محتاج أتأكد. افتح التأكيد وعدّل التاريخ/الوقت.`
+                : `Got it — creating a ${modeLabel}. I just need to confirm some details.`)
+            : isTR
+              ? (language === 'ar'
+                  ? 'تمام. راجع التفاصيل واضغط تأكيد.'
+                  : 'Okay. Please review and confirm.')
+              : (language === 'ar'
+                  ? `فهمت ${modeLabel}: ${entry.title}`
+                  : `Got it, ${modeLabel}: ${entry.title}`);
           
           intentionalSpeechRef.current = true;
           setAiTranscript('');
@@ -608,19 +935,94 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
 
   // ─── Confirm & Save ─────────────────────────────────────────────────────
 
-  const handleConfirm = useCallback(() => {
+  const handleConfirm = useCallback(async () => {
     if (!extractedEntry) return;
-    console.log('[VoiceAssistant] Saving entry:', extractedEntry);
-    onSaveEntry({
-      title: extractedEntry.title,
-      date: extractedEntry.date,
-      description: extractedEntry.description,
-    });
-    console.log('[VoiceAssistant] Entry saved, dispatching event');
-    setVoiceState('done');
-    setTimeout(() => {
-      handleClose();
-    }, 800);
+    if (extractedEntry.clarificationQuestion) return;
+
+    const mode = extractedEntry.mode || 'calendar';
+    console.log(`[VoiceAssistant] Saving ${mode}:`, extractedEntry);
+
+    try {
+      if (mode === 'task') {
+        const payload = mapTaskDraftToPayload({
+          title: extractedEntry.title,
+          description: extractedEntry.description,
+          due_day: extractedEntry.date,
+          due_time: extractedEntry.time,
+          priority: extractedEntry.priority || 'normal',
+        });
+        const createdTask = await TRService.createTask(payload);
+        console.log('[VoiceAssistant] Task created via TRService:', createdTask.id);
+
+        // Create subtasks if any were extracted
+        if (extractedEntry.subtasks && extractedEntry.subtasks.length > 0) {
+          for (let i = 0; i < extractedEntry.subtasks.length; i++) {
+            const subPayload = mapSubtaskDraftToPayload(
+              { title: extractedEntry.subtasks[i] },
+              createdTask.id,
+              i,
+            );
+            await TRService.createSubtask(subPayload);
+          }
+          console.log(`[VoiceAssistant] Created ${extractedEntry.subtasks.length} subtasks`);
+        }
+        // Speak short success (cost-saving)
+        try {
+          if (dcRef.current?.readyState === 'open') {
+            const msg = language === 'ar'
+              ? 'تم إنشاء المهمة. تفضل شوفها.'
+              : 'Task created. Please have a look.';
+            intentionalSpeechRef.current = true;
+            dcRef.current.send(JSON.stringify({
+              type: 'session.update',
+              session: { instructions: `Say EXACTLY this and nothing else: "${msg}"` },
+            }));
+            dcRef.current.send(JSON.stringify({ type: 'response.create' }));
+          }
+        } catch {}
+      } else if (mode === 'reminder') {
+        const payload = mapReminderDraftToPayload({
+          title: extractedEntry.title,
+          description: extractedEntry.description,
+          due_day: extractedEntry.date,
+          due_time: extractedEntry.time,
+        });
+        await TRService.createReminder(payload);
+        console.log('[VoiceAssistant] Reminder created via TRService');
+
+        // Speak short success (cost-saving)
+        try {
+          if (dcRef.current?.readyState === 'open') {
+            const msg = language === 'ar'
+              ? 'تم إنشاء التذكير. تفضل شوفه.'
+              : 'Reminder created. Please have a look.';
+            intentionalSpeechRef.current = true;
+            dcRef.current.send(JSON.stringify({
+              type: 'session.update',
+              session: { instructions: `Say EXACTLY this and nothing else: "${msg}"` },
+            }));
+            dcRef.current.send(JSON.stringify({ type: 'response.create' }));
+          }
+        } catch {}
+      } else {
+        // Calendar entry — use existing onSaveEntry callback
+        onSaveEntry({
+          title: extractedEntry.title,
+          date: extractedEntry.date,
+          time: extractedEntry.time,
+          description: extractedEntry.description,
+        });
+        console.log('[VoiceAssistant] Calendar entry saved');
+      }
+
+      setVoiceState('done');
+      const closeDelay = (mode === 'task' || mode === 'reminder') ? 1400 : 800;
+      setTimeout(() => { handleClose(); }, closeDelay);
+    } catch (err: any) {
+      console.error('[VoiceAssistant] Failed to save:', err);
+      setErrorMsg(err?.message || 'Failed to save');
+      setVoiceState('error');
+    }
   }, [extractedEntry, onSaveEntry, handleClose]);
 
   // ─── Type mode submit ───────────────────────────────────────────────────
@@ -839,20 +1241,38 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                       {t('Hold mic to speak', 'اضغط مع الاستمرار للتحدث')}
                     </p>
                     
-                    {/* Example hint */}
+                    {/* Example hints */}
                     <div 
-                      className="mt-2 px-4 py-2 rounded-lg text-center"
+                      className="mt-2 px-4 py-2 rounded-lg text-center space-y-2"
                       style={{
                         background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(6,5,65,0.04)',
                         border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(6,5,65,0.08)',
                       }}
                     >
-                      <p className="text-xs mb-1" style={{ color: isDark ? '#858384' : '#606062' }}>
-                        {t('📅 Calendar Entry', '📅 إدخال تقويم')}
-                      </p>
-                      <p className="text-sm italic" style={{ color: isDark ? '#f2f2f2' : '#060541' }}>
-                        {t('"Doctor appointment tomorrow at 10am"', '"موعد الطبيب غداً الساعة 10 صباحاً"')}
-                      </p>
+                      <div>
+                        <p className="text-xs mb-0.5" style={{ color: isDark ? '#858384' : '#606062' }}>
+                          {t('📅 Calendar', '📅 تقويم')}
+                        </p>
+                        <p className="text-xs italic" style={{ color: isDark ? '#f2f2f2' : '#060541' }}>
+                          {t('"Doctor appointment tomorrow at 10am"', '"موعد الطبيب غداً الساعة 10 صباحاً"')}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs mb-0.5" style={{ color: isDark ? '#858384' : '#606062' }}>
+                          {t('✅ Task', '✅ مهمة')}
+                        </p>
+                        <p className="text-xs italic" style={{ color: isDark ? '#f2f2f2' : '#060541' }}>
+                          {t('"Create task buy groceries tomorrow"', '"أنشئ مهمة شراء البقالة غداً"')}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs mb-0.5" style={{ color: isDark ? '#858384' : '#606062' }}>
+                          {t('🔔 Reminder', '🔔 تذكير')}
+                        </p>
+                        <p className="text-xs italic" style={{ color: isDark ? '#f2f2f2' : '#060541' }}>
+                          {t('"Remind me to call mom at 5pm"', '"ذكرني أتصل بأمي الساعة 5 مساءً"')}
+                        </p>
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -930,24 +1350,74 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                 )}
 
                 {/* Confirming — show extracted entry */}
-                {voiceState === 'confirming' && extractedEntry && (
+                {voiceState === 'confirming' && extractedEntry && (() => {
+                  const entryMode = extractedEntry.mode || 'calendar';
+                  const modeBadge = entryMode === 'task'
+                    ? { label: t('Task', 'مهمة'), color: isDark ? 'hsl(210,100%,65%)' : '#060541' }
+                    : entryMode === 'reminder'
+                      ? { label: t('Reminder', 'تذكير'), color: isDark ? 'hsl(25,95%,60%)' : 'hsl(25,95%,45%)' }
+                      : { label: t('Calendar', 'تقويم'), color: isDark ? 'hsl(142,76%,55%)' : 'hsl(142,76%,40%)' };
+
+                  const recalcClarification = (next: ExtractedEntry) => {
+                    const nDate = Boolean(next.needsDateConfirm);
+                    const nTime = Boolean(next.needsTimeConfirm);
+                    const m = next.mode || 'calendar';
+                    let q: string | undefined;
+                    if (m === 'reminder') {
+                      if (nDate && nTime) q = 'Please confirm the date and time for this reminder.';
+                      else if (nDate) q = 'When should I remind you? Please confirm the date.';
+                      else if (nTime) q = 'What time should I remind you?';
+                    } else if (m === 'task') {
+                      if (nDate) q = 'When is this task due? Please confirm the date.';
+                    } else {
+                      if (nDate && nTime) q = 'Please confirm the date and time.';
+                      else if (nDate) q = 'Please confirm the date.';
+                      else if (nTime) q = 'Please confirm the time.';
+                    }
+                    return q;
+                  };
+
+                  return (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="w-full space-y-3"
+                    className="w-full h-full flex flex-col min-h-0"
                   >
-                    <p className="text-xs text-center mb-2" style={{ color: isDark ? '#858384' : '#606062' }}>
-                      {t('You said:', 'قلت:')} "{transcript}"
-                    </p>
+                    <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-3">
+                      <p className="text-xs text-center mb-2" style={{ color: isDark ? '#858384' : '#606062' }}>
+                        {t('You said:', 'قلت:')} "{transcript}"
+                      </p>
 
-                    {/* Preview card */}
-                    <div
-                      className="rounded-xl p-4 space-y-2"
-                      style={{
-                        background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(6,5,65,0.04)',
-                        border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(6,5,65,0.08)',
-                      }}
-                    >
+                      {/* Mode badge */}
+                      <div className="flex justify-center">
+                        <span
+                          className="text-xs font-semibold px-3 py-1 rounded-full"
+                          style={{
+                            background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(6,5,65,0.06)',
+                            color: modeBadge.color,
+                          }}
+                        >
+                          {modeBadge.label}
+                        </span>
+                      </div>
+
+                      {extractedEntry.clarificationQuestion && (
+                        <p className="text-sm text-center" style={{ color: isDark ? '#f2f2f2' : '#060541' }}>
+                          {t(
+                            extractedEntry.clarificationQuestion,
+                            'ممكن تتأكد لي من التاريخ/الوقت؟'
+                          )}
+                        </p>
+                      )}
+
+                      {/* Preview card */}
+                      <div
+                        className="rounded-xl p-4 space-y-2"
+                        style={{
+                          background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(6,5,65,0.04)',
+                          border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(6,5,65,0.08)',
+                        }}
+                      >
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-medium" style={{ color: isDark ? '#858384' : '#606062' }}>
                           {t('Title', 'العنوان')}
@@ -971,9 +1441,125 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                           {t('Date', 'التاريخ')}
                         </span>
                       </div>
-                      <p className="text-sm" style={{ color: isDark ? '#f2f2f2' : '#060541' }}>
-                        {formatDateDisplay(extractedEntry.date)}
-                      </p>
+                      <input
+                        type="date"
+                        value={extractedEntry.date}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const next = {
+                            ...extractedEntry,
+                            date: val || extractedEntry.date,
+                            needsDateConfirm: false,
+                          };
+                          setExtractedEntry({ ...next, clarificationQuestion: recalcClarification(next) });
+                        }}
+                        aria-label={t('Date', 'التاريخ')}
+                        className="w-full text-sm bg-transparent border-b border-dashed focus:outline-none focus:border-solid px-1 py-0.5"
+                        style={{
+                          color: isDark ? '#f2f2f2' : '#060541',
+                          borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(6,5,65,0.2)',
+                          colorScheme: isDark ? 'dark' : 'light',
+                        }}
+                      />
+
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="text-xs font-medium" style={{ color: isDark ? '#858384' : '#606062' }}>
+                          {t('Time', 'الوقت')}
+                        </span>
+                      </div>
+                      <input
+                        type="time"
+                        value={extractedEntry.time || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const next = {
+                            ...extractedEntry,
+                            time: val || undefined,
+                            needsTimeConfirm: !(val || '').trim(),
+                          };
+                          setExtractedEntry({ ...next, clarificationQuestion: recalcClarification(next) });
+                        }}
+                        aria-label={t('Time', 'الوقت')}
+                        className="w-full text-sm bg-transparent border-b border-dashed focus:outline-none focus:border-solid px-1 py-0.5"
+                        style={{
+                          color: isDark ? '#f2f2f2' : '#060541',
+                          borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(6,5,65,0.2)',
+                          colorScheme: isDark ? 'dark' : 'light',
+                        }}
+                      />
+
+                      {/* Priority selector — only for tasks */}
+                      {entryMode === 'task' && (
+                        <>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-xs font-medium" style={{ color: isDark ? '#858384' : '#606062' }}>
+                              {t('Priority', 'الأولوية')}
+                            </span>
+                          </div>
+                          <div className="flex gap-2 mt-1">
+                            {(['normal', 'high', 'urgent'] as const).map((p) => {
+                              const selected = (extractedEntry.priority || 'normal') === p;
+                              const pLabel = p === 'normal' ? t('Normal', 'عادي') : p === 'high' ? t('High', 'عالي') : t('Urgent', 'عاجل');
+                              return (
+                                <button
+                                  key={p}
+                                  onClick={() => setExtractedEntry({ ...extractedEntry, priority: p })}
+                                  className="flex-1 py-1.5 rounded-lg text-xs font-medium transition-all"
+                                  style={{
+                                    background: selected
+                                      ? (p === 'urgent' ? 'hsl(0,70%,55%)' : p === 'high' ? 'hsl(25,95%,55%)' : isDark ? 'hsl(210,100%,65%)' : '#060541')
+                                      : (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(6,5,65,0.04)'),
+                                    color: selected ? '#fff' : (isDark ? '#858384' : '#606062'),
+                                    border: selected ? 'none' : (isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(6,5,65,0.1)'),
+                                  }}
+                                >
+                                  {pLabel}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
+
+                      {/* Subtasks list — only for tasks with extracted subtasks */}
+                      {entryMode === 'task' && extractedEntry.subtasks && extractedEntry.subtasks.length > 0 && (
+                        <>
+                          <div className="flex items-center gap-2 mt-3">
+                            <span className="text-xs font-medium" style={{ color: isDark ? '#858384' : '#606062' }}>
+                              {t(`Subtasks (${extractedEntry.subtasks.length})`, `المهام الفرعية (${extractedEntry.subtasks.length})`)}
+                            </span>
+                          </div>
+                          <div className="space-y-1.5 mt-1">
+                            {extractedEntry.subtasks.map((sub, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+                                style={{
+                                  background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(6,5,65,0.03)',
+                                }}
+                              >
+                                <span className="text-xs" style={{ color: isDark ? 'hsl(210,100%,65%)' : '#060541' }}>
+                                  {idx + 1}.
+                                </span>
+                                <span className="flex-1 text-sm" style={{ color: isDark ? '#f2f2f2' : '#060541' }}>
+                                  {sub}
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    const updated = extractedEntry.subtasks!.filter((_, i) => i !== idx);
+                                    setExtractedEntry({ ...extractedEntry, subtasks: updated.length > 0 ? updated : undefined });
+                                  }}
+                                  className="p-0.5 rounded-full transition-colors"
+                                  style={{ color: isDark ? '#858384' : '#606062' }}
+                                  aria-label={t('Remove subtask', 'إزالة المهمة الفرعية')}
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
 
                       {extractedEntry.description && (
                         <>
@@ -987,10 +1573,11 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                           </p>
                         </>
                       )}
+                      </div>
                     </div>
 
-                    {/* Confirm / Retry buttons */}
-                    <div className="flex gap-3 pt-2">
+                    {/* Confirm / Retry buttons (sticky footer) */}
+                    <div className="flex gap-3 pt-3">
                       <button
                         onClick={retryListening}
                         className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors"
@@ -1003,21 +1590,26 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                       </button>
                       <button
                         onClick={handleConfirm}
+                        disabled={Boolean(extractedEntry.clarificationQuestion)}
                         className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white transition-colors"
                         style={{
                           background: isDark
                             ? 'linear-gradient(135deg, hsl(142,76%,55%) 0%, hsl(160,80%,45%) 100%)'
                             : 'linear-gradient(135deg, hsl(142,76%,40%) 0%, hsl(160,80%,35%) 100%)',
+                          opacity: extractedEntry.clarificationQuestion ? 0.6 : 1,
                         }}
                       >
                         <span className="flex items-center justify-center gap-1.5">
                           <Check className="h-4 w-4" />
-                          {t('Confirm & Save', 'تأكيد وحفظ')}
+                          {entryMode === 'task' ? t('Create Task', 'إنشاء مهمة')
+                            : entryMode === 'reminder' ? t('Create Reminder', 'إنشاء تذكير')
+                            : t('Confirm & Save', 'تأكيد وحفظ')}
                         </span>
                       </button>
                     </div>
                   </motion.div>
-                )}
+                  );
+                })()}
 
                 {/* Done */}
                 {voiceState === 'done' && (
