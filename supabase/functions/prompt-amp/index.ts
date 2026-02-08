@@ -383,7 +383,7 @@ async function ampImage2VideoWithOpenAI(
         content: [
           {
             type: "image_url",
-            image_url: { url: imageUrl, detail: "low" },
+            image_url: { url: imageUrl.trim(), detail: "low" },
           },
           {
             type: "text",
@@ -555,7 +555,7 @@ serve(async (req) => {
 
     // ─── Image-to-Video Amp route ───
     if (mode === "image2video") {
-      const imageUrl = (body?.image_url ?? "").toString();
+      const imageUrl = (body?.image_url ?? "").toString().trim();
       const brandDetails = (body?.brand_details ?? "").toString();
       const environment = (body?.environment ?? "").toString();
       const duration = (body?.duration ?? "6").toString();

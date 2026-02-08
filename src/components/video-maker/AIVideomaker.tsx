@@ -206,7 +206,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             .createSignedUrl(storagePath, 60 * 60 * 6);
           if (signedErr) throw new Error(`Signed URL failed: ${signedErr.message}`);
           if (!signedData?.signedUrl) throw new Error('Signed URL missing');
-          ampImageUrl = signedData.signedUrl;
+          ampImageUrl = signedData.signedUrl.trim();
           console.log('[AIVideomaker] Amp upload successful:', ampImageUrl);
         } catch (prepErr: any) {
           console.error('[AIVideomaker] Amp prepare error:', prepErr);
@@ -492,44 +492,48 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           mode: 'async',
         };
       } else {
-        // Image-to-Video: upload image first
+        // Image-to-Video: always compress + upload image to get a signed https URL
         setGenerationStatus(language === 'ar' ? 'جاري رفع الصورة...' : 'Uploading image...');
-        let imageUrl = imagePreview;
-        if (imageFile) {
-          try {
-            const compressedBlob = await compressImage(imageFile, 512, 0.5); 
-            const randomId = Math.random().toString(36).substring(2, 15);
-            const storagePath = `${user.id}/ai-video-input/${randomId}.jpg`;
-            
-            console.log('[AIVideomaker] Uploading to message_attachments:', storagePath);
-            
-            const { error: uploadErr } = await supabase.storage
-              .from('message_attachments')
-              .upload(storagePath, compressedBlob, {
-                contentType: 'image/jpeg',
-                cacheControl: '3600',
-                upsert: true,
-              });
-            
-            if (uploadErr) {
-              console.error('[AIVideomaker] Storage upload error details:', uploadErr);
-              throw new Error(`Upload failed: ${uploadErr.message}`);
-            }
-            
-            const { data: signedData, error: signedErr } = await supabase.storage
-              .from('message_attachments')
-              .createSignedUrl(storagePath, 60 * 60 * 6);
-            if (signedErr) throw new Error(`Signed URL failed: ${signedErr.message}`);
-            if (signedData?.signedUrl) {
-              imageUrl = signedData.signedUrl;
-              console.log('[AIVideomaker] Upload successful, URL:', imageUrl);
-            } else {
-              throw new Error('Signed URL missing');
-            }
-          } catch (prepErr: any) {
-            console.error('[AIVideomaker] Prepare image error:', prepErr);
-            throw prepErr;
+        let imageUrl = '';
+        try {
+          const randomId = Math.random().toString(36).substring(2, 15);
+          const storagePath = `${user.id}/ai-video-input/${randomId}.jpg`;
+
+          let sourceBlob: Blob;
+          if (imageFile) {
+            sourceBlob = await compressImage(imageFile, 1024, 0.7);
+          } else if (imagePreview?.startsWith('data:')) {
+            const previewBlob = await dataUrlToBlob(imagePreview);
+            sourceBlob = await compressImage(new File([previewBlob], 'preview.jpg', { type: 'image/jpeg' }), 1024, 0.7);
+          } else {
+            throw new Error('Missing image source');
           }
+
+          console.log('[AIVideomaker] Uploading to message_attachments:', storagePath, 'size:', sourceBlob.size);
+
+          const { error: uploadErr } = await supabase.storage
+            .from('message_attachments')
+            .upload(storagePath, sourceBlob, {
+              contentType: 'image/jpeg',
+              cacheControl: '3600',
+              upsert: true,
+            });
+
+          if (uploadErr) {
+            console.error('[AIVideomaker] Storage upload error details:', uploadErr);
+            throw new Error(`Upload failed: ${uploadErr.message}`);
+          }
+
+          const { data: signedData, error: signedErr } = await supabase.storage
+            .from('message_attachments')
+            .createSignedUrl(storagePath, 60 * 60 * 6);
+          if (signedErr) throw new Error(`Signed URL failed: ${signedErr.message}`);
+          if (!signedData?.signedUrl) throw new Error('Signed URL missing');
+          imageUrl = signedData.signedUrl.trim();
+          console.log('[AIVideomaker] Upload successful, URL:', imageUrl);
+        } catch (prepErr: any) {
+          console.error('[AIVideomaker] Prepare image error:', prepErr);
+          throw prepErr;
         }
 
         requestBody = {
