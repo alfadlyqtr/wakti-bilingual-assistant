@@ -56,31 +56,80 @@ export type LocationPermissionStatus = 'IN_USE' | 'ALWAYS' | 'DENIED' | 'UNKNOWN
 
 const LOCATION_CACHE_KEY = 'wakti_native_location_cache';
 const LOCATION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for fresh location
-const SDK_READY_TIMEOUT = 3000; // max ms to wait for Natively SDK bridge to load
+const BRIDGE_READY_TIMEOUT = 5000; // max ms to wait for native iOS/Android bridge
 
 /**
- * Wait for the Natively SDK JS bridge to be injected into the WebView.
- * The wrapper fires a 'natively-ready' event on window when ready.
- * Returns true if ready, false if timed out.
+ * Wait for the Natively NATIVE BRIDGE to be connected (not just CDN script loaded).
+ *
+ * The CDN script (natively-frontend.min.js) loads and defines window.NativelyLocation
+ * immediately, but the actual native bridge (window.$agent) connects later when the
+ * iOS/Android app calls natively.notify(). Until then, natively.injected === false
+ * and all SDK calls are silently queued (callbacks never fire).
+ *
+ * We use the SDK's own addObserver() which fires when the bridge connects,
+ * with a timeout safety net.
  */
-function waitForNativelyReady(timeoutMs: number = SDK_READY_TIMEOUT): Promise<boolean> {
+function waitForNativeBridge(timeoutMs: number = BRIDGE_READY_TIMEOUT): Promise<boolean> {
   if (typeof window === 'undefined') return Promise.resolve(false);
-  // Already ready
-  if ((window as any).__nativelyReady || (window as any).NativelyLocation) {
+
+  const natively = (window as any).natively;
+
+  // No SDK at all (running in regular browser, not Natively WebView)
+  if (!natively) {
+    console.warn('[NativelyLocation] window.natively not found — not a Natively app');
+    return Promise.resolve(false);
+  }
+
+  // Bridge already connected
+  if (natively.injected === true) {
+    console.log('[NativelyLocation] ✅ Native bridge already connected (natively.injected=true)');
     return Promise.resolve(true);
   }
+
+  // Check if this is even a native app (user agent check)
+  const isNativeApp = natively.isIOSApp === true || natively.isAndroidApp === true;
+  if (!isNativeApp) {
+    console.warn('[NativelyLocation] Not running inside Natively app (UA check failed)');
+    return Promise.resolve(false);
+  }
+
+  // Bridge not connected yet — use SDK's own observer pattern to wait
+  console.log('[NativelyLocation] ⏳ Waiting for native bridge to connect (natively.addObserver)...');
   return new Promise((resolve) => {
+    let settled = false;
+
     const timer = setTimeout(() => {
-      console.warn(`[NativelyLocation] SDK bridge not ready after ${timeoutMs}ms`);
-      window.removeEventListener('natively-ready', onReady);
-      resolve(false);
+      if (!settled) {
+        settled = true;
+        // Check one more time in case it connected but observer didn't fire
+        if (natively.injected === true) {
+          console.log('[NativelyLocation] ✅ Native bridge connected (detected at timeout check)');
+          resolve(true);
+        } else {
+          console.warn(`[NativelyLocation] ❌ Native bridge not connected after ${timeoutMs}ms`);
+          resolve(false);
+        }
+      }
     }, timeoutMs);
-    const onReady = () => {
-      clearTimeout(timer);
-      console.log('[NativelyLocation] ✅ SDK bridge became ready (natively-ready event)');
-      resolve(true);
-    };
-    window.addEventListener('natively-ready', onReady, { once: true });
+
+    // The SDK's addObserver() fires when natively.notify() is called by the native app
+    try {
+      natively.addObserver(() => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          console.log('[NativelyLocation] ✅ Native bridge connected (addObserver fired)');
+          resolve(true);
+        }
+      });
+    } catch (err) {
+      console.error('[NativelyLocation] addObserver() failed:', err);
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        resolve(false);
+      }
+    }
   });
 }
 
@@ -90,8 +139,8 @@ function logNativelyRuntimeStatus(context: string): void {
   const isNativeApp = natively?.isNativeApp === true || natively?.isIOSApp === true || natively?.isAndroidApp === true;
   console.log('[NativelyLocation] Runtime status:', {
     context,
-    nativelyReady: (window as any).__nativelyReady,
-    hasNatively: !!natively,
+    nativelyInjected: natively?.injected,
+    hasAgent: !!(window as any).$agent,
     isNativeApp,
     hasNativelyLocation: typeof (window as any).NativelyLocation !== 'undefined',
   });
@@ -229,10 +278,10 @@ export async function getNativeLocation(options?: {
     }
   }
 
-  // Wait for Natively SDK bridge to be injected (it loads async in the WebView)
-  const sdkReady = await waitForNativelyReady();
-  if (!sdkReady) {
-    console.warn('[NativelyLocation] ❌ Natively SDK bridge never became ready — returning null');
+  // Wait for native iOS/Android bridge to connect (not just CDN script loaded)
+  const bridgeReady = await waitForNativeBridge();
+  if (!bridgeReady) {
+    console.warn('[NativelyLocation] ❌ Native bridge not connected — returning null');
     return null;
   }
 
