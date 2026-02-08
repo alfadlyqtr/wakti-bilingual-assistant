@@ -767,13 +767,17 @@ class WaktiAIV2ServiceClass {
         }
       } catch {}
 
-      // Load user location (country, city) to include in metadata
-      // If query contains "near me", weather, or traffic patterns, force fresh location
-      const needsFreshLocation = activeTrigger === 'search' || queryNeedsFreshLocation(message);
-      if (needsFreshLocation) {
-        console.log(`📍 LOCATION: Query needs fresh location - "${message.substring(0, 50)}..."`);
+      // Only request GPS location for search/near-me/weather/traffic queries.
+      // Normal chat/reminders do NOT need location (avoids unnecessary GPS calls + iOS prompts).
+      const needsLocation = activeTrigger === 'search' || queryNeedsFreshLocation(message);
+      let location: UserLocationContext | null = null;
+      if (needsLocation) {
+        const needsFreshLocation = activeTrigger === 'search' || queryNeedsFreshLocation(message);
+        console.log(`📍 LOCATION: Query needs location (fresh=${needsFreshLocation}) - "${message.substring(0, 50)}..."`);
+        location = await this.getUserLocation(userId, needsFreshLocation);
+      } else {
+        console.log(`📍 LOCATION: Skipping GPS for non-location query (trigger=${activeTrigger})`);
       }
-      const location = await this.getUserLocation(userId, needsFreshLocation);
       const clientTimezone = location?.timezone || this.getClientTimezone();
       
       // DEBUG: Log what location data we're sending to the Edge Function

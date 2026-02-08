@@ -202,11 +202,11 @@ export async function getNativeLocation(options?: {
     }
   }
 
-  // Try Natively SDK FIRST
+  // Natively SDK ONLY — no browser geolocation fallback (causes iOS "website wants location" popup)
   const instance = getInstance();
   if (!instance) {
-    console.log('[NativelyLocation] Natively SDK not available, trying browser fallback');
-    return getBrowserLocation(timeoutMs);
+    console.warn('[NativelyLocation] ❌ Natively SDK not available — returning null (no browser fallback)');
+    return null;
   }
 
   const sdkResult = await new Promise<NativeLocationResult | null>((resolve) => {
@@ -300,55 +300,13 @@ export async function getNativeLocation(options?: {
     return sdkResult;
   }
 
-  // SDK failed/timed out — try browser geolocation as fallback
-  console.log('[NativelyLocation] SDK failed, trying browser geolocation fallback...');
-  return getBrowserLocation(timeoutMs);
+  // SDK failed/timed out — NO browser fallback (would cause iOS permission popup)
+  console.warn('[NativelyLocation] ❌ Natively SDK failed/timed out — returning null (no browser fallback)');
+  return null;
 }
 
-/**
- * Browser geolocation fallback (works in Natively WebView too)
- */
-async function getBrowserLocation(timeoutMs: number): Promise<NativeLocationResult | null> {
-  console.log('[NativelyLocation] Trying browser geolocation fallback...');
-  
-  if (typeof navigator === 'undefined' || !navigator.geolocation) {
-    console.log('[NativelyLocation] Browser geolocation not available');
-    return null;
-  }
-
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      console.log('[NativelyLocation] Browser geolocation timeout');
-      resolve(null);
-    }, timeoutMs);
-
-    console.log('[NativelyLocation] Calling navigator.geolocation.getCurrentPosition...');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        clearTimeout(timer);
-        console.log('[NativelyLocation] ✅ Browser geolocation success:', pos.coords.latitude, pos.coords.longitude);
-        const result: NativeLocationResult = {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-          source: 'browser',
-        };
-        setCachedLocation(result);
-        resolve(result);
-      },
-      (err) => {
-        clearTimeout(timer);
-        console.log('[NativelyLocation] ❌ Browser geolocation error:', err.code, err.message);
-        resolve(null);
-      },
-      {
-        enableHighAccuracy: true, // Request high accuracy since user granted permission
-        timeout: timeoutMs,
-        maximumAge: 60000, // Accept cached position up to 1 minute old
-      }
-    );
-  });
-}
+// Browser geolocation fallback REMOVED — Natively SDK is the only GPS source.
+// This prevents iOS from showing "www.wakti.qa would like to use your current location" popup.
 
 /**
  * Detect if user query contains "near me" patterns (EN/AR)
