@@ -49,13 +49,40 @@ export interface NativeLocationResult {
   accuracy?: number;
   city?: string;
   country?: string;
-  source: 'native' | 'browser' | 'cached';
+  source: 'native' | 'cached';
 }
 
 export type LocationPermissionStatus = 'IN_USE' | 'ALWAYS' | 'DENIED' | 'UNKNOWN';
 
 const LOCATION_CACHE_KEY = 'wakti_native_location_cache';
 const LOCATION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for fresh location
+const SDK_READY_TIMEOUT = 3000; // max ms to wait for Natively SDK bridge to load
+
+/**
+ * Wait for the Natively SDK JS bridge to be injected into the WebView.
+ * The wrapper fires a 'natively-ready' event on window when ready.
+ * Returns true if ready, false if timed out.
+ */
+function waitForNativelyReady(timeoutMs: number = SDK_READY_TIMEOUT): Promise<boolean> {
+  if (typeof window === 'undefined') return Promise.resolve(false);
+  // Already ready
+  if ((window as any).__nativelyReady || (window as any).NativelyLocation) {
+    return Promise.resolve(true);
+  }
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      console.warn(`[NativelyLocation] SDK bridge not ready after ${timeoutMs}ms`);
+      window.removeEventListener('natively-ready', onReady);
+      resolve(false);
+    }, timeoutMs);
+    const onReady = () => {
+      clearTimeout(timer);
+      console.log('[NativelyLocation] ✅ SDK bridge became ready (natively-ready event)');
+      resolve(true);
+    };
+    window.addEventListener('natively-ready', onReady, { once: true });
+  });
+}
 
 function logNativelyRuntimeStatus(context: string): void {
   if (typeof window === 'undefined') return;
@@ -202,10 +229,17 @@ export async function getNativeLocation(options?: {
     }
   }
 
+  // Wait for Natively SDK bridge to be injected (it loads async in the WebView)
+  const sdkReady = await waitForNativelyReady();
+  if (!sdkReady) {
+    console.warn('[NativelyLocation] ❌ Natively SDK bridge never became ready — returning null');
+    return null;
+  }
+
   // Natively SDK ONLY — no browser geolocation fallback (causes iOS "website wants location" popup)
   const instance = getInstance();
   if (!instance) {
-    console.warn('[NativelyLocation] ❌ Natively SDK not available — returning null (no browser fallback)');
+    console.warn('[NativelyLocation] ❌ Natively SDK not available after ready — returning null');
     return null;
   }
 
