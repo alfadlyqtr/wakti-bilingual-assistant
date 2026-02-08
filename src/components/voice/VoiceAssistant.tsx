@@ -260,27 +260,37 @@ function extractPriorityFromText(text: string): 'normal' | 'high' | 'urgent' {
 // ─── Clean title helper (shared between calendar & task) ─────────────────────
 
 function cleanTitle(rawTitle: string, transcript: string): string {
-  let title = rawTitle.trim();
-
-  // Remove common command phrases (with optional comma/punctuation after)
+  // First: strip command phrases from the FULL transcript, then use that as
+  // the base title. This handles cases like "Set a reminder, call wife in two
+  // minutes" where pickPrimaryClause splits on comma and loses the command part.
+  let fullCleaned = transcript.trim();
   const commandPatterns = [
     /^(create|add|make|set|new|put)\s+(a\s+)?(calendar\s+)?(entry|event|appointment|reminder|task|subtask|todo)?[,.]?\s*/i,
     /^calendar\s+entry[,.]?\s*/i,
     /^(أضف|أنشئ|سجل|اعمل)\s+(موعد|حدث|تذكير|مهمة)?[,.]?\s*/i,
-    /^(create|add|new|set)\s+(task|reminder|todo)[,.]?\s*/i,
+    /^(create|add|new|set)\s+(a\s+)?(task|reminder|todo)[,.]?\s*/i,
     /^(remind\s+me\s+(to|about)?)[,.]?\s*/i,
     /^(ذكرني\s*(بـ?|أن)?)[,.]?\s*/i,
-    /^(set\s+(the\s+)?reminder\s*(to|for)?)[,.]?\s*/i,
+    /^(set\s+(the\s+|a\s+)?reminder\s*(to|for)?)[,.]?\s*/i,
+    /^(I'll remind you\s+(to)?)[,.]?\s*/i,
   ];
+  for (const pattern of commandPatterns) {
+    fullCleaned = fullCleaned.replace(pattern, '');
+  }
+  // Use the cleaned full transcript as the title base (better than rawTitle
+  // which may be a fragment from pickPrimaryClause that lost context)
+  let title = fullCleaned.trim() || rawTitle.trim();
+
+  // Run command patterns again on the title in case rawTitle was used as fallback
   for (const pattern of commandPatterns) {
     title = title.replace(pattern, '');
   }
 
-  // Remove relative time prefixes from title: "in 5 minutes ..." / "after 10 min ..." / "بعد 5 دقائق ..."
-  title = title.replace(/^\s*(in|after)\s+\d{1,3}\s*(minute|minutes|min|mins)\s*/i, '');
-  title = title.replace(/^\s*(at)\s+\d{1,3}\s*(minute|minutes|min|mins)\s*/i, '');
-  title = title.replace(/^\s*(in|after|at)\s+(one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty)\s+minutes?\s*/i, '');
-  title = title.replace(/^\s*بعد\s+\d{1,3}\s*دقائق?\s*/i, '');
+  // Remove relative time phrases from title ANYWHERE: "in 5 minutes" / "after 10 min" / "بعد 5 دقائق"
+  title = title.replace(/\b(in|after)\s+\d{1,3}\s*(minute|minutes|min|mins)\b/gi, '');
+  title = title.replace(/\b(in|after|at)\s+(one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty)\s+minutes?\b/gi, '');
+  title = title.replace(/\bبعد\s+\d{1,3}\s*دقائق?\b/gi, '');
+  title = title.replace(/\bبعد\s+(خمس|عشر|عشرة|ربع ساعة|نص ساعة)\s*(?:دقائق?)?\b/gi, '');
   // If the user said "... at 5 minutes" (common speech mistake), strip it wherever it appears.
   title = title.replace(/\b(?:at)\s+\d{1,3}\s*(?:minute|minutes|min|mins)\b/gi, '');
   title = title.replace(/\b(?:at)\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty)\s+minutes?\b/gi, '');
@@ -558,6 +568,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
   const streamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const intentionalSpeechRef = useRef(false);
+  const allowRemoteAudioRef = useRef(false);
   const greetingDoneRef = useRef(false);
   const tzRef = useRef<string>('');
   const localNowIsoRef = useRef<string>('');
@@ -574,6 +585,14 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
   const voiceStateRef = useRef<VoiceState>('idle');
   const audioContextRef = useRef<AudioContext | null>(null);
   const waitingForGreetingEndRef = useRef(false);
+
+  const setRemoteAudioMuted = useCallback((muted: boolean) => {
+    allowRemoteAudioRef.current = !muted;
+    if (audioRef.current) {
+      audioRef.current.muted = muted;
+      audioRef.current.volume = muted ? 0 : 1;
+    }
+  }, []);
 
   // ─── Unlock Audio (iOS requires user gesture) ────────────────────────────
 
@@ -686,10 +705,19 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
           
           intentionalSpeechRef.current = true;
           setAiTranscript('');
+
+          // Allow audio playback ONLY for our intentional confirmation line
+          setRemoteAudioMuted(false);
+
+          // Cancel any auto-response that may have started despite pre-silence
+          try { dcRef.current.send(JSON.stringify({ type: 'response.cancel' })); } catch {}
           
+          // Re-enable audio modality (was set to text-only in stopListening)
+          // and give the AI our exact confirmation script
           dcRef.current.send(JSON.stringify({
             type: 'session.update',
             session: {
+              modalities: ['text', 'audio'],
               instructions: `Say EXACTLY this and nothing else: "${confirmMsg}"`
             }
           }));
@@ -719,6 +747,10 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
       case 'output_audio_buffer.stopped': {
         // This fires when the AI audio actually finishes playing on the client
         console.log('[VoiceAssistant] Audio playback stopped (client)');
+
+        // Always re-mute remote audio after any playback finishes
+        setRemoteAudioMuted(true);
+
         if (waitingForGreetingEndRef.current) {
           waitingForGreetingEndRef.current = false;
           greetingDoneRef.current = true;
@@ -749,22 +781,26 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
             }
           }, 4000);
         }
-        
-        // Only kill follow-up responses if this was NOT an intentional speech (greeting or confirmation)
-        if (!wasIntentionalSpeech) {
-          intentionalSpeechRef.current = false;
-          try {
-            if (dcRef.current?.readyState === 'open') {
-              dcRef.current.send(JSON.stringify({ type: 'response.cancel' }));
-              dcRef.current.send(JSON.stringify({
-                type: 'session.update',
-                session: {
-                  instructions: 'Do NOT speak. Do NOT respond. Only transcribe audio input silently. Say absolutely nothing.',
-                }
-              }));
-            }
-          } catch {}
-        }
+
+        // After ANY response completes, ALWAYS silence the AI to prevent chatbot behavior.
+        // The AI must never auto-respond to user audio — it only speaks when we explicitly
+        // send a "Say EXACTLY this" instruction.
+        intentionalSpeechRef.current = false;
+
+        // Safety: mute remote audio to hard-block any unexpected speech.
+        setRemoteAudioMuted(true);
+
+        try {
+          if (dcRef.current?.readyState === 'open') {
+            dcRef.current.send(JSON.stringify({ type: 'response.cancel' }));
+            dcRef.current.send(JSON.stringify({
+              type: 'session.update',
+              session: {
+                instructions: 'Do NOT speak. Do NOT respond. Only transcribe audio input silently. Say absolutely nothing.',
+              }
+            }));
+          }
+        } catch {}
         break;
       }
 
@@ -809,8 +845,9 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
       pc.ontrack = (event) => {
         if (audioRef.current && event.streams[0]) {
           audioRef.current.srcObject = event.streams[0];
-          audioRef.current.muted = false;
-          audioRef.current.volume = 1;
+          // Hard default: remote audio is muted unless we explicitly allow it.
+          audioRef.current.muted = true;
+          audioRef.current.volume = 0;
           audioRef.current.play().catch(() => {});
         }
       };
@@ -932,11 +969,15 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
         setAiTranscript('');
         setVoiceState('greeting');
         intentionalSpeechRef.current = true;
+
+        // Allow audio playback ONLY for our intentional greeting line
+        setRemoteAudioMuted(false);
         
         // Send voice greeting via OpenAI Realtime
         dcRef.current!.send(JSON.stringify({
           type: 'session.update',
           session: {
+            modalities: ['text', 'audio'],
             instructions: t(
               `Say EXACTLY this and nothing else: "${greeting}"`,
               `قل بالضبط هذا ولا شيء آخر: "${greeting}"`
@@ -993,7 +1034,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
     setTranscript('');
     setExtractedEntry(null);
     setVoiceState('listening');
-  }, [setVoiceState]);
+  }, [setRemoteAudioMuted, setVoiceState]);
 
   const cancelListening = useCallback(() => {
     holdCanceledRef.current = true;
@@ -1024,10 +1065,27 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
     // Immediately move to thinking for smoother UX and to prevent re-entry
     setVoiceState('thinking');
 
-    // With turn_detection=null, we must manually commit the audio buffer
+    // CRITICAL: Pre-silence the AI BEFORE committing the audio buffer.
+    // Without this, OpenAI auto-generates a spoken response to the user's
+    // audio (chatbot behavior). We only want transcription, not conversation.
     if (dcRef.current?.readyState === 'open') {
+      // Hard gate: ensure remote audio playback is muted during user speech + transcription
+      setRemoteAudioMuted(true);
+
+      // Kill any in-flight response first
+      try { dcRef.current.send(JSON.stringify({ type: 'response.cancel' })); } catch {}
+
+      // Tell the AI to shut up — transcribe only
+      dcRef.current.send(JSON.stringify({
+        type: 'session.update',
+        session: {
+          instructions: 'Do NOT speak. Do NOT respond. Do NOT generate any audio output. Only transcribe the audio input silently. Say absolutely nothing. You are NOT a chatbot. You are NOT a conversational assistant. NEVER reply to user audio.',
+          modalities: ['text'],
+        }
+      }));
+
       didCommitRef.current = true;
-      console.log('[VoiceAssistant] Committing audio buffer...');
+      console.log('[VoiceAssistant] Pre-silenced AI, committing audio buffer...');
       dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
     }
 
@@ -1053,7 +1111,8 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
     if (!micBtnRef.current) return;
 
     const rect = micBtnRef.current.getBoundingClientRect();
-    const outside = e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom;
+    const margin = 40; // generous margin so small finger movements don't cancel
+    const outside = e.clientX < rect.left - margin || e.clientX > rect.right + margin || e.clientY < rect.top - margin || e.clientY > rect.bottom + margin;
     if (outside && !holdCanceledRef.current) {
       cancelListening();
     }
@@ -1371,7 +1430,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                         onPointerMove={(e) => { handleHoldMove(e); }}
                         onPointerUp={(e) => { handleHoldEnd(e); }}
                         onPointerCancel={(e) => { handleHoldCancel(e); }}
-                        onPointerLeave={(e) => { handleHoldMove(e); }}
                         onContextMenu={(e) => e.preventDefault()}
                         aria-label={t('Hold to speak', 'اضغط مع الاستمرار للتحدث')}
                         className="relative z-10 rounded-full h-20 w-20 flex items-center justify-center select-none"
@@ -1458,7 +1516,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                         onPointerMove={(e) => { handleHoldMove(e); }}
                         onPointerUp={(e) => { handleHoldEnd(e); }}
                         onPointerCancel={(e) => { handleHoldCancel(e); }}
-                        onPointerLeave={(e) => { handleHoldMove(e); }}
                         onContextMenu={(e) => e.preventDefault()}
                         aria-label={t('Release to stop', 'ارفع إصبعك للتوقف')}
                         className="relative z-10 rounded-full h-20 w-20 flex items-center justify-center select-none"

@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import {
   Upload,
@@ -94,6 +94,14 @@ const dataUrlToBlob = async (dataUrl: string): Promise<Blob> => {
   return await res.blob();
 };
 
+const cleanSignedUrl = (url: string): string => {
+  try {
+    return decodeURI(url).trim();
+  } catch {
+    return url.replace(/%20/g, ' ').trim();
+  }
+};
+
 export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const { language } = useTheme();
   const { user } = useAuth();
@@ -125,39 +133,33 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
   const invokePromptAmpWithBetterErrors = useCallback(
     async (body: Record<string, unknown>) => {
-      const { data, error } = await supabase.functions.invoke('prompt-amp', { body });
-      if (!error) return { data };
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) throw new Error('Not authenticated');
 
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const accessToken = sessionData?.session?.access_token;
-        const supabaseUrl = (supabase as any)?.supabaseUrl as string | undefined;
-        const supabaseKey = (supabase as any)?.supabaseKey as string | undefined;
+      const supabaseUrl = SUPABASE_URL;
+      const supabaseKey = SUPABASE_ANON_KEY;
 
-        if (accessToken && supabaseUrl && supabaseKey) {
-          const resp = await fetch(`${supabaseUrl}/functions/v1/prompt-amp`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${accessToken}`,
-              apikey: supabaseKey,
-            },
-            body: JSON.stringify(body),
-          });
-          const txt = await resp.text().catch(() => '');
-          if (!resp.ok && txt) {
-            throw new Error(txt);
-          }
-          if (resp.ok) {
-            const json = await resp.json().catch(() => null);
-            return { data: json };
-          }
-        }
-      } catch (fetchErr: any) {
-        throw new Error(fetchErr?.message || error.message);
+      const resp = await fetch(`${supabaseUrl}/functions/v1/prompt-amp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          apikey: supabaseKey,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const txt = await resp.text().catch(() => '');
+      if (!resp.ok) {
+        throw new Error(txt || `prompt-amp returned ${resp.status}`);
       }
 
-      throw new Error(error.message || 'Unknown error');
+      try {
+        return { data: JSON.parse(txt) };
+      } catch {
+        throw new Error('Invalid JSON from prompt-amp');
+      }
     },
     []
   );
@@ -206,7 +208,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             .createSignedUrl(storagePath, 60 * 60 * 6);
           if (signedErr) throw new Error(`Signed URL failed: ${signedErr.message}`);
           if (!signedData?.signedUrl) throw new Error('Signed URL missing');
-          ampImageUrl = signedData.signedUrl.trim();
+          ampImageUrl = cleanSignedUrl(signedData.signedUrl);
           console.log('[AIVideomaker] Amp upload successful:', ampImageUrl);
         } catch (prepErr: any) {
           console.error('[AIVideomaker] Amp prepare error:', prepErr);
@@ -529,7 +531,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             .createSignedUrl(storagePath, 60 * 60 * 6);
           if (signedErr) throw new Error(`Signed URL failed: ${signedErr.message}`);
           if (!signedData?.signedUrl) throw new Error('Signed URL missing');
-          imageUrl = signedData.signedUrl.trim();
+          imageUrl = cleanSignedUrl(signedData.signedUrl);
           console.log('[AIVideomaker] Upload successful, URL:', imageUrl);
         } catch (prepErr: any) {
           console.error('[AIVideomaker] Prepare image error:', prepErr);

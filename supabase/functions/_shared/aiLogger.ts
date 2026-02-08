@@ -89,6 +89,8 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   "claude-3-5-sonnet-20241022": { input: 3.00, output: 15.00 },
   "claude-3-5-sonnet": { input: 3.00, output: 15.00 },
   "claude-3-haiku": { input: 0.25, output: 1.25 },
+  "claude-3-5-haiku-latest": { input: 1.00, output: 5.00 },
+  "claude-3-5-haiku-20241022": { input: 1.00, output: 5.00 },
   
   // ─── Google/Gemini ───
   "gemini-2.0-flash": { input: 0.075, output: 0.30 },

@@ -12,6 +12,10 @@ const corsHeaders = {
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+
+// Claude Haiku - cheapest cost-effective Claude model for text generation
+const CLAUDE_MODEL = 'claude-3-5-haiku-latest';
 
 // Content type configurations
 const contentConfig = {
@@ -115,12 +119,12 @@ serve(async (req) => {
     console.log("🎯 Text Generator: Request method:", req.method);
     console.log("🎯 Text Generator: Request headers:", Object.fromEntries(req.headers.entries()));
     
-    if (!OPENAI_API_KEY && !DEEPSEEK_API_KEY) {
+    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY && !DEEPSEEK_API_KEY) {
       console.error("🚨 Text Generator: No AI provider keys found in environment");
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: "No AI provider configured. Please add OPENAI_API_KEY or DEEPSEEK_API_KEY to Supabase Edge Function Secrets." 
+          error: "No AI provider configured. Please add ANTHROPIC_API_KEY, OPENAI_API_KEY, or DEEPSEEK_API_KEY to Supabase Edge Function Secrets." 
         }),
         { 
           status: 500, 
@@ -138,7 +142,7 @@ serve(async (req) => {
       requestBody = {};
     }
 
-    const { prompt, mode, language, languageVariant, messageAnalysis, modelPreference, temperature, contentType, length, replyLength, tone, register, image, extractTarget, webSearch } = requestBody;
+    const { prompt, mode, language, languageVariant, messageAnalysis, modelPreference: _modelPreference, temperature: _temperature, contentType, length, replyLength, tone, register, emojis, image, extractTarget, webSearch } = requestBody;
 
     console.log("🎯 Request details:", { 
       promptLength: prompt?.length || 0, 
@@ -149,6 +153,9 @@ serve(async (req) => {
       length,
       replyLength,
       tone,
+      register,
+      languageVariant,
+      emojis,
       hasImage: !!image,
       extractTarget,
       webSearch: !!webSearch
@@ -373,26 +380,21 @@ Return ONLY the JSON, no additional text.`;
     }
 
     console.log("🎯 Text Generator: Calling AI provider for text generation");
-    console.log("🎯 Mode:", mode);
-    console.log("🎯 Language:", language);
-    console.log("🎯 Prompt length:", prompt.length);
-    console.log("🎯 Requested modelPreference:", modelPreference);
-    console.log("🎯 Requested temperature:", temperature);
+    console.log("🎯 Mode:", mode, "| Language:", language, "| Prompt length:", prompt.length);
+    console.log("🎯 Structured fields:", { tone, register, languageVariant, emojis, contentType });
 
-    const systemPrompt = getSystemPrompt(language, languageVariant);
-    const genParams = getGenerationParams(contentType, tone, length || 'medium', register);
+    const systemPrompt = buildSystemPrompt(language, { tone, register, languageVariant, emojis, contentType });
+    const genParams = getGenerationParams(contentType, tone, length || replyLength || 'medium', register);
     console.log("🎯 Generation parameters:", genParams);
 
     let generatedText: string | undefined;
 
-    // If webSearch is enabled, use OpenAI Responses API with web_search tool
+    // ── Web Search: OpenAI gpt-4.1-mini (Responses API) ──
     if (webSearch && OPENAI_API_KEY) {
       try {
-        console.log("🎯 Text Generator: Web Search enabled - using OpenAI Responses API");
+        console.log("🎯 Text Generator: Web Search enabled - using OpenAI gpt-4.1-mini Responses API");
         const startWebSearch = Date.now();
         
-        // Build the enhanced prompt that instructs to ADD facts, not replace content
-        // This prompt is designed to produce high-quality, fact-rich content with real data
         const webSearchPrompt = language === 'ar'
           ? `أنت كاتب محترف. المستخدم يريد محتوى عالي الجودة عن الموضوع التالي.
 
@@ -438,35 +440,25 @@ ${prompt}`;
         });
 
         const webSearchDuration = Date.now() - startWebSearch;
-        console.log(`🎯 Text Generator: Web Search request completed in ${webSearchDuration}ms with status ${webSearchResponse.status}`);
+        console.log(`🎯 Text Generator: Web Search completed in ${webSearchDuration}ms, status ${webSearchResponse.status}`);
 
         if (webSearchResponse.ok) {
           const webSearchResult = await webSearchResponse.json();
-          console.log("🎯 Text Generator: Web Search raw response keys:", Object.keys(webSearchResult));
-          
-          // Extract the output text from Responses API
           const outputText = webSearchResult.output_text || webSearchResult.output?.[0]?.content?.[0]?.text || '';
           
-          // Extract sources/citations from the response
-          // OpenAI Responses API returns citations in output array with type "web_search_call"
           const sources: Array<{ title: string; url: string }> = [];
           if (Array.isArray(webSearchResult.output)) {
             for (const item of webSearchResult.output) {
-              // Look for web_search_call results which contain the search results
               if (item.type === 'web_search_call' && Array.isArray(item.search_results)) {
                 for (const result of item.search_results) {
-                  if (result.url && result.title) {
-                    sources.push({ title: result.title, url: result.url });
-                  }
+                  if (result.url && result.title) sources.push({ title: result.title, url: result.url });
                 }
               }
-              // Also check for message content with annotations (inline citations)
               if (item.type === 'message' && Array.isArray(item.content)) {
                 for (const contentItem of item.content) {
                   if (contentItem.type === 'output_text' && Array.isArray(contentItem.annotations)) {
                     for (const annotation of contentItem.annotations) {
                       if (annotation.type === 'url_citation' && annotation.url && annotation.title) {
-                        // Avoid duplicates
                         if (!sources.some(s => s.url === annotation.url)) {
                           sources.push({ title: annotation.title, url: annotation.url });
                         }
@@ -478,11 +470,18 @@ ${prompt}`;
             }
           }
           
-          console.log("🎯 Text Generator: Web Search extracted sources:", sources.length);
-          
           if (outputText) {
-            generatedText = outputText;
-            console.log("🎯 Text Generator: Web Search generated text, length:", generatedText?.length || 0);
+            generatedText = sanitizeEmDashes(outputText);
+
+            await logAIFromRequest(req, {
+              functionName: "text-generator",
+              provider: "openai",
+              model: "gpt-4.1-mini",
+              inputText: prompt,
+              outputText: generatedText,
+              durationMs: webSearchDuration,
+              status: "success"
+            });
 
             return new Response(
               JSON.stringify({
@@ -499,21 +498,87 @@ ${prompt}`;
               { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           } else {
-            console.warn("🎯 Text Generator: Web Search returned no content, falling back to standard generation");
+            console.warn("🎯 Text Generator: Web Search returned no content, falling back");
           }
         } else {
           const errTxt = await webSearchResponse.text();
           console.warn("🎯 Text Generator: Web Search API error, falling back:", { status: webSearchResponse.status, error: errTxt });
         }
       } catch (e) {
-        console.warn("🎯 Text Generator: Web Search request threw error, falling back:", e);
+        console.warn("🎯 Text Generator: Web Search threw error, falling back:", e);
       }
     }
 
-    // Primary: OpenAI (gpt-4.1-mini) - standard generation without web search
+    // ── Primary: Claude Haiku (non-web-search) ──
+    if (ANTHROPIC_API_KEY && !generatedText) {
+      try {
+        console.log(`🎯 Text Generator: PRIMARY - Claude (${CLAUDE_MODEL})`);
+        const startClaude = Date.now();
+        const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: CLAUDE_MODEL,
+            system: systemPrompt,
+            messages: [
+              { role: "user", content: prompt }
+            ],
+            temperature: genParams.temperature,
+            max_tokens: genParams.max_tokens,
+          }),
+        });
+        const claudeDuration = Date.now() - startClaude;
+        console.log(`🎯 Text Generator: Claude completed in ${claudeDuration}ms, status ${claudeResponse.status}`);
+
+        if (claudeResponse.ok) {
+          const claudeResult = await claudeResponse.json();
+          const content = claudeResult.content?.[0]?.text || "";
+          if (content) {
+            generatedText = sanitizeEmDashes(content);
+            console.log("🎯 Text Generator: Claude success, length:", generatedText?.length || 0);
+
+            await logAIFromRequest(req, {
+              functionName: "text-generator",
+              provider: "anthropic",
+              model: CLAUDE_MODEL,
+              inputText: prompt,
+              outputText: generatedText,
+              durationMs: claudeDuration,
+              status: "success"
+            });
+
+            return new Response(
+              JSON.stringify({
+                success: true,
+                generatedText,
+                mode,
+                language,
+                modelUsed: CLAUDE_MODEL,
+                temperatureUsed: genParams.temperature,
+                contentType: contentType || null
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          } else {
+            console.warn("🎯 Text Generator: Claude returned no content");
+          }
+        } else {
+          const errTxt = await claudeResponse.text();
+          console.warn("🎯 Text Generator: Claude API error:", { status: claudeResponse.status, error: errTxt });
+        }
+      } catch (e) {
+        console.warn("🎯 Text Generator: Claude threw error:", e);
+      }
+    }
+
+    // ── Fallback 1: OpenAI gpt-4.1-mini ──
     if (OPENAI_API_KEY && !generatedText) {
       try {
-        console.log("🎯 Text Generator: Attempting OpenAI", genParams.model);
+        console.log("🎯 Text Generator: FALLBACK 1 - OpenAI gpt-4.1-mini");
         const startOpenai = Date.now();
         const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
@@ -522,7 +587,7 @@ ${prompt}`;
             "Authorization": `Bearer ${OPENAI_API_KEY}`,
           },
           body: JSON.stringify({
-            model: genParams.model,
+            model: 'gpt-4.1-mini',
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: prompt }
@@ -532,15 +597,22 @@ ${prompt}`;
           }),
         });
         const openaiDuration = Date.now() - startOpenai;
-        console.log(`🎯 Text Generator: OpenAI request completed in ${openaiDuration}ms with status ${openaiResponse.status}`);
 
         if (openaiResponse.ok) {
           const openaiResult = await openaiResponse.json();
           const content = openaiResult.choices?.[0]?.message?.content || "";
           if (content) {
-            generatedText = content;
-            const modelUsed = genParams.model;
-            console.log("🎯 Text Generator: Successfully generated text, length:", generatedText?.length || 0, "model:", modelUsed);
+            generatedText = sanitizeEmDashes(content);
+
+            await logAIFromRequest(req, {
+              functionName: "text-generator",
+              provider: "openai",
+              model: "gpt-4.1-mini",
+              inputText: prompt,
+              outputText: generatedText,
+              durationMs: openaiDuration,
+              status: "success"
+            });
 
             return new Response(
               JSON.stringify({
@@ -548,28 +620,26 @@ ${prompt}`;
                 generatedText,
                 mode,
                 language,
-                modelUsed,
+                modelUsed: 'gpt-4.1-mini',
                 temperatureUsed: genParams.temperature,
                 contentType: contentType || null
               }),
               { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
-          } else {
-            console.warn("🎯 Text Generator: OpenAI returned no content");
           }
         } else {
           const errTxt = await openaiResponse.text();
-          console.warn("🎯 Text Generator: OpenAI API error:", { status: openaiResponse.status, statusText: openaiResponse.statusText, error: errTxt });
+          console.warn("🎯 Text Generator: OpenAI fallback error:", errTxt);
         }
       } catch (e) {
-        console.warn("🎯 Text Generator: OpenAI request threw error:", e);
+        console.warn("🎯 Text Generator: OpenAI fallback threw:", e);
       }
     }
 
-    // Fallback: Gemini (only if OpenAI failed/unavailable)
+    // ── Fallback 2: Gemini ──
     if (GEMINI_API_KEY && !generatedText) {
       try {
-        console.log("🎯 Text Generator: Falling back to Gemini (gemini-2.5-flash-lite)");
+        console.log("🎯 Text Generator: FALLBACK 2 - Gemini gemini-2.5-flash-lite");
         const startGemini = Date.now();
         const result = await generateGemini(
           'gemini-2.5-flash-lite',
@@ -579,12 +649,9 @@ ${prompt}`;
           []
         );
         const geminiDuration = Date.now() - startGemini;
-        console.log(`🎯 Text Generator: Gemini request completed in ${geminiDuration}ms`);
-
         const content = result?.candidates?.[0]?.content?.parts?.[0]?.text || "";
         if (content) {
-          generatedText = content;
-          console.log("🎯 Text Generator: Successfully generated text, length:", generatedText?.length || 0, "model: gemini-2.5-flash-lite");
+          generatedText = sanitizeEmDashes(content);
 
           await logAIFromRequest(req, {
             functionName: "text-generator",
@@ -608,20 +675,18 @@ ${prompt}`;
             }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
-        } else {
-          console.warn("🎯 Text Generator: Gemini returned no content");
         }
       } catch (e) {
-        console.warn("🎯 Text Generator: Gemini request threw error:", e);
+        console.warn("🎯 Text Generator: Gemini fallback threw:", e);
       }
     }
 
-    // Fallback to DeepSeek if needed and available
-    if (!OPENAI_API_KEY || (!generatedText && DEEPSEEK_API_KEY)) {
+    // ── Fallback 3: DeepSeek ──
+    if (DEEPSEEK_API_KEY && !generatedText) {
       try {
-        console.log("🎯 Text Generator: Falling back to DeepSeek (deepseek-chat)");
-        const startDeepseek = Date.now();
-        const deepseekResponse = await fetch("https://api.deepseek.com/v1/chat/completions", {
+        console.log("🎯 Text Generator: FALLBACK 3 - DeepSeek");
+        const startDs = Date.now();
+        const dsResp = await fetch("https://api.deepseek.com/v1/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -637,38 +702,29 @@ ${prompt}`;
             max_tokens: genParams.max_tokens,
           }),
         });
-        const deepseekDuration = Date.now() - startDeepseek;
-        console.log(`🎯 Text Generator: DeepSeek request completed in ${deepseekDuration}ms with status ${deepseekResponse.status}`);
-
-        if (deepseekResponse.ok) {
-          const result = await deepseekResponse.json();
+        const dsDuration = Date.now() - startDs;
+        console.log(`🎯 Text Generator: DeepSeek completed in ${dsDuration}ms`);
+        if (dsResp.ok) {
+          const result = await dsResp.json();
           const content = result.choices?.[0]?.message?.content || "";
           if (content) {
-            generatedText = content;
-            const modelUsed = 'deepseek-chat';
-            console.log("🎯 Text Generator: Successfully generated text, length:", generatedText?.length || 0, "model:", modelUsed);
-
+            generatedText = sanitizeEmDashes(content);
             return new Response(
               JSON.stringify({
                 success: true,
                 generatedText,
                 mode,
                 language,
-                modelUsed,
+                modelUsed: 'deepseek-chat',
                 temperatureUsed: genParams.temperature,
                 contentType: contentType || null
               }),
               { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
-          } else {
-            console.error("🎯 Text Generator: No text generated from DeepSeek API", JSON.stringify(result));
           }
-        } else {
-          const errorText = await deepseekResponse.text();
-          console.error("🎯 Text Generator: DeepSeek API error:", { status: deepseekResponse.status, statusText: deepseekResponse.statusText, error: errorText });
         }
       } catch (e) {
-        console.error("🎯 Text Generator: DeepSeek request threw error:", e);
+        console.warn("🎯 Text Generator: DeepSeek fallback threw:", e);
       }
     }
 
@@ -691,11 +747,10 @@ ${prompt}`;
       stack: err.stack
     });
     
-    // Log failed AI usage
     await logAIFromRequest(req, {
       functionName: "text-generator",
-      provider: "gemini",
-      model: "gemini-2.5-flash-lite",
+      provider: "anthropic",
+      model: CLAUDE_MODEL,
       status: "error",
       errorMessage: err.message
     });
@@ -713,61 +768,117 @@ ${prompt}`;
   }
 });
 
-// System prompt for text generation with language variant enforcement
-function getSystemPrompt(language: string, languageVariant?: string): string {
+// ============================================================================
+// Em-dash sanitation: guaranteed removal from all outputs
+// ============================================================================
+function sanitizeEmDashes(text: string): string {
+  return text
+    .replace(/\u2014/g, ', ')   // em-dash → comma
+    .replace(/\u2013/g, ', ')   // en-dash → comma
+    .replace(/ , /g, ', ')      // clean double spaces around comma
+    .replace(/^, /gm, '');      // remove leading comma at line start
+}
+
+// ============================================================================
+// System prompt builder: uses structured fields from frontend
+// ============================================================================
+interface StructuredFields {
+  tone?: string;
+  register?: string;
+  languageVariant?: string;
+  emojis?: string;
+  contentType?: string;
+}
+
+function buildSystemPrompt(language: string, fields: StructuredFields): string {
   const isArabic = language === 'ar';
+  const { tone, register, languageVariant, emojis, contentType } = fields;
 
-  // Normalize variant for robust matching (e.g., "Canadian English", "en-CA", "CA")
-  const v = (languageVariant || '').toString().trim().toLowerCase();
-
-  let variantLine = '';
-  if (!isArabic) {
-    if (v.includes('canadian') || v.includes('en-ca') || v === 'ca' || v.includes('canada')) {
-      variantLine = 'Use Canadian English spelling and phrasing (e.g., colour, centre, cheque, licence, defence). Prefer metric units.';
-    } else if (v.includes('us') || v.includes('en-us') || v.includes('american')) {
-      variantLine = 'Use US English spelling and phrasing (e.g., color, center, check, license, defense).';
-    } else if (v.includes('uk') || v.includes('en-gb') || v.includes('british')) {
-      variantLine = 'Use UK English spelling and phrasing (e.g., colour, centre, cheque, licence, defence).';
-    } else if (v.includes('aus') || v.includes('au') || v.includes('australian') || v.includes('en-au')) {
-      variantLine = 'Use Australian English spelling and phrasing. Prefer metric units.';
-    }
-  } else {
-    if (v.includes('msa') || v.includes('modern standard') || v.includes('فصحى') || v.includes('fusha')) {
-      variantLine = 'استخدم العربية الفصحى MSA.';
-    } else if (v.includes('gulf') || v.includes('khaleeji') || v.includes('الخليج') || v.includes('خليج')) {
-      variantLine = 'استخدم العربية الخليجية بأسلوب طبيعي ومفهوم.';
-    }
-  }
-
+  // ── Base identity ──
   const basePrompt = isArabic
     ? 'أنت مساعد ذكي متخصص في إنشاء النصوص عالية الجودة. مهمتك هي إنشاء محتوى واضح ومفيد ومتسق بناءً على طلب المستخدم.'
     : "You are an intelligent assistant specialized in generating high-quality text content. Your task is to create clear, helpful, and coherent content based on the user's request.";
 
-  const guidelines = isArabic
+  // ── Hard formatting rules ──
+  const formatRules = isArabic
     ? `
-المبادئ التوجيهية:
+قواعد التنسيق (إلزامية):
 - اكتب نصاً واضحاً ومباشراً
 - تجنب استخدام النجوم (*) للتنسيق
-- لا تستخدم أبداً شرطة إم (—) ولا الشرطة العادية (-)
-- اتبع بدقة نوع المحتوى، النبرة، والطول المطلوب
-- حافظ على الاتساق في الأسلوب
-- قدم محتوى مفيداً وذا صلة
-- لا تضع افتراضات غير ضرورية
+- ممنوع منعاً باتاً استخدام شرطة إم (—) أو شرطة إن (–). لا تستخدمها أبداً تحت أي ظرف.
 - ركز على إنشاء النص فقط`
     : `
-Guidelines:
+Formatting rules (MANDATORY):
 - Write clear and direct text
 - Do not use asterisks (*) for formatting
-- NEVER use em-dashes (—) and hyphens (-)
-- Strictly follow the requested Content Type, Tone, and Length
-- Maintain consistency in style
-- Provide helpful and relevant content
-- Do not make unnecessary assumptions
+- ABSOLUTELY NEVER use em-dashes (—) or en-dashes (–). Not even once. Use commas, periods, or semicolons instead.
 - Focus only on text generation`;
 
-  const variantBlock = variantLine
-    ? (isArabic ? `\nتعليمات المتغير اللغوي: ${variantLine}` : `\nLanguage variant instruction: ${variantLine}`)
+  // ── Structured constraints block (from dropdown selections) ──
+  const constraints: string[] = [];
+
+  // Content type
+  if (contentType) {
+    const ctName = contentType.replace(/_/g, ' ');
+    constraints.push(isArabic ? `نوع المحتوى: ${ctName}` : `Content type: ${ctName}`);
+  }
+
+  // Tone
+  if (tone) {
+    if (tone === 'human') {
+      constraints.push(isArabic
+        ? 'النبرة: بشري طبيعي. اكتب وكأنك إنسان حقيقي. ممنوع أي أسلوب ذكاء اصطناعي. استخدم كلمات يومية بسيطة وتدفق طبيعي.'
+        : 'Tone: Human (natural). Write like a real person. Never mention AI, models, or assistants. Use simple everyday wording and natural flow. Avoid the overly-polished AI vibe.');
+    } else {
+      constraints.push(isArabic ? `النبرة: ${tone}` : `Tone: ${tone}`);
+    }
+  }
+
+  // Register
+  if (register) {
+    const regLabels: Record<string, string> = {
+      formal: isArabic ? 'رسمي' : 'Formal',
+      neutral: isArabic ? 'محايد' : 'Neutral',
+      casual: isArabic ? 'غير رسمي' : 'Casual',
+      slang: isArabic ? 'عامي' : 'Slang',
+      poetic: isArabic ? 'شعري / أدبي' : 'Poetic / Lyrical',
+      gen_z: isArabic ? 'أسلوب جيل زد' : 'Gen Z style',
+      business_formal: isArabic ? 'رسمي للأعمال' : 'Business Formal',
+      executive_brief: isArabic ? 'موجز تنفيذي' : 'Executive Brief',
+    };
+    constraints.push(isArabic ? `السجل اللغوي: ${regLabels[register] || register}` : `Register: ${regLabels[register] || register}`);
+  }
+
+  // Language variant
+  if (languageVariant) {
+    const v = languageVariant.toLowerCase();
+    if (!isArabic) {
+      if (v.includes('us')) constraints.push('Language variant: US English (color, center, check).');
+      else if (v.includes('uk')) constraints.push('Language variant: UK English (colour, centre, cheque).');
+      else if (v.includes('canadian')) constraints.push('Language variant: Canadian English (colour, centre). Prefer metric.');
+      else if (v.includes('australian')) constraints.push('Language variant: Australian English. Prefer metric.');
+    } else {
+      if (v.includes('msa')) constraints.push('المتغير اللغوي: العربية الفصحى MSA.');
+      else if (v.includes('gulf')) constraints.push('المتغير اللغوي: العربية الخليجية بأسلوب طبيعي ومفهوم.');
+    }
+  }
+
+  // Emojis
+  if (emojis) {
+    const emojiRules: Record<string, string> = {
+      none: isArabic ? 'الإيموجي: لا تستخدم أي إيموجي.' : 'Emojis: Do NOT use any emojis.',
+      light: isArabic ? 'الإيموجي: استخدم إيموجي قليل جداً (1-2 فقط).' : 'Emojis: Use very few emojis (1-2 max).',
+      rich: isArabic ? 'الإيموجي: استخدم إيموجي بشكل معتدل.' : 'Emojis: Use emojis moderately throughout.',
+      extra: isArabic ? 'الإيموجي: استخدم إيموجي بكثافة.' : 'Emojis: Use emojis heavily and expressively.',
+    };
+    if (emojiRules[emojis]) constraints.push(emojiRules[emojis]);
+  }
+
+  const constraintsBlock = constraints.length > 0
+    ? (isArabic
+      ? `\n\nإعدادات المستخدم (اتبعها بدقة):\n${constraints.map(c => `- ${c}`).join('\n')}`
+      : `\n\nUser settings (follow strictly):\n${constraints.map(c => `- ${c}`).join('\n')}`)
     : '';
 
-  return basePrompt + guidelines + variantBlock;
+  return basePrompt + formatRules + constraintsBlock;
 }

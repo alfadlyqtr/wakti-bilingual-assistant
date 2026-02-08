@@ -475,9 +475,13 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         language,
         modelPreference: modelPreference === 'auto' ? undefined : modelPreference,
         temperature,
-        contentType: modeForRequest === 'compose' ? (contentType === 'auto' ? undefined : contentType) : undefined,
+        contentType: contentType === 'auto' ? undefined : contentType,
         length: modeForRequest === 'compose' ? effectiveLength(length) : undefined,
         replyLength: modeForRequest === 'reply' ? effectiveLength(replyLength) : undefined,
+        tone: tone === 'auto' ? undefined : tone,
+        register: register === 'auto' ? undefined : register,
+        languageVariant: languageVariant === 'auto' ? undefined : languageVariant,
+        emojis: emojis === 'auto' ? undefined : emojis,
         webSearch: useWebSearch,
       };
 
@@ -508,7 +512,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [canGenerate, buildPrompt, activeTab, language, modelPreference, temperature, contentType, length, replyLength, onTextGenerated]);
+  }, [canGenerate, buildPrompt, activeTab, language, modelPreference, temperature, contentType, length, replyLength, tone, register, languageVariant, emojis, onTextGenerated]);
 
   const title = language === 'ar' ? 'منشئ النص الذكي' : 'Smart Text Generator';
 
