@@ -29,6 +29,7 @@ serve(async (req) => {
     const { data: dueReminders, error: fetchError } = await supabase
       .from("notification_history")
       .select("*")
+      .in("type", ["ai_reminder", "doc_expiry", "tr_reminder_due", "tr_task_due"])
       .not("scheduled_for", "is", null)
       .lte("scheduled_for", now)
       .eq("push_sent", false)

@@ -24,6 +24,32 @@ export function isNativelyApp(): boolean {
   );
 }
 
+export function isInNativeApp(): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const NativelyInfo = (window as any).NativelyInfo;
+    if (NativelyInfo) {
+      const info = new NativelyInfo();
+      const browserInfo = info.browserInfo();
+      if (browserInfo && browserInfo.isNativeApp) {
+        return true;
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  if ((window as any).NativelyPurchases || (window as any).NativelyNotifications) {
+    return true;
+  }
+
+  if (window.matchMedia?.('(display-mode: standalone)')?.matches) return true;
+  if ((navigator as any).standalone === true) return true;
+
+  return isNativelyApp();
+}
+
 /**
  * Open URL in external Safari browser (not in-app browser)
  * This is needed for .pkpass files which Safari handles natively

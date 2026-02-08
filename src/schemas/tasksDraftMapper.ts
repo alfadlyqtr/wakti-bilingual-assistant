@@ -150,8 +150,27 @@ const INTENT_PATTERNS: { intent: VoiceIntent; en: string[]; ar: string[] }[] = [
   },
   {
     intent: 'schedule_reminder',
-    en: ['create reminder', 'remind me', 'set reminder', 'add reminder', 'new reminder', 'schedule reminder'],
-    ar: ['أنشئ تذكير', 'ذكرني', 'اضبط تذكير', 'أضف تذكير', 'تذكير جديد'],
+    en: [
+      'create reminder',
+      'remind me',
+      'set reminder',
+      'set the reminder',
+      'set a reminder',
+      'set an reminder',
+      'add reminder',
+      'new reminder',
+      'schedule reminder',
+    ],
+    ar: [
+      'أنشئ تذكير',
+      'ذكرني',
+      'اضبط تذكير',
+      'أضف تذكير',
+      'تذكير جديد',
+      'حط تذكير',
+      'سوّي تذكير',
+      'ضع تذكير',
+    ],
   },
   {
     intent: 'share_task',
@@ -177,6 +196,25 @@ export function detectTRIntent(transcript: string): VoiceIntent | null {
       if (lower.includes(phrase.toLowerCase())) return intent;
     }
   }
+
+  // Heuristic: if the user says "reminder" but not an exact phrase, treat it as a reminder
+  // only when there are clear scheduling cues (time / relative time / date words). This avoids
+  // stealing generic calendar phrases.
+  const hasReminderWord = lower.includes('reminder') || lower.includes('تذكير') || lower.includes('ذكرني');
+  if (hasReminderWord) {
+    const hasTimeCue = /\b\d{1,2}(?::\d{2})?\s*(am|pm|a\.?m\.?|p\.?m\.?)\b/i.test(lower)
+      || /\b\d{1,2}\s*(ص|صباح|صباحاً|صباحا|م|مساء|مساءً|مساءا)\b/i.test(lower)
+      || /\b(in\s+\d+\s*(minute|minutes|min|mins))\b/i.test(lower)
+      || /\b(after\s+\d+\s*(minute|minutes|min|mins))\b/i.test(lower)
+      || /\b(in\s+(one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty)\s+minutes?)\b/i.test(lower)
+      || /\b(بعد\s+\d+\s*دقائق?)\b/.test(lower)
+      || /\b(بعد\s+(خمس|عشر|عشرة|١٠|٥)\s*دقائق?)\b/.test(lower)
+      || /\b(today|tomorrow|tonight|this\s+evening|this\s+morning)\b/i.test(lower)
+      || /\b(اليوم|غدا|غداً|بكرة|بكره|الليلة|مساء|صباح)\b/.test(lower);
+
+    if (hasTimeCue) return 'schedule_reminder';
+  }
+
   return null;
 }
 

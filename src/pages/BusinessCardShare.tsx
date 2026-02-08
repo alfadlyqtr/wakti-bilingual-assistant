@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { Check, UserPlus, ArrowLeft, Share2, Download } from 'lucide-react';
+import InAppWaktiEscape from '@/components/public/InAppWaktiEscape';
 
 interface BusinessCardData {
   firstName: string;
@@ -414,6 +415,7 @@ export default function BusinessCardShare() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-background via-background to-blue-500/5">
+      <InAppWaktiEscape language="en" containerClassName="max-w-md" />
       {/* Header: Logo top-left only */}
       <header className="flex items-center px-4 py-3">
         <a href={appStoreUrl} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">

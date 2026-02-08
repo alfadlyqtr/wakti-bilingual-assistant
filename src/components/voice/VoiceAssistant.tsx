@@ -132,8 +132,55 @@ function parseDateFromText(text: string): { date: string | null; isConfident: bo
 
 // ─── Extract structured data from transcript ────────────────────────────────
 
+function extractRelativeMinutes(textLower: string): number | null {
+  const numeric = textLower.match(/\b(?:in|after|at)\s+(\d{1,3})\s*(?:minute|minutes|min|mins)\b/);
+  if (numeric) return Math.max(1, Math.min(24 * 60, parseInt(numeric[1], 10)));
+
+  const word = textLower.match(/\b(?:in|after|at)\s+(one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty)\s+minutes?\b/);
+  if (word) {
+    const map: Record<string, number> = {
+      one: 1,
+      two: 2,
+      three: 3,
+      four: 4,
+      five: 5,
+      six: 6,
+      seven: 7,
+      eight: 8,
+      nine: 9,
+      ten: 10,
+      fifteen: 15,
+      twenty: 20,
+    };
+    return map[word[1]] ?? null;
+  }
+
+  const arNumeric = textLower.match(/\bبعد\s+(\d{1,3})\s*دقائق?\b/);
+  if (arNumeric) return Math.max(1, Math.min(24 * 60, parseInt(arNumeric[1], 10)));
+
+  const arWord = textLower.match(/\bبعد\s+(خمس|عشرة|عشر|ربع ساعة|نص ساعة)\s*(?:دقائق?)?\b/);
+  if (arWord) {
+    const val = arWord[1];
+    if (val === 'خمس') return 5;
+    if (val === 'عشر' || val === 'عشرة') return 10;
+    if (val === 'ربع ساعة') return 15;
+    if (val === 'نص ساعة') return 30;
+  }
+
+  return null;
+}
+
 function extractTimeFromText(text: string): { time: string | null; isConfident: boolean } {
   const lower = text.toLowerCase();
+
+  // Relative time (used primarily for reminders): "in 5 minutes" / "بعد 5 دقائق"
+  // We parse this here so the confirmation UI can still show the time.
+  const relMinutes = extractRelativeMinutes(lower);
+  if (relMinutes) {
+    const now = new Date();
+    const future = new Date(now.getTime() + relMinutes * 60 * 1000);
+    return { time: `${String(future.getHours()).padStart(2, '0')}:${String(future.getMinutes()).padStart(2, '0')}`, isConfident: true };
+  }
 
   // 24h: 21:30 / 9:05
   const hhmm = lower.match(/\b(\d{1,2})\s*:\s*(\d{2})\b/);
@@ -223,10 +270,20 @@ function cleanTitle(rawTitle: string, transcript: string): string {
     /^(create|add|new|set)\s+(task|reminder|todo)[,.]?\s*/i,
     /^(remind\s+me\s+(to|about)?)[,.]?\s*/i,
     /^(ذكرني\s*(بـ?|أن)?)[,.]?\s*/i,
+    /^(set\s+(the\s+)?reminder\s*(to|for)?)[,.]?\s*/i,
   ];
   for (const pattern of commandPatterns) {
     title = title.replace(pattern, '');
   }
+
+  // Remove relative time prefixes from title: "in 5 minutes ..." / "after 10 min ..." / "بعد 5 دقائق ..."
+  title = title.replace(/^\s*(in|after)\s+\d{1,3}\s*(minute|minutes|min|mins)\s*/i, '');
+  title = title.replace(/^\s*(at)\s+\d{1,3}\s*(minute|minutes|min|mins)\s*/i, '');
+  title = title.replace(/^\s*(in|after|at)\s+(one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty)\s+minutes?\s*/i, '');
+  title = title.replace(/^\s*بعد\s+\d{1,3}\s*دقائق?\s*/i, '');
+  // If the user said "... at 5 minutes" (common speech mistake), strip it wherever it appears.
+  title = title.replace(/\b(?:at)\s+\d{1,3}\s*(?:minute|minutes|min|mins)\b/gi, '');
+  title = title.replace(/\b(?:at)\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty)\s+minutes?\b/gi, '');
 
   // Remove time patterns
   const timePatterns = [
@@ -393,9 +450,6 @@ function extractTaskDetails(transcript: string): { title: string; subtasks: stri
 // ─── Main extraction: detects mode (calendar / task / reminder) ──────────────
 
 function extractEntryFromTranscript(transcript: string): ExtractedEntry {
-  const { date, isConfident: isDateConfident } = parseDateFromText(transcript);
-  const { time, isConfident: isTimeConfident } = extractTimeFromText(transcript);
-
   // Detect task/reminder intent using the schema mapper
   const trIntent = detectTRIntent(transcript);
   let mode: DetectedMode = 'calendar';
@@ -404,6 +458,21 @@ function extractEntryFromTranscript(transcript: string): ExtractedEntry {
   } else if (trIntent === 'schedule_reminder') {
     mode = 'reminder';
   }
+
+  const { date, isConfident: isDateConfident } = parseDateFromText(transcript);
+  const { time, isConfident: isTimeConfident } = extractTimeFromText(transcript);
+
+  // If we detected a reminder and a relative-time phrase was used, compute the exact scheduled date/time.
+  // (This also handles crossing midnight.)
+  const lower = transcript.toLowerCase();
+  const relMinutes = extractRelativeMinutes(lower);
+  const relFuture = (mode === 'reminder' && relMinutes)
+    ? new Date(Date.now() + relMinutes * 60 * 1000)
+    : null;
+  const effectiveDate = relFuture
+    ? format(relFuture, 'yyyy-MM-dd')
+    : (date || format(new Date(), 'yyyy-MM-dd'));
+  const effectiveDateConfident = relFuture ? true : isDateConfident;
 
   // For tasks: use smart extraction that pulls out title + subtasks
   // For calendar/reminder: use the existing clause-based extraction
@@ -419,7 +488,7 @@ function extractEntryFromTranscript(transcript: string): ExtractedEntry {
     title = cleanTitle(primaryClause, transcript);
   }
 
-  const missingDate = !date || !isDateConfident;
+  const missingDate = !effectiveDate || !effectiveDateConfident;
   const missingTime = !time || !isTimeConfident;
 
   let clarificationQuestion: string | undefined = undefined;
@@ -450,7 +519,7 @@ function extractEntryFromTranscript(transcript: string): ExtractedEntry {
 
   return {
     title,
-    date: date || format(new Date(), 'yyyy-MM-dd'),
+    date: effectiveDate,
     time: time || undefined,
     clarificationQuestion,
     needsDateConfirm: missingDate,
@@ -490,6 +559,15 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const intentionalSpeechRef = useRef(false);
   const greetingDoneRef = useRef(false);
+  const tzRef = useRef<string>('');
+  const localNowIsoRef = useRef<string>('');
+  const micBtnRef = useRef<HTMLButtonElement | null>(null);
+  const holdPointerIdRef = useRef<number | null>(null);
+  const holdCanceledRef = useRef(false);
+  const holdActiveRef = useRef(false);
+  const didCommitRef = useRef(false);
+  const isSavingRef = useRef(false);
+  const [isSaving, setIsSaving] = useState(false);
   const initializingRef = useRef(false);
   const displayNameRef = useRef('');
   const dcReadyRef = useRef(false);
@@ -718,6 +796,12 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
       stream.getAudioTracks().forEach(track => track.enabled = false);
       console.log('[VoiceAssistant] Mic muted initially');
 
+      // Capture device-local context for better time/date understanding
+      try {
+        tzRef.current = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+      } catch { tzRef.current = ''; }
+      localNowIsoRef.current = new Date().toISOString();
+
       const pc = new RTCPeerConnection();
       pcRef.current = pc;
       stream.getAudioTracks().forEach(track => pc.addTrack(track, stream));
@@ -738,9 +822,12 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
         console.log('[VoiceAssistant] Data channel open');
         dcReadyRef.current = true;
 
+        const tzLine = tzRef.current ? `User timezone: ${tzRef.current}.` : '';
+        const nowLine = localNowIsoRef.current ? `User local now (ISO): ${localNowIsoRef.current}.` : '';
+
         const instructions = t(
-          `You are a voice-controlled assistant for the Wakti app. You are NOT a chatbot. You do NOT have conversations. You NEVER offer help or ask follow-up questions on your own. You ONLY speak when given an explicit instruction that starts with "Say EXACTLY this". If you receive any audio input, do NOT respond to it — just transcribe it silently. NEVER generate any response unless explicitly instructed.`,
-          `أنت مساعد صوتي لتطبيق وقتي. أنت لست روبوت محادثة. لا تتحدث أبدًا من تلقاء نفسك. لا تعرض المساعدة. لا تسأل أسئلة. تحدث فقط عندما يُطلب منك بالضبط "قل بالضبط هذا". إذا استلمت أي صوت، لا ترد عليه — فقط انسخه بصمت.`
+          `You are a voice-controlled assistant for the Wakti app. You are NOT a chatbot. You do NOT have conversations. You NEVER offer help or ask follow-up questions on your own. You ONLY speak when given an explicit instruction that starts with "Say EXACTLY this". If you receive any audio input, do NOT respond to it — just transcribe it silently. NEVER generate any response unless explicitly instructed. ${tzLine} ${nowLine}`,
+          `أنت مساعد صوتي لتطبيق وقتي. أنت لست روبوت محادثة. لا تتحدث أبدًا من تلقاء نفسك. لا تعرض المساعدة. لا تسأل أسئلة. تحدث فقط عندما يُطلب منك بالضبط "قل بالضبط هذا". إذا استلمت أي صوت، لا ترد عليه — فقط انسخه بصمت. ${tzLine} ${nowLine}`
         );
 
         dc.send(JSON.stringify({
@@ -787,7 +874,11 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
 
       console.log('[VoiceAssistant] Calling edge function...');
       const response = await supabase.functions.invoke('voice-assistant-session', {
-        body: { sdp_offer: offer.sdp },
+        body: {
+          sdp_offer: offer.sdp,
+          timezone: tzRef.current || undefined,
+          local_now: localNowIsoRef.current || undefined,
+        },
       });
       console.log('[VoiceAssistant] Edge function response:', response.error ? 'ERROR' : 'OK', response.data ? 'has data' : 'no data');
 
@@ -887,6 +978,11 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
       console.log('[VoiceAssistant] startListening blocked, state is not idle/confirming');
       return;
     }
+
+    holdCanceledRef.current = false;
+    holdActiveRef.current = true;
+    didCommitRef.current = false;
+
     if (streamRef.current) {
       const tracks = streamRef.current.getAudioTracks();
       tracks.forEach(t => t.enabled = true);
@@ -899,32 +995,83 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
     setVoiceState('listening');
   }, [setVoiceState]);
 
+  const cancelListening = useCallback(() => {
+    holdCanceledRef.current = true;
+    holdActiveRef.current = false;
+
+    if (streamRef.current) {
+      streamRef.current.getAudioTracks().forEach(t => t.enabled = false);
+    }
+
+    setTranscript('');
+    setExtractedEntry(null);
+    setVoiceState('idle');
+  }, [setVoiceState]);
+
   const stopListening = useCallback(() => {
     if (voiceStateRef.current !== 'listening') return;
+    if (holdCanceledRef.current) return;
+    if (didCommitRef.current) return;
     console.log('[VoiceAssistant] stopListening called');
-    
+
+    holdActiveRef.current = false;
+
     if (streamRef.current) {
       streamRef.current.getAudioTracks().forEach(t => t.enabled = false);
       console.log('[VoiceAssistant] Mic muted');
     }
-    
+
+    // Immediately move to thinking for smoother UX and to prevent re-entry
+    setVoiceState('thinking');
+
     // With turn_detection=null, we must manually commit the audio buffer
-    // This tells OpenAI "user is done speaking, process the audio now"
     if (dcRef.current?.readyState === 'open') {
+      didCommitRef.current = true;
       console.log('[VoiceAssistant] Committing audio buffer...');
       dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
     }
-    
-    // Stay in listening state briefly to wait for transcription
-    // The transcription event handler will move us to 'thinking' then 'confirming'
-    // If no transcription comes in 3 seconds, go back to idle
+
+    // If no transcription comes in 4 seconds, go back to idle
     setTimeout(() => {
-      if (voiceStateRef.current === 'listening') {
+      if (voiceStateRef.current === 'thinking') {
         console.log('[VoiceAssistant] No transcription received, going back to idle');
         setVoiceState('idle');
       }
-    }, 3000);
+    }, 4000);
   }, [setVoiceState]);
+
+  const handleHoldStart = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    if (holdPointerIdRef.current !== null) return;
+    holdPointerIdRef.current = e.pointerId;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+    startListening();
+  }, [startListening]);
+
+  const handleHoldMove = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    if (holdPointerIdRef.current !== e.pointerId) return;
+    if (!holdActiveRef.current) return;
+    if (!micBtnRef.current) return;
+
+    const rect = micBtnRef.current.getBoundingClientRect();
+    const outside = e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom;
+    if (outside && !holdCanceledRef.current) {
+      cancelListening();
+    }
+  }, [cancelListening]);
+
+  const handleHoldEnd = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    if (holdPointerIdRef.current !== e.pointerId) return;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+    holdPointerIdRef.current = null;
+    if (holdCanceledRef.current) return;
+    stopListening();
+  }, [stopListening]);
+
+  const handleHoldCancel = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    if (holdPointerIdRef.current !== e.pointerId) return;
+    holdPointerIdRef.current = null;
+    cancelListening();
+  }, [cancelListening]);
 
   // Legacy toggle for retry button in confirming state
   const retryListening = useCallback(() => {
@@ -938,11 +1085,14 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
   const handleConfirm = useCallback(async () => {
     if (!extractedEntry) return;
     if (extractedEntry.clarificationQuestion) return;
+    if (isSavingRef.current) return;
 
     const mode = extractedEntry.mode || 'calendar';
     console.log(`[VoiceAssistant] Saving ${mode}:`, extractedEntry);
 
     try {
+      isSavingRef.current = true;
+      setIsSaving(true);
       if (mode === 'task') {
         const payload = mapTaskDraftToPayload({
           title: extractedEntry.title,
@@ -1022,6 +1172,9 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
       console.error('[VoiceAssistant] Failed to save:', err);
       setErrorMsg(err?.message || 'Failed to save');
       setVoiceState('error');
+    } finally {
+      isSavingRef.current = false;
+      setIsSaving(false);
     }
   }, [extractedEntry, onSaveEntry, handleClose]);
 
@@ -1175,6 +1328,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                 </div>
                 <button
                   onClick={handleClose}
+                  aria-label={t('Close', 'إغلاق')}
                   className="p-1.5 rounded-full transition-colors"
                   style={{
                     background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(6,5,65,0.06)',
@@ -1212,13 +1366,12 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                   >
                     <div className="relative">
                       <motion.button
-                        onPointerDown={(e) => { e.preventDefault(); startListening(); }}
-                        onPointerUp={stopListening}
-                        onPointerCancel={stopListening}
-                        onPointerLeave={stopListening}
-                        onTouchStart={(e) => { e.preventDefault(); startListening(); }}
-                        onTouchEnd={(e) => { e.preventDefault(); stopListening(); }}
-                        onTouchCancel={stopListening}
+                        ref={micBtnRef}
+                        onPointerDown={(e) => { e.preventDefault(); handleHoldStart(e); }}
+                        onPointerMove={(e) => { handleHoldMove(e); }}
+                        onPointerUp={(e) => { handleHoldEnd(e); }}
+                        onPointerCancel={(e) => { handleHoldCancel(e); }}
+                        onPointerLeave={(e) => { handleHoldMove(e); }}
                         onContextMenu={(e) => e.preventDefault()}
                         aria-label={t('Hold to speak', 'اضغط مع الاستمرار للتحدث')}
                         className="relative z-10 rounded-full h-20 w-20 flex items-center justify-center select-none"
@@ -1301,11 +1454,11 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                         }}
                       />
                       <motion.button
-                        onPointerUp={stopListening}
-                        onPointerCancel={stopListening}
-                        onPointerLeave={stopListening}
-                        onTouchEnd={(e) => { e.preventDefault(); stopListening(); }}
-                        onTouchCancel={stopListening}
+                        ref={micBtnRef}
+                        onPointerMove={(e) => { handleHoldMove(e); }}
+                        onPointerUp={(e) => { handleHoldEnd(e); }}
+                        onPointerCancel={(e) => { handleHoldCancel(e); }}
+                        onPointerLeave={(e) => { handleHoldMove(e); }}
                         onContextMenu={(e) => e.preventDefault()}
                         aria-label={t('Release to stop', 'ارفع إصبعك للتوقف')}
                         className="relative z-10 rounded-full h-20 w-20 flex items-center justify-center select-none"
@@ -1590,13 +1743,13 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                       </button>
                       <button
                         onClick={handleConfirm}
-                        disabled={Boolean(extractedEntry.clarificationQuestion)}
+                        disabled={Boolean(extractedEntry.clarificationQuestion) || isSaving}
                         className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white transition-colors"
                         style={{
                           background: isDark
                             ? 'linear-gradient(135deg, hsl(142,76%,55%) 0%, hsl(160,80%,45%) 100%)'
                             : 'linear-gradient(135deg, hsl(142,76%,40%) 0%, hsl(160,80%,35%) 100%)',
-                          opacity: extractedEntry.clarificationQuestion ? 0.6 : 1,
+                          opacity: (extractedEntry.clarificationQuestion || isSaving) ? 0.6 : 1,
                         }}
                       >
                         <span className="flex items-center justify-center gap-1.5">

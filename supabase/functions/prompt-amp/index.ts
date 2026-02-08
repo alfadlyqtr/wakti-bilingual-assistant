@@ -84,7 +84,22 @@ function buildSystemPrompt(preferArabic: boolean, mode?: string) {
   const isMusic = mode === "music";
   const isLyrics = mode === "lyrics";
 
+  const isText2Video = mode === "text2video";
+
   if (preferArabic) {
+    if (isText2Video) {
+      return [
+        "أنت مهندس مطالبات خبير لنماذج تحويل النص إلى فيديو.",
+        "مهمتك: أعد صياغة فكرة المستخدم كمطالبة فيديو سينمائية واحدة باللغة الإنجليزية.",
+        "قواعد صارمة:",
+        "- يجب أن يكون الناتج باللغة الإنجليزية دائماً حتى لو كان الإدخال بالعربية.",
+        "- صف الحركة والمشهد والكاميرا والإضاءة والمزاج بوضوح.",
+        "- اجعل الوصف حيوياً ومفصلاً لنموذج إنشاء الفيديو.",
+        "- لا تتحدث مع المستخدم، لا تشرح، فقط أخرج المطالبة المحسّنة.",
+        "المخرج: فقرة واحدة باللغة الإنجليزية تصف الفيديو المطلوب."
+      ].join(" ");
+    }
+
     if (isMusic) {
       return [
         "أنت منتِج موسيقي خبير يعيد صياغة موجز موسيقي كسطر واحد واضح وطبيعي (ليس قائمة شروط).",
@@ -193,6 +208,20 @@ function buildSystemPrompt(preferArabic: boolean, mode?: string) {
       ].join(" ");
     }
 
+    if (isText2Video) {
+      return [
+        "You are an expert prompt engineer for Text-to-Video AI models.",
+        "Your job: rewrite the user's idea into a single, vivid, cinematic video prompt.",
+        "Hard rules:",
+        "- Output must ALWAYS be in English, even if the input is in another language.",
+        "- Describe the scene, motion, camera movement, lighting, mood, and timing clearly.",
+        "- Be specific about subjects, environments, actions, and visual dynamics.",
+        "- Keep the prompt under 300 words but rich in detail.",
+        "- Do NOT chat, explain, or add commentary. Output only the enhanced video prompt.",
+        "Output format: One paragraph describing the desired video scene and motion."
+      ].join(" ");
+    }
+
     if (isI2I) {
       return [
         "You are an expert prompt enhancer for Image-to-Image editing of an UPLOADED PHOTO.",
@@ -279,6 +308,13 @@ async function ampPromptWithDeepSeek(
 }
 
 // ─── Image-to-Video Amp (OpenAI gpt-4o-mini vision) ───
+function stripArabicChars(text: string): string {
+  return (text || "")
+    .replace(/[\u0600-\u06FF]+/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 const IMAGE2VIDEO_SYSTEM_PROMPT = `You are a cinematic video prompt engineer. You analyze an uploaded image and generate a production-ready video prompt for a 6–10 second cinematic reveal spot.
 
 Your job:
@@ -300,6 +336,7 @@ Your job:
 }
 
 Rules:
+- Output language MUST be ENGLISH ONLY. If any provided brand/business details are in Arabic (or any non-English language), translate them internally and output ONLY English.
 - Write in present tense, active voice.
 - Keep description under ~120 words.
 - One seamless, visually satisfying build-up from emptiness to full reveal.
@@ -407,13 +444,82 @@ async function ampImage2VideoWithOpenAI(
       parts.push(`Keywords: ${parsed.keywords.join(", ")}.`);
     }
 
-    return parts.join(" ");
+    return stripArabicChars(parts.join(" "));
   } catch {
     // If JSON parsing fails, return the raw content as-is (still useful)
-    return content.trim();
+    return stripArabicChars(content.trim());
   }
 }
 // ─── End Image-to-Video Amp ───
+
+// ─── Text-to-Video Amp (OpenAI gpt-4o-mini) ───
+const TEXT2VIDEO_SYSTEM_PROMPT = `You are an expert cinematic video prompt engineer for Text-to-Video AI models.
+
+Your job: Take the user's idea (in ANY language, including Arabic) and rewrite it as a single, vivid, production-ready cinematic video prompt in ENGLISH.
+
+The video prompt should describe a 6–10 second cinematic spot. Think of brands like Corona, Tesla, IKEA, Apple, Google, Qatar Airways, and Chewy — magical, fast-assembly transformations progressing smoothly from an empty or minimal scene into a fully revealed experience. No on-screen text. No spoken dialogue.
+
+Rules & Tone:
+- Output must ALWAYS be in English, even if the input is in Arabic or another language.
+- Write in present tense, active voice.
+- Keep the description under ~200 words but rich in cinematic detail.
+- Describe the scene, motion, camera movement, lighting progression, mood, environment, and timing clearly.
+- Ensure one seamless, visually satisfying build-up or transformation.
+- Be specific about subjects, environments, actions, visual dynamics, and pacing.
+- If brand/product direction is unclear, default to cinematic magical realism.
+- Do NOT chat, explain, ask questions, or add commentary. Output ONLY the enhanced video prompt.
+- Do NOT include any JSON formatting. Output a single plain-text paragraph.
+
+Output format: One vivid paragraph describing the desired video scene, motion, camera work, lighting, and mood.`;
+
+async function ampText2VideoWithOpenAI(userText: string): Promise<string> {
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
+
+  const payload = {
+    model: "gpt-4o-mini",
+    temperature: 0.6,
+    max_tokens: 800,
+    messages: [
+      {
+        role: "system",
+        content: TEXT2VIDEO_SYSTEM_PROMPT,
+      },
+      {
+        role: "user",
+        content: userText,
+      },
+    ],
+  };
+
+  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await resp.json().catch(() => null);
+  if (!resp.ok) {
+    throw new Error(
+      JSON.stringify({
+        stage: "openai-text2video",
+        status: resp.status,
+        body: data || null,
+      }),
+    );
+  }
+
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== "string" || content.trim().length === 0) {
+    throw new Error("openai_empty_response");
+  }
+
+  return content.trim();
+}
+// ─── End Text-to-Video Amp ───
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -499,6 +605,54 @@ serve(async (req) => {
       );
     }
     // ─── End Image-to-Video route ───
+
+    // ─── Text-to-Video Amp route (OpenAI gpt-4o-mini) ───
+    if (mode === "text2video") {
+      if (!text || text.trim().length === 0) {
+        return new Response(
+          JSON.stringify({
+            error: "Missing 'text' for text2video mode",
+            code: "BAD_REQUEST_MISSING_TEXT",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      inputText = `[text2video] ${text}`;
+      const improved = await ampText2VideoWithOpenAI(text);
+
+      await logAI({
+        functionName: "prompt-amp",
+        userId,
+        model: "gpt-4o-mini",
+        inputText,
+        outputText: improved,
+        durationMs: Date.now() - startTime,
+        status: "success",
+        metadata: {
+          provider: "openai",
+          mode: "text2video",
+          language: "en",
+        },
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          text: improved,
+          language: "en",
+          mode: "text2video",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    // ─── End Text-to-Video route ───
 
     if (!text || text.trim().length === 0) {
       return new Response(

@@ -19,6 +19,7 @@ import { format, isAfter, parseISO } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { toast } from 'sonner';
+import InAppWaktiEscape from '@/components/public/InAppWaktiEscape';
 
 export default function SharedTask() {
   const { shareLink } = useParams<{ shareLink: string }>();
@@ -220,6 +221,7 @@ export default function SharedTask() {
 
   return (
     <div className="fixed inset-0 w-full h-full bg-background overflow-y-auto">
+      <InAppWaktiEscape language={language === 'ar' ? 'ar' : 'en'} />
       <div className="w-full max-w-4xl mx-auto px-4 py-6">
         <div className="space-y-6">
           {/* Header */}

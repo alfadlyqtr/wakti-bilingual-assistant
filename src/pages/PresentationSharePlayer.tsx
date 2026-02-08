@@ -5,6 +5,8 @@ import { SUPABASE_URL } from '@/integrations/supabase/client';
 import type { ShareManifestV1, ShareManifestV2 } from '@/utils/presentationShare';
 import { getPublicStorageUrl } from '@/utils/presentationShare';
 import PresentationSlideReadOnly from '@/components/wakti-ai-v2/PresentationSlideReadOnly';
+import InAppWaktiEscape from '@/components/public/InAppWaktiEscape';
+import { isInNativeApp } from '@/integrations/natively/browserBridge';
 
 type LoadState =
   | { status: 'loading' }
@@ -22,6 +24,8 @@ export default function PresentationSharePlayer(): React.ReactElement {
   const { token } = useParams();
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const [isNative, setIsNative] = useState(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -73,6 +77,10 @@ export default function PresentationSharePlayer(): React.ReactElement {
       cancelled = true;
     };
   }, [manifestUrl]);
+
+  useEffect(() => {
+    setIsNative(isInNativeApp());
+  }, []);
 
   const manifest = state.status === 'ready' ? state.manifest : null;
 
@@ -197,20 +205,23 @@ export default function PresentationSharePlayer(): React.ReactElement {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0c0f14] via-[#0c0f14] to-[#060541] text-[#f2f2f2] flex flex-col">
-      {/* Compact header */}
-      <header className="flex-shrink-0 border-b border-white/10 bg-black/20 backdrop-blur px-4 py-2">
-        <div className="max-w-4xl mx-auto flex items-center gap-3">
-          <img
-            src="/lovable-uploads/33ebdcdd-300d-42cf-be5e-f6a82ca9ef4d.png"
-            alt="Wakti"
-            className="w-7 h-7 flex-shrink-0 rounded"
-          />
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold truncate">{state.manifest.title}</div>
-            <div className="text-xs opacity-60 truncate">Wakti AI Presentation</div>
+      <InAppWaktiEscape language="en" variant="dark" containerClassName="max-w-4xl" />
+
+      {!isNative && (
+        <header className="flex-shrink-0 border-b border-white/10 bg-black/20 backdrop-blur px-4 py-2">
+          <div className="max-w-4xl mx-auto flex items-center gap-3">
+            <img
+              src="/lovable-uploads/33ebdcdd-300d-42cf-be5e-f6a82ca9ef4d.png"
+              alt="Wakti"
+              className="w-7 h-7 flex-shrink-0 rounded"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold truncate">{state.manifest.title}</div>
+              <div className="text-xs opacity-60 truncate">Wakti AI Presentation</div>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
       {/* Main content - horizontal layout */}
       <main className="flex-1 flex flex-col gap-3 p-3 max-w-4xl mx-auto w-full">

@@ -20,11 +20,14 @@ import {
   X,
   Play,
   Wand2,
+  ArrowLeft,
+  ArrowRight,
   Camera,
   Save,
   Check,
   Lock,
   FolderOpen,
+  Type,
 } from 'lucide-react';
 
 interface QuotaInfo {
@@ -48,19 +51,59 @@ interface LatestVideo {
   signedUrl?: string | null;
 }
 
+// Image compression helper
+const compressImage = (file: File, maxWidth = 1024, quality = 0.8): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = (maxWidth / width) * height;
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Canvas compression failed'));
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+      img.onerror = reject;
+    };
+    reader.onerror = reject;
+  });
+};
+
 export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const { language } = useTheme();
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const hasArabicChars = (text: string) => /[\u0600-\u06FF]/.test(text || '');
+
   // State
+  const [generationMode, setGenerationMode] = useState<'image_to_video' | 'text_to_video'>('image_to_video');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
-  const [negativePrompt, setNegativePrompt] = useState('');
   const [duration, setDuration] = useState<'6' | '10'>('6');
+  const [aspectRatio, setAspectRatio] = useState<string>('9:16');
   const [isAmping, setIsAmping] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState('');
   const [generationProgress, setGenerationProgress] = useState(0);
@@ -75,54 +118,93 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const usageIncrementedRef = useRef(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Amp: generate a cinematic prompt from the uploaded image using OpenAI vision
+  // Amp: generate/improve a cinematic prompt
   const handleAmp = useCallback(async () => {
-    if (!imagePreview || isAmping || isGenerating || !user) return;
+    if (isAmping || isGenerating || !user) return;
+    // Image mode requires an image; text mode requires a prompt
+    if (generationMode === 'image_to_video' && !imagePreview) return;
+    if (generationMode === 'text_to_video' && !prompt.trim()) return;
     setIsAmping(true);
     try {
-      // Upload image to storage first to avoid sending large base64 to edge function (mobile timeout fix)
-      let ampImageUrl = imagePreview;
-      if (imageFile) {
-        const ext = imageFile.name.split('.').pop() || 'png';
-        const storagePath = `${user.id}/ai-video-input/${crypto.randomUUID()}.${ext}`;
-        const { error: uploadErr } = await supabase.storage
-          .from('message_attachments')
-          .upload(storagePath, imageFile, {
-            contentType: imageFile.type,
-            cacheControl: '3600',
-            upsert: true,
-          });
-        if (!uploadErr) {
-          const { data: pubData } = supabase.storage
-            .from('message_attachments')
-            .getPublicUrl(storagePath);
-          if (pubData?.publicUrl) ampImageUrl = pubData.publicUrl;
+      if (generationMode === 'image_to_video') {
+        // Image-to-Video amp: upload image then use OpenAI vision
+        let ampImageUrl = imagePreview!;
+        if (imageFile) {
+          try {
+            const compressedBlob = await compressImage(imageFile, 512, 0.5); 
+            const randomId = Math.random().toString(36).substring(2, 15);
+            const storagePath = `${user.id}/ai-video-input/${randomId}.jpg`;
+            
+            console.log('[AIVideomaker] Amp: Uploading to message_attachments:', storagePath);
+            
+            const { error: uploadErr } = await supabase.storage
+              .from('message_attachments')
+              .upload(storagePath, compressedBlob, {
+                contentType: 'image/jpeg',
+                cacheControl: '3600',
+                upsert: true,
+              });
+              
+            if (!uploadErr) {
+              const { data: signedData, error: signedErr } = await supabase.storage
+                .from('message_attachments')
+                .createSignedUrl(storagePath, 60 * 60 * 6);
+              if (signedErr) throw new Error(`Signed URL failed: ${signedErr.message}`);
+              if (signedData?.signedUrl) {
+                ampImageUrl = signedData.signedUrl;
+                console.log('[AIVideomaker] Amp upload successful:', ampImageUrl);
+              } else {
+                throw new Error('Signed URL missing');
+              }
+            } else {
+              console.error('[AIVideomaker] Amp upload error:', uploadErr);
+              throw new Error(`Upload failed: ${uploadErr.message}`);
+            }
+          } catch (prepErr: any) {
+            console.error('[AIVideomaker] Amp prepare error:', prepErr);
+            throw new Error(language === 'ar' ? 'فشل تجهيز الصورة: ' + prepErr.message : 'Failed to prepare image: ' + prepErr.message);
+          }
+        }
+
+        const { data, error } = await supabase.functions.invoke('prompt-amp', {
+          body: {
+            mode: 'image2video',
+            image_url: ampImageUrl,
+            brand_details: prompt.trim() || '',
+            environment: 'auto',
+            duration,
+          },
+        });
+        if (error) throw new Error(`AI Function error: ${error.message || 'Unknown error'}`);
+        if (data?.success && data?.text) {
+          setPrompt(data.text);
+          toast.success(language === 'ar' ? 'تم تحسين الوصف ✨' : 'Prompt amped ✨');
+        } else {
+          throw new Error(data?.error || 'No improved prompt returned');
+        }
+      } else {
+        // Text-to-Video amp: enhance/translate the text prompt via DeepSeek
+        const { data, error } = await supabase.functions.invoke('prompt-amp', {
+          body: {
+            mode: 'text2video',
+            text: prompt.trim(),
+          },
+        });
+        if (error) throw new Error(`AI Function error: ${error.message || 'Unknown error'}`);
+        if (data?.success && data?.text) {
+          setPrompt(data.text);
+          toast.success(language === 'ar' ? 'تم تحسين الوصف ✨' : 'Prompt amped ✨');
+        } else {
+          throw new Error(data?.error || 'No improved prompt returned');
         }
       }
-
-      const { data, error } = await supabase.functions.invoke('prompt-amp', {
-        body: {
-          mode: 'image2video',
-          image_url: ampImageUrl,
-          brand_details: prompt.trim() || '',
-          environment: 'auto',
-          duration,
-        },
-      });
-      if (error) throw new Error(error.message || 'Amp failed');
-      if (data?.success && data?.text) {
-        setPrompt(data.text);
-        toast.success(language === 'ar' ? 'تم تحسين الوصف ✨' : 'Prompt amped ✨');
-      } else {
-        throw new Error(data?.error || 'No improved prompt returned');
-      }
-    } catch (err) {
+    } catch (err: any) {
       console.error('[AIVideomaker] Amp error:', err);
-      toast.error(language === 'ar' ? 'فشل تحسين الوصف' : 'Failed to amp prompt');
+      toast.error(language === 'ar' ? 'فشل تحسين الوصف: ' + (err.message || '') : 'Failed to amp: ' + (err.message || ''));
     } finally {
       setIsAmping(false);
     }
-  }, [imagePreview, imageFile, isAmping, isGenerating, prompt, duration, language, user]);
+  }, [generationMode, imagePreview, imageFile, isAmping, isGenerating, prompt, duration, language, user]);
 
   // Load quota on mount
   const loadQuota = useCallback(async () => {
@@ -136,7 +218,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const q = data?.[0] || data;
       setQuota({
         used: q?.videos_generated || 0,
-        limit: q?.videos_limit || 10,
+        limit: q?.videos_limit || 20,
         extra: q?.extra_videos || 0,
         canGenerate: q?.can_generate ?? true,
       });
@@ -308,7 +390,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   }, [language, loadQuota, loadLatestVideo]);
 
   const handleGenerate = async () => {
-    if (!imagePreview || !user) return;
+    // Validate based on mode
+    if (generationMode === 'image_to_video' && !imagePreview) return;
+    if (generationMode === 'text_to_video' && !prompt.trim()) return;
+    if (!user) return;
+
+    const needsArabicTranslation =
+      language === 'ar' &&
+      hasArabicChars(prompt) &&
+      (generationMode === 'text_to_video' ||
+        (generationMode === 'image_to_video' && prompt.trim().length > 0));
+    if (needsArabicTranslation) return;
 
     if (loadingQuota) {
       toast.message(language === 'ar' ? 'جاري التحقق من الحد...' : 'Checking quota...');
@@ -334,47 +426,82 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
     setIsGenerating(true);
     setGenerationProgress(5);
-    setGenerationStatus(language === 'ar' ? 'جاري رفع الصورة...' : 'Uploading image...');
     setGeneratedVideoUrl(null);
     usageIncrementedRef.current = false;
 
     try {
-      // Step 1: Upload image to Supabase Storage directly (avoids sending large base64 to edge function)
-      let imageUrl = imagePreview;
-      if (imageFile) {
-        const ext = imageFile.name.split('.').pop() || 'png';
-        const storagePath = `${user.id}/ai-video-input/${crypto.randomUUID()}.${ext}`;
-        const { error: uploadErr } = await supabase.storage
-          .from('message_attachments')
-          .upload(storagePath, imageFile, {
-            contentType: imageFile.type,
-            cacheControl: '3600',
-            upsert: true,
-          });
-        if (uploadErr) {
-          console.error('[AIVideomaker] Image upload error:', uploadErr);
-          throw new Error(language === 'ar' ? 'فشل رفع الصورة' : 'Failed to upload image');
+      let requestBody: Record<string, unknown>;
+
+      if (generationMode === 'text_to_video') {
+        // Text-to-Video: no image upload needed
+        setGenerationStatus(language === 'ar' ? 'جاري بدء الإنشاء...' : 'Starting generation...');
+
+        const finalPrompt = prompt.trim();
+
+        requestBody = {
+          generation_type: 'text_to_video',
+          prompt: finalPrompt,
+          duration,
+          aspect_ratio: aspectRatio,
+          video_mode: 'normal',
+          mode: 'async',
+        };
+      } else {
+        // Image-to-Video: upload image first
+        setGenerationStatus(language === 'ar' ? 'جاري رفع الصورة...' : 'Uploading image...');
+        let imageUrl = imagePreview;
+        if (imageFile) {
+          try {
+            const compressedBlob = await compressImage(imageFile, 512, 0.5); 
+            const randomId = Math.random().toString(36).substring(2, 15);
+            const storagePath = `${user.id}/ai-video-input/${randomId}.jpg`;
+            
+            console.log('[AIVideomaker] Uploading to message_attachments:', storagePath);
+            
+            const { error: uploadErr } = await supabase.storage
+              .from('message_attachments')
+              .upload(storagePath, compressedBlob, {
+                contentType: 'image/jpeg',
+                cacheControl: '3600',
+                upsert: true,
+              });
+            
+            if (uploadErr) {
+              console.error('[AIVideomaker] Storage upload error details:', uploadErr);
+              throw new Error(`Upload failed: ${uploadErr.message}`);
+            }
+            
+            const { data: signedData, error: signedErr } = await supabase.storage
+              .from('message_attachments')
+              .createSignedUrl(storagePath, 60 * 60 * 6);
+            if (signedErr) throw new Error(`Signed URL failed: ${signedErr.message}`);
+            if (signedData?.signedUrl) {
+              imageUrl = signedData.signedUrl;
+              console.log('[AIVideomaker] Upload successful, URL:', imageUrl);
+            } else {
+              throw new Error('Signed URL missing');
+            }
+          } catch (prepErr: any) {
+            console.error('[AIVideomaker] Prepare image error:', prepErr);
+            throw prepErr;
+          }
         }
-        const { data: pubData } = supabase.storage
-          .from('message_attachments')
-          .getPublicUrl(storagePath);
-        if (pubData?.publicUrl) {
-          imageUrl = pubData.publicUrl;
-        }
+
+        requestBody = {
+          generation_type: 'image_to_video',
+          image: imageUrl,
+          prompt: prompt.trim() || undefined,
+          duration,
+          mode: 'async',
+        };
       }
 
       setGenerationProgress(10);
       setGenerationStatus(language === 'ar' ? 'جاري بدء الإنشاء...' : 'Starting generation...');
 
-      // Step 2: Call edge function with the public URL (lightweight request, no timeout)
+      // Call edge function
       const { data, error } = await supabase.functions.invoke('freepik-image2video', {
-        body: {
-          image: imageUrl,
-          prompt: prompt.trim() || undefined,
-          negative_prompt: negativePrompt.trim() || undefined,
-          duration,
-          mode: 'async',
-        },
+        body: requestBody,
       });
 
       if (error) {
@@ -516,13 +643,22 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const used = quota?.used || 0;
   const limit = quota?.limit || 10;
   const limitReached = quota !== null && !quota.canGenerate;
-  const canGenerate = imagePreview && !limitReached && !isGenerating && !loadingQuota;
+
+  const needsArabicTranslation =
+    language === 'ar' &&
+    hasArabicChars(prompt) &&
+    (generationMode === 'text_to_video' ||
+      (generationMode === 'image_to_video' && prompt.trim().length > 0));
+
+  const canGenerate = generationMode === 'text_to_video'
+    ? (prompt.trim().length > 0 && !needsArabicTranslation && !limitReached && !isGenerating && !loadingQuota)
+    : (imagePreview && !needsArabicTranslation && !limitReached && !isGenerating && !loadingQuota);
   const showLatestVideo = !generatedVideoUrl && !!(latestVideo?.signedUrl || latestVideo?.video_url);
 
   return (
     <div className="relative">
       {/* Glowing background effects */}
-      <div className="pointer-events-none absolute -inset-4 rounded-[2rem] opacity-40 blur-3xl bg-gradient-to-br from-[hsl(210,100%,65%)] via-[hsl(280,70%,65%)] to-[hsl(25,95%,60%)] dark:opacity-20" />
+      <div className="pointer-events-none absolute -inset-4 rounded-[2rem] opacity-40 blur-3xl bg-gradient-to-br from-[hsl(210,100%,65%)] via-[hsl(180,85%,60%)] to-[hsl(160,80%,55%)] dark:opacity-20" />
       
       {/* Main card container */}
       <div className="relative enhanced-card rounded-[1.5rem] p-5 md:p-6 overflow-hidden">
@@ -533,11 +669,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           {/* Compact header row */}
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#060541] to-[hsl(280,70%,35%)] shadow-lg shadow-primary/30">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#060541] to-[hsl(210,100%,35%)] shadow-lg shadow-primary/30">
                 <Wand2 className="h-5 w-5 text-white" />
               </div>
               <div>
-                <h2 className="text-lg font-bold bg-gradient-to-r from-[#060541] to-[hsl(280,70%,45%)] dark:from-white dark:to-[hsl(280,70%,75%)] bg-clip-text text-transparent">
+                <h2 className="text-lg font-bold bg-gradient-to-r from-[#060541] to-[hsl(210,100%,45%)] dark:from-white dark:to-[hsl(210,100%,75%)] bg-clip-text text-transparent">
                   {language === 'ar' ? 'صانع الفيديو بالذكاء الاصطناعي' : 'AI Video Generator'}
                 </h2>
               </div>
@@ -550,7 +686,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   disabled={isGenerating}
                   className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
                     duration === '6'
-                      ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(280,70%,65%)]/30 text-primary font-bold'
+                      ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
                       : 'text-muted-foreground hover:text-primary'
                   }`}
                 >
@@ -561,7 +697,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   disabled={isGenerating}
                   className={`px-2.5 py-1.5 text-xs font-medium transition-all mr-0.5 ${
                     duration === '10'
-                      ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(280,70%,65%)]/30 text-primary font-bold'
+                      ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
                       : 'text-muted-foreground hover:text-primary'
                   }`}
                 >
@@ -579,74 +715,129 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             </div>
           </div>
 
+          {/* Mode toggle */}
+          <div
+            className={`inline-flex items-center rounded-2xl border border-primary/20 bg-background/40 backdrop-blur-sm p-1 shadow-sm shadow-primary/10 ${
+              isGenerating ? 'opacity-80' : ''
+            }`}
+            role="group"
+            aria-label={language === 'ar' ? 'وضع إنشاء الفيديو' : 'Video generation mode'}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                if (!isGenerating) setGenerationMode('image_to_video');
+              }}
+              disabled={isGenerating}
+              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed ${
+                generationMode === 'image_to_video'
+                  ? 'bg-gradient-to-r from-[#060541] via-[hsl(210,100%,32%)] to-[#060541] text-white shadow-[0_6px_18px_hsla(210,100%,45%,0.25)]'
+                  : 'text-muted-foreground hover:text-primary hover:bg-primary/5'
+              }`}
+            >
+              <span
+                className={`grid place-items-center h-6 w-6 rounded-lg ${
+                  generationMode === 'image_to_video' ? 'bg-white/15' : 'bg-primary/5'
+                }`}
+              >
+                <ImageIcon className="h-3.5 w-3.5" />
+              </span>
+              <span>{language === 'ar' ? 'صورة ← فيديو' : 'Image → Video'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (!isGenerating) setGenerationMode('text_to_video');
+              }}
+              disabled={isGenerating}
+              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed ${
+                generationMode === 'text_to_video'
+                  ? 'bg-gradient-to-r from-[#060541] via-[hsl(210,100%,32%)] to-[#060541] text-white shadow-[0_6px_18px_hsla(210,100%,45%,0.25)]'
+                  : 'text-muted-foreground hover:text-primary hover:bg-primary/5'
+              }`}
+            >
+              <span
+                className={`grid place-items-center h-6 w-6 rounded-lg ${
+                  generationMode === 'text_to_video' ? 'bg-white/15' : 'bg-primary/5'
+                }`}
+              >
+                <Type className="h-3.5 w-3.5" />
+              </span>
+              <span>{language === 'ar' ? 'نص ← فيديو' : 'Text → Video'}</span>
+            </button>
+          </div>
+
           {/* Unified content area */}
-          <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4">
-            {/* Image upload - compact */}
-            <div className="relative">
-              {!imagePreview ? (
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="relative cursor-pointer group h-full min-h-[200px]"
-                >
-                  <div className="h-full rounded-2xl border-2 border-dashed border-primary/40 bg-gradient-to-br from-[hsl(210,100%,65%)]/5 via-[hsl(280,70%,65%)]/5 to-[hsl(25,95%,60%)]/5 flex flex-col items-center justify-center gap-3 transition-all hover:border-primary hover:shadow-[0_0_30px_hsla(210,100%,65%,0.3)] active:scale-[0.98]">
-                    <div className="p-4 rounded-2xl bg-gradient-to-br from-[#060541] to-[hsl(280,70%,35%)] shadow-lg shadow-primary/40 group-hover:shadow-xl group-hover:shadow-primary/50 transition-all group-hover:scale-105">
-                      <Upload className="h-7 w-7 text-white" />
-                    </div>
-                    <div className="text-center px-3">
-                      <p className="font-semibold text-sm">
-                        {language === 'ar' ? 'اختر صورة' : 'Choose Image'}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {language === 'ar' ? 'PNG, JPG • 10MB' : 'PNG, JPG • 10MB'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="relative h-full min-h-[200px]">
-                  <div className="h-full rounded-2xl overflow-hidden bg-black/90 shadow-2xl shadow-black/50 ring-2 ring-primary/30">
-                    <img
-                      src={imagePreview}
-                      alt="Selected"
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-                  {/* Always visible X button */}
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg bg-red-500 hover:bg-red-600"
-                    onClick={clearImage}
-                    disabled={isGenerating}
+          <div className={`grid grid-cols-1 ${generationMode === 'image_to_video' ? 'md:grid-cols-[280px_1fr]' : ''} gap-4`}>
+            {/* Image upload - only shown in image_to_video mode */}
+            {generationMode === 'image_to_video' && (
+              <div className="relative">
+                {!imagePreview ? (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="relative cursor-pointer group h-full min-h-[200px]"
                   >
-                    <X className="h-4 w-4" />
-                  </Button>
-                  {/* Change button at bottom */}
-                  <div className="absolute bottom-2 left-2 right-2">
+                    <div className="h-full rounded-2xl border-2 border-dashed border-primary/40 bg-gradient-to-br from-[hsl(210,100%,65%)]/5 via-[hsl(180,85%,60%)]/5 to-[hsl(160,80%,55%)]/5 flex flex-col items-center justify-center gap-3 transition-all hover:border-primary hover:shadow-[0_0_30px_hsla(210,100%,65%,0.3)] active:scale-[0.98]">
+                      <div className="p-4 rounded-2xl bg-gradient-to-br from-[#060541] to-[hsl(210,100%,35%)] shadow-lg shadow-primary/40 group-hover:shadow-xl group-hover:shadow-primary/50 transition-all group-hover:scale-105">
+                        <Upload className="h-7 w-7 text-white" />
+                      </div>
+                      <div className="text-center px-3">
+                        <p className="font-semibold text-sm">
+                          {language === 'ar' ? 'اختر صورة' : 'Choose Image'}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {language === 'ar' ? 'PNG, JPG • 10MB' : 'PNG, JPG • 10MB'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="relative h-full min-h-[200px]">
+                    <div className="h-full rounded-2xl overflow-hidden bg-black/90 shadow-2xl shadow-black/50 ring-2 ring-primary/30">
+                      <img
+                        src={imagePreview}
+                        alt="Selected"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    {/* Always visible X button */}
                     <Button
-                      variant="secondary"
-                      size="sm"
-                      className="w-full h-8 text-xs bg-white/90 hover:bg-white text-black rounded-lg shadow-lg"
-                      onClick={() => fileInputRef.current?.click()}
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg bg-red-500 hover:bg-red-600"
+                      onClick={clearImage}
                       disabled={isGenerating}
                     >
-                      {language === 'ar' ? 'تغيير الصورة' : 'Change Image'}
+                      <X className="h-4 w-4" />
                     </Button>
+                    {/* Change button at bottom */}
+                    <div className="absolute bottom-2 left-2 right-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="w-full h-8 text-xs bg-white/90 hover:bg-white text-black rounded-lg shadow-lg"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isGenerating}
+                      >
+                        {language === 'ar' ? 'تغيير الصورة' : 'Change Image'}
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageSelect}
-                aria-label={language === 'ar' ? 'اختر صورة' : 'Select image'}
-              />
-            </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageSelect}
+                  aria-label={language === 'ar' ? 'اختر صورة' : 'Select image'}
+                />
+              </div>
+            )}
 
-            {/* Prompt & Generate - compact */}
+            {/* Prompt & Generate */}
             <div className="flex flex-col gap-3 relative">
               {/* Limit reached overlay */}
               {limitReached && (
@@ -669,56 +860,89 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder={
-                    language === 'ar'
-                      ? 'صف الحركة المطلوبة...\n\nمثال: شخص يبتسم ويلوح بيده، قطة تحرك رأسها ببطء، سيارة تتحرك للأمام...'
-                      : 'Describe the motion you want...\n\ne.g., A person smiling and waving, a cat slowly moving its head, a car driving forward...'
+                    generationMode === 'text_to_video'
+                      ? (language === 'ar'
+                          ? 'صف المشهد والحركة بالتفصيل...\n\nمثال: أبواب تفتح واحدًا تلو الآخر لتكشف غرفًا مختلفة بداخلها أشخاص صغار يعيشون حياتهم...'
+                          : 'Describe the full scene and motion in detail...\n\ne.g., Doors open one by one to reveal different rooms with tiny people living inside...')
+                      : (language === 'ar'
+                          ? 'صف الحركة المطلوبة...\n\nمثال: شخص يبتسم ويلوح بيده، قطة تحرك رأسها ببطء، سيارة تتحرك للأمام...'
+                          : 'Describe the motion you want...\n\ne.g., A person smiling and waving, a cat slowly moving its head, a car driving forward...')
                   }
                   className="min-h-[140px] h-full text-sm resize-none rounded-xl border-2 border-primary/20 focus:border-primary bg-background/50 backdrop-blur-sm transition-all placeholder:text-muted-foreground/60"
                   maxLength={2500}
                   disabled={isGenerating || limitReached}
                 />
                 <div className="absolute bottom-2 right-3 flex items-center gap-2">
-                  {imagePreview && (
-                    <button
-                      onClick={handleAmp}
-                      disabled={isAmping || isGenerating || !imagePreview}
-                      className={`p-1 rounded-md transition-all ${
-                        isAmping
-                          ? 'text-primary animate-spin'
-                          : 'text-muted-foreground/50 hover:text-primary hover:bg-primary/10'
-                      }`}
-                      title={language === 'ar' ? 'تحسين الوصف بالذكاء الاصطناعي' : 'AI Amp: generate cinematic prompt'}
-                    >
-                      <Wand2 className="h-4 w-4" />
-                    </button>
+                  {(generationMode === 'image_to_video' ? imagePreview : prompt.trim()) && (
+                    <div className="flex items-center gap-2">
+                      {needsArabicTranslation && (
+                        <div className="flex items-center gap-1 text-[11px] font-semibold text-[#060541]">
+                          <span>{language === 'ar' ? 'اضغط لترجمة العربية' : 'Click to translate Arabic'}</span>
+                          {language === 'ar' ? (
+                            <ArrowLeft className="h-3.5 w-3.5" />
+                          ) : (
+                            <ArrowRight className="h-3.5 w-3.5" />
+                          )}
+                        </div>
+                      )}
+                      <button
+                        onClick={handleAmp}
+                        disabled={isAmping || isGenerating}
+                        className={`p-1 rounded-md transition-all ${
+                          isAmping
+                            ? 'text-primary animate-spin'
+                            : needsArabicTranslation
+                              ? 'text-[#060541] bg-[rgba(6,5,65,0.08)] ring-2 ring-[rgba(6,5,65,0.35)] shadow-[0_0_20px_rgba(33,150,243,0.25)]'
+                              : 'text-muted-foreground/50 hover:text-primary hover:bg-primary/10'
+                        }`}
+                        title={
+                          needsArabicTranslation
+                            ? (language === 'ar' ? 'اضغط لترجمة العربية' : 'Click to translate Arabic')
+                            : (language === 'ar' ? 'تحسين الوصف بالذكاء الاصطناعي' : 'AI Amp: enhance prompt')
+                        }
+                      >
+                        <Wand2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   )}
                   <span className="text-[10px] text-muted-foreground/50">{prompt.length}/2500</span>
                 </div>
               </div>
 
-              {/* Advanced toggle */}
-              <button
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="self-start text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
-              >
-                <span>{showAdvanced ? '▲' : '▼'}</span>
-                <span>{language === 'ar' ? 'خيارات متقدمة' : 'Advanced'}</span>
-              </button>
-
-              {showAdvanced && (
-                <Textarea
-                  value={negativePrompt}
-                  onChange={(e) => setNegativePrompt(e.target.value)}
-                  placeholder={language === 'ar' ? 'ما تريد تجنبه: ضبابي، جودة منخفضة...' : 'What to avoid: blurry, low quality...'}
-                  className="min-h-[60px] text-xs resize-none rounded-xl border border-muted bg-muted/30"
-                  maxLength={2500}
-                  disabled={isGenerating}
-                />
+              {/* Aspect ratio picker - only for text-to-video */}
+              {generationMode === 'text_to_video' && (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-0.5 rounded-full border border-primary/20 overflow-hidden">
+                    <button
+                      onClick={() => !isGenerating && setAspectRatio('9:16')}
+                      disabled={isGenerating}
+                      className={`px-3 py-1.5 text-xs font-medium transition-all ${
+                        aspectRatio === '9:16'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                          : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? 'عمودي' : 'Portrait'}
+                    </button>
+                    <button
+                      onClick={() => !isGenerating && setAspectRatio('16:9')}
+                      disabled={isGenerating}
+                      className={`px-3 py-1.5 text-xs font-medium transition-all ${
+                        aspectRatio === '16:9'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                          : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? 'أفقي' : 'Landscape'}
+                    </button>
+                  </div>
+                </div>
               )}
+
 
               {/* Generate button */}
               <Button
-                className="w-full h-12 text-base font-bold rounded-xl bg-gradient-to-r from-[#060541] via-[hsl(260,70%,30%)] to-[hsl(280,70%,35%)] hover:from-[hsl(243,84%,18%)] hover:via-[hsl(260,70%,35%)] hover:to-[hsl(280,70%,40%)] shadow-[0_4px_20px_hsla(260,70%,50%,0.4)] hover:shadow-[0_6px_30px_hsla(260,70%,50%,0.5)] transition-all active:scale-[0.98] disabled:opacity-50 disabled:shadow-none"
+                className="w-full h-12 text-base font-bold rounded-xl bg-[#060541] text-white border border-white/10 shadow-[0_10px_28px_rgba(6,5,65,0.35)] hover:bg-[hsl(243,84%,18%)] hover:shadow-[0_14px_34px_hsla(210,100%,65%,0.25)] transition-all active:scale-[0.98] disabled:opacity-50 disabled:shadow-none"
                 onClick={handleGenerate}
                 disabled={!canGenerate}
               >
@@ -740,7 +964,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 <div className="space-y-2">
                   <div className="h-3 rounded-full bg-muted overflow-hidden">
                     <div 
-                      className="h-full bg-gradient-to-r from-[hsl(210,100%,65%)] via-[hsl(280,70%,65%)] to-[hsl(142,76%,55%)] transition-all duration-500 ease-out"
+                      className="h-full bg-gradient-to-r from-[hsl(210,100%,65%)] via-[hsl(180,85%,60%)] to-[hsl(160,80%,55%)] transition-all duration-500 ease-out"
                       style={{ width: `${generationProgress}%` }}
                     />
                   </div>
@@ -755,10 +979,20 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               )}
 
               {/* Status messages */}
-              {!imagePreview && !isGenerating && !limitReached && (
-                <p className="text-center text-xs text-muted-foreground">
-                  {language === 'ar' ? '← اختر صورة للبدء' : '← Select an image to start'}
-                </p>
+              {!isGenerating && !limitReached && (
+                generationMode === 'image_to_video' ? (
+                  !imagePreview && (
+                    <p className="text-center text-xs text-muted-foreground">
+                      {language === 'ar' ? '← اختر صورة للبدء' : '← Select an image to start'}
+                    </p>
+                  )
+                ) : (
+                  !prompt.trim() && (
+                    <p className="text-center text-xs text-muted-foreground">
+                      {language === 'ar' ? '← اكتب وصفاً للبدء' : '← Write a prompt to start'}
+                    </p>
+                  )
+                )
               )}
             </div>
           </div>
@@ -819,7 +1053,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   </Button>
                   
                   <Button 
-                    className="h-12 flex-col gap-1 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-700 dark:text-purple-300"
+                    className="h-12 flex-col gap-1 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-800 dark:text-cyan-300"
                     onClick={handleShare}
                   >
                     <Share2 className="h-5 w-5" />
@@ -876,7 +1110,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     <span className="text-[10px] font-medium">{language === 'ar' ? 'تحميل' : 'Download'}</span>
                   </Button>
                   <Button
-                    className="h-11 flex-col gap-1 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-700 dark:text-purple-300"
+                    className="h-11 flex-col gap-1 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-800 dark:text-cyan-300"
                     onClick={() => onSaveSuccess?.()}
                   >
                     <FolderOpen className="h-5 w-5" />

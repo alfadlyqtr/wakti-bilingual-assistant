@@ -4,6 +4,7 @@ import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { AudioPlayer } from '@/components/music/AudioPlayer';
 import { useTheme } from '@/providers/ThemeProvider';
+import InAppWaktiEscape from '@/components/public/InAppWaktiEscape';
 
 interface TrackRecord {
   id: string;
@@ -108,35 +109,38 @@ export default function MusicShare() {
   const createdAt = new Date(track.created_at).toLocaleString();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-xl p-4 md:p-6 space-y-4">
-        <div className="space-y-1">
-          <h1 className="text-lg md:text-xl font-semibold">
-            {language === 'ar' ? 'مقطع موسيقي من Wakti' : 'Wakti Music Track'}
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            {createdAt}
-          </p>
-        </div>
-
-        {track.prompt && (
-          <p className="text-sm text-muted-foreground line-clamp-3" title={track.prompt || undefined}>
-            {track.prompt}
-          </p>
-        )}
-
-        {track.include_styles && track.include_styles.length > 0 && (
-          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-            {track.include_styles.map((s) => (
-              <span key={s} className="px-2 py-0.5 rounded-full bg-muted">
-                {s}
-              </span>
-            ))}
+    <div className="min-h-screen bg-background">
+      <InAppWaktiEscape language={language === 'ar' ? 'ar' : 'en'} containerClassName="max-w-xl" />
+      <div className="flex items-center justify-center p-4">
+        <Card className="w-full max-w-xl p-4 md:p-6 space-y-4">
+          <div className="space-y-1">
+            <h1 className="text-lg md:text-xl font-semibold">
+              {language === 'ar' ? 'مقطع موسيقي من Wakti' : 'Wakti Music Track'}
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              {createdAt}
+            </p>
           </div>
-        )}
 
-        <AudioPlayer src={playUrl} className="w-full" />
-      </Card>
+          {track.prompt && (
+            <p className="text-sm text-muted-foreground line-clamp-3" title={track.prompt || undefined}>
+              {track.prompt}
+            </p>
+          )}
+
+          {track.include_styles && track.include_styles.length > 0 && (
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              {track.include_styles.map((s) => (
+                <span key={s} className="px-2 py-0.5 rounded-full bg-muted">
+                  {s}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <AudioPlayer src={playUrl} className="w-full" />
+        </Card>
+      </div>
     </div>
   );
 }

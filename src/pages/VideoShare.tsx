@@ -5,6 +5,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Loader2, Play, ArrowLeft } from 'lucide-react';
+import InAppWaktiEscape from '@/components/public/InAppWaktiEscape';
 
 interface VideoData {
   id: string;
@@ -145,6 +146,7 @@ export default function VideoShare() {
 
   return (
     <div className="min-h-screen bg-background">
+      <InAppWaktiEscape language={language === 'ar' ? 'ar' : 'en'} />
       {/* Main content */}
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         {/* Video player */}

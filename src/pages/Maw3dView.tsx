@@ -15,6 +15,7 @@ import { Maw3dEvent, Maw3dRsvp, EventStyle } from '@/types/maw3d';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import CalendarDropdown from '@/components/events/CalendarDropdown';
+import InAppWaktiEscape from '@/components/public/InAppWaktiEscape';
 
 export default function Maw3dView() {
   const { shortId } = useParams();
@@ -428,6 +429,7 @@ export default function Maw3dView() {
     <div className="h-full flex flex-col bg-background">
       <Toaster />
       <div className="flex-1 overflow-y-auto">
+        <InAppWaktiEscape language={eventLanguage} containerClassName="max-w-2xl" />
         <div className="container mx-auto px-4 py-8 pb-32">
           <div className="max-w-2xl mx-auto space-y-6">
             

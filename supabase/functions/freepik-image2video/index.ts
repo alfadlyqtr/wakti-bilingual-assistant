@@ -8,10 +8,11 @@ const corsHeaders = {
 };
 
 // ============================================================
-// Provider: KIE.ai  |  Model: Grok Imagine (Image→Video)
+// Provider: KIE.ai  |  Models: Grok Imagine (Image→Video & Text→Video)
 // ============================================================
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY") || "";
 const KIE_MODEL = "grok-imagine/image-to-video";
+const KIE_TEXT2VIDEO_MODEL = "grok-imagine/text-to-video";
 const KIE_CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_STATUS_URL = "https://api.kie.ai/api/v1/jobs/recordInfo";
 
@@ -63,6 +64,10 @@ type StorageBucketClient = {
     options: { contentType: string; cacheControl?: string; upsert?: boolean }
   ) => Promise<{ error?: { message?: string } | null }>;
   getPublicUrl: (path: string) => { data?: { publicUrl?: string } };
+  createSignedUrl: (
+    path: string,
+    expiresIn: number
+  ) => Promise<{ data?: { signedUrl?: string } | null; error?: { message?: string } | null }>;
 };
 
 type StorageClient = {
@@ -98,9 +103,64 @@ async function uploadImageDataUriToPublicUrl(
 
   if (uploadError) throw new Error(uploadError.message || "Failed to upload image");
 
-  const { data } = supabase.storage.from("message_attachments").getPublicUrl(path);
-  if (!data?.publicUrl) throw new Error("Failed to get public URL");
-  return data.publicUrl;
+  const { data, error } = await supabase.storage
+    .from("message_attachments")
+    .createSignedUrl(path, 60 * 60 * 6);
+  if (error) throw new Error(error.message || "Failed to create signed URL");
+  if (!data?.signedUrl) throw new Error("Failed to get signed URL");
+  return data.signedUrl;
+}
+
+async function createTextToVideoTask(
+  prompt: string,
+  duration?: string,
+  aspectRatio?: string,
+  mode?: string,
+): Promise<{ task_id: string; status: string }> {
+  const validDuration = duration === "10" ? "10" : "6";
+  const validAspectRatio = ["2:3", "3:2", "1:1", "16:9", "9:16"].includes(aspectRatio || "")
+    ? aspectRatio!
+    : "9:16";
+  const validMode = ["fun", "normal", "spicy"].includes(mode || "") ? mode! : "normal";
+
+  const input: Record<string, unknown> = {
+    prompt: prompt.slice(0, 5000),
+    aspect_ratio: validAspectRatio,
+    mode: validMode,
+    duration: validDuration,
+  };
+
+  const requestBody = {
+    model: KIE_TEXT2VIDEO_MODEL,
+    input,
+  };
+
+  console.log("[kie-text2video] Creating task, model:", KIE_TEXT2VIDEO_MODEL);
+
+  const response = await fetch(KIE_CREATE_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${KIE_API_KEY}`,
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("[kie-text2video] Create task failed:", response.status, errorText);
+    throw new Error(`KIE API error: ${response.status} - ${errorText}`);
+  }
+
+  const result: KieCreateResponse = await response.json();
+  console.log("[kie-text2video] Create response:", JSON.stringify(result));
+
+  if (result.code !== 200 || !result.data?.taskId) {
+    throw new Error(`KIE API error: ${result.msg || result.message || "Failed to create task"}`);
+  }
+
+  console.log("[kie-text2video] Task created, taskId:", result.data.taskId);
+  return { task_id: result.data.taskId, status: "waiting" };
 }
 
 async function createVideoTask(
@@ -332,9 +392,19 @@ serve(async (req) => {
       });
     }
 
+    // Parse generation type
+    const generationType = body.generation_type || "image_to_video";
+
     // Default mode: create task
-    if (!image) {
+    if (generationType === "image_to_video" && !image) {
       return new Response(JSON.stringify({ error: "Missing image (URL or base64)" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (generationType === "text_to_video" && (!prompt || !prompt.trim())) {
+      return new Response(JSON.stringify({ error: "Missing prompt for text-to-video" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -371,23 +441,30 @@ serve(async (req) => {
       );
     }
 
-    // KIE.ai requires a public image URL — upload data URI if needed
-    let imageUrl: string = image;
-    if (typeof image === "string" && image.startsWith("data:image/")) {
-      try {
-        imageUrl = await uploadImageDataUriToPublicUrl(supabase, user.id, image);
-        console.log("[kie-image2video] Uploaded data URI to public URL for KIE");
-      } catch (e) {
-        console.error("[kie-image2video] Failed to upload image:", e);
-        return new Response(
-          JSON.stringify({ error: e instanceof Error ? e.message : "Failed to prepare image" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
+    let task: { task_id: string; status: string };
 
-    // Create the task
-    const task = await createVideoTask(imageUrl, prompt, reqDuration);
+    if (generationType === "text_to_video") {
+      // Text-to-Video: no image needed
+      const aspectRatio = body.aspect_ratio as string | undefined;
+      const videoMode = body.video_mode as string | undefined;
+      task = await createTextToVideoTask(prompt, reqDuration, aspectRatio, videoMode);
+    } else {
+      // Image-to-Video: requires image URL
+      let imageUrl: string = image;
+      if (typeof image === "string" && image.startsWith("data:image/")) {
+        try {
+          imageUrl = await uploadImageDataUriToPublicUrl(supabase, user.id, image);
+          console.log("[kie-image2video] Uploaded data URI to public URL for KIE");
+        } catch (e) {
+          console.error("[kie-image2video] Failed to upload image:", e);
+          return new Response(
+            JSON.stringify({ error: e instanceof Error ? e.message : "Failed to prepare image" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+      task = await createVideoTask(imageUrl, prompt, reqDuration);
+    }
 
     // If mode is 'async', return task_id immediately for frontend polling
     if (mode === "async") {

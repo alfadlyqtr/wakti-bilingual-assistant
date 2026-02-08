@@ -2,6 +2,8 @@
 import { supabase, ensurePassport, getCurrentUserId } from "@/integrations/supabase/client";
 import { TRServiceCache } from "./trServiceCache";
 
+type TRPushKind = 'tr_reminder_due' | 'tr_task_due';
+
 export interface TRTask {
   id: string;
   user_id: string;
@@ -56,6 +58,126 @@ export interface TRSharedAccess {
 }
 
 export class TRService {
+  private static parseLocalDueDateTimeISO(dueDate?: string | null, dueTime?: string | null): string | null {
+    if (!dueDate) return null;
+    if (!dueTime) return null;
+    const t = (dueTime || '').trim();
+    if (!t) return null;
+
+    // Accept HH:mm or HH:mm:ss
+    const normalizedTime = t.length === 5 ? `${t}:00` : t;
+    const d = new Date(`${dueDate}T${normalizedTime}`);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString();
+  }
+
+  private static async cancelScheduledTRPush(params: { userId: string; kind: TRPushKind; itemId: string }) {
+    try {
+      await ensurePassport();
+      const jsonKey = params.kind === 'tr_reminder_due' ? 'tr_reminder_id' : 'tr_task_id';
+
+      const { data: notifRow, error } = await (supabase as any)
+        .from('notification_history')
+        .select('id, user_id, data, scheduled_for, push_sent')
+        .eq('user_id', params.userId)
+        .eq('type', params.kind)
+        .contains('data', { [jsonKey]: params.itemId })
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !notifRow) return;
+
+      const onesignalId = notifRow?.data?.onesignal_notification_id || null;
+      if (!onesignalId) {
+        // Nothing to cancel
+        return;
+      }
+
+      const { error: cancelErr } = await supabase.functions.invoke('cancel-onesignal-notification', {
+        body: {
+          user_id: params.userId,
+          notification_id: notifRow.id,
+          onesignal_notification_id: onesignalId,
+        },
+      });
+
+      if (cancelErr) {
+        console.warn('[TRService] Failed to cancel OneSignal notification:', cancelErr);
+      }
+    } catch (e) {
+      console.warn('[TRService] cancelScheduledTRPush error:', e);
+    }
+  }
+
+  private static async scheduleTRPush(params: {
+    userId: string;
+    kind: TRPushKind;
+    itemId: string;
+    title: string;
+    body: string;
+    scheduledForISO: string;
+    deepLink?: string;
+  }) {
+    try {
+      const scheduledDate = new Date(params.scheduledForISO);
+      if (isNaN(scheduledDate.getTime())) return;
+      if (scheduledDate.getTime() < Date.now() + 30_000) {
+        // Avoid immediate/past pushes; those are handled elsewhere.
+        return;
+      }
+
+      await ensurePassport();
+
+      // Create a DB record first (scheduled_for future means instant_push_trigger will not fire)
+      const jsonKey = params.kind === 'tr_reminder_due' ? 'tr_reminder_id' : 'tr_task_id';
+      const { data: notifData, error: notifError } = await (supabase as any)
+        .from('notification_history')
+        .insert({
+          user_id: params.userId,
+          type: params.kind,
+          title: params.title,
+          body: params.body,
+          scheduled_for: params.scheduledForISO,
+          push_sent: false,
+          is_read: false,
+          deep_link: params.deepLink || '/tr',
+          data: {
+            source: 'tr',
+            [jsonKey]: params.itemId,
+            created_at: new Date().toISOString(),
+          },
+        })
+        .select('id')
+        .single();
+
+      if (notifError || !notifData?.id) {
+        console.warn('[TRService] Failed to create notification_history row:', notifError);
+        return;
+      }
+
+      // Schedule OneSignal via Edge Function
+      const { error: scheduleErr } = await supabase.functions.invoke('schedule-tr-push', {
+        body: {
+          user_id: params.userId,
+          kind: params.kind,
+          item_id: params.itemId,
+          notification_id: notifData.id,
+          reminder_text: params.body,
+          title: params.title,
+          scheduled_for: params.scheduledForISO,
+          deep_link: params.deepLink || '/tr',
+        },
+      });
+
+      if (scheduleErr) {
+        console.warn('[TRService] Failed to schedule push:', scheduleErr);
+      }
+    } catch (e) {
+      console.warn('[TRService] scheduleTRPush error:', e);
+    }
+  }
+
   // Helper method to sanitize task data before database operations
   private static sanitizeTaskData(taskData: any) {
     const sanitized = { ...taskData };
@@ -183,6 +305,23 @@ export class TRService {
     // Clear cache to force refresh
     TRServiceCache.clearTasks();
     
+    // Schedule push (tasks only if due_time exists)
+    try {
+      const scheduledForISO = this.parseLocalDueDateTimeISO(data?.due_date, data?.due_time);
+      if (scheduledForISO) {
+        await this.cancelScheduledTRPush({ userId, kind: 'tr_task_due', itemId: data.id });
+        await this.scheduleTRPush({
+          userId,
+          kind: 'tr_task_due',
+          itemId: data.id,
+          title: 'Task Due',
+          body: data.title,
+          scheduledForISO,
+          deepLink: '/tr',
+        });
+      }
+    } catch {}
+
     return data;
   }
 
@@ -200,11 +339,38 @@ export class TRService {
     
     // Clear cache to force refresh
     TRServiceCache.clearTasks();
-    
+
+    // Reschedule push if due date/time changed; cancel if due_time removed
+    try {
+      const userId = await getCurrentUserId();
+      if (userId) {
+        const scheduledForISO = this.parseLocalDueDateTimeISO(data?.due_date, data?.due_time);
+        await this.cancelScheduledTRPush({ userId, kind: 'tr_task_due', itemId: id });
+        if (scheduledForISO) {
+          await this.scheduleTRPush({
+            userId,
+            kind: 'tr_task_due',
+            itemId: id,
+            title: 'Task Due',
+            body: data.title,
+            scheduledForISO,
+            deepLink: '/tr',
+          });
+        }
+      }
+    } catch {}
+
     return data;
   }
 
   static async deleteTask(id: string): Promise<void> {
+    try {
+      const userId = await getCurrentUserId();
+      if (userId) {
+        await this.cancelScheduledTRPush({ userId, kind: 'tr_task_due', itemId: id });
+      }
+    } catch {}
+
     const { error } = await supabase
       .from('tr_tasks')
       .delete()
@@ -367,7 +533,24 @@ export class TRService {
     
     // Clear cache to force refresh
     TRServiceCache.clearReminders();
-    
+
+    // Schedule push (reminders require due_time)
+    try {
+      const scheduledForISO = this.parseLocalDueDateTimeISO(data?.due_date, data?.due_time);
+      if (scheduledForISO) {
+        await this.cancelScheduledTRPush({ userId, kind: 'tr_reminder_due', itemId: data.id });
+        await this.scheduleTRPush({
+          userId,
+          kind: 'tr_reminder_due',
+          itemId: data.id,
+          title: 'Reminder',
+          body: data.title,
+          scheduledForISO,
+          deepLink: '/tr',
+        });
+      }
+    } catch {}
+
     return data;
   }
 
@@ -385,7 +568,26 @@ export class TRService {
     
     // Clear cache to force refresh
     TRServiceCache.clearReminders();
-    
+
+    try {
+      const userId = await getCurrentUserId();
+      if (userId) {
+        const scheduledForISO = this.parseLocalDueDateTimeISO(data?.due_date, data?.due_time);
+        await this.cancelScheduledTRPush({ userId, kind: 'tr_reminder_due', itemId: id });
+        if (scheduledForISO) {
+          await this.scheduleTRPush({
+            userId,
+            kind: 'tr_reminder_due',
+            itemId: id,
+            title: 'Reminder',
+            body: data.title,
+            scheduledForISO,
+            deepLink: '/tr',
+          });
+        }
+      }
+    } catch {}
+
     return data;
   }
 
@@ -414,11 +616,37 @@ export class TRService {
     
     // Clear cache to force refresh
     TRServiceCache.clearReminders();
+
+    try {
+      const userId = await getCurrentUserId();
+      if (userId) {
+        const scheduledForISO = this.parseLocalDueDateTimeISO(data?.due_date, data?.due_time);
+        await this.cancelScheduledTRPush({ userId, kind: 'tr_reminder_due', itemId: id });
+        if (scheduledForISO) {
+          await this.scheduleTRPush({
+            userId,
+            kind: 'tr_reminder_due',
+            itemId: id,
+            title: 'Reminder',
+            body: data.title,
+            scheduledForISO,
+            deepLink: '/tr',
+          });
+        }
+      }
+    } catch {}
     
     return data;
   }
 
   static async deleteReminder(id: string): Promise<void> {
+    try {
+      const userId = await getCurrentUserId();
+      if (userId) {
+        await this.cancelScheduledTRPush({ userId, kind: 'tr_reminder_due', itemId: id });
+      }
+    } catch {}
+
     const { error } = await supabase
       .from('tr_reminders')
       .delete()

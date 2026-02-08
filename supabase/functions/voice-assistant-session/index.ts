@@ -41,13 +41,18 @@ serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const { sdp_offer } = body;
+    const { sdp_offer, timezone, local_now } = body;
 
     if (!sdp_offer) {
       return new Response(JSON.stringify({ error: "Missing sdp_offer" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Client-local context (optional): helps debugging and future context-aware behavior
+    if (timezone || local_now) {
+      console.log('[voice-assistant-session] Client context:', { timezone, local_now });
     }
 
     // Fetch user display name for greeting (never use email)
@@ -102,6 +107,8 @@ serve(async (req: Request) => {
       sdp_answer: sdpAnswer,
       model: MODEL,
       display_name: displayName,
+      timezone: timezone || null,
+      local_now: local_now || null,
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
