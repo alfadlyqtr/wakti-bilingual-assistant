@@ -439,15 +439,13 @@ function getBrowserLocation(timeoutMs: number = 10000): Promise<NativeLocationRe
 }
 
 /**
- * Get current location — doc-accurate Natively SDK flow with browser fallback.
+ * Get current location — Browser GPS first, Natively SDK fallback.
  *
- * Flow (per Natively docs):
+ * Flow (Option A — most accurate):
  * 1. Check cache (unless skipCache)
- * 2. Wait for native bridge
- * 3. Check permission via permission()
- * 4. If skipCache (fresh GPS needed): use start()/stop() foreground tracking
- * 5. Otherwise: use current() one-shot
- * 6. If Natively SDK fails or unavailable: browser geolocation fallback
+ * 2. ATTEMPT 1: Browser geolocation (device GPS via WebView — most reliable)
+ * 3. ATTEMPT 2: Natively SDK (permission check → foreground tracking or current())
+ * 4. If all fail: return null
  */
 export async function getNativeLocation(options?: {
   timeoutMs?: number;
@@ -479,7 +477,17 @@ export async function getNativeLocation(options?: {
     }
   }
 
-  // ── ATTEMPT 1: Natively SDK (native device GPS) ──
+  // ── ATTEMPT 1: Browser geolocation (device GPS via WebView — most reliable) ──
+  console.log('[NativelyLocation] 🌐 ATTEMPT 1: Browser geolocation (device GPS)...');
+  const browserResult = await getBrowserLocation(timeoutMs);
+  if (browserResult) {
+    console.log('[NativelyLocation] ✅ Browser GPS succeeded:', browserResult.latitude, browserResult.longitude);
+    return browserResult;
+  }
+  console.warn('[NativelyLocation] Browser geolocation failed or denied');
+
+  // ── ATTEMPT 2: Natively SDK (native bridge GPS) ──
+  console.log('[NativelyLocation] 🛰️ ATTEMPT 2: Natively SDK...');
   const bridgeReady = await waitForNativeBridge();
   if (bridgeReady) {
     const instance = getInstance();
@@ -489,17 +497,15 @@ export async function getNativeLocation(options?: {
       console.log('[NativelyLocation] Permission:', perm);
 
       if (perm === 'IN_USE' || perm === 'ALWAYS') {
-        // Permission granted — get location
         let result: NativeLocationResult | null = null;
 
         if (skipCache) {
           // Fresh GPS needed (search/near-me) → foreground tracking (WhatsApp-style)
-          console.log('[NativelyLocation] 🛰️ Using foreground tracking for fresh GPS...');
+          console.log('[NativelyLocation] Using foreground tracking for fresh GPS...');
           result = await getForegroundLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
         }
 
         if (!result) {
-          // Either not skipCache, or foreground tracking failed → try current() one-shot
           console.log('[NativelyLocation] Using current() one-shot...');
           result = await getCurrentLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
         }
@@ -510,11 +516,9 @@ export async function getNativeLocation(options?: {
         console.warn('[NativelyLocation] SDK returned no usable coordinates');
       } else if (perm === 'DENIED') {
         console.warn('[NativelyLocation] ⚠️ Location permission DENIED — trying current() with fallbackToSettings=true');
-        // Try current() anyway — it will show the "open settings" prompt if fallbackToSettings is true
         const result = await getCurrentLocation(instance, minAccuracy, accuracyType, priority, true, timeoutMs);
         if (result) return result;
       } else {
-        // UNKNOWN — try current() anyway, SDK may handle it
         console.log('[NativelyLocation] Permission unknown — trying current() anyway...');
         const result = await getCurrentLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
         if (result) return result;
@@ -524,13 +528,6 @@ export async function getNativeLocation(options?: {
     }
   } else {
     console.warn('[NativelyLocation] Native bridge not available');
-  }
-
-  // ── ATTEMPT 2: Browser geolocation fallback ──
-  console.log('[NativelyLocation] Natively SDK did not return location — trying browser fallback...');
-  const browserResult = await getBrowserLocation(timeoutMs);
-  if (browserResult) {
-    return browserResult;
   }
 
   console.warn('[NativelyLocation] ❌ All location methods failed — returning null');
