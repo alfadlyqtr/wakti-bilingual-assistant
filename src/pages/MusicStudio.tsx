@@ -236,6 +236,116 @@ const handleDownload = async (url: string, filename: string) => {
   );
  }
 
+ function VideoThumbnail({ videoUrl, storagePath, fallbackThumbnail, fallbackDuration }: {
+  videoUrl: string | null;
+  storagePath: string | null;
+  fallbackThumbnail: string | null;
+  fallbackDuration: number | null;
+}) {
+  const [videoSrc, setVideoSrc] = useState<string | null>(null);
+  const [realDuration, setRealDuration] = useState<number | null>(fallbackDuration);
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const attemptedRef = useRef(false);
+
+  useEffect(() => {
+    if (fallbackThumbnail || attemptedRef.current) return;
+    if (!storagePath && !videoUrl) return;
+    attemptedRef.current = true;
+
+    let cancelled = false;
+    const load = async () => {
+      try {
+        if (storagePath) {
+          // Use signed URL instead of downloading full blob — much faster
+          const { data: urlData, error } = await supabase.storage
+            .from('videos')
+            .createSignedUrl(storagePath, 3600);
+          if (error || !urlData?.signedUrl || cancelled) {
+            if (!cancelled) setFailed(true);
+            return;
+          }
+          if (!cancelled) setVideoSrc(urlData.signedUrl);
+        } else if (videoUrl) {
+          if (!cancelled) setVideoSrc(videoUrl);
+        }
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    };
+    load();
+
+    // Fallback: stop spinner after 8s if video never loads
+    const timeout = setTimeout(() => {
+      if (!cancelled) setFailed(true);
+    }, 8000);
+
+    return () => { cancelled = true; clearTimeout(timeout); };
+  }, [storagePath, videoUrl, fallbackThumbnail]);
+
+  const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    const vid = e.currentTarget;
+    if (vid.duration && isFinite(vid.duration)) {
+      setRealDuration(Math.round(vid.duration));
+    }
+    vid.currentTime = 0.5;
+  };
+
+  const handleSeeked = () => setLoaded(true);
+
+  const formatDur = (sec: number | null | undefined) => {
+    if (!sec || sec <= 0) return '';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
+  };
+
+  const showVideo = !fallbackThumbnail && videoSrc && !failed;
+
+  return (
+    <>
+      {fallbackThumbnail ? (
+        <img src={fallbackThumbnail} alt="Video" className="w-full h-full object-cover" loading="lazy" />
+      ) : showVideo ? (
+        <>
+          <video
+            src={videoSrc!}
+            muted
+            playsInline
+            crossOrigin="anonymous"
+            preload="metadata"
+            onLoadedMetadata={handleLoadedMetadata}
+            onSeeked={handleSeeked}
+            onError={() => setFailed(true)}
+            className={`w-full h-full object-cover ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          />
+          {!loaded && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/50" />
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+          {(storagePath || videoUrl) && !failed ? (
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/50" />
+          ) : (
+            <Video className="h-6 w-6 text-muted-foreground" />
+          )}
+        </div>
+      )}
+      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+        <Play className="h-8 w-8 text-white" />
+      </div>
+      {!!realDuration && (
+        <div className="absolute bottom-1 right-1 text-[10px] px-1.5 py-0.5 rounded bg-black/70 text-white font-medium">
+          {formatDur(realDuration)}
+        </div>
+      )}
+    </>
+  );
+}
+
  function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
   const { language } = useTheme();
   const { user } = useAuth();
@@ -276,9 +386,13 @@ const handleDownload = async (url: string, filename: string) => {
           }
 
           if ((v as any).thumbnail_url) {
-            const thumbPath = (v as any).thumbnail_url as string;
-            const { data: tUrl } = supabase.storage.from('videos').getPublicUrl(thumbPath);
-            thumbnailSignedUrl = tUrl?.publicUrl || null;
+            const thumbVal = (v as any).thumbnail_url as string;
+            if (thumbVal.startsWith('http')) {
+              thumbnailSignedUrl = thumbVal;
+            } else {
+              const { data: tUrl } = supabase.storage.from('videos').getPublicUrl(thumbVal);
+              thumbnailSignedUrl = tUrl?.publicUrl || null;
+            }
           }
 
           return { ...v, signedUrl, thumbnailSignedUrl, source: 'user' };
@@ -298,7 +412,7 @@ const handleDownload = async (url: string, filename: string) => {
         title: v.title || null,
         video_url: v.video_url || null,
         storage_path: null,
-        duration_seconds: v.duration_seconds || 5,
+        duration_seconds: v.duration_seconds || null,
         is_public: !!v.is_public,
         created_at: v.created_at,
         signedUrl: v.video_url || null,
@@ -347,7 +461,7 @@ const handleDownload = async (url: string, filename: string) => {
           title: v.title || 'AI Video',
           storage_path: storagePath,
           video_url: null,
-          duration_seconds: v.duration_seconds || 5,
+          duration_seconds: v.duration_seconds || null,
           aspect_ratio: '9:16',
           style_template: 'ai',
           is_public: v.is_public,
@@ -548,27 +662,14 @@ const handleDownload = async (url: string, filename: string) => {
                 <button
                   className="w-20 h-28 md:w-24 md:h-32 rounded-lg overflow-hidden bg-gradient-to-br from-primary/20 to-primary/5 shrink-0 relative group"
                   onClick={() => setActivePreviewId((prev) => (prev === v.id ? null : v.id))}
+                  aria-label={v.title || (language === 'ar' ? 'تشغيل الفيديو' : 'Play video')}
                 >
-                  {v.thumbnailSignedUrl ? (
-                    <img
-                      src={v.thumbnailSignedUrl}
-                      alt={v.title || 'Video'}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Video className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Play className="h-8 w-8 text-white" />
-                  </div>
-                  {!!v.duration_seconds && (
-                    <div className="absolute bottom-1 right-1 text-[10px] px-1.5 py-0.5 rounded bg-black/70 text-white font-medium">
-                      {formatDuration(v.duration_seconds)}
-                    </div>
-                  )}
+                  <VideoThumbnail
+                    videoUrl={v.signedUrl || v.video_url || null}
+                    storagePath={v.storage_path}
+                    fallbackThumbnail={v.thumbnailSignedUrl || null}
+                    fallbackDuration={v.duration_seconds}
+                  />
                 </button>
 
                 <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
@@ -608,6 +709,12 @@ const handleDownload = async (url: string, filename: string) => {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',
+                      })}
+                      {' · '}
+                      {new Date(v.created_at).toLocaleTimeString(language === 'ar' ? 'ar-SA' : 'en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true,
                       })}
                     </p>
                     <div className="flex items-center gap-1 mt-1">

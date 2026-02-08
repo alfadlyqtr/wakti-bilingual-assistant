@@ -411,18 +411,22 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
           }
 
           if ((v as any).thumbnail_url) {
-            const thumbPath = (v as any).thumbnail_url as string;
-            const { data: tSigned, error: tErr } = await supabase.storage
-              .from('videos')
-              .createSignedUrl(thumbPath, 3600);
-            if (tErr) {
-              console.error('[VideoMaker] Thumbnail signed URL error:', tErr);
-              const { data: tUrl } = supabase.storage.from('videos').getPublicUrl(thumbPath);
-              thumbnailSignedUrl = tUrl?.publicUrl || null;
+            const thumbVal = (v as any).thumbnail_url as string;
+            if (thumbVal.startsWith('http')) {
+              thumbnailSignedUrl = thumbVal;
             } else {
-              thumbnailSignedUrl = tSigned?.signedUrl || null;
+              const { data: tSigned, error: tErr } = await supabase.storage
+                .from('videos')
+                .createSignedUrl(thumbVal, 3600);
+              if (tErr) {
+                console.error('[VideoMaker] Thumbnail signed URL error:', tErr);
+                const { data: tUrl } = supabase.storage.from('videos').getPublicUrl(thumbVal);
+                thumbnailSignedUrl = tUrl?.publicUrl || null;
+              } else {
+                thumbnailSignedUrl = tSigned?.signedUrl || null;
+              }
             }
-            console.log('[VideoMaker] Thumbnail URL:', thumbnailSignedUrl ? 'OK' : 'FAILED', 'path:', thumbPath);
+            console.log('[VideoMaker] Thumbnail URL:', thumbnailSignedUrl ? 'OK' : 'FAILED');
           }
 
           return { ...v, signedUrl, thumbnailSignedUrl };

@@ -748,13 +748,13 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
         // This fires when the AI audio actually finishes playing on the client
         console.log('[VoiceAssistant] Audio playback stopped (client)');
 
-        // Always re-mute remote audio after any playback finishes
+        // Always re-mute remote audio and clear intentional speech flag
+        intentionalSpeechRef.current = false;
         setRemoteAudioMuted(true);
 
         if (waitingForGreetingEndRef.current) {
           waitingForGreetingEndRef.current = false;
           greetingDoneRef.current = true;
-          intentionalSpeechRef.current = false;
           setTimeout(() => {
             setVoiceState('idle');
             setAiTranscript('');
@@ -776,20 +776,34 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
               waitingForGreetingEndRef.current = false;
               greetingDoneRef.current = true;
               intentionalSpeechRef.current = false;
+              setRemoteAudioMuted(true);
               setVoiceState('idle');
               setAiTranscript('');
             }
           }, 4000);
         }
 
-        // After ANY response completes, ALWAYS silence the AI to prevent chatbot behavior.
-        // The AI must never auto-respond to user audio — it only speaks when we explicitly
-        // send a "Say EXACTLY this" instruction.
-        intentionalSpeechRef.current = false;
+        if (wasIntentionalSpeech) {
+          // DO NOT mute here — the audio is still playing on the client.
+          // output_audio_buffer.stopped will mute when playback actually ends.
+          // Just add a safety fallback in case that event never fires.
+          console.log('[VoiceAssistant] response.done for intentional speech — letting audio finish playing');
+          setTimeout(() => {
+            // If output_audio_buffer.stopped hasn't fired after 5s, force mute
+            if (allowRemoteAudioRef.current) {
+              console.log('[VoiceAssistant] Fallback: force-muting after intentional speech timeout');
+              intentionalSpeechRef.current = false;
+              setRemoteAudioMuted(true);
+            }
+          }, 5000);
+        } else {
+          // Non-intentional response (chatbot auto-reply) — kill it immediately
+          console.log('[VoiceAssistant] response.done for NON-intentional speech — muting immediately');
+          intentionalSpeechRef.current = false;
+          setRemoteAudioMuted(true);
+        }
 
-        // Safety: mute remote audio to hard-block any unexpected speech.
-        setRemoteAudioMuted(true);
-
+        // After ANY response completes, silence the AI model to prevent future chatbot behavior.
         try {
           if (dcRef.current?.readyState === 'open') {
             dcRef.current.send(JSON.stringify({ type: 'response.cancel' }));
@@ -797,6 +811,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
               type: 'session.update',
               session: {
                 instructions: 'Do NOT speak. Do NOT respond. Only transcribe audio input silently. Say absolutely nothing.',
+                modalities: ['text'],
               }
             }));
           }

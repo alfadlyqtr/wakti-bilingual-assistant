@@ -329,7 +329,12 @@ Return ONLY the JSON, no additional text.`;
           inputText: "[image extraction]",
           outputText: extractedText,
           durationMs: visionDuration,
-          status: "success"
+          status: "success",
+          metadata: {
+            mode: "extract",
+            language,
+            extractTarget,
+          }
         });
 
         return new Response(
@@ -386,6 +391,21 @@ Return ONLY the JSON, no additional text.`;
     const systemPrompt = buildSystemPrompt(language, { tone, register, languageVariant, emojis, contentType });
     const genParams = getGenerationParams(contentType, tone, length || replyLength || 'medium', register);
     console.log("🎯 Generation parameters:", genParams);
+
+    const logMetadataBase = {
+      mode,
+      language,
+      webSearch: !!webSearch,
+      contentType: contentType ?? null,
+      tone: tone ?? null,
+      register: register ?? null,
+      languageVariant: languageVariant ?? null,
+      emojis: emojis ?? null,
+      length: length ?? null,
+      replyLength: replyLength ?? null,
+      temperatureUsed: genParams.temperature,
+      maxTokensUsed: genParams.max_tokens,
+    };
 
     let generatedText: string | undefined;
 
@@ -480,7 +500,11 @@ ${prompt}`;
               inputText: prompt,
               outputText: generatedText,
               durationMs: webSearchDuration,
-              status: "success"
+              status: "success",
+              metadata: {
+                ...logMetadataBase,
+                webSearchUsed: true,
+              }
             });
 
             return new Response(
@@ -548,7 +572,11 @@ ${prompt}`;
               inputText: prompt,
               outputText: generatedText,
               durationMs: claudeDuration,
-              status: "success"
+              status: "success",
+              metadata: {
+                ...logMetadataBase,
+                webSearchUsed: false,
+              }
             });
 
             return new Response(
@@ -611,7 +639,11 @@ ${prompt}`;
               inputText: prompt,
               outputText: generatedText,
               durationMs: openaiDuration,
-              status: "success"
+              status: "success",
+              metadata: {
+                ...logMetadataBase,
+                webSearchUsed: false,
+              }
             });
 
             return new Response(
@@ -660,7 +692,11 @@ ${prompt}`;
             inputText: prompt,
             outputText: generatedText,
             durationMs: geminiDuration,
-            status: "success"
+            status: "success",
+            metadata: {
+              ...logMetadataBase,
+              webSearchUsed: false,
+            }
           });
 
           return new Response(
@@ -752,7 +788,10 @@ ${prompt}`;
       provider: "anthropic",
       model: CLAUDE_MODEL,
       status: "error",
-      errorMessage: err.message
+      errorMessage: err.message,
+      metadata: {
+        note: "Unhandled error in text-generator (request payload may be unavailable at this scope)"
+      }
     });
 
     return new Response(
@@ -796,88 +835,231 @@ function buildSystemPrompt(language: string, fields: StructuredFields): string {
 
   // ── Base identity ──
   const basePrompt = isArabic
-    ? 'أنت مساعد ذكي متخصص في إنشاء النصوص عالية الجودة. مهمتك هي إنشاء محتوى واضح ومفيد ومتسق بناءً على طلب المستخدم.'
-    : "You are an intelligent assistant specialized in generating high-quality text content. Your task is to create clear, helpful, and coherent content based on the user's request.";
+    ? 'أنت كاتب محترف متخصص في إنشاء النصوص. مهمتك هي إنشاء محتوى بناءً على طلب المستخدم مع الالتزام الصارم بكل الإعدادات أدناه.'
+    : "You are a professional writer. Your job is to generate text content following the user's request while strictly obeying EVERY setting below.";
 
   // ── Hard formatting rules ──
   const formatRules = isArabic
-    ? `
-قواعد التنسيق (إلزامية):
-- اكتب نصاً واضحاً ومباشراً
-- تجنب استخدام النجوم (*) للتنسيق
-- ممنوع منعاً باتاً استخدام شرطة إم (—) أو شرطة إن (–). لا تستخدمها أبداً تحت أي ظرف.
-- ركز على إنشاء النص فقط`
-    : `
-Formatting rules (MANDATORY):
-- Write clear and direct text
-- Do not use asterisks (*) for formatting
-- ABSOLUTELY NEVER use em-dashes (—) or en-dashes (–). Not even once. Use commas, periods, or semicolons instead.
-- Focus only on text generation`;
+    ? `\n\n⚠️ قواعد التنسيق (إلزامية، لا استثناءات):\n- اكتب نصاً واضحاً ومباشراً\n- تجنب استخدام النجوم (*) للتنسيق\n- ممنوع منعاً باتاً استخدام شرطة إم (—) أو شرطة إن (–). لا تستخدمها أبداً. استخدم الفاصلة أو النقطة بدلاً منها.\n- ركز على إنشاء النص فقط`
+    : `\n\n⚠️ Formatting rules (MANDATORY, zero exceptions):\n- Write clear and direct text\n- Do not use asterisks (*) for formatting\n- ABSOLUTELY NEVER use em-dashes (—) or en-dashes (–). Not even once. Use commas, periods, or semicolons instead.\n- Focus only on text generation`;
 
   // ── Structured constraints block (from dropdown selections) ──
   const constraints: string[] = [];
 
-  // Content type
+  // ────────────────────────────────────────────────────
+  // CONTENT TYPE
+  // ────────────────────────────────────────────────────
   if (contentType) {
     const ctName = contentType.replace(/_/g, ' ');
-    constraints.push(isArabic ? `نوع المحتوى: ${ctName}` : `Content type: ${ctName}`);
+    constraints.push(isArabic ? `📄 نوع المحتوى: ${ctName}. التزم ببنية هذا النوع من المحتوى.` : `📄 Content type: ${ctName}. Follow the structure and conventions of this content type.`);
   }
 
-  // Tone
+  // ────────────────────────────────────────────────────
+  // TONE (detailed behavioral instructions per value)
+  // ────────────────────────────────────────────────────
   if (tone) {
-    if (tone === 'human') {
-      constraints.push(isArabic
-        ? 'النبرة: بشري طبيعي. اكتب وكأنك إنسان حقيقي. ممنوع أي أسلوب ذكاء اصطناعي. استخدم كلمات يومية بسيطة وتدفق طبيعي.'
-        : 'Tone: Human (natural). Write like a real person. Never mention AI, models, or assistants. Use simple everyday wording and natural flow. Avoid the overly-polished AI vibe.');
+    const toneInstructions: Record<string, { en: string; ar: string }> = {
+      human: {
+        en: '🎭 TONE = HUMAN (CRITICAL):\n  - Write EXACTLY like a real person typing a message. Not like an AI.\n  - Use contractions (don\'t, can\'t, I\'m, it\'s).\n  - Use filler words occasionally (well, honestly, actually, you know).\n  - Vary sentence length naturally. Some short. Some longer ones that flow.\n  - NEVER use phrases like "I hope this helps", "Please don\'t hesitate", "I\'d be happy to".\n  - NEVER mention AI, assistant, model, or capabilities.\n  - Sound like a friend writing, not a corporate bot.',
+        ar: '🎭 النبرة = بشري طبيعي (حرج):\n  - اكتب بالضبط مثل شخص حقيقي يكتب رسالة. ليس مثل ذكاء اصطناعي.\n  - استخدم أسلوب محادثة يومي طبيعي.\n  - نوّع في طول الجمل. بعضها قصير. وبعضها أطول.\n  - ممنوع عبارات مثل "أتمنى أن يكون هذا مفيداً" أو "لا تتردد".\n  - ممنوع ذكر الذكاء الاصطناعي أو المساعد.\n  - اكتب وكأنك صديق يكتب رسالة، مو روبوت.'
+      },
+      professional: {
+        en: '🎭 TONE = PROFESSIONAL: Write in a polished, business-appropriate manner. Clear structure, no slang, confident language.',
+        ar: '🎭 النبرة = مهني: اكتب بأسلوب مهني مصقول ومناسب للأعمال. بنية واضحة، بدون عامية، لغة واثقة.'
+      },
+      casual: {
+        en: '🎭 TONE = CASUAL: Write relaxed and conversational. Like texting a friend. Short sentences, simple words, laid-back vibe.',
+        ar: '🎭 النبرة = غير رسمي: اكتب بأسلوب مريح ومحادثة. مثل رسالة لصديق. جمل قصيرة، كلمات بسيطة.'
+      },
+      formal: {
+        en: '🎭 TONE = FORMAL: Write with formal, elevated language. Complete sentences, no contractions, respectful and dignified.',
+        ar: '🎭 النبرة = رسمي: اكتب بلغة رسمية راقية. جمل كاملة، بدون اختصارات، أسلوب محترم ووقور.'
+      },
+      friendly: {
+        en: '🎭 TONE = FRIENDLY: Write warm and approachable. Use positive language, be encouraging, feel like a helpful friend.',
+        ar: '🎭 النبرة = ودود: اكتب بأسلوب دافئ وقريب. استخدم لغة إيجابية ومشجعة.'
+      },
+      persuasive: {
+        en: '🎭 TONE = PERSUASIVE: Write to convince. Use strong arguments, emotional appeal, call to action. Be compelling.',
+        ar: '🎭 النبرة = إقناعي: اكتب لتقنع. استخدم حجج قوية، جاذبية عاطفية، ودعوة للعمل.'
+      },
+      romantic: {
+        en: '🎭 TONE = ROMANTIC: Write with warmth, tenderness, and emotional depth. Poetic touches welcome. Heartfelt.',
+        ar: '🎭 النبرة = رومانسي: اكتب بدفء وحنان وعمق عاطفي. لمسات شعرية مرحب بها.'
+      },
+      neutral: {
+        en: '🎭 TONE = NEUTRAL: Write balanced and objective. No strong emotion, no bias. Straightforward and factual.',
+        ar: '🎭 النبرة = محايد: اكتب بتوازن وموضوعية. بدون عاطفة قوية أو تحيز. مباشر وواقعي.'
+      },
+      empathetic: {
+        en: '🎭 TONE = EMPATHETIC: Write with understanding and compassion. Acknowledge feelings, be supportive and kind.',
+        ar: '🎭 النبرة = متعاطف: اكتب بتفهم وتعاطف. اعترف بالمشاعر، كن داعماً ولطيفاً.'
+      },
+      confident: {
+        en: '🎭 TONE = CONFIDENT: Write with authority and certainty. Strong declarative sentences. No hedging or "maybe".',
+        ar: '🎭 النبرة = واثق: اكتب بسلطة ويقين. جمل تقريرية قوية. بدون تردد.'
+      },
+      humorous: {
+        en: '🎭 TONE = HUMOROUS: Write with wit and humor. Include clever observations, light jokes, playful language. Make the reader smile.',
+        ar: '🎭 النبرة = مرح: اكتب بذكاء وفكاهة. أضف ملاحظات ذكية ونكات خفيفة ولغة مرحة.'
+      },
+      urgent: {
+        en: '🎭 TONE = URGENT: Write with immediacy and importance. Short punchy sentences. Convey that this matters NOW.',
+        ar: '🎭 النبرة = عاجل: اكتب بإلحاح وأهمية. جمل قصيرة ومؤثرة. أوصل أن هذا مهم الآن.'
+      },
+      apologetic: {
+        en: '🎭 TONE = APOLOGETIC: Write with genuine remorse and sincerity. Take responsibility, express regret clearly.',
+        ar: '🎭 النبرة = اعتذاري: اكتب بندم صادق وإخلاص. تحمل المسؤولية، عبّر عن الأسف بوضوح.'
+      },
+      inspirational: {
+        en: '🎭 TONE = INSPIRATIONAL: Write to uplift and inspire. Use powerful imagery, motivating language, hopeful outlook.',
+        ar: '🎭 النبرة = ملهم: اكتب لترفع المعنويات وتلهم. استخدم صور قوية ولغة محفزة ونظرة متفائلة.'
+      },
+      motivational: {
+        en: '🎭 TONE = MOTIVATIONAL: Write to push action. Energy, encouragement, "you can do this" attitude. Be a coach.',
+        ar: '🎭 النبرة = تحفيزي: اكتب لتدفع للعمل. طاقة، تشجيع، موقف "تقدر تسويها". كن مدرباً.'
+      },
+      sympathetic: {
+        en: '🎭 TONE = SYMPATHETIC: Write with deep understanding of difficulty. Validate the struggle, offer comfort.',
+        ar: '🎭 النبرة = متعاطف: اكتب بتفهم عميق للصعوبة. صادق على المعاناة، قدم الراحة.'
+      },
+      sincere: {
+        en: '🎭 TONE = SINCERE: Write with genuine honesty and authenticity. No fluff, no corporate speak. Mean every word.',
+        ar: '🎭 النبرة = صادق: اكتب بصدق وأصالة حقيقية. بدون حشو أو كلام رسمي فارغ.'
+      },
+      informative: {
+        en: '🎭 TONE = INFORMATIVE: Write to educate and inform. Clear explanations, logical structure, factual content.',
+        ar: '🎭 النبرة = معلوماتي: اكتب لتثقف وتُعلم. شروحات واضحة، بنية منطقية، محتوى واقعي.'
+      },
+      concise: {
+        en: '🎭 TONE = CONCISE: Write tight and efficient. Every word must earn its place. No filler, no repetition. Get to the point.',
+        ar: '🎭 النبرة = موجز: اكتب بإيجاز وكفاءة. كل كلمة لها مكانها. بدون حشو أو تكرار. ادخل في الموضوع.'
+      },
+      dramatic: {
+        en: '🎭 TONE = DRAMATIC: Write with intensity and flair. Build tension, use vivid language, create emotional impact.',
+        ar: '🎭 النبرة = درامي: اكتب بحدة وأناقة. ابنِ التوتر، استخدم لغة حية، اصنع تأثيراً عاطفياً.'
+      },
+      suspenseful: {
+        en: '🎭 TONE = SUSPENSEFUL: Write to keep the reader hooked. Build anticipation, use cliffhangers, create mystery.',
+        ar: '🎭 النبرة = مشوّق: اكتب لتبقي القارئ مشدوداً. ابنِ الترقب، استخدم التشويق.'
+      },
+      authoritative: {
+        en: '🎭 TONE = AUTHORITATIVE: Write as a subject matter expert. Confident assertions, backed by knowledge. Command respect.',
+        ar: '🎭 النبرة = موثوق: اكتب كخبير في الموضوع. تأكيدات واثقة مدعومة بالمعرفة.'
+      },
+      educational: {
+        en: '🎭 TONE = EDUCATIONAL: Write as a teacher. Break down complex ideas simply. Use examples. Guide the reader step by step.',
+        ar: '🎭 النبرة = تثقيفي: اكتب كمعلم. بسّط الأفكار المعقدة. استخدم أمثلة. ارشد القارئ خطوة بخطوة.'
+      },
+    };
+    const ti = toneInstructions[tone];
+    if (ti) {
+      constraints.push(isArabic ? ti.ar : ti.en);
     } else {
-      constraints.push(isArabic ? `النبرة: ${tone}` : `Tone: ${tone}`);
+      constraints.push(isArabic ? `🎭 النبرة: ${tone}` : `🎭 Tone: ${tone}`);
     }
   }
 
-  // Register
+  // ────────────────────────────────────────────────────
+  // REGISTER (strict style enforcement per value)
+  // ────────────────────────────────────────────────────
   if (register) {
-    const regLabels: Record<string, string> = {
-      formal: isArabic ? 'رسمي' : 'Formal',
-      neutral: isArabic ? 'محايد' : 'Neutral',
-      casual: isArabic ? 'غير رسمي' : 'Casual',
-      slang: isArabic ? 'عامي' : 'Slang',
-      poetic: isArabic ? 'شعري / أدبي' : 'Poetic / Lyrical',
-      gen_z: isArabic ? 'أسلوب جيل زد' : 'Gen Z style',
-      business_formal: isArabic ? 'رسمي للأعمال' : 'Business Formal',
-      executive_brief: isArabic ? 'موجز تنفيذي' : 'Executive Brief',
+    const regInstructions: Record<string, { en: string; ar: string }> = {
+      formal: {
+        en: '📝 REGISTER = FORMAL: Use complete sentences, proper grammar, no contractions, no slang. Write as you would in an official document.',
+        ar: '📝 السجل = رسمي: استخدم جمل كاملة، قواعد صحيحة، بدون اختصارات أو عامية. اكتب كما في وثيقة رسمية.'
+      },
+      neutral: {
+        en: '📝 REGISTER = NEUTRAL: Standard language, neither too formal nor too casual. Clear and accessible.',
+        ar: '📝 السجل = محايد: لغة معيارية، ليست رسمية جداً ولا غير رسمية. واضحة ومفهومة.'
+      },
+      casual: {
+        en: '📝 REGISTER = CASUAL: Relaxed language. Contractions OK. Short sentences. Like talking to a friend.',
+        ar: '📝 السجل = غير رسمي: لغة مريحة. جمل قصيرة. مثل الكلام مع صديق.'
+      },
+      slang: {
+        en: '📝 REGISTER = SLANG: Use informal slang and colloquial expressions. Street-level language. Keep it real.',
+        ar: '📝 السجل = عامي: استخدم عامية ولهجة محلية. لغة الشارع. خلها طبيعية وعفوية.'
+      },
+      poetic: {
+        en: '📝 REGISTER = POETIC: Use lyrical, literary language. Metaphors, imagery, rhythm in sentences. Beautiful prose.',
+        ar: '📝 السجل = شعري/أدبي: استخدم لغة أدبية وشعرية. استعارات، تصوير، إيقاع في الجمل. نثر جميل.'
+      },
+      gen_z: {
+        en: '📝 REGISTER = GEN Z: Use Gen Z internet language. Words like "slay", "no cap", "lowkey", "vibe", "bestie", "literally". Keep it trendy and youthful.',
+        ar: '📝 السجل = جيل زد: استخدم لغة جيل زد والإنترنت. كلمات عصرية وشبابية. خلها ترندي.'
+      },
+      business_formal: {
+        en: '📝 REGISTER = BUSINESS FORMAL: Corporate professional language. Structured paragraphs, action items, clear deliverables. Suitable for board rooms.',
+        ar: '📝 السجل = رسمي للأعمال: لغة مهنية للشركات. فقرات منظمة، نقاط عمل واضحة. مناسب لاجتماعات الإدارة.'
+      },
+      executive_brief: {
+        en: '📝 REGISTER = EXECUTIVE BRIEF: Ultra-concise, high-level summary style. Bullet points OK. No fluff. Decision-maker language.',
+        ar: '📝 السجل = موجز تنفيذي: موجز جداً، أسلوب ملخص عالي المستوى. نقاط مختصرة. بدون حشو. لغة صانع قرار.'
+      },
     };
-    constraints.push(isArabic ? `السجل اللغوي: ${regLabels[register] || register}` : `Register: ${regLabels[register] || register}`);
+    const ri = regInstructions[register];
+    if (ri) {
+      constraints.push(isArabic ? ri.ar : ri.en);
+    }
   }
 
-  // Language variant
+  // ────────────────────────────────────────────────────
+  // LANGUAGE VARIANT (strong enforcement with examples)
+  // ────────────────────────────────────────────────────
   if (languageVariant) {
     const v = languageVariant.toLowerCase();
     if (!isArabic) {
-      if (v.includes('us')) constraints.push('Language variant: US English (color, center, check).');
-      else if (v.includes('uk')) constraints.push('Language variant: UK English (colour, centre, cheque).');
-      else if (v.includes('canadian')) constraints.push('Language variant: Canadian English (colour, centre). Prefer metric.');
-      else if (v.includes('australian')) constraints.push('Language variant: Australian English. Prefer metric.');
+      if (v.includes('us')) {
+        constraints.push('🌍 LANGUAGE VARIANT = US ENGLISH (STRICT):\n  - Use American spelling ONLY: color (NOT colour), center (NOT centre), organize (NOT organise), defense (NOT defence), check (NOT cheque), traveled (NOT travelled).\n  - Use American vocabulary: apartment (NOT flat), elevator (NOT lift), truck (NOT lorry), gas (NOT petrol).\n  - Use imperial units by default (miles, pounds, Fahrenheit) unless context requires metric.');
+      } else if (v.includes('uk')) {
+        constraints.push('🌍 LANGUAGE VARIANT = UK ENGLISH (STRICT):\n  - Use British spelling ONLY: colour (NOT color), centre (NOT center), organise (NOT organize), defence (NOT defense), cheque (NOT check), travelled (NOT traveled).\n  - Use British vocabulary: flat (NOT apartment), lift (NOT elevator), lorry (NOT truck), petrol (NOT gas).\n  - Use metric units by default (kilometres, kilograms, Celsius).');
+      } else if (v.includes('canadian')) {
+        constraints.push('🌍 LANGUAGE VARIANT = CANADIAN ENGLISH (STRICT):\n  - Use Canadian spelling: colour (NOT color), centre (NOT center), but organize (NOT organise), defense (NOT defence).\n  - Mix of British spelling with some American conventions.\n  - Use metric units (kilometres, Celsius, litres).\n  - Use Canadian vocabulary where applicable: toque, loonie, double-double.');
+      } else if (v.includes('australian')) {
+        constraints.push('🌍 LANGUAGE VARIANT = AUSTRALIAN ENGLISH (STRICT):\n  - Use Australian/British spelling: colour, centre, organise, defence, travelled.\n  - Use Australian vocabulary where natural: arvo (afternoon), brekkie (breakfast), mate, reckon.\n  - Use metric units (kilometres, Celsius, litres).');
+      }
     } else {
-      if (v.includes('msa')) constraints.push('المتغير اللغوي: العربية الفصحى MSA.');
-      else if (v.includes('gulf')) constraints.push('المتغير اللغوي: العربية الخليجية بأسلوب طبيعي ومفهوم.');
+      if (v.includes('msa')) {
+        constraints.push('🌍 المتغير اللغوي = العربية الفصحى MSA (صارم):\n  - اكتب بالعربية الفصحى الحديثة فقط. لا تستخدم أي لهجة محلية.\n  - استخدم قواعد النحو والصرف الصحيحة (إعراب، تنوين عند الحاجة).\n  - تجنب أي كلمات عامية مثل: مو، هالشي، شلون، وش، ليش.\n  - استخدم بدلاً منها: ليس، هذا الأمر، كيف، ماذا، لماذا.\n  - الأسلوب يجب أن يكون كأنك تكتب في صحيفة رسمية أو كتاب أكاديمي.');
+      } else if (v.includes('gulf')) {
+        constraints.push('🌍 المتغير اللغوي = العربية الخليجية (صارم):\n  - اكتب بلهجة خليجية أصيلة 100%. ليس عربي فصيح مع كلمات خليجية، بل خليجي كامل.\n  - استخدم هذه الكلمات والتعبيرات الخليجية بشكل طبيعي:\n    • "مب" أو "مو" بدل "ليس"\n    • "وش" أو "شنو" بدل "ماذا"\n    • "ليش" بدل "لماذا"\n    • "شلون" أو "شلونك" بدل "كيف حالك"\n    • "ترى" للتأكيد\n    • "يا غالي" أو "يا الغالي" للمخاطبة\n    • "عيل" بدل "إذن"\n    • "هالشي" بدل "هذا الشيء"\n    • "أبي" أو "أبغى" بدل "أريد"\n    • "إنت/إنتي" بدل "أنت/أنتِ"\n    • "حيل" أو "مرة" بدل "جداً"\n    • "يالله" للتشجيع\n    • "ما عليه" بدل "لا بأس"\n    • "إي" بدل "نعم"\n  - تجنب تماماً الكلمات الفصحى الثقيلة مثل: أدرك، أتمنى، صديقيتنا، التزامي.\n  - استخدم بدلها: أعرف، أتمنى/أبي، صداقتنا/ربعنا، كلمتي.\n  - اكتب وكأنك شخص خليجي يكتب رسالة واتساب لصديقه.');
+      }
     }
   }
 
-  // Emojis
+  // ────────────────────────────────────────────────────
+  // EMOJIS (strict count enforcement)
+  // ────────────────────────────────────────────────────
   if (emojis) {
-    const emojiRules: Record<string, string> = {
-      none: isArabic ? 'الإيموجي: لا تستخدم أي إيموجي.' : 'Emojis: Do NOT use any emojis.',
-      light: isArabic ? 'الإيموجي: استخدم إيموجي قليل جداً (1-2 فقط).' : 'Emojis: Use very few emojis (1-2 max).',
-      rich: isArabic ? 'الإيموجي: استخدم إيموجي بشكل معتدل.' : 'Emojis: Use emojis moderately throughout.',
-      extra: isArabic ? 'الإيموجي: استخدم إيموجي بكثافة.' : 'Emojis: Use emojis heavily and expressively.',
+    const emojiInstructions: Record<string, { en: string; ar: string }> = {
+      none: {
+        en: '😶 EMOJIS = NONE (STRICT): Do NOT include any emojis, emoticons, or unicode symbols in the output. Zero. Not even one.',
+        ar: '😶 الإيموجي = بدون (صارم): لا تضع أي إيموجي أو رموز تعبيرية في النص. صفر. ولا واحد.'
+      },
+      light: {
+        en: '🙂 EMOJIS = LIGHT: Use exactly 1 to 2 emojis in the ENTIRE text. Place them naturally, not at the start of every sentence.',
+        ar: '🙂 الإيموجي = قليل: استخدم 1 إلى 2 إيموجي فقط في كل النص. ضعها بشكل طبيعي.'
+      },
+      rich: {
+        en: '😊 EMOJIS = RICH: Use emojis moderately throughout the text (roughly 1 emoji per paragraph or key point). Make them relevant to the content.',
+        ar: '😊 الإيموجي = معتدل: استخدم إيموجي بشكل معتدل في النص (تقريباً 1 إيموجي لكل فقرة أو نقطة رئيسية).'
+      },
+      extra: {
+        en: '🎉 EMOJIS = EXTRA: Use emojis heavily and expressively! Multiple emojis per paragraph. Make the text feel vibrant and expressive. 🔥✨💪',
+        ar: '🎉 الإيموجي = كثيف: استخدم إيموجي بكثافة وتعبير! عدة إيموجي في كل فقرة. اجعل النص حيوياً ومعبراً. 🔥✨💪'
+      },
     };
-    if (emojiRules[emojis]) constraints.push(emojiRules[emojis]);
+    const ei = emojiInstructions[emojis];
+    if (ei) {
+      constraints.push(isArabic ? ei.ar : ei.en);
+    }
   }
 
   const constraintsBlock = constraints.length > 0
     ? (isArabic
-      ? `\n\nإعدادات المستخدم (اتبعها بدقة):\n${constraints.map(c => `- ${c}`).join('\n')}`
-      : `\n\nUser settings (follow strictly):\n${constraints.map(c => `- ${c}`).join('\n')}`)
+      ? `\n\n🔒 إعدادات المستخدم (اتبعها بدقة متناهية، لا تتجاهل أي إعداد):\n${constraints.map(c => `${c}`).join('\n\n')}`
+      : `\n\n🔒 User settings (follow with absolute precision, do NOT ignore any setting):\n${constraints.map(c => `${c}`).join('\n\n')}`)
     : '';
 
   return basePrompt + formatRules + constraintsBlock;

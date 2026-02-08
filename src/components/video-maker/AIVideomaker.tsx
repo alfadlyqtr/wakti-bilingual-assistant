@@ -126,6 +126,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [loadingQuota, setLoadingQuota] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [sourceImageUrl, setSourceImageUrl] = useState<string | null>(null);
   const [latestVideo, setLatestVideo] = useState<LatestVideo | null>(null);
   const pollInFlightRef = useRef(false);
   const usageIncrementedRef = useRef(false);
@@ -532,6 +533,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           if (signedErr) throw new Error(`Signed URL failed: ${signedErr.message}`);
           if (!signedData?.signedUrl) throw new Error('Signed URL missing');
           imageUrl = cleanSignedUrl(signedData.signedUrl);
+          setSourceImageUrl(imageUrl);
           console.log('[AIVideomaker] Upload successful, URL:', imageUrl);
         } catch (prepErr: any) {
           console.error('[AIVideomaker] Prepare image error:', prepErr);
@@ -543,6 +545,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           image: imageUrl,
           prompt: prompt.trim() || undefined,
           duration,
+          aspect_ratio: aspectRatio,
           mode: 'async',
         };
       }
@@ -667,8 +670,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         description: prompt.trim() || null,
         storage_path: storagePath,
         video_url: null,
-        duration_seconds: 5,
-        aspect_ratio: '9:16',
+        thumbnail_url: generationMode === 'image_to_video' ? (sourceImageUrl || null) : null,
+        duration_seconds: parseInt(duration, 10),
+        aspect_ratio: aspectRatio,
         style_template: 'ai',
         is_public: false,
       });
@@ -960,9 +964,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 </div>
               </div>
 
-              {/* Aspect ratio picker - only for text-to-video */}
-              {generationMode === 'text_to_video' && (
-                <div className="flex items-center gap-2">
+              {/* Aspect ratio picker - for both modes */}
+              <div className="flex items-center gap-2">
                   <div className="flex items-center gap-0.5 rounded-full border border-primary/20 overflow-hidden">
                     <button
                       onClick={() => !isGenerating && setAspectRatio('9:16')}
@@ -988,7 +991,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     </button>
                   </div>
                 </div>
-              )}
 
 
               {/* Generate button */}
