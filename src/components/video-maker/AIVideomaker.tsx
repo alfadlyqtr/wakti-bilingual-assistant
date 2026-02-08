@@ -89,6 +89,11 @@ const compressImage = (file: File, maxWidth = 1024, quality = 0.8): Promise<Blob
   });
 };
 
+const dataUrlToBlob = async (dataUrl: string): Promise<Blob> => {
+  const res = await fetch(dataUrl);
+  return await res.blob();
+};
+
 export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const { language } = useTheme();
   const { user } = useAuth();
@@ -118,6 +123,45 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const usageIncrementedRef = useRef(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  const invokePromptAmpWithBetterErrors = useCallback(
+    async (body: Record<string, unknown>) => {
+      const { data, error } = await supabase.functions.invoke('prompt-amp', { body });
+      if (!error) return { data };
+
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData?.session?.access_token;
+        const supabaseUrl = (supabase as any)?.supabaseUrl as string | undefined;
+        const supabaseKey = (supabase as any)?.supabaseKey as string | undefined;
+
+        if (accessToken && supabaseUrl && supabaseKey) {
+          const resp = await fetch(`${supabaseUrl}/functions/v1/prompt-amp`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+              apikey: supabaseKey,
+            },
+            body: JSON.stringify(body),
+          });
+          const txt = await resp.text().catch(() => '');
+          if (!resp.ok && txt) {
+            throw new Error(txt);
+          }
+          if (resp.ok) {
+            const json = await resp.json().catch(() => null);
+            return { data: json };
+          }
+        }
+      } catch (fetchErr: any) {
+        throw new Error(fetchErr?.message || error.message);
+      }
+
+      throw new Error(error.message || 'Unknown error');
+    },
+    []
+  );
+
   // Amp: generate/improve a cinematic prompt
   const handleAmp = useCallback(async () => {
     if (isAmping || isGenerating || !user) return;
@@ -128,54 +172,58 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     try {
       if (generationMode === 'image_to_video') {
         // Image-to-Video amp: upload image then use OpenAI vision
-        let ampImageUrl = imagePreview!;
-        if (imageFile) {
-          try {
-            const compressedBlob = await compressImage(imageFile, 512, 0.5); 
-            const randomId = Math.random().toString(36).substring(2, 15);
-            const storagePath = `${user.id}/ai-video-input/${randomId}.jpg`;
-            
-            console.log('[AIVideomaker] Amp: Uploading to message_attachments:', storagePath);
-            
-            const { error: uploadErr } = await supabase.storage
-              .from('message_attachments')
-              .upload(storagePath, compressedBlob, {
-                contentType: 'image/jpeg',
-                cacheControl: '3600',
-                upsert: true,
-              });
-              
-            if (!uploadErr) {
-              const { data: signedData, error: signedErr } = await supabase.storage
-                .from('message_attachments')
-                .createSignedUrl(storagePath, 60 * 60 * 6);
-              if (signedErr) throw new Error(`Signed URL failed: ${signedErr.message}`);
-              if (signedData?.signedUrl) {
-                ampImageUrl = signedData.signedUrl;
-                console.log('[AIVideomaker] Amp upload successful:', ampImageUrl);
-              } else {
-                throw new Error('Signed URL missing');
-              }
-            } else {
-              console.error('[AIVideomaker] Amp upload error:', uploadErr);
-              throw new Error(`Upload failed: ${uploadErr.message}`);
-            }
-          } catch (prepErr: any) {
-            console.error('[AIVideomaker] Amp prepare error:', prepErr);
-            throw new Error(language === 'ar' ? 'فشل تجهيز الصورة: ' + prepErr.message : 'Failed to prepare image: ' + prepErr.message);
+        let ampImageUrl = '';
+        try {
+          const randomId = Math.random().toString(36).substring(2, 15);
+          const storagePath = `${user.id}/ai-video-input/${randomId}.jpg`;
+
+          let sourceBlob: Blob;
+          if (imageFile) {
+            sourceBlob = await compressImage(imageFile, 512, 0.5);
+          } else if (imagePreview?.startsWith('data:')) {
+            const previewBlob = await dataUrlToBlob(imagePreview);
+            sourceBlob = await compressImage(new File([previewBlob], 'preview.jpg', { type: 'image/jpeg' }), 512, 0.5);
+          } else {
+            throw new Error('Missing image source');
           }
+
+          console.log('[AIVideomaker] Amp: Uploading to message_attachments:', storagePath);
+          const { error: uploadErr } = await supabase.storage
+            .from('message_attachments')
+            .upload(storagePath, sourceBlob, {
+              contentType: 'image/jpeg',
+              cacheControl: '3600',
+              upsert: true,
+            });
+
+          if (uploadErr) {
+            console.error('[AIVideomaker] Amp upload error:', uploadErr);
+            throw new Error(`Upload failed: ${uploadErr.message}`);
+          }
+
+          const { data: signedData, error: signedErr } = await supabase.storage
+            .from('message_attachments')
+            .createSignedUrl(storagePath, 60 * 60 * 6);
+          if (signedErr) throw new Error(`Signed URL failed: ${signedErr.message}`);
+          if (!signedData?.signedUrl) throw new Error('Signed URL missing');
+          ampImageUrl = signedData.signedUrl;
+          console.log('[AIVideomaker] Amp upload successful:', ampImageUrl);
+        } catch (prepErr: any) {
+          console.error('[AIVideomaker] Amp prepare error:', prepErr);
+          throw new Error(
+            language === 'ar'
+              ? 'فشل تجهيز الصورة: ' + (prepErr?.message || '')
+              : 'Failed to prepare image: ' + (prepErr?.message || '')
+          );
         }
 
-        const { data, error } = await supabase.functions.invoke('prompt-amp', {
-          body: {
-            mode: 'image2video',
-            image_url: ampImageUrl,
-            brand_details: prompt.trim() || '',
-            environment: 'auto',
-            duration,
-          },
+        const { data } = await invokePromptAmpWithBetterErrors({
+          mode: 'image2video',
+          image_url: ampImageUrl,
+          brand_details: prompt.trim() || '',
+          environment: 'auto',
+          duration,
         });
-        if (error) throw new Error(`AI Function error: ${error.message || 'Unknown error'}`);
         if (data?.success && data?.text) {
           setPrompt(data.text);
           toast.success(language === 'ar' ? 'تم تحسين الوصف ✨' : 'Prompt amped ✨');
@@ -184,13 +232,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         }
       } else {
         // Text-to-Video amp: enhance/translate the text prompt via DeepSeek
-        const { data, error } = await supabase.functions.invoke('prompt-amp', {
-          body: {
-            mode: 'text2video',
-            text: prompt.trim(),
-          },
+        const { data } = await invokePromptAmpWithBetterErrors({
+          mode: 'text2video',
+          text: prompt.trim(),
         });
-        if (error) throw new Error(`AI Function error: ${error.message || 'Unknown error'}`);
         if (data?.success && data?.text) {
           setPrompt(data.text);
           toast.success(language === 'ar' ? 'تم تحسين الوصف ✨' : 'Prompt amped ✨');
@@ -204,7 +249,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       setIsAmping(false);
     }
-  }, [generationMode, imagePreview, imageFile, isAmping, isGenerating, prompt, duration, language, user]);
+  }, [generationMode, imagePreview, imageFile, isAmping, isGenerating, prompt, duration, language, user, invokePromptAmpWithBetterErrors]);
 
   // Load quota on mount
   const loadQuota = useCallback(async () => {
@@ -868,7 +913,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           ? 'صف الحركة المطلوبة...\n\nمثال: شخص يبتسم ويلوح بيده، قطة تحرك رأسها ببطء، سيارة تتحرك للأمام...'
                           : 'Describe the motion you want...\n\ne.g., A person smiling and waving, a cat slowly moving its head, a car driving forward...')
                   }
-                  className="min-h-[140px] h-full text-sm resize-none rounded-xl border-2 border-primary/20 focus:border-primary bg-background/50 backdrop-blur-sm transition-all placeholder:text-muted-foreground/60"
+                  className="min-h-[140px] h-full text-sm resize-none rounded-xl border-2 border-primary/20 focus:border-primary bg-background/50 backdrop-blur-sm transition-all placeholder:text-muted-foreground/60 pr-12 pb-10"
                   maxLength={2500}
                   disabled={isGenerating || limitReached}
                 />
