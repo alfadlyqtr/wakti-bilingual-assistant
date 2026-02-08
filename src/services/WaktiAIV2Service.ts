@@ -296,9 +296,9 @@ class WaktiAIV2ServiceClass {
           accuracy: nativeLoc.accuracy ?? null,
           city: nativeLoc.city || resolved.city,
           country: nativeLoc.country || resolved.country,
-          source: 'native',
+          source: nativeLoc.source === 'browser' ? 'native' : 'native',
         };
-        console.log(`[WaktiAIV2Service] ✅ Device GPS: [${resolved.latitude}, ${resolved.longitude}] source=${nativeLoc.source} accuracy=${nativeLoc.accuracy}`);
+        console.log(`[WaktiAIV2Service] ✅ Device location: [${resolved.latitude}, ${resolved.longitude}] source=${nativeLoc.source} accuracy=${nativeLoc.accuracy}`);
       } else {
         console.log('[WaktiAIV2Service] ⚠️ Native location returned null or invalid');
       }

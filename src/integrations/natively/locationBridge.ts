@@ -27,10 +27,8 @@ interface NativelyLocationInstance {
     fallbackToSettings?: boolean
   ) => void;
   stop: () => void;
-  // Legacy method (some SDK versions)
-  getCurrentPosition?: (
-    onSuccess: (position: any) => void,
-    onError?: (err?: unknown) => void
+  permission: (
+    callback: (resp: { status: string }) => void
   ) => void;
 }
 
@@ -49,7 +47,7 @@ export interface NativeLocationResult {
   accuracy?: number;
   city?: string;
   country?: string;
-  source: 'native' | 'cached';
+  source: 'native' | 'cached' | 'browser';
 }
 
 export type LocationPermissionStatus = 'IN_USE' | 'ALWAYS' | 'DENIED' | 'UNKNOWN';
@@ -238,15 +236,218 @@ export function clearLocationCache(): void {
 }
 
 /**
- * Get current location using Natively SDK
- * Uses foreground location only (no background tracking)
- * 
- * @param options.timeoutMs - Timeout in milliseconds (default 10000)
- * @param options.minAccuracy - Minimum accuracy in meters (default 100)
- * @param options.accuracyType - iOS accuracy type (default 'HundredMeters')
- * @param options.priority - Android priority (default 'BALANCED')
- * @param options.fallbackToSettings - Show settings prompt if denied (default true)
- * @param options.skipCache - Force fresh location fetch (default false)
+ * Check location permission status via Natively SDK.
+ * Returns: 'IN_USE' | 'ALWAYS' | 'DENIED' | 'UNKNOWN'
+ */
+function checkPermission(instance: NativelyLocationInstance, timeoutMs: number = 3000): Promise<LocationPermissionStatus> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        console.warn('[NativelyLocation] Permission check timed out');
+        resolve('UNKNOWN');
+      }
+    }, timeoutMs);
+
+    try {
+      instance.permission((resp) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        const status = (resp?.status || 'UNKNOWN').toUpperCase();
+        console.log('[NativelyLocation] Permission status:', status);
+        if (status === 'IN_USE' || status === 'ALWAYS') resolve(status as LocationPermissionStatus);
+        else if (status === 'DENIED') resolve('DENIED');
+        else resolve('UNKNOWN');
+      });
+    } catch (err) {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        console.warn('[NativelyLocation] Permission check error:', err);
+        resolve('UNKNOWN');
+      }
+    }
+  });
+}
+
+/**
+ * Get location using foreground tracking (start → wait for fix → stop).
+ * This is the "WhatsApp-style" approach: lets the OS acquire a real GPS fix.
+ */
+function getForegroundLocation(
+  instance: NativelyLocationInstance,
+  minAccuracy: number,
+  accuracyType: string,
+  priority: string,
+  fallbackToSettings: boolean,
+  timeoutMs: number
+): Promise<NativeLocationResult | null> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const interval = 3000; // poll every 3s
+
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        try { instance.stop(); } catch {}
+        console.warn('[NativelyLocation] Foreground tracking timed out after', timeoutMs, 'ms');
+        resolve(null);
+      }
+    }, timeoutMs);
+
+    const handleResponse = (resp: NativelyLocationResponse) => {
+      console.log('[NativelyLocation] Foreground tracking response:', JSON.stringify(resp));
+
+      if (settled) return;
+
+      const lat = resp.latitude;
+      const lng = resp.longitude;
+
+      if ((resp.status === 'Success' || resp.status === 'Timeout') &&
+          typeof lat === 'number' && typeof lng === 'number' &&
+          lat !== 0 && lng !== 0) {
+        settled = true;
+        clearTimeout(timer);
+        try { instance.stop(); } catch {}
+        const result: NativeLocationResult = {
+          latitude: lat,
+          longitude: lng,
+          accuracy: resp.accuracy,
+          source: 'native',
+        };
+        setCachedLocation(result);
+        console.log('[NativelyLocation] ✅ Foreground tracking got fix:', lat, lng, 'accuracy:', resp.accuracy);
+        resolve(result);
+        return;
+      }
+
+      if (resp.status === 'Error') {
+        settled = true;
+        clearTimeout(timer);
+        try { instance.stop(); } catch {}
+        console.warn('[NativelyLocation] Foreground tracking error');
+        resolve(null);
+      }
+      // If Timeout without coords, keep waiting for next update
+    };
+
+    try {
+      console.log('[NativelyLocation] Starting foreground tracking:', { interval, minAccuracy, accuracyType, priority });
+      instance.start(interval, minAccuracy, accuracyType, priority, handleResponse, fallbackToSettings);
+    } catch (err) {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        console.error('[NativelyLocation] start() threw:', err);
+        resolve(null);
+      }
+    }
+  });
+}
+
+/**
+ * Get location using one-shot current() call.
+ * Faster but may return coarse/stale location.
+ */
+function getCurrentLocation(
+  instance: NativelyLocationInstance,
+  minAccuracy: number,
+  accuracyType: string,
+  priority: string,
+  fallbackToSettings: boolean,
+  timeoutMs: number
+): Promise<NativeLocationResult | null> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        console.warn('[NativelyLocation] current() timed out');
+        resolve(null);
+      }
+    }, timeoutMs);
+
+    const handleResponse = (resp: NativelyLocationResponse) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      console.log('[NativelyLocation] current() response:', JSON.stringify(resp));
+
+      if ((resp.status === 'Success' || resp.status === 'Timeout') &&
+          typeof resp.latitude === 'number' && typeof resp.longitude === 'number') {
+        const result: NativeLocationResult = {
+          latitude: resp.latitude,
+          longitude: resp.longitude,
+          accuracy: resp.accuracy,
+          source: 'native',
+        };
+        setCachedLocation(result);
+        resolve(result);
+        return;
+      }
+      console.warn('[NativelyLocation] current() failed:', resp.status);
+      resolve(null);
+    };
+
+    try {
+      console.log('[NativelyLocation] Calling current():', { minAccuracy, accuracyType, priority });
+      instance.current(minAccuracy, accuracyType, priority, handleResponse, fallbackToSettings);
+    } catch (err) {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        console.error('[NativelyLocation] current() threw:', err);
+        resolve(null);
+      }
+    }
+  });
+}
+
+/**
+ * Browser geolocation fallback.
+ * Used when Natively SDK is unavailable or fails.
+ */
+function getBrowserLocation(timeoutMs: number = 10000): Promise<NativeLocationResult | null> {
+  return new Promise((resolve) => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      console.warn('[NativelyLocation] Browser geolocation not available');
+      resolve(null);
+      return;
+    }
+    console.log('[NativelyLocation] 🌐 Trying browser geolocation fallback...');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const result: NativeLocationResult = {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          source: 'browser',
+        };
+        setCachedLocation(result);
+        console.log('[NativelyLocation] ✅ Browser geolocation:', result.latitude, result.longitude);
+        resolve(result);
+      },
+      (err) => {
+        console.warn('[NativelyLocation] Browser geolocation failed:', err.message);
+        resolve(null);
+      },
+      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 }
+    );
+  });
+}
+
+/**
+ * Get current location — doc-accurate Natively SDK flow with browser fallback.
+ *
+ * Flow (per Natively docs):
+ * 1. Check cache (unless skipCache)
+ * 2. Wait for native bridge
+ * 3. Check permission via permission()
+ * 4. If skipCache (fresh GPS needed): use start()/stop() foreground tracking
+ * 5. Otherwise: use current() one-shot
+ * 6. If Natively SDK fails or unavailable: browser geolocation fallback
  */
 export async function getNativeLocation(options?: {
   timeoutMs?: number;
@@ -258,13 +459,13 @@ export async function getNativeLocation(options?: {
 }): Promise<NativeLocationResult | null> {
   const {
     timeoutMs = 10000,
-    minAccuracy = 100,
+    minAccuracy = 50,
     fallbackToSettings = true,
     skipCache = false,
   } = options || {};
 
   // When skipCache (forceFresh), use higher accuracy settings for real GPS
-  const accuracyType = options?.accuracyType || (skipCache ? 'Best' : 'HundredMeters');
+  const accuracyType = options?.accuracyType || (skipCache ? 'Best' : 'NearestTenMeters');
   const priority = options?.priority || (skipCache ? 'HIGH' : 'BALANCED');
 
   logNativelyRuntimeStatus('getNativeLocation');
@@ -278,118 +479,63 @@ export async function getNativeLocation(options?: {
     }
   }
 
-  // Wait for native iOS/Android bridge to connect (not just CDN script loaded)
+  // ── ATTEMPT 1: Natively SDK (native device GPS) ──
   const bridgeReady = await waitForNativeBridge();
-  if (!bridgeReady) {
-    console.warn('[NativelyLocation] ❌ Native bridge not connected — returning null');
-    return null;
-  }
+  if (bridgeReady) {
+    const instance = getInstance();
+    if (instance) {
+      // Check permission first (per docs)
+      const perm = await checkPermission(instance);
+      console.log('[NativelyLocation] Permission:', perm);
 
-  // Natively SDK ONLY — no browser geolocation fallback (causes iOS "website wants location" popup)
-  const instance = getInstance();
-  if (!instance) {
-    console.warn('[NativelyLocation] ❌ Natively SDK not available after ready — returning null');
-    return null;
-  }
+      if (perm === 'IN_USE' || perm === 'ALWAYS') {
+        // Permission granted — get location
+        let result: NativeLocationResult | null = null;
 
-  const sdkResult = await new Promise<NativeLocationResult | null>((resolve) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        console.warn('[NativelyLocation] Timeout waiting for SDK location');
-        resolve(null);
-      }
-    }, timeoutMs);
-
-    const handleResponse = (resp: NativelyLocationResponse) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-
-      console.log('[NativelyLocation] SDK Response:', JSON.stringify(resp));
-
-      if (resp.status === 'Success' || resp.status === 'Timeout') {
-        const lat = resp.latitude;
-        const lng = resp.longitude;
-        if (typeof lat === 'number' && typeof lng === 'number') {
-          const result: NativeLocationResult = {
-            latitude: lat,
-            longitude: lng,
-            accuracy: resp.accuracy,
-            city: resp.city,
-            country: resp.country,
-            source: 'native',
-          };
-          setCachedLocation(result);
-          resolve(result);
-          return;
+        if (skipCache) {
+          // Fresh GPS needed (search/near-me) → foreground tracking (WhatsApp-style)
+          console.log('[NativelyLocation] 🛰️ Using foreground tracking for fresh GPS...');
+          result = await getForegroundLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
         }
-      }
 
-      console.warn('[NativelyLocation] SDK failed to get location:', resp.status);
-      resolve(null);
-    };
+        if (!result) {
+          // Either not skipCache, or foreground tracking failed → try current() one-shot
+          console.log('[NativelyLocation] Using current() one-shot...');
+          result = await getCurrentLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
+        }
 
-    try {
-      // Try new SDK method first
-      if (typeof instance.current === 'function') {
-        console.log('[NativelyLocation] Using current() method with accuracy:', accuracyType, 'priority:', priority);
-        instance.current(
-          minAccuracy,
-          accuracyType,
-          priority,
-          handleResponse,
-          fallbackToSettings
-        );
-      } 
-      // Fallback to legacy method
-      else if (typeof instance.getCurrentPosition === 'function') {
-        console.log('[NativelyLocation] Using legacy getCurrentPosition() method');
-        instance.getCurrentPosition(
-          (pos: any) => {
-            const coords = pos?.coords || pos || {};
-            handleResponse({
-              status: 'Success',
-              latitude: coords.latitude ?? coords.lat,
-              longitude: coords.longitude ?? coords.lng,
-              accuracy: coords.accuracy,
-              city: pos?.city || coords?.city,
-              country: pos?.country || coords?.country,
-            });
-          },
-          () => {
-            handleResponse({ status: 'Error' });
-          }
-        );
+        if (result) {
+          return result;
+        }
+        console.warn('[NativelyLocation] SDK returned no usable coordinates');
+      } else if (perm === 'DENIED') {
+        console.warn('[NativelyLocation] ⚠️ Location permission DENIED — trying current() with fallbackToSettings=true');
+        // Try current() anyway — it will show the "open settings" prompt if fallbackToSettings is true
+        const result = await getCurrentLocation(instance, minAccuracy, accuracyType, priority, true, timeoutMs);
+        if (result) return result;
       } else {
-        console.warn('[NativelyLocation] No location method available on SDK instance');
-        settled = true;
-        clearTimeout(timer);
-        resolve(null);
+        // UNKNOWN — try current() anyway, SDK may handle it
+        console.log('[NativelyLocation] Permission unknown — trying current() anyway...');
+        const result = await getCurrentLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
+        if (result) return result;
       }
-    } catch (err) {
-      console.error('[NativelyLocation] Error calling SDK location method:', err);
-      if (!settled) {
-        settled = true;
-        clearTimeout(timer);
-        resolve(null);
-      }
+    } else {
+      console.warn('[NativelyLocation] SDK instance creation failed');
     }
-  });
-
-  // If SDK succeeded, return the result
-  if (sdkResult) {
-    return sdkResult;
+  } else {
+    console.warn('[NativelyLocation] Native bridge not available');
   }
 
-  // SDK failed/timed out — NO browser fallback (would cause iOS permission popup)
-  console.warn('[NativelyLocation] ❌ Natively SDK failed/timed out — returning null (no browser fallback)');
+  // ── ATTEMPT 2: Browser geolocation fallback ──
+  console.log('[NativelyLocation] Natively SDK did not return location — trying browser fallback...');
+  const browserResult = await getBrowserLocation(timeoutMs);
+  if (browserResult) {
+    return browserResult;
+  }
+
+  console.warn('[NativelyLocation] ❌ All location methods failed — returning null');
   return null;
 }
-
-// Browser geolocation fallback REMOVED — Natively SDK is the only GPS source.
-// This prevents iOS from showing "www.wakti.qa would like to use your current location" popup.
 
 /**
  * Detect if user query contains "near me" patterns (EN/AR)
