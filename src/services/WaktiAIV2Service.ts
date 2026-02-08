@@ -1218,9 +1218,56 @@ class WaktiAIV2ServiceClass {
           // Do NOT create on OFFER - that's just the AI asking if user wants a reminder
           if (reminderData && reminderData.type === 'confirm') {
             const data = reminderData.data as { scheduled_for?: string; reminder_text?: string; timezone?: string; replaces_previous?: boolean };
-            const scheduledTime = data.scheduled_for;
+            let scheduledTime = data.scheduled_for;
             const reminderText = data.reminder_text || 'Reminder from Wakti AI';
             const replacesPrevious = data.replaces_previous === true;
+            
+            // SAFETY NET: If AI calculated a time in the past, try to fix it
+            // This handles cases where AI miscalculates "in X minutes"
+            if (scheduledTime) {
+              const scheduledDate = new Date(scheduledTime);
+              const now = new Date();
+              const oneMinuteAgo = now.getTime() - 60000;
+              
+              if (scheduledDate.getTime() < oneMinuteAgo) {
+                console.warn('⚠️ REMINDER FIX: AI output past time, attempting to recalculate...', { 
+                  aiTime: scheduledTime, 
+                  now: now.toISOString() 
+                });
+                
+                // Use the current user message (in scope from sendStreamingMessage param)
+                const lastUserMsg = (message || '').toLowerCase();
+                
+                // Match patterns like "in 1 minute", "in 5 minutes", "in an hour"
+                const minuteMatch = lastUserMsg.match(/in\s+(\d+|a|one|an)\s*min/i);
+                const hourMatch = lastUserMsg.match(/in\s+(\d+|a|one|an)\s*hour/i);
+                
+                let fixedTime: Date | null = null;
+                
+                if (minuteMatch) {
+                  const numStr = minuteMatch[1].toLowerCase();
+                  const minutes = (numStr === 'a' || numStr === 'one' || numStr === 'an') ? 1 : parseInt(numStr, 10);
+                  if (!isNaN(minutes) && minutes > 0 && minutes <= 1440) {
+                    fixedTime = new Date(now.getTime() + minutes * 60000);
+                    console.log(`🔧 REMINDER FIX: Recalculated "in ${minutes} minute(s)" → ${fixedTime.toISOString()}`);
+                  }
+                } else if (hourMatch) {
+                  const numStr = hourMatch[1].toLowerCase();
+                  const hours = (numStr === 'a' || numStr === 'one' || numStr === 'an') ? 1 : parseInt(numStr, 10);
+                  if (!isNaN(hours) && hours > 0 && hours <= 24) {
+                    fixedTime = new Date(now.getTime() + hours * 3600000);
+                    console.log(`🔧 REMINDER FIX: Recalculated "in ${hours} hour(s)" → ${fixedTime.toISOString()}`);
+                  }
+                }
+                
+                if (fixedTime) {
+                  scheduledTime = fixedTime.toISOString();
+                } else {
+                  console.error('❌ REMINDER FIX: Could not recalculate time, skipping reminder creation');
+                  scheduledTime = undefined;
+                }
+              }
+            }
             
             if (scheduledTime && userId) {
               // Only cancel previous reminders if AI explicitly says it's replacing/adjusting one
@@ -1501,9 +1548,54 @@ class WaktiAIV2ServiceClass {
           const reminderData = parseReminderFromResponse(fullResponse);
           if (reminderData && reminderData.type === 'confirm') {
             const data = reminderData.data as { scheduled_for?: string; reminder_text?: string; timezone?: string; replaces_previous?: boolean };
-            const scheduledTime = data.scheduled_for;
+            let scheduledTime = data.scheduled_for;
             const reminderText = data.reminder_text || 'Reminder from Wakti AI';
             const replacesPrevious = data.replaces_previous === true;
+            
+            // SAFETY NET: If AI calculated a time in the past, try to fix it
+            if (scheduledTime) {
+              const scheduledDate = new Date(scheduledTime);
+              const now = new Date();
+              const oneMinuteAgo = now.getTime() - 60000;
+              
+              if (scheduledDate.getTime() < oneMinuteAgo) {
+                console.warn('⚠️ REMINDER FIX (Vision): AI output past time, attempting to recalculate...', { 
+                  aiTime: scheduledTime, 
+                  now: now.toISOString() 
+                });
+                
+                // Use the current user message (in scope from sendStreamingMessage param)
+                const lastUserMsg = (message || '').toLowerCase();
+                
+                const minuteMatch = lastUserMsg.match(/in\s+(\d+|a|one|an)\s*min/i);
+                const hourMatch = lastUserMsg.match(/in\s+(\d+|a|one|an)\s*hour/i);
+                
+                let fixedTime: Date | null = null;
+                
+                if (minuteMatch) {
+                  const numStr = minuteMatch[1].toLowerCase();
+                  const minutes = (numStr === 'a' || numStr === 'one' || numStr === 'an') ? 1 : parseInt(numStr, 10);
+                  if (!isNaN(minutes) && minutes > 0 && minutes <= 1440) {
+                    fixedTime = new Date(now.getTime() + minutes * 60000);
+                    console.log(`🔧 REMINDER FIX (Vision): Recalculated "in ${minutes} minute(s)" → ${fixedTime.toISOString()}`);
+                  }
+                } else if (hourMatch) {
+                  const numStr = hourMatch[1].toLowerCase();
+                  const hours = (numStr === 'a' || numStr === 'one' || numStr === 'an') ? 1 : parseInt(numStr, 10);
+                  if (!isNaN(hours) && hours > 0 && hours <= 24) {
+                    fixedTime = new Date(now.getTime() + hours * 3600000);
+                    console.log(`🔧 REMINDER FIX (Vision): Recalculated "in ${hours} hour(s)" → ${fixedTime.toISOString()}`);
+                  }
+                }
+                
+                if (fixedTime) {
+                  scheduledTime = fixedTime.toISOString();
+                } else {
+                  console.error('❌ REMINDER FIX (Vision): Could not recalculate time, skipping reminder creation');
+                  scheduledTime = undefined;
+                }
+              }
+            }
             
             if (scheduledTime && userId) {
               // Only cancel previous reminders if AI explicitly says it's replacing/adjusting one

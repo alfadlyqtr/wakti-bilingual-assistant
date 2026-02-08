@@ -279,11 +279,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         requestNotificationPermission(true); // true = show alert to open settings if previously denied
         
         // Set external ID to link this device to the user for targeted push notifications
-        // Longer delay to ensure SDK is fully ready and permission is processed
+        // Two attempts with staggered delays to handle SDK timing races
         setTimeout(() => {
-          console.log('[AuthContext] Setting notification user ID:', user.id);
+          console.log('[AuthContext] Setting notification user ID (attempt 1):', user.id);
           setNotificationUser(user.id);
         }, 2000);
+        setTimeout(() => {
+          console.log('[AuthContext] Setting notification user ID (attempt 2 - retry):', user.id);
+          setNotificationUser(user.id);
+        }, 6000);
         
         // Check subscription status via Edge Function (calls RevenueCat REST API)
         // This ensures we have accurate subscription state after login
@@ -300,7 +304,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         });
       } else {
         purchasesLogout();
-        removeNotificationUser();
+        // NOTE: Do NOT call removeNotificationUser() here.
+        // This effect fires on transient auth nulls (token refresh, session blips).
+        // Unlinking the OneSignal external_id here causes "not subscribed" errors
+        // and the "burst then dead" push pattern. Only unlink on explicit signOut().
       }
     } catch (error) {
       console.warn('AuthContext: Natively identify failed', error);

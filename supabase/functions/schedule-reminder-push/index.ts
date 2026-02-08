@@ -108,7 +108,12 @@ serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } else {
-      const errorMsg = result.errors?.join(", ") || JSON.stringify(result);
+      const rawErr = result.errors;
+      const errorMsg = Array.isArray(rawErr)
+        ? rawErr.join(", ")
+        : typeof rawErr === 'string'
+          ? rawErr
+          : rawErr ? JSON.stringify(rawErr) : JSON.stringify(result);
       console.error(`[schedule-reminder-push] ❌ Failed:`, errorMsg);
       return new Response(
         JSON.stringify({ error: errorMsg }),

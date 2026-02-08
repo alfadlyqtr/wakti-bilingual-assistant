@@ -157,7 +157,12 @@ serve(async (req) => {
           console.log(`Push sent successfully for ${notif.id}: OneSignal ID ${result.id}`);
         } else {
           failedCount++;
-          const errorMsg = result.errors?.join(", ") || "Unknown error";
+          const rawErr = result.errors;
+          const errorMsg = Array.isArray(rawErr)
+            ? rawErr.join(", ")
+            : typeof rawErr === 'string'
+              ? rawErr
+              : rawErr ? JSON.stringify(rawErr) : JSON.stringify(result);
           results.push({ id: notif.id, success: false, error: errorMsg });
           console.error(`Push failed for ${notif.id}:`, errorMsg);
         }
