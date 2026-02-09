@@ -2050,16 +2050,19 @@ serve(async (req) => {
 
         requestTrigger = effectiveTrigger;
         console.log(`🎯 REQUEST: trigger=${effectiveTrigger}, submode=${chatSubmode}, lang=${language}`);
-        console.log('📍 LOCATION PAYLOAD:', {
-          hasLocation: !!location,
-          source: location?.source,
-          latitude: location?.latitude,
-          longitude: location?.longitude,
-          city: location?.city,
-          country: location?.country,
-          accuracy: location?.accuracy,
-          timezone: clientTimezone,
-        });
+        const locationDebugUserId = 'd63c3ea5-9ae2-48f9-bdba-001baa5c6953';
+        if (userId === locationDebugUserId && effectiveTrigger === 'search') {
+          console.log('📍 LOCATION PAYLOAD (DEBUG USER ONLY):', {
+            hasLocation: !!location,
+            source: location?.source,
+            latitude: location?.latitude,
+            longitude: location?.longitude,
+            city: location?.city,
+            country: location?.country,
+            accuracy: location?.accuracy,
+            timezone: clientTimezone,
+          });
+        }
 
         if (!message) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Message required' })}\n\n`));
