@@ -2310,12 +2310,12 @@ serve(async (req) => {
               hour12: true
             });
 
-            // Get accurate city from device GPS (no IP geo fallback — it gives wrong city)
-            let userCity = location?.city || '';
-            let userCountry = location?.country || '';
-            
-            if (location?.latitude && location?.longitude && !userCity) {
-              console.log('📍 Reverse geocoding to get accurate city...');
+            // GPS ONLY: ignore client/profile city/country when coords exist
+            // Always reverse-geocode from GPS to avoid Doha/profile anchoring.
+            let userCity = '';
+            let userCountry = '';
+            if (location?.latitude && location?.longitude) {
+              console.log('📍 Reverse geocoding from GPS (ignoring profile city/country)...');
               const geocoded = await reverseGeocode(location.latitude, location.longitude);
               if (geocoded.city) userCity = geocoded.city;
               if (geocoded.country) userCountry = geocoded.country;
