@@ -56,6 +56,18 @@ const LANGUAGE_VARIANT_KEYS_EN: LanguageVariantKey[] = ['auto', 'us_english', 'u
 const LANGUAGE_VARIANT_KEYS_AR: LanguageVariantKey[] = ['auto', 'msa', 'gulf_arabic'];
 const EMOJIS_KEYS: EmojisKey[] = ['auto', 'none', 'light', 'rich', 'extra'];
 
+const WEB_SEARCH_ALLOWED_CONTENT_TYPES = new Set<ContentTypeKey>([
+  'research_brief',
+  'research_report',
+  'report',
+  'case_study',
+  'policy_note',
+  'how_to_guide',
+  'press_release',
+  'product_description',
+  'essay',
+]);
+
 const ctLabel = (k: ContentTypeKey, lang: 'en' | 'ar') => {
   const en: Record<ContentTypeKey, string> = {
     auto: 'Auto',
@@ -184,6 +196,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const [languageVariant, setLanguageVariant] = useState<LanguageVariantKey>('auto');
   const [emojis, setEmojis] = useState<EmojisKey>('auto');
   const [useWebSearch, setUseWebSearch] = useState(false);
+  const [webSearchUrl, setWebSearchUrl] = useState('');
 
   // Reply fields
   const [keyPoints, setKeyPoints] = useState('');
@@ -224,6 +237,18 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const [formMessage, setFormMessage] = useState('');
   const [formSeverity, setFormSeverity] = useState('');
   const [showExtractedFields, setShowExtractedFields] = useState(false);
+
+  const isWebSearchAllowed = useMemo(
+    () => WEB_SEARCH_ALLOWED_CONTENT_TYPES.has(contentType),
+    [contentType]
+  );
+
+  useEffect(() => {
+    if (!isWebSearchAllowed && useWebSearch) {
+      setUseWebSearch(false);
+      setWebSearchUrl('');
+    }
+  }, [isWebSearchAllowed, useWebSearch]);
 
   const buildFormSummary = useCallback((fields: ExtractedFormFields) => {
     const subject = (fields.subject || '').trim();
@@ -469,6 +494,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         if (val === 'very_long') return 'long';
         return val as 'short' | 'medium' | 'long';
       };
+      const normalizedWebSearchUrl = webSearchUrl.trim() || undefined;
       const body: any = {
         prompt,
         mode: modeForRequest,
@@ -482,7 +508,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         register: register === 'auto' ? undefined : register,
         languageVariant: languageVariant === 'auto' ? undefined : languageVariant,
         emojis: emojis === 'auto' ? undefined : emojis,
-        webSearch: useWebSearch,
+        webSearch: isWebSearchAllowed ? useWebSearch : false,
+        webSearchUrl: isWebSearchAllowed && useWebSearch ? normalizedWebSearchUrl : undefined,
       };
 
       const resp = await callEdgeFunctionWithRetry<any>('text-generator', {
@@ -512,7 +539,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [canGenerate, buildPrompt, activeTab, language, modelPreference, temperature, contentType, length, replyLength, tone, register, languageVariant, emojis, onTextGenerated]);
+  }, [canGenerate, buildPrompt, activeTab, language, modelPreference, temperature, contentType, length, replyLength, tone, register, languageVariant, emojis, useWebSearch, webSearchUrl, isWebSearchAllowed, onTextGenerated]);
 
   const title = language === 'ar' ? 'منشئ النص الذكي' : 'Smart Text Generator';
 
@@ -635,6 +662,59 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     <div className="px-6 md:pb-6 pb-[calc(var(--app-bottom-tabs-h)+16px)]">
           {activeTab === 'compose' && (
             <div className="space-y-4">
+              {/* Web Search Controls */}
+              <div className="grid gap-2">
+                <div className="flex flex-col gap-2">
+                  <div className="grid md:grid-cols-[auto,1fr] gap-3 items-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isWebSearchAllowed) return;
+                        setUseWebSearch(!useWebSearch);
+                      }}
+                      disabled={!isWebSearchAllowed}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
+                        useWebSearch && isWebSearchAllowed
+                          ? 'bg-blue-500/10 border-blue-500/40 text-blue-600 dark:text-blue-400'
+                          : 'border-border hover:bg-muted'
+                      } ${!isWebSearchAllowed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      title={
+                        isWebSearchAllowed
+                          ? (language === 'ar' ? 'تفعيل البحث على الويب لإضافة حقائق ومصادر' : 'Enable web search to add facts and sources')
+                          : (language === 'ar' ? 'متاح فقط لبعض أنواع المحتوى' : 'Available only for specific content types')
+                      }
+                    >
+                      <Globe className={`w-4 h-4 ${useWebSearch && isWebSearchAllowed ? 'text-blue-500' : ''}`} />
+                      <span className="text-sm font-medium">{language === 'ar' ? 'بحث الويب' : 'Web Search'}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${useWebSearch && isWebSearchAllowed ? 'bg-blue-500 text-white' : 'bg-muted text-muted-foreground'}`}>
+                        {useWebSearch && isWebSearchAllowed ? (language === 'ar' ? 'مفعّل' : 'ON') : (language === 'ar' ? 'معطّل' : 'OFF')}
+                      </span>
+                    </button>
+                    <div className="grid gap-1">
+                      <label htmlFor="webSearchUrl" className="text-xs font-medium text-muted-foreground">
+                        {language === 'ar' ? 'رابط مرجعي (اختياري)' : 'Reference URL (optional)'}
+                      </label>
+                      <input
+                        id="webSearchUrl"
+                        type="url"
+                        className={`border rounded px-3 py-2 ${fieldAccent} ${placeholderMuted}`}
+                        placeholder={language === 'ar' ? 'الصق رابط المصدر هنا (اختياري)' : 'Paste a source URL here (optional)'}
+                        value={webSearchUrl}
+                        onChange={(e) => setWebSearchUrl(e.target.value)}
+                        disabled={!useWebSearch || !isWebSearchAllowed}
+                        title={language === 'ar' ? 'أدخل رابط المصدر' : 'Enter source URL'}
+                      />
+                    </div>
+                  </div>
+                  {!isWebSearchAllowed && (
+                    <span className="text-xs text-muted-foreground">
+                      {language === 'ar'
+                        ? 'بحث الويب متاح فقط لبعض أنواع المحتوى البحثية'
+                        : 'Web search is available only for research-focused content types'}
+                    </span>
+                  )}
+                </div>
+              </div>
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'الموضوع' : 'Topic to write'}</label>
@@ -780,35 +860,64 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 </div>
               </div>
 
-              {/* Web Search Toggle */}
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setUseWebSearch(!useWebSearch)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
-                    useWebSearch 
-                      ? 'bg-blue-500/10 border-blue-500/40 text-blue-600 dark:text-blue-400' 
-                      : 'border-border hover:bg-muted'
-                  }`}
-                  title={language === 'ar' ? 'تفعيل البحث على الويب لإضافة حقائق ومصادر' : 'Enable web search to add facts and sources'}
-                >
-                  <Globe className={`w-4 h-4 ${useWebSearch ? 'text-blue-500' : ''}`} />
-                  <span className="text-sm font-medium">{language === 'ar' ? 'بحث الويب' : 'Web Search'}</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${useWebSearch ? 'bg-blue-500 text-white' : 'bg-muted text-muted-foreground'}`}>
-                    {useWebSearch ? (language === 'ar' ? 'مفعّل' : 'ON') : (language === 'ar' ? 'معطّل' : 'OFF')}
-                  </span>
-                </button>
-                {useWebSearch && (
-                  <span className="text-xs text-muted-foreground">
-                    {language === 'ar' ? 'سيتم إضافة حقائق ومصادر من الويب' : 'Facts and sources will be added from the web'}
-                  </span>
-                )}
-              </div>
             </div>
           )}
 
           {activeTab === 'reply' && (
             <div className="space-y-4">
+              {/* Web Search Controls */}
+              <div className="grid gap-2">
+                <div className="flex flex-col gap-2">
+                  <div className="grid md:grid-cols-[auto,1fr] gap-3 items-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isWebSearchAllowed) return;
+                        setUseWebSearch(!useWebSearch);
+                      }}
+                      disabled={!isWebSearchAllowed}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
+                        useWebSearch && isWebSearchAllowed
+                          ? 'bg-blue-500/10 border-blue-500/40 text-blue-600 dark:text-blue-400'
+                          : 'border-border hover:bg-muted'
+                      } ${!isWebSearchAllowed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      title={
+                        isWebSearchAllowed
+                          ? (language === 'ar' ? 'تفعيل البحث على الويب لإضافة حقائق ومصادر' : 'Enable web search to add facts and sources')
+                          : (language === 'ar' ? 'متاح فقط لبعض أنواع المحتوى' : 'Available only for specific content types')
+                      }
+                    >
+                      <Globe className={`w-4 h-4 ${useWebSearch && isWebSearchAllowed ? 'text-blue-500' : ''}`} />
+                      <span className="text-sm font-medium">{language === 'ar' ? 'بحث الويب' : 'Web Search'}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${useWebSearch && isWebSearchAllowed ? 'bg-blue-500 text-white' : 'bg-muted text-muted-foreground'}`}>
+                        {useWebSearch && isWebSearchAllowed ? (language === 'ar' ? 'مفعّل' : 'ON') : (language === 'ar' ? 'معطّل' : 'OFF')}
+                      </span>
+                    </button>
+                    <div className="grid gap-1">
+                      <label htmlFor="webSearchUrl" className="text-xs font-medium text-muted-foreground">
+                        {language === 'ar' ? 'رابط مرجعي (اختياري)' : 'Reference URL (optional)'}
+                      </label>
+                      <input
+                        id="webSearchUrl"
+                        type="url"
+                        className={`border rounded px-3 py-2 ${fieldAccent} ${placeholderMuted}`}
+                        placeholder={language === 'ar' ? 'الصق رابط المصدر هنا (اختياري)' : 'Paste a source URL here (optional)'}
+                        value={webSearchUrl}
+                        onChange={(e) => setWebSearchUrl(e.target.value)}
+                        disabled={!useWebSearch || !isWebSearchAllowed}
+                        title={language === 'ar' ? 'أدخل رابط المصدر' : 'Enter source URL'}
+                      />
+                    </div>
+                  </div>
+                  {!isWebSearchAllowed && (
+                    <span className="text-xs text-muted-foreground">
+                      {language === 'ar'
+                        ? 'بحث الويب متاح فقط لبعض أنواع المحتوى البحثية'
+                        : 'Web search is available only for research-focused content types'}
+                    </span>
+                  )}
+                </div>
+              </div>
               <div className="grid gap-3 mb-3">
                 <div className="flex items-center justify-between gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'نقاط أساسية وكلمات مفتاحية' : 'Key Points & Keywords'}</label>

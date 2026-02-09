@@ -127,6 +127,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [sourceImageUrl, setSourceImageUrl] = useState<string | null>(null);
+  const [sourceImagePath, setSourceImagePath] = useState<string | null>(null);
   const [latestVideo, setLatestVideo] = useState<LatestVideo | null>(null);
   const pollInFlightRef = useRef(false);
   const usageIncrementedRef = useRef(false);
@@ -346,6 +347,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setImageFile(null);
     setImagePreview(null);
     setGeneratedVideoUrl(null);
+    setSourceImagePath(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -479,12 +481,15 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
     try {
       let requestBody: Record<string, unknown>;
+      const endingDirective = language === 'ar'
+        ? 'اختم بمشهد يهدأ تدريجياً مع تلاشي لطيف في النهاية.'
+        : 'End with a smooth wind-down and a gentle fade-out.';
+      const basePrompt = prompt.trim();
+      const finalPrompt = basePrompt ? `${basePrompt}\n${endingDirective}` : endingDirective;
 
       if (generationMode === 'text_to_video') {
         // Text-to-Video: no image upload needed
         setGenerationStatus(language === 'ar' ? 'جاري بدء الإنشاء...' : 'Starting generation...');
-
-        const finalPrompt = prompt.trim();
 
         requestBody = {
           generation_type: 'text_to_video',
@@ -532,8 +537,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             .createSignedUrl(storagePath, 60 * 60 * 6);
           if (signedErr) throw new Error(`Signed URL failed: ${signedErr.message}`);
           if (!signedData?.signedUrl) throw new Error('Signed URL missing');
-          imageUrl = cleanSignedUrl(signedData.signedUrl);
+          imageUrl = signedData.signedUrl;
           setSourceImageUrl(imageUrl);
+          setSourceImagePath(storagePath);
           console.log('[AIVideomaker] Upload successful, URL:', imageUrl);
         } catch (prepErr: any) {
           console.error('[AIVideomaker] Prepare image error:', prepErr);
@@ -543,7 +549,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         requestBody = {
           generation_type: 'image_to_video',
           image: imageUrl,
-          prompt: prompt.trim() || undefined,
+          prompt: finalPrompt,
           duration,
           aspect_ratio: aspectRatio,
           mode: 'async',
@@ -670,7 +676,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         description: prompt.trim() || null,
         storage_path: storagePath,
         video_url: null,
-        thumbnail_url: generationMode === 'image_to_video' ? (sourceImageUrl || null) : null,
+        thumbnail_url: generationMode === 'image_to_video'
+          ? (sourceImagePath || sourceImageUrl || null)
+          : null,
         duration_seconds: parseInt(duration, 10),
         aspect_ratio: aspectRatio,
         style_template: 'ai',
@@ -910,6 +918,40 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               )}
 
               {/* Prompt textarea */}
+              <div className="flex flex-col gap-2 px-1 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {needsArabicTranslation && (
+                    <div className="flex items-center gap-1 text-[11px] font-semibold text-[#060541]">
+                      <span>{language === 'ar' ? 'اضغط لترجمة العربية' : 'Click to translate Arabic'}</span>
+                      {language === 'ar' ? (
+                        <ArrowLeft className="h-3.5 w-3.5" />
+                      ) : (
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      )}
+                    </div>
+                  )}
+                  <button
+                    onClick={handleAmp}
+                    disabled={isAmping || isGenerating || !(generationMode === 'image_to_video' ? imagePreview : prompt.trim())}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold rounded-full border transition-all ${
+                      isAmping
+                        ? 'text-primary border-primary/40 bg-primary/10'
+                        : needsArabicTranslation
+                          ? 'text-[#060541] border-[rgba(6,5,65,0.35)] bg-[rgba(6,5,65,0.08)] shadow-[0_0_20px_rgba(33,150,243,0.25)]'
+                          : 'text-muted-foreground border-primary/20 hover:text-primary hover:border-primary/50 hover:bg-primary/10'
+                    }`}
+                    title={
+                      needsArabicTranslation
+                        ? (language === 'ar' ? 'اضغط لترجمة العربية' : 'Click to translate Arabic')
+                        : (language === 'ar' ? 'تعزيز الوصف بالذكاء الاصطناعي' : 'Amp: enhance prompt')
+                    }
+                  >
+                    <Wand2 className={`h-3.5 w-3.5 ${isAmping ? 'animate-spin' : ''}`} />
+                    <span>{language === 'ar' ? 'تعزيز' : 'Amp'}</span>
+                  </button>
+                </div>
+                <span className="text-[10px] text-muted-foreground/50 sm:self-auto">{prompt.length}/2500</span>
+              </div>
               <div className="relative flex-1">
                 <Textarea
                   value={prompt}
@@ -923,45 +965,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           ? 'صف الحركة المطلوبة...\n\nمثال: شخص يبتسم ويلوح بيده، قطة تحرك رأسها ببطء، سيارة تتحرك للأمام...'
                           : 'Describe the motion you want...\n\ne.g., A person smiling and waving, a cat slowly moving its head, a car driving forward...')
                   }
-                  className="min-h-[140px] h-full text-sm resize-none rounded-xl border-2 border-primary/20 focus:border-primary bg-background/50 backdrop-blur-sm transition-all placeholder:text-muted-foreground/60 pr-12 pb-10"
+                  className="min-h-[140px] h-full text-sm resize-none rounded-xl border-2 border-primary/20 focus:border-primary bg-background/50 backdrop-blur-sm transition-all placeholder:text-muted-foreground/60"
                   maxLength={2500}
                   disabled={isGenerating || limitReached}
                 />
-                <div className="absolute bottom-2 right-3 flex items-center gap-2">
-                  {(generationMode === 'image_to_video' ? imagePreview : prompt.trim()) && (
-                    <div className="flex items-center gap-2">
-                      {needsArabicTranslation && (
-                        <div className="flex items-center gap-1 text-[11px] font-semibold text-[#060541]">
-                          <span>{language === 'ar' ? 'اضغط لترجمة العربية' : 'Click to translate Arabic'}</span>
-                          {language === 'ar' ? (
-                            <ArrowLeft className="h-3.5 w-3.5" />
-                          ) : (
-                            <ArrowRight className="h-3.5 w-3.5" />
-                          )}
-                        </div>
-                      )}
-                      <button
-                        onClick={handleAmp}
-                        disabled={isAmping || isGenerating}
-                        className={`p-1 rounded-md transition-all ${
-                          isAmping
-                            ? 'text-primary animate-spin'
-                            : needsArabicTranslation
-                              ? 'text-[#060541] bg-[rgba(6,5,65,0.08)] ring-2 ring-[rgba(6,5,65,0.35)] shadow-[0_0_20px_rgba(33,150,243,0.25)]'
-                              : 'text-muted-foreground/50 hover:text-primary hover:bg-primary/10'
-                        }`}
-                        title={
-                          needsArabicTranslation
-                            ? (language === 'ar' ? 'اضغط لترجمة العربية' : 'Click to translate Arabic')
-                            : (language === 'ar' ? 'تحسين الوصف بالذكاء الاصطناعي' : 'AI Amp: enhance prompt')
-                        }
-                      >
-                        <Wand2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  )}
-                  <span className="text-[10px] text-muted-foreground/50">{prompt.length}/2500</span>
-                </div>
               </div>
 
               {/* Aspect ratio picker - for both modes */}

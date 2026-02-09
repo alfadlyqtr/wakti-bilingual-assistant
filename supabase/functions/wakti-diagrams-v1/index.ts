@@ -113,6 +113,7 @@ serve(async (req) => {
     // Parse request
     const body: DiagramRequest = await req.json();
     const { inputText, fileContent, imageBase64, imageMimeType, extractOnly, diagramFamily, language, maxDiagrams, userId, krokiStyle } = body;
+    const isAutoRequest = !krokiStyle || krokiStyle === "auto";
 
     // ─────────────────────────────────────────────────────────────────────────
     // Extract-only mode: Just extract text from image and return it
@@ -230,6 +231,47 @@ serve(async (req) => {
         console.error(`❌ Failed to render diagram "${spec.title}":`, err);
         // Log the diagram source for debugging
         console.error(`📝 Failed diagram source: ${spec.diagramSource}`);
+        if (isAutoRequest) {
+          try {
+            console.log("🛟 Auto fallback: rendering safe Mermaid flowchart...");
+            const fallbackSpec = buildAutoFallbackFlowchart(language);
+            const pngBuffer = await renderWithKroki("mermaid", fallbackSpec.diagramSource);
+
+            const diagramId = crypto.randomUUID();
+            const fileName = `${diagramId}.png`;
+            const storagePath = `${ownerId}/diagrams/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+              .from("generated-files")
+              .upload(storagePath, pngBuffer, {
+                contentType: "image/png",
+                upsert: true,
+              });
+
+            if (uploadError) {
+              console.error("Upload error (fallback):", uploadError);
+              continue;
+            }
+
+            const { data: signedUrlData } = await supabase.storage
+              .from("generated-files")
+              .createSignedUrl(storagePath, 86400 * 7);
+
+            generatedDiagrams.push({
+              id: diagramId,
+              title: fallbackSpec.title,
+              description: fallbackSpec.description,
+              type: "flowchart",
+              engine: "mermaid",
+              imageUrl: signedUrlData?.signedUrl || "",
+              diagramSource: fallbackSpec.diagramSource,
+            });
+
+            console.log("✅ Auto fallback diagram rendered and stored");
+          } catch (fallbackError) {
+            console.error("❌ Auto fallback render failed:", fallbackError);
+          }
+        }
       }
     }
 
@@ -291,11 +333,12 @@ async function classifyTextForDiagram(text: string): Promise<KrokiStyleKey> {
     return "mindmap-style";
   }
   
-  // Timeline/Schedule/Dates → gantt
-  const timelineKeywords = /\b(schedule|timeline|deadline|milestone|phase|week|month|year|q[1-4]|january|february|march|april|may|june|july|august|september|october|november|december|2024|2025|2026|ramadan|eid)\b/i;
-  const hasMultipleDates = (text.match(/\d{1,2}[\/\-]\d{1,2}|\d{4}/g) || []).length >= 2;
-  if (timelineKeywords.test(text) || hasMultipleDates) {
-    console.log("📅 Heuristic: Detected timeline/schedule → gantt");
+  // Timeline/Schedule/Dates → gantt (only when explicit dates exist)
+  const timelineKeywords = /\b(schedule|timeline|deadline|milestone|phase|week|month|year|q[1-4]|january|february|march|april|may|june|july|august|september|october|november|december|ramadan|eid)\b/i;
+  const explicitDateMatches = text.match(/\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/g) || [];
+  const hasMultipleExplicitDates = explicitDateMatches.length >= 2;
+  if (hasMultipleExplicitDates && timelineKeywords.test(text)) {
+    console.log("📅 Heuristic: Detected explicit timeline dates → gantt");
     return "gantt";
   }
   
@@ -496,6 +539,26 @@ async function planDiagrams(
   }
   
   return diagrams;
+}
+
+function buildAutoFallbackFlowchart(language: Language): {
+  title: string;
+  description: string;
+  diagramSource: string;
+} {
+  const title = language === "ar" ? "مخطط تلقائي" : "Auto Diagram";
+  const description = language === "ar"
+    ? "مخطط مبسّط لأن النص غير واضح أو لم يتم توليد مخطط صالح"
+    : "A simplified diagram because the input was unclear or a valid diagram could not be generated";
+  const diagramSource = `flowchart TD
+    A[Input] --> B[Process]
+    B --> C[Output]`;
+
+  return {
+    title,
+    description,
+    diagramSource,
+  };
 }
 
 function buildSystemPrompt(_family: DiagramFamily, language: Language, maxDiagrams: number, krokiStyle: KrokiStyleKey): string {

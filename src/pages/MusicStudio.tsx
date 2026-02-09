@@ -246,6 +246,7 @@ const handleDownload = async (url: string, filename: string) => {
   const [realDuration, setRealDuration] = useState<number | null>(fallbackDuration);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [thumbError, setThumbError] = useState(false);
   const attemptedRef = useRef(false);
 
   useEffect(() => {
@@ -300,12 +301,18 @@ const handleDownload = async (url: string, filename: string) => {
     return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
   };
 
-  const showVideo = !fallbackThumbnail && videoSrc && !failed;
+  const showVideo = (!fallbackThumbnail || thumbError) && videoSrc && !failed;
 
   return (
     <>
-      {fallbackThumbnail ? (
-        <img src={fallbackThumbnail} alt="Video" className="w-full h-full object-cover" loading="lazy" />
+      {fallbackThumbnail && !thumbError ? (
+        <img
+          src={fallbackThumbnail}
+          alt="Video"
+          className="w-full h-full object-cover"
+          loading="lazy"
+          onError={() => setThumbError(true)}
+        />
       ) : showVideo ? (
         <>
           <video
@@ -390,8 +397,23 @@ const handleDownload = async (url: string, filename: string) => {
             if (thumbVal.startsWith('http')) {
               thumbnailSignedUrl = thumbVal;
             } else {
-              const { data: tUrl } = supabase.storage.from('videos').getPublicUrl(thumbVal);
-              thumbnailSignedUrl = tUrl?.publicUrl || null;
+              // Prefer message_attachments for AI image-to-video source images
+              const { data: tSigned, error: tErr } = await supabase.storage
+                .from('message_attachments')
+                .createSignedUrl(thumbVal, 3600);
+              if (!tErr && tSigned?.signedUrl) {
+                thumbnailSignedUrl = tSigned.signedUrl;
+              } else {
+                const { data: tSignedAlt, error: tErrAlt } = await supabase.storage
+                  .from('videos')
+                  .createSignedUrl(thumbVal, 3600);
+                if (!tErrAlt && tSignedAlt?.signedUrl) {
+                  thumbnailSignedUrl = tSignedAlt.signedUrl;
+                } else {
+                  const { data: tUrl } = supabase.storage.from('videos').getPublicUrl(thumbVal);
+                  thumbnailSignedUrl = tUrl?.publicUrl || null;
+                }
+              }
             }
           }
 
@@ -693,7 +715,7 @@ const handleDownload = async (url: string, filename: string) => {
                       <div className="flex items-center gap-1.5 group/title">
                         <h3 className="font-medium truncate">{v.title || (language === 'ar' ? 'بدون عنوان' : 'Untitled')}</h3>
                         <button
-                          className="opacity-0 group-hover/title:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted"
+                          className="p-0.5 rounded hover:bg-muted"
                           onClick={() => {
                             setEditingId(v.id);
                             setEditingTitle(v.title || '');

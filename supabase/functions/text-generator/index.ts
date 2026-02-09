@@ -13,9 +13,22 @@ const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 
 // Claude Haiku - cheapest cost-effective Claude model for text generation
 const CLAUDE_MODEL = 'claude-3-5-haiku-latest';
+
+const WEB_SEARCH_ALLOWED_CONTENT_TYPES = new Set([
+  'research_brief',
+  'research_report',
+  'report',
+  'case_study',
+  'policy_note',
+  'how_to_guide',
+  'press_release',
+  'product_description',
+  'essay',
+]);
 
 // Content type configurations
 const contentConfig = {
@@ -142,7 +155,7 @@ serve(async (req) => {
       requestBody = {};
     }
 
-    const { prompt, mode, language, languageVariant, messageAnalysis, modelPreference: _modelPreference, temperature: _temperature, contentType, length, replyLength, tone, register, emojis, image, extractTarget, webSearch } = requestBody;
+    const { prompt, mode, language, languageVariant, messageAnalysis, modelPreference: _modelPreference, temperature: _temperature, contentType, length, replyLength, tone, register, emojis, image, extractTarget, webSearch, webSearchUrl } = requestBody;
 
     console.log("🎯 Request details:", { 
       promptLength: prompt?.length || 0, 
@@ -158,7 +171,8 @@ serve(async (req) => {
       emojis,
       hasImage: !!image,
       extractTarget,
-      webSearch: !!webSearch
+      webSearch: !!webSearch,
+      webSearchUrl: webSearchUrl || null
     });
 
     // ============================================
@@ -388,6 +402,9 @@ Return ONLY the JSON, no additional text.`;
     console.log("🎯 Mode:", mode, "| Language:", language, "| Prompt length:", prompt.length);
     console.log("🎯 Structured fields:", { tone, register, languageVariant, emojis, contentType });
 
+    const webSearchAllowed = !!contentType && WEB_SEARCH_ALLOWED_CONTENT_TYPES.has(contentType);
+    const webSearchEnabled = !!webSearch && webSearchAllowed;
+    const normalizedWebSearchUrl = typeof webSearchUrl === 'string' && webSearchUrl.trim() ? webSearchUrl.trim() : undefined;
     const systemPrompt = buildSystemPrompt(language, { tone, register, languageVariant, emojis, contentType });
     const genParams = getGenerationParams(contentType, tone, length || replyLength || 'medium', register);
     console.log("🎯 Generation parameters:", genParams);
@@ -395,7 +412,8 @@ Return ONLY the JSON, no additional text.`;
     const logMetadataBase = {
       mode,
       language,
-      webSearch: !!webSearch,
+      webSearch: webSearchEnabled,
+      webSearchUrl: normalizedWebSearchUrl ?? null,
       contentType: contentType ?? null,
       tone: tone ?? null,
       register: register ?? null,
@@ -409,127 +427,141 @@ Return ONLY the JSON, no additional text.`;
 
     let generatedText: string | undefined;
 
-    // ── Web Search: OpenAI gpt-4.1-mini (Responses API) ──
-    if (webSearch && OPENAI_API_KEY) {
+    // ── Web Search: Tavily + Claude ──
+    if (webSearchEnabled && TAVILY_API_KEY) {
       try {
-        console.log("🎯 Text Generator: Web Search enabled - using OpenAI gpt-4.1-mini Responses API");
+        console.log("🎯 Text Generator: Web Search enabled - using Tavily + Claude");
         const startWebSearch = Date.now();
-        
-        const webSearchPrompt = language === 'ar'
-          ? `أنت كاتب محترف. المستخدم يريد محتوى عالي الجودة عن الموضوع التالي.
 
-**تعليمات مهمة:**
-1. ابحث في الويب عن أحدث الحقائق والإحصائيات والأرقام الحقيقية
-2. أضف تواريخ محددة وأرقام دقيقة (مثل: "في 2024، بلغ عدد السياح 5.6 مليون")
-3. اذكر أسماء حقيقية للأماكن والمنظمات والأحداث
-4. اكتب بأسلوب واضح ومنظم مع فقرات متماسكة
-5. لا تحذف أي شيء من محتوى المستخدم - فقط عززه بالحقائق والمصادر
-6. اجعل المحتوى غنياً بالمعلومات ومفيداً للقارئ
-
-الموضوع:
-${prompt}`
-          : `You are a professional writer. The user wants high-quality content about the following topic.
-
-**Critical Instructions:**
-1. Search the web for the LATEST facts, statistics, and real data
-2. Include SPECIFIC numbers, dates, and figures (e.g., "In 2024, tourism reached 5.6 million visitors")
-3. Mention REAL names of places, organizations, events, and people where relevant
-4. Write in a clear, well-organized style with coherent paragraphs
-5. Do NOT remove or change the user's original content - only ENHANCE it with facts and sources
-6. Make the content information-rich and valuable to the reader
-7. If writing an essay or report, include a strong introduction, detailed body paragraphs, and a clear conclusion
-
-Topic:
-${prompt}`;
-
-        const responsesApiBody = {
-          model: 'gpt-4.1-mini',
-          input: webSearchPrompt,
-          tools: [{ type: 'web_search' }],
-          instructions: systemPrompt,
-          temperature: genParams.temperature,
+        const tavilyPayload: Record<string, unknown> = {
+          api_key: TAVILY_API_KEY,
+          query: prompt,
+          search_depth: "basic",
+          max_results: 6,
+          include_raw_content: true,
+          include_answer: false,
         };
 
-        const webSearchResponse = await fetch("https://api.openai.com/v1/responses", {
+        if (normalizedWebSearchUrl) {
+          try {
+            const parsedUrl = new URL(normalizedWebSearchUrl);
+            tavilyPayload.include_domains = [parsedUrl.hostname];
+          } catch (urlErr) {
+            console.warn("🎯 Text Generator: Invalid webSearchUrl, ignoring:", urlErr);
+          }
+        }
+
+        const tavilyResponse = await fetch("https://api.tavily.com/search", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${OPENAI_API_KEY}`,
-          },
-          body: JSON.stringify(responsesApiBody),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(tavilyPayload),
         });
 
         const webSearchDuration = Date.now() - startWebSearch;
-        console.log(`🎯 Text Generator: Web Search completed in ${webSearchDuration}ms, status ${webSearchResponse.status}`);
+        console.log(`🎯 Text Generator: Tavily search completed in ${webSearchDuration}ms, status ${tavilyResponse.status}`);
 
-        if (webSearchResponse.ok) {
-          const webSearchResult = await webSearchResponse.json();
-          const outputText = webSearchResult.output_text || webSearchResult.output?.[0]?.content?.[0]?.text || '';
-          
-          const sources: Array<{ title: string; url: string }> = [];
-          if (Array.isArray(webSearchResult.output)) {
-            for (const item of webSearchResult.output) {
-              if (item.type === 'web_search_call' && Array.isArray(item.search_results)) {
-                for (const result of item.search_results) {
-                  if (result.url && result.title) sources.push({ title: result.title, url: result.url });
-                }
-              }
-              if (item.type === 'message' && Array.isArray(item.content)) {
-                for (const contentItem of item.content) {
-                  if (contentItem.type === 'output_text' && Array.isArray(contentItem.annotations)) {
-                    for (const annotation of contentItem.annotations) {
-                      if (annotation.type === 'url_citation' && annotation.url && annotation.title) {
-                        if (!sources.some(s => s.url === annotation.url)) {
-                          sources.push({ title: annotation.title, url: annotation.url });
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-          
-          if (outputText) {
-            generatedText = sanitizeEmDashes(outputText);
+        if (tavilyResponse.ok) {
+          const tavilyResult = await tavilyResponse.json();
+          const results: Array<{ title?: string; url?: string; content?: string }> = Array.isArray(tavilyResult?.results)
+            ? tavilyResult.results
+            : [];
 
-            await logAIFromRequest(req, {
-              functionName: "text-generator",
-              provider: "openai",
-              model: "gpt-4.1-mini",
-              inputText: prompt,
-              outputText: generatedText,
-              durationMs: webSearchDuration,
-              status: "success",
-              metadata: {
-                ...logMetadataBase,
-                webSearchUsed: true,
-              }
+          const sources = results
+            .filter((r) => r?.url && r?.title)
+            .map((r) => ({ title: r.title as string, url: r.url as string }));
+
+          const contextChunks = results
+            .map((r, idx) => {
+              const title = r?.title ? `Title: ${r.title}` : `Result ${idx + 1}`;
+              const url = r?.url ? `URL: ${r.url}` : '';
+              const content = r?.content || '';
+              return [title, url, content].filter(Boolean).join("\n");
+            })
+            .filter(Boolean)
+            .join("\n\n---\n\n");
+
+          if (contextChunks) {
+            const claudePrompt = language === 'ar'
+              ? `أنت كاتب محترف. استخدم نتائج البحث أدناه لكتابة محتوى دقيق وغني بالمعلومات. التزم بإعدادات المستخدم بدقة.
+
+نتائج البحث:
+${contextChunks}
+
+طلب المستخدم:
+${prompt}`
+              : `You are a professional writer. Use the search results below to write accurate, information-rich content. Follow user settings strictly.
+
+Search results:
+${contextChunks}
+
+User request:
+${prompt}`;
+
+            const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-api-key": ANTHROPIC_API_KEY || "",
+                "anthropic-version": "2023-06-01",
+              },
+              body: JSON.stringify({
+                model: CLAUDE_MODEL,
+                system: systemPrompt,
+                messages: [{ role: "user", content: claudePrompt }],
+                temperature: genParams.temperature,
+                max_tokens: genParams.max_tokens,
+              }),
             });
 
-            return new Response(
-              JSON.stringify({
-                success: true,
-                generatedText,
-                mode,
-                language,
-                modelUsed: 'gpt-4.1-mini (web_search)',
-                temperatureUsed: genParams.temperature,
-                contentType: contentType || null,
-                webSearchUsed: true,
-                webSearchSources: sources
-              }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+            if (claudeResponse.ok) {
+              const claudeResult = await claudeResponse.json();
+              const content = claudeResult.content?.[0]?.text || "";
+              if (content) {
+                generatedText = sanitizeEmDashes(content);
+
+                await logAIFromRequest(req, {
+                  functionName: "text-generator",
+                  provider: "anthropic",
+                  model: CLAUDE_MODEL,
+                  inputText: prompt,
+                  outputText: generatedText,
+                  durationMs: webSearchDuration,
+                  status: "success",
+                  metadata: {
+                    ...logMetadataBase,
+                    webSearchUsed: true,
+                    webSearchProvider: "tavily",
+                  }
+                });
+
+                return new Response(
+                  JSON.stringify({
+                    success: true,
+                    generatedText,
+                    mode,
+                    language,
+                    modelUsed: `${CLAUDE_MODEL} (tavily)` ,
+                    temperatureUsed: genParams.temperature,
+                    contentType: contentType || null,
+                    webSearchUsed: true,
+                    webSearchSources: sources
+                  }),
+                  { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                );
+              }
+            } else {
+              const errTxt = await claudeResponse.text();
+              console.warn("🎯 Text Generator: Claude web search synthesis error:", errTxt);
+            }
           } else {
-            console.warn("🎯 Text Generator: Web Search returned no content, falling back");
+            console.warn("🎯 Text Generator: Tavily returned empty results");
           }
         } else {
-          const errTxt = await webSearchResponse.text();
-          console.warn("🎯 Text Generator: Web Search API error, falling back:", { status: webSearchResponse.status, error: errTxt });
+          const errTxt = await tavilyResponse.text();
+          console.warn("🎯 Text Generator: Tavily API error, falling back:", errTxt);
         }
       } catch (e) {
-        console.warn("🎯 Text Generator: Web Search threw error, falling back:", e);
+        console.warn("🎯 Text Generator: Tavily web search threw error, falling back:", e);
       }
     }
 

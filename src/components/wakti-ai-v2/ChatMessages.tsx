@@ -1449,8 +1449,17 @@ export function ChatMessages({
 
       // Apply table repair to all assistant messages (fixes malformed AI tables)
       // Also strip reminder blocks so they don't show as raw JSON/HTML comments
-      const cleanedContent = stripReminderBlocks(message.content || '');
-      const content = repairMarkdownTables(cleanedContent);
+      const rawContent = message.content || '';
+      const cleanedContent = stripReminderBlocks(rawContent);
+      const hadReminderBlock = cleanedContent !== rawContent;
+      const fallbackReminderReply = language === 'ar'
+        ? 'تم ضبط التذكير. هل تريد أي شيء آخر؟'
+        : 'Got it — reminder set. Anything else you need?';
+      const content = repairMarkdownTables(
+        cleanedContent.trim().length === 0 && hadReminderBlock
+          ? fallbackReminderReply
+          : cleanedContent
+      );
 
       // Vision JSON renderer (Option B): render structured results if present
       const vjson = (message as any)?.metadata?.visionJson || (message as any)?.metadata?.json;
