@@ -130,71 +130,43 @@ const handleDownload = async (url: string, filename: string) => {
  }
 
  function VideoPlayer({ url, storagePath, language }: { url: string; storagePath?: string | null; language: string }) {
-  const [videoSrc, setVideoSrc] = useState<string | null>(null);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const blobUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(false);
-
-    const loadVideo = async () => {
+    const fetchVideo = async () => {
+      setLoading(true);
+      setError(false);
       try {
-        // Strategy 1: Try signed URL for storage_path videos
         if (storagePath) {
-          const { data: signedData, error: signedErr } = await supabase.storage
-            .from('videos')
-            .createSignedUrl(storagePath, 3600);
-          if (!cancelled && !signedErr && signedData?.signedUrl) {
-            setVideoSrc(signedData.signedUrl);
-            setLoading(false);
-            return;
-          }
-          // Strategy 2: Fallback to blob download (always works with service-uploaded files)
-          const { data: blobData, error: dlErr } = await supabase.storage
+          const { data, error: dlError } = await supabase.storage
             .from('videos')
             .download(storagePath);
-          if (!cancelled && !dlErr && blobData) {
-            const blobUrl = URL.createObjectURL(blobData);
-            blobUrlRef.current = blobUrl;
-            setVideoSrc(blobUrl);
-            setLoading(false);
-            return;
-          }
-        }
-
-        // Strategy 3: Use the direct URL (for AI videos with external URLs)
-        if (url) {
-          if (!cancelled) {
-            setVideoSrc(url);
-            setLoading(false);
-            return;
-          }
-        }
-
-        if (!cancelled) {
-          setError(true);
-          setLoading(false);
+          if (dlError) throw dlError;
+          if (cancelled) return;
+          const objectUrl = URL.createObjectURL(data);
+          setBlobUrl(objectUrl);
+        } else {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error('Fetch failed');
+          const blob = await res.blob();
+          if (cancelled) return;
+          const objectUrl = URL.createObjectURL(blob);
+          setBlobUrl(objectUrl);
         }
       } catch (e) {
-        console.error('[VideoPlayer] Load error:', e);
-        if (!cancelled) {
-          setError(true);
-          setLoading(false);
-        }
+        console.error('[VideoPlayer] Fetch error:', e);
+        if (!cancelled) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
-
-    loadVideo();
-
+    fetchVideo();
     return () => {
       cancelled = true;
-      if (blobUrlRef.current) {
-        URL.revokeObjectURL(blobUrlRef.current);
-        blobUrlRef.current = null;
-      }
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
     };
   }, [url, storagePath]);
 
@@ -230,7 +202,7 @@ const handleDownload = async (url: string, filename: string) => {
     );
   }
 
-  if (error || !videoSrc) {
+  if (error || !blobUrl) {
     return (
       <div className="px-3 pb-3 space-y-2">
         <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
@@ -248,12 +220,11 @@ const handleDownload = async (url: string, filename: string) => {
   return (
     <div className="px-3 pb-3 space-y-2">
       <video
-        src={videoSrc}
+        src={blobUrl}
         controls
         autoPlay
         playsInline
         preload="auto"
-        onError={() => setError(true)}
         className="w-full max-h-[60vh] rounded-lg bg-black object-contain"
       />
       <div className="flex justify-end">
@@ -330,41 +301,16 @@ function VideoThumbnail({ fallbackDuration }: {
           let thumbnailSignedUrl: string | null = null;
 
           if (v.storage_path) {
-            const { data: signedData, error: signedErr } = await supabase.storage.from('videos').createSignedUrl(v.storage_path, 3600);
-            console.log('[loadSavedVideos] storage_path:', v.storage_path, 'signedErr:', signedErr, 'signedUrl:', signedData?.signedUrl?.substring(0, 80));
-            if (!signedErr && signedData?.signedUrl) {
-              signedUrl = signedData.signedUrl;
-            }
+            const { data: pubData } = supabase.storage.from('videos').getPublicUrl(v.storage_path);
+            signedUrl = pubData?.publicUrl || null;
           } else if (v.video_url) {
             signedUrl = v.video_url;
-            console.log('[loadSavedVideos] using video_url directly:', v.video_url?.substring(0, 80));
-          } else {
-            console.log('[loadSavedVideos] NO storage_path and NO video_url for video id:', v.id);
           }
 
           if ((v as any).thumbnail_url) {
-            const thumbVal = (v as any).thumbnail_url as string;
-            if (thumbVal.startsWith('http')) {
-              thumbnailSignedUrl = thumbVal;
-            } else {
-              // Prefer message_attachments for AI image-to-video source images
-              const { data: tSigned, error: tErr } = await supabase.storage
-                .from('message_attachments')
-                .createSignedUrl(thumbVal, 3600);
-              if (!tErr && tSigned?.signedUrl) {
-                thumbnailSignedUrl = tSigned.signedUrl;
-              } else {
-                const { data: tSignedAlt, error: tErrAlt } = await supabase.storage
-                  .from('videos')
-                  .createSignedUrl(thumbVal, 3600);
-                if (!tErrAlt && tSignedAlt?.signedUrl) {
-                  thumbnailSignedUrl = tSignedAlt.signedUrl;
-                } else {
-                  const { data: tUrl } = supabase.storage.from('videos').getPublicUrl(thumbVal);
-                  thumbnailSignedUrl = tUrl?.publicUrl || null;
-                }
-              }
-            }
+            const thumbPath = (v as any).thumbnail_url as string;
+            const { data: tUrl } = supabase.storage.from('videos').getPublicUrl(thumbPath);
+            thumbnailSignedUrl = tUrl?.publicUrl || null;
           }
 
           return { ...v, signedUrl, thumbnailSignedUrl, source: 'user' };
@@ -384,7 +330,7 @@ function VideoThumbnail({ fallbackDuration }: {
         title: v.title || null,
         video_url: v.video_url || null,
         storage_path: null,
-        duration_seconds: v.duration_seconds || null,
+        duration_seconds: v.duration_seconds || 5,
         is_public: !!v.is_public,
         created_at: v.created_at,
         signedUrl: v.video_url || null,
@@ -741,7 +687,7 @@ function VideoThumbnail({ fallbackDuration }: {
                 </div>
               </div>
 
-              {activePreviewId === v.id && <VideoPlayer url={v.signedUrl || v.video_url || ''} storagePath={v.storage_path} language={language} />}
+              {activePreviewId === v.id && v.signedUrl && <VideoPlayer url={v.signedUrl} storagePath={v.storage_path} language={language} />}
             </Card>
           ))}
         </div>
