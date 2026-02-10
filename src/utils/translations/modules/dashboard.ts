@@ -17,5 +17,5 @@ export const dashboard = {
   welcome: "Welcome",
   moodTrend: "Mood Trend",
   journal: "Journal",
-  free_trial_welcome_message: "Enjoy Wakti AI app with full features for 24 hours! After your access expires, you can subscribe to unlock unlimited use and get a free 3-day trial on our monthly plan."
+  free_trial_welcome_message: "Enjoy Wakti AI app with full features for 4 days! After your access expires, you can subscribe to unlock unlimited use and get a free 3-day trial on our monthly plan."
 };

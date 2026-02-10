@@ -130,44 +130,28 @@ const handleDownload = async (url: string, filename: string) => {
  }
 
  function VideoPlayer({ url, storagePath, language }: { url: string; storagePath?: string | null; language: string }) {
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    const fetchVideo = async () => {
-      setLoading(true);
-      setError(false);
-      try {
-        if (storagePath) {
-          const { data, error: dlError } = await supabase.storage
-            .from('videos')
-            .download(storagePath);
-          if (dlError) throw dlError;
-          if (cancelled) return;
-          const objectUrl = URL.createObjectURL(data);
-          setBlobUrl(objectUrl);
-        } else {
-          const res = await fetch(url);
-          if (!res.ok) throw new Error('Fetch failed');
-          const blob = await res.blob();
-          if (cancelled) return;
-          const objectUrl = URL.createObjectURL(blob);
-          setBlobUrl(objectUrl);
-        }
-      } catch (e) {
-        console.error('[VideoPlayer] Fetch error:', e);
-        if (!cancelled) setError(true);
-      } finally {
-        if (!cancelled) setLoading(false);
+    setLoading(true);
+    setError(false);
+    try {
+      if (url) {
+        setStreamUrl(url);
+      } else if (storagePath) {
+        const { data: pubData } = supabase.storage.from('videos').getPublicUrl(storagePath);
+        setStreamUrl(pubData?.publicUrl || null);
+      } else {
+        setStreamUrl(null);
       }
-    };
-    fetchVideo();
-    return () => {
-      cancelled = true;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    };
+    } catch (e) {
+      console.error('[VideoPlayer] Stream URL error:', e);
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
   }, [url, storagePath]);
 
   const handleDownload = async () => {
@@ -202,7 +186,7 @@ const handleDownload = async (url: string, filename: string) => {
     );
   }
 
-  if (error || !blobUrl) {
+  if (error || !streamUrl) {
     return (
       <div className="px-3 pb-3 space-y-2">
         <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
@@ -220,11 +204,11 @@ const handleDownload = async (url: string, filename: string) => {
   return (
     <div className="px-3 pb-3 space-y-2">
       <video
-        src={blobUrl}
+        src={streamUrl}
         controls
         autoPlay
         playsInline
-        preload="auto"
+        preload="metadata"
         className="w-full max-h-[60vh] rounded-lg bg-black object-contain"
       />
       <div className="flex justify-end">
@@ -236,63 +220,13 @@ const handleDownload = async (url: string, filename: string) => {
   );
  }
 
- function VideoThumbnail({ videoUrl, storagePath, fallbackThumbnail, fallbackDuration }: {
+ function VideoThumbnail({ fallbackDuration }: {
   videoUrl: string | null;
   storagePath: string | null;
   fallbackThumbnail: string | null;
   fallbackDuration: number | null;
 }) {
-  const [videoSrc, setVideoSrc] = useState<string | null>(null);
-  const [realDuration, setRealDuration] = useState<number | null>(fallbackDuration);
-  const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const [thumbError, setThumbError] = useState(false);
-  const attemptedRef = useRef(false);
-
-  useEffect(() => {
-    if (fallbackThumbnail || attemptedRef.current) return;
-    if (!storagePath && !videoUrl) return;
-    attemptedRef.current = true;
-
-    let cancelled = false;
-    const load = async () => {
-      try {
-        if (storagePath) {
-          // Use signed URL instead of downloading full blob — much faster
-          const { data: urlData, error } = await supabase.storage
-            .from('videos')
-            .createSignedUrl(storagePath, 3600);
-          if (error || !urlData?.signedUrl || cancelled) {
-            if (!cancelled) setFailed(true);
-            return;
-          }
-          if (!cancelled) setVideoSrc(urlData.signedUrl);
-        } else if (videoUrl) {
-          if (!cancelled) setVideoSrc(videoUrl);
-        }
-      } catch {
-        if (!cancelled) setFailed(true);
-      }
-    };
-    load();
-
-    // Fallback: stop spinner after 8s if video never loads
-    const timeout = setTimeout(() => {
-      if (!cancelled) setFailed(true);
-    }, 8000);
-
-    return () => { cancelled = true; clearTimeout(timeout); };
-  }, [storagePath, videoUrl, fallbackThumbnail]);
-
-  const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    const vid = e.currentTarget;
-    if (vid.duration && isFinite(vid.duration)) {
-      setRealDuration(Math.round(vid.duration));
-    }
-    vid.currentTime = 0.5;
-  };
-
-  const handleSeeked = () => setLoaded(true);
+  const [realDuration] = useState<number | null>(fallbackDuration);
 
   const formatDur = (sec: number | null | undefined) => {
     if (!sec || sec <= 0) return '';
@@ -301,46 +235,11 @@ const handleDownload = async (url: string, filename: string) => {
     return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
   };
 
-  const showVideo = (!fallbackThumbnail || thumbError) && videoSrc && !failed;
-
   return (
     <>
-      {fallbackThumbnail && !thumbError ? (
-        <img
-          src={fallbackThumbnail}
-          alt="Video"
-          className="w-full h-full object-cover"
-          loading="lazy"
-          onError={() => setThumbError(true)}
-        />
-      ) : showVideo ? (
-        <>
-          <video
-            src={videoSrc!}
-            muted
-            playsInline
-            crossOrigin="anonymous"
-            preload="metadata"
-            onLoadedMetadata={handleLoadedMetadata}
-            onSeeked={handleSeeked}
-            onError={() => setFailed(true)}
-            className={`w-full h-full object-cover ${loaded ? 'opacity-100' : 'opacity-0'}`}
-          />
-          {!loaded && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/50" />
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="w-full h-full flex items-center justify-center">
-          {(storagePath || videoUrl) && !failed ? (
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/50" />
-          ) : (
-            <Video className="h-6 w-6 text-muted-foreground" />
-          )}
-        </div>
-      )}
+      <div className="w-full h-full flex items-center justify-center">
+        <Video className="h-6 w-6 text-muted-foreground" />
+      </div>
       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
         <Play className="h-8 w-8 text-white" />
       </div>

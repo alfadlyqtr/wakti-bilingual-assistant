@@ -76,6 +76,14 @@ type StorageClient = {
   };
 };
 
+function sanitizeImageUrl(url: string): string {
+  let cleaned = url.trim();
+  if (cleaned.startsWith("%20")) {
+    cleaned = cleaned.replace(/^%20+/, "");
+  }
+  return cleaned.trim();
+}
+
 function parseDataUriImage(dataUri: string): { contentType: string; bytes: Uint8Array } {
   const match = dataUri.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.*)$/);
   if (!match) throw new Error("Invalid image data URI");
@@ -168,9 +176,10 @@ async function createVideoTask(
   prompt?: string,
   duration?: string,
 ): Promise<{ task_id: string; status: string }> {
+  const sanitizedImageUrl = sanitizeImageUrl(imageUrl);
   const validDuration = duration === "10" ? "10" : "6";
   const input: Record<string, unknown> = {
-    image_urls: [imageUrl],
+    image_urls: [sanitizedImageUrl],
     mode: "normal",
     duration: validDuration,
   };

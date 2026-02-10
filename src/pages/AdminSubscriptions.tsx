@@ -90,7 +90,7 @@ export default function AdminSubscriptions() {
         p_minutes: minutes,
       });
       if (error) throw error;
-      toast.success(action === 'reset' ? `Reset 24-hour trial for ${user.email}` : `Extended trial by ${minutes} minutes for ${user.email}`);
+      toast.success(action === 'reset' ? `Reset 4-day trial for ${user.email}` : `Extended trial by ${minutes} minutes for ${user.email}`);
       await loadData();
     } catch (err: any) {
       console.error('Adjust trial failed:', err);

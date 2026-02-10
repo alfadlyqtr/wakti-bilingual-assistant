@@ -35,7 +35,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { restorePurchases } from "@/integrations/natively/purchasesBridge";
 
-// TrialCountdown Component - Shows remaining time of 24-hour trial
+// TrialCountdown Component - Shows remaining time of 4-day trial
 // When trial ends, shows friendly message with subscribe CTA
 // Includes its own header - parent should NOT show "Free Trial Active" separately
 const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: string; language: string; onSubscribeClick?: () => void }) => {
@@ -45,7 +45,7 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
   useEffect(() => {
     const calculateTimeLeft = () => {
       const start = new Date(startAt).getTime();
-      const trialEnd = start + (24 * 60 * 60 * 1000); // 24 hours
+      const trialEnd = start + (96 * 60 * 60 * 1000); // 96 hours (4 days)
       const now = Date.now();
       const diff = trialEnd - now;
       
@@ -55,10 +55,11 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
       }
       
       setIsExpired(false);
-      const hours = Math.floor(diff / 3600000);
+      const days = Math.floor(diff / 86400000);
+      const hours = Math.floor((diff % 86400000) / 3600000);
       const minutes = Math.floor((diff % 3600000) / 60000);
       const seconds = Math.floor((diff % 60000) / 1000);
-      setTimeLeft(`${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+      setTimeLeft(days > 0 ? `${days}d ${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}` : `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
     };
     
     calculateTimeLeft();
@@ -914,7 +915,7 @@ export default function Account() {
                     {subscriptionData?.profile && !subscriptionData.profile.is_subscribed && subscriptionData.profile.free_access_start_at && (() => {
                       // Calculate if trial is still active
                       const start = new Date(subscriptionData.profile.free_access_start_at).getTime();
-                      const trialEnd = start + (24 * 60 * 60 * 1000); // 24 hours
+                      const trialEnd = start + (96 * 60 * 60 * 1000); // 96 hours (4 days)
                       const isTrialActive = Date.now() < trialEnd;
                       
                       return (

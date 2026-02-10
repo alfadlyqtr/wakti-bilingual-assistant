@@ -155,7 +155,7 @@ serve(async (req) => {
       requestBody = {};
     }
 
-    const { prompt, mode, language, languageVariant, messageAnalysis, modelPreference: _modelPreference, temperature: _temperature, contentType, length, replyLength, tone, register, emojis, image, extractTarget, webSearch, webSearchUrl } = requestBody;
+    const { prompt, mode, language, languageVariant, messageAnalysis, modelPreference: _modelPreference, temperature: _temperature, contentType, length, replyLength, wordCount, replyWordCount, tone, register, emojis, image, extractTarget, webSearch, webSearchUrl } = requestBody;
 
     console.log("🎯 Request details:", { 
       promptLength: prompt?.length || 0, 
@@ -169,6 +169,8 @@ serve(async (req) => {
       register,
       languageVariant,
       emojis,
+      wordCount: wordCount ?? null,
+      replyWordCount: replyWordCount ?? null,
       hasImage: !!image,
       extractTarget,
       webSearch: !!webSearch,
@@ -405,8 +407,19 @@ Return ONLY the JSON, no additional text.`;
     const webSearchAllowed = !!contentType && WEB_SEARCH_ALLOWED_CONTENT_TYPES.has(contentType);
     const webSearchEnabled = !!webSearch && webSearchAllowed;
     const normalizedWebSearchUrl = typeof webSearchUrl === 'string' && webSearchUrl.trim() ? webSearchUrl.trim() : undefined;
-    const systemPrompt = buildSystemPrompt(language, { tone, register, languageVariant, emojis, contentType });
+    const systemPrompt = buildSystemPrompt(language, { tone, register, languageVariant, emojis, contentType, wordCount: wordCount ?? replyWordCount });
     const genParams = getGenerationParams(contentType, tone, length || replyLength || 'medium', register);
+    const requestedWordCountRaw = Number(wordCount ?? replyWordCount);
+    const requestedWordCount = Number.isFinite(requestedWordCountRaw) && requestedWordCountRaw > 0
+      ? Math.min(3000, Math.round(requestedWordCountRaw))
+      : undefined;
+    if (requestedWordCount) {
+      const estimatedTokens = Math.min(4096, Math.max(256, Math.round(requestedWordCount * 1.6)));
+      genParams.max_tokens = estimatedTokens;
+    }
+    const applyWordCount = (text: string) => (
+      requestedWordCount ? enforceWordCount(text, requestedWordCount) : text
+    );
     console.log("🎯 Generation parameters:", genParams);
 
     const logMetadataBase = {
@@ -421,6 +434,8 @@ Return ONLY the JSON, no additional text.`;
       emojis: emojis ?? null,
       length: length ?? null,
       replyLength: replyLength ?? null,
+      wordCount: wordCount ?? null,
+      replyWordCount: replyWordCount ?? null,
       temperatureUsed: genParams.temperature,
       maxTokensUsed: genParams.max_tokens,
     };
@@ -517,7 +532,7 @@ ${prompt}`;
               const claudeResult = await claudeResponse.json();
               const content = claudeResult.content?.[0]?.text || "";
               if (content) {
-                generatedText = sanitizeEmDashes(content);
+                generatedText = applyWordCount(sanitizeEmDashes(content));
 
                 await logAIFromRequest(req, {
                   functionName: "text-generator",
@@ -594,7 +609,7 @@ ${prompt}`;
           const claudeResult = await claudeResponse.json();
           const content = claudeResult.content?.[0]?.text || "";
           if (content) {
-            generatedText = sanitizeEmDashes(content);
+            generatedText = applyWordCount(sanitizeEmDashes(content));
             console.log("🎯 Text Generator: Claude success, length:", generatedText?.length || 0);
 
             await logAIFromRequest(req, {
@@ -662,7 +677,7 @@ ${prompt}`;
           const openaiResult = await openaiResponse.json();
           const content = openaiResult.choices?.[0]?.message?.content || "";
           if (content) {
-            generatedText = sanitizeEmDashes(content);
+            generatedText = applyWordCount(sanitizeEmDashes(content));
 
             await logAIFromRequest(req, {
               functionName: "text-generator",
@@ -715,7 +730,7 @@ ${prompt}`;
         const geminiDuration = Date.now() - startGemini;
         const content = result?.candidates?.[0]?.content?.parts?.[0]?.text || "";
         if (content) {
-          generatedText = sanitizeEmDashes(content);
+          generatedText = applyWordCount(sanitizeEmDashes(content));
 
           await logAIFromRequest(req, {
             functionName: "text-generator",
@@ -776,7 +791,7 @@ ${prompt}`;
           const result = await dsResp.json();
           const content = result.choices?.[0]?.message?.content || "";
           if (content) {
-            generatedText = sanitizeEmDashes(content);
+            generatedText = applyWordCount(sanitizeEmDashes(content));
             return new Response(
               JSON.stringify({
                 success: true,
@@ -850,6 +865,13 @@ function sanitizeEmDashes(text: string): string {
     .replace(/^, /gm, '');      // remove leading comma at line start
 }
 
+function enforceWordCount(text: string, target: number): string {
+  const safeTarget = Math.max(1, Math.min(3000, Math.round(target)));
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= safeTarget) return text.trim();
+  return words.slice(0, safeTarget).join(' ').trim();
+}
+
 // ============================================================================
 // System prompt builder: uses structured fields from frontend
 // ============================================================================
@@ -859,11 +881,12 @@ interface StructuredFields {
   languageVariant?: string;
   emojis?: string;
   contentType?: string;
+  wordCount?: number | string | null;
 }
 
 function buildSystemPrompt(language: string, fields: StructuredFields): string {
   const isArabic = language === 'ar';
-  const { tone, register, languageVariant, emojis, contentType } = fields;
+  const { tone, register, languageVariant, emojis, contentType, wordCount } = fields;
 
   // ── Base identity ──
   const basePrompt = isArabic
@@ -884,6 +907,18 @@ function buildSystemPrompt(language: string, fields: StructuredFields): string {
   if (contentType) {
     const ctName = contentType.replace(/_/g, ' ');
     constraints.push(isArabic ? `📄 نوع المحتوى: ${ctName}. التزم ببنية هذا النوع من المحتوى.` : `📄 Content type: ${ctName}. Follow the structure and conventions of this content type.`);
+  }
+
+  // ────────────────────────────────────────────────────
+  // WORD COUNT (strict)
+  // ────────────────────────────────────────────────────
+  const normalizedWordCount = Number(wordCount);
+  if (Number.isFinite(normalizedWordCount) && normalizedWordCount > 0) {
+    const cappedWordCount = Math.min(3000, Math.round(normalizedWordCount));
+    constraints.push(isArabic
+      ? `🧮 عدد الكلمات: يجب أن يكون الناتج قريبًا قدر الإمكان من ${cappedWordCount} كلمة. لا تتجاوز ${cappedWordCount} كلمة. حاول الالتزام بهذا العدد بدقة.`
+      : `🧮 Word count: Output should be as close as possible to ${cappedWordCount} words. Do not exceed ${cappedWordCount} words. Aim to hit this count precisely.`
+    );
   }
 
   // ────────────────────────────────────────────────────

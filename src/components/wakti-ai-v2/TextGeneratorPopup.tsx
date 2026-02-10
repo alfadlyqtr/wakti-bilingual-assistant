@@ -191,7 +191,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const [topic, setTopic] = useState('');
   const [contentType, setContentType] = useState<ContentTypeKey>('auto');
   const [tone, setTone] = useState<ToneKey>('auto');
-  const [length, setLength] = useState<'auto' | 'very_short' | 'short' | 'medium' | 'long' | 'very_long'>('auto');
+  const [length, setLength] = useState<'auto' | 'very_short' | 'short' | 'medium' | 'long' | 'very_long' | 'word_count'>('auto');
+  const [wordCount, setWordCount] = useState('');
   const [register, setRegister] = useState<RegisterKey>('auto');
   const [languageVariant, setLanguageVariant] = useState<LanguageVariantKey>('auto');
   const [emojis, setEmojis] = useState<EmojisKey>('auto');
@@ -201,7 +202,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   // Reply fields
   const [keyPoints, setKeyPoints] = useState('');
   const [originalMessage, setOriginalMessage] = useState('');
-  const [replyLength, setReplyLength] = useState<'auto' | 'very_short' | 'short' | 'medium' | 'long' | 'very_long'>('auto');
+  const [replyLength, setReplyLength] = useState<'auto' | 'very_short' | 'short' | 'medium' | 'long' | 'very_long' | 'word_count'>('auto');
+  const [replyWordCount, setReplyWordCount] = useState('');
   const [replyAudience, setReplyAudience] = useState<'sender' | 'someone_else'>('sender');
   const [replyRecipientName, setReplyRecipientName] = useState('');
 
@@ -212,6 +214,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const [webSearchSources, setWebSearchSources] = useState<Array<{ title: string; url: string }>>([]);
   const [copied, setCopied] = useState(false);
   const [copyMenuOpen, setCopyMenuOpen] = useState(false);
+  const [typingFrameIndex, setTypingFrameIndex] = useState(0);
 
   // Screenshot upload refs
   const composeFileInputRef = useRef<HTMLInputElement>(null);
@@ -323,12 +326,76 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     try { localStorage.setItem(CACHE_KEY, JSON.stringify(arr)); } catch { }
   };
 
+  const typingFrames = useMemo(() => {
+    const base = language === 'ar' ? 'جاري التوليد' : 'Generating';
+    return [
+      base.slice(0, 1),
+      base.slice(0, 2),
+      base.slice(0, 3),
+      base.slice(0, 4),
+      base.slice(0, 5),
+      base.slice(0, 6),
+      base.slice(0, 7),
+      base,
+      `${base}.`,
+      `${base}..`,
+      `${base}...`,
+      `${base}..`,
+      `${base}.`,
+      base,
+      base.slice(0, 7),
+      base.slice(0, 6),
+      base.slice(0, 5),
+      base.slice(0, 4),
+      base.slice(0, 3),
+      base.slice(0, 2),
+      base.slice(0, 1),
+    ].filter(Boolean);
+  }, [language]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setTypingFrameIndex(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setTypingFrameIndex((prev) => (prev + 1) % typingFrames.length);
+    }, 90);
+    return () => clearInterval(interval);
+  }, [isLoading, typingFrames.length]);
+
+  const generateButtonLabel = isLoading
+    ? typingFrames[typingFrameIndex] || (language === 'ar' ? 'جارٍ التوليد...' : 'Generating...')
+    : (language === 'ar' ? 'توليد النص' : 'Generate Text');
+
+  const normalizedWordCount = useMemo(() => {
+    const raw = Number(wordCount);
+    if (!Number.isFinite(raw)) return undefined;
+    const rounded = Math.round(raw);
+    if (rounded < 1) return undefined;
+    return Math.min(3000, rounded);
+  }, [wordCount]);
+
+  const normalizedReplyWordCount = useMemo(() => {
+    const raw = Number(replyWordCount);
+    if (!Number.isFinite(raw)) return undefined;
+    const rounded = Math.round(raw);
+    if (rounded < 1) return undefined;
+    return Math.min(3000, rounded);
+  }, [replyWordCount]);
+
   const canGenerate = useMemo(() => {
-    if (activeTab === 'compose') return topic.trim().length > 0 && !isLoading;
-    if (activeTab === 'reply') return originalMessage.trim().length > 0 && !isLoading;
+    if (activeTab === 'compose') {
+      if (length === 'word_count') return topic.trim().length > 0 && !!normalizedWordCount && !isLoading;
+      return topic.trim().length > 0 && !isLoading;
+    }
+    if (activeTab === 'reply') {
+      if (replyLength === 'word_count') return originalMessage.trim().length > 0 && !!normalizedReplyWordCount && !isLoading;
+      return originalMessage.trim().length > 0 && !isLoading;
+    }
     if (activeTab === 'generated') return generatedText.trim().length > 0 && !isLoading;
     return !isLoading;
-  }, [activeTab, topic, originalMessage, generatedText, isLoading]);
+  }, [activeTab, topic, originalMessage, generatedText, isLoading, length, replyLength, normalizedWordCount, normalizedReplyWordCount]);
 
   const buildPrompt = (): string => {
     if (activeTab === 'compose') {
@@ -338,7 +405,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           ? `Write about: ${topic}`
           : `Write a ${ctLabel(contentType, language)} about: ${topic}`,
         tone !== 'auto' && tone !== 'human' ? `Tone: ${tone}` : '',
-        length !== 'auto' ? `Length: ${length}` : '',
+        length === 'word_count' && normalizedWordCount ? `Word count: ${normalizedWordCount}` : length !== 'auto' ? `Length: ${length}` : '',
         register ? `Register: ${register}` : '',
         languageVariant ? `Language Variant: ${languageVariant}` : '',
         emojis ? `Emojis: ${emojis}` : '',
@@ -369,7 +436,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           formSeverity ? `Severity (detected): ${formSeverity}` : '',
           `Message/context (detected): ${formMessage || 'N/A'}`,
           keyPoints ? `Key points to include: ${keyPoints}` : '',
-          replyLength !== 'auto' ? `Reply length: ${replyLength}` : '',
+          replyLength === 'word_count' && normalizedReplyWordCount ? `Reply word count: ${normalizedReplyWordCount}` : replyLength !== 'auto' ? `Reply length: ${replyLength}` : '',
           tone !== 'auto' && tone !== 'human' ? `Tone: ${tone}` : '',
           register ? `Register: ${register}` : '',
           languageVariant ? `Language Variant: ${languageVariant}` : '',
@@ -391,7 +458,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           ? 'Your job: read the original message, extract the key issues/next steps, then write a clear message to my friend telling them what to do.'
           : '',
         keyPoints ? `Instructions / key points from me: ${keyPoints}` : '',
-        replyLength !== 'auto' ? `Reply length: ${replyLength}` : '',
+        replyLength === 'word_count' && normalizedReplyWordCount ? `Reply word count: ${normalizedReplyWordCount}` : replyLength !== 'auto' ? `Reply length: ${replyLength}` : '',
         tone !== 'auto' && tone !== 'human' ? `Tone: ${tone}` : '',
         register ? `Register: ${register}` : '',
         languageVariant ? `Language Variant: ${languageVariant}` : '',
@@ -489,7 +556,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       }
       const modeForRequest: 'compose' | 'reply' = activeTab === 'compose' ? 'compose' : activeTab === 'reply' ? 'reply' : mode;
       const effectiveLength = (val: string): 'short' | 'medium' | 'long' | undefined => {
-        if (!val || val === 'auto') return undefined;
+        if (!val || val === 'auto' || val === 'word_count') return undefined;
         if (val === 'very_short') return 'short';
         if (val === 'very_long') return 'long';
         return val as 'short' | 'medium' | 'long';
@@ -504,6 +571,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         contentType: contentType === 'auto' ? undefined : contentType,
         length: modeForRequest === 'compose' ? effectiveLength(length) : undefined,
         replyLength: modeForRequest === 'reply' ? effectiveLength(replyLength) : undefined,
+        wordCount: modeForRequest === 'compose' && length === 'word_count' ? normalizedWordCount : undefined,
+        replyWordCount: modeForRequest === 'reply' && replyLength === 'word_count' ? normalizedReplyWordCount : undefined,
         tone: tone === 'auto' ? undefined : tone,
         register: register === 'auto' ? undefined : register,
         languageVariant: languageVariant === 'auto' ? undefined : languageVariant,
@@ -539,7 +608,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [canGenerate, buildPrompt, activeTab, language, modelPreference, temperature, contentType, length, replyLength, tone, register, languageVariant, emojis, useWebSearch, webSearchUrl, isWebSearchAllowed, onTextGenerated]);
+  }, [canGenerate, buildPrompt, activeTab, language, modelPreference, temperature, contentType, length, replyLength, tone, register, languageVariant, emojis, useWebSearch, webSearchUrl, isWebSearchAllowed, normalizedWordCount, normalizedReplyWordCount, onTextGenerated]);
 
   const title = language === 'ar' ? 'منشئ النص الذكي' : 'Smart Text Generator';
 
@@ -814,7 +883,25 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                     <option value="medium">{language === 'ar' ? 'متوسط' : 'Medium'}</option>
                     <option value="long">{language === 'ar' ? 'طويل' : 'Long'}</option>
                     <option value="very_long">{language === 'ar' ? 'طويل جدًا' : 'Very long'}</option>
+                    <option value="word_count">{language === 'ar' ? 'عدد الكلمات' : 'Word count'}</option>
                   </select>
+                  {length === 'word_count' && (
+                    <div className="grid gap-1">
+                      <input
+                        type="number"
+                        min={1}
+                        max={3000}
+                        inputMode="numeric"
+                        className={`border rounded px-3 py-2 ${fieldAccent} ${placeholderMuted}`}
+                        placeholder={language === 'ar' ? 'أدخل عدد الكلمات (1-3000)' : 'Enter word count (1-3000)'}
+                        value={wordCount}
+                        onChange={(e) => setWordCount(e.target.value)}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {language === 'ar' ? 'الحد الأقصى 3000 كلمة' : 'Max 3000 words'}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="grid gap-2">
                   <label htmlFor="composeRegister" className="text-sm font-medium">{language === 'ar' ? 'السجل اللغوي' : 'Register'}</label>
@@ -1074,7 +1161,25 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                     <option value="medium">{language === 'ar' ? 'متوسط' : 'Medium'}</option>
                     <option value="long">{language === 'ar' ? 'طويل' : 'Long'}</option>
                     <option value="very_long">{language === 'ar' ? 'طويل جدًا' : 'Very long'}</option>
+                    <option value="word_count">{language === 'ar' ? 'عدد الكلمات' : 'Word count'}</option>
                   </select>
+                  {replyLength === 'word_count' && (
+                    <div className="grid gap-1">
+                      <input
+                        type="number"
+                        min={1}
+                        max={3000}
+                        inputMode="numeric"
+                        className={`border rounded px-3 py-2 ${fieldAccent} ${placeholderMuted}`}
+                        placeholder={language === 'ar' ? 'أدخل عدد الكلمات (1-3000)' : 'Enter word count (1-3000)'}
+                        value={replyWordCount}
+                        onChange={(e) => setReplyWordCount(e.target.value)}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {language === 'ar' ? 'الحد الأقصى 3000 كلمة' : 'Max 3000 words'}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="grid gap-2">
                   <label htmlFor="replyRegister" className="text-sm font-medium">{language === 'ar' ? 'السجل اللغوي' : 'Register'}</label>
@@ -1236,7 +1341,10 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                     </div>
                   )}
                 </div>
-                <button className="px-3 py-1.5 rounded border hover:bg-muted" onClick={handleGenerate}>
+                <button
+                  className="px-3 py-1.5 rounded border-2 border-indigo-500/60 text-indigo-700 dark:text-indigo-200 bg-indigo-500/10 hover:bg-indigo-500/20 shadow-[0_0_18px_rgba(99,102,241,0.45)] hover:shadow-[0_0_26px_rgba(99,102,241,0.6)]"
+                  onClick={handleGenerate}
+                >
                   {language === 'ar' ? 'إعادة توليد' : 'Regenerate'}
                 </button>
                 <button
@@ -1276,14 +1384,14 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             <div className="mt-4 text-sm text-destructive">{error}</div>
           )}
           {/* Inline generate button at end of content (not sticky) - hide for diagrams and presentation */}
-          {activeTab !== 'diagrams' && activeTab !== 'presentation' && activeTab !== 'translate' && (
+          {activeTab !== 'diagrams' && activeTab !== 'presentation' && activeTab !== 'translate' && activeTab !== 'generated' && (
           <div className="mt-6 flex justify-end">
               <button
                 className={`px-5 py-2.5 rounded-full text-sm font-medium shadow-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 hover:shadow-xl transition-all ${canGenerate ? '' : 'opacity-60 cursor-not-allowed'}`}
                 onClick={handleGenerate}
                 disabled={!canGenerate}
               >
-                {isLoading ? (language === 'ar' ? 'جارٍ الإنشاء...' : 'Generating...') : (language === 'ar' ? 'توليد النص' : 'Generate Text')}
+                {generateButtonLabel}
               </button>
             </div>
           )}
