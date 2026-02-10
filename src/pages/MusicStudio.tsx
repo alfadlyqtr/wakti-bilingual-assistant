@@ -141,8 +141,12 @@ const handleDownload = async (url: string, filename: string) => {
       if (url) {
         setStreamUrl(url);
       } else if (storagePath) {
-        const { data: pubData } = supabase.storage.from('videos').getPublicUrl(storagePath);
-        setStreamUrl(pubData?.publicUrl || null);
+        supabase.storage.from('videos').createSignedUrl(storagePath, 3600).then(({ data, error: err }) => {
+          if (!err && data?.signedUrl) setStreamUrl(data.signedUrl);
+          else setError(true);
+          setLoading(false);
+        });
+        return;
       } else {
         setStreamUrl(null);
       }
@@ -285,8 +289,10 @@ const handleDownload = async (url: string, filename: string) => {
           let thumbnailSignedUrl: string | null = null;
 
           if (v.storage_path) {
-            const { data: pubData } = supabase.storage.from('videos').getPublicUrl(v.storage_path);
-            signedUrl = pubData?.publicUrl || null;
+            const { data: signedData, error: signedErr } = await supabase.storage.from('videos').createSignedUrl(v.storage_path, 3600);
+            if (!signedErr && signedData?.signedUrl) {
+              signedUrl = signedData.signedUrl;
+            }
           } else if (v.video_url) {
             signedUrl = v.video_url;
           }
