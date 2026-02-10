@@ -934,7 +934,7 @@ export default function Account() {
                                 size="lg"
                               >
                                 <Sparkles className="w-4 h-4 mr-2" />
-                                {language === 'ar' ? 'اشترك الآن واحصل على 3 أيام مجانية' : 'Subscribe Now – Get 3 Free Days'}
+                                {language === 'ar' ? 'اشترك الآن' : 'Subscribe Now'}
                               </Button>
                               {/* Restore Purchases button - Apple requirement */}
                               <Button
