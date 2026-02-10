@@ -130,32 +130,72 @@ const handleDownload = async (url: string, filename: string) => {
  }
 
  function VideoPlayer({ url, storagePath, language }: { url: string; storagePath?: string | null; language: string }) {
-  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const blobUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     setError(false);
-    try {
-      if (url) {
-        setStreamUrl(url);
-      } else if (storagePath) {
-        supabase.storage.from('videos').createSignedUrl(storagePath, 3600).then(({ data, error: err }) => {
-          if (!err && data?.signedUrl) setStreamUrl(data.signedUrl);
-          else setError(true);
+
+    const loadVideo = async () => {
+      try {
+        // Strategy 1: Try signed URL for storage_path videos
+        if (storagePath) {
+          const { data: signedData, error: signedErr } = await supabase.storage
+            .from('videos')
+            .createSignedUrl(storagePath, 3600);
+          if (!cancelled && !signedErr && signedData?.signedUrl) {
+            setVideoSrc(signedData.signedUrl);
+            setLoading(false);
+            return;
+          }
+          // Strategy 2: Fallback to blob download (always works with service-uploaded files)
+          const { data: blobData, error: dlErr } = await supabase.storage
+            .from('videos')
+            .download(storagePath);
+          if (!cancelled && !dlErr && blobData) {
+            const blobUrl = URL.createObjectURL(blobData);
+            blobUrlRef.current = blobUrl;
+            setVideoSrc(blobUrl);
+            setLoading(false);
+            return;
+          }
+        }
+
+        // Strategy 3: Use the direct URL (for AI videos with external URLs)
+        if (url) {
+          if (!cancelled) {
+            setVideoSrc(url);
+            setLoading(false);
+            return;
+          }
+        }
+
+        if (!cancelled) {
+          setError(true);
           setLoading(false);
-        });
-        return;
-      } else {
-        setStreamUrl(null);
+        }
+      } catch (e) {
+        console.error('[VideoPlayer] Load error:', e);
+        if (!cancelled) {
+          setError(true);
+          setLoading(false);
+        }
       }
-    } catch (e) {
-      console.error('[VideoPlayer] Stream URL error:', e);
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
+    };
+
+    loadVideo();
+
+    return () => {
+      cancelled = true;
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+    };
   }, [url, storagePath]);
 
   const handleDownload = async () => {
@@ -190,7 +230,7 @@ const handleDownload = async (url: string, filename: string) => {
     );
   }
 
-  if (error || !streamUrl) {
+  if (error || !videoSrc) {
     return (
       <div className="px-3 pb-3 space-y-2">
         <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
@@ -208,11 +248,12 @@ const handleDownload = async (url: string, filename: string) => {
   return (
     <div className="px-3 pb-3 space-y-2">
       <video
-        src={streamUrl}
+        src={videoSrc}
         controls
         autoPlay
         playsInline
-        preload="metadata"
+        preload="auto"
+        onError={() => setError(true)}
         className="w-full max-h-[60vh] rounded-lg bg-black object-contain"
       />
       <div className="flex justify-end">
@@ -222,9 +263,9 @@ const handleDownload = async (url: string, filename: string) => {
       </div>
     </div>
   );
- }
+}
 
- function VideoThumbnail({ fallbackDuration }: {
+function VideoThumbnail({ fallbackDuration }: {
   videoUrl: string | null;
   storagePath: string | null;
   fallbackThumbnail: string | null;
@@ -290,11 +331,15 @@ const handleDownload = async (url: string, filename: string) => {
 
           if (v.storage_path) {
             const { data: signedData, error: signedErr } = await supabase.storage.from('videos').createSignedUrl(v.storage_path, 3600);
+            console.log('[loadSavedVideos] storage_path:', v.storage_path, 'signedErr:', signedErr, 'signedUrl:', signedData?.signedUrl?.substring(0, 80));
             if (!signedErr && signedData?.signedUrl) {
               signedUrl = signedData.signedUrl;
             }
           } else if (v.video_url) {
             signedUrl = v.video_url;
+            console.log('[loadSavedVideos] using video_url directly:', v.video_url?.substring(0, 80));
+          } else {
+            console.log('[loadSavedVideos] NO storage_path and NO video_url for video id:', v.id);
           }
 
           if ((v as any).thumbnail_url) {
@@ -696,7 +741,7 @@ const handleDownload = async (url: string, filename: string) => {
                 </div>
               </div>
 
-              {activePreviewId === v.id && v.signedUrl && <VideoPlayer url={v.signedUrl} storagePath={v.storage_path} language={language} />}
+              {activePreviewId === v.id && <VideoPlayer url={v.signedUrl || v.video_url || ''} storagePath={v.storage_path} language={language} />}
             </Card>
           ))}
         </div>
