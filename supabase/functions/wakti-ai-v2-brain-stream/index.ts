@@ -2321,19 +2321,17 @@ serve(async (req) => {
               if (geocoded.country) userCountry = geocoded.country;
             }
 
-            // Build location context string
+            // Build location context string (GPS-only)
             let locationContext = '';
-            if (userCity || userCountry) {
-              const parts = [];
-              if (userCity && userCountry) parts.push(`City: ${userCity}, ${userCountry}`);
-              else if (userCity) parts.push(`City: ${userCity}`);
-              else if (userCountry) parts.push(`Country: ${userCountry}`);
-              if (location?.latitude && location?.longitude) {
-                parts.push(`Coordinates: ${location.latitude.toFixed(4)}°N, ${location.longitude.toFixed(4)}°E`);
-              }
-              if (parts.length > 0) {
-                locationContext = `\n\nUSER LOCATION CONTEXT:\n${parts.join('\n')}`;
-              }
+            const parts = [] as string[];
+            if (userCity && userCountry) parts.push(`City: ${userCity}, ${userCountry}`);
+            else if (userCity) parts.push(`City: ${userCity}`);
+            else if (userCountry) parts.push(`Country: ${userCountry}`);
+            if (location?.latitude && location?.longitude) {
+              parts.push(`Coordinates: ${location.latitude.toFixed(4)}°N, ${location.longitude.toFixed(4)}°E`);
+            }
+            if (parts.length > 0) {
+              locationContext = `\n\nUSER LOCATION CONTEXT:\n${parts.join('\n')}`;
             }
 
             const eliteIntroRule = (() => {
