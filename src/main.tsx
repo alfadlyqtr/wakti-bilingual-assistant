@@ -34,6 +34,35 @@ if (import.meta.env.DEV) {
   };
 }
 
+const shouldDecodeClipboardText = (text: string): boolean => {
+  const trimmed = text.trim();
+  if (/^https?:\/\//i.test(trimmed)) return false;
+  if (/^mailto:/i.test(trimmed)) return false;
+  return /%0A|%20|%0D|%09/i.test(text) || /%[0-9A-Fa-f]{2}/.test(text);
+};
+
+const safeDecodeClipboardText = (text: string): string => {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    try {
+      return decodeURIComponent(text.replace(/\+/g, ' '));
+    } catch {
+      return text;
+    }
+  }
+};
+
+if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+  const originalWriteText = navigator.clipboard.writeText.bind(navigator.clipboard);
+  navigator.clipboard.writeText = (text: string) => {
+    const normalized = typeof text === 'string' && shouldDecodeClipboardText(text)
+      ? safeDecodeClipboardText(text)
+      : text;
+    return originalWriteText(normalized);
+  };
+}
+
 const rootElement = document.getElementById("root");
 
 if (!rootElement) {

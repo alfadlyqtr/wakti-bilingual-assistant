@@ -48,6 +48,7 @@ const contentConfig = {
   how_to_guide: { baseTokens: 2048, model: 'gpt-4.1-mini', temperature: 0.5 },
   policy_note: { baseTokens: 1536, model: 'gpt-4.1-mini', temperature: 0.4 },
   product_description: { baseTokens: 768, model: 'gpt-4.1-mini', temperature: 0.7 },
+  captions: { baseTokens: 768, model: 'gpt-4.1-mini', temperature: 0.8 },
   essay: { baseTokens: 3072, model: 'gpt-4.1-mini', temperature: 0.7 },
   proposal: { baseTokens: 2560, model: 'gpt-4.1-mini', temperature: 0.6 },
   official_letter: { baseTokens: 1024, model: 'gpt-4.1-mini', temperature: 0.5 },
@@ -56,6 +57,42 @@ const contentConfig = {
   // Default fallback
   default: { baseTokens: 1024, model: 'gpt-4.1-mini', temperature: 0.7 }
 };
+
+async function fetchUrlSearchText(url: string): Promise<string | null> {
+  const TAVILY_KEY = Deno.env.get("TAVILY_API_KEY");
+  if (!TAVILY_KEY) return null;
+  try {
+    const resp = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: TAVILY_KEY,
+        query: url,
+        search_depth: "basic",
+        max_results: 5,
+        include_raw_content: true,
+      }),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const results = Array.isArray(data?.results) ? data.results : [];
+    const combined = results.map((item: Record<string, unknown>) => {
+      const titleVal = typeof item?.title === 'string' ? item.title : '';
+      const urlVal = typeof item?.url === 'string' ? item.url : '';
+      const contentVal = typeof item?.content === 'string'
+        ? item.content
+        : (typeof item?.raw_content === 'string' ? item.raw_content : '');
+      const title = titleVal ? `Title: ${titleVal}` : '';
+      const link = urlVal ? `URL: ${urlVal}` : '';
+      const content = contentVal || '';
+      return [title, link, content].filter(Boolean).join('\n');
+    }).join('\n\n---\n\n');
+    const cleaned = stripHtml(combined);
+    return cleaned ? cleaned.slice(0, 12000) : null;
+  } catch {
+    return null;
+  }
+}
 
 // Length multipliers
 const lengthMultipliers = {
@@ -155,7 +192,7 @@ serve(async (req) => {
       requestBody = {};
     }
 
-    const { prompt, mode, language, languageVariant, messageAnalysis, modelPreference: _modelPreference, temperature: _temperature, contentType, length, replyLength, wordCount, replyWordCount, tone, register, emojis, image, extractTarget, webSearch, webSearchUrl } = requestBody;
+    const { prompt, mode, language, languageVariant, messageAnalysis, modelPreference: _modelPreference, temperature: _temperature, contentType, length, replyLength, wordCount, replyWordCount, tone, register, emojis, captionPlatform, image, extractTarget, webSearch, webSearchUrl, fetchUrlOnly } = requestBody;
 
     console.log("🎯 Request details:", { 
       promptLength: prompt?.length || 0, 
@@ -169,13 +206,119 @@ serve(async (req) => {
       register,
       languageVariant,
       emojis,
+      captionPlatform: captionPlatform ?? null,
       wordCount: wordCount ?? null,
       replyWordCount: replyWordCount ?? null,
       hasImage: !!image,
       extractTarget,
       webSearch: !!webSearch,
-      webSearchUrl: webSearchUrl || null
+      webSearchUrl: webSearchUrl || null,
+      fetchUrlOnly: !!fetchUrlOnly
     });
+
+    // ============================================
+    // MODE: fetch_url - Fetch URL content
+    // ============================================
+    if (mode === 'fetch_url') {
+      const url = typeof requestBody?.url === 'string' ? requestBody.url.trim() : '';
+      if (!url) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Missing URL' }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      try {
+        const urlText = await fetchUrlText(url);
+        if (!urlText) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Failed to fetch URL content' }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const cleanedText = stripHtml(urlText);
+        let contentText = cleanedText;
+        if (!contentText || contentText.length < 200) {
+          const fallbackText = await fetchUrlSearchText(url);
+          if (fallbackText && fallbackText.length > contentText.length) {
+            contentText = fallbackText;
+          }
+        }
+        if (!contentText || contentText.length < 80) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Unable to read readable content from URL' }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const summaryPrompt = language === 'ar'
+          ? `اقرأ المحتوى التالي من الرابط وارجع ملخصاً واضحاً ومختصراً بدون أي HTML أو أكواد. اذكر أهم النقاط فقط بنص عادي:\n\n${contentText}`
+          : `Read the following URL content and return a clear, concise summary with no HTML or code. Provide the key points in plain text only:\n\n${contentText}`;
+
+        let summaryText = contentText.slice(0, 4000);
+
+        if (ANTHROPIC_API_KEY) {
+          const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": ANTHROPIC_API_KEY,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model: CLAUDE_MODEL,
+              system: language === 'ar'
+                ? 'أنت مساعد يلخص محتوى الروابط بوضوح وبأسلوب موجز، بدون أي HTML أو أكواد.'
+                : 'You summarize URL content clearly and concisely in plain text with no HTML or code.',
+              messages: [{ role: "user", content: summaryPrompt }],
+              temperature: 0.3,
+              max_tokens: 700,
+            }),
+          });
+
+          if (claudeResponse.ok) {
+            const claudeResult = await claudeResponse.json();
+            summaryText = claudeResult.content?.[0]?.text?.trim() || summaryText;
+          }
+        } else if (OPENAI_API_KEY) {
+          const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+              model: 'gpt-4.1-mini',
+              messages: [
+                { role: 'system', content: language === 'ar'
+                  ? 'أنت مساعد يلخص محتوى الروابط بوضوح وبأسلوب موجز، بدون أي HTML أو أكواد.'
+                  : 'You summarize URL content clearly and concisely in plain text with no HTML or code.' },
+                { role: 'user', content: summaryPrompt }
+              ],
+              temperature: 0.3,
+              max_tokens: 700,
+            })
+          });
+
+          if (openaiResponse.ok) {
+            const openaiResult = await openaiResponse.json();
+            summaryText = openaiResult.choices?.[0]?.message?.content?.trim() || summaryText;
+          }
+        }
+        const finalSummary = stripHtml(summaryText);
+
+        return new Response(
+          JSON.stringify({ success: true, extractedText: finalSummary }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (e) {
+        const err = e as Error;
+        return new Response(
+          JSON.stringify({ success: false, error: `Failed to fetch URL: ${err?.message || 'Unknown error'}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
 
     // ============================================
     // MODE: extract - Extract text from screenshot
@@ -407,7 +550,8 @@ Return ONLY the JSON, no additional text.`;
     const webSearchAllowed = !!contentType && WEB_SEARCH_ALLOWED_CONTENT_TYPES.has(contentType);
     const webSearchEnabled = !!webSearch && webSearchAllowed;
     const normalizedWebSearchUrl = typeof webSearchUrl === 'string' && webSearchUrl.trim() ? webSearchUrl.trim() : undefined;
-    const systemPrompt = buildSystemPrompt(language, { tone, register, languageVariant, emojis, contentType, wordCount: wordCount ?? replyWordCount });
+    const urlFetchEnabled = !!fetchUrlOnly && !!normalizedWebSearchUrl;
+    const systemPrompt = buildSystemPrompt(language, { tone, register, languageVariant, emojis, contentType, wordCount: wordCount ?? replyWordCount, captionPlatform });
     const genParams = getGenerationParams(contentType, tone, length || replyLength || 'medium', register);
     const requestedWordCountRaw = Number(wordCount ?? replyWordCount);
     const requestedWordCount = Number.isFinite(requestedWordCountRaw) && requestedWordCountRaw > 0
@@ -427,11 +571,13 @@ Return ONLY the JSON, no additional text.`;
       language,
       webSearch: webSearchEnabled,
       webSearchUrl: normalizedWebSearchUrl ?? null,
+      fetchUrlOnly: fetchUrlOnly ?? null,
       contentType: contentType ?? null,
       tone: tone ?? null,
       register: register ?? null,
       languageVariant: languageVariant ?? null,
       emojis: emojis ?? null,
+      captionPlatform: captionPlatform ?? null,
       length: length ?? null,
       replyLength: replyLength ?? null,
       wordCount: wordCount ?? null,
@@ -442,8 +588,97 @@ Return ONLY the JSON, no additional text.`;
 
     let generatedText: string | undefined;
 
+    // ── URL Fetch Only (no search) ──
+    if (urlFetchEnabled) {
+      try {
+        console.log("🎯 Text Generator: URL fetch enabled");
+        const startUrlFetch = Date.now();
+        const urlText = await fetchUrlText(normalizedWebSearchUrl);
+        const urlFetchDuration = Date.now() - startUrlFetch;
+
+        if (urlText) {
+          const claudePrompt = language === 'ar'
+            ? `أنت كاتب محترف. استخدم محتوى الرابط أدناه لكتابة نص دقيق ومرتبط. التزم بإعدادات المستخدم بدقة.
+
+محتوى الرابط:
+${urlText}
+
+طلب المستخدم:
+${prompt}`
+            : `You are a professional writer. Use the URL content below to write accurate, relevant text. Follow user settings strictly.
+
+URL content:
+${urlText}
+
+User request:
+${prompt}`;
+
+          const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": ANTHROPIC_API_KEY || "",
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model: CLAUDE_MODEL,
+              system: systemPrompt,
+              messages: [{ role: "user", content: claudePrompt }],
+              temperature: genParams.temperature,
+              max_tokens: genParams.max_tokens,
+            }),
+          });
+
+          if (claudeResponse.ok) {
+            const claudeResult = await claudeResponse.json();
+            const content = claudeResult.content?.[0]?.text || "";
+            if (content) {
+              generatedText = applyWordCount(sanitizeEmDashes(content));
+
+              await logAIFromRequest(req, {
+                functionName: "text-generator",
+                provider: "anthropic",
+                model: CLAUDE_MODEL,
+                inputText: prompt,
+                outputText: generatedText,
+                durationMs: urlFetchDuration,
+                status: "success",
+                metadata: {
+                  ...logMetadataBase,
+                  webSearchUsed: true,
+                  webSearchProvider: "url_fetch",
+                }
+              });
+
+              return new Response(
+                JSON.stringify({
+                  success: true,
+                  generatedText,
+                  mode,
+                  language,
+                  modelUsed: `${CLAUDE_MODEL} (url)` ,
+                  temperatureUsed: genParams.temperature,
+                  contentType: contentType || null,
+                  webSearchUsed: true,
+                  webSearchSources: [{ title: normalizedWebSearchUrl, url: normalizedWebSearchUrl }]
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
+          } else {
+            const errTxt = await claudeResponse.text();
+            console.warn("🎯 Text Generator: URL fetch Claude error:", errTxt);
+          }
+        } else {
+          console.warn("🎯 Text Generator: URL fetch returned empty content");
+        }
+      } catch (e) {
+        console.warn("🎯 Text Generator: URL fetch failed, falling back:", e);
+      }
+    }
+
     // ── Web Search: Tavily + Claude ──
-    if (webSearchEnabled && TAVILY_API_KEY) {
+    if (webSearchEnabled && TAVILY_API_KEY && !generatedText) {
       try {
         console.log("🎯 Text Generator: Web Search enabled - using Tavily + Claude");
         const startWebSearch = Date.now();
@@ -872,6 +1107,55 @@ function enforceWordCount(text: string, target: number): string {
   return words.slice(0, safeTarget).join(' ').trim();
 }
 
+async function fetchUrlText(url: string): Promise<string | null> {
+  const TAVILY_KEY = Deno.env.get("TAVILY_API_KEY");
+  // Prefer Tavily extract API for clean content
+  if (TAVILY_KEY) {
+    try {
+      const resp = await fetch("https://api.tavily.com/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: TAVILY_KEY, urls: [url] }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const result = data?.results?.[0];
+        const cleanText = result?.text || '';
+        const rawText = result?.raw_content || '';
+        if (cleanText.trim()) return cleanText.slice(0, 15000);
+        if (rawText.trim()) return stripHtml(rawText).slice(0, 15000);
+      }
+    } catch (e) {
+      console.warn("Tavily extract failed, falling back to raw fetch:", e);
+    }
+  }
+  // Fallback: raw fetch
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'User-Agent': 'WaktiTextGenerator/1.0' }
+    });
+    if (!response.ok) return null;
+    const text = await response.text();
+    return text ? stripHtml(text).slice(0, 12000) : null;
+  } catch {
+    return null;
+  }
+}
+
+function stripHtml(input: string): string {
+  return input
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // ============================================================================
 // System prompt builder: uses structured fields from frontend
 // ============================================================================
@@ -882,11 +1166,12 @@ interface StructuredFields {
   emojis?: string;
   contentType?: string;
   wordCount?: number | string | null;
+  captionPlatform?: string | null;
 }
 
 function buildSystemPrompt(language: string, fields: StructuredFields): string {
   const isArabic = language === 'ar';
-  const { tone, register, languageVariant, emojis, contentType, wordCount } = fields;
+  const { tone, register, languageVariant, emojis, contentType, wordCount, captionPlatform } = fields;
 
   // ── Base identity ──
   const basePrompt = isArabic
@@ -907,6 +1192,14 @@ function buildSystemPrompt(language: string, fields: StructuredFields): string {
   if (contentType) {
     const ctName = contentType.replace(/_/g, ' ');
     constraints.push(isArabic ? `📄 نوع المحتوى: ${ctName}. التزم ببنية هذا النوع من المحتوى.` : `📄 Content type: ${ctName}. Follow the structure and conventions of this content type.`);
+  }
+
+  if (contentType === 'captions') {
+    const platformLabel = captionPlatform && captionPlatform !== 'auto' ? captionPlatform.replace(/_/g, ' ') : (isArabic ? 'غير محدد' : 'unspecified');
+    constraints.push(isArabic
+      ? `📸 محتوى كابتشن: اكتب كابتشن قصير وجذاب مناسب لمنصة ${platformLabel}. اجعله موجزاً، لافتاً، وسهل القراءة. يمكن إضافة هاشتاقات مناسبة فقط إذا لزم.`
+      : `📸 Captions: Write short, catchy captions tailored for ${platformLabel}. Keep it concise, attention-grabbing, and easy to read. Add hashtags only if needed.`
+    );
   }
 
   // ────────────────────────────────────────────────────

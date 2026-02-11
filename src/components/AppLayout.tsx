@@ -210,20 +210,22 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
       title: 'WAKTI AI',
       subtitle: 'Your 4-day trial has ended. Subscribe to continue.',
       features: [
-        'WAKTI AI',
-        'WAKTI AI Search',
-        'Image Generator',
-        'Tasks & Reminders',
-        'Maw3d Events',
-        'Tasjeel Voice Recorder',
-        'Contacts & Messaging',
-        'Vitality',
-        'WAKTI Journal',
-        'Smart Text Generator',
-        'AI Games',
-        'Voice Cloning',
-        'Music Generation',
-        'Voice Translation',
+        { title: 'WAKTI AI', sublabel: '(chat • search • study)' },
+        { title: 'Generator', sublabel: '(image • video • music)' },
+        { title: 'Maw3d Events' },
+        { title: 'Contacts & Messaging' },
+        { title: 'WAKTI Journal' },
+        { title: 'Voice Cloning' },
+        { title: 'Voice TTS' },
+        { title: 'My Documents' },
+        { title: 'Tasks & Reminders' },
+        { title: 'Tasjeel Voice Recorder' },
+        { title: 'Vitality' },
+        { title: 'Smart Text Generator' },
+        { title: 'AI Games' },
+        { title: 'Voice Translation' },
+        { title: 'Calendar' },
+        { title: 'AI Coding' },
       ],
       trial: '',
       subscribe: 'Subscribe Now',
@@ -238,20 +240,22 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
       title: 'WAKTI AI',
       subtitle: 'انتهت فترة التجربة المجانية (4 أيام). اشترك للمتابعة.',
       features: [
-        'وقتي AI',
-        'بحث وقتي AI',
-        'مولد الصور',
-        'المهام والتذكيرات',
-        'مواعيد Maw3d',
-        'تسجيل (Tasjeel) مسجل الصوت',
-        'جهات الاتصال والرسائل',
-        'الحيوية',
-        'دفتر يوميات وقطي',
-        'مولد النص الذكي',
-        'ألعاب الذكاء الاصطناعي',
-        'استنساخ الصوت',
-        'إنشاء الموسيقى',
-        'ترجمة الصوت',
+        { title: 'وقتي AI', sublabel: '(دردشة • بحث • دراسة)' },
+        { title: 'المولد', sublabel: '(صور • فيديو • موسيقى)' },
+        { title: 'مواعيد Maw3d' },
+        { title: 'جهات الاتصال والرسائل' },
+        { title: 'دفتر يوميات وقطي' },
+        { title: 'استنساخ الصوت' },
+        { title: 'تحويل النص لصوت' },
+        { title: 'مستنداتي' },
+        { title: 'المهام والتذكيرات' },
+        { title: 'تسجيل (Tasjeel) مسجل الصوت' },
+        { title: 'الحيوية' },
+        { title: 'مولد النص الذكي' },
+        { title: 'ألعاب الذكاء الاصطناعي' },
+        { title: 'ترجمة الصوت' },
+        { title: 'التقويم' },
+        { title: 'الترميز بالذكاء الاصطناعي' },
       ],
       trial: '',
       subscribe: 'اشترك الآن',
@@ -299,12 +303,20 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
         <div className="space-y-4 py-4">
           {/* Features */}
           <div className="grid grid-cols-2 gap-2">
-            {txt.features.map((feature, i) => (
-              <div key={i} className="flex items-center gap-2 text-sm rounded-md bg-accent/5 px-2 py-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-accent-green" />
-                <span>{feature}</span>
-              </div>
-            ))}
+            {txt.features.map((feature, i) => {
+              const item = typeof feature === 'string' ? { title: feature } : feature;
+              return (
+                <div key={i} className="flex items-center gap-2 text-sm rounded-md bg-accent/5 px-2 py-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-accent-green" />
+                  <span className="flex items-center gap-1">
+                    <span>{item.title}</span>
+                    {item.sublabel ? (
+                      <span className="text-xs text-muted-foreground">{item.sublabel}</span>
+                    ) : null}
+                  </span>
+                </div>
+              );
+            })}
           </div>
 
           {/* Price */}
