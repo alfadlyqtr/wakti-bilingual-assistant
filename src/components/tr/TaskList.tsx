@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { MoreHorizontal, Edit, Trash2, Share2, CheckCircle2, Circle, Clock, Moon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuPortal } from '@/components/ui/dropdown-menu';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -28,6 +29,7 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
   const [optimisticAll, setOptimisticAll] = useState<Record<string, {completed: boolean; nonce: number}>>({});
   const [isMdUp, setIsMdUp] = useState<boolean>(false);
   const [latestCompletions, setLatestCompletions] = useState<Record<string, { who: string; when: string }>>({});
+  const [deleteTarget, setDeleteTarget] = useState<TRTask | null>(null);
   const channelsRef = useRef<any[]>([]);
 
   useEffect(() => {
@@ -172,16 +174,21 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
     }
   };
 
-  const handleDeleteTask = async (task: TRTask) => {
-    if (confirm(t('confirmDeleteTask', language))) {
-      try {
-        await TRService.deleteTask(task.id);
-        toast.success(t('taskDeleted', language));
-        onTasksChanged();
-      } catch (error) {
-        console.error('Error deleting task:', error);
-        toast.error(t('errorDeletingTask', language));
-      }
+  const handleDeleteTask = (task: TRTask) => {
+    setDeleteTarget(task);
+  };
+
+  const handleConfirmDeleteTask = async () => {
+    if (!deleteTarget) return;
+    try {
+      await TRService.deleteTask(deleteTarget.id);
+      toast.success(t('taskDeleted', language));
+      onTasksChanged();
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      toast.error(t('errorDeletingTask', language));
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -381,6 +388,26 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
           </CardContent>
         </Card>
       ))}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {language === 'ar' ? 'حذف المهمة' : 'Delete Task'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {language === 'ar'
+                ? `هل أنت متأكد أنك تريد حذف "${deleteTarget?.title}"؟`
+                : `Are you sure you want to delete "${deleteTarget?.title}"?`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{language === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDeleteTask} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {language === 'ar' ? 'حذف' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

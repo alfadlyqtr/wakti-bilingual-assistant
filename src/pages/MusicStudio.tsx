@@ -2275,6 +2275,7 @@ function EditorTab() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [tracks, setTracks] = useState<Array<{ id: string; created_at: string; prompt: string | null; include_styles: string[] | null; exclude_styles: string[] | null; requested_duration_seconds: number | null; signed_url: string | null; storage_path: string | null; mime: string | null; play_url?: string | null }>>([]);
+  const [deleteTrackTarget, setDeleteTrackTarget] = useState<{ id: string; storagePath: string | null } | null>(null);
 
   const load = async () => {
     if (!user) {
@@ -2328,13 +2329,14 @@ function EditorTab() {
 
   useEffect(() => { load(); }, [user?.id]);
 
-  const handleDelete = async (trackId: string, storagePath: string | null) => {
-    const confirmMsg = language === 'ar' 
-      ? 'هل أنت متأكد من حذف هذا المقطع؟' 
-      : 'Are you sure you want to delete this track?';
-    
-    if (!confirm(confirmMsg)) return;
+  const handleDeleteClick = (trackId: string, storagePath: string | null) => {
+    setDeleteTrackTarget({ id: trackId, storagePath });
+  };
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteTrackTarget) return;
+    const { id: trackId, storagePath } = deleteTrackTarget;
+    setDeleteTrackTarget(null);
     try {
       // Delete from database
       const { error: dbError } = await (supabase as any)
@@ -2407,7 +2409,7 @@ function EditorTab() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDelete(t.id, t.storage_path)}
+                      onClick={() => handleDeleteClick(t.id, t.storage_path)}
                       className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -2419,6 +2421,25 @@ function EditorTab() {
           ))}
         </div>
       )}
+
+      <AlertDialog open={!!deleteTrackTarget} onOpenChange={(open) => !open && setDeleteTrackTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {language === 'ar' ? 'حذف المقطع' : 'Delete Track'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {language === 'ar' ? 'هل أنت متأكد من حذف هذا المقطع؟' : 'Are you sure you want to delete this track?'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{language === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {language === 'ar' ? 'حذف' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

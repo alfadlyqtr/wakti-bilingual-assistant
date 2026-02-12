@@ -13,6 +13,7 @@ import {
   Loader2, Paperclip, Eye, RefreshCw, Search,
   AlertCircle, User, Mail, Calendar, Shield
 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -54,6 +55,7 @@ export function AdminSupportTab() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
@@ -164,13 +166,14 @@ export function AdminSupportTab() {
     }
   };
 
-  const closeTicket = async () => {
+  const closeTicket = () => {
     if (!selectedTicket || !isAdmin) return;
+    setShowCloseConfirm(true);
+  };
 
-    if (!confirm('Are you sure you want to close this ticket?')) {
-      return;
-    }
-
+  const handleConfirmClose = async () => {
+    if (!selectedTicket || !isAdmin) return;
+    setShowCloseConfirm(false);
     setIsClosing(true);
     try {
       // Delete all messages for this ticket first
@@ -508,6 +511,22 @@ export function AdminSupportTab() {
           </div>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Close Ticket</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to close this ticket? All messages and attachments will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmClose} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Close Ticket
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

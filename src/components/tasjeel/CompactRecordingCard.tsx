@@ -1,5 +1,6 @@
 
 import React, { useState } from "react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useTheme } from "@/providers/ThemeProvider";
 import { TasjeelRecord } from "./types";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,7 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
   const [isPlayingOriginal, setIsPlayingOriginal] = useState(false);
   const [isPlayingSummary, setIsPlayingSummary] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Format date function
   const formatDate = (dateString: string): string => {
@@ -78,15 +80,12 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
   };
 
   // Handle delete with confirmation and proper feedback
-  const handleDelete = async () => {
-    const confirmMessage = language === 'ar' 
-      ? 'هل أنت متأكد أنك تريد حذف هذا التسجيل؟'
-      : 'Are you sure you want to delete this recording?';
-    
-    if (!confirm(confirmMessage)) {
-      return;
-    }
+  const handleDelete = () => {
+    setShowDeleteConfirm(true);
+  };
 
+  const handleConfirmDelete = async () => {
+    setShowDeleteConfirm(false);
     setIsDeleting(true);
     try {
       await onDelete(recording.id);
@@ -327,6 +326,26 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
           </>
         )}
       </CardContent>
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {language === 'ar' ? 'حذف التسجيل' : 'Delete Recording'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {language === 'ar'
+                ? 'هل أنت متأكد أنك تريد حذف هذا التسجيل؟'
+                : 'Are you sure you want to delete this recording?'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{language === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {language === 'ar' ? 'حذف' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 };

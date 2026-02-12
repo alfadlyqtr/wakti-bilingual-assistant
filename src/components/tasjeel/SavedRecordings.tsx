@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/components/ui/toast-helper";
 import { FileText, Download, Trash, AlertCircle, RefreshCw, Zap } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { generatePDF } from "@/utils/pdfUtils";
 import CompactRecordingCard from "./CompactRecordingCard";
 import { Button } from "@/components/ui/button";
@@ -103,6 +104,7 @@ const SavedRecordings: React.FC = () => {
   const [recordings, setRecordings] = useState<TasjeelRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isCleaningUp, setIsCleaningUp] = useState<boolean>(false);
+  const [showCleanupConfirm, setShowCleanupConfirm] = useState(false);
 
   // Load saved recordings
   useEffect(() => {
@@ -179,14 +181,12 @@ const SavedRecordings: React.FC = () => {
   };
 
   // Manual cleanup function
-  const handleManualCleanup = async () => {
-    if (!confirm(language === 'ar' 
-      ? 'هل تريد حذف جميع التسجيلات الأقدم من 10 أيام؟' 
-      : 'Delete all recordings older than 10 days?'
-    )) {
-      return;
-    }
+  const handleManualCleanup = () => {
+    setShowCleanupConfirm(true);
+  };
 
+  const handleConfirmCleanup = async () => {
+    setShowCleanupConfirm(false);
     setIsCleaningUp(true);
     try {
       console.log('Starting manual cleanup...');
@@ -346,6 +346,24 @@ const SavedRecordings: React.FC = () => {
           />
         ))
       )}
+      <AlertDialog open={showCleanupConfirm} onOpenChange={setShowCleanupConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {language === 'ar' ? 'تنظيف التسجيلات' : 'Clean Up Recordings'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {language === 'ar' ? 'هل تريد حذف جميع التسجيلات الأقدم من 10 أيام؟' : 'Delete all recordings older than 10 days?'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{language === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmCleanup} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {language === 'ar' ? 'حذف' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

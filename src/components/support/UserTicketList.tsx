@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Eye, MessageCircle, Clock, CheckCircle, X, Loader2, Paperclip } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -42,6 +43,7 @@ export function UserTicketList() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   useEffect(() => {
     loadTickets();
@@ -128,15 +130,14 @@ export function UserTicketList() {
     }
   };
 
-  const closeTicket = async () => {
+  const closeTicket = () => {
     if (!selectedTicket) return;
+    setShowCloseConfirm(true);
+  };
 
-    const confirmMessage = language === 'ar' 
-      ? 'هل أنت متأكد من إغلاق هذه التذكرة؟ سيتم حذف جميع الرسائل والمرفقات نهائياً.'
-      : 'Are you sure you want to close this ticket? All messages and attachments will be permanently deleted.';
-    
-    if (!confirm(confirmMessage)) return;
-
+  const handleConfirmClose = async () => {
+    if (!selectedTicket) return;
+    setShowCloseConfirm(false);
     setIsClosing(true);
     try {
       const { error } = await supabase.functions.invoke('support-ticket-maintenance', {
@@ -340,6 +341,26 @@ export function UserTicketList() {
           )}
         </DialogContent>
       </Dialog>
+      <AlertDialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {language === 'ar' ? 'إغلاق التذكرة' : 'Close Ticket'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {language === 'ar'
+                ? 'هل أنت متأكد من إغلاق هذه التذكرة؟ سيتم حذف جميع الرسائل والمرفقات نهائياً.'
+                : 'Are you sure you want to close this ticket? All messages and attachments will be permanently deleted.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{language === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmClose} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {language === 'ar' ? 'إغلاق' : 'Close Ticket'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

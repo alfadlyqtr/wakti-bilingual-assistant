@@ -36,6 +36,7 @@ import {
   Globe,
   Image as ImageLucide
 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ColorPickerWithGradient, getColorStyle, isGradientValue } from '@/components/ui/ColorPickerWithGradient';
 import { Switch } from '@/components/ui/switch';
 import { generateShareToken, type ShareManifestV2 } from '@/utils/presentationShare';
@@ -1163,6 +1164,7 @@ const PresentationTab: React.FC = () => {
   const [generatedShareUrl, setGeneratedShareUrl] = useState<string | null>(null);
   const [generatedThumbnailUrl, setGeneratedThumbnailUrl] = useState<string | null>(null);
   const [isSavingPresentation, setIsSavingPresentation] = useState(false);
+  const [deletePresentationId, setDeletePresentationId] = useState<string | null>(null);
 
   // UI state
   const [isLoading, setIsLoading] = useState(false);
@@ -4940,9 +4942,7 @@ const PresentationTab: React.FC = () => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (confirm(language === 'ar' ? 'هل تريد حذف هذا العرض؟' : 'Delete this presentation?')) {
-                    deletePresentation(pres.id);
-                  }
+                  setDeletePresentationId(pres.id);
                 }}
                 className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
                 title={language === 'ar' ? 'حذف' : 'Delete'}
@@ -5014,6 +5014,32 @@ const PresentationTab: React.FC = () => {
           {currentStep === 'slides' && renderSlidesStep()}
         </>
       )}
+      <AlertDialog open={!!deletePresentationId} onOpenChange={(open) => !open && setDeletePresentationId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {language === 'ar' ? 'حذف العرض' : 'Delete Presentation'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {language === 'ar' ? 'هل تريد حذف هذا العرض؟' : 'Are you sure you want to delete this presentation?'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{language === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deletePresentationId) {
+                  deletePresentation(deletePresentationId);
+                  setDeletePresentationId(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {language === 'ar' ? 'حذف' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

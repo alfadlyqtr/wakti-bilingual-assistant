@@ -5,6 +5,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import {
   Video,
   Loader2,
@@ -42,6 +43,7 @@ export default function MyAIVideosTab({ onCreate }: MyAIVideosTabProps) {
   const [loading, setLoading] = useState(true);
   const [selectedVideo, setSelectedVideo] = useState<AIVideo | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const loadVideos = useCallback(async () => {
     if (!user) return;
@@ -67,8 +69,10 @@ export default function MyAIVideosTab({ onCreate }: MyAIVideosTabProps) {
     loadVideos();
   }, [loadVideos]);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm(language === 'ar' ? 'هل تريد حذف هذا الفيديو؟' : 'Delete this video?')) return;
+  const handleDeleteConfirm = async () => {
+    if (!deleteTargetId) return;
+    const id = deleteTargetId;
+    setDeleteTargetId(null);
     setDeletingId(id);
     try {
       const { error } = await (supabase as any)
@@ -304,7 +308,7 @@ export default function MyAIVideosTab({ onCreate }: MyAIVideosTabProps) {
                     className="h-7 px-2 text-red-500 hover:text-red-600 hover:bg-red-500/10 ml-auto"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDelete(video.id);
+                      setDeleteTargetId(video.id);
                     }}
                     disabled={deletingId === video.id}
                   >
@@ -368,6 +372,24 @@ export default function MyAIVideosTab({ onCreate }: MyAIVideosTabProps) {
           </div>
         </div>
       )}
+      <AlertDialog open={!!deleteTargetId} onOpenChange={(open) => !open && setDeleteTargetId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {language === 'ar' ? 'حذف الفيديو' : 'Delete Video'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {language === 'ar' ? 'هل تريد حذف هذا الفيديو؟' : 'Are you sure you want to delete this video?'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{language === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {language === 'ar' ? 'حذف' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { format } from "date-fns";
 import { generatePDF } from "@/utils/pdfUtils";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import {
   Download,
   Trash2,
@@ -322,6 +323,7 @@ const PreviousRecordings: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedRecord, setSelectedRecord] = useState<TasjeelRecord | null>(null);
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   
   // Audio player state
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -566,9 +568,7 @@ const PreviousRecordings: React.FC = () => {
                       size="icon" 
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (confirm(t.confirmDelete)) {
-                          handleDelete(record.id);
-                        }
+                        setDeleteTargetId(record.id);
                       }}
                     >
                       <Trash2 className="h-5 w-5 text-destructive" />
@@ -597,6 +597,33 @@ const PreviousRecordings: React.FC = () => {
         t={t}
         language={language}
       />
+
+      <AlertDialog open={!!deleteTargetId} onOpenChange={(open) => !open && setDeleteTargetId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {language === 'ar' ? 'حذف التسجيل' : 'Delete Recording'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t.confirmDelete}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{language === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteTargetId) {
+                  handleDelete(deleteTargetId);
+                  setDeleteTargetId(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {language === 'ar' ? 'حذف' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

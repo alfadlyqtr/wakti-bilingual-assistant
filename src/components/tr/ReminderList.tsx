@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { MoreVertical, Calendar, Clock, Edit, Trash2, Pause, Timer, AlarmClock, CheckCircle2 } from 'lucide-react';
 import { format, isPast, parseISO, differenceInSeconds, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -34,6 +35,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
   const [tick, setTick] = useState(0); // For countdown refresh
   const triggeredReminders = useRef<Set<string>>(new Set()); // Track which reminders we've already triggered
   const [snoozeReminderId, setSnoozeReminderId] = useState<string | null>(null); // For snooze popover
+  const [deleteTarget, setDeleteTarget] = useState<TRReminder | null>(null);
 
 
   useEffect(() => {
@@ -125,15 +127,14 @@ export const ReminderList: React.FC<ReminderListProps> = ({
     { label: language === 'ar' ? '1 س' : '1h', minutes: 60 },
   ];
 
-  const handleDeleteClick = async (reminder: TRReminder) => {
-    const confirmMsg = language === 'ar' 
-      ? `هل أنت متأكد أنك تريد حذف "${reminder.title}"؟`
-      : `Are you sure you want to delete "${reminder.title}"?`;
-    
-    if (!window.confirm(confirmMsg)) return;
-    
+  const handleDeleteClick = (reminder: TRReminder) => {
+    setDeleteTarget(reminder);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await TRService.deleteReminder(reminder.id);
+      await TRService.deleteReminder(deleteTarget.id);
       toast.success(t('reminderDeleted', language));
       
       if (onRemindersChanged) {
@@ -145,6 +146,8 @@ export const ReminderList: React.FC<ReminderListProps> = ({
     } catch (error) {
       console.error('ReminderList - Error deleting reminder:', error);
       toast.error(t('errorDeleting', language));
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -472,6 +475,27 @@ export const ReminderList: React.FC<ReminderListProps> = ({
           onReminderSaved={handleReminderSaved}
         />
       )}
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {language === 'ar' ? 'حذف التذكير' : 'Delete Reminder'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {language === 'ar'
+                ? `هل أنت متأكد أنك تريد حذف "${deleteTarget?.title}"؟`
+                : `Are you sure you want to delete "${deleteTarget?.title}"?`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{language === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {language === 'ar' ? 'حذف' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </>
   );
