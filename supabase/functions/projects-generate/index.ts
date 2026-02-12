@@ -243,7 +243,14 @@ async function extractTextFromPDF(url: string, apiKey: string): Promise<string> 
     }
     
     const pdfBytes = await response.arrayBuffer();
-    const base64Pdf = btoa(String.fromCharCode(...new Uint8Array(pdfBytes)));
+    // Chunk-based base64 encoding (spread operator crashes on files >50KB)
+    const uint8 = new Uint8Array(pdfBytes);
+    let binaryStr = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < uint8.length; i += chunkSize) {
+      binaryStr += String.fromCharCode(...uint8.subarray(i, Math.min(i + chunkSize, uint8.length)));
+    }
+    const base64Pdf = btoa(binaryStr);
     
     console.log(`[PDF Extract] PDF size: ${pdfBytes.byteLength} bytes, sending to Gemini...`);
     
@@ -317,7 +324,14 @@ async function extractTextFromDOCX(url: string, apiKey: string): Promise<string>
     }
     
     const docxBytes = await response.arrayBuffer();
-    const base64Docx = btoa(String.fromCharCode(...new Uint8Array(docxBytes)));
+    // Chunk-based base64 encoding (spread operator crashes on files >50KB)
+    const uint8Docx = new Uint8Array(docxBytes);
+    let binaryStrDocx = '';
+    const chunkSizeDocx = 8192;
+    for (let i = 0; i < uint8Docx.length; i += chunkSizeDocx) {
+      binaryStrDocx += String.fromCharCode(...uint8Docx.subarray(i, Math.min(i + chunkSizeDocx, uint8Docx.length)));
+    }
+    const base64Docx = btoa(binaryStrDocx);
     
     console.log(`[DOCX Extract] DOCX size: ${docxBytes.byteLength} bytes, sending to Gemini...`);
     
@@ -383,7 +397,14 @@ async function analyzeImageForInspiration(url: string, apiKey: string): Promise<
     }
     
     const imageBytes = await response.arrayBuffer();
-    const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBytes)));
+    // Chunk-based base64 encoding (spread operator crashes on files >50KB)
+    const uint8Img = new Uint8Array(imageBytes);
+    let binaryStrImg = '';
+    const chunkSizeImg = 8192;
+    for (let i = 0; i < uint8Img.length; i += chunkSizeImg) {
+      binaryStrImg += String.fromCharCode(...uint8Img.subarray(i, Math.min(i + chunkSizeImg, uint8Img.length)));
+    }
+    const base64Image = btoa(binaryStrImg);
     
     // Determine mime type from URL or response
     const contentType = response.headers.get('content-type') || 'image/jpeg';
@@ -4006,6 +4027,85 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
     let documentContentStr = '';
     let visionInspirationStr = '';
     
+    // BULLETPROOF SERVER-SIDE FETCH: ALWAYS fetch from DB using service-role client.
+    // Client-provided URLs may be broken (public URLs that 400). Service-role signed URLs always work.
+    if (projectId) {
+      console.log(`[Assets] Server-side DB fetch for project: ${projectId} (client sent ${uploadedAssets.length} assets, overriding with signed URLs)`);
+      try {
+        const { data: dbUploads, error: dbErr } = await supabase
+          .from('project_uploads')
+          .select('filename, storage_path, file_type, bucket_id')
+          .eq('project_id', projectId);
+        
+        if (dbErr) {
+          console.error(`[Assets] DB fetch error:`, dbErr);
+        } else if (dbUploads && dbUploads.length > 0) {
+          console.log(`[Assets] Found ${dbUploads.length} uploads in DB, building signed URLs...`);
+          // Clear client-provided assets — replace with server-side signed URLs
+          uploadedAssets.length = 0;
+          for (const upload of dbUploads) {
+            const bucket = (upload as any).bucket_id || 'project-assets';
+            const storagePath = (upload as any).storage_path;
+            // Use signed URL (works even for private buckets, 1 hour expiry)
+            const { data: signedData, error: signErr } = await supabase.storage
+              .from(bucket)
+              .createSignedUrl(storagePath, 3600);
+            
+            if (signErr || !signedData?.signedUrl) {
+              // Fallback to public URL
+              const { data: pubData } = supabase.storage.from(bucket).getPublicUrl(storagePath);
+              console.warn(`[Assets] Signed URL failed for ${(upload as any).filename}, using public: ${signErr?.message}`);
+              uploadedAssets.push({
+                filename: (upload as any).filename,
+                url: pubData.publicUrl,
+                file_type: (upload as any).file_type
+              });
+            } else {
+              console.log(`[Assets] ✅ Signed URL OK for ${(upload as any).filename} (${bucket})`);
+              uploadedAssets.push({
+                filename: (upload as any).filename,
+                url: signedData.signedUrl,
+                file_type: (upload as any).file_type
+              });
+            }
+          }
+          console.log(`[Assets] SERVER-SIDE FETCH: Built ${uploadedAssets.length} uploadedAssets from DB`);
+        } else {
+          console.log(`[Assets] No project_uploads found in DB for project ${projectId}`);
+        }
+      } catch (fetchErr) {
+        console.error(`[Assets] Exception fetching from DB:`, fetchErr);
+      }
+    }
+    
+    // FALLBACK #2: If still empty, check assets[] URLs for PDF/doc extensions
+    if (uploadedAssets.length === 0 && assets.length > 0) {
+      const docExtensions = ['.pdf', '.docx', '.doc', '.txt', '.rtf'];
+      const imgExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+      for (const url of assets) {
+        if (typeof url !== 'string') continue;
+        const lowerUrl = url.toLowerCase().split('?')[0];
+        const filename = lowerUrl.split('/').pop() || 'file';
+        let file_type: string | null = null;
+        if (docExtensions.some(ext => lowerUrl.endsWith(ext))) {
+          if (lowerUrl.endsWith('.pdf')) file_type = 'application/pdf';
+          else if (lowerUrl.endsWith('.docx')) file_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          else if (lowerUrl.endsWith('.doc')) file_type = 'application/msword';
+          else if (lowerUrl.endsWith('.txt')) file_type = 'text/plain';
+          else if (lowerUrl.endsWith('.rtf')) file_type = 'application/rtf';
+          uploadedAssets.push({ filename, url, file_type });
+        } else if (imgExtensions.some(ext => lowerUrl.endsWith(ext))) {
+          file_type = 'image/' + (lowerUrl.endsWith('.jpg') ? 'jpeg' : lowerUrl.split('.').pop());
+          uploadedAssets.push({ filename, url, file_type });
+        }
+      }
+      if (uploadedAssets.length > 0) {
+        console.log(`[Assets] FALLBACK #2: Converted ${uploadedAssets.length} asset URLs to uploadedAssets`);
+      }
+    }
+    
+    console.log(`[Assets] Final uploadedAssets count: ${uploadedAssets.length}, assets count: ${assets.length}`);
+    
     const geminiApiKeyForAssets = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
     if (uploadedAssets.length > 0 && geminiApiKeyForAssets) {
       console.log(`[Assets] Processing ${uploadedAssets.length} uploaded assets for content extraction...`);
@@ -4020,6 +4120,8 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
       } catch (err) {
         console.error('[Assets] Error processing assets:', err);
       }
+    } else {
+      console.warn(`[Assets] SKIPPED extraction: uploadedAssets=${uploadedAssets.length}, hasGeminiKey=${!!geminiApiKeyForAssets}`);
     }
     
     // Build uploaded assets section for prompts (kept for reference but now using documentContentStr/visionInspirationStr directly)

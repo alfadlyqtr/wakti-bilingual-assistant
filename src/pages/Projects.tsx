@@ -1246,19 +1246,22 @@ Apply these styles consistently throughout the entire design.`;
 
     try {
       setGenerating(true);
+      console.log('[createProject] Step 0: Starting...');
 
       // Step 0: Assets are uploaded AFTER project creation so we can scope them to {userId}/{projectId}
       let assetUrls: string[] = [];
 
       // Ensure we have a valid session
+      console.log('[createProject] Step 1: Getting session...');
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         toast.error(isRTL ? 'انتهت الجلسة، يرجى تسجيل الدخول مرة أخرى' : 'Session expired, please log in again');
         setGenerating(false);
         return;
       }
+      console.log('[createProject] Step 1: Session OK');
 
-      // Step 1: Create project immediately with placeholder
+      // Step 2: Create project immediately with placeholder
       const projectName = generateProjectTitle(prompt);
       const slug = projectName
         .toLowerCase()
@@ -1267,7 +1270,7 @@ Apply these styles consistently throughout the entire design.`;
         .replace(/-+/g, '-')
         .replace(/^-|-$/g, '') || 'my-project';
 
-      console.log('Creating project for user:', user.id, 'session user:', session.user.id);
+      console.log('[createProject] Step 2: Inserting project for user:', user.id);
       
       const { data: projectData, error: projectError } = await (supabase
         .from('projects' as any)
@@ -1282,29 +1285,32 @@ Apply these styles consistently throughout the entire design.`;
         .select()
         .single() as any);
 
-      console.log('Project creation result:', { projectData, projectError });
+      console.log('[createProject] Step 2: Result:', { projectData: !!projectData, projectError });
       
       if (projectError) {
-        console.error('Project creation failed:', projectError);
+        console.error('[createProject] Step 2: FAILED:', projectError);
         throw projectError;
       }
 
       // Upload assets (scoped to this project) and track them in project_uploads for hard-delete
+      console.log('[createProject] Step 3: Uploading', attachedFiles.length, 'files...');
       if (attachedFiles.length > 0) {
         setIsUploading(true);
         for (const file of attachedFiles) {
           try {
             const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
             const storagePath = `${user.id}/${projectData.id}/${Date.now()}-${safeFilename}`;
+            console.log('[createProject] Step 3: Uploading', safeFilename, '(' + file.size + ' bytes)');
 
             const { error: uploadError } = await supabase.storage
               .from('project-assets')
               .upload(storagePath, file);
 
             if (uploadError) {
-              console.error('Upload error:', uploadError);
+              console.error('[createProject] Step 3: Upload error:', uploadError);
               continue;
             }
+            console.log('[createProject] Step 3: Upload OK for', safeFilename);
 
             await supabase
               .from('project_uploads' as any)
@@ -1330,7 +1336,7 @@ Apply these styles consistently throughout the entire design.`;
         setIsUploading(false);
       }
 
-      // Step 2: Create placeholder file
+      console.log('[createProject] Step 4: Creating placeholder file...');
       const placeholderHtml = `<!DOCTYPE html>
 <html ${language === 'ar' ? 'dir="rtl" lang="ar"' : 'lang="en"'}>
 <head>
@@ -1381,11 +1387,12 @@ Apply these styles consistently throughout the entire design.`;
         }) as any);
 
       if (fileError) {
-        console.error('File creation failed:', fileError);
+        console.error('[createProject] Step 4: FAILED:', fileError);
         throw fileError;
       }
+      console.log('[createProject] Step 4: Placeholder OK');
       
-      console.log('File created, navigating to:', `/projects/${projectData.id}`);
+      console.log('[createProject] Step 5: Navigating to editor...');
 
       // Step 3: Navigate to editor immediately
       const assetParams = assetUrls.length > 0 ? `&assets=${encodeURIComponent(JSON.stringify(assetUrls))}` : '';
@@ -1396,8 +1403,13 @@ Apply these styles consistently throughout the entire design.`;
       navigate(`/projects/${projectData.id}?generating=true&prompt=${encodeURIComponent(prompt)}&theme=${selectedTheme}${assetParams}${instructionsParam}${langParam}`);
 
     } catch (err: any) {
-      console.error('Error:', err);
-      toast.error(err.message || (isRTL ? 'فشل في الإنشاء' : 'Failed to create'));
+      console.error('[createProject] FAILED:', err);
+      const msg = err?.message || '';
+      if (msg.includes('Failed to fetch')) {
+        toast.error(isRTL ? 'خطأ في الاتصال. حاول مرة أخرى.' : 'Network error. Please try again.');
+      } else {
+        toast.error(msg || (isRTL ? 'فشل في الإنشاء' : 'Failed to create'));
+      }
       setGenerating(false);
     }
   };

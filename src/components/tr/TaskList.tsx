@@ -180,15 +180,16 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
 
   const handleConfirmDeleteTask = async () => {
     if (!deleteTarget) return;
+    const idToDelete = deleteTarget.id;
+    // Close dialog FIRST to remove portal overlay before potential unmount
+    setDeleteTarget(null);
     try {
-      await TRService.deleteTask(deleteTarget.id);
+      await TRService.deleteTask(idToDelete);
       toast.success(t('taskDeleted', language));
       onTasksChanged();
     } catch (error) {
       console.error('Error deleting task:', error);
       toast.error(t('errorDeletingTask', language));
-    } finally {
-      setDeleteTarget(null);
     }
   };
 

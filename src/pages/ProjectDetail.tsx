@@ -1426,25 +1426,35 @@ export default function ProjectDetail() {
       // engine requires `uploadedAssets` objects with {filename, url, file_type}.
       let uploadedAssetsForCreate: Array<{ filename: string; url: string; file_type: string | null }> = [];
       try {
-        const { data: uploads } = await supabase
+        console.log('[ProjectDetail] Fetching project_uploads for project:', id);
+        const { data: uploads, error: uploadsError } = await (supabase as any)
           .from('project_uploads')
           .select('filename, storage_path, file_type, bucket_id')
           .eq('project_id', id);
+        
+        console.log('[ProjectDetail] project_uploads query result:', { count: uploads?.length, error: uploadsError });
+        
+        if (uploadsError) {
+          console.error('[ProjectDetail] project_uploads query ERROR:', uploadsError);
+        }
         
         if (uploads && uploads.length > 0) {
           uploadedAssetsForCreate = uploads.map((upload: any) => {
             const bucket = upload.bucket_id || 'project-assets';
             const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(upload.storage_path);
+            console.log('[ProjectDetail] Asset:', upload.filename, '| bucket:', bucket, '| url:', urlData.publicUrl?.substring(0, 80));
             return {
               filename: upload.filename,
               url: urlData.publicUrl,
               file_type: upload.file_type
             };
           });
-          console.log('[ProjectDetail] Loaded', uploadedAssetsForCreate.length, 'uploaded assets for initial creation');
+          console.log('[ProjectDetail] ✅ Loaded', uploadedAssetsForCreate.length, 'uploaded assets for initial creation');
+        } else {
+          console.warn('[ProjectDetail] ⚠️ No project_uploads found for project', id);
         }
       } catch (err) {
-        console.error('[ProjectDetail] Error fetching uploads for creation:', err);
+        console.error('[ProjectDetail] ❌ Exception fetching uploads for creation:', err);
       }
 
       // Option A: start job then poll

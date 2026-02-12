@@ -133,8 +133,11 @@ export const ReminderList: React.FC<ReminderListProps> = ({
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
+    const idToDelete = deleteTarget.id;
+    // Close dialog FIRST to remove portal overlay before potential unmount
+    setDeleteTarget(null);
     try {
-      await TRService.deleteReminder(deleteTarget.id);
+      await TRService.deleteReminder(idToDelete);
       toast.success(t('reminderDeleted', language));
       
       if (onRemindersChanged) {
@@ -146,8 +149,6 @@ export const ReminderList: React.FC<ReminderListProps> = ({
     } catch (error) {
       console.error('ReminderList - Error deleting reminder:', error);
       toast.error(t('errorDeleting', language));
-    } finally {
-      setDeleteTarget(null);
     }
   };
 
