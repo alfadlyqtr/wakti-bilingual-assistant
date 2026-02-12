@@ -1180,8 +1180,8 @@ function buildSystemPrompt(language: string, fields: StructuredFields): string {
 
   // ── Hard formatting rules ──
   const formatRules = isArabic
-    ? `\n\n⚠️ قواعد التنسيق (إلزامية، لا استثناءات):\n- اكتب نصاً واضحاً ومباشراً\n- تجنب استخدام النجوم (*) للتنسيق\n- ممنوع منعاً باتاً استخدام شرطة إم (—) أو شرطة إن (–). لا تستخدمها أبداً. استخدم الفاصلة أو النقطة بدلاً منها.\n- ركز على إنشاء النص فقط`
-    : `\n\n⚠️ Formatting rules (MANDATORY, zero exceptions):\n- Write clear and direct text\n- Do not use asterisks (*) for formatting\n- ABSOLUTELY NEVER use em-dashes (—) or en-dashes (–). Not even once. Use commas, periods, or semicolons instead.\n- Focus only on text generation`;
+    ? `\n\n⚠️ قواعد التنسيق (إلزامية، لا استثناءات):\n- اكتب نصاً واضحاً ومباشراً\n- تجنب استخدام النجوم (*) للتنسيق\n- ممنوع منعاً باتاً استخدام شرطة إم (—) أو شرطة إن (–). لا تستخدمها أبداً. استخدم الفاصلة أو النقطة بدلاً منها.\n- ركز على إنشاء النص فقط\n- ممنوع البدء بعبارات تمهيدية مثل "إليك الرد:" أو "هذا رد مسودة:" أو أي مقدمة مشابهة. ابدأ مباشرة بالمحتوى المطلوب.\n- ممنوع إضافة ملاحظات أو تعليقات أو شرح عما تم تغييره. اكتب النص المطلوب فقط، لا شيء آخر.`
+    : `\n\n⚠️ Formatting rules (MANDATORY, zero exceptions):\n- Write clear and direct text\n- Do not use asterisks (*) for formatting\n- ABSOLUTELY NEVER use em-dashes (—) or en-dashes (–). Not even once. Use commas, periods, or semicolons instead.\n- Focus only on text generation\n- NEVER start with intro lines like "Here's a draft reply:", "Here's a cleaned-up response:", "Here's a professional version:", or any similar preamble. Jump straight into the actual content.\n- NEVER add notes, explanations, or commentary about what you changed or improved. Output ONLY the requested text, nothing else.`;
 
   // ── Structured constraints block (from dropdown selections) ──
   const constraints: string[] = [];

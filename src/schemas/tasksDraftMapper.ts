@@ -187,6 +187,21 @@ const INTENT_PATTERNS: { intent: VoiceIntent; en: string[]; ar: string[] }[] = [
     en: ['complete subtask', 'subtask done', 'finish step', 'mark step done'],
     ar: ['أكمل المهمة الفرعية', 'الخطوة تمت', 'أنهِ الخطوة'],
   },
+  {
+    intent: 'snooze_reminder',
+    en: ['snooze reminder', 'snooze my reminder', 'delay reminder', 'postpone reminder', 'snooze'],
+    ar: ['أجّل التذكير', 'أخّر التذكير', 'سنوز', 'تأجيل التذكير'],
+  },
+  {
+    intent: 'reschedule_task',
+    en: ['reschedule task', 'move task', 'change task date', 'postpone task', 'delay task'],
+    ar: ['أعد جدولة المهمة', 'انقل المهمة', 'غيّر موعد المهمة', 'أجّل المهمة'],
+  },
+  {
+    intent: 'reschedule_reminder',
+    en: ['reschedule reminder', 'move reminder', 'change reminder', 'change reminder time', 'move my reminder'],
+    ar: ['أعد جدولة التذكير', 'انقل التذكير', 'غيّر موعد التذكير'],
+  },
 ];
 
 export function detectTRIntent(transcript: string): VoiceIntent | null {

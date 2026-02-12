@@ -385,14 +385,15 @@ export function createCalendarEvent(
     let startDateStr: string | Date = startDate;
     let endDateStr: string | Date = endDate;
     
-    if (isIOS) {
-      // iOS: pass Date objects (some SDK builds call .toISOString internally)
-      startDateStr = startDate;
-      endDateStr = endDate;
-    } else if (isAndroid) {
-      // Android expects yyyy-MM-dd HH:mm:ss.SSS
+    // Both iOS and Android expect date strings, not Date objects.
+    // Use ISO format for iOS, yyyy-MM-dd HH:mm:ss.SSS for Android.
+    if (isAndroid) {
       startDateStr = formatDateForNatively(startDate);
       endDateStr = formatDateForNatively(endDate);
+    } else {
+      // iOS and fallback: use ISO 8601 strings
+      startDateStr = startDate.toISOString();
+      endDateStr = endDate.toISOString();
     }
     
     console.log('[NativelyCalendar] Creating event:', {
@@ -406,11 +407,13 @@ export function createCalendarEvent(
     });
 
     // First try the standard method signature
+    // SDK docs: createCalendarEvent(title, endDate, startDate, timezone, calendarId, description, callback)
+    // Note: SDK expects endDate BEFORE startDate
     if (typeof cal.createCalendarEvent === 'function') {
       cal.createCalendarEvent(
         title,
-        startDateStr,
         endDateStr,
+        startDateStr,
         timezoneStr,
         calendarIdStr,
         descriptionStr,

@@ -3,14 +3,13 @@ import { createPortal } from 'react-dom';
 import { useAudioSession } from '@/hooks/useAudioSession';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Loader2, ChevronDown, ChevronLeft, ChevronRight, Plus, ImagePlus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Wand2, Mic, X, Square } from 'lucide-react';
+import { Send, Loader2, ChevronDown, ChevronLeft, ChevronRight, Plus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Mic, X, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PlusMenu } from './PlusMenu';
 import { ActiveModeIndicator } from './ActiveModeIndicator';
 import { SimplifiedFileUpload } from './SimplifiedFileUpload';
-import { ImageModeFileUpload } from './ImageModeFileUpload';
 import { TalkBubble } from './TalkBubble';
 import type { UploadedFile } from '@/types/fileUpload';
 import { useSimplifiedFileUpload } from '@/hooks/useSimplifiedFileUpload';
@@ -22,7 +21,6 @@ const modeHighlightStyles = (activeTrigger: string) => {
   switch (activeTrigger) {
     case 'chat': return 'border-blue-300 ring-2 ring-blue-200/70 shadow-blue-200/10';
     case 'search': return 'border-green-300 ring-2 ring-green-200/70 shadow-green-100/10';
-    case 'image': return 'border-orange-300 ring-2 ring-orange-200/70 shadow-orange-100/15';
     case 'video': return 'border-purple-300 ring-2 ring-purple-200/70 shadow-purple-100/15';
     default: return 'border-primary/40';
   }
@@ -31,13 +29,10 @@ const textareaHighlight = (activeTrigger: string) => {
   switch (activeTrigger) {
     case 'chat': return 'border-blue-300 shadow-[inset_0_2px_12px_0_rgba(96,165,250,0.10)]';
     case 'search': return 'border-green-300 shadow-[inset_0_2px_12px_0_rgba(74,222,128,0.10)]';
-    case 'image': return 'border-orange-300 shadow-[inset_0_2px_12px_0_rgba(251,191,36,0.08)]';
     case 'video': return 'border-purple-300 shadow-[inset_0_2px_12px_0_rgba(147,51,234,0.10)]';
     default: return 'border-primary/20';
   }
 };
-
-export type ImageMode = 'text2image' | 'image2image' | 'background-removal' | 'draw-after-bg';
 
 export type ChatSubmode = 'chat' | 'study';
 
@@ -51,13 +46,12 @@ interface ChatInputProps {
   setMessage: (message: string) => void;
   isLoading: boolean;
   sessionMessages: any[];
-  onSendMessage: (message: string, trigger: string, files?: any[], imageMode?: ImageMode, imageQuality?: 'fast' | 'best_fast', chatSubmode?: ChatSubmode, replyContext?: ReplyContext) => void;
+  onSendMessage: (message: string, trigger: string, files?: any[], imageMode?: undefined, imageQuality?: undefined, chatSubmode?: ChatSubmode, replyContext?: ReplyContext) => void;
   onClearChat: () => void;
   onOpenPlusDrawer: () => void;
   onOpenConversations?: () => void;
   activeTrigger: string;
   onTriggerChange?: (trigger: string) => void;
-  onImageModeChange?: (mode: ImageMode) => void;
   showVideoUpload?: boolean;
   setShowVideoUpload?: (show: boolean) => void;
   videoCategory?: string;
@@ -81,7 +75,6 @@ export function ChatInput({
   onOpenConversations,
   activeTrigger,
   onTriggerChange,
-  onImageModeChange,
   showVideoUpload = false,
   setShowVideoUpload,
   videoCategory = 'custom',
@@ -95,7 +88,6 @@ export function ChatInput({
 }: ChatInputProps) {
   const { language } = useTheme();
   const [wasAutoSwitchedToVision, setWasAutoSwitchedToVision] = useState(false);
-  const [imageMode, setImageMode] = useState<ImageMode>('text2image');
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [showQuickModes, setShowQuickModes] = useState(false);
   const quickModesAnchorRef = useRef<HTMLButtonElement>(null);
@@ -104,9 +96,6 @@ export function ChatInput({
   // Button ref and viewport position for Search submode dropdown (Web/YouTube)
   const searchModeBtnRef = useRef<HTMLButtonElement>(null);
   const [searchMenuPos, setSearchMenuPos] = useState<{ top: number; left: number } | null>(null);
-  // Button ref and viewport position for Image Mode dropdown
-  const imageModeBtnRef = useRef<HTMLButtonElement>(null);
-  const [imageMenuPos, setImageMenuPos] = useState<{ top: number; left: number } | null>(null);
   // Search submode: 'web' | 'youtube'
   const [searchSubmode, setSearchSubmode] = useState<'web' | 'youtube'>(() => {
     try {
@@ -114,11 +103,6 @@ export function ChatInput({
       return (v === 'youtube' || v === 'web') ? (v as 'web' | 'youtube') : 'web';
     } catch { return 'web'; }
   });
-  // Local-only UI state: image quality dropdown (visible only in image -> text2image)
-  const [imageQuality, setImageQuality] = useState<'fast' | 'best_fast'>('fast');
-  // Custom dropdown position for Image quality (Fast/Best)
-  const qualityBtnRef = useRef<HTMLButtonElement>(null);
-  const [qualityMenuPos, setQualityMenuPos] = useState<{ top: number; left: number } | null>(null);
   // TTS Auto Play toggle (persisted)
   const [ttsAutoPlay, setTtsAutoPlay] = useState(false);
   const seedFileInputRef = useRef<HTMLInputElement>(null);
@@ -130,10 +114,6 @@ export function ChatInput({
   const inputCardRef = useRef<HTMLDivElement>(null);
   // Ref to the inner card to compute offset from viewport bottom to card top
   const cardRef = useRef<HTMLDivElement>(null);
-  // Image2Image inline translation state
-  const [isTranslatingI2I, setIsTranslatingI2I] = useState(false);
-  const [i2iDidTranslate, setI2iDidTranslate] = useState(false);
-  const [isAmping, setIsAmping] = useState(false);
   // Chat/Study submode dropdown state
   const chatSubmodeBtnRef = useRef<HTMLButtonElement>(null);
   const [chatSubmodeMenuPos, setChatSubmodeMenuPos] = useState<{ top: number; left: number } | null>(null);
@@ -152,43 +132,13 @@ export function ChatInput({
 
   // Modes Stepper (Option B)
   const [showModesStepper, setShowModesStepper] = useState(false);
-  const [stepperIndex, setStepperIndex] = useState(0); // 0: chat, 1: search, 2: image
-  const modesOrder: Array<{ key: 'chat' | 'search' | 'image'; labelEn: string; labelAr: string; color: string }> = [
+  const [stepperIndex, setStepperIndex] = useState(0); // 0: chat, 1: search
+  const modesOrder: Array<{ key: 'chat' | 'search'; labelEn: string; labelAr: string; color: string }> = [
     { key: 'chat', labelEn: 'Chat', labelAr: 'دردشة', color: 'bg-blue-600' },
     { key: 'search', labelEn: 'Search', labelAr: 'بحث', color: 'bg-green-600' },
-    { key: 'image', labelEn: 'Image', labelAr: 'صورة', color: 'bg-orange-500' },
   ];
   const currentMode = modesOrder[stepperIndex];
 
-  // Always default Image mode to Text2Image + Fast when the user ENTERS Image mode.
-  // Important: only run on transition into Image mode, so it doesn't override submode changes while already in Image.
-  const prevTriggerRef = useRef<string>(activeTrigger);
-  useEffect(() => {
-    const prev = prevTriggerRef.current;
-    prevTriggerRef.current = activeTrigger;
-    if (activeTrigger === 'image' && prev !== 'image') {
-      setImageMode('text2image');
-      setImageQuality('fast');
-      onImageModeChange?.('text2image');
-    }
-  }, [activeTrigger, onImageModeChange]);
-
-  useEffect(() => {
-    if (!(activeTrigger === 'image' && imageMode === 'image2image' && language === 'ar')) {
-      setI2iDidTranslate(false);
-      return;
-    }
-
-    if (!message || message.trim().length === 0) {
-      setI2iDidTranslate(false);
-      return;
-    }
-
-    // If Arabic appears again, translation is needed again.
-    if (hasArabic(message)) {
-      setI2iDidTranslate(false);
-    }
-  }, [activeTrigger, imageMode, language, message]);
   const attachDebugOverlay = () => {
     try {
       const id = 'wakti-modes-debug-overlay';
@@ -401,15 +351,6 @@ export function ChatInput({
     }
   }, [uploadedFiles, activeTrigger, wasAutoSwitchedToVision, onTriggerChange, isLoading]);
 
-  // When in Image mode and switching to Text2Image, clear any seed uploads from other submodes
-  useEffect(() => {
-    if (activeTrigger === 'image' && imageMode === 'text2image' && uploadedFiles.length > 0) {
-      try {
-        console.log('🧹 Clearing seed uploads: switched to Text2Image');
-        clearFiles();
-      } catch {}
-    }
-  }, [activeTrigger, imageMode]);
 
   // Removed auto-focus to avoid programmatically opening the mobile keyboard
   // Keyboard should appear only after explicit user interaction with the input
@@ -432,7 +373,6 @@ export function ChatInput({
     const closer = () => {
       setIsModeMenuOpen(false);
       setSearchMenuPos(null);
-      setImageMenuPos(null);
       setShowQuickModes(false);
     };
     window.addEventListener('wakti-close-all-overlays', closer as EventListener);
@@ -448,9 +388,8 @@ export function ChatInput({
         !target.closest('[data-stepper-menu]')
       ) {
         setSearchMenuPos(null);
-        setImageMenuPos(null);
-        setShowQuickModes(false);
-        // Do not forcibly close the stepper here; it has its own backdrop closer
+        setSearchMenuPos(null);
+      setShowQuickModes(false);
       }
     };
     
@@ -656,8 +595,8 @@ export function ChatInput({
         maybePrefixed, 
         finalTrigger, // Use the final trigger (could be auto-switched to vision)
         outgoingFiles,
-        activeTrigger === 'image' ? imageMode : undefined, // Only pass imageMode if in image mode
-        activeTrigger === 'image' && imageMode === 'text2image' ? imageQuality : undefined, // Only pass imageQuality for Text2Image
+        undefined,
+        undefined,
         activeTrigger === 'chat' ? chatSubmode : undefined, // Pass chatSubmode for Chat mode (chat vs study)
         replyContext || undefined // Pass reply context if replying to a message
       );
@@ -786,19 +725,14 @@ export function ChatInput({
     return textareaHighlight(activeTrigger);
   })();
 
-  // While processing (translating or amping), highlight the textarea content
-  const processingHighlightClass = isTranslatingI2I
-    ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-400 animate-pulse'
-    : (isAmping ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-400 animate-pulse' : '');
+  const processingHighlightClass = '';
 
   // Determine if textarea should be enabled
   const isTextareaEnabled = activeTrigger !== 'video' || (activeTrigger === 'video' && videoTemplate === 'image2video');
   
   // Determine if send button should be enabled
   const hasArabic = (s: string) => /[\u0600-\u06FF]/.test(s || '');
-  const isArabicI2I = activeTrigger === 'image' && imageMode === 'image2image' && hasArabic(message);
-  // In draw-after-bg mode, prompt is required for generation
-  const canSend = (message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading && isTextareaEnabled && !isArabicI2I;
+  const canSend = (message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading && isTextareaEnabled;
 
   // Get appropriate placeholder text
   const getPlaceholderText = () => {
@@ -812,38 +746,7 @@ export function ChatInput({
       }
       return language === 'ar' ? 'ابحث في الويب: موضوع أو سؤال' : 'search the web !! News, sport reaults, topics and more.';
     }
-    // Image mode: adapt helper example to the selected imageMode when empty
-    if (activeTrigger === 'image' && message.trim() === '') {
-      return getImageModeExample();
-    }
     return language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...';
-  };
-
-  // Dynamic helper example per imageMode (shown only in Image mode)
-  const getImageModeExample = () => {
-    if (language === 'ar') {
-      switch (imageMode) {
-        case 'text2image':
-          return 'مثال: مقهى دافئ، سينمائي، إضاءة ناعمة';
-        case 'image2image':
-          return 'مثال: حوّل الصورة إلى أسلوب ألوان مائية';
-        case 'background-removal':
-          return 'مثال: إزالة الخلفية والإبقاء على العنصر فقط';
-        default:
-          return '';
-      }
-    } else {
-      switch (imageMode) {
-        case 'text2image':
-          return 'Ex: cozy cafe, cinematic, soft light';
-        case 'image2image':
-          return 'Ex: style the uploaded image as watercolor';
-        case 'background-removal':
-          return 'Ex: remove background, keep subject only';
-        default:
-          return '';
-      }
-    }
   };
 
   
@@ -1014,16 +917,6 @@ export function ChatInput({
       {/* File Upload Component - Different component based on mode (hidden during mobile keyboard) */}
       {!isKeyboardMode && activeTrigger !== 'video' && (
         <>
-          {activeTrigger === 'image' ? (
-            <ImageModeFileUpload
-              onFilesUploaded={handleFilesUploaded}
-              onRemoveFile={removeFile}
-              uploadedFiles={uploadedFiles}
-              isUploading={isUploading}
-              disabled={isUploading}
-              maxFiles={1}
-            />
-          ) : (
             <SimplifiedFileUpload
               onFilesUploaded={handleFilesUploaded}
               onUpdateFiles={updateFiles}
@@ -1041,7 +934,6 @@ export function ChatInput({
                 }
               }}
             />
-          )}
         </>
       )}
 
@@ -1188,17 +1080,6 @@ export function ChatInput({
                               <SearchIcon className="h-4 w-4" />
                               <span className="text-xs font-semibold">{language === 'ar' ? 'بحث' : 'Search'}</span>
                             </motion.button>
-                            <motion.button
-                              initial={{ opacity: 0, y: -10, scale: 0.98 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                              transition={{ delay: 0.12, type: 'spring', stiffness: 380, damping: 24 }}
-                              onPointerUp={() => { onTriggerChange && onTriggerChange('image'); setShowQuickModes(false); }}
-                              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-orange-500 text-white shadow-[0_10px_24px_rgba(234,88,12,0.35)] hover:shadow-[0_12px_30px_rgba(234,88,12,0.45)] active:scale-[0.98]"
-                            >
-                              <ImageIcon className="h-4 w-4" />
-                              <span className="text-xs font-semibold">{language === 'ar' ? 'صورة' : 'Image'}</span>
-                            </motion.button>
                           </div>
                         </motion.div>
                       )}
@@ -1318,139 +1199,6 @@ export function ChatInput({
                             )}
                           </AnimatePresence>,
                           document.body
-                        )}
-                      </div>
-                    ) : activeTrigger === 'image' ? (
-                      <div className="relative flex items-center gap-2">
-                        <button
-                          ref={imageModeBtnRef}
-                          data-dropdown
-                          onPointerDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            // @ts-ignore
-                            if (e.nativeEvent && typeof e.nativeEvent.stopImmediatePropagation === 'function') e.nativeEvent.stopImmediatePropagation();
-                            const rect = imageModeBtnRef.current?.getBoundingClientRect();
-                            if (imageMenuPos) {
-                              setImageMenuPos(null);
-                            } else if (rect) {
-                              const margin = 8;
-                              // Prefer clamping within the chat/messages area so the menu visually aligns with the chat column
-                              const host = document.querySelector('.wakti-ai-messages-area') as HTMLElement | null;
-                              const bounds = host ? host.getBoundingClientRect() : null;
-                              const minX = (bounds?.left ?? 12) + 12;
-                              const maxX = (bounds ? bounds.right - 12 : window.innerWidth - 12);
-                              const centerX = rect.left + rect.width / 2;
-                              const clampedX = Math.max(minX, Math.min(centerX, maxX));
-                              setImageMenuPos({ top: rect.top - margin, left: clampedX });
-                            }
-                          }}
-                          className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-full text-xs font-medium leading-none bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/50 align-middle shrink-0"
-                        >
-                          <ImagePlus className="h-3 w-3" />
-                          <span className="text-xs">
-                            {imageMode === 'image2image'
-                              ? (language === 'ar' ? 'صورة إلى صورة' : 'Image2Image')
-                              : imageMode === 'background-removal'
-                                ? (language === 'ar' ? 'إزالة الخلفية' : 'BG Removal')
-                                 : imageMode === 'draw-after-bg'
-                                  ? (language === 'ar' ? 'رسم' : 'Draw')
-                                  : (language === 'ar' ? 'نص إلى صورة' : 'Text2Image')}
-                          </span>
-                          <ChevronDown className="h-3 w-3" />
-                        </button>
-                        {createPortal(
-                          <AnimatePresence>
-                            {imageMenuPos && (
-                              <motion.div
-                                key="image-menu"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ type: 'spring', stiffness: 320, damping: 24 }}
-                                className="fixed z-[9999] min-w-[160px]"
-                                data-dropdown-menu
-                                style={{
-                                  top: imageMenuPos.top,
-                                  left: imageMenuPos.left,
-                                  transform: 'translate(-50%, -100%)',
-                                  transformOrigin: 'bottom center',
-                                }}
-                                onPointerDown={(e) => e.stopPropagation()}
-                              >
-                                <div className="rounded-2xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 py-1">
-                                  <button onPointerUp={() => { setImageMode('text2image'); onImageModeChange?.('text2image'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'نص إلى صورة' : 'Text2Image'}</button>
-                                  <button onPointerUp={() => { setImageMode('image2image'); onImageModeChange?.('image2image'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'صورة إلى صورة' : 'Image2Image'}</button>
-                                  <button onPointerUp={() => { setImageMode('background-removal'); onImageModeChange?.('background-removal'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'إزالة الخلفية' : 'BG Removal'}</button>
-                                  <button onPointerUp={() => { setImageMode('draw-after-bg'); onImageModeChange?.('draw-after-bg'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'رسم' : 'Draw'}</button>
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>,
-                          document.body
-                        )}
-
-                        {/* Seed image upload for Image Mode submodes that require an input image (excluding draw-after-bg) */}
-                        {imageMode !== 'text2image' && imageMode !== 'draw-after-bg' && (
-                          <button
-                            type="button"
-                            className="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 text-orange-900 dark:text-orange-200 shadow-sm"
-                            onClick={(e) => { e.stopPropagation(); seedFileInputRef.current?.click(); }}
-                            aria-label={language === 'ar' ? 'رفع صورة مرجعية' : 'Upload reference image'}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                        )}
-
-                        {imageMode === 'text2image' && (
-                          <>
-                            <button
-                              ref={qualityBtnRef}
-                              data-dropdown
-                              onPointerDown={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                // @ts-ignore
-                                if (e.nativeEvent && typeof e.nativeEvent.stopImmediatePropagation === 'function') e.nativeEvent.stopImmediatePropagation();
-                                const rect = qualityBtnRef.current?.getBoundingClientRect();
-                                if (qualityMenuPos) {
-                                  setQualityMenuPos(null);
-                                } else if (rect) {
-                                  const margin = 8;
-                                  const rightEdge = Math.min(window.innerWidth - 12, rect.right);
-                                  setQualityMenuPos({ top: rect.top - margin, left: rightEdge - 8 });
-                                }
-                              }}
-                              aria-label={language === 'ar' ? 'اختيار الجودة' : 'Select quality'}
-                              className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-lg text-xs font-medium leading-none bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 text-orange-900 dark:text-orange-200 shadow-sm"
-                            >
-                              <span>{imageQuality === 'fast' ? (language === 'ar' ? 'سريع' : 'Fast') : (language === 'ar' ? 'أفضل' : 'Best')}</span>
-                              <ChevronDown className="h-3 w-3" />
-                            </button>
-                            {createPortal(
-                              <AnimatePresence>
-                                {qualityMenuPos && (
-                                  <motion.div
-                                    key="quality-menu"
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    exit={{ opacity: 0 }}
-                                    transition={{ type: 'spring', stiffness: 320, damping: 24 }}
-                                    className="fixed z-[9999] min-w-[160px]"
-                                    data-dropdown-menu
-                                    style={{ top: qualityMenuPos.top, left: qualityMenuPos.left, transform: 'translate(-100%, -100%)', transformOrigin: 'bottom right' }}
-                                    onPointerDown={(e) => e.stopPropagation()}
-                                  >
-                                    <div className="rounded-xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 py-1">
-                                      <button onPointerUp={() => { setImageQuality('fast'); setQualityMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'سريع' : 'Fast'}</button>
-                                      <button onPointerUp={() => { setImageQuality('best_fast'); setQualityMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'أفضل' : 'Best'}</button>
-                                    </div>
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>,
-                              document.body
-                            )}
-                          </>
                         )}
                       </div>
                     ) : (activeTrigger === 'chat' || activeTrigger === 'vision') ? (
@@ -1586,49 +1334,6 @@ export function ChatInput({
             {/* VISION/IMAGE MODE: Show Vision-specific chips (NOT in Study mode) */}
             {!isKeyboardMode && uploadedFiles.length > 0 && message === '' && !isInputCollapsed && !(activeTrigger === 'chat' && chatSubmode === 'study') && (
               <div className="flex gap-2 flex-wrap px-3 py-2 mb-2 border-b border-white/20 hide-on-keyboard">
-                {/* Background Removal: show only a single bilingual chip */}
-                {activeTrigger === 'image' && imageMode === 'background-removal' ? (
-                  <button
-                    onClick={() => setMessage('Remove the background')}
-                    className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm"
-                  >
-                    🧹 {language === 'ar' ? 'أزل الخلفية' : 'Remove the background'}
-                  </button>
-                ) : activeTrigger === 'image' && imageMode === 'image2image' ? (
-                  <>
-                    <button
-                      onClick={() => setMessage('Convert to watercolor style')}
-                      className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm"
-                    >
-                      🎨 {language === 'ar' ? 'ألوان مائية' : 'Watercolor'}
-                    </button>
-                    <button
-                      onClick={() => setMessage('Make it cartoon/anime')}
-                      className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm"
-                    >
-                      📺 {language === 'ar' ? 'كرتون/أنمي' : 'Cartoon/Anime'}
-                    </button>
-                    <button
-                      onClick={() => setMessage('Enhance sharpness and details')}
-                      className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm"
-                    >
-                      ✨ {language === 'ar' ? 'تحسين التفاصيل' : 'Enhance details'}
-                    </button>
-                    <button
-                      onClick={() => setMessage('Change to black and white')}
-                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm"
-                    >
-                      🖤 {language === 'ar' ? 'أبيض وأسود' : 'Black & White'}
-                    </button>
-                    <button
-                      onClick={() => setMessage('Increase brightness slightly')}
-                      className="px-3 py-1.5 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded-full text-sm"
-                    >
-                      ☀️ {language === 'ar' ? 'زيادة السطوع' : 'Increase brightness'}
-                    </button>
-                  </>
-                ) : (
-                  <>
                     {uploadedFiles[0]?.imageType?.id === 'ids' && (
                       <>
                         <button
@@ -1741,8 +1446,6 @@ export function ChatInput({
                         </button>
                       </>
                     )}
-                  </>
-                )}
               </div>
             )}
             
@@ -1793,7 +1496,7 @@ export function ChatInput({
                       placeholder={getPlaceholderText()}
                       autoExpand={true}
                       maxLines={4}
-                      minLines={(message.trim() === '' && (activeTrigger === 'image' || activeTrigger === 'search')) ? 2 : 1}
+                      minLines={(message.trim() === '' && activeTrigger === 'search') ? 2 : 1}
                       className={`wakti-ai-textarea
                         flex-1 border-[2.5px]
                         bg-white/95 dark:bg-gray-800/90
@@ -1807,7 +1510,7 @@ export function ChatInput({
                         rounded-xl
                         outline-none transition-all duration-200
                         ${!isTextareaEnabled ? 'opacity-50 cursor-not-allowed' : ''}
-                        ${(message.trim() === '' && (activeTrigger === 'image' || activeTrigger === 'search')) 
+                        ${(message.trim() === '' && activeTrigger === 'search') 
                           ? 'placeholder:text-xs placeholder:italic placeholder:text-gray-400 dark:placeholder:text-gray-500' 
                           : 'placeholder:text-sm placeholder:text-gray-500 dark:placeholder:text-gray-400'}
                         py-3 px-4
@@ -1890,113 +1593,14 @@ export function ChatInput({
                               <SearchIcon className="h-4 w-4" />
                               <span>{language === 'ar' ? 'بحث' : 'Search'}</span>
                             </motion.button>
-                            <motion.button
-                              initial={{ opacity: 0, x: 16, scale: 0.94 }}
-                              animate={{ opacity: 1, x: 0, scale: 1 }}
-                              exit={{ opacity: 0, x: 10, scale: 0.96 }}
-                              transition={{ delay: 0.16, type: 'spring', stiffness: 420, damping: 26 }}
-                              onPointerUp={() => { onTriggerChange && onTriggerChange('image'); setShowQuickModes(false); }}
-                              className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 bg-orange-500 text-white text-xs font-semibold shadow"
-                              type="button"
-                            >
-                              <ImageIcon className="h-4 w-4" />
-                              <span>{language === 'ar' ? 'صورة' : 'Image'}</span>
-                            </motion.button>
                           </div>
                         </motion.div>
                       )}
                     </AnimatePresence>
-                    {activeTrigger === 'image' && imageMode === 'image2image' && (
-                      <div className="mt-1 flex items-center gap-2">
-                        {language === 'ar' && (
-                          <div className="text-xs font-extrabold leading-tight text-amber-900 dark:text-amber-100 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/50 px-2 py-1 rounded-md">
-                            {hasArabic(message)
-                              ? 'قبل الإرسال: اضغط "ترجمة".'
-                              : (i2iDidTranslate
-                                ? 'تمام — جاهز. اضغط إرسال.'
-                                : 'اكتب بالعربية. عند الإرسال سنحوّل النص للإنجليزية تلقائياً (لا تقلق).')}
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                   
                   {/* Send button: always visible, disabled when cannot send */}
                   <div className="relative inline-flex flex-col items-end gap-1">
-                    {/* Small Translate button placed above the send button (only for Arabic in Image2Image) */}
-                    {activeTrigger === 'image' && imageMode === 'image2image' && language === 'ar' && hasArabic(message) && (
-                      <button
-                        type="button"
-                        className={`h-6 px-2 rounded-full text-[10px] font-semibold text-white shadow-md disabled:opacity-50 disabled:pointer-events-none 
-                          ${isTranslatingI2I ? 'bg-blue-500 animate-pulse' : 'bg-blue-600 hover:bg-blue-700 animate-pulse ring-2 ring-blue-300/70 shadow-[0_0_18px_rgba(59,130,246,0.35)]'}`}
-                        disabled={isTranslatingI2I}
-                        onClick={async () => {
-                          if (!message || isTranslatingI2I) return;
-                          try {
-                            setIsTranslatingI2I(true);
-                            const { data, error } = await supabase.functions.invoke('image2image-ar2en', { body: { text: message } });
-                            if (!error && data?.text) {
-                              setMessage(data.text as string);
-                              setI2iDidTranslate(true);
-                            } else {
-                              console.error('Translate failed:', error || data);
-                            }
-                          } catch (e) {
-                            console.error('Translate exception:', e);
-                          } finally {
-                            setIsTranslatingI2I(false);
-                          }
-                        }}
-                        aria-busy={isTranslatingI2I}
-                        aria-live="polite"
-                      >
-                        {isTranslatingI2I ? (
-                          <span className="inline-flex items-center gap-1">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            <span>{language === 'ar' ? '...جارٍ الترجمة' : 'Translating...'}</span>
-                          </span>
-                        ) : (
-                          <>{language === 'ar' ? 'ترجمة' : 'Translate'}</>
-                        )}
-                      </button>
-                    )}
-
-                    {/* Amp button for prompt enhancement (image modes, including background-removal) */}
-                    {activeTrigger === 'image' && (imageMode === 'text2image' || imageMode === 'image2image' || imageMode === 'background-removal') && message.trim().length > 0 && (
-                      <button
-                        type="button"
-                        className={`
-                          h-11 w-11 rounded-xl p-0 flex-shrink-0 text-white inline-flex items-center justify-center
-                          border-0 shadow-2xl backdrop-blur-md shadow-lg
-                          transition-all duration-200 hover:scale-110 hover:shadow-2xl
-                          disabled:opacity-50 disabled:pointer-events-none
-                          ${isAmping ? 'bg-orange-500 animate-pulse' : 'bg-orange-500 hover:bg-orange-600'}
-                        `}
-                        disabled={isAmping || isTranslatingI2I}
-                        onClick={async () => {
-                          if (!message || isAmping) return;
-                          try {
-                            setIsAmping(true);
-                            const { data, error } = await supabase.functions.invoke('prompt-amp', { body: { text: message, mode: imageMode } });
-                            if (!error && data?.text) {
-                              setMessage(String(data.text));
-                            } else {
-                              console.error('Amp failed:', error || data);
-                            }
-                          } catch (e) {
-                            console.error('Amp exception:', e);
-                          } finally {
-                            setIsAmping(false);
-                          }
-                        }}
-                        aria-busy={isAmping}
-                        aria-live="polite"
-                        title={language === 'ar' ? 'تحسين' : 'Amp'}
-                        aria-label={language === 'ar' ? 'تحسين' : 'Amp'}
-                      >
-                        <Wand2 className={`h-5 w-5 ${isAmping ? 'animate-spin' : ''}`} />
-                      </button>
-                    )}
 
                     <TooltipProvider>
                       <Tooltip>

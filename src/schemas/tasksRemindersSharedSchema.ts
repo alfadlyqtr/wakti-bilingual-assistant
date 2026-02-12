@@ -43,7 +43,10 @@ export type VoiceIntent =
   | 'schedule_reminder'
   | 'share_task'
   | 'complete_task'
-  | 'complete_subtask';
+  | 'complete_subtask'
+  | 'snooze_reminder'
+  | 'reschedule_task'
+  | 'reschedule_reminder';
 
 export interface VoiceClarification {
   fieldPath: string;
@@ -261,6 +264,9 @@ export const TASKS_REMINDERS_SHARED_SCHEMA = {
       'share_task',
       'complete_task',
       'complete_subtask',
+      'snooze_reminder',
+      'reschedule_task',
+      'reschedule_reminder',
     ] as VoiceIntent[],
     clarifications: [
       {

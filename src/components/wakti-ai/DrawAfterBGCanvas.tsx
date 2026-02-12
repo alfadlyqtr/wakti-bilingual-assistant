@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Loader2, Trash2, Undo2, Redo2, Download, Sparkles, ChevronDown, ImagePlus, Move, RotateCcw, ZoomIn, ZoomOut, Settings2 } from 'lucide-react';
+import { Loader2, Trash2, Undo2, Redo2, Download, Sparkles, ChevronDown, ImagePlus, Move, RotateCcw, ZoomIn, ZoomOut, Settings2, Check } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
   DropdownMenu,
@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useDrawAfterBG } from '@/hooks/useDrawAfterBG';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 interface DrawAfterBGCanvasProps {
@@ -30,8 +32,11 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
   const bgImageRef = useRef<HTMLImageElement | null>(null);
   const bgImageSrcRef = useRef<string | null>(null);
   const isPanningBgRef = useRef(false);
+  const skipDrawBgRef = useRef(false);
   const lastPanPointRef = useRef<{ x: number; y: number } | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const { user } = useAuth();
   const lastGenerationTimeRef = useRef<number>(0);
   const { language } = useTheme();
   const isArabic = language === 'ar';
@@ -296,6 +301,10 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
 
   // Repaint background when background transform changes
   useEffect(() => {
+    if (skipDrawBgRef.current) {
+      skipDrawBgRef.current = false;
+      return;
+    }
     drawBackground();
   }, [drawBackground]);
 
@@ -306,7 +315,48 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
     if (!lastGeneratedImage || !bgCanvasRef.current) return;
 
     console.log('🔄 Setting background src to:', lastGeneratedImage);
-    loadBackgroundFromUrl(lastGeneratedImage);
+
+    // Paint the AI result directly onto the background canvas.
+    // We bypass the loadBackgroundFromUrl → fitBackgroundToCanvas → drawBackground chain
+    // because on 2nd+ generation the state values don't change, so drawBackground never re-fires.
+    const bgCanvas = bgCanvasRef.current;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      bgImageRef.current = img;
+      bgImageSrcRef.current = lastGeneratedImage;
+      setHasBackground(true);
+
+      // Fit & paint directly
+      const ctx = bgCanvas.getContext('2d');
+      if (!ctx) return;
+      ctx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+      const needsDownscale = img.width > bgCanvas.width || img.height > bgCanvas.height;
+      const scale = needsDownscale
+        ? Math.min(bgCanvas.width / img.width, bgCanvas.height / img.height)
+        : 1;
+      setBgScale(scale);
+      setBgRotationDeg(0);
+      setBgOffset({ x: 0, y: 0 });
+      setBgOpacity(1);
+
+      ctx.save();
+      const cx = bgCanvas.width / 2;
+      const cy = bgCanvas.height / 2;
+      ctx.translate(cx, cy);
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      ctx.restore();
+
+      // Skip the next drawBackground useEffect cycle — we just painted directly
+      // and the setBgScale/setBgOffset calls will trigger it with stale closure values.
+      skipDrawBgRef.current = true;
+
+      console.log('✅ AI result painted to background canvas');
+    };
+    img.src = lastGeneratedImage;
+
     clearDrawingLayer();
     toast.success(isArabic ? 'تم تحسين الصورة! ارسم وأرسل مرة أخرى للبناء.' : 'AI enhanced! Draw and send again to keep building.');
   }, [lastGeneratedImage]);
@@ -1053,7 +1103,82 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
             title={isArabic ? 'حفظ الرسم' : 'Save drawing'}
           >
             <Download className="w-4 h-4" />
-            {!isMobile && (isArabic ? 'حفظ' : 'Save')}
+            {!isMobile && (isArabic ? 'تنزيل' : 'Download')}
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isSaving}
+            onClick={async () => {
+              const canvas = canvasRef.current;
+              const bgCanvas = bgCanvasRef.current;
+              if (!canvas || !bgCanvas || !user?.id) {
+                toast.error(isArabic ? 'يرجى تسجيل الدخول' : 'Please sign in');
+                return;
+              }
+
+              setIsSaving(true);
+              try {
+                // Capture combined canvas
+                const exportCanvas = document.createElement('canvas');
+                exportCanvas.width = canvas.width;
+                exportCanvas.height = canvas.height;
+                const exportCtx = exportCanvas.getContext('2d');
+                if (!exportCtx) throw new Error('No context');
+
+                exportCtx.fillStyle = '#ffffff';
+                exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+                exportCtx.drawImage(bgCanvas, 0, 0);
+                exportCtx.drawImage(canvas, 0, 0);
+
+                const blob = await new Promise<Blob | null>((resolve) =>
+                  exportCanvas.toBlob(resolve, 'image/png')
+                );
+                if (!blob) throw new Error('Failed to capture');
+
+                // Upload to storage
+                const fileName = `${user.id}/draw-${Date.now()}.png`;
+                const { error: uploadErr } = await supabase.storage
+                  .from('generated-images')
+                  .upload(fileName, blob, { contentType: 'image/png', upsert: false });
+                if (uploadErr) throw uploadErr;
+
+                const { data: urlData } = supabase.storage
+                  .from('generated-images')
+                  .getPublicUrl(fileName);
+                const imageUrl = urlData?.publicUrl;
+                if (!imageUrl) throw new Error('No public URL');
+
+                // Insert into DB
+                const { error: dbErr } = await (supabase as any)
+                  .from('user_generated_images')
+                  .insert({
+                    user_id: user.id,
+                    image_url: imageUrl,
+                    prompt: prompt || null,
+                    submode: 'draw',
+                    quality: null,
+                    meta: {},
+                  });
+                if (dbErr) throw dbErr;
+
+                toast.success(isArabic ? 'تم الحفظ! يمكنك رؤيتها في المحفوظات' : 'Saved! Check your Saved tab');
+
+                // Clear canvas
+                clearCanvas();
+              } catch (err: any) {
+                console.error('Done & Save failed:', err);
+                toast.error(isArabic ? 'فشل الحفظ' : 'Save failed');
+              } finally {
+                setIsSaving(false);
+              }
+            }}
+            className={isMobile ? "p-2 min-w-[36px] bg-green-500/10 border-green-500/30 text-green-600 dark:text-green-400" : "gap-2 bg-green-500/10 border-green-500/30 text-green-600 dark:text-green-400"}
+            title={isArabic ? 'حفظ وإنهاء' : 'Done & Save'}
+          >
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            {!isMobile && (isArabic ? 'حفظ وإنهاء' : 'Done & Save')}
           </Button>
         </div>
       </div>

@@ -103,6 +103,7 @@ import FitnessWhoopCallback from "./pages/FitnessWhoopCallback";
 import Journal from "./pages/Journal";
 import MusicStudio from "./pages/MusicStudio";
 import MusicShare from "./pages/MusicShare";
+import ImageShare from "./pages/ImageShare";
 import VideoShare from "./pages/VideoShare";
 import BusinessCardShare from "./pages/BusinessCardShare";
 import WalletPass from "./pages/WalletPass";
@@ -189,6 +190,7 @@ function App() {
                 {/* Maw3d public view */}
                 <Route path="/maw3d/:shortId" element={<Maw3dView />} />
                 <Route path="/music/share/:id" element={<MusicShare />} />
+                <Route path="/image/:id" element={<ImageShare />} />
                 <Route path="/video/:id" element={<VideoShare />} />
                 
                 {/* Wallet pass branded loading page (public) */}

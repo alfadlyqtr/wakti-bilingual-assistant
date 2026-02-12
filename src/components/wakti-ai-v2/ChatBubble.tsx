@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { ImageModal } from './ImageModal';
 import { supabase } from '@/integrations/supabase/client';
 import { getSelectedVoices } from './TalkBackSettings';
+import { safeCopyToClipboard } from '@/utils/clipboardUtils';
 
 // Proxy image URLs through our Edge Function to avoid COEP/CORS blocking
 const SUPABASE_URL = 'https://hxauxozopvpzpdygoqwf.supabase.co';
@@ -53,7 +54,7 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
   // Copy message content to clipboard
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(message.content);
+      await safeCopyToClipboard(message.content);
       toast.success(language === 'ar' ? 'تم النسخ!' : 'Copied!', {
         description: language === 'ar' ? 'تم نسخ الرسالة إلى الحافظة' : 'Message copied to clipboard',
       });

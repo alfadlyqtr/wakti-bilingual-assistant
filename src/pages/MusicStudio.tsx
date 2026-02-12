@@ -26,6 +26,7 @@ import {
   Trash2,
   Music,
   Video,
+  Image as ImageIcon,
   RefreshCw,
   Plus,
   Loader2,
@@ -36,8 +37,14 @@ import {
   Save,
   AlertCircle,
   Pencil,
+  Sparkles,
+  Zap,
+  ArrowRight,
+  Palette,
 } from 'lucide-react';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
+import StudioImageGenerator from '@/components/studio/StudioImageGenerator';
+import SavedImagesTab from '@/components/studio/SavedImagesTab';
 import { useLocation } from 'react-router-dom';
 
 const normalizeAudioUrl = (url: string) => {
@@ -721,9 +728,10 @@ function VideoThumbnail({ fallbackDuration }: {
 
 export default function MusicStudio() {
   const { language } = useTheme();
-  const [mainTab, setMainTab] = useState<'music' | 'video'>('music');
+  const [mainTab, setMainTab] = useState<'studio' | 'music' | 'video' | 'image'>('studio');
   const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor'>('compose');
   const [videoMode, setVideoMode] = useState<'ai' | 'saved'>('ai');
+  const [imageMode, setImageMode] = useState<'create' | 'saved'>('create');
   const location = useLocation();
 
   useEffect(() => {
@@ -733,6 +741,47 @@ export default function MusicStudio() {
       setVideoMode('saved');
     }
   }, [location.state]);
+
+  const isArabic = language === 'ar';
+
+  const studioCards: { key: 'music' | 'video' | 'image'; icon: React.ReactNode; titleEn: string; titleAr: string; descEn: string; descAr: string; cardBg: string; iconBg: string; iconColor: string; shadow: string }[] = [
+    {
+      key: 'music',
+      icon: <Music className="h-6 w-6" />,
+      titleEn: 'Music',
+      titleAr: 'الموسيقى',
+      descEn: 'Compose AI-powered tracks, choose genres, moods & instruments.',
+      descAr: 'أنشئ مقطوعات موسيقية بالذكاء الاصطناعي، اختر الأنماط والمزاج والآلات.',
+      cardBg: 'bg-gradient-to-br from-violet-50 via-purple-50/80 to-blue-50 dark:from-violet-950/40 dark:via-purple-950/30 dark:to-blue-950/40',
+      iconBg: 'bg-gradient-to-br from-violet-500 to-purple-600',
+      iconColor: 'text-white',
+      shadow: 'shadow-[0_8px_30px_-4px_hsla(270,60%,50%,0.25)] dark:shadow-[0_8px_30px_-4px_hsla(270,70%,65%,0.2)]',
+    },
+    {
+      key: 'video',
+      icon: <Video className="h-6 w-6" />,
+      titleEn: 'Video',
+      titleAr: 'الفيديو',
+      descEn: 'Generate cinematic videos from text or images in seconds.',
+      descAr: 'أنشئ فيديوهات سينمائية من النصوص أو الصور في ثوانٍ.',
+      cardBg: 'bg-gradient-to-br from-orange-50 via-rose-50/80 to-pink-50 dark:from-orange-950/40 dark:via-rose-950/30 dark:to-pink-950/40',
+      iconBg: 'bg-gradient-to-br from-orange-500 to-rose-500',
+      iconColor: 'text-white',
+      shadow: 'shadow-[0_8px_30px_-4px_hsla(25,80%,50%,0.25)] dark:shadow-[0_8px_30px_-4px_hsla(25,95%,60%,0.2)]',
+    },
+    {
+      key: 'image',
+      icon: <Palette className="h-6 w-6" />,
+      titleEn: 'Image',
+      titleAr: 'الصورة',
+      descEn: 'Create stunning visuals, style transfers, background removal & more.',
+      descAr: 'أنشئ صورًا مذهلة، نقل الأنماط، إزالة الخلفية والمزيد.',
+      cardBg: 'bg-gradient-to-br from-emerald-50 via-teal-50/80 to-cyan-50 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-cyan-950/40',
+      iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-500',
+      iconColor: 'text-white',
+      shadow: 'shadow-[0_8px_30px_-4px_hsla(160,60%,40%,0.25)] dark:shadow-[0_8px_30px_-4px_hsla(160,80%,55%,0.2)]',
+    },
+  ];
 
   return (
     <div className="w-full max-w-6xl mx-auto p-3 md:p-6 pb-20 md:pb-6 space-y-4">
@@ -746,7 +795,7 @@ export default function MusicStudio() {
           }`}
         >
           <Music className="h-4 w-4" />
-          {language === 'ar' ? 'الموسيقى' : 'Music'}
+          {isArabic ? 'الموسيقى' : 'Music'}
         </button>
         <button
           onClick={() => setMainTab('video')}
@@ -757,9 +806,74 @@ export default function MusicStudio() {
           }`}
         >
           <Video className="h-4 w-4" />
-          {language === 'ar' ? 'الفيديو' : 'Video'}
+          {isArabic ? 'الفيديو' : 'Video'}
+        </button>
+        <button
+          onClick={() => setMainTab('image')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+            mainTab === 'image'
+              ? 'bg-primary text-primary-foreground shadow-md'
+              : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+          }`}
+        >
+          <ImageIcon className="h-4 w-4" />
+          {isArabic ? 'الصورة' : 'Image'}
         </button>
       </div>
+
+      {/* ─── Studio Landing Hub ─── */}
+      {mainTab === 'studio' && (
+        <div className="space-y-10 py-6 md:py-10">
+          {/* Hero */}
+          <div className="text-center space-y-4">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-br from-[#060541] to-purple-600 dark:from-purple-500 dark:to-blue-500 shadow-[0_4px_24px_hsla(260,70%,50%,0.35)] dark:shadow-[0_4px_24px_hsla(260,70%,65%,0.4)]">
+              <Sparkles className="h-7 w-7 text-white" />
+            </div>
+            <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-[#060541] via-purple-600 to-blue-600 dark:from-white dark:via-purple-200 dark:to-blue-300 bg-clip-text text-transparent leading-tight">
+              {isArabic ? 'استوديو وقتي الإبداعي' : 'Wakti Creative Studio'}
+            </h1>
+          </div>
+
+          {/* Feature Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6">
+            {studioCards.map((card) => (
+              <button
+                key={card.key}
+                onClick={() => setMainTab(card.key)}
+                className={`relative text-left p-6 rounded-3xl ${card.cardBg} ${card.shadow} border border-white/60 dark:border-white/[0.08] transition-transform duration-200 active:scale-[0.97]`}
+              >
+                {/* Icon pill */}
+                <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl ${card.iconBg} ${card.iconColor} shadow-lg mb-5`}>
+                  {card.icon}
+                </div>
+
+                {/* Title + arrow */}
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xl font-bold tracking-tight text-foreground">
+                    {isArabic ? card.titleAr : card.titleEn}
+                  </h3>
+                  <ArrowRight className={`h-5 w-5 text-muted-foreground/40 ${isArabic ? 'rotate-180' : ''}`} />
+                </div>
+
+                {/* Description */}
+                <p className="text-[13px] text-muted-foreground leading-relaxed">
+                  {isArabic ? card.descAr : card.descEn}
+                </p>
+              </button>
+            ))}
+          </div>
+
+          {/* Bottom tagline */}
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <Zap className="h-3.5 w-3.5 text-amber-500" />
+            <p className="text-[11px] text-muted-foreground/70 font-medium tracking-wide uppercase">
+              {isArabic
+                ? 'مدعوم بوقتي AI'
+                : 'Powered by Wakti AI'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Music Tab Content */}
       {mainTab === 'music' && (
@@ -801,6 +915,29 @@ export default function MusicStudio() {
             <AIVideomaker onSaveSuccess={() => setVideoMode('saved')} />
           ) : (
             <SavedVideosTab onCreate={() => setVideoMode('ai')} />
+          )}
+        </>
+      )}
+
+      {mainTab === 'image' && (
+        <>
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl md:text-2xl font-bold">{language === 'ar' ? 'الصورة' : 'Image'}</h1>
+            <div />
+          </div>
+          <nav className="flex gap-2 border-b border-border pb-2 flex-wrap">
+            <Button variant={imageMode === 'create' ? 'default' : 'outline'} size="sm" onClick={() => setImageMode('create')}>
+              {language === 'ar' ? 'إنشاء' : 'Create'}
+            </Button>
+            <Button variant={imageMode === 'saved' ? 'default' : 'outline'} size="sm" onClick={() => setImageMode('saved')}>
+              {language === 'ar' ? 'المحفوظات' : 'Saved'}
+            </Button>
+          </nav>
+
+          {imageMode === 'create' ? (
+            <StudioImageGenerator onSaveSuccess={() => setImageMode('saved')} />
+          ) : (
+            <SavedImagesTab onCreate={() => setImageMode('create')} />
           )}
         </>
       )}

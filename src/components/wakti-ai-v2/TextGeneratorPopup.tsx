@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { ImagePlus, Loader2, Globe } from 'lucide-react';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
+import { safeCopyToClipboard } from '@/utils/clipboardUtils';
 import DiagramsTab from './DiagramsTab';
 import PresentationTab from './PresentationTab';
 import TextTranslateTab from './TextTranslateTab';
@@ -511,27 +512,60 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     return '';
   };
 
+  const splitNotesFromText = useCallback((text: string): { mainText: string; notes: string } => {
+    let t = (text || '').trim();
+    let notes = '';
+
+    // Strip AI intro lines like "Here's a draft reply:", "Here's a cleaned-up response:", etc.
+    const introPattern = /^Here'?s?\s+(?:a\s+|the\s+|my\s+|your\s+)?(?:cleaned[- ]?up|improved|revised|corrected|rewritten|polished|professional|updated|draft|suggested|proposed|possible|formal|friendly|concise)\b[^\n]*:?\s*\n+/i;
+    const introMatch = t.match(introPattern);
+    if (introMatch) {
+      t = t.slice(introMatch[0].length).trim();
+    }
+
+    // Split off trailing notes section
+    const notesPatterns = [
+      /\n\s*Notes? on improvements?:?\s*\n/i,
+      /\n\s*Notes?:?\s*\n\s*-/i,
+      /\n\s*Improvements?:?\s*\n/i,
+      /\n\s*Changes? made:?\s*\n/i,
+      /\n\s*(?:Key )?changes?:?\s*\n\s*-/i,
+    ];
+    for (const pattern of notesPatterns) {
+      const match = t.search(pattern);
+      if (match > 0) {
+        notes = t.slice(match).trim();
+        t = t.slice(0, match).trim();
+        break;
+      }
+    }
+
+    return { mainText: t, notes };
+  }, []);
+
+  const parsedText = useMemo(() => splitNotesFromText(generatedText), [generatedText, splitNotesFromText]);
+
   const handleCopy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(generatedText || '');
+      await safeCopyToClipboard(parsedText.mainText || '');
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch { }
-  }, [generatedText]);
+  }, [parsedText.mainText]);
 
   const parsedGenerated = useMemo(() => {
-    const text = (generatedText || '').trim();
+    const text = parsedText.mainText;
     const subjectMatch = text.match(/\bSUBJECT:\s*(.+?)(?=\n\s*MESSAGE:|$)/is);
     const messageMatch = text.match(/\bMESSAGE:\s*([\s\S]+)/i);
     const subject = (subjectMatch?.[1] || '').trim();
     const message = (messageMatch?.[1] || '').trim();
     const hasFillFormat = !!(subject && message);
     return { hasFillFormat, subject, message };
-  }, [generatedText]);
+  }, [parsedText.mainText]);
 
   const copyWithFeedback = useCallback(async (text: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      await safeCopyToClipboard(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch { }
@@ -550,13 +584,13 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   }, [parsedGenerated, copyWithFeedback]);
 
   const handleCopyAll = useCallback(async () => {
-    await copyWithFeedback((generatedText || '').trim());
+    await copyWithFeedback(parsedText.mainText);
     setCopyMenuOpen(false);
-  }, [generatedText, copyWithFeedback]);
+  }, [parsedText.mainText, copyWithFeedback]);
 
   const handleShare = useCallback(async () => {
     try {
-      const text = (generatedText || '').trim();
+      const text = parsedText.mainText;
       if (!text) return;
       if (navigator.share) {
         await navigator.share({
@@ -572,7 +606,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       console.error('Share failed:', e);
       setError(e?.message || 'Share failed');
     }
-  }, [generatedText]);
+  }, [parsedText.mainText]);
 
   const handleGenerate = useCallback(async () => {
     if (!canGenerate) return;
@@ -1379,10 +1413,15 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                   id="generatedTextArea"
                   className={`w-full border rounded p-3 min-h-[220px] ${fieldAccent}`} 
                   readOnly 
-                  value={generatedText} 
+                  value={parsedText.mainText} 
                   title={language === 'ar' ? 'النص المُولد' : 'Generated text'}
                 />
               </div>
+              {parsedText.notes && (
+                <div className="rounded-lg border border-border/50 bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">{parsedText.notes}</p>
+                </div>
+              )}
               
               {/* Web Search Sources */}
               {webSearchSources.length > 0 && (

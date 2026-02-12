@@ -116,9 +116,7 @@ const InspectablePreview = ({
         console.log('[InspectablePreview] Inspector ready received');
         setInspectorReady(true);
         // If inspect mode is already on, re-send the toggle
-        if (elementSelectMode) {
-          sendToggleMessage(true);
-        }
+        sendToggleMessage(!!elementSelectMode);
       }
 
       // Mode change acknowledgment
@@ -345,7 +343,22 @@ root.render(
 
     // Add styles.css if not present
     if (!next["/styles.css"]) {
-      next["/styles.css"] = "@tailwind base;\n@tailwind components;\n@tailwind utilities;";
+      next["/styles.css"] = "/* Tailwind loaded via CDN */";
+    }
+
+    // Strip @tailwind directives and @apply rules from all CSS files
+    // Tailwind is loaded via CDN script tag, so these directives crash Sandpack's bundler
+    for (const [path, content] of Object.entries(next)) {
+      if (path.endsWith('.css') && typeof content === 'string') {
+        let cleaned = content;
+        // Remove @tailwind directives
+        cleaned = cleaned.replace(/@tailwind\s+(base|components|utilities)\s*;?\s*/g, '');
+        // Replace @apply with plain comment (can't be processed without PostCSS)
+        cleaned = cleaned.replace(/@apply\s+[^;]+;/g, '/* @apply removed - use inline classes */');
+        if (cleaned !== content) {
+          next[path] = cleaned;
+        }
+      }
     }
 
     // If project uses i18n, inject our pre-bundled version under the original package names
@@ -857,13 +870,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                     />
                   </SandpackErrorBoundary>
 
-                  {/* Visual Mode Indicator - pointer-events-none so it doesn't block clicks */}
-                  {elementSelectMode && (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-4 py-2 rounded-full text-[10px] md:text-xs font-medium shadow-lg flex items-center gap-2 animate-pulse z-50 whitespace-nowrap pointer-events-none">
-                      <MousePointer2 className="w-3.5 h-3.5" />
-                      Click to select
-                    </div>
-                  )}
+                  {/* Visual Mode Indicator removed - now handled in ProjectDetail.tsx */}
           </div>
 
           {/* INCREMENTAL FILE UPDATER - Prevents full rebuilds on code changes */}

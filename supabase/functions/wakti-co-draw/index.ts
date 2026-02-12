@@ -51,7 +51,15 @@ serve(async (req) => {
       base64Data = imageBase64.split(',')[1];
     }
 
+    // Detect if user is asking for colors
+    const lowerPrompt = prompt.toLowerCase();
+    const wantsColor = lowerPrompt.includes('color') || lowerPrompt.includes('colorize') || lowerPrompt.includes('colour') || lowerPrompt.includes('ألوان') || lowerPrompt.includes('لون');
+
     // Build the editing prompt
+    const colorInstruction = wantsColor
+      ? `\n\nCRITICAL COLOR INSTRUCTION: The user is requesting colors. You MUST output a FULLY COLORED version of the drawing. Convert ALL black-and-white lines into a vibrant, colorful illustration. Fill every region with appropriate, realistic colors. The sky should be blue, grass green, water blue, sun yellow, etc. Do NOT return a black-and-white or grayscale image. The output MUST have rich, vivid colors throughout the entire image.`
+      : '';
+
     const editingPrompt = `You are a collaborative drawing assistant. 
 The user has drawn something and wants you to modify or enhance it.
 
@@ -62,9 +70,9 @@ RULES:
 2. Keep the user's original drawing as the base/foundation
 3. When the user says "add X" - actually ADD that element
 4. When the user says "enhance" or "improve" - make the drawing look better
-5. When the user says "add colors" - colorize the existing drawing
+5. When the user says "add colors" or "colorize" - you MUST colorize the entire drawing with vivid, appropriate colors. Never return black-and-white when colors are requested.
 6. You CAN add new elements when requested
-7. The result should look like a natural extension of their drawing`;
+7. The result should look like a natural extension of their drawing${colorInstruction}`;
 
     // Call Gemini API directly for image editing
     const response = await fetch(

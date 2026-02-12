@@ -845,8 +845,8 @@ export default function ProjectDetail() {
   // Visual Edit Popover state
   const [showElementEditPopover, setShowElementEditPopover] = useState(false);
   
-  // Force Sandpack re-render key (incremented on revert)
-  const [sandpackKey, setSandpackKey] = useState(0);
+  // Force Sandpack re-render key (incremented on revert, starts with timestamp to force fresh mount)
+  const [sandpackKey, setSandpackKey] = useState(() => Date.now());
 
   // Visual Edit Mode keyboard shortcuts (Ctrl+Z undo, Ctrl+Shift+Z redo)
   useEffect(() => {
@@ -1008,7 +1008,7 @@ export default function ProjectDetail() {
     try {
       const { data, error } = await supabase
         .from('project_uploads')
-        .select('filename, storage_path, file_type')
+        .select('filename, storage_path, file_type, bucket_id')
         .eq('project_id', id);
       
       if (error) {
@@ -1018,7 +1018,8 @@ export default function ProjectDetail() {
 
       if (data && data.length > 0) {
         const assets = data.map((upload: any) => {
-          const { data: urlData } = supabase.storage.from('project-uploads').getPublicUrl(upload.storage_path);
+          const bucket = upload.bucket_id || 'project-assets';
+          const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(upload.storage_path);
           return {
             filename: upload.filename,
             url: urlData.publicUrl,
@@ -1420,6 +1421,32 @@ export default function ProjectDetail() {
 
       const backendContextForCreate = backendContext || await fetchBackendContext();
 
+      // FIX: Fetch uploaded assets (PDFs, images, docs) so the backend can extract text
+      // Previously, only plain URL strings were sent as `assets` but the PDF extraction
+      // engine requires `uploadedAssets` objects with {filename, url, file_type}.
+      let uploadedAssetsForCreate: Array<{ filename: string; url: string; file_type: string | null }> = [];
+      try {
+        const { data: uploads } = await supabase
+          .from('project_uploads')
+          .select('filename, storage_path, file_type, bucket_id')
+          .eq('project_id', id);
+        
+        if (uploads && uploads.length > 0) {
+          uploadedAssetsForCreate = uploads.map((upload: any) => {
+            const bucket = upload.bucket_id || 'project-assets';
+            const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(upload.storage_path);
+            return {
+              filename: upload.filename,
+              url: urlData.publicUrl,
+              file_type: upload.file_type
+            };
+          });
+          console.log('[ProjectDetail] Loaded', uploadedAssetsForCreate.length, 'uploaded assets for initial creation');
+        }
+      } catch (err) {
+        console.error('[ProjectDetail] Error fetching uploads for creation:', err);
+      }
+
       // Option A: start job then poll
       // NOTE: Complex multi-feature projects may cause 504 Gateway Timeout
       // The job still runs in the background, so we poll for the latest job status
@@ -1442,11 +1469,12 @@ export default function ProjectDetail() {
             prompt: finalPrompt,
             theme,
             assets,
-            images: imagesForBackend, // Include attached PDFs/images from chat
+            images: imagesForBackend,
+            uploadedAssets: uploadedAssetsForCreate, // PDFs/docs/images with filename+url+file_type for extraction
             userInstructions: customThemeInstructions,
             backendContext: backendContextForCreate || undefined,
             debugContext: debugContext?.getDebugContextForAgent?.(),
-            lang: searchParams.get('lang') || language, // Pass language for content generation
+            lang: searchParams.get('lang') || language,
           },
         });
 
@@ -1914,10 +1942,8 @@ export default function ProjectDetail() {
   };
 
   const refreshPreview = () => {
-    // Sandpack auto-refreshes when code changes
-    // Force a re-render by toggling the code
-    setCodeContent(prev => prev + ' ');
-    setTimeout(() => setCodeContent(prev => prev.trim()), 10);
+    // Force Sandpack to fully re-mount (picks up new inspector code, etc.)
+    setSandpackKey(prev => prev + 1);
   };
 
   // ============================================
@@ -8083,6 +8109,7 @@ ${fixInstructions}
                           const newMode = !elementSelectMode;
                           setElementSelectMode(newMode);
                           if (newMode) {
+                            setSandpackKey(prev => prev + 1);
                             // Auto-switch to preview on mobile when enabling Visual Editor
                             // Mobile is defined as < 768px (md breakpoint)
                             if (window.innerWidth < 768 && mobileTab !== 'preview') {
@@ -8435,7 +8462,7 @@ ${fixInstructions}
             }>
               {(codeContent || Object.keys(generatedFiles).length > 0) ? (
                 <div className="w-full h-full relative">
-                  <MatrixOverlay isVisible={aiEditing && leftPanelMode === 'code'} />
+                  <MatrixOverlay isVisible={aiEditing} />
                   <div className={cn(
                     "h-full w-full transition-all flex flex-col overflow-hidden mx-auto",
                     deviceView === 'desktop' && "max-w-full",
@@ -8475,18 +8502,18 @@ ${fixInstructions}
               )}
             </Suspense>
             
-            {/* Visual Edit Mode Active Banner - pointer-events-none except close button */}
+            {/* Visual Edit Mode Active Banner - thin top bar, no gradient fill */}
             {elementSelectMode && (
-              <div className="absolute top-[56px] left-0 right-0 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-2.5 text-sm flex items-center justify-between z-50 shadow-lg pointer-events-none">
+              <div className="absolute top-[56px] left-0 right-0 h-10 bg-indigo-600/90 backdrop-blur-sm text-white px-4 text-xs flex items-center justify-between z-50 shadow-md pointer-events-none">
                 <span className="flex items-center gap-2 font-medium">
-                  <MousePointer2 className="h-4 w-4 animate-pulse" />
+                  <MousePointer2 className="h-3.5 w-3.5 animate-pulse" />
                   {isRTL ? 'وضع التحرير المرئي - انقر على عنصر لتحريره' : 'Visual Edit Mode - Click an element to edit'}
                 </span>
                 <button 
                   onClick={() => setElementSelectMode(false)}
                   className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded-lg transition-colors pointer-events-auto"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5" />
                 </button>
               </div>
             )}

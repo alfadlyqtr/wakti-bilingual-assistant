@@ -6,10 +6,9 @@ import { EnhancedFrontendMemory, ConversationMetadata } from '@/services/Enhance
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { supabase } from '@/integrations/supabase/client';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
-import { ChatInput, ImageMode, ChatSubmode, ReplyContext } from '@/components/wakti-ai-v2/ChatInput';
+import { ChatInput, ChatSubmode, ReplyContext } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSidebar';
-import { DrawAfterBGCanvas, DrawAfterBGCanvasRef } from '@/components/wakti-ai/DrawAfterBGCanvas';
 import { cn } from '@/lib/utils';
 import { createPortal } from 'react-dom';
 import { useIsDesktop } from '@/hooks/use-mobile';
@@ -32,7 +31,6 @@ const WaktiAIV2 = () => {
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [inputReservePx, setInputReservePx] = useState<number>(120);
-  const [activeImageMode, setActiveImageMode] = useState<ImageMode>('text2image');
   const [chatSubmode, setChatSubmode] = useState<ChatSubmode>('chat');
   const [replyContext, setReplyContext] = useState<ReplyContext | null>(null);
 
@@ -41,8 +39,6 @@ const WaktiAIV2 = () => {
   const visionInFlightRef = useRef<boolean>(false);
   const lastTriggerRef = useRef<string>('chat');
   const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const drawCanvasRef = useRef<DrawAfterBGCanvasRef>(null);
-  const imageProgressIntervalRef = useRef<number | null>(null);
   const { language } = useTheme();
   const { showError } = useToastHelper();
   const { isDesktop } = useIsDesktop();
@@ -62,18 +58,6 @@ const WaktiAIV2 = () => {
       setPersonalTouch(null);
     }
   };
-
-  // Listen for quick prompt selection from DrawAfterBGCanvas
-  useEffect(() => {
-    const handleQuickPrompt = (event: CustomEvent) => {
-      setMessage(event.detail);
-    };
-
-    window.addEventListener('quickPromptSelected', handleQuickPrompt as EventListener);
-    return () => {
-      window.removeEventListener('quickPromptSelected', handleQuickPrompt as EventListener);
-    };
-  }, []);
 
   // Listen for quick action prompts from EnhancedQuickActions component
   useEffect(() => {
@@ -111,14 +95,6 @@ const WaktiAIV2 = () => {
     }
   }, [activeTrigger]);
 
-  const prevTriggerRef = useRef<string>(activeTrigger);
-  useEffect(() => {
-    const prev = prevTriggerRef.current;
-    prevTriggerRef.current = activeTrigger;
-    if (activeTrigger === 'image' && prev !== 'image') {
-      setActiveImageMode('text2image');
-    }
-  }, [activeTrigger]);
 
   useEffect(() => {
     loadUserProfile();
@@ -276,12 +252,6 @@ const WaktiAIV2 = () => {
     chatSubmodeParam?: ChatSubmode,
     replyContextParam?: ReplyContext
   ) => {
-    // Special handling for draw-after-bg mode - trigger generation in canvas
-    if (trigger === 'image' && imageMode === 'draw-after-bg') {
-      drawCanvasRef.current?.triggerManualGeneration();
-      return;
-    }
-
     if (!messageContent.trim() && (!attachedFiles || attachedFiles.length === 0)) {
       showError('Please enter a message or attach a file.');
       return;
@@ -362,10 +332,6 @@ const WaktiAIV2 = () => {
             { ...baseTool, id: `tool-1`, name: 'Web Search', icon: 'globe' },
             { ...baseTool, id: `tool-2`, name: 'AI Analysis', icon: 'brain', status: 'pending' as const }
           ];
-        case 'image':
-          return [
-            { ...baseTool, id: `tool-1`, name: 'Image Generation', icon: 'image' }
-          ];
         case 'vision':
           return [
             { ...baseTool, id: `tool-1`, name: 'Vision Analysis', icon: 'eye' },
@@ -389,92 +355,13 @@ const WaktiAIV2 = () => {
         startTime,
         toolsUsed: getInitialToolCalls().length,
         toolCalls: getInitialToolCalls(),
-        ...(trigger === 'image' ? { loadingStage: 'generating', progress: 0 } : {}),
         ...(trigger === 'search' && isYouTubeQuery ? { youtubeLoading: true } : {})
       },
     };
     setSessionMessages([...newMessages, assistantPlaceholder]);
 
     try {
-      if (trigger === 'image') {
-        // Simulated progress percentage (Option B) to improve UX while waiting for non-streaming image results
-        const clearImageProgress = () => {
-          if (imageProgressIntervalRef.current) {
-            window.clearInterval(imageProgressIntervalRef.current);
-            imageProgressIntervalRef.current = null;
-          }
-        };
-
-        // Clear any previous image progress timer
-        clearImageProgress();
-
-        let p = 0;
-        const setProgress = (next: number) => {
-          const v = Math.max(0, Math.min(100, Math.round(next)));
-          setSessionMessages(prev => prev.map(m => m.id === assistantMessageId
-            ? { ...m, metadata: { ...(m.metadata || {}), loading: true, loadingStage: 'generating', progress: v } }
-            : m
-          ));
-        };
-
-        setProgress(0);
-        imageProgressIntervalRef.current = window.setInterval(() => {
-          // Fast to ~15%, then slow to ~92%, then final jump to 100% when done.
-          let inc = 0;
-          if (p < 15) inc = 3 + Math.random() * 5;
-          else if (p < 60) inc = 1 + Math.random() * 2.5;
-          else if (p < 85) inc = Math.random() * 1.8;
-          else if (p < 92) inc = Math.random() * 0.8;
-          p = Math.min(92, p + inc);
-          setProgress(p);
-        }, 350);
-
-        // Non-streaming image pipeline (text2image / image2image / background-removal)
-        const response = await WaktiAIV2Service.sendMessage(
-          messageContent,
-          userProfile.id,
-          requestLanguage,
-          convId,
-          'text',
-          newMessages,
-          false,
-          trigger,
-          '',
-          attachedFiles,
-          controller.signal,
-          imageMode,
-          imageQuality
-        );
-
-        clearImageProgress();
-
-        const responseAny = response as any;
-        const resolvedImageUrl = responseAny?.imageUrl || responseAny?.url || responseAny?.image_url || responseAny?.imageURL;
-        const endTime = Date.now();
-        const thinkingDuration = Math.round((endTime - startTime) / 1000);
-        
-        const finalAssistantMessage: AIMessage = {
-          ...assistantPlaceholder,
-          content: response.response,
-          metadata: { 
-            loading: false, 
-            ...response.metadata,
-            thinkingDuration,
-            toolsUsed: 1,
-            toolCalls: [
-              { id: 'img-1', name: 'Image Generation', icon: 'image', status: 'completed', duration: thinkingDuration }
-            ]
-          },
-          intent: trigger,
-          ...(resolvedImageUrl ? { imageUrl: resolvedImageUrl } : {})
-        };
-
-        setSessionMessages(prev => {
-          const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
-          EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId);
-          return finalMessages;
-        });
-      } else if (inputType === 'vision') {
+      if (inputType === 'vision') {
         console.log('🔍 VISION PATH ENTERED:', { inputType, trigger, attachedFilesCount: attachedFiles?.length });
         let streamed = '';
         let streamMeta: any = {};
@@ -725,10 +612,6 @@ const WaktiAIV2 = () => {
         return finalMessages;
       });
     } finally {
-      if (imageProgressIntervalRef.current) {
-        window.clearInterval(imageProgressIntervalRef.current);
-        imageProgressIntervalRef.current = null;
-      }
       setIsLoading(false);
       
       // Clear safety timeout since request completed
@@ -857,10 +740,7 @@ const WaktiAIV2 = () => {
           paddingBottom: `${inputReservePx + 12}px`
         }}
       >
-        {activeTrigger === 'image' && activeImageMode === 'draw-after-bg' ? (
-          <DrawAfterBGCanvas ref={drawCanvasRef} prompt={message} />
-        ) : (
-          <ChatMessages
+        <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
             activeTrigger={activeTrigger}
@@ -878,7 +758,6 @@ const WaktiAIV2 = () => {
             isNewConversation={isNewConversation}
             onReplyToMessage={handleReplyToMessage}
           />
-        )}
       </div>
 
         {portalRoot ? createPortal(
@@ -894,7 +773,6 @@ const WaktiAIV2 = () => {
               onOpenConversations={() => setShowConversations(true)}
               activeTrigger={activeTrigger}
               onTriggerChange={setActiveTrigger}
-              onImageModeChange={setActiveImageMode}
               chatSubmode={chatSubmode}
               onChatSubmodeChange={setChatSubmode}
               onAddTalkMessage={handleAddTalkMessage}
@@ -917,7 +795,6 @@ const WaktiAIV2 = () => {
               onOpenConversations={() => setShowConversations(true)}
               activeTrigger={activeTrigger}
               onTriggerChange={setActiveTrigger}
-              onImageModeChange={setActiveImageMode}
               chatSubmode={chatSubmode}
               onChatSubmodeChange={setChatSubmode}
               onAddTalkMessage={handleAddTalkMessage}

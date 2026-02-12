@@ -18,6 +18,7 @@ import { SearchResultActions } from './SearchResultActions';
 // are for WAKTI AI Coder (ProjectDetail.tsx), not for the main WAKTI AI assistant
 import { supabase } from '@/integrations/supabase/client';
 import { getSelectedVoices } from './TalkBackSettings';
+import { safeCopyToClipboard } from '@/utils/clipboardUtils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -1251,7 +1252,6 @@ export function ChatMessages({
       if (message.inputType === 'voice') {
         return '🎤 Voice';
       }
-      if (currentActiveTrigger === 'image') return '🎨 Image';
       if (currentActiveTrigger === 'search') {
         if (message.content?.trim().toLowerCase().startsWith('yt:')) return 'YouTube';
         return '🔍 Search';
@@ -2238,7 +2238,7 @@ export function ChatMessages({
                             {/* Copy Button - More Visible */}
                             <button
                               onClick={() => {
-                                navigator.clipboard.writeText(message.content);
+                                safeCopyToClipboard(message.content);
                                 toast.success(language === 'ar' ? 'تم النسخ!' : 'Copied!');
                               }}
                               className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"

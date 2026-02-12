@@ -26,7 +26,10 @@ import { TRService } from '@/services/trService';
 type VoiceState = 'idle' | 'connecting' | 'greeting' | 'listening' | 'thinking' | 'confirming' | 'done' | 'error';
 
 /** What the voice input was detected as */
-type DetectedMode = 'calendar' | 'task' | 'reminder';
+type DetectedMode = 'calendar' | 'task' | 'reminder' | 'unrecognized';
+
+/** Action intents that operate on existing items (not create) */
+type ActionIntent = 'complete_task' | 'snooze_reminder' | 'reschedule_task' | 'reschedule_reminder';
 
 interface ExtractedEntry {
   title: string;
@@ -42,6 +45,14 @@ interface ExtractedEntry {
   priority?: 'normal' | 'high' | 'urgent';
   /** Task-specific: subtask titles extracted from transcript */
   subtasks?: string[];
+  /** Action intent (operate on existing item, not create) */
+  actionIntent?: ActionIntent;
+  /** The target item ID found by fuzzy match */
+  targetItemId?: string;
+  /** The matched item title (for display) */
+  targetItemTitle?: string;
+  /** Snooze minutes (for snooze_reminder) */
+  snoozeMinutes?: number;
 }
 
 interface VoiceAssistantProps {
@@ -265,14 +276,18 @@ function cleanTitle(rawTitle: string, transcript: string): string {
   // minutes" where pickPrimaryClause splits on comma and loses the command part.
   let fullCleaned = transcript.trim();
   const commandPatterns = [
-    /^(create|add|make|set|new|put)\s+(a\s+)?(calendar\s+)?(entry|event|appointment|reminder|task|subtask|todo)?[,.]?\s*/i,
+    /^(create|add|make|set|new|put)\s+(a\s+)?(calendar\s+)?(entry|event|appointment|reminder|task|subtask|todo)\s*(to|for|about)?[,.]?\s*/i,
     /^calendar\s+entry[,.]?\s*/i,
-    /^(أضف|أنشئ|سجل|اعمل)\s+(موعد|حدث|تذكير|مهمة)?[,.]?\s*/i,
-    /^(create|add|new|set)\s+(a\s+)?(task|reminder|todo)[,.]?\s*/i,
+    /^(أضف|أنشئ|سجل|اعمل)\s+(موعد|حدث|تذكير|مهمة)?\s*(لـ?|عن|أن)?[,.]?\s*/i,
+    /^(create|add|new|set)\s+(a\s+)?(task|reminder|todo)\s*(to|for|about)?[,.]?\s*/i,
     /^(remind\s+me\s+(to|about)?)[,.]?\s*/i,
-    /^(ذكرني\s*(بـ?|أن)?)[,.]?\s*/i,
+    /^(ذكرني\s*(بـ?|أن|إني)?)[,.]?\s*/i,
     /^(set\s+(the\s+|a\s+)?reminder\s*(to|for)?)[,.]?\s*/i,
     /^(I'll remind you\s+(to)?)[,.]?\s*/i,
+    /^(i\s+need\s+to)[,.]?\s*/i,
+    /^(i\s+want\s+to)[,.]?\s*/i,
+    /^(please\s+)?(remind|remember)\s+(me\s+)?(to|about)?[,.]?\s*/i,
+    /^(don'?t\s+let\s+me\s+forget\s+(to)?)[,.]?\s*/i,
   ];
   for (const pattern of commandPatterns) {
     fullCleaned = fullCleaned.replace(pattern, '');
@@ -327,6 +342,9 @@ function cleanTitle(rawTitle: string, transcript: string): string {
 
   // Remove filler words
   title = title.replace(/\b(on|at|for|في|يوم|will|add|the|a|an)\b/gi, '');
+  
+  // Remove dangling leading prepositions/connectors left after stripping
+  title = title.replace(/^\s*(to|for|about|that|which|and|or|من|عن|أن|إن)\s+/i, '');
   
   // Clean up extra spaces and punctuation
   title = title.replace(/^[,.:;\s]+/, '').replace(/[,.:;\s]+$/, '').replace(/\s+/g, ' ').trim();
@@ -457,13 +475,128 @@ function extractTaskDetails(transcript: string): { title: string; subtasks: stri
   return { title, subtasks: cleanSubtasks };
 }
 
+// ─── Fuzzy title matching for action intents ─────────────────────────────────
+
+function fuzzyMatch(needle: string, haystack: string): number {
+  const a = needle.toLowerCase().trim();
+  const b = haystack.toLowerCase().trim();
+  if (a === b) return 1;
+  if (b.includes(a) || a.includes(b)) return 0.8;
+  // Simple word overlap score
+  const aWords = a.split(/\s+/);
+  const bWords = b.split(/\s+/);
+  const overlap = aWords.filter(w => bWords.some(bw => bw.includes(w) || w.includes(bw))).length;
+  return overlap / Math.max(aWords.length, bWords.length);
+}
+
+function extractTargetName(transcript: string, actionKeywords: string[]): string {
+  let cleaned = transcript.trim();
+  // Strip action keywords from the transcript to get the target item name
+  for (const kw of actionKeywords) {
+    cleaned = cleaned.replace(new RegExp(kw, 'gi'), '');
+  }
+  // Strip date/time phrases
+  cleaned = cleaned.replace(/\b(today|tomorrow|day after tomorrow)\b/gi, '');
+  cleaned = cleaned.replace(/\b(next\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/gi, '');
+  cleaned = cleaned.replace(/\b(at|@)\s*\d{1,2}(:\d{2})?\s*(am|pm|a\.?m\.?|p\.?m\.?)?\b/gi, '');
+  cleaned = cleaned.replace(/\b\d{1,2}\s*(am|pm|a\.?m\.?|p\.?m\.?)\b/gi, '');
+  cleaned = cleaned.replace(/\b(in|after)\s+\d{1,3}\s*(minute|minutes|min|mins)\b/gi, '');
+  cleaned = cleaned.replace(/\b(in|after)\s+(one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty)\s+minutes?\b/gi, '');
+  cleaned = cleaned.replace(/\bبعد\s+\d{1,3}\s*دقائق?\b/gi, '');
+  cleaned = cleaned.replace(/\b(اليوم|غدا|غداً|بكرة|بكره|بعد غد)\b/g, '');
+  // Strip filler
+  cleaned = cleaned.replace(/\b(the|my|a|an|to|for|about)\b/gi, '');
+  cleaned = cleaned.replace(/^[,.:;\s'"]+/, '').replace(/[,.:;\s'"]+$/, '').replace(/\s+/g, ' ').trim();
+  return cleaned;
+}
+
+function extractSnoozeMinutes(transcript: string): number {
+  const lower = transcript.toLowerCase();
+  // "snooze 10 minutes" / "snooze for 5 min"
+  const numMatch = lower.match(/\b(\d{1,3})\s*(minute|minutes|min|mins)\b/);
+  if (numMatch) return Math.max(1, Math.min(24 * 60, parseInt(numMatch[1], 10)));
+  // "snooze for five minutes"
+  const wordMap: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, fifteen: 15, twenty: 20, thirty: 30 };
+  const wordMatch = lower.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty|thirty)\s*(minute|minutes|min|mins)\b/);
+  if (wordMatch && wordMap[wordMatch[1]]) return wordMap[wordMatch[1]];
+  // Default snooze: 10 minutes
+  return 10;
+}
+
 // ─── Main extraction: detects mode (calendar / task / reminder) ──────────────
+
+const ACTION_INTENTS: ActionIntent[] = ['complete_task', 'snooze_reminder', 'reschedule_task', 'reschedule_reminder'];
+
+function isActionIntent(intent: string | null): intent is ActionIntent {
+  return intent !== null && ACTION_INTENTS.includes(intent as ActionIntent);
+}
 
 function extractEntryFromTranscript(transcript: string): ExtractedEntry {
   // Detect task/reminder intent using the schema mapper
   const trIntent = detectTRIntent(transcript);
+
+  // ── Action intents (operate on existing items) ──
+  if (isActionIntent(trIntent)) {
+    const actionKeywords: Record<ActionIntent, string[]> = {
+      complete_task: ['complete task', 'mark done', 'finish task', 'task done', 'mark complete', 'أكمل المهمة', 'علّم مكتملة', 'أنهِ المهمة', 'المهمة تمت'],
+      snooze_reminder: ['snooze reminder', 'snooze my reminder', 'delay reminder', 'postpone reminder', 'snooze', 'أجّل التذكير', 'أخّر التذكير', 'سنوز', 'تأجيل التذكير'],
+      reschedule_task: ['reschedule task', 'move task', 'change task date', 'postpone task', 'delay task', 'أعد جدولة المهمة', 'انقل المهمة', 'غيّر موعد المهمة', 'أجّل المهمة'],
+      reschedule_reminder: ['reschedule reminder', 'move reminder', 'change reminder', 'change reminder time', 'move my reminder', 'أعد جدولة التذكير', 'انقل التذكير', 'غيّر موعد التذكير'],
+    };
+
+    const targetName = extractTargetName(transcript, actionKeywords[trIntent]);
+    const mode: DetectedMode = (trIntent === 'complete_task' || trIntent === 'reschedule_task') ? 'task' : 'reminder';
+
+    // For reschedule intents, extract the new date/time
+    const { date } = parseDateFromText(transcript);
+    const { time } = extractTimeFromText(transcript);
+    const effectiveDate = date || format(new Date(), 'yyyy-MM-dd');
+
+    const snoozeMinutes = trIntent === 'snooze_reminder' ? extractSnoozeMinutes(transcript) : undefined;
+
+    return {
+      title: targetName || '(searching...)',
+      date: effectiveDate,
+      time: time || undefined,
+      mode,
+      actionIntent: trIntent,
+      snoozeMinutes,
+      needsDateConfirm: (trIntent === 'reschedule_task' || trIntent === 'reschedule_reminder') && !date,
+      needsTimeConfirm: trIntent === 'reschedule_reminder' && !time,
+      clarificationQuestion:
+        (trIntent === 'reschedule_task' || trIntent === 'reschedule_reminder') && !date
+          ? 'When should this be rescheduled to?'
+          : undefined,
+    };
+  }
+
+  // ── Guard: detect questions / non-actionable speech ──
+  // If no intent was matched, check if this is a question or general query
+  // that should NOT be treated as a calendar entry.
+  if (!trIntent) {
+    const lower = transcript.toLowerCase().trim();
+    const isQuestion =
+      /^(do i|can i|what|when|where|how|why|who|which|is there|are there|have i|did i|will i|could|should|would)\b/i.test(lower) ||
+      /\?$/.test(lower.trim()) ||
+      /^(هل|ما|ماذا|متى|أين|كيف|لماذا|من|أي|عندي|هل عندي|كم)\b/.test(lower);
+
+    // Also check: does it contain ANY calendar/task/reminder creation keywords?
+    const hasCreateKeywords =
+      /\b(appointment|meeting|event|call|doctor|dentist|lunch|dinner|breakfast|gym|class|flight|trip|party|birthday|wedding|interview|deadline)\b/i.test(lower) ||
+      /\b(موعد|اجتماع|حدث|مكالمة|طبيب|غداء|عشاء|فطور|رحلة|حفلة|عيد ميلاد|مقابلة)\b/.test(lower);
+
+    if (isQuestion && !hasCreateKeywords) {
+      return {
+        title: transcript.trim(),
+        date: format(new Date(), 'yyyy-MM-dd'),
+        mode: 'unrecognized',
+      };
+    }
+  }
+
+  // ── Create intents (original flow) ──
   let mode: DetectedMode = 'calendar';
-  if (trIntent === 'create_task' || trIntent === 'add_subtask' || trIntent === 'complete_task' || trIntent === 'complete_subtask' || trIntent === 'share_task') {
+  if (trIntent === 'create_task' || trIntent === 'add_subtask' || trIntent === 'share_task') {
     mode = 'task';
   } else if (trIntent === 'schedule_reminder') {
     mode = 'reminder';
@@ -682,53 +815,143 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
 
         // Extract entry from transcript
         const entry = extractEntryFromTranscript(text);
-        setExtractedEntry(entry);
-        
-        // Voice confirmation: AI speaks back what it heard
-        if (dcRef.current?.readyState === 'open') {
-          const needsClarification = Boolean(entry.clarificationQuestion);
-          const modeLabel = entry.mode === 'task' ? (language === 'ar' ? 'مهمة' : 'task')
-            : entry.mode === 'reminder' ? (language === 'ar' ? 'تذكير' : 'reminder')
-            : (language === 'ar' ? 'إدخال تقويم' : 'calendar entry');
-          const isTR = entry.mode === 'task' || entry.mode === 'reminder';
-          const confirmMsg = needsClarification
-            ? (language === 'ar'
-                ? `تمام — ${modeLabel} بس محتاج أتأكد. افتح التأكيد وعدّل التاريخ/الوقت.`
-                : `Got it — creating a ${modeLabel}. I just need to confirm some details.`)
-            : isTR
-              ? (language === 'ar'
-                  ? 'تمام. راجع التفاصيل واضغط تأكيد.'
-                  : 'Okay. Please review and confirm.')
-              : (language === 'ar'
-                  ? `فهمت ${modeLabel}: ${entry.title}`
-                  : `Got it, ${modeLabel}: ${entry.title}`);
-          
-          intentionalSpeechRef.current = true;
-          setAiTranscript('');
 
-          // Allow audio playback ONLY for our intentional confirmation line
-          setRemoteAudioMuted(false);
-
-          // Cancel any auto-response that may have started despite pre-silence
-          try { dcRef.current.send(JSON.stringify({ type: 'response.cancel' })); } catch {}
-          
-          // Re-enable audio modality (was set to text-only in stopListening)
-          // and give the AI our exact confirmation script
-          dcRef.current.send(JSON.stringify({
-            type: 'session.update',
-            session: {
-              modalities: ['text', 'audio'],
-              instructions: `Say EXACTLY this and nothing else: "${confirmMsg}"`
+        // ── Handle unrecognized speech (questions, general queries) ──
+        if (entry.mode === 'unrecognized') {
+          setTranscript(text);
+          setExtractedEntry(null);
+          const helpMsg = language === 'ar'
+            ? 'عذراً، أقدر أساعدك بإنشاء مهام وتذكيرات ومواعيد، أو إكمال مهمة وتأجيل تذكير. جرّب قول: أنشئ مهمة أو ذكرني.'
+            : "Sorry, I can help you create tasks, reminders, and calendar entries, or complete a task and snooze a reminder. Try saying: create a task, or remind me.";
+          if (dcRef.current?.readyState === 'open') {
+            intentionalSpeechRef.current = true;
+            setAiTranscript('');
+            setRemoteAudioMuted(false);
+            try { dcRef.current.send(JSON.stringify({ type: 'response.cancel' })); } catch {}
+            dcRef.current.send(JSON.stringify({
+              type: 'session.update',
+              session: {
+                modalities: ['text', 'audio'],
+                instructions: `Say EXACTLY this and nothing else: "${helpMsg}"`
+              }
+            }));
+            dcRef.current.send(JSON.stringify({ type: 'response.create' }));
+          }
+          // Show briefly then go back to idle after the AI finishes speaking
+          setTimeout(() => {
+            if (voiceStateRef.current === 'thinking') {
+              setVoiceState('idle');
             }
-          }));
-          dcRef.current.send(JSON.stringify({ type: 'response.create' }));
-          
-          // After AI speaks, show confirming state
-          // The response.done handler will NOT reset to idle because we have extractedEntry
+          }, 5000);
+          break;
         }
-        
-        // Show confirming UI immediately (AI speaks in background)
-        setVoiceState('confirming');
+
+        // ── Resolve action intents: fetch items and fuzzy-match ──
+        const resolveAndConfirm = async (resolvedEntry: ExtractedEntry) => {
+          if (resolvedEntry.actionIntent) {
+            try {
+              const isTaskAction = resolvedEntry.actionIntent === 'complete_task' || resolvedEntry.actionIntent === 'reschedule_task';
+              const items = isTaskAction
+                ? await TRService.getTasks()
+                : await TRService.getReminders();
+
+              // For complete_task, only match incomplete tasks
+              const candidates = isTaskAction
+                ? (items as any[]).filter((t: any) => !t.completed)
+                : items;
+
+              if (candidates.length > 0 && resolvedEntry.title && resolvedEntry.title !== '(searching...)') {
+                // Fuzzy match
+                let bestScore = 0;
+                let bestItem: any = null;
+                for (const item of candidates) {
+                  const score = fuzzyMatch(resolvedEntry.title, item.title);
+                  if (score > bestScore) {
+                    bestScore = score;
+                    bestItem = item;
+                  }
+                }
+                if (bestItem && bestScore >= 0.3) {
+                  resolvedEntry.targetItemId = bestItem.id;
+                  resolvedEntry.targetItemTitle = bestItem.title;
+                  resolvedEntry.title = bestItem.title;
+                } else {
+                  // No good match — pick the most recent item as fallback
+                  const fallback = candidates[0];
+                  resolvedEntry.targetItemId = fallback.id;
+                  resolvedEntry.targetItemTitle = fallback.title;
+                  resolvedEntry.title = fallback.title;
+                }
+              } else if (candidates.length > 0) {
+                // No target name spoken — use most recent
+                const fallback = candidates[0];
+                resolvedEntry.targetItemId = fallback.id;
+                resolvedEntry.targetItemTitle = fallback.title;
+                resolvedEntry.title = fallback.title;
+              } else {
+                resolvedEntry.clarificationQuestion = isTaskAction
+                  ? 'No open tasks found.'
+                  : 'No reminders found.';
+              }
+            } catch (err) {
+              console.error('[VoiceAssistant] Failed to fetch items for action:', err);
+              resolvedEntry.clarificationQuestion = 'Could not load your items. Please try again.';
+            }
+          }
+
+          setExtractedEntry(resolvedEntry);
+
+          // Build confirmation message
+          let confirmMsg: string;
+          if (resolvedEntry.actionIntent) {
+            const itemName = resolvedEntry.targetItemTitle || resolvedEntry.title;
+            const actionLabels: Record<ActionIntent, { en: string; ar: string }> = {
+              complete_task: { en: `Mark "${itemName}" as done?`, ar: `علّم "${itemName}" مكتملة؟` },
+              snooze_reminder: { en: `Snooze "${itemName}" for ${resolvedEntry.snoozeMinutes || 10} minutes?`, ar: `أجّل "${itemName}" ${resolvedEntry.snoozeMinutes || 10} دقائق؟` },
+              reschedule_task: { en: `Reschedule "${itemName}"?`, ar: `أعد جدولة "${itemName}"؟` },
+              reschedule_reminder: { en: `Reschedule "${itemName}"?`, ar: `أعد جدولة "${itemName}"؟` },
+            };
+            const label = actionLabels[resolvedEntry.actionIntent];
+            confirmMsg = language === 'ar' ? label.ar : label.en;
+          } else {
+            const needsClarification = Boolean(resolvedEntry.clarificationQuestion);
+            const modeLabel = resolvedEntry.mode === 'task' ? (language === 'ar' ? 'مهمة' : 'task')
+              : resolvedEntry.mode === 'reminder' ? (language === 'ar' ? 'تذكير' : 'reminder')
+              : (language === 'ar' ? 'إدخال تقويم' : 'calendar entry');
+            const isTR = resolvedEntry.mode === 'task' || resolvedEntry.mode === 'reminder';
+            confirmMsg = needsClarification
+              ? (language === 'ar'
+                  ? `تمام — ${modeLabel} بس محتاج أتأكد. افتح التأكيد وعدّل التاريخ/الوقت.`
+                  : `Got it — creating a ${modeLabel}. I just need to confirm some details.`)
+              : isTR
+                ? (language === 'ar'
+                    ? 'تمام. راجع التفاصيل واضغط تأكيد.'
+                    : 'Okay. Please review and confirm.')
+                : (language === 'ar'
+                    ? `فهمت ${modeLabel}: ${resolvedEntry.title}`
+                    : `Got it, ${modeLabel}: ${resolvedEntry.title}`);
+          }
+
+          // Voice confirmation
+          if (dcRef.current?.readyState === 'open') {
+            intentionalSpeechRef.current = true;
+            setAiTranscript('');
+            setRemoteAudioMuted(false);
+            try { dcRef.current.send(JSON.stringify({ type: 'response.cancel' })); } catch {}
+            dcRef.current.send(JSON.stringify({
+              type: 'session.update',
+              session: {
+                modalities: ['text', 'audio'],
+                instructions: `Say EXACTLY this and nothing else: "${confirmMsg}"`
+              }
+            }));
+            dcRef.current.send(JSON.stringify({ type: 'response.create' }));
+          }
+
+          setVoiceState('confirming');
+        };
+
+        resolveAndConfirm(entry);
         break;
       }
 
@@ -1147,6 +1370,33 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
     cancelListening();
   }, [cancelListening]);
 
+  // ─── Document-level safety net for mobile pointer release ──────────────
+  // If the DOM element swaps mid-hold (React re-render), the button's own
+  // pointerup may never fire. This catches that case.
+  useEffect(() => {
+    const onDocPointerUp = (e: PointerEvent) => {
+      if (holdPointerIdRef.current === null) return;
+      if (e.pointerId !== holdPointerIdRef.current) return;
+      console.log('[VoiceAssistant] Document-level pointerup safety net fired');
+      holdPointerIdRef.current = null;
+      if (holdCanceledRef.current) return;
+      stopListening();
+    };
+    const onDocPointerCancel = (e: PointerEvent) => {
+      if (holdPointerIdRef.current === null) return;
+      if (e.pointerId !== holdPointerIdRef.current) return;
+      console.log('[VoiceAssistant] Document-level pointercancel safety net fired');
+      holdPointerIdRef.current = null;
+      cancelListening();
+    };
+    document.addEventListener('pointerup', onDocPointerUp, true);
+    document.addEventListener('pointercancel', onDocPointerCancel, true);
+    return () => {
+      document.removeEventListener('pointerup', onDocPointerUp, true);
+      document.removeEventListener('pointercancel', onDocPointerCancel, true);
+    };
+  }, [stopListening, cancelListening]);
+
   // Legacy toggle for retry button in confirming state
   const retryListening = useCallback(() => {
     setTranscript('');
@@ -1162,11 +1412,72 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
     if (isSavingRef.current) return;
 
     const mode = extractedEntry.mode || 'calendar';
-    console.log(`[VoiceAssistant] Saving ${mode}:`, extractedEntry);
+    const actionIntent = extractedEntry.actionIntent;
+    console.log(`[VoiceAssistant] ${actionIntent ? 'Executing action' : 'Saving'} ${actionIntent || mode}:`, extractedEntry);
 
     try {
       isSavingRef.current = true;
       setIsSaving(true);
+
+      // ── Action intents (operate on existing items) ──
+      if (actionIntent && extractedEntry.targetItemId) {
+        const itemId = extractedEntry.targetItemId;
+        let successMsg = '';
+
+        switch (actionIntent) {
+          case 'complete_task':
+            await TRService.updateTask(itemId, { completed: true, completed_at: new Date().toISOString() });
+            successMsg = language === 'ar' ? 'تم! المهمة مكتملة.' : 'Done! Task completed.';
+            console.log('[VoiceAssistant] Task completed:', itemId);
+            break;
+
+          case 'snooze_reminder':
+            await TRService.snoozeReminder(itemId, extractedEntry.snoozeMinutes || 10);
+            successMsg = language === 'ar'
+              ? `تم تأجيل التذكير ${extractedEntry.snoozeMinutes || 10} دقائق.`
+              : `Reminder snoozed for ${extractedEntry.snoozeMinutes || 10} minutes.`;
+            console.log('[VoiceAssistant] Reminder snoozed:', itemId);
+            break;
+
+          case 'reschedule_task':
+            await TRService.updateTask(itemId, {
+              due_date: extractedEntry.date,
+              ...(extractedEntry.time ? { due_time: extractedEntry.time } : {}),
+            });
+            successMsg = language === 'ar' ? 'تم إعادة جدولة المهمة.' : 'Task rescheduled.';
+            console.log('[VoiceAssistant] Task rescheduled:', itemId);
+            break;
+
+          case 'reschedule_reminder':
+            await TRService.updateReminder(itemId, {
+              due_date: extractedEntry.date,
+              ...(extractedEntry.time ? { due_time: extractedEntry.time } : {}),
+            });
+            successMsg = language === 'ar' ? 'تم إعادة جدولة التذكير.' : 'Reminder rescheduled.';
+            console.log('[VoiceAssistant] Reminder rescheduled:', itemId);
+            break;
+        }
+
+        // Speak success
+        try {
+          if (dcRef.current?.readyState === 'open' && successMsg) {
+            intentionalSpeechRef.current = true;
+            dcRef.current.send(JSON.stringify({
+              type: 'session.update',
+              session: { instructions: `Say EXACTLY this and nothing else: "${successMsg}"` },
+            }));
+            dcRef.current.send(JSON.stringify({ type: 'response.create' }));
+          }
+        } catch {}
+
+        setVoiceState('done');
+        setTimeout(() => { handleClose(); }, 1400);
+        isSavingRef.current = false;
+        setIsSaving(false);
+        return;
+      }
+
+      // ── Create intents (original flow) ──
       if (mode === 'task') {
         const payload = mapTaskDraftToPayload({
           title: extractedEntry.title,
@@ -1431,43 +1742,77 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                   </motion.div>
                 )}
 
-                {/* Idle state — hold mic to speak */}
-                {voiceState === 'idle' && (
+                {/* Idle + Listening — single persistent mic button (never unmounts mid-hold) */}
+                {(voiceState === 'idle' || voiceState === 'listening') && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     className="flex flex-col items-center gap-4"
                   >
                     <div className="relative">
+                      {/* Pulse ring — only visible while listening */}
+                      <AnimatePresence>
+                        {voiceState === 'listening' && (
+                          <motion.div
+                            key="pulse"
+                            initial={{ opacity: 0 }}
+                            animate={{ scale: [1, 1.3, 1], opacity: [0.4, 0.1, 0.4] }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 1.5, repeat: Infinity }}
+                            className="absolute inset-0 rounded-full pointer-events-none"
+                            style={{
+                              background: isDark
+                                ? 'radial-gradient(circle, hsla(210,100%,65%,0.3) 0%, transparent 70%)'
+                                : 'radial-gradient(circle, hsla(243,84%,14%,0.2) 0%, transparent 70%)',
+                              width: '120px',
+                              height: '120px',
+                              top: '-20px',
+                              left: '-20px',
+                            }}
+                          />
+                        )}
+                      </AnimatePresence>
                       <motion.button
                         ref={micBtnRef}
-                        onPointerDown={(e) => { e.preventDefault(); handleHoldStart(e); }}
+                        onPointerDown={(e) => { handleHoldStart(e); }}
                         onPointerMove={(e) => { handleHoldMove(e); }}
                         onPointerUp={(e) => { handleHoldEnd(e); }}
                         onPointerCancel={(e) => { handleHoldCancel(e); }}
                         onContextMenu={(e) => e.preventDefault()}
-                        aria-label={t('Hold to speak', 'اضغط مع الاستمرار للتحدث')}
+                        aria-label={voiceState === 'listening' ? t('Release to stop', 'ارفع إصبعك للتوقف') : t('Hold to speak', 'اضغط مع الاستمرار للتحدث')}
                         className="relative z-10 rounded-full h-20 w-20 flex items-center justify-center select-none"
                         style={{
                           background: isDark
                             ? 'linear-gradient(135deg, hsl(210,100%,65%) 0%, hsl(280,70%,65%) 100%)'
                             : 'linear-gradient(135deg, #060541 0%, hsl(260,70%,25%) 100%)',
                           boxShadow: isDark
-                            ? '0 0 20px hsla(210,100%,65%,0.3)'
-                            : '0 4px 16px hsla(243,84%,14%,0.2)',
+                            ? (voiceState === 'listening'
+                              ? '0 0 30px hsla(210,100%,65%,0.5)'
+                              : '0 0 20px hsla(210,100%,65%,0.3)')
+                            : (voiceState === 'listening'
+                              ? '0 4px 20px hsla(243,84%,14%,0.3)'
+                              : '0 4px 16px hsla(243,84%,14%,0.2)'),
                           WebkitTouchCallout: 'none',
                           WebkitUserSelect: 'none',
-                          touchAction: 'manipulation',
+                          touchAction: 'none',
                         }}
                       >
                         <Mic className="h-8 w-8 text-white" />
                       </motion.button>
                     </div>
                     <p className="text-sm" style={{ color: isDark ? '#858384' : '#606062' }}>
-                      {t('Hold mic to speak', 'اضغط مع الاستمرار للتحدث')}
+                      {voiceState === 'listening'
+                        ? t('Listening... speak now', 'أستمع... تحدث الآن')
+                        : t('Hold mic to speak', 'اضغط مع الاستمرار للتحدث')}
                     </p>
+                    {voiceState === 'listening' && transcript && (
+                      <p className="text-sm text-center mt-2" style={{ color: isDark ? '#f2f2f2' : '#060541' }}>
+                        "{transcript}"
+                      </p>
+                    )}
                     
-                    {/* Example hints */}
+                    {/* Example hints — only in idle */}
+                    {voiceState === 'idle' && (
                     <div 
                       className="mt-2 px-4 py-2 rounded-lg text-center space-y-2"
                       style={{
@@ -1499,63 +1844,15 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                           {t('"Remind me to call mom at 5pm"', '"ذكرني أتصل بأمي الساعة 5 مساءً"')}
                         </p>
                       </div>
+                      <div>
+                        <p className="text-xs mb-0.5" style={{ color: isDark ? '#858384' : '#606062' }}>
+                          {t('⚡ Quick Actions', '⚡ إجراءات سريعة')}
+                        </p>
+                        <p className="text-xs italic" style={{ color: isDark ? '#f2f2f2' : '#060541' }}>
+                          {t('"Mark buy groceries done" · "Snooze reminder 10 min" · "Move task to tomorrow"', '"علّم شراء البقالة مكتملة" · "أجّل التذكير 10 دقائق" · "انقل المهمة لبكرة"')}
+                        </p>
+                      </div>
                     </div>
-                  </motion.div>
-                )}
-
-                {/* Listening state — user is holding the button */}
-                {voiceState === 'listening' && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex flex-col items-center gap-4"
-                  >
-                    {/* Pulse ring */}
-                    <div className="relative">
-                      <motion.div
-                        animate={{ scale: [1, 1.3, 1], opacity: [0.4, 0.1, 0.4] }}
-                        transition={{ duration: 1.5, repeat: Infinity }}
-                        className="absolute inset-0 rounded-full"
-                        style={{
-                          background: isDark
-                            ? 'radial-gradient(circle, hsla(210,100%,65%,0.3) 0%, transparent 70%)'
-                            : 'radial-gradient(circle, hsla(243,84%,14%,0.2) 0%, transparent 70%)',
-                          width: '120px',
-                          height: '120px',
-                          top: '-20px',
-                          left: '-20px',
-                        }}
-                      />
-                      <motion.button
-                        ref={micBtnRef}
-                        onPointerMove={(e) => { handleHoldMove(e); }}
-                        onPointerUp={(e) => { handleHoldEnd(e); }}
-                        onPointerCancel={(e) => { handleHoldCancel(e); }}
-                        onContextMenu={(e) => e.preventDefault()}
-                        aria-label={t('Release to stop', 'ارفع إصبعك للتوقف')}
-                        className="relative z-10 rounded-full h-20 w-20 flex items-center justify-center select-none"
-                        style={{
-                          background: isDark
-                            ? 'linear-gradient(135deg, hsl(210,100%,65%) 0%, hsl(280,70%,65%) 100%)'
-                            : 'linear-gradient(135deg, #060541 0%, hsl(260,70%,25%) 100%)',
-                          boxShadow: isDark
-                            ? '0 0 30px hsla(210,100%,65%,0.5)'
-                            : '0 4px 20px hsla(243,84%,14%,0.3)',
-                          WebkitTouchCallout: 'none',
-                          WebkitUserSelect: 'none',
-                          touchAction: 'manipulation',
-                        }}
-                      >
-                        <Mic className="h-8 w-8 text-white" />
-                      </motion.button>
-                    </div>
-                    <p className="text-sm" style={{ color: isDark ? '#858384' : '#606062' }}>
-                      {t('Listening... speak now', 'أستمع... تحدث الآن')}
-                    </p>
-                    {transcript && (
-                      <p className="text-sm text-center mt-2" style={{ color: isDark ? '#f2f2f2' : '#060541' }}>
-                        "{transcript}"
-                      </p>
                     )}
                   </motion.div>
                 )}
@@ -1577,11 +1874,22 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                 {/* Confirming — show extracted entry */}
                 {voiceState === 'confirming' && extractedEntry && (() => {
                   const entryMode = extractedEntry.mode || 'calendar';
-                  const modeBadge = entryMode === 'task'
-                    ? { label: t('Task', 'مهمة'), color: isDark ? 'hsl(210,100%,65%)' : '#060541' }
-                    : entryMode === 'reminder'
-                      ? { label: t('Reminder', 'تذكير'), color: isDark ? 'hsl(25,95%,60%)' : 'hsl(25,95%,45%)' }
-                      : { label: t('Calendar', 'تقويم'), color: isDark ? 'hsl(142,76%,55%)' : 'hsl(142,76%,40%)' };
+                  const actionIntent = extractedEntry.actionIntent;
+                  const isAction = Boolean(actionIntent);
+
+                  const modeBadge = actionIntent === 'complete_task'
+                    ? { label: t('Complete Task', 'إكمال مهمة'), color: isDark ? 'hsl(142,76%,55%)' : 'hsl(142,76%,40%)' }
+                    : actionIntent === 'snooze_reminder'
+                      ? { label: t('Snooze Reminder', 'تأجيل تذكير'), color: isDark ? 'hsl(25,95%,60%)' : 'hsl(25,95%,45%)' }
+                      : actionIntent === 'reschedule_task'
+                        ? { label: t('Reschedule Task', 'إعادة جدولة مهمة'), color: isDark ? 'hsl(210,100%,65%)' : '#060541' }
+                        : actionIntent === 'reschedule_reminder'
+                          ? { label: t('Reschedule Reminder', 'إعادة جدولة تذكير'), color: isDark ? 'hsl(25,95%,60%)' : 'hsl(25,95%,45%)' }
+                          : entryMode === 'task'
+                            ? { label: t('Task', 'مهمة'), color: isDark ? 'hsl(210,100%,65%)' : '#060541' }
+                            : entryMode === 'reminder'
+                              ? { label: t('Reminder', 'تذكير'), color: isDark ? 'hsl(25,95%,60%)' : 'hsl(25,95%,45%)' }
+                              : { label: t('Calendar', 'تقويم'), color: isDark ? 'hsl(142,76%,55%)' : 'hsl(142,76%,40%)' };
 
                   const recalcClarification = (next: ExtractedEntry) => {
                     const nDate = Boolean(next.needsDateConfirm);
@@ -1643,6 +1951,112 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                           border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(6,5,65,0.08)',
                         }}
                       >
+
+                      {/* ── Action intent: complete_task — just show matched title ── */}
+                      {actionIntent === 'complete_task' && (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium" style={{ color: isDark ? '#858384' : '#606062' }}>
+                              {t('Task', 'المهمة')}
+                            </span>
+                          </div>
+                          <p className="text-base font-semibold px-1" style={{ color: isDark ? '#f2f2f2' : '#060541' }}>
+                            {extractedEntry.targetItemTitle || extractedEntry.title}
+                          </p>
+                        </>
+                      )}
+
+                      {/* ── Action intent: snooze_reminder — show title + snooze minutes ── */}
+                      {actionIntent === 'snooze_reminder' && (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium" style={{ color: isDark ? '#858384' : '#606062' }}>
+                              {t('Reminder', 'التذكير')}
+                            </span>
+                          </div>
+                          <p className="text-base font-semibold px-1" style={{ color: isDark ? '#f2f2f2' : '#060541' }}>
+                            {extractedEntry.targetItemTitle || extractedEntry.title}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-xs font-medium" style={{ color: isDark ? '#858384' : '#606062' }}>
+                              {t('Snooze for', 'تأجيل لمدة')}
+                            </span>
+                          </div>
+                          <div className="flex gap-2 mt-1">
+                            {[5, 10, 15, 30].map((mins) => {
+                              const selected = (extractedEntry.snoozeMinutes || 10) === mins;
+                              return (
+                                <button
+                                  key={mins}
+                                  onClick={() => setExtractedEntry({ ...extractedEntry, snoozeMinutes: mins })}
+                                  className="flex-1 py-1.5 rounded-lg text-xs font-medium transition-all"
+                                  style={{
+                                    background: selected
+                                      ? (isDark ? 'hsl(25,95%,60%)' : 'hsl(25,95%,45%)')
+                                      : (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(6,5,65,0.04)'),
+                                    color: selected ? '#fff' : (isDark ? '#858384' : '#606062'),
+                                    border: selected ? 'none' : (isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(6,5,65,0.1)'),
+                                  }}
+                                >
+                                  {mins} {t('min', 'د')}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
+
+                      {/* ── Action intent: reschedule — show title + date/time ── */}
+                      {(actionIntent === 'reschedule_task' || actionIntent === 'reschedule_reminder') && (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium" style={{ color: isDark ? '#858384' : '#606062' }}>
+                              {actionIntent === 'reschedule_task' ? t('Task', 'المهمة') : t('Reminder', 'التذكير')}
+                            </span>
+                          </div>
+                          <p className="text-base font-semibold px-1" style={{ color: isDark ? '#f2f2f2' : '#060541' }}>
+                            {extractedEntry.targetItemTitle || extractedEntry.title}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-xs font-medium" style={{ color: isDark ? '#858384' : '#606062' }}>
+                              {t('New Date', 'التاريخ الجديد')}
+                            </span>
+                          </div>
+                          <input
+                            type="date"
+                            value={extractedEntry.date}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const next = { ...extractedEntry, date: val || extractedEntry.date, needsDateConfirm: false };
+                              setExtractedEntry({ ...next, clarificationQuestion: recalcClarification(next) });
+                            }}
+                            aria-label={t('New Date', 'التاريخ الجديد')}
+                            className="w-full text-sm bg-transparent border-b border-dashed focus:outline-none focus:border-solid px-1 py-0.5"
+                            style={{ color: isDark ? '#f2f2f2' : '#060541', borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(6,5,65,0.2)', colorScheme: isDark ? 'dark' : 'light' }}
+                          />
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-xs font-medium" style={{ color: isDark ? '#858384' : '#606062' }}>
+                              {t('New Time', 'الوقت الجديد')}
+                            </span>
+                          </div>
+                          <input
+                            type="time"
+                            value={extractedEntry.time || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const next = { ...extractedEntry, time: val || undefined, needsTimeConfirm: !(val || '').trim() };
+                              setExtractedEntry({ ...next, clarificationQuestion: recalcClarification(next) });
+                            }}
+                            aria-label={t('New Time', 'الوقت الجديد')}
+                            className="w-full text-sm bg-transparent border-b border-dashed focus:outline-none focus:border-solid px-1 py-0.5"
+                            style={{ color: isDark ? '#f2f2f2' : '#060541', borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(6,5,65,0.2)', colorScheme: isDark ? 'dark' : 'light' }}
+                          />
+                        </>
+                      )}
+
+                      {/* ── Create intents: full form (title, date, time, priority, subtasks) ── */}
+                      {!isAction && (
+                        <>
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-medium" style={{ color: isDark ? '#858384' : '#606062' }}>
                           {t('Title', 'العنوان')}
@@ -1798,6 +2212,8 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                           </p>
                         </>
                       )}
+                        </>
+                      )}
                       </div>
                     </div>
 
@@ -1826,7 +2242,10 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
                       >
                         <span className="flex items-center justify-center gap-1.5">
                           <Check className="h-4 w-4" />
-                          {entryMode === 'task' ? t('Create Task', 'إنشاء مهمة')
+                          {actionIntent === 'complete_task' ? t('Complete', 'إكمال')
+                            : actionIntent === 'snooze_reminder' ? t('Snooze', 'تأجيل')
+                            : actionIntent === 'reschedule_task' || actionIntent === 'reschedule_reminder' ? t('Reschedule', 'إعادة جدولة')
+                            : entryMode === 'task' ? t('Create Task', 'إنشاء مهمة')
                             : entryMode === 'reminder' ? t('Create Reminder', 'إنشاء تذكير')
                             : t('Confirm & Save', 'تأكيد وحفظ')}
                         </span>

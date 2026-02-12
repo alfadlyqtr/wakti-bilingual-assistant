@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Copy, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generatePDF } from '@/utils/pdfUtils';
+import { safeCopyToClipboard } from '@/utils/clipboardUtils';
 
 interface TextActionButtonsProps {
   text: string;
@@ -17,7 +18,7 @@ export function TextActionButtons({ text, mode }: TextActionButtonsProps) {
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(text);
+      await safeCopyToClipboard(text);
       toast({
         title: language === 'ar' ? 'تم النسخ!' : 'Copied!',
         description: language === 'ar' ? 'تم نسخ النص إلى الحافظة' : 'Text copied to clipboard',
