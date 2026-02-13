@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 type PublishFile = {
   path: string;
@@ -280,7 +281,7 @@ async function assignVercelAlias(params: {
   }
 }
 
-const CODE_VERSION = "2026-01-09-V4";
+const CODE_VERSION = "2026-02-13-V5";
 
 serve(async (req) => {
   console.log(`[projects-publish] CODE_VERSION=${CODE_VERSION}`);
@@ -344,12 +345,42 @@ serve(async (req) => {
       );
     }
 
+    // ── Server-side subdomain availability check ──────────────────────
+    const projectId = typeof body.projectId === "string" ? body.projectId : "";
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Check if another project already owns this subdomain (case-insensitive)
+    const { data: existing, error: checkErr } = await supabaseAdmin
+      .from("projects")
+      .select("id,user_id")
+      .ilike("subdomain", projectSlug)
+      .maybeSingle();
+
+    if (checkErr) {
+      console.error("[projects-publish] subdomain check error:", checkErr);
+    }
+
+    if (existing && existing.id !== projectId) {
+      console.log("[projects-publish] Subdomain taken:", projectSlug, "by project", existing.id);
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: "This subdomain is already taken",
+          code: "SUBDOMAIN_TAKEN",
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    // ── End subdomain check ────────────────────────────────────────────
+
     const teamId = await resolveTeamId(VERCEL_TOKEN);
     const VERCEL_PROJECT_ID = (Deno.env.get("VERCEL_PROJECT_ID") || "").trim();
 
     const name = `wakti-${projectSlug}`;
 
-    // Deploy to Vercel (no target specified - Vercel will assign automatically)
+    // Deploy to Vercel
     const result = await vercelDeploy({
       token: VERCEL_TOKEN,
       teamId,

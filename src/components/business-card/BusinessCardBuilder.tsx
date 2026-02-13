@@ -1896,7 +1896,7 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
         lastName: formData.lastName,
       });
       
-      // Prepare card data for the pass
+      // Prepare card data for the pass (exclude image URLs - Edge Function doesn't use them and they bloat the URL)
       const cardData = {
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -1906,8 +1906,6 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
         jobTitle: formData.jobTitle || '',
         website: formData.website || '',
         cardUrl,
-        profilePhotoUrl: formData.profilePhotoUrl || '',
-        logoUrl: formData.logoUrl || '',
       };
       
       // Check if we're running in the Natively wrapper with Wallet support

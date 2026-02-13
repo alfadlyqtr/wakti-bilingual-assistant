@@ -354,7 +354,12 @@ serve(async (req) => {
     const pkpassData = await walletResponse.arrayBuffer();
     const uint8Array = new Uint8Array(pkpassData);
     
-    const filename = `${cardData.firstName}_${cardData.lastName}.pkpass`;
+    // Sanitize filename to ASCII-only (HTTP headers must be ByteString / ASCII)
+    const safeName = `${cardData.firstName}_${cardData.lastName}`
+      .replace(/[^\x20-\x7E]/g, '')  // strip non-ASCII
+      .replace(/[\/\\:*?"<>|]/g, '_') // strip filesystem-unsafe chars
+      .trim();
+    const filename = (safeName || 'wakti_card') + '.pkpass';
     console.log("Successfully generated pass:", filename, "size:", uint8Array.length);
 
     // Return the .pkpass file with proper headers for iOS

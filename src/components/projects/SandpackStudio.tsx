@@ -317,6 +317,22 @@ export default function SandpackStudio({
       next[fixedPath] = content;
     });
 
+    // If no files are ready yet, provide a minimal App so Sandpack doesn't fall back
+    // to its built-in default template (which shows "Hello world").
+    if (Object.keys(next).length === 0) {
+      next["/App.js"] = `import React from "react";
+
+export default function App() {
+  return (
+    <div style={{ padding: 24, fontFamily: "Inter, system-ui, -apple-system" }}>
+      <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Loading project…</div>
+      <div style={{ fontSize: 12, opacity: 0.7 }}>Please wait a moment.</div>
+    </div>
+  );
+}
+`;
+    }
+
     // Ensure /App.js exists so Sandpack always has a default entry file to open in Code view.
     // Many generated projects place App under /src, which would leave Sandpack with no obvious active file.
     if (!next["/App.js"]) {

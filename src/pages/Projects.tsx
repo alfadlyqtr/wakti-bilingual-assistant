@@ -693,6 +693,106 @@ Create content appropriate for a {PRODUCT} with realistic details.`,
     defaultOption: { en: 'Wedding Invitation', ar: 'دعوة زفاف' },
     color: 'from-fuchsia-500 to-pink-500'
   },
+  { 
+    id: 'interactive-deck', 
+    icon: '🧩', 
+    title: { en: 'Interactive Deck', ar: 'عرض تفاعلي' },
+    desc: { en: 'Interactive, explorable presentation', ar: 'عرض تقديمي تفاعلي للاستكشاف' },
+    promptTemplate: { 
+      en: `Create an interactive, explorable presentation deck about {PRODUCT}.
+
+GOAL:
+- This is NOT a static slideshow. It should feel like a modern web experience that is still clearly a deck.
+
+TECH REQUIREMENTS:
+- Build as a React app (single page).
+- Use Tailwind classes for styling (Tailwind loaded via CDN).
+- No external APIs required.
+
+STRUCTURE:
+- Use a clean multi-file structure (data + components).
+- Keep slide content/data separate from UI components.
+- Keep navigation/progress logic separate from slide rendering.
+
+UI/UX:
+- Left: collapsible Table of Contents (sections/chapters).
+- Center: the active slide.
+- Bottom: progress bar + Next/Prev.
+- Support keyboard navigation (←/→, space, home/end) and mobile swipe.
+- Each slide can include interactive blocks: tabs, accordion, reveal, stats cards, comparison grid.
+
+DECK CONTENT:
+- Generate 10-12 slides with a clear storyline.
+- Include at least:
+  1) Cover
+  2) Agenda
+  3) Problem
+  4) Solution
+  5) Key features (interactive tabs)
+  6) Market / context (charts optional)
+  7) Differentiation (comparison grid)
+  8) Demo / how it works
+  9) Roadmap
+  10) Call to action
+
+DESIGN:
+- Premium, modern, dark-first look with subtle gradients and glow.
+- Use a consistent design system and spacing.
+
+Make all text realistic and tailored to {PRODUCT}.`,
+      ar: `أنشئ عرض تقديمي تفاعلي واستكشافي عن {PRODUCT}.
+
+الهدف:
+- هذا ليس عرض شرائح ثابت. يجب أن يبدو كتجربة ويب حديثة ومع ذلك يكون واضحاً أنه عرض.
+
+متطلبات تقنية:
+- ابنِه كتطبيق React (صفحة واحدة).
+- استخدم Tailwind classes للتصميم (Tailwind محمّل عبر CDN).
+- بدون الاعتماد على APIs خارجية.
+
+الهيكلة:
+- استخدم هيكلة متعددة الملفات بشكل مرتب (بيانات + مكوّنات).
+- افصل محتوى/بيانات الشرائح عن مكوّنات الواجهة.
+- افصل منطق التنقل/التقدم عن عرض الشريحة.
+
+تجربة المستخدم:
+- يسار: جدول محتويات قابل للطي (أقسام/فصول).
+- الوسط: الشريحة الحالية.
+- أسفل: شريط تقدم + التالي/السابق.
+- دعم التنقل بالكيبورد (يسار/يمين، مسافة، Home/End) ودعم سحب الموبايل.
+- كل شريحة يمكن أن تحتوي عناصر تفاعلية: Tabs، Accordion، Reveal، بطاقات أرقام، مقارنة.
+
+محتوى العرض:
+- أنشئ 10-12 شريحة بقصة واضحة.
+- يجب أن تتضمن على الأقل:
+  1) الغلاف
+  2) جدول الأعمال
+  3) المشكلة
+  4) الحل
+  5) المميزات (Tabs تفاعلية)
+  6) السوق/السياق (مخططات اختيارية)
+  7) التميّز (جدول مقارنة)
+  8) عرض/كيف يعمل
+  9) خارطة طريق
+  10) دعوة لاتخاذ إجراء
+
+التصميم:
+- مظهر فاخر وحديث (داكن بالأساس) مع تدرجات خفيفة وتوهج.
+- حافظ على نظام تصميم ومسافات متسقة.
+
+اجعل النصوص واقعية ومخصصة لـ{PRODUCT}.`
+    },
+    options: [
+      { en: 'Startup Pitch Deck', ar: 'عرض شركة ناشئة' },
+      { en: 'Product Feature Deck', ar: 'عرض مميزات المنتج' },
+      { en: 'Portfolio / Case Study', ar: 'بورتفوليو / دراسة حالة' },
+      { en: 'Guide / Handbook', ar: 'دليل / كتيّب' },
+      { en: 'Proposal / Offer', ar: 'عرض / مقترح' },
+      { en: 'Workshop / Training', ar: 'ورشة / تدريب' },
+    ],
+    defaultOption: { en: 'Startup Pitch Deck', ar: 'عرض شركة ناشئة' },
+    color: 'from-violet-500 to-indigo-500'
+  },
 ];
 
 export default function Projects() {
@@ -1054,7 +1154,7 @@ Apply these styles consistently throughout the entire design.`;
   };
 
   // Build a theme-aware prompt by injecting selected theme's style into the template
-  const buildThemeAwarePrompt = (baseTemplate: string, productType: string): string => {
+  const buildThemeAwarePrompt = (baseTemplate: string, productType: string, templateId?: string): string => {
     // Replace the product placeholder
     let finalPrompt = baseTemplate.replace('{PRODUCT}', productType);
     
@@ -1092,20 +1192,22 @@ Apply these styles consistently throughout the entire design.`;
       }
     }
     
-    // Add responsive/mobile emphasis and backend integration at the end
-    const additionalInstructions = isRTL 
-      ? `\n\nمهم جداً:
+    // Add responsive/mobile emphasis at the end (skip for templates that are not websites)
+    if (templateId !== 'interactive-deck') {
+      const additionalInstructions = isRTL 
+        ? `\n\nمهم جداً:
 - تصميم متجاوب بالكامل (موبايل أولاً) - يجب أن يعمل بشكل مثالي على جميع الأجهزة
 - أضف زر واتساب عائم للتواصل السريع
 - استخدم صور من Freepik للمنتجات/الخدمات (لا تستخدم Unsplash أو picsum أو placeholder.com)
 - تأكد من دعم اللغة العربية (RTL) بشكل كامل`
-      : `\n\nIMPORTANT:
+        : `\n\nIMPORTANT:
 - Fully responsive design (mobile-first) - must work perfectly on all devices
 - Add floating WhatsApp button for quick contact
 - Use Freepik images for products/services (DO NOT use Unsplash, picsum, or placeholder.com)
 - Ensure smooth animations and transitions throughout`;
-    
-    finalPrompt += additionalInstructions;
+      
+      finalPrompt += additionalInstructions;
+    }
     
     return finalPrompt;
   };
@@ -1947,7 +2049,7 @@ Apply these styles consistently throughout the entire design.`;
                                   setTemplateSelections(prev => ({ ...prev, [example.id]: optionText }));
                                   // Build theme-aware prompt with selected option
                                   const template = isRTL ? example.promptTemplate.ar : example.promptTemplate.en;
-                                  const finalPrompt = buildThemeAwarePrompt(template, optionText);
+                                  const finalPrompt = buildThemeAwarePrompt(template, optionText, example.id);
                                   setPrompt(finalPrompt);
                                   setActiveTemplateId(null);
                                 }}
@@ -1972,7 +2074,7 @@ Apply these styles consistently throughout the entire design.`;
                                     if (e.key === 'Enter' && customTemplateInput.trim()) {
                                       setTemplateSelections(prev => ({ ...prev, [example.id]: customTemplateInput.trim() }));
                                       const template = isRTL ? example.promptTemplate.ar : example.promptTemplate.en;
-                                      const finalPrompt = buildThemeAwarePrompt(template, customTemplateInput.trim());
+                                      const finalPrompt = buildThemeAwarePrompt(template, customTemplateInput.trim(), example.id);
                                       setPrompt(finalPrompt);
                                       setActiveTemplateId(null);
                                       setCustomTemplateInput('');
@@ -1984,7 +2086,7 @@ Apply these styles consistently throughout the entire design.`;
                                     if (customTemplateInput.trim()) {
                                       setTemplateSelections(prev => ({ ...prev, [example.id]: customTemplateInput.trim() }));
                                       const template = isRTL ? example.promptTemplate.ar : example.promptTemplate.en;
-                                      const finalPrompt = buildThemeAwarePrompt(template, customTemplateInput.trim());
+                                      const finalPrompt = buildThemeAwarePrompt(template, customTemplateInput.trim(), example.id);
                                       setPrompt(finalPrompt);
                                       setActiveTemplateId(null);
                                       setCustomTemplateInput('');

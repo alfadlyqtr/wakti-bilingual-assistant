@@ -2204,7 +2204,7 @@ export default function ProjectDetail() {
       const { data, error } = await supabase
         .from('projects' as any)
         .select('id')
-        .eq('subdomain', value.toLowerCase())
+        .ilike('subdomain', value.toLowerCase())
         .neq('id', project?.id || '')
         .maybeSingle();
       
@@ -2517,7 +2517,7 @@ export default function ProjectDetail() {
       if (updateError) {
         const pgCode = (updateError as any)?.code;
         const msg = (updateError as any)?.message || '';
-        if (pgCode === '23505' || msg.toLowerCase().includes('projects_unique_published_subdomain')) {
+        if (pgCode === '23505' || msg.toLowerCase().includes('subdomain_unique') || msg.toLowerCase().includes('projects_unique_published_subdomain')) {
           const takenMsg = isRTL ? 'هذا الاسم مستخدم بالفعل' : 'This name is already taken';
           setSubdomainError(takenMsg);
           toast.error(takenMsg);
