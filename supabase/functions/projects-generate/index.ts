@@ -6252,6 +6252,9 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         if (tc.tool === 'search_replace' && tc.result?.success && tc.result?.path) {
           filesChanged.push(tc.result.path);
         }
+        if (tc.tool === 'morph_edit' && tc.result?.success && tc.result?.filepath) {
+          filesChanged.push(tc.result.filepath);
+        }
         if (tc.tool === 'insert_code' && tc.result?.success && tc.result?.path) {
           filesChanged.push(tc.result.path);
         }
@@ -6644,6 +6647,9 @@ Call task_complete when finished.`;
           }
           if (tc.tool === 'search_replace' && tc.result?.success && tc.result?.path) {
             execFilesChanged.push(tc.result.path);
+          }
+          if (tc.tool === 'morph_edit' && tc.result?.success && tc.result?.filepath) {
+            execFilesChanged.push(tc.result.filepath);
           }
           if (tc.tool === 'insert_code' && tc.result?.success && tc.result?.path) {
             execFilesChanged.push(tc.result.path);

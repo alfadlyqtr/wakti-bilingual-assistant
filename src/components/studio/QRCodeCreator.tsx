@@ -18,12 +18,16 @@ import {
   Info,
   Upload,
   X,
+  Bookmark,
+  Trash2,
+  Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 /* ─────────────────────── Types ─────────────────────── */
 
 type QRType = 'url' | 'text' | 'email' | 'phone' | 'wifi';
+type SubTab = 'create' | 'saved';
 
 interface QRConfig {
   text: string;
@@ -34,6 +38,29 @@ interface QRConfig {
   ecLevel: 'L' | 'M' | 'Q' | 'H';
   centerImageUrl: string;
   centerImageSizeRatio: number;
+}
+
+interface SavedQR {
+  id: string;
+  label: string;
+  qrType: QRType;
+  dataUrl: string;
+  createdAt: number;
+}
+
+/* ─────────────────────── Storage ─────────────────────── */
+
+const STORAGE_KEY = 'wakti_saved_qr_codes';
+
+function loadSavedQRs(): SavedQR[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function persistSavedQRs(items: SavedQR[]) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); } catch { /* quota */ }
 }
 
 /* ─────────────────────── Presets ─────────────────────── */
@@ -68,6 +95,10 @@ export default function QRCodeCreator() {
   const previewRef = useRef<HTMLDivElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [logoPreview, setLogoPreview] = useState<string>('');
+
+  // Sub-tabs: create / saved
+  const [subTab, setSubTab] = useState<SubTab>('create');
+  const [savedQRs, setSavedQRs] = useState<SavedQR[]>(() => loadSavedQRs());
 
   // QR type
   const [qrType, setQrType] = useState<QRType>('url');
@@ -184,6 +215,31 @@ export default function QRCodeCreator() {
     }
   }, [qrDataUrl, isArabic]);
 
+  // Save current QR code
+  const handleSaveQR = useCallback(() => {
+    if (!qrDataUrl) return;
+    const label = qrType === 'url' ? urlInput : qrType === 'text' ? textInput : qrType === 'email' ? emailInput : qrType === 'phone' ? phoneInput : wifiSSID;
+    const item: SavedQR = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      label: label.slice(0, 80) || 'QR Code',
+      qrType,
+      dataUrl: qrDataUrl,
+      createdAt: Date.now(),
+    };
+    const updated = [item, ...savedQRs];
+    setSavedQRs(updated);
+    persistSavedQRs(updated);
+    toast.success(isArabic ? 'تم حفظ رمز QR' : 'QR code saved');
+  }, [qrDataUrl, qrType, urlInput, textInput, emailInput, phoneInput, wifiSSID, savedQRs, isArabic]);
+
+  // Delete a saved QR code
+  const handleDeleteQR = useCallback((id: string) => {
+    const updated = savedQRs.filter(q => q.id !== id);
+    setSavedQRs(updated);
+    persistSavedQRs(updated);
+    toast.success(isArabic ? 'تم الحذف' : 'Deleted');
+  }, [savedQRs, isArabic]);
+
   // Handle logo file upload → convert to base64 data URI
   const handleLogoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -259,7 +315,7 @@ export default function QRCodeCreator() {
             <p className="text-xs text-muted-foreground">{isArabic ? 'أنشئ رموز QR مخصصة وأنيقة' : 'Create beautiful, customized QR codes'}</p>
           </div>
         </div>
-        {generated && (
+        {subTab === 'create' && generated && (
           <button
             onClick={handleReset}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all"
@@ -270,6 +326,38 @@ export default function QRCodeCreator() {
         )}
       </div>
 
+      {/* ─── Sub-tabs: Create / Saved ─── */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setSubTab('create')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+            subTab === 'create'
+              ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-[0_4px_14px_hsla(210,80%,50%,0.35)]'
+              : 'bg-white dark:bg-white/[0.06] text-muted-foreground hover:bg-gray-50 dark:hover:bg-white/[0.1] shadow-[0_1px_6px_hsla(0,0%,0%,0.06)] dark:shadow-[0_1px_6px_hsla(0,0%,0%,0.3)] border border-gray-200/60 dark:border-white/[0.08]'
+          }`}
+        >
+          <Plus className="h-4 w-4" />
+          {isArabic ? 'إنشاء' : 'Create'}
+        </button>
+        <button
+          onClick={() => setSubTab('saved')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+            subTab === 'saved'
+              ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-[0_4px_14px_hsla(210,80%,50%,0.35)]'
+              : 'bg-white dark:bg-white/[0.06] text-muted-foreground hover:bg-gray-50 dark:hover:bg-white/[0.1] shadow-[0_1px_6px_hsla(0,0%,0%,0.06)] dark:shadow-[0_1px_6px_hsla(0,0%,0%,0.3)] border border-gray-200/60 dark:border-white/[0.08]'
+          }`}
+        >
+          <Bookmark className="h-4 w-4" />
+          {isArabic ? 'المحفوظة' : 'Saved'}
+          {savedQRs.length > 0 && (
+            <span className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-white/20 text-[10px] font-bold leading-none px-1">
+              {savedQRs.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {subTab === 'create' && (
       <div className="flex flex-col lg:grid lg:grid-cols-5 gap-6">
         {/* ─── Controls ─── */}
         <div className="lg:col-span-3 space-y-5 order-2 lg:order-1">
@@ -648,6 +736,13 @@ export default function QRCodeCreator() {
                         {isArabic ? 'تحميل' : 'Download'}
                       </button>
                       <button
+                        onClick={handleSaveQR}
+                        aria-label="Save QR code"
+                        className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white dark:bg-white/[0.06] text-foreground font-medium text-sm shadow-[0_2px_8px_hsla(0,0%,0%,0.06)] dark:shadow-[0_2px_8px_hsla(0,0%,0%,0.25)] border border-gray-200/60 dark:border-white/[0.08] hover:bg-gray-50 dark:hover:bg-white/[0.1] active:scale-[0.98] transition-all"
+                      >
+                        <Bookmark className="h-4 w-4" />
+                      </button>
+                      <button
                         onClick={handleShare}
                         aria-label="Share QR code"
                         className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white dark:bg-white/[0.06] text-foreground font-medium text-sm shadow-[0_2px_8px_hsla(0,0%,0%,0.06)] dark:shadow-[0_2px_8px_hsla(0,0%,0%,0.25)] border border-gray-200/60 dark:border-white/[0.08] hover:bg-gray-50 dark:hover:bg-white/[0.1] active:scale-[0.98] transition-all"
@@ -672,6 +767,105 @@ export default function QRCodeCreator() {
           </div>
         </div>
       </div>
+      )}
+
+      {/* ─── Saved Tab ─── */}
+      {subTab === 'saved' && (
+        <div className="space-y-4">
+          {savedQRs.length === 0 ? (
+            <div className="flex flex-col items-center gap-4 py-16 text-center">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-50 dark:from-white/[0.06] dark:to-white/[0.02] flex items-center justify-center">
+                <Bookmark className="h-10 w-10 text-gray-300 dark:text-gray-600" />
+              </div>
+              <div>
+                <p className="text-base font-semibold text-muted-foreground">{isArabic ? 'لا توجد رموز محفوظة' : 'No saved QR codes'}</p>
+                <p className="text-sm text-muted-foreground/60 mt-1">{isArabic ? 'أنشئ رمز QR واحفظه هنا' : 'Create a QR code and save it here'}</p>
+              </div>
+              <button
+                onClick={() => setSubTab('create')}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 text-white font-semibold text-sm shadow-[0_4px_16px_hsla(210,80%,50%,0.35)] active:scale-[0.98] transition-all"
+              >
+                <Plus className="h-4 w-4" />
+                {isArabic ? 'إنشاء رمز QR' : 'Create QR Code'}
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {savedQRs.map((item) => (
+                <div
+                  key={item.id}
+                  className="group rounded-2xl border border-gray-100 dark:border-white/[0.06] bg-white dark:bg-white/[0.03] shadow-[0_4px_20px_hsla(0,0%,0%,0.04)] dark:shadow-[0_4px_20px_hsla(0,0%,0%,0.25)] overflow-hidden hover:shadow-[0_8px_30px_hsla(0,0%,0%,0.08)] dark:hover:shadow-[0_8px_30px_hsla(0,0%,0%,0.4)] transition-all"
+                >
+                  {/* QR Image */}
+                  <div className="p-4 flex items-center justify-center bg-gray-50/50 dark:bg-white/[0.02]">
+                    <img
+                      src={item.dataUrl}
+                      alt={item.label}
+                      className="w-full max-w-[140px] h-auto rounded-lg"
+                    />
+                  </div>
+
+                  {/* Info + Actions */}
+                  <div className="px-3 py-2.5 space-y-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-foreground truncate">{item.label}</p>
+                      <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                        {new Date(item.createdAt).toLocaleDateString(isArabic ? 'ar' : 'en', { month: 'short', day: 'numeric' })}
+                        {' · '}
+                        {item.qrType.toUpperCase()}
+                      </p>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={async () => {
+                          const a = document.createElement('a');
+                          a.href = item.dataUrl;
+                          a.download = `wakti-qr-${item.id}.png`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                        }}
+                        aria-label="Download"
+                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-500/20 text-[11px] font-medium transition-colors"
+                      >
+                        <Download className="h-3 w-3" />
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const res = await fetch(item.dataUrl);
+                            const blob = await res.blob();
+                            const file = new File([blob], `wakti-qr-${item.id}.png`, { type: 'image/png' });
+                            if (navigator.share && navigator.canShare?.({ files: [file] })) {
+                              await navigator.share({ files: [file], title: 'Wakti QR Code' });
+                            } else {
+                              await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                              toast.success(isArabic ? 'تم نسخ الصورة' : 'Image copied');
+                            }
+                          } catch (err: any) {
+                            if (err?.name !== 'AbortError') toast.error(isArabic ? 'فشل' : 'Failed');
+                          }
+                        }}
+                        aria-label="Share"
+                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-gray-50 dark:bg-white/[0.04] text-muted-foreground hover:bg-gray-100 dark:hover:bg-white/[0.08] text-[11px] font-medium transition-colors"
+                      >
+                        <Share2 className="h-3 w-3" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteQR(item.id)}
+                        aria-label="Delete"
+                        className="flex items-center justify-center px-2 py-1.5 rounded-lg text-muted-foreground/50 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-500 text-[11px] transition-colors"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
