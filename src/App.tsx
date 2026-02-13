@@ -107,6 +107,7 @@ import ImageShare from "./pages/ImageShare";
 import VideoShare from "./pages/VideoShare";
 import BusinessCardShare from "./pages/BusinessCardShare";
 import WalletPass from "./pages/WalletPass";
+import QRTextView from "./pages/QRTextView";
 import LettersCreate from "./pages/LettersCreate";
 import LettersWaiting from "./pages/LettersWaiting";
 import LettersJoin from "./pages/LettersJoin";
@@ -195,6 +196,9 @@ function App() {
                 
                 {/* Wallet pass branded loading page (public) */}
                 <Route path="/wallet-pass" element={<WalletPass />} />
+                
+                {/* QR Code text view (public) */}
+                <Route path="/qr/view" element={<QRTextView />} />
                 
                 {/* ============================================================
                     PROTECTED APP ROUTES - Persistent AppLayout (no remount!)

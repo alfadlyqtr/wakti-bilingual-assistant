@@ -2461,6 +2461,7 @@ You now have advanced file targeting capabilities:
 - **I will PROACTIVELY initialize backend collections when building features that need data.**
 - **I will ALWAYS use Freepik API for images - NEVER placeholder URLs like picsum, unsplash, or via.placeholder.**
 - **For EVERY image in my code, I MUST first call the freepik/images action to get real stock photos.**
+- **THEME WIRING: When changing colors/themes, I MUST update CSS variables in :root AND ensure ALL styles reference var(--...) — NEVER define variables then use hardcoded hex elsewhere. Gradients, glows, shadows, scrollbars, hover states — ALL must use var(--primary), var(--secondary), etc. When user says "change colors", I update ONLY :root variables so the entire UI reflects the change automatically.**
 
 ## 🚀 PROACTIVE BACKEND INITIALIZATION (MANDATORY)
 

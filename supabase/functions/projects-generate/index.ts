@@ -2690,6 +2690,15 @@ You are an elite React Expert creating premium UI applications.
 2.  **Layout**: Use "Bento Box" grids, asymmetrical layouts, and generous whitespace.
 3.  **Visual Depth**: Use advanced glassmorphism (backdrop-blur-2xl bg-white/[0.02] border-white/[0.05]), multi-layered shadows, and mesh gradients.
 4.  **Micro-interactions**: Every button and card must have hover effects (scale, glow, border-color change). Use Framer Motion. Buttons need "active:scale-95".
+5.  **Theme Wiring (MANDATORY - NON-NEGOTIABLE)**: When applying ANY color theme:
+    - ALWAYS define ALL theme colors as CSS variables in styles.css \`:root { --primary: #hex; --secondary: #hex; --accent: #hex; --bg: #hex; --bg-card: #hex; --text: #hex; --text-muted: #hex; }\`
+    - EVERY color in the entire project MUST reference these variables: \`background-color: var(--bg)\`, \`color: var(--text)\`, \`border-color: var(--primary)\`, etc.
+    - For Tailwind classes use arbitrary values with variables: \`bg-[var(--bg)]\`, \`text-[var(--text)]\`, \`border-[var(--primary)]\`
+    - Gradients MUST use variables: \`background: linear-gradient(135deg, var(--primary), var(--secondary))\`
+    - Glows/shadows MUST derive from variables: \`box-shadow: 0 0 20px var(--primary)\`
+    - Scrollbar colors, hover states, active states — ALL must use var(--...)
+    - ⛔ NEVER define CSS variables in :root and then use hardcoded hex colors elsewhere. If you write \`--primary: #ec4899\` then every pink element MUST use \`var(--primary)\`, NOT \`#ec4899\` directly.
+    - When the user asks to "change colors" or "change theme", update ONLY the :root variables — the entire UI must automatically reflect the change.
 
 ### PART 2: ARCHITECTURE
 1.  **Frontend-as-Backend**: Create \`/utils/mockData.js\` for data. Use \`useEffect\` with simulated latency for realism.
@@ -6725,16 +6734,22 @@ Call task_complete when finished.`;
       startHeartbeat(job.id);
       
     try {
-      // Handle 'user_prompt' theme - extract colors/style from the user's prompt
+      // Handle theme selection - prioritize detailed userInstructions from frontend theme picker
       let selectedThemeDesc: string;
-      if (theme === 'user_prompt' || !theme) {
+      if (userInstructions && userInstructions.trim().length > 20) {
+        // Frontend sent detailed theme instructions (colors, typography, shadows, layout, mood)
+        // These are MUCH richer than THEME_PRESETS one-liners — use them as primary
+        selectedThemeDesc = userInstructions;
+        console.log(`[Theme] Using detailed userInstructions (${userInstructions.length} chars): ${userInstructions.substring(0, 120)}...`);
+      } else if (theme === 'user_prompt' || !theme) {
         selectedThemeDesc = extractThemeFromPrompt(prompt);
         console.log(`[Theme] Extracted from prompt: ${selectedThemeDesc.substring(0, 100)}...`);
       } else {
         selectedThemeDesc = THEME_PRESETS[theme] || THEME_PRESETS['none'];
+        console.log(`[Theme] Using THEME_PRESETS[${theme}]: ${selectedThemeDesc.substring(0, 100)}...`);
       }
       // CRITICAL: Force theme instructions to be the most important rule
-      const themeEnforcement = `\n\nCRITICAL STYLE RULES (MUST FOLLOW):\n${selectedThemeDesc}\nEnsure ALL components use these exact colors and vibe. DO NOT USE DEFAULT COLORS.`;
+      const themeEnforcement = `\n\nCRITICAL STYLE RULES (MUST FOLLOW):\n${selectedThemeDesc}\n\nIMPORTANT: Define these colors as CSS variables in :root and use var(--...) everywhere. Ensure ALL components use these exact colors and vibe. DO NOT USE DEFAULT COLORS.`;
       
       // Language instructions for content generation
       const langInstructions = lang === 'ar' 

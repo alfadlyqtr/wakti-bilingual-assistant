@@ -27,6 +27,7 @@ import {
   Music,
   Video,
   Image as ImageIcon,
+  QrCode,
   RefreshCw,
   Plus,
   Loader2,
@@ -45,6 +46,7 @@ import {
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import StudioImageGenerator from '@/components/studio/StudioImageGenerator';
 import SavedImagesTab from '@/components/studio/SavedImagesTab';
+import QRCodeCreator from '@/components/studio/QRCodeCreator';
 import { useLocation } from 'react-router-dom';
 
 const normalizeAudioUrl = (url: string) => {
@@ -728,7 +730,7 @@ function VideoThumbnail({ fallbackDuration }: {
 
 export default function MusicStudio() {
   const { language } = useTheme();
-  const [mainTab, setMainTab] = useState<'studio' | 'music' | 'video' | 'image'>('studio');
+  const [mainTab, setMainTab] = useState<'studio' | 'music' | 'video' | 'image' | 'qrcode'>('studio');
   const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor'>('compose');
   const [videoMode, setVideoMode] = useState<'ai' | 'saved'>('ai');
   const [imageMode, setImageMode] = useState<'create' | 'saved'>('create');
@@ -744,7 +746,7 @@ export default function MusicStudio() {
 
   const isArabic = language === 'ar';
 
-  const studioCards: { key: 'music' | 'video' | 'image'; icon: React.ReactNode; titleEn: string; titleAr: string; descEn: string; descAr: string; cardBg: string; iconBg: string; iconColor: string; shadow: string }[] = [
+  const studioCards: { key: 'music' | 'video' | 'image' | 'qrcode'; icon: React.ReactNode; titleEn: string; titleAr: string; descEn: string; descAr: string; cardBg: string; iconBg: string; iconColor: string; shadow: string }[] = [
     {
       key: 'music',
       icon: <Music className="h-6 w-6" />,
@@ -781,44 +783,42 @@ export default function MusicStudio() {
       iconColor: 'text-white',
       shadow: 'shadow-[0_8px_30px_-4px_hsla(160,60%,40%,0.25)] dark:shadow-[0_8px_30px_-4px_hsla(160,80%,55%,0.2)]',
     },
+    {
+      key: 'qrcode',
+      icon: <QrCode className="h-6 w-6" />,
+      titleEn: 'QR Code',
+      titleAr: 'رمز QR',
+      descEn: 'Create custom QR codes for links, contacts, Wi-Fi & more.',
+      descAr: 'أنشئ رموز QR مخصصة للروابط وجهات الاتصال والواي فاي والمزيد.',
+      cardBg: 'bg-gradient-to-br from-sky-50 via-blue-50/80 to-indigo-50 dark:from-sky-950/40 dark:via-blue-950/30 dark:to-indigo-950/40',
+      iconBg: 'bg-gradient-to-br from-sky-500 to-indigo-600',
+      iconColor: 'text-white',
+      shadow: 'shadow-[0_8px_30px_-4px_hsla(210,70%,50%,0.25)] dark:shadow-[0_8px_30px_-4px_hsla(210,100%,65%,0.2)]',
+    },
   ];
 
   return (
     <div className="w-full max-w-6xl mx-auto p-3 md:p-6 pb-20 md:pb-6 space-y-4">
-      <div className="flex items-center gap-2 border-b border-border pb-3">
-        <button
-          onClick={() => setMainTab('music')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-            mainTab === 'music'
-              ? 'bg-primary text-primary-foreground shadow-md'
-              : 'bg-muted hover:bg-muted/80 text-muted-foreground'
-          }`}
-        >
-          <Music className="h-4 w-4" />
-          {isArabic ? 'الموسيقى' : 'Music'}
-        </button>
-        <button
-          onClick={() => setMainTab('video')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-            mainTab === 'video'
-              ? 'bg-primary text-primary-foreground shadow-md'
-              : 'bg-muted hover:bg-muted/80 text-muted-foreground'
-          }`}
-        >
-          <Video className="h-4 w-4" />
-          {isArabic ? 'الفيديو' : 'Video'}
-        </button>
-        <button
-          onClick={() => setMainTab('image')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-            mainTab === 'image'
-              ? 'bg-primary text-primary-foreground shadow-md'
-              : 'bg-muted hover:bg-muted/80 text-muted-foreground'
-          }`}
-        >
-          <ImageIcon className="h-4 w-4" />
-          {isArabic ? 'الصورة' : 'Image'}
-        </button>
+      <div className="flex items-center gap-2 pb-3 overflow-x-auto">
+        {[
+          { key: 'music' as const, icon: <Music className="h-4 w-4" />, labelEn: 'Music', labelAr: 'الموسيقى' },
+          { key: 'video' as const, icon: <Video className="h-4 w-4" />, labelEn: 'Video', labelAr: 'الفيديو' },
+          { key: 'image' as const, icon: <ImageIcon className="h-4 w-4" />, labelEn: 'Image', labelAr: 'الصورة' },
+          { key: 'qrcode' as const, icon: <QrCode className="h-4 w-4" />, labelEn: 'QR Code', labelAr: 'رمز QR' },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setMainTab(tab.key)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all whitespace-nowrap ${
+              mainTab === tab.key
+                ? 'bg-gradient-to-r from-[#060541] to-purple-700 dark:from-purple-600 dark:to-blue-500 text-white shadow-[0_4px_16px_hsla(260,70%,40%,0.35)] dark:shadow-[0_4px_16px_hsla(260,70%,65%,0.3)] scale-[1.02]'
+                : 'bg-white dark:bg-white/[0.06] text-muted-foreground hover:bg-gray-50 dark:hover:bg-white/[0.1] shadow-[0_2px_8px_hsla(0,0%,0%,0.06)] dark:shadow-[0_2px_8px_hsla(0,0%,0%,0.25)] border border-gray-200/60 dark:border-white/[0.08]'
+            }`}
+          >
+            {tab.icon}
+            {isArabic ? tab.labelAr : tab.labelEn}
+          </button>
+        ))}
       </div>
 
       {/* ─── Studio Landing Hub ─── */}
@@ -835,7 +835,7 @@ export default function MusicStudio() {
           </div>
 
           {/* Feature Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 md:gap-6">
             {studioCards.map((card) => (
               <button
                 key={card.key}
@@ -918,6 +918,8 @@ export default function MusicStudio() {
           )}
         </>
       )}
+
+      {mainTab === 'qrcode' && <QRCodeCreator />}
 
       {mainTab === 'image' && (
         <>
