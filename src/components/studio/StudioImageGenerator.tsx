@@ -348,14 +348,15 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               .upload(fn, b, { contentType: b.type, upsert: false });
             if (!ue) {
               const { data: ud } = supabase.storage.from('generated-images').getPublicUrl(fn);
-              if (ud?.publicUrl) {
-                setSavedBucketUrl(ud.publicUrl);
+              const publicUrl = ud?.publicUrl?.trim();
+              if (publicUrl) {
+                setSavedBucketUrl(publicUrl);
                 // Insert DB row to get an ID for the branded share page
                 const { data: row } = await (supabase as any)
                   .from('user_generated_images')
                   .insert({
                     user_id: user.id,
-                    image_url: ud.publicUrl,
+                    image_url: publicUrl,
                     prompt: prompt || null,
                     submode,
                     quality: submode === 'text2image' ? quality : null,
@@ -461,7 +462,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         const { data: urlData } = supabase.storage
           .from('generated-images')
           .getPublicUrl(fileName);
-        bucketUrl = urlData?.publicUrl;
+        bucketUrl = urlData?.publicUrl?.trim();
         if (!bucketUrl) throw new Error('Failed to get public URL');
         storagePath = fileName;
         setSavedBucketUrl(bucketUrl);

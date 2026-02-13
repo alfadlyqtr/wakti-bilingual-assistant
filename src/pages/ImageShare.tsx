@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Download, ExternalLink } from 'lucide-react';
 
 const APP_STORE_URL = 'https://apps.apple.com/us/app/wakti-ai/id6755150700';
 const LOGO_URL = '/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png';
@@ -73,24 +72,6 @@ export default function ImageShare() {
     }
   }, [image]);
 
-  const handleDownloadImage = async () => {
-    if (!image) return;
-    try {
-      const res = await fetch(image.image_url);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `wakti-ai-${Date.now()}.jpg`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch {
-      window.open(image.image_url, '_blank');
-    }
-  };
-
   // ─── Loading ───
   if (loading) {
     return (
@@ -112,7 +93,6 @@ export default function ImageShare() {
           rel="noopener noreferrer"
           className="mt-4 px-6 py-3 rounded-2xl bg-gradient-to-r from-[#060541] to-purple-600 text-white font-semibold text-sm flex items-center gap-2 active:scale-95 transition-transform"
         >
-          <Download className="h-4 w-4" />
           Download Wakti AI
         </a>
       </div>
