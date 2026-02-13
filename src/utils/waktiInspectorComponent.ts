@@ -1,12 +1,12 @@
 // WaktiInspector - A React component that runs INSIDE the Sandpack preview
 // This is injected into the index.js entry point so it executes in the iframe
-// VERSION 2 - outline-only highlight, no tint/shadow, skips large containers
+// VERSION 3 - Mobile-first: tap-to-select, touch events, bottom-sheet ready
 
 export const WAKTI_INSPECTOR_COMPONENT = `
-// ========== WAKTI INSPECTOR v2026-02-12 ==========
+// ========== WAKTI INSPECTOR v2026-02-13 ==========
 // Runs inside the Sandpack iframe to enable Visual Edits
-// IMPORTANT: No backgroundColor, no boxShadow — outline-only highlighting
-var WAKTI_INSPECTOR_VERSION = 'v2026-02-12-2';
+// MOBILE-FIRST: Touch events + mouse events, tap-to-select
+var WAKTI_INSPECTOR_VERSION = 'v2026-02-13-mobile';
 console.log('[WaktiInspector] Version:', WAKTI_INSPECTOR_VERSION);
 
 function WaktiInspector() {
@@ -124,7 +124,7 @@ function WaktiInspector() {
     return function() { window.removeEventListener('message', handleMessage); };
   }, []);
 
-  // Handle mouse events when in inspect mode
+  // Handle mouse + touch events when in inspect mode (MOBILE-FIRST)
   React.useEffect(function() {
     if (!_inspectMode || !overlayRef.current) return;
     
@@ -132,34 +132,28 @@ function WaktiInspector() {
     var label = overlayRef.current.label;
     var vw = window.innerWidth;
     var vh = window.innerHeight;
+    var isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    var touchStartTarget = null;
+    var touchStartTime = 0;
+    
+    var isSkippable = function(target) {
+      if (!target || target === overlay || target.id === 'wakti-inspector-overlay' || target.id === 'wakti-inspector-label') return true;
+      if (target === document.body || target === document.documentElement || target.id === 'root') return true;
+      var rect = target.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return true;
+      if (rect.width > vw * 0.85 && rect.height > vh * 0.85) return true;
+      return false;
+    };
     
     var updateOverlay = function(target) {
-      if (!target || target === overlay || target.id === 'wakti-inspector-overlay' || target.id === 'wakti-inspector-label') {
-        overlay.style.display = 'none';
-        return;
-      }
-      
-      // Skip html, body, root
-      if (target === document.body || target === document.documentElement || target.id === 'root') {
-        overlay.style.display = 'none';
-        return;
-      }
-      
-      var rect = target.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) {
-        overlay.style.display = 'none';
-        return;
-      }
-      
-      // SKIP LARGE CONTAINERS: if element covers >85% of viewport, walk to first smaller child
-      if (rect.width > vw * 0.85 && rect.height > vh * 0.85) {
+      if (isSkippable(target)) {
         overlay.style.display = 'none';
         return;
       }
       
       currentTargetRef.current = target;
+      var rect = target.getBoundingClientRect();
       
-      // ALWAYS enforce outline-only styles
       overlay.style.display = 'block';
       overlay.style.top = rect.top + 'px';
       overlay.style.left = rect.left + 'px';
@@ -177,21 +171,23 @@ function WaktiInspector() {
       label.textContent = labelText;
     };
 
-    var handleMouseMove = function(e) { updateOverlay(e.target); };
-    var handleMouseOut = function(e) {
-      if (!e.relatedTarget || e.relatedTarget === document.body) overlay.style.display = 'none';
-    };
-
-    var handleClick = function(e) {
-      var target = e.target;
-      if (!target || target === overlay || target.id === 'wakti-inspector-overlay') return;
+    var selectElement = function(target) {
+      if (isSkippable(target)) return;
       
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-
       var rect = target.getBoundingClientRect();
       var cs = window.getComputedStyle(target);
+      
+      // Build breadcrumb path (for bottom sheet navigation)
+      var breadcrumb = [];
+      var el = target;
+      var maxDepth = 5;
+      while (el && el !== document.body && el !== document.documentElement && maxDepth > 0) {
+        var tag = el.tagName.toLowerCase();
+        var cls = (el.className && typeof el.className === 'string') ? el.className.split(' ').filter(function(c) { return c && c.indexOf('wakti') === -1; })[0] : '';
+        breadcrumb.unshift(cls ? tag + '.' + cls : tag);
+        el = el.parentElement;
+        maxDepth--;
+      }
       
       var elementInfo = {
         tagName: target.tagName.toLowerCase(),
@@ -200,30 +196,99 @@ function WaktiInspector() {
         innerText: (target.innerText || '').trim().substring(0, 150),
         openingTag: target.outerHTML.split('>')[0] + '>',
         computedStyle: { color: cs.color, backgroundColor: cs.backgroundColor, fontSize: cs.fontSize },
-        rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
+        rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+        breadcrumb: breadcrumb
       };
 
       console.log('[WaktiInspector] Element selected:', elementInfo.tagName, elementInfo.innerText.substring(0, 30));
       window.parent.postMessage({ type: 'WAKTI_ELEMENT_SELECTED', payload: elementInfo }, '*');
       
-      // Brief flash feedback — very subtle
-      overlay.style.background = 'rgba(99, 102, 241, 0.08)';
-      setTimeout(function() { overlay.style.background = 'transparent'; }, 120);
+      // Flash feedback
+      overlay.style.background = 'rgba(99, 102, 241, 0.12)';
+      setTimeout(function() { overlay.style.background = 'transparent'; }, 150);
     };
 
-    var handleMouseDown = function(e) { e.preventDefault(); };
+    // === MOUSE EVENTS (desktop fallback) ===
+    var handleMouseMove = function(e) { updateOverlay(e.target); };
+    var handleMouseOut = function(e) {
+      if (!e.relatedTarget || e.relatedTarget === document.body) overlay.style.display = 'none';
+    };
+    var handleClick = function(e) {
+      if (isTouchDevice) return; // Skip on touch devices — handled by touch events
+      var target = e.target;
+      if (isSkippable(target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      updateOverlay(target);
+      selectElement(target);
+    };
+    var handleMouseDown = function(e) {
+      if (isTouchDevice) return;
+      e.preventDefault();
+    };
 
+    // === TOUCH EVENTS (mobile-first) ===
+    var handleTouchStart = function(e) {
+      if (!e.touches || !e.touches[0]) return;
+      var touch = e.touches[0];
+      touchStartTarget = document.elementFromPoint(touch.clientX, touch.clientY);
+      touchStartTime = Date.now();
+      
+      // Show highlight immediately on touch
+      if (touchStartTarget && !isSkippable(touchStartTarget)) {
+        updateOverlay(touchStartTarget);
+      }
+    };
+    
+    var handleTouchEnd = function(e) {
+      // Only select if it was a quick tap (< 500ms), not a scroll
+      var elapsed = Date.now() - touchStartTime;
+      if (elapsed > 500 || !touchStartTarget) {
+        touchStartTarget = null;
+        return;
+      }
+      
+      var target = touchStartTarget;
+      touchStartTarget = null;
+      
+      if (isSkippable(target)) return;
+      
+      // Prevent the tap from triggering links/buttons in the preview
+      e.preventDefault();
+      e.stopPropagation();
+      
+      updateOverlay(target);
+      selectElement(target);
+    };
+    
+    var handleTouchMove = function(e) {
+      // If user is scrolling, cancel the tap selection
+      touchStartTarget = null;
+      overlay.style.display = 'none';
+    };
+
+    // Register all events
     document.addEventListener('mousemove', handleMouseMove, true);
     document.addEventListener('mouseout', handleMouseOut, true);
     document.addEventListener('click', handleClick, true);
     document.addEventListener('mousedown', handleMouseDown, true);
-    document.body.style.cursor = 'crosshair';
+    document.addEventListener('touchstart', handleTouchStart, { capture: true, passive: true });
+    document.addEventListener('touchend', handleTouchEnd, { capture: true, passive: false });
+    document.addEventListener('touchmove', handleTouchMove, { capture: true, passive: true });
+    
+    if (!isTouchDevice) {
+      document.body.style.cursor = 'crosshair';
+    }
 
     return function() {
       document.removeEventListener('mousemove', handleMouseMove, true);
       document.removeEventListener('mouseout', handleMouseOut, true);
       document.removeEventListener('click', handleClick, true);
       document.removeEventListener('mousedown', handleMouseDown, true);
+      document.removeEventListener('touchstart', handleTouchStart, true);
+      document.removeEventListener('touchend', handleTouchEnd, true);
+      document.removeEventListener('touchmove', handleTouchMove, true);
       document.body.style.cursor = '';
       overlay.style.display = 'none';
     };

@@ -135,30 +135,19 @@ export function PreviewContainer({
         )}
       </Suspense>
       
-      {/* Visual Edit Mode Banner */}
+      {/* Visual Edit Mode — tiny non-blocking pill indicator */}
       <AnimatePresence>
         {elementSelectMode && (
           <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="absolute top-[56px] left-0 right-0 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-2.5 text-sm flex items-center justify-between z-50 shadow-lg pointer-events-none"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 0.7, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="absolute top-[60px] left-1/2 -translate-x-1/2 z-30 pointer-events-none"
           >
-            <span className="flex items-center gap-2 font-medium">
-              <motion.div
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ duration: 1, repeat: Infinity }}
-              >
-                <MousePointer2 className="h-4 w-4" />
-              </motion.div>
-              {isRTL ? 'وضع التحرير المرئي - انقر على عنصر لتحريره' : 'Visual Edit Mode - Click an element to edit'}
-            </span>
-            <button 
-              onClick={onCloseElementSelectMode}
-              className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded-lg transition-colors pointer-events-auto"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="bg-indigo-600/60 backdrop-blur-sm text-white px-2.5 py-0.5 rounded-full text-[9px] font-medium flex items-center gap-1 shadow">
+              <MousePointer2 className="h-2.5 w-2.5" />
+              {isRTL ? 'اضغط على عنصر' : 'Click to edit'}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

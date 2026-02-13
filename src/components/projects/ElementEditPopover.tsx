@@ -1070,9 +1070,6 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
                   </Button>
                 </div>
                 
-                <p className="text-[10px] text-center text-emerald-500/80 pt-2">
-                  ✓ {isRTL ? 'تغيير الصورة مجاني - بدون AI' : 'Image change is FREE - No AI needed'}
-                </p>
               </div>
             </>
           ) : (

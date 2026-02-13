@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { decode as base64Decode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 // WalletWallet API for pass generation
 // API Docs: https://walletwallet.dev/docs
@@ -256,8 +257,8 @@ serve(async (req) => {
         // Convert URL-safe base64 back to standard base64
         let base64 = dataParam.replace(/-/g, '+').replace(/_/g, '/');
         while (base64.length % 4) base64 += '=';
-        const decoded = atob(base64);
-        const jsonString = decodeURIComponent(escape(decoded));
+        const bytes = base64Decode(base64);
+        const jsonString = new TextDecoder().decode(bytes);
         cardData = JSON.parse(jsonString);
         console.log("Decoded card data for:", cardData.firstName, cardData.lastName);
       } catch (e) {

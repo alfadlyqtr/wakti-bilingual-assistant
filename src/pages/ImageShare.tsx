@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { isNativelyApp } from '@/integrations/natively/browserBridge';
+import { ArrowLeft } from 'lucide-react';
 
 const APP_STORE_URL = 'https://apps.apple.com/us/app/wakti-ai/id6755150700';
 const LOGO_URL = '/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png';
@@ -15,9 +17,11 @@ interface ImageRecord {
 
 export default function ImageShare() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [image, setImage] = useState<ImageRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isInApp = isNativelyApp();
 
   useEffect(() => {
     const load = async () => {
@@ -105,6 +109,15 @@ export default function ImageShare() {
       {/* Header */}
       <header className="flex items-center justify-between px-5 py-4">
         <div className="flex items-center gap-3">
+          {isInApp && (
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center gap-1 px-3 py-2 rounded-xl bg-white/10 border border-white/10 text-white text-sm font-semibold active:scale-95 transition-transform"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Wakti
+            </button>
+          )}
           <img src={LOGO_URL} alt="Wakti" className="w-10 h-10 rounded-xl shadow-lg" />
           <div>
             <h1 className="text-white font-bold text-base leading-tight">Wakti AI</h1>
@@ -134,16 +147,26 @@ export default function ImageShare() {
           </p>
         </div>
 
-        {/* Download Wakti CTA */}
-        <a
-          href={APP_STORE_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="w-full max-w-sm mx-auto flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-[#060541] via-purple-600 to-blue-600 text-white font-bold text-sm shadow-[0_4px_24px_hsla(260,70%,50%,0.4)] active:scale-[0.97] transition-transform"
-        >
-          <img src={LOGO_URL} alt="" className="w-5 h-5 rounded-md" />
-          Download Wakti AI
-        </a>
+        {/* CTA: Back to Wakti (in-app) or Download Wakti AI (browser) */}
+        {isInApp ? (
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="w-full max-w-sm mx-auto flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-[#060541] via-purple-600 to-blue-600 text-white font-bold text-sm shadow-[0_4px_24px_hsla(260,70%,50%,0.4)] active:scale-[0.97] transition-transform"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Wakti
+          </button>
+        ) : (
+          <a
+            href={APP_STORE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full max-w-sm mx-auto flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-[#060541] via-purple-600 to-blue-600 text-white font-bold text-sm shadow-[0_4px_24px_hsla(260,70%,50%,0.4)] active:scale-[0.97] transition-transform"
+          >
+            <img src={LOGO_URL} alt="" className="w-5 h-5 rounded-md" />
+            Download Wakti AI
+          </a>
+        )}
       </footer>
     </div>
   );

@@ -129,6 +129,7 @@ import { QuickActionButtons } from '@/components/projects/QuickActionButtons';
 import { ClarifyingQuestionsModal, ClarifyingQuestion } from '@/components/projects/ClarifyingQuestionsModal';
 import { MigrationApprovalDialog } from '@/components/projects/MigrationApprovalDialog';
 import { ElementEditPopover } from '@/components/projects/ElementEditPopover';
+import MobileEditBottomSheet from '@/components/projects/MobileEditBottomSheet';
 import { ToolUsageIndicator } from '@/components/wakti-ai-v2/ToolUsageIndicator';
 import { ErrorExplanationCard } from '@/components/wakti-ai-v2/ErrorExplanationCard';
 import { AutoFixCard, parseAutoFixMessage } from '@/components/projects/AutoFixCard';
@@ -828,6 +829,8 @@ export default function ProjectDetail() {
   const [showProjectCompleteModal, setShowProjectCompleteModal] = useState(false);
 
   // Element selection mode - for "Send Element" feature (Visual Inspector)
+  // On mobile, auto-enable so users can tap elements immediately
+  const isMobileDevice = typeof window !== 'undefined' && window.innerWidth < 768;
   const [elementSelectMode, setElementSelectMode] = useState(false);
   const [selectedElementInfo, setSelectedElementInfo] = useState<{
     tagName: string;
@@ -847,6 +850,13 @@ export default function ProjectDetail() {
   
   // Force Sandpack re-render key (incremented on revert, starts with timestamp to force fresh mount)
   const [sandpackKey, setSandpackKey] = useState(() => Date.now());
+
+  // AUTO-ENABLE visual edit on mobile when project is ready (not generating)
+  useEffect(() => {
+    if (isMobileDevice && !isGenerating && Object.keys(generatedFiles).length > 0 && !elementSelectMode) {
+      setElementSelectMode(true);
+    }
+  }, [isMobileDevice, isGenerating, generatedFiles]);
 
   // Visual Edit Mode keyboard shortcuts (Ctrl+Z undo, Ctrl+Shift+Z redo)
   useEffect(() => {
@@ -8497,7 +8507,10 @@ ${fixInstructions}
                           setSelectedElementInfo(elementInfo);
                           setShowElementEditPopover(true); // Show edit popover immediately
                         }
-                        setElementSelectMode(false);
+                        // On mobile, keep inspect mode on for continuous tap-to-edit
+                        if (!isMobileDevice) {
+                          setElementSelectMode(false);
+                        }
                       }}
                     />
                   </div>
@@ -8512,24 +8525,18 @@ ${fixInstructions}
               )}
             </Suspense>
             
-            {/* Visual Edit Mode Active Banner - thin top bar, no gradient fill */}
+            {/* Visual Edit Mode — no blocking banner, just a tiny non-interactive pill */}
             {elementSelectMode && (
-              <div className="absolute top-[56px] left-0 right-0 h-10 bg-indigo-600/90 backdrop-blur-sm text-white px-4 text-xs flex items-center justify-between z-50 shadow-md pointer-events-none">
-                <span className="flex items-center gap-2 font-medium">
-                  <MousePointer2 className="h-3.5 w-3.5 animate-pulse" />
-                  {isRTL ? 'وضع التحرير المرئي - انقر على عنصر لتحريره' : 'Visual Edit Mode - Click an element to edit'}
-                </span>
-                <button 
-                  onClick={() => setElementSelectMode(false)}
-                  className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded-lg transition-colors pointer-events-auto"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+              <div className="absolute top-[60px] left-1/2 -translate-x-1/2 z-30 pointer-events-none opacity-70">
+                <div className="bg-indigo-600/60 backdrop-blur-sm text-white px-2.5 py-0.5 rounded-full text-[9px] font-medium flex items-center gap-1 shadow">
+                  <MousePointer2 className="h-2.5 w-2.5" />
+                  {isRTL ? 'اضغط على عنصر' : 'Click to edit'}
+                </div>
               </div>
             )}
             
-            {/* Selected Element Floating Bar - Only show when not in popover mode */}
-            {selectedElementInfo && !showElementEditPopover && (
+            {/* Selected Element Floating Bar - Only show on desktop when not in popover mode */}
+            {selectedElementInfo && !showElementEditPopover && !isMobileDevice && (
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-zinc-900 border border-indigo-500/50 p-3 rounded-xl shadow-2xl flex items-center gap-4 z-50 animate-in slide-in-from-bottom-5 max-w-md">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -8900,8 +8907,138 @@ ${fixInstructions}
         isRTL={isRTL}
       />
 
-      {/* Element Edit Popover - Visual Edits */}
+      {/* Element Edit - Mobile Bottom Sheet OR Desktop Popover */}
       {showElementEditPopover && selectedElementInfo && (
+        typeof window !== 'undefined' && window.innerWidth < 768 ? (
+        <MobileEditBottomSheet
+          element={selectedElementInfo}
+          onClose={() => {
+            setShowElementEditPopover(false);
+            setSelectedElementInfo(null);
+          }}
+          onDirectEdit={(changes) => {
+            // Apply direct edits to the code - NO AI PROMPTS, NO CREDITS!
+            const candidatePaths = Object.keys(generatedFiles).filter((p) =>
+              /\.(jsx?|tsx?)$/.test(p)
+            );
+            candidatePaths.sort((a, b) => (a === '/App.js' ? -1 : b === '/App.js' ? 1 : 0));
+
+            let applied = false;
+            let appliedPath: string | null = null;
+            let result: { success: boolean; code: string; message: string } | null = null;
+
+            for (const path of candidatePaths) {
+              const currentCode = generatedFiles[path] || '';
+              const attempt = applyDirectEdits(currentCode, selectedElementInfo, changes);
+              if (attempt.success && validateJSX(attempt.code)) {
+                applied = true;
+                appliedPath = path;
+                result = attempt;
+                break;
+              }
+            }
+
+            if (applied && appliedPath && result) {
+              visualEditHistory.pushState(generatedFiles, result.message);
+              const newFiles = { ...generatedFiles, [appliedPath]: result.code };
+              setGeneratedFiles(newFiles);
+              if (appliedPath === '/App.js') setCodeContent(result.code);
+
+              const finalResult = result;
+              (async () => {
+                try {
+                  const rows = Object.entries(newFiles).map(([path, content]) => ({
+                    project_id: id, path, content,
+                  }));
+                  await (supabase.from('project_files' as any).upsert(rows, { onConflict: 'project_id,path' }) as any);
+                  toast.success(isRTL ? `✓ تم الحفظ: ${finalResult.message}` : `✓ Saved: ${finalResult.message}`);
+                } catch (err) {
+                  console.error('[Visual Edit] Auto-save failed:', err);
+                  toast.warning(isRTL ? `تم التطبيق: ${finalResult.message}` : `Applied: ${finalResult.message}`);
+                }
+              })();
+            } else {
+              toast.error(isRTL ? 'تعذر تطبيق التعديل. جرّب "تعديل بالذكاء الاصطناعي".' : 'Could not apply edit. Try "AI Edit".');
+            }
+            setShowElementEditPopover(false);
+            setSelectedElementInfo(null);
+          }}
+          onImageChange={() => {
+            const className = selectedElementInfo?.className || '';
+            const openingTag = selectedElementInfo?.openingTag || '';
+            const isMultiImageContext = /carousel|slider|swiper|slick|embla|gallery|grid.*image|photo.*grid/i.test(className + ' ' + openingTag);
+            if (isMultiImageContext) {
+              setIsChangingCarouselImages(true);
+              setPhotoSelectorMultiSelect(true);
+            } else {
+              setPendingElementImageEdit({ elementInfo: selectedElementInfo, originalPrompt: 'Replace image' });
+              setPhotoSelectorMultiSelect(false);
+            }
+            setPhotoSelectorInitialTab('stock');
+            setShowStockPhotoSelector(true);
+            setShowElementEditPopover(false);
+          }}
+          onAIEdit={(prompt) => {
+            const contextPrompt = `For the ${selectedElementInfo.tagName} element ${selectedElementInfo.className ? `with class "${selectedElementInfo.className.split(' ')[0]}"` : ''} containing "${selectedElementInfo.innerText.substring(0, 50)}...": ${prompt}`;
+            setChatInput(contextPrompt);
+            setShowElementEditPopover(false);
+            setSelectedElementInfo(null);
+          }}
+          onSelectParent={() => {
+            // Send message to iframe to select parent element
+            const iframe = document.querySelector('.sp-preview-container iframe') as HTMLIFrameElement;
+            if (iframe?.contentWindow) {
+              iframe.contentWindow.postMessage({ type: 'WAKTI_SELECT_PARENT' }, '*');
+            }
+          }}
+          onInlineTextSave={(newText) => {
+            // Apply text change directly
+            const candidatePaths = Object.keys(generatedFiles).filter((p) => /\.(jsx?|tsx?)$/.test(p));
+            candidatePaths.sort((a, b) => (a === '/App.js' ? -1 : b === '/App.js' ? 1 : 0));
+            for (const path of candidatePaths) {
+              const currentCode = generatedFiles[path] || '';
+              const oldText = selectedElementInfo.innerText;
+              if (oldText && currentCode.includes(oldText)) {
+                const newCode = currentCode.replace(oldText, newText);
+                if (validateJSX(newCode)) {
+                  visualEditHistory.pushState(generatedFiles, isRTL ? 'تعديل النص' : 'Text edit');
+                  const newFiles = { ...generatedFiles, [path]: newCode };
+                  setGeneratedFiles(newFiles);
+                  if (path === '/App.js') setCodeContent(newCode);
+                  toast.success(isRTL ? 'تم تحديث النص!' : 'Text updated!');
+                  // Auto-save
+                  (async () => {
+                    try {
+                      const rows = Object.entries(newFiles).map(([p, c]) => ({ project_id: id, path: p, content: c }));
+                      await (supabase.from('project_files' as any).upsert(rows, { onConflict: 'project_id,path' }) as any);
+                    } catch (err) { console.error('[Visual Edit] Text save failed:', err); }
+                  })();
+                  break;
+                }
+              }
+            }
+          }}
+          isRTL={isRTL}
+          canUndo={visualEditHistory.canUndo}
+          canRedo={visualEditHistory.canRedo}
+          onUndo={() => {
+            const previousFiles = visualEditHistory.undo();
+            if (previousFiles) {
+              setGeneratedFiles(previousFiles);
+              setCodeContent(previousFiles['/App.js'] || '');
+              toast.info(isRTL ? 'تم التراجع' : 'Undone');
+            }
+          }}
+          onRedo={() => {
+            const nextFiles = visualEditHistory.redo();
+            if (nextFiles) {
+              setGeneratedFiles(nextFiles);
+              setCodeContent(nextFiles['/App.js'] || '');
+              toast.info(isRTL ? 'تم الإعادة' : 'Redone');
+            }
+          }}
+        />
+        ) : (
         <ElementEditPopover
           element={selectedElementInfo}
           onClose={() => {
@@ -9152,6 +9289,7 @@ ${fixInstructions}
             }
           }}
         />
+        )
       )}
       </>
       )}
