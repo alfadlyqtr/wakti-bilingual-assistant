@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { QRCodeCanvas } from 'qrcode.react';
+import { supabase, getCurrentUserId } from '@/integrations/supabase/client';
 import {
   QrCode,
   Download,
@@ -45,22 +46,7 @@ interface SavedQR {
   label: string;
   qrType: QRType;
   dataUrl: string;
-  createdAt: number;
-}
-
-/* ─────────────────────── Storage ─────────────────────── */
-
-const STORAGE_KEY = 'wakti_saved_qr_codes';
-
-function loadSavedQRs(): SavedQR[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function persistSavedQRs(items: SavedQR[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); } catch { /* quota */ }
+  createdAt: string;
 }
 
 /* ─────────────────────── Presets ─────────────────────── */
@@ -98,7 +84,43 @@ export default function QRCodeCreator() {
 
   // Sub-tabs: create / saved
   const [subTab, setSubTab] = useState<SubTab>('create');
-  const [savedQRs, setSavedQRs] = useState<SavedQR[]>(() => loadSavedQRs());
+  const [savedQRs, setSavedQRs] = useState<SavedQR[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(false);
+
+  // Load saved QR codes from Supabase
+  const fetchSavedQRs = useCallback(async () => {
+    try {
+      setLoadingSaved(true);
+      const userId = await getCurrentUserId();
+      if (!userId) { setSavedQRs([]); return; }
+      const { data, error } = await supabase
+        .from('saved_qr_codes')
+        .select('id, label, qr_type, data_url, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setSavedQRs((data || []).map(r => ({
+        id: r.id,
+        label: r.label,
+        qrType: r.qr_type as QRType,
+        dataUrl: r.data_url,
+        createdAt: r.created_at,
+      })));
+    } catch (err) {
+      console.error('Failed to load saved QR codes:', err);
+    } finally {
+      setLoadingSaved(false);
+    }
+  }, []);
+
+  // Fetch on mount and when switching to saved tab
+  useEffect(() => {
+    fetchSavedQRs();
+  }, []);
+
+  useEffect(() => {
+    if (subTab === 'saved') fetchSavedQRs();
+  }, [subTab, fetchSavedQRs]);
 
   // QR type
   const [qrType, setQrType] = useState<QRType>('url');
@@ -215,30 +237,43 @@ export default function QRCodeCreator() {
     }
   }, [qrDataUrl, isArabic]);
 
-  // Save current QR code
-  const handleSaveQR = useCallback(() => {
+  // Save current QR code to Supabase
+  const handleSaveQR = useCallback(async () => {
     if (!qrDataUrl) return;
-    const label = qrType === 'url' ? urlInput : qrType === 'text' ? textInput : qrType === 'email' ? emailInput : qrType === 'phone' ? phoneInput : wifiSSID;
-    const item: SavedQR = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      label: label.slice(0, 80) || 'QR Code',
-      qrType,
-      dataUrl: qrDataUrl,
-      createdAt: Date.now(),
-    };
-    const updated = [item, ...savedQRs];
-    setSavedQRs(updated);
-    persistSavedQRs(updated);
-    toast.success(isArabic ? 'تم حفظ رمز QR' : 'QR code saved');
-  }, [qrDataUrl, qrType, urlInput, textInput, emailInput, phoneInput, wifiSSID, savedQRs, isArabic]);
+    try {
+      const userId = await getCurrentUserId();
+      if (!userId) {
+        toast.error(isArabic ? 'يرجى تسجيل الدخول أولاً' : 'Please sign in first');
+        return;
+      }
+      const label = qrType === 'url' ? urlInput : qrType === 'text' ? textInput : qrType === 'email' ? emailInput : qrType === 'phone' ? phoneInput : wifiSSID;
+      const { error } = await supabase.from('saved_qr_codes').insert({
+        user_id: userId,
+        label: (label || '').slice(0, 80) || 'QR Code',
+        qr_type: qrType,
+        data_url: qrDataUrl,
+      });
+      if (error) throw error;
+      toast.success(isArabic ? 'تم حفظ رمز QR' : 'QR code saved');
+      fetchSavedQRs();
+    } catch (err) {
+      console.error('Failed to save QR code:', err);
+      toast.error(isArabic ? 'فشل الحفظ' : 'Save failed');
+    }
+  }, [qrDataUrl, qrType, urlInput, textInput, emailInput, phoneInput, wifiSSID, isArabic, fetchSavedQRs]);
 
-  // Delete a saved QR code
-  const handleDeleteQR = useCallback((id: string) => {
-    const updated = savedQRs.filter(q => q.id !== id);
-    setSavedQRs(updated);
-    persistSavedQRs(updated);
-    toast.success(isArabic ? 'تم الحذف' : 'Deleted');
-  }, [savedQRs, isArabic]);
+  // Delete a saved QR code from Supabase
+  const handleDeleteQR = useCallback(async (id: string) => {
+    try {
+      const { error } = await supabase.from('saved_qr_codes').delete().eq('id', id);
+      if (error) throw error;
+      setSavedQRs(prev => prev.filter(q => q.id !== id));
+      toast.success(isArabic ? 'تم الحذف' : 'Deleted');
+    } catch (err) {
+      console.error('Failed to delete QR code:', err);
+      toast.error(isArabic ? 'فشل الحذف' : 'Delete failed');
+    }
+  }, [isArabic]);
 
   // Handle logo file upload → convert to base64 data URI
   const handleLogoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -772,7 +807,12 @@ export default function QRCodeCreator() {
       {/* ─── Saved Tab ─── */}
       {subTab === 'saved' && (
         <div className="space-y-4">
-          {savedQRs.length === 0 ? (
+          {loadingSaved ? (
+            <div className="flex flex-col items-center gap-3 py-16 text-center">
+              <div className="w-8 h-8 border-3 border-sky-500 border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm text-muted-foreground">{isArabic ? 'جاري التحميل...' : 'Loading...'}</p>
+            </div>
+          ) : savedQRs.length === 0 ? (
             <div className="flex flex-col items-center gap-4 py-16 text-center">
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-50 dark:from-white/[0.06] dark:to-white/[0.02] flex items-center justify-center">
                 <Bookmark className="h-10 w-10 text-gray-300 dark:text-gray-600" />

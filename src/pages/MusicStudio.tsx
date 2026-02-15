@@ -678,7 +678,7 @@ function VideoThumbnail({ fallbackDuration }: {
                       {v.is_public ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                     </Button>
                     <button
-                      className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-white shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all"
+                      className="w-8 h-8 rounded-full bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all"
                       onClick={() => handleShareSavedVideo(v)}
                       aria-label="Share"
                     >
@@ -754,10 +754,10 @@ export default function MusicStudio() {
       titleAr: 'الموسيقى',
       descEn: 'Compose AI-powered tracks, choose genres, moods & instruments.',
       descAr: 'أنشئ مقطوعات موسيقية بالذكاء الاصطناعي، اختر الأنماط والمزاج والآلات.',
-      cardBg: 'bg-gradient-to-br from-violet-50 via-purple-50/80 to-blue-50 dark:from-violet-950/40 dark:via-purple-950/30 dark:to-blue-950/40',
-      iconBg: 'bg-gradient-to-br from-violet-500 to-purple-600',
+      cardBg: 'bg-gradient-to-br from-sky-50 via-blue-50/80 to-cyan-50 dark:from-sky-950/40 dark:via-blue-950/30 dark:to-cyan-950/40',
+      iconBg: 'bg-gradient-to-br from-sky-500 to-blue-600',
       iconColor: 'text-white',
-      shadow: 'shadow-[0_8px_30px_-4px_hsla(270,60%,50%,0.25)] dark:shadow-[0_8px_30px_-4px_hsla(270,70%,65%,0.2)]',
+      shadow: 'shadow-[0_8px_30px_-4px_hsla(210,70%,50%,0.25)] dark:shadow-[0_8px_30px_-4px_hsla(210,100%,65%,0.2)]',
     },
     {
       key: 'video',
@@ -790,8 +790,8 @@ export default function MusicStudio() {
       titleAr: 'رمز QR',
       descEn: 'Create custom QR codes for links, contacts, Wi-Fi & more.',
       descAr: 'أنشئ رموز QR مخصصة للروابط وجهات الاتصال والواي فاي والمزيد.',
-      cardBg: 'bg-gradient-to-br from-sky-50 via-blue-50/80 to-indigo-50 dark:from-sky-950/40 dark:via-blue-950/30 dark:to-indigo-950/40',
-      iconBg: 'bg-gradient-to-br from-sky-500 to-indigo-600',
+      cardBg: 'bg-gradient-to-br from-sky-50 via-blue-50/80 to-cyan-50 dark:from-sky-950/40 dark:via-blue-950/30 dark:to-cyan-950/40',
+      iconBg: 'bg-gradient-to-br from-sky-500 to-blue-600',
       iconColor: 'text-white',
       shadow: 'shadow-[0_8px_30px_-4px_hsla(210,70%,50%,0.25)] dark:shadow-[0_8px_30px_-4px_hsla(210,100%,65%,0.2)]',
     },
@@ -799,7 +799,7 @@ export default function MusicStudio() {
 
   return (
     <div className="w-full max-w-6xl mx-auto p-3 md:p-6 pb-20 md:pb-6 space-y-4">
-      <div className="flex items-center gap-2 pb-3 overflow-x-auto">
+      <div className="grid grid-cols-4 gap-1.5 md:gap-2 pb-3">
         {[
           { key: 'music' as const, icon: <Music className="h-4 w-4" />, labelEn: 'Music', labelAr: 'الموسيقى' },
           { key: 'video' as const, icon: <Video className="h-4 w-4" />, labelEn: 'Video', labelAr: 'الفيديو' },
@@ -809,10 +809,10 @@ export default function MusicStudio() {
           <button
             key={tab.key}
             onClick={() => setMainTab(tab.key)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all whitespace-nowrap ${
+            className={`flex items-center justify-center gap-1.5 px-2 md:px-4 py-2.5 rounded-xl font-semibold text-xs md:text-sm transition-all active:scale-95 ${
               mainTab === tab.key
-                ? 'bg-gradient-to-r from-[#060541] to-purple-700 dark:from-purple-600 dark:to-blue-500 text-white shadow-[0_4px_16px_hsla(260,70%,40%,0.35)] dark:shadow-[0_4px_16px_hsla(260,70%,65%,0.3)] scale-[1.02]'
-                : 'bg-white dark:bg-white/[0.06] text-muted-foreground hover:bg-gray-50 dark:hover:bg-white/[0.1] shadow-[0_2px_8px_hsla(0,0%,0%,0.06)] dark:shadow-[0_2px_8px_hsla(0,0%,0%,0.25)] border border-gray-200/60 dark:border-white/[0.08]'
+                ? 'bg-[#060541] dark:bg-sky-600 text-white shadow-[0_4px_12px_hsla(220,60%,20%,0.3)] dark:shadow-[0_4px_12px_hsla(200,80%,50%,0.3)]'
+                : 'bg-white dark:bg-white/[0.06] text-foreground hover:bg-gray-100 dark:hover:bg-white/[0.1] shadow-[0_2px_6px_hsla(0,0%,0%,0.08)] dark:shadow-[0_2px_6px_hsla(0,0%,0%,0.3)] border border-gray-200 dark:border-white/[0.1]'
             }`}
           >
             {tab.icon}
@@ -826,10 +826,10 @@ export default function MusicStudio() {
         <div className="space-y-10 py-6 md:py-10">
           {/* Hero */}
           <div className="text-center space-y-4">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-br from-[#060541] to-purple-600 dark:from-purple-500 dark:to-blue-500 shadow-[0_4px_24px_hsla(260,70%,50%,0.35)] dark:shadow-[0_4px_24px_hsla(260,70%,65%,0.4)]">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-br from-[#060541] to-blue-600 dark:from-sky-500 dark:to-blue-600 shadow-[0_4px_24px_hsla(210,70%,40%,0.35)] dark:shadow-[0_4px_24px_hsla(210,80%,55%,0.4)]">
               <Sparkles className="h-7 w-7 text-white" />
             </div>
-            <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-[#060541] via-purple-600 to-blue-600 dark:from-white dark:via-purple-200 dark:to-blue-300 bg-clip-text text-transparent leading-tight">
+            <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-[#060541] via-blue-600 to-sky-500 dark:from-white dark:via-sky-200 dark:to-blue-300 bg-clip-text text-transparent leading-tight">
               {isArabic ? 'استوديو وقتي الإبداعي' : 'Wakti Creative Studio'}
             </h1>
           </div>

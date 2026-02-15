@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      saved_qr_codes: {
+        Row: {
+          id: string
+          user_id: string
+          label: string
+          qr_type: string
+          data_url: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          label?: string
+          qr_type?: string
+          data_url: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          label?: string
+          qr_type?: string
+          data_url?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_qr_codes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_activity_logs: {
         Row: {
           action: string
