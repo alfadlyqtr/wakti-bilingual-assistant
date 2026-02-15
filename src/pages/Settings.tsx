@@ -427,7 +427,7 @@ export default function Settings() {
                 <div className="flex items-center justify-between rounded-md border p-4">
                   <div className="space-y-1">
                     <p className="text-sm font-medium">
-                      {language === "ar" ? "إظهار يوميات وقطي" : "Show Today's Journal"}
+                      {language === "ar" ? "إظهار يوميات وقتي" : "Show Today's Journal"}
                     </p>
                   </div>
                   <Switch 

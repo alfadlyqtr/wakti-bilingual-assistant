@@ -274,7 +274,7 @@ export default function LandingPage() {
               </a>
             </div>
             <div className="mt-1 text-center text-[11px] text-white/40">
-              © 2025 WAKTI. {lang === "ar" ? "جميع الحقوق محفوظة" : "All Rights Reserved"}
+              © 2026 WAKTI. {lang === "ar" ? "جميع الحقوق محفوظة" : "All Rights Reserved"}
             </div>
           </div>
         </div>
