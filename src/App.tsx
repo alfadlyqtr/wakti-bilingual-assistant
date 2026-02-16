@@ -129,6 +129,7 @@ import WaktiPricingPage from "./pages/WaktiPricingPage";
 import WaktiBlog from "./pages/WaktiBlog";
 import WaktiBlogPost from "./pages/WaktiBlogPost";
 import WaktiContactPage from "./pages/WaktiContactPage";
+import WaktiCaseStudies from "./pages/WaktiCaseStudies";
 
 import "./App.css";
 
@@ -185,6 +186,7 @@ function App() {
                   <Route path="blog" element={<WaktiBlog />} />
                   <Route path="blog/:slug" element={<WaktiBlogPost />} />
                   <Route path="contact" element={<WaktiContactPage />} />
+                  <Route path="case-studies" element={<WaktiCaseStudies />} />
                 </Route>
                 <Route path="/home" element={<Index />} />
                 <Route path="/login" element={<Login />} />
