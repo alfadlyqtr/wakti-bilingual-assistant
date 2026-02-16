@@ -120,6 +120,16 @@ import ProjectDetail from "./pages/ProjectDetail";
 import ProjectSlugRedirect from "./pages/ProjectSlugRedirect";
 import ProjectPreview from "./pages/ProjectPreview";
 
+// Wakti.ai marketing landing pages
+import { WaktiLayout } from "@/components/wakti-landing/WaktiLayout";
+import WaktiLanding from "./pages/WaktiLanding";
+import WaktiFeatures from "./pages/WaktiFeatures";
+import WaktiAbout from "./pages/WaktiAbout";
+import WaktiPricingPage from "./pages/WaktiPricingPage";
+import WaktiBlog from "./pages/WaktiBlog";
+import WaktiBlogPost from "./pages/WaktiBlogPost";
+import WaktiContactPage from "./pages/WaktiContactPage";
+
 import "./App.css";
 
 const queryClient = new QueryClient();
@@ -165,6 +175,17 @@ function App() {
                 
                 {/* Public routes - no auth provider needed */}
                 <Route path="/" element={<RootHandler />} />
+                
+                {/* Wakti.ai Marketing Landing Pages - separate layout, no app chrome */}
+                <Route path="/wakti" element={<WaktiLayout />}>
+                  <Route index element={<WaktiLanding />} />
+                  <Route path="features" element={<WaktiFeatures />} />
+                  <Route path="about" element={<WaktiAbout />} />
+                  <Route path="pricing" element={<WaktiPricingPage />} />
+                  <Route path="blog" element={<WaktiBlog />} />
+                  <Route path="blog/:slug" element={<WaktiBlogPost />} />
+                  <Route path="contact" element={<WaktiContactPage />} />
+                </Route>
                 <Route path="/home" element={<Index />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />

@@ -14,41 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      saved_qr_codes: {
-        Row: {
-          id: string
-          user_id: string
-          label: string
-          qr_type: string
-          data_url: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          label?: string
-          qr_type?: string
-          data_url: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          label?: string
-          qr_type?: string
-          data_url?: string
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "saved_qr_codes_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       admin_activity_logs: {
         Row: {
           action: string
@@ -695,6 +660,57 @@ export type Database = {
           record_id?: string
           table_name?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      blog_posts: {
+        Row: {
+          author_name: string | null
+          content: string | null
+          content_ar: string | null
+          cover_image_url: string | null
+          created_at: string
+          excerpt: string | null
+          excerpt_ar: string | null
+          id: string
+          published: boolean
+          published_at: string | null
+          slug: string
+          title: string
+          title_ar: string | null
+          updated_at: string
+        }
+        Insert: {
+          author_name?: string | null
+          content?: string | null
+          content_ar?: string | null
+          cover_image_url?: string | null
+          created_at?: string
+          excerpt?: string | null
+          excerpt_ar?: string | null
+          id?: string
+          published?: boolean
+          published_at?: string | null
+          slug: string
+          title: string
+          title_ar?: string | null
+          updated_at?: string
+        }
+        Update: {
+          author_name?: string | null
+          content?: string | null
+          content_ar?: string | null
+          cover_image_url?: string | null
+          created_at?: string
+          excerpt?: string | null
+          excerpt_ar?: string | null
+          id?: string
+          published?: boolean
+          published_at?: string | null
+          slug?: string
+          title?: string
+          title_ar?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -3223,6 +3239,33 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_qr_codes: {
+        Row: {
+          created_at: string
+          data_url: string
+          id: string
+          label: string
+          qr_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data_url: string
+          id?: string
+          label?: string
+          qr_type?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data_url?: string
+          id?: string
+          label?: string
+          qr_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       saved_tts: {
         Row: {
           audio_url: string | null
@@ -3818,6 +3861,27 @@ export type Database = {
           },
         ]
       }
+      user_active_sessions: {
+        Row: {
+          device_info: string | null
+          last_login: string | null
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          device_info?: string | null
+          last_login?: string | null
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          device_info?: string | null
+          last_login?: string | null
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_ai_video_quotas: {
         Row: {
           extra_videos: number
@@ -3881,27 +3945,6 @@ export type Database = {
           updated_at?: string
           user_id?: string
           video_url?: string
-        }
-        Relationships: []
-      }
-      user_active_sessions: {
-        Row: {
-          user_id: string
-          session_id: string
-          last_login: string | null
-          device_info: string | null
-        }
-        Insert: {
-          user_id: string
-          session_id: string
-          last_login?: string | null
-          device_info?: string | null
-        }
-        Update: {
-          user_id?: string
-          session_id?: string
-          last_login?: string | null
-          device_info?: string | null
         }
         Relationships: []
       }
@@ -4103,6 +4146,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_generated_images: {
+        Row: {
+          created_at: string | null
+          id: string
+          image_url: string
+          is_public: boolean | null
+          meta: Json | null
+          prompt: string | null
+          quality: string | null
+          submode: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          image_url: string
+          is_public?: boolean | null
+          meta?: Json | null
+          prompt?: string | null
+          quality?: string | null
+          submode?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          image_url?: string
+          is_public?: boolean | null
+          meta?: Json | null
+          prompt?: string | null
+          quality?: string | null
+          submode?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       user_memory_context: {
         Row: {
@@ -5647,6 +5726,7 @@ export type Database = {
       cleanup_old_conversation_summaries: { Args: never; Returns: undefined }
       cleanup_old_conversations: { Args: never; Returns: undefined }
       cleanup_old_messages: { Args: never; Returns: undefined }
+      cleanup_old_saved_qr_codes: { Args: never; Returns: number }
       cleanup_user_translations_after_20_days: { Args: never; Returns: number }
       clear_whoop_cache: { Args: { p_user_id: string }; Returns: undefined }
       create_default_warranty_categories: {

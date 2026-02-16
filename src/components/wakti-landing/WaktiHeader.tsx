@@ -1,0 +1,108 @@
+import { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { Menu, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import type { WaktiLang } from "./WaktiLayout";
+
+const navItems = [
+  { path: "/wakti", labelEn: "Home", labelAr: "الرئيسية" },
+  { path: "/wakti/features", labelEn: "Features", labelAr: "المميزات" },
+  { path: "/wakti/about", labelEn: "About", labelAr: "عن واكتي" },
+  { path: "/wakti/pricing", labelEn: "Pricing", labelAr: "الأسعار" },
+  { path: "/wakti/blog", labelEn: "Blog", labelAr: "المدونة" },
+  { path: "/wakti/contact", labelEn: "Contact", labelAr: "تواصل" },
+];
+
+interface Props {
+  lang: WaktiLang;
+  setLang: (l: WaktiLang) => void;
+}
+
+export function WaktiHeader({ lang, setLang }: Props) {
+  const [open, setOpen] = useState(false);
+  const location = useLocation();
+
+  return (
+    <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl border-b border-[#e9ceb0]/10"
+      style={{ background: "rgba(12,15,20,0.88)" }}>
+      <div className="max-w-7xl mx-auto px-5 h-16 flex items-center justify-between">
+        {/* Logo */}
+        <Link to="/wakti" className="flex items-center gap-2">
+          <span className="text-2xl font-bold tracking-tight"
+            style={{ color: "#e9ceb0", fontFamily: "'Georgia', serif" }}>
+            WAKTI
+          </span>
+        </Link>
+
+        {/* Desktop nav */}
+        <nav className="hidden md:flex items-center gap-8">
+          {navItems.map((item) => {
+            const active = location.pathname === item.path;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`text-sm tracking-wide transition-colors duration-200 ${
+                  active
+                    ? "text-[#e9ceb0]"
+                    : "text-[#858384] hover:text-[#e9ceb0]"
+                }`}
+              >
+                {lang === "ar" ? item.labelAr : item.labelEn}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Right side */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setLang(lang === "en" ? "ar" : "en")}
+            className="text-xs px-3 py-1.5 rounded-full border border-[#e9ceb0]/30 text-[#e9ceb0] hover:bg-[#e9ceb0]/10 transition-all"
+          >
+            {lang === "en" ? "العربية" : "English"}
+          </button>
+
+          {/* Mobile hamburger */}
+          <button
+            className="md:hidden text-[#e9ceb0]"
+            onClick={() => setOpen(!open)}
+          >
+            {open ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile menu overlay */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.25 }}
+            className="md:hidden fixed inset-0 top-16 z-40 flex flex-col items-center justify-center gap-8"
+            style={{ background: "rgba(12,15,20,0.96)" }}
+          >
+            {navItems.map((item, i) => (
+              <motion.div
+                key={item.path}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.06 }}
+              >
+                <Link
+                  to={item.path}
+                  onClick={() => setOpen(false)}
+                  className="text-xl font-light tracking-widest text-[#e9ceb0] hover:text-white transition-colors"
+                >
+                  {lang === "ar" ? item.labelAr : item.labelEn}
+                </Link>
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </header>
+  );
+}
