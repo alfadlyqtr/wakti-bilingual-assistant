@@ -84,29 +84,29 @@ export function WaktiHeader({ lang, setLang }: Props) {
         </div>
       </div>
 
-      {/* Mobile menu overlay */}
+      {/* Mobile dropdown menu */}
       <AnimatePresence>
         {open && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="md:hidden fixed inset-0 top-16 z-40 overflow-y-auto"
+          <motion.nav
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="md:hidden overflow-hidden border-b border-[#e9ceb0]/10"
             style={{ background: "rgba(12,15,20,0.98)" }}
           >
-            <div className="flex flex-col items-center justify-center min-h-full gap-6 py-10">
+            <div className="flex flex-col items-center gap-4 py-6 px-5">
               {navItems.map((item, i) => (
                 <motion.div
                   key={item.path}
-                  initial={{ opacity: 0, y: 15 }}
+                  initial={{ opacity: 0, y: -8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.06 }}
+                  transition={{ delay: i * 0.05 }}
                 >
                   <Link
                     to={item.path}
                     onClick={() => setOpen(false)}
-                    className={`text-xl font-light tracking-widest transition-colors ${
+                    className={`text-lg font-light tracking-widest transition-colors ${
                       isActive(item.path) ? "text-white" : "text-[#e9ceb0] hover:text-white"
                     }`}
                   >
@@ -115,7 +115,7 @@ export function WaktiHeader({ lang, setLang }: Props) {
                 </motion.div>
               ))}
             </div>
-          </motion.div>
+          </motion.nav>
         )}
       </AnimatePresence>
     </header>
