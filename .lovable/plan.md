@@ -1,21 +1,33 @@
 
-## Fix Partner Logos to Load from Supabase Storage
 
-### Problem
-The logos are uploaded to the Supabase `partners` bucket but the component still uses local file imports. Additionally, the CSS filter `brightness-0 invert` is making logos invisible.
+## Fix: Landing Page Not Scrollable on Mobile
 
-### Changes
+### Root Cause
 
-**File: `src/components/wakti-landing/WaktiPartners.tsx`**
+In `src/components/wakti-landing/RippleGrid.css` (line 6), the grid container has `pointer-events: auto`. This WebGL canvas covers the entire hero section and intercepts all touch gestures on mobile, preventing the browser from performing its native vertical scroll.
 
-1. Remove the 3 local asset imports (lines 3-5)
-2. Update the `partners` array to use Supabase Storage public URLs:
-   - `https://hxauxozopvpzpdygoqwf.supabase.co/storage/v1/object/public/partners/MCIT-LOGO-1.jpg`
-   - `https://hxauxozopvpzpdygoqwf.supabase.co/storage/v1/object/public/partners/QSTP_Logo_colored-e1720330919282-1-1024x410.png`
-   - `https://hxauxozopvpzpdygoqwf.supabase.co/storage/v1/object/public/partners/summit.webp`
-3. Remove `brightness-0 invert opacity-70` from the img className and replace with `opacity-90` so logos show their original colors
+### Fix (1 file, 2 lines)
 
-### Technical Detail
-- Lines 1-11: Remove imports, switch to Supabase URL strings
-- Line 40: Change className from `brightness-0 invert opacity-70` to `opacity-90`
-- No other files affected
+**File: `src/components/wakti-landing/RippleGrid.css`**
+
+Add `touch-action: pan-y` to the container so the browser allows vertical touch scrolling through the canvas, while still permitting mouse hover interaction on desktop:
+
+```css
+.ripple-grid-container {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  touch-action: pan-y;  /* NEW - allow vertical scroll on touch devices */
+}
+```
+
+This single property tells mobile browsers: "Allow the user to scroll vertically even though this element captures pointer events." Desktop mouse interaction (the ripple-follow effect) continues to work unchanged.
+
+### Why This Works
+
+- `touch-action: pan-y` permits native vertical scrolling gestures to pass through
+- `pointer-events: auto` is preserved so desktop mouse hover effects still function
+- No other files need changes -- the scroll was only blocked by this canvas overlay
+
