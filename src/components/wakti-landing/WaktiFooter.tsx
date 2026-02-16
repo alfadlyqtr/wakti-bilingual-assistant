@@ -3,7 +3,7 @@ import type { WaktiLang } from "./WaktiLayout";
 
 function isWaktiDomain() {
   const h = window.location.hostname;
-  return h === 'wakti.ai' || h === 'www.wakti.ai' || h === 'wakti.qa' || h === 'www.wakti.qa';
+  return h === 'wakti.ai' || h === 'www.wakti.ai';
 }
 
 const prefix = isWaktiDomain() ? "" : "/wakti";
