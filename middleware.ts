@@ -30,9 +30,9 @@ export default function middleware(request: Request) {
     return; // Pass through to main app
   }
   
-  // Handle root domain (wakti.ai) - redirect to marketing/main app
+  // Handle root domain (wakti.ai) - serve marketing landing pages
   if (hostname === 'wakti.ai' || hostname.startsWith('wakti.ai:')) {
-    return Response.redirect('https://wakti.qa', 308);
+    return; // Pass through — SPA renders marketing pages via isWaktiDomain()
   }
   
   // Handle subdomains (*.wakti.ai)
@@ -42,7 +42,7 @@ export default function middleware(request: Request) {
     
     // Skip www subdomain - redirect to main app
     if (subdomain === 'www') {
-      return Response.redirect('https://wakti.qa', 308);
+      return Response.redirect('https://wakti.ai', 308);
     }
     
     // Rewrite to internal preview route
