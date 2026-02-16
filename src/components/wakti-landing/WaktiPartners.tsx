@@ -1,13 +1,13 @@
 import { motion } from "framer-motion";
 import type { WaktiLang } from "./WaktiLayout";
+import mcitLogo from "@/assets/partners/mcit-logo.jpg";
+import qstpLogo from "@/assets/partners/qstp-logo.png";
+import websummitLogo from "@/assets/partners/websummit-logo.webp";
 
 const partners = [
-  { name: "TMW", logoText: "TMW" },
-  { name: "Qatar", logoText: "QA" },
-  { name: "Partner 1", logoText: "P1" },
-  { name: "Partner 2", logoText: "P2" },
-  { name: "Partner 3", logoText: "P3" },
-  { name: "Partner 4", logoText: "P4" },
+  { name: "MCIT", logo: mcitLogo },
+  { name: "QSTP", logo: qstpLogo },
+  { name: "Web Summit Qatar", logo: websummitLogo },
 ];
 
 interface Props {
@@ -36,8 +36,8 @@ export function WaktiPartners({ lang }: Props) {
           transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
         >
           {doubled.map((p, i) => (
-            <div key={i} className="flex-shrink-0 w-24 h-12 rounded-lg border border-[#e9ceb0]/10 flex items-center justify-center">
-              <span className="text-[#858384] text-sm font-medium tracking-wider">{p.logoText}</span>
+            <div key={i} className="flex-shrink-0 h-16 px-4 flex items-center justify-center">
+              <img src={p.logo} alt={p.name} className="h-12 w-auto object-contain brightness-0 invert opacity-70" />
             </div>
           ))}
         </motion.div>
