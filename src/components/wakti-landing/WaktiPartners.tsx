@@ -1,13 +1,10 @@
 import { motion } from "framer-motion";
 import type { WaktiLang } from "./WaktiLayout";
-import mcitLogo from "@/assets/partners/mcit-logo.jpg";
-import qstpLogo from "@/assets/partners/qstp-logo.png";
-import websummitLogo from "@/assets/partners/websummit-logo.webp";
 
 const partners = [
-  { name: "MCIT", logo: mcitLogo },
-  { name: "QSTP", logo: qstpLogo },
-  { name: "Web Summit Qatar", logo: websummitLogo },
+  { name: "MCIT", logo: "https://hxauxozopvpzpdygoqwf.supabase.co/storage/v1/object/public/partners/MCIT-LOGO-1.jpg" },
+  { name: "QSTP", logo: "https://hxauxozopvpzpdygoqwf.supabase.co/storage/v1/object/public/partners/QSTP_Logo_colored-e1720330919282-1-1024x410.png" },
+  { name: "Web Summit Qatar", logo: "https://hxauxozopvpzpdygoqwf.supabase.co/storage/v1/object/public/partners/summit.webp" },
 ];
 
 interface Props {
@@ -37,7 +34,7 @@ export function WaktiPartners({ lang }: Props) {
         >
           {doubled.map((p, i) => (
             <div key={i} className="flex-shrink-0 h-16 px-4 flex items-center justify-center">
-              <img src={p.logo} alt={p.name} className="h-12 w-auto object-contain brightness-0 invert opacity-70" />
+              <img src={p.logo} alt={p.name} className="h-12 w-auto object-contain opacity-90" />
             </div>
           ))}
         </motion.div>
