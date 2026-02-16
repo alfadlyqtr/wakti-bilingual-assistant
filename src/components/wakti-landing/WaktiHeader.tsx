@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -30,11 +30,34 @@ interface Props {
 export function WaktiHeader({ lang, setLang }: Props) {
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const menuRef = useRef<HTMLElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
 
   const isActive = (path: string) => {
     if (path === `${prefix}/`) return location.pathname === path || location.pathname === prefix;
     return location.pathname === path;
   };
+
+  // Close on Escape
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape" && open) {
+      setOpen(false);
+      toggleRef.current?.focus();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
+
+  // Focus first link when menu opens
+  useEffect(() => {
+    if (open && menuRef.current) {
+      const firstLink = menuRef.current.querySelector("a");
+      firstLink?.focus();
+    }
+  }, [open]);
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl border-b border-[#e9ceb0]/10"
@@ -49,12 +72,13 @@ export function WaktiHeader({ lang, setLang }: Props) {
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden md:flex items-center gap-8">
+        <nav className="hidden md:flex items-center gap-8" aria-label="Main navigation">
           {navItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
-              className={`text-sm tracking-wide transition-colors duration-200 ${
+              aria-current={isActive(item.path) ? "page" : undefined}
+              className={`text-sm tracking-wide transition-colors duration-200 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e9ceb0] ${
                 isActive(item.path)
                   ? "text-[#e9ceb0]"
                   : "text-[#858384] hover:text-[#e9ceb0]"
@@ -69,15 +93,20 @@ export function WaktiHeader({ lang, setLang }: Props) {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setLang(lang === "en" ? "ar" : "en")}
-            className="text-xs px-3 py-1.5 rounded-full border border-[#e9ceb0]/30 text-[#e9ceb0] hover:bg-[#e9ceb0]/10 transition-all"
+            aria-label={lang === "en" ? "Switch to Arabic" : "Switch to English"}
+            className="text-xs px-3 py-1.5 rounded-full border border-[#e9ceb0]/30 text-[#e9ceb0] hover:bg-[#e9ceb0]/10 transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e9ceb0]"
           >
             {lang === "en" ? "العربية" : "English"}
           </button>
 
           {/* Mobile hamburger */}
           <button
-            className="md:hidden text-[#e9ceb0]"
+            ref={toggleRef}
+            className="md:hidden text-[#e9ceb0] rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e9ceb0]"
             onClick={() => setOpen(!open)}
+            aria-expanded={open}
+            aria-controls="mobile-nav-menu"
+            aria-label={open ? "Close navigation menu" : "Open navigation menu"}
           >
             {open ? <X size={24} /> : <Menu size={24} />}
           </button>
@@ -88,16 +117,20 @@ export function WaktiHeader({ lang, setLang }: Props) {
       <AnimatePresence>
         {open && (
           <motion.nav
+            ref={menuRef}
+            id="mobile-nav-menu"
+            role="navigation"
+            aria-label="Mobile navigation"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="md:hidden overflow-hidden border-b border-[#e9ceb0]/10"
+            className="md:hidden overflow-y-auto max-h-[70vh] border-b border-[#e9ceb0]/10"
             style={{ background: "rgba(12,15,20,0.98)" }}
           >
-            <div className="flex flex-col items-center gap-4 py-6 px-5">
+            <ul className="flex flex-col items-center gap-4 py-6 px-5 list-none" role="list">
               {navItems.map((item, i) => (
-                <motion.div
+                <motion.li
                   key={item.path}
                   initial={{ opacity: 0, y: -8 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -106,15 +139,16 @@ export function WaktiHeader({ lang, setLang }: Props) {
                   <Link
                     to={item.path}
                     onClick={() => setOpen(false)}
-                    className={`text-lg font-light tracking-widest transition-colors ${
+                    aria-current={isActive(item.path) ? "page" : undefined}
+                    className={`text-lg font-light tracking-widest transition-colors block py-1 px-3 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e9ceb0] focus-visible:bg-[#e9ceb0]/10 ${
                       isActive(item.path) ? "text-white" : "text-[#e9ceb0] hover:text-white"
                     }`}
                   >
                     {lang === "ar" ? item.labelAr : item.labelEn}
                   </Link>
-                </motion.div>
+                </motion.li>
               ))}
-            </div>
+            </ul>
           </motion.nav>
         )}
       </AnimatePresence>
