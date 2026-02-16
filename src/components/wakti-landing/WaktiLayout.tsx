@@ -12,8 +12,14 @@ export function WaktiLayout() {
   return (
     <div
       dir={isRtl ? "rtl" : "ltr"}
-      className="min-h-screen flex flex-col"
-      style={{ background: "#0c0f14" }}
+      className="flex flex-col"
+      style={{
+        background: "#0c0f14",
+        minHeight: "100vh",
+        overflowY: "auto",
+        overflowX: "hidden",
+        position: "relative",
+      }}
     >
       <WaktiHeader lang={lang} setLang={setLang} />
       <main className="flex-1">
