@@ -35,8 +35,9 @@ export function WaktiPartners({ lang }: Props) {
           transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
         >
           {doubled.map((p, i) => (
-            <div key={i} className="flex-shrink-0 h-16 px-4 flex items-center justify-center">
+            <div key={i} className="flex-shrink-0 px-4 flex flex-col items-center justify-center gap-2">
               <img src={p.logo} alt={p.name} className="h-12 w-auto object-contain opacity-90" />
+              <span className="text-xs text-[#858384] whitespace-nowrap">{p.name}</span>
             </div>
           ))}
         </motion.div>
