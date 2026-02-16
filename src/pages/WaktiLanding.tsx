@@ -49,7 +49,6 @@ export default function WaktiLanding() {
             custom={0}
             variants={fadeUp}
             className="text-xs uppercase tracking-[0.4em] text-[#858384] mb-6"
-            style={{ textShadow: "0 0 12px rgba(255,255,255,0.5), 0 0 24px rgba(255,255,255,0.3)" }}
           >
             {isAr ? "إدارة ذكية للوقت" : "Smart Time Management"}
           </motion.p>
@@ -58,7 +57,7 @@ export default function WaktiLanding() {
             custom={1}
             variants={fadeUp}
             className="text-5xl md:text-7xl font-bold tracking-tight mb-6"
-            style={{ color: "#e9ceb0", fontFamily: "'Georgia', serif", textShadow: "0 0 20px rgba(255,255,255,0.6), 0 0 40px rgba(255,255,255,0.3)" }}
+            style={{ color: "#e9ceb0", fontFamily: "'Georgia', serif" }}
           >
             WAKTI
           </motion.h1>
@@ -67,7 +66,6 @@ export default function WaktiLanding() {
             custom={2}
             variants={fadeUp}
             className="text-lg md:text-xl text-[#858384] leading-relaxed max-w-lg mx-auto mb-8"
-            style={{ textShadow: "0 0 12px rgba(255,255,255,0.5), 0 0 24px rgba(255,255,255,0.3)" }}
           >
             {isAr
               ? "تطبيقك الذكي لإدارة المهام والمواعيد والتذكيرات — كل شيء في مكان واحد."
@@ -80,7 +78,7 @@ export default function WaktiLanding() {
             className="flex justify-center gap-4"
           >
             <div className="h-px w-16 bg-[#e9ceb0]/30 self-center" />
-            <span className="text-[#e9ceb0]/60 text-xs tracking-[0.3em] uppercase" style={{ textShadow: "0 0 12px rgba(255,255,255,0.5)" }}>
+            <span className="text-[#e9ceb0]/60 text-xs tracking-[0.3em] uppercase">
               {isAr ? "أذكى. أسرع. أسهل." : "Smarter. Faster. Easier."}
             </span>
             <div className="h-px w-16 bg-[#e9ceb0]/30 self-center" />
@@ -124,7 +122,7 @@ export default function WaktiLanding() {
           viewport={{ once: true }}
           className="max-w-2xl mx-auto text-center"
         >
-          <p className="text-[#858384] text-base leading-relaxed" style={{ textShadow: "0 0 12px rgba(255,255,255,0.5), 0 0 24px rgba(255,255,255,0.3)" }}>
+          <p className="text-[#858384] text-base leading-relaxed">
             {isAr
               ? "واكتي هو تطبيق شامل مصمم لمساعدتك على تنظيم حياتك بطريقة ذكية وسلسة. من المهام والمواعيد إلى التذكيرات والذكاء الاصطناعي — واكتي هو رفيقك اليومي."
               : "WAKTI is a comprehensive app designed to help you organize your life intelligently and seamlessly. From tasks and events to reminders and AI — WAKTI is your daily companion."}
