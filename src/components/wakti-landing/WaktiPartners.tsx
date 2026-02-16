@@ -5,6 +5,8 @@ const partners = [
   { name: "MCIT", logo: "https://hxauxozopvpzpdygoqwf.supabase.co/storage/v1/object/public/partners/MCIT-LOGO-1.jpg" },
   { name: "QSTP", logo: "https://hxauxozopvpzpdygoqwf.supabase.co/storage/v1/object/public/partners/QSTP_Logo_colored-e1720330919282-1-1024x410.png" },
   { name: "Web Summit Qatar", logo: "https://hxauxozopvpzpdygoqwf.supabase.co/storage/v1/object/public/partners/summit.webp" },
+  { name: "Qatar Post", logo: "https://hxauxozopvpzpdygoqwf.supabase.co/storage/v1/object/public/partners/Qatar-Post-Cover-Photo.jpg" },
+  { name: "SkipCash", logo: "https://hxauxozopvpzpdygoqwf.supabase.co/storage/v1/object/public/partners/skipcash.jpg" },
 ];
 
 interface Props {
