@@ -34,6 +34,9 @@ export function WaktiFooter({ lang }: Props) {
             <Link to="/wakti/pricing" className="hover:text-[#e9ceb0] transition-colors">
               {isAr ? "الأسعار" : "Pricing"}
             </Link>
+            <Link to="/wakti/case-studies" className="hover:text-[#e9ceb0] transition-colors">
+              {isAr ? "دراسات الحالة" : "Case Studies"}
+            </Link>
             <Link to="/wakti/blog" className="hover:text-[#e9ceb0] transition-colors">
               {isAr ? "المدونة" : "Blog"}
             </Link>

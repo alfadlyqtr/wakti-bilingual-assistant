@@ -9,6 +9,7 @@ const navItems = [
   { path: "/wakti/features", labelEn: "Features", labelAr: "المميزات" },
   { path: "/wakti/about", labelEn: "About", labelAr: "عن واكتي" },
   { path: "/wakti/pricing", labelEn: "Pricing", labelAr: "الأسعار" },
+  { path: "/wakti/case-studies", labelEn: "Case Studies", labelAr: "دراسات الحالة" },
   { path: "/wakti/blog", labelEn: "Blog", labelAr: "المدونة" },
   { path: "/wakti/contact", labelEn: "Contact", labelAr: "تواصل" },
 ];
