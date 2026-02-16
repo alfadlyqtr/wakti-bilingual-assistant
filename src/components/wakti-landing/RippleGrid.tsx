@@ -181,24 +181,14 @@ void main() {
       const rect = containerRef.current.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width;
       const y = 1.0 - (e.clientY - rect.top) / rect.height;
+      const inside = x >= 0 && x <= 1 && y >= 0 && y <= 1;
       targetMouseRef.current = { x, y };
-    };
-
-    const handleMouseEnter = () => {
-      if (!mouseInteraction) return;
-      mouseInfluenceRef.current = 1.0;
-    };
-
-    const handleMouseLeave = () => {
-      if (!mouseInteraction) return;
-      mouseInfluenceRef.current = 0.0;
+      mouseInfluenceRef.current = inside ? 1.0 : 0.0;
     };
 
     window.addEventListener('resize', resize);
     if (mouseInteraction) {
-      containerRef.current.addEventListener('mousemove', handleMouseMove);
-      containerRef.current.addEventListener('mouseenter', handleMouseEnter);
-      containerRef.current.addEventListener('mouseleave', handleMouseLeave);
+      window.addEventListener('mousemove', handleMouseMove);
     }
 
     resize();
@@ -224,10 +214,8 @@ void main() {
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', resize);
-      if (mouseInteraction && container) {
-        container.removeEventListener('mousemove', handleMouseMove);
-        container.removeEventListener('mouseenter', handleMouseEnter);
-        container.removeEventListener('mouseleave', handleMouseLeave);
+      if (mouseInteraction) {
+        window.removeEventListener('mousemove', handleMouseMove);
       }
       renderer.gl.getExtension('WEBGL_lose_context')?.loseContext();
       container?.removeChild(gl.canvas);
