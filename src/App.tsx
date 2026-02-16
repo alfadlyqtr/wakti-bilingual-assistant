@@ -46,14 +46,12 @@ function getSubdomain(): string | null {
   return null;
 }
 
-// Detect if we're on the wakti.ai root domain (marketing site)
+// Detect if we're on the wakti.ai root domain (marketing site ONLY — NOT wakti.qa)
 function isWaktiDomain(): boolean {
   const hostname = window.location.hostname;
   return (
     hostname === 'wakti.ai' ||
-    hostname === 'www.wakti.ai' ||
-    hostname === 'wakti.qa' ||
-    hostname === 'www.wakti.qa'
+    hostname === 'www.wakti.ai'
   );
 }
 

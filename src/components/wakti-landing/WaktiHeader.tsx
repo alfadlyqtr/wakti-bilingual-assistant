@@ -7,7 +7,7 @@ import type { WaktiLang } from "./WaktiLayout";
 // Detect if on wakti.ai root domain — use clean paths
 function isWaktiDomain() {
   const h = window.location.hostname;
-  return h === 'wakti.ai' || h === 'www.wakti.ai' || h === 'wakti.qa' || h === 'www.wakti.qa';
+  return h === 'wakti.ai' || h === 'www.wakti.ai';
 }
 
 const prefix = isWaktiDomain() ? "" : "/wakti";
