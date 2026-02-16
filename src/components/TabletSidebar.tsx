@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Gamepad2,
   Music,
+  Aperture,
   Shield,
   FolderOpen
 } from "lucide-react";
@@ -42,7 +43,7 @@ export function TabletSidebar() {
     { icon: CalendarClock, label: "events", path: "/maw3d", badge: maw3dEventCount },
     { icon: ListTodo, label: "tasks", path: "/tr", badge: 0 },
     { icon: Sparkles, label: "wakti_ai", path: "/wakti-ai" },
-    { icon: Music, label: "music", path: "/music" },
+    { icon: Aperture, label: "music", path: "/music" },
     { icon: Gamepad2, label: "games", path: "/games" },
     { icon: Mic, label: "tasjeel", path: "/tasjeel" },
     { icon: FolderOpen, label: "my_warranty", path: "/my-warranty" },

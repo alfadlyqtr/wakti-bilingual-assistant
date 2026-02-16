@@ -18,7 +18,7 @@ import {
   Home,
   LucideIcon,
   Gamepad2,
-  Music,
+  Aperture,
   Code2,
   FolderOpen
 } from "lucide-react";
@@ -58,7 +58,7 @@ export function DesktopSidebar() {
     { icon: HeartPulse, label: "vitality", path: "/fitness" },
     { icon: AudioLines as unknown as IconComponent, label: "tasjeel", path: "/tasjeel" },
     { icon: FolderOpen as unknown as IconComponent, label: "my_warranty", path: "/my-warranty" },
-    { icon: Music as unknown as IconComponent, label: "music", path: "/music" },
+    { icon: Aperture as unknown as IconComponent, label: "music", path: "/music" },
     { icon: Code2 as unknown as IconComponent, label: "projects", path: "/projects" },
     { icon: Gamepad2 as unknown as IconComponent, label: "games", path: "/games" },
   ];

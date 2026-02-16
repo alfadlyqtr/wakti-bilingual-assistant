@@ -13,6 +13,7 @@ import {
   Gamepad2, 
   NotebookPen, 
   Music, 
+  Aperture,
   AudioLines, 
   FolderOpen, 
   Code2
@@ -78,7 +79,7 @@ export function NavWidget({ language: propLanguage }: NavWidgetProps) {
     {
       name: t('music', language),
       path: '/music',
-      icon: Music,
+      icon: Aperture,
       colorClass: 'text-fuchsia-500',
       glowColor: '#d946ef',
     },
