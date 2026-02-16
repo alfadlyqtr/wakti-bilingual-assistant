@@ -46,6 +46,17 @@ function getSubdomain(): string | null {
   return null;
 }
 
+// Detect if we're on the wakti.ai root domain (marketing site)
+function isWaktiDomain(): boolean {
+  const hostname = window.location.hostname;
+  return (
+    hostname === 'wakti.ai' ||
+    hostname === 'www.wakti.ai' ||
+    hostname === 'wakti.qa' ||
+    hostname === 'www.wakti.qa'
+  );
+}
+
 // Import all your existing components
 import Index from "./pages/Index";
 import RootHandler from "@/components/RootHandler";
@@ -137,6 +148,7 @@ const queryClient = new QueryClient();
 
 // Check for subdomain on app load
 const detectedSubdomain = getSubdomain();
+const isWaktiRootDomain = isWaktiDomain();
 
 function App() {
   // If subdomain detected (e.g., mozi.wakti.ai), render ProjectPreview directly
@@ -145,6 +157,34 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <ProjectPreview subdomain={detectedSubdomain} />
+          <SpeedInsights />
+          <Analytics />
+        </ThemeProvider>
+      </QueryClientProvider>
+    );
+  }
+
+  // If on wakti.ai root domain, render marketing landing pages
+  if (isWaktiRootDomain) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route element={<WaktiLayout />}>
+                <Route path="/" element={<WaktiLanding />} />
+                <Route path="/features" element={<WaktiFeatures />} />
+                <Route path="/about" element={<WaktiAbout />} />
+                <Route path="/pricing" element={<WaktiPricingPage />} />
+                <Route path="/case-studies" element={<WaktiCaseStudies />} />
+                <Route path="/blog" element={<WaktiBlog />} />
+                <Route path="/blog/:slug" element={<WaktiBlogPost />} />
+                <Route path="/contact" element={<WaktiContactPage />} />
+                <Route path="*" element={<WaktiLanding />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+          <Toaster />
           <SpeedInsights />
           <Analytics />
         </ThemeProvider>
