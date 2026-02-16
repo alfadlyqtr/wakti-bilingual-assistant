@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { useOutletContext } from "react-router-dom";
 import { WaktiPartners } from "@/components/wakti-landing/WaktiPartners";
 import type { WaktiLang } from "@/components/wakti-landing/WaktiLayout";
+import RippleGrid from "@/components/wakti-landing/RippleGrid";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 40 },
@@ -20,11 +21,21 @@ export default function WaktiLanding() {
     <div className="pt-16">
       {/* Hero */}
       <section className="relative min-h-[90vh] flex flex-col items-center justify-center px-5 overflow-hidden">
-        {/* Background glow */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full opacity-20"
-            style={{ background: "radial-gradient(circle, #e9ceb0 0%, transparent 70%)" }} />
-          <div className="absolute bottom-0 left-0 right-0 h-32"
+        {/* RippleGrid Background */}
+        <div className="absolute inset-0 z-0">
+          <RippleGrid
+            gridColor="#e9ceb0"
+            rippleIntensity={0.04}
+            gridSize={12.0}
+            gridThickness={18.0}
+            fadeDistance={1.8}
+            vignetteStrength={2.5}
+            glowIntensity={0.08}
+            opacity={0.35}
+            mouseInteraction={true}
+            mouseInteractionRadius={1.2}
+          />
+          <div className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
             style={{ background: "linear-gradient(to top, #0c0f14, transparent)" }} />
         </div>
 
