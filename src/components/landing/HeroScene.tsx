@@ -40,7 +40,7 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
       <motion.div className="absolute inset-0 z-0" style={{ y: gridY }}>
         <div className="absolute inset-0 bg-[#0c0f14]" />
         <RippleGrid
-          gridColor="#e9ceb0"
+          gridColor="#4a90d9"
           rippleIntensity={0.01}
           gridSize={12.0}
           gridThickness={15.0}
