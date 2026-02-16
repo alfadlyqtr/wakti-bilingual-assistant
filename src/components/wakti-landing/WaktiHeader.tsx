@@ -88,29 +88,33 @@ export function WaktiHeader({ lang, setLang }: Props) {
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
-            className="md:hidden fixed inset-0 top-16 z-40 flex flex-col items-center justify-center gap-5 overflow-y-auto py-8"
-            style={{ background: "rgba(12,15,20,0.96)" }}
+            className="md:hidden fixed inset-0 top-16 z-40 overflow-y-auto"
+            style={{ background: "rgba(12,15,20,0.98)" }}
           >
-            {navItems.map((item, i) => (
-              <motion.div
-                key={item.path}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.06 }}
-              >
-                <Link
-                  to={item.path}
-                  onClick={() => setOpen(false)}
-                  className="text-xl font-light tracking-widest text-[#e9ceb0] hover:text-white transition-colors"
+            <div className="flex flex-col items-center justify-center min-h-full gap-6 py-10">
+              {navItems.map((item, i) => (
+                <motion.div
+                  key={item.path}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.06 }}
                 >
-                  {lang === "ar" ? item.labelAr : item.labelEn}
-                </Link>
-              </motion.div>
-            ))}
+                  <Link
+                    to={item.path}
+                    onClick={() => setOpen(false)}
+                    className={`text-xl font-light tracking-widest transition-colors ${
+                      isActive(item.path) ? "text-white" : "text-[#e9ceb0] hover:text-white"
+                    }`}
+                  >
+                    {lang === "ar" ? item.labelAr : item.labelEn}
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
