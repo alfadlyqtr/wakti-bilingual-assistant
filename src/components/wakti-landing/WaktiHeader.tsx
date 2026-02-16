@@ -92,7 +92,7 @@ export function WaktiHeader({ lang, setLang }: Props) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.25 }}
-            className="md:hidden fixed inset-0 top-16 z-40 flex flex-col items-center justify-center gap-8"
+            className="md:hidden fixed inset-0 top-16 z-40 flex flex-col items-center justify-center gap-5 overflow-y-auto py-8"
             style={{ background: "rgba(12,15,20,0.96)" }}
           >
             {navItems.map((item, i) => (
