@@ -1,6 +1,13 @@
 import { Link } from "react-router-dom";
 import type { WaktiLang } from "./WaktiLayout";
 
+function isWaktiDomain() {
+  const h = window.location.hostname;
+  return h === 'wakti.ai' || h === 'www.wakti.ai' || h === 'wakti.qa' || h === 'www.wakti.qa';
+}
+
+const prefix = isWaktiDomain() ? "" : "/wakti";
+
 interface Props {
   lang: WaktiLang;
 }
@@ -25,22 +32,22 @@ export function WaktiFooter({ lang }: Props) {
 
           {/* Links */}
           <div className="flex flex-wrap justify-center gap-6 text-sm text-[#858384]">
-            <Link to="/wakti/features" className="hover:text-[#e9ceb0] transition-colors">
+            <Link to={`${prefix}/features`} className="hover:text-[#e9ceb0] transition-colors">
               {isAr ? "المميزات" : "Features"}
             </Link>
-            <Link to="/wakti/about" className="hover:text-[#e9ceb0] transition-colors">
+            <Link to={`${prefix}/about`} className="hover:text-[#e9ceb0] transition-colors">
               {isAr ? "عن واكتي" : "About"}
             </Link>
-            <Link to="/wakti/pricing" className="hover:text-[#e9ceb0] transition-colors">
+            <Link to={`${prefix}/pricing`} className="hover:text-[#e9ceb0] transition-colors">
               {isAr ? "الأسعار" : "Pricing"}
             </Link>
-            <Link to="/wakti/case-studies" className="hover:text-[#e9ceb0] transition-colors">
+            <Link to={`${prefix}/case-studies`} className="hover:text-[#e9ceb0] transition-colors">
               {isAr ? "دراسات الحالة" : "Case Studies"}
             </Link>
-            <Link to="/wakti/blog" className="hover:text-[#e9ceb0] transition-colors">
+            <Link to={`${prefix}/blog`} className="hover:text-[#e9ceb0] transition-colors">
               {isAr ? "المدونة" : "Blog"}
             </Link>
-            <Link to="/wakti/contact" className="hover:text-[#e9ceb0] transition-colors">
+            <Link to={`${prefix}/contact`} className="hover:text-[#e9ceb0] transition-colors">
               {isAr ? "تواصل" : "Contact"}
             </Link>
             <Link to="/privacy-terms" className="hover:text-[#e9ceb0] transition-colors">
