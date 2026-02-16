@@ -24,7 +24,7 @@ export default function WaktiLanding() {
         {/* RippleGrid Background */}
         <div className="absolute inset-0 z-0">
           <RippleGrid
-            gridColor="#e9ceb0"
+            gridColor="#8a1538"
             rippleIntensity={0.01}
             gridSize={12.0}
             gridThickness={15.0}
