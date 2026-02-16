@@ -27,11 +27,12 @@ export default function WaktiLanding() {
             gridColor="#e9ceb0"
             rippleIntensity={0.04}
             gridSize={12.0}
-            gridThickness={18.0}
-            fadeDistance={1.8}
-            vignetteStrength={2.5}
-            glowIntensity={0.08}
-            opacity={0.35}
+            gridThickness={15.0}
+            fadeDistance={0.5}
+            vignetteStrength={5.0}
+            glowIntensity={0.0}
+            opacity={1.0}
+            gridRotation={0}
             mouseInteraction={true}
             mouseInteractionRadius={1.2}
           />
