@@ -1,13 +1,10 @@
 import { motion } from "framer-motion";
 import type { WaktiLang } from "./WaktiLayout";
-import mcitLogo from "@/assets/partners/mcit-logo.jpg";
-import qstpLogo from "@/assets/partners/qstp-logo.png";
-import websummitLogo from "@/assets/partners/websummit-logo.webp";
 
 const partners = [
-  { name: "MCIT", logo: mcitLogo },
-  { name: "QSTP", logo: qstpLogo },
-  { name: "Web Summit Qatar", logo: websummitLogo },
+  { name: "MCIT", logo: "/partners/mcit-logo.jpg" },
+  { name: "QSTP", logo: "/partners/qstp-logo.png" },
+  { name: "Web Summit Qatar", logo: "/partners/websummit-logo.webp" },
 ];
 
 interface Props {
