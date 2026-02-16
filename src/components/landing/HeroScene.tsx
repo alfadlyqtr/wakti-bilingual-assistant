@@ -1,10 +1,12 @@
-import { motion } from "framer-motion";
+import { motion, useScroll, useTransform } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Logo3D } from "@/components/Logo3D";
 import { ScrollIndicator } from "./ScrollIndicator";
 import { useTheme } from "@/providers/ThemeProvider";
 import { ArrowRight } from "lucide-react";
+import RippleGrid from "@/components/wakti-landing/RippleGrid";
 
 interface HeroSceneProps {
   language?: "en" | "ar";
@@ -14,6 +16,15 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
   const navigate = useNavigate();
   const { language: currentLang, setLanguage } = useTheme();
   const isArabic = language === "ar";
+  const sectionRef = useRef<HTMLElement>(null);
+
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start start", "end start"],
+  });
+
+  const gridY = useTransform(scrollYProgress, [0, 1], ["0%", "30%"]);
+  const contentY = useTransform(scrollYProgress, [0, 1], ["0%", "15%"]);
 
   const toggleLanguage = () => {
     setLanguage(currentLang === "en" ? "ar" : "en");
@@ -21,40 +32,34 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
 
   return (
     <section 
+      ref={sectionRef}
       className="landing-scene scroll-snap-scene relative flex flex-col items-center justify-center h-[100dvh] w-full overflow-hidden"
       style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
-      {/* Video Background */}
-      <div className="absolute inset-0 z-0 bg-[#0c0f14] flex items-center justify-center">
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover blur-2xl scale-110 opacity-40"
-          poster="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png"
-        >
-          <source src="/Animated_Logo_Splash_Screen_Creation.mp4" type="video/mp4" />
-        </video>
-
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover scale-[1.1]"
-          poster="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png"
-        >
-          <source src="/Animated_Logo_Splash_Screen_Creation.mp4" type="video/mp4" />
-        </video>
+      {/* RippleGrid Background with parallax */}
+      <motion.div className="absolute inset-0 z-0" style={{ y: gridY }}>
+        <div className="absolute inset-0 bg-[#0c0f14]" />
+        <RippleGrid
+          gridColor="#e9ceb0"
+          rippleIntensity={0.04}
+          gridSize={12.0}
+          gridThickness={15.0}
+          fadeDistance={0.5}
+          vignetteStrength={5.0}
+          glowIntensity={0.0}
+          opacity={1.0}
+          gridRotation={0}
+          mouseInteraction={true}
+          mouseInteractionRadius={1.2}
+        />
         {/* Dark gradient overlay */}
         <div 
-          className="absolute inset-0"
+          className="absolute inset-0 pointer-events-none"
           style={{
-            background: "linear-gradient(180deg, rgba(12,15,20,0.5) 0%, rgba(12,15,20,0.82) 60%, rgba(12,15,20,0.97) 100%)"
+            background: "linear-gradient(180deg, rgba(12,15,20,0.3) 0%, rgba(12,15,20,0.6) 60%, rgba(12,15,20,0.95) 100%)"
           }}
         />
-      </div>
+      </motion.div>
 
       {/* Header Bar - Top Right */}
       <motion.div 
@@ -88,8 +93,8 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
         </Button>
       </motion.div>
 
-      {/* Main Content */}
-      <div className="relative z-10 flex flex-col items-center text-center px-6">
+      {/* Main Content with parallax */}
+      <motion.div className="relative z-10 flex flex-col items-center text-center px-6" style={{ y: contentY }}>
         {/* Logo with breathing animation */}
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
@@ -163,7 +168,7 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
             {isArabic ? "السعر" : "Price"}
           </button>
         </motion.div>
-      </div>
+      </motion.div>
 
       {/* Scroll Indicator */}
       <ScrollIndicator className="absolute bottom-32 inset-x-0 z-10 flex justify-center" />
