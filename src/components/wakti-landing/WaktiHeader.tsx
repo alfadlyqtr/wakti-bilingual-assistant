@@ -65,10 +65,7 @@ export function WaktiHeader({ lang, setLang }: Props) {
       <div className="max-w-7xl mx-auto px-5 h-16 flex items-center justify-between">
         {/* Logo */}
         <Link to={`${prefix}/`} className="flex items-center gap-2">
-          <span className="text-2xl font-bold tracking-tight"
-            style={{ color: "#e9ceb0", fontFamily: "'Georgia', serif" }}>
-            WAKTI
-          </span>
+          <img src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" alt="WAKTI" className="h-9 w-auto" />
         </Link>
 
         {/* Desktop nav */}
