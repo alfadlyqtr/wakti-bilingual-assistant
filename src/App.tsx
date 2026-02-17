@@ -46,15 +46,6 @@ function getSubdomain(): string | null {
   return null;
 }
 
-// Detect if we're on the wakti.ai root domain (marketing site ONLY — NOT wakti.qa)
-function isWaktiDomain(): boolean {
-  const hostname = window.location.hostname;
-  return (
-    hostname === 'wakti.ai' ||
-    hostname === 'www.wakti.ai'
-  );
-}
-
 // Import all your existing components
 import Index from "./pages/Index";
 import RootHandler from "@/components/RootHandler";
@@ -129,60 +120,21 @@ import ProjectDetail from "./pages/ProjectDetail";
 import ProjectSlugRedirect from "./pages/ProjectSlugRedirect";
 import ProjectPreview from "./pages/ProjectPreview";
 
-// Wakti.ai marketing landing pages
-import { WaktiLayout } from "@/components/wakti-landing/WaktiLayout";
-import WaktiLanding from "./pages/WaktiLanding";
-import WaktiFeatures from "./pages/WaktiFeatures";
-import WaktiAbout from "./pages/WaktiAbout";
-import WaktiPricingPage from "./pages/WaktiPricingPage";
-import WaktiBlog from "./pages/WaktiBlog";
-import WaktiBlogPost from "./pages/WaktiBlogPost";
-import WaktiContactPage from "./pages/WaktiContactPage";
-import WaktiCaseStudies from "./pages/WaktiCaseStudies";
-
 import "./App.css";
 
 const queryClient = new QueryClient();
 
 // Check for subdomain on app load
 const detectedSubdomain = getSubdomain();
-const isWaktiRootDomain = isWaktiDomain();
 
 function App() {
+
   // If subdomain detected (e.g., mozi.wakti.ai), render ProjectPreview directly
   if (detectedSubdomain) {
     return (
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <ProjectPreview subdomain={detectedSubdomain} />
-          <SpeedInsights />
-          <Analytics />
-        </ThemeProvider>
-      </QueryClientProvider>
-    );
-  }
-
-  // If on wakti.ai root domain, render marketing landing pages
-  if (isWaktiRootDomain) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route element={<WaktiLayout />}>
-                <Route path="/" element={<WaktiLanding />} />
-                <Route path="/features" element={<WaktiFeatures />} />
-                <Route path="/about" element={<WaktiAbout />} />
-                <Route path="/pricing" element={<WaktiPricingPage />} />
-                <Route path="/case-studies" element={<WaktiCaseStudies />} />
-                <Route path="/blog" element={<WaktiBlog />} />
-                <Route path="/blog/:slug" element={<WaktiBlogPost />} />
-                <Route path="/contact" element={<WaktiContactPage />} />
-                <Route path="*" element={<WaktiLanding />} />
-              </Route>
-            </Routes>
-          </BrowserRouter>
-          <Toaster />
           <SpeedInsights />
           <Analytics />
         </ThemeProvider>
@@ -215,17 +167,6 @@ function App() {
                 {/* Public routes - no auth provider needed */}
                 <Route path="/" element={<RootHandler />} />
                 
-                {/* Wakti.ai Marketing Landing Pages - separate layout, no app chrome */}
-                <Route path="/wakti" element={<WaktiLayout />}>
-                  <Route index element={<WaktiLanding />} />
-                  <Route path="features" element={<WaktiFeatures />} />
-                  <Route path="about" element={<WaktiAbout />} />
-                  <Route path="pricing" element={<WaktiPricingPage />} />
-                  <Route path="blog" element={<WaktiBlog />} />
-                  <Route path="blog/:slug" element={<WaktiBlogPost />} />
-                  <Route path="contact" element={<WaktiContactPage />} />
-                  <Route path="case-studies" element={<WaktiCaseStudies />} />
-                </Route>
                 <Route path="/home" element={<Index />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />

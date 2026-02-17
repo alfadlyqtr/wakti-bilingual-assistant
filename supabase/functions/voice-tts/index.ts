@@ -208,7 +208,7 @@ For this text, use NEUTRAL NORTH AMERICAN ENGLISH. Friendly, crisp, natural.`;
 };
 
 // Phonetic anchors to force the AI into the correct accent mode
-const getPhoneticAnchor = (_isArabic: boolean, _userName?: string) => {
+const _getPhoneticAnchor = (_isArabic: boolean, _userName?: string) => {
   return '';
 };
 
@@ -348,7 +348,7 @@ serve(async (req: Request) => {
 
     // Get request data
     const requestBody = await req.json();
-    const { text, voice_id, mode, gender, user_name } = requestBody;
+    const { text, voice_id, mode, gender, user_name: _user_name } = requestBody;
     
     console.log(`🎵 TTS request:`, {
       textLength: text?.length || 0,
@@ -386,117 +386,98 @@ serve(async (req: Request) => {
     }
 
     // ========================================================================
-    // PRIMARY: Gemini 2.5 Flash TTS
+    // PRIMARY: Gemini 2.5 Flash TTS (English only — Arabic skips to Chirp)
     // ========================================================================
     const bearerToken = await getGoogleAccessTokenFromServiceAccount();
+    // Gemini is English-only; Arabic goes straight to Google Chirp below
 
-    if (bearerToken || GEMINI_TTS_KEY) {
-      console.log('🎵 Using Gemini 2.5 Flash TTS (Neural Actor mode)');
+    if (!textIsArabic && (bearerToken || GEMINI_TTS_KEY)) {
+      console.log('🎵 Using Gemini 2.5 Flash TTS (English path)');
       
       const geminiVoice = GEMINI_VOICES[voiceGender];
-      const languageCode = getLanguageCode(textIsArabic);
+      const languageCode = getLanguageCode(false); // always en-US here
       
-      // Prepend phonetic anchor to force accent mode
-      const phoneticAnchor = getPhoneticAnchor(textIsArabic, user_name);
-      const preparedText = phoneticAnchor + text;
+      const preparedText = text;
       
       console.log(`🎵 Gemini TTS config:`, {
         voice: geminiVoice,
         language: languageCode,
-        isArabic: textIsArabic,
+        isArabic: false,
         gender: voiceGender,
         textLength: preparedText.length
       });
 
-      // Build the style prompt for Neural Actor mode
-      const stylePrompt = getStylePrompt(textIsArabic);
+      const stylePrompt = getStylePrompt(false);
       
       const geminiUrl = bearerToken
         ? 'https://texttospeech.googleapis.com/v1/text:synthesize'
         : `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GEMINI_TTS_KEY}`;
 
-      const geminiResponse = await fetch(geminiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(bearerToken ? { 'Authorization': `Bearer ${bearerToken}` } : {}),
-        },
-        body: JSON.stringify({
-            input: {
-              text: preparedText,
-              prompt: stylePrompt, // Neural Actor style instructions
-            },
-            voice: {
-              languageCode: languageCode,
-              name: geminiVoice,
-              model_name: 'gemini-2.5-flash-tts', // Use Gemini TTS model
-            },
-            audioConfig: {
-              audioEncoding: 'MP3',
-            },
-        }),
-      });
-
-      if (geminiResponse.ok) {
-        const geminiData = await geminiResponse.json();
-        const audioContent = geminiData.audioContent;
-
-        if (audioContent) {
-          const audioBytes = base64ToBytes(audioContent);
-          console.log('🎵 Gemini TTS audio generated successfully:', { audioSize: audioBytes.byteLength });
-
-          // Log successful AI usage
-          await logAIFromRequest(req, {
-            functionName: "voice-tts",
-            provider: "gemini",
-            model: "gemini-2.5-flash-tts",
-            inputText: text,
-            status: "success",
-            metadata: {
-              voice: geminiVoice,
-              language: languageCode,
-              audioSize: audioBytes.byteLength,
-              isArabic: textIsArabic,
-            }
-          });
-
-          return new Response(audioBytes.buffer as ArrayBuffer, {
-            headers: {
-              ...corsHeaders,
-              'Content-Type': 'audio/mpeg',
-              'Content-Length': audioBytes.byteLength.toString(),
-              'Cache-Control': 'private, max-age=604800, immutable',
-            },
-          });
-        }
-
-        // Option B: Gemini is configured; do NOT fall back. Surface the real error.
-        console.error('🎵 Gemini TTS succeeded but returned no audioContent');
-        return new Response(JSON.stringify({
-          success: false,
-          provider: 'gemini',
-          error: 'Gemini TTS returned no audioContent',
-        }), {
-          status: 502,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      try {
+        const geminiResponse = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(bearerToken ? { 'Authorization': `Bearer ${bearerToken}` } : {}),
+          },
+          body: JSON.stringify({
+              input: {
+                text: preparedText,
+                prompt: stylePrompt,
+              },
+              voice: {
+                languageCode: languageCode,
+                name: geminiVoice,
+                model_name: 'gemini-2.5-flash-tts',
+              },
+              audioConfig: {
+                audioEncoding: 'MP3',
+              },
+          }),
         });
-      }
 
-      // Option B: Gemini is configured; do NOT fall back. Surface Gemini error.
-      const errorText = await geminiResponse.text();
-      console.error('🎵 Gemini TTS failed (no fallback):', geminiResponse.status, errorText);
-      return new Response(JSON.stringify({
-        success: false,
-        provider: 'gemini',
-        status: geminiResponse.status,
-        error: errorText?.slice(0, 2000) || 'Gemini TTS failed',
-      }), {
-        status: geminiResponse.status || 502,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-        },
-      });
+        if (geminiResponse.ok) {
+          const geminiData = await geminiResponse.json();
+          const audioContent = geminiData.audioContent;
+
+          if (audioContent) {
+            const audioBytes = base64ToBytes(audioContent);
+            console.log('🎵 Gemini TTS audio generated successfully:', { audioSize: audioBytes.byteLength });
+
+            await logAIFromRequest(req, {
+              functionName: "voice-tts",
+              provider: "gemini",
+              model: "gemini-2.5-flash-tts",
+              inputText: text,
+              status: "success",
+              metadata: {
+                voice: geminiVoice,
+                language: languageCode,
+                audioSize: audioBytes.byteLength,
+                isArabic: false,
+              }
+            });
+
+            return new Response(audioBytes.buffer as ArrayBuffer, {
+              headers: {
+                ...corsHeaders,
+                'Content-Type': 'audio/mpeg',
+                'Content-Length': audioBytes.byteLength.toString(),
+                'Cache-Control': 'private, max-age=604800, immutable',
+              },
+            });
+          }
+          // No audioContent — fall through to Google Chirp
+          console.warn('🎵 Gemini TTS returned no audioContent, falling back to Google Chirp');
+        } else {
+          const errorText = await geminiResponse.text();
+          console.warn('🎵 Gemini TTS failed (will fallback to Google Chirp):', geminiResponse.status, errorText?.slice(0, 500));
+        }
+      } catch (geminiErr) {
+        console.warn('🎵 Gemini TTS threw error (will fallback to Google Chirp):', geminiErr);
+      }
+    } else if (textIsArabic) {
+      console.log('🎵 Arabic text detected — skipping Gemini, using Google Chirp directly');
     }
 
     // ========================================================================
@@ -510,9 +491,11 @@ serve(async (req: Request) => {
       throw new Error('TTS API keys not configured');
     }
 
-    if (!voice_id) {
-      throw new Error('Missing required field: voice_id is required for Google TTS fallback');
-    }
+    // Auto-select Chirp voice when voice_id is missing (e.g. Arabic path from mini speaker)
+    const effectiveVoiceId = voice_id || (textIsArabic
+      ? (voiceGender === 'female' ? 'ar-XA-Chirp3-HD-Vindemiatrix' : 'ar-XA-Chirp3-HD-Schedar')
+      : (voiceGender === 'female' ? 'en-US-Chirp3-HD-Zephyr' : 'en-US-Chirp3-HD-Orus'));
+    console.log('🎵 Effective voice_id:', effectiveVoiceId, '(original:', voice_id || '<none>', ')');
 
     // Google-only; no external style settings
 
@@ -531,7 +514,7 @@ serve(async (req: Request) => {
         if (/^ar/i.test(name)) return 'ar-XA';
         return 'en-US';
       };
-      const languageCode = deriveLang(voice_id);
+      const languageCode = deriveLang(effectiveVoiceId);
 
       const synthesize = async (name: string, t: string) => {
         const lang = deriveLang(name);
@@ -565,7 +548,7 @@ serve(async (req: Request) => {
 
       // Fast path: single-call synthesis for typical lengths to avoid MP3 concatenation issues on iOS
       if ((text?.length || 0) <= 4500) {
-        let resp = await synthesize(voice_id, text);
+        let resp = await synthesize(effectiveVoiceId, text);
         if (!resp.ok && (resp.status === 400 || resp.status === 404)) {
           const isArabic = /^ar/i.test(languageCode);
           const fallbackVoice = isArabic ? 'ar-XA-Chirp3-HD-Schedar' : 'en-US-Chirp3-HD-Orus';
@@ -604,7 +587,7 @@ serve(async (req: Request) => {
         for (let i = 0; i < chunks.length; i++) {
           const part = chunks[i];
           console.log(`🎵 Synthesizing chunk ${i + 1}/${chunks.length} (len=${part.length})`);
-          let resp = await synthesize(voice_id, part);
+          let resp = await synthesize(effectiveVoiceId, part);
           if (!resp.ok && (resp.status === 400 || resp.status === 404)) {
             const isArabic = /^ar/i.test(languageCode);
             const fallbackVoice = isArabic ? 'ar-XA-Chirp3-HD-Schedar' : 'en-US-Chirp3-HD-Orus';
