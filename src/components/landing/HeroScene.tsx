@@ -6,7 +6,7 @@ import { Logo3D } from "@/components/Logo3D";
 import { ScrollIndicator } from "./ScrollIndicator";
 import { useTheme } from "@/providers/ThemeProvider";
 import { ArrowRight } from "lucide-react";
-import RippleGrid from "@/components/wakti-landing/RippleGrid";
+import RippleGrid from "@/components/landing/RippleGrid";
 
 interface HeroSceneProps {
   language?: "en" | "ar";
