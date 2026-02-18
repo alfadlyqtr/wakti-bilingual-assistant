@@ -11,22 +11,36 @@ interface PriorityBadgeProps {
 export const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority }) => {
   const { language } = useTheme();
   
-  const getPriorityStyles = () => {
-    switch (priority) {
-      case 'normal':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-      case 'high':
-        return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
-      case 'urgent':
-        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
-    }
+  const config = {
+    normal: {
+      bg: 'bg-blue-100/70 dark:bg-blue-900/30',
+      text: 'text-blue-700 dark:text-blue-300',
+      border: 'border-blue-200/50 dark:border-blue-700/40',
+      dot: 'bg-blue-500',
+    },
+    high: {
+      bg: 'bg-orange-100/70 dark:bg-orange-900/30',
+      text: 'text-orange-700 dark:text-orange-300',
+      border: 'border-orange-200/50 dark:border-orange-700/40',
+      dot: 'bg-orange-500',
+    },
+    urgent: {
+      bg: 'bg-red-100/70 dark:bg-red-900/30',
+      text: 'text-red-700 dark:text-red-300',
+      border: 'border-red-200/50 dark:border-red-700/40',
+      dot: 'bg-red-500',
+    },
+  }[priority] || {
+    bg: 'bg-slate-100 dark:bg-slate-800',
+    text: 'text-slate-600 dark:text-slate-300',
+    border: 'border-slate-200/50 dark:border-slate-700/40',
+    dot: 'bg-slate-400',
   };
 
   return (
-    <Badge className={`${getPriorityStyles()} text-xs`}>
+    <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full border ${config.bg} ${config.text} ${config.border}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
       {t(priority, language)}
-    </Badge>
+    </span>
   );
 };

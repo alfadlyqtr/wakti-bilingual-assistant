@@ -15,19 +15,19 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ completed, isOverdue }
 
   if (completed) {
     return (
-      <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-xs">
-        <CheckCircle2 className="w-3 h-3 mr-1" />
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-100/70 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-700/40">
+        <CheckCircle2 className="w-3 h-3" />
         {t('completed', language)}
-      </Badge>
+      </span>
     );
   }
 
   if (isOverdue) {
     return (
-      <Badge className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 text-xs">
-        <AlertTriangle className="w-3 h-3 mr-1" />
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-red-100/70 text-red-700 dark:bg-red-900/30 dark:text-red-300 border border-red-200/50 dark:border-red-700/40">
+        <AlertTriangle className="w-3 h-3" />
         {t('overdue', language)}
-      </Badge>
+      </span>
     );
   }
 

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { MoreHorizontal, Edit, Trash2, Share2, CheckCircle2, Circle, Clock, Moon } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, Share2, CheckCircle2, Circle, Clock, Moon, ChevronDown, ChevronUp, ListChecks, Grid2X2, CheckCheck, RotateCcw } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuPortal } from '@/components/ui/dropdown-menu';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -216,180 +216,222 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
   }
 
   return (
-    <div className="space-y-3">
-      {tasks.map((task) => (
-        <Card key={task.id} className="overflow-hidden">
-          <CardContent className="p-4">
-            {/* Task Header */}
-            <div className="flex items-start gap-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleToggleComplete(task)}
-                className="p-0 h-auto mt-1"
-              >
-                {task.completed ? (
-                  <CheckCircle2 className="w-5 h-5 text-green-600" />
-                ) : (
-                  <Circle className="w-5 h-5" />
-                )}
-              </Button>
+    <div className="space-y-4">
+      {tasks.map((task) => {
+        const completed = task.completed;
+        const overdue = isOverdue(task);
+        const expanded = expandedTasks.has(task.id);
 
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className={`font-medium ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
-                      {task.title}
-                    </h3>
-                    <PriorityBadge priority={task.priority} />
-                    {task.is_shared && (
-                      <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-1 rounded">
-                        {t('sharedTask', language)}
+        return (
+          <div
+            key={task.id}
+            className={`group relative rounded-2xl border transition-all duration-300 overflow-hidden
+              ${
+                completed
+                  ? 'bg-gradient-to-br from-emerald-50/80 via-white to-emerald-50/40 dark:from-emerald-950/30 dark:via-[#0c0f14] dark:to-emerald-950/10 border-emerald-200/60 dark:border-emerald-800/40'
+                  : overdue
+                    ? 'bg-gradient-to-br from-red-50/60 via-white to-orange-50/30 dark:from-red-950/20 dark:via-[#0c0f14] dark:to-red-950/10 border-red-200/60 dark:border-red-800/40'
+                    : 'bg-gradient-to-br from-white via-slate-50/50 to-indigo-50/30 dark:from-[#0c0f14] dark:via-[#12151c] dark:to-[#0f1219] border-slate-200/80 dark:border-slate-700/50'
+              }
+              shadow-sm hover:shadow-md dark:shadow-black/20`}
+          >
+            {/* Top accent bar */}
+            <div className={`h-1 w-full ${
+              completed
+                ? 'bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400'
+                : overdue
+                  ? 'bg-gradient-to-r from-red-400 via-orange-400 to-red-400'
+                  : task.priority === 'urgent'
+                    ? 'bg-gradient-to-r from-red-500 via-pink-500 to-red-500'
+                    : task.priority === 'high'
+                      ? 'bg-gradient-to-r from-orange-400 via-amber-400 to-orange-400'
+                      : 'bg-gradient-to-r from-[#060541] via-indigo-500 to-[#060541] dark:from-indigo-500 dark:via-blue-400 dark:to-indigo-500'
+            }`} />
+
+            <div className="p-4 md:p-5">
+              {/* Task Header */}
+              <div className="flex items-start gap-3">
+                <button
+                  onClick={() => handleToggleComplete(task)}
+                  className={`mt-0.5 flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300 touch-manipulation
+                    ${
+                      completed
+                        ? 'bg-emerald-500 border-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.4)]'
+                        : 'border-slate-300 dark:border-slate-600 hover:border-indigo-400 dark:hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
+                    }`}
+                >
+                  {completed && <CheckCircle2 className="w-4 h-4" />}
+                </button>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`font-semibold text-base leading-tight ${
+                        completed
+                          ? 'line-through text-muted-foreground/70'
+                          : 'text-foreground'
+                      }`}>
+                        {task.title}
+                      </h3>
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        <PriorityBadge priority={task.priority} />
+                        {task.is_shared && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-100/80 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 border border-blue-200/50 dark:border-blue-700/50">
+                            <Share2 className="w-3 h-3" />
+                            {t('sharedTask', language)}
+                          </span>
+                        )}
+                        {task.is_shared && completed && latestCompletions[task.id] && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-100/80 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-700/50">
+                            <CheckCircle2 className="w-3 h-3" />
+                            {latestCompletions[task.id].who}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <DropdownMenu modal={false}>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full opacity-60 hover:opacity-100 transition-opacity">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuPortal>
+                        <DropdownMenuContent
+                          align="end"
+                          sideOffset={6}
+                          collisionPadding={8}
+                          className="z-[2147483000] min-w-[180px] rounded-xl"
+                          onCloseAutoFocus={(e) => e.preventDefault()}
+                        >
+                        <DropdownMenuItem onClick={() => handleToggleComplete(task)}>
+                          <CheckCircle2 className="h-4 w-4 mr-2" />
+                          {completed ? t('markIncomplete', language) : t('markComplete', language)}
+                        </DropdownMenuItem>
+                        {!completed && (
+                          <DropdownMenuItem onClick={() => handleSnoozeTask(task)}>
+                            <Moon className="h-4 w-4 mr-2" />
+                            {t('snooze', language)}
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem onClick={() => onTaskEdit(task)}>
+                          <Edit className="h-4 w-4 mr-2" />
+                          {t('edit', language)}
+                        </DropdownMenuItem>
+                        {task.is_shared && task.share_link && (
+                          <DropdownMenuItem onClick={() => handleShareTask(task)}>
+                            <Share2 className="h-4 w-4 mr-2" />
+                            {t('shareLink', language)}
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem 
+                          onClick={() => handleDeleteTask(task)}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          {t('delete', language)}
+                        </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenuPortal>
+                    </DropdownMenu>
+                  </div>
+
+                  {/* Due date + Status row */}
+                  <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+                    {task.due_date && (
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ${
+                        overdue
+                          ? 'bg-red-100/80 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                          : 'bg-slate-100/80 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300'
+                      }`}>
+                        <Clock className="w-3.5 h-3.5" />
+                        {format(parseISO(task.due_date), 'MMM dd, yyyy')}
+                        {task.due_time && <span className="opacity-70">at {task.due_time}</span>}
                       </span>
                     )}
-                    {/* Airport-stamp badge for shared tasks when completed */}
-                    {task.is_shared && task.completed && latestCompletions[task.id] && (
-                      <span className="text-[11px] px-2 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-200">
-                        ✓ Completed by: {latestCompletions[task.id].who}
+                    <StatusBadge completed={completed} isOverdue={overdue} />
+                    {task.is_shared && completed && latestCompletions[task.id]?.when && (
+                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                        {new Date(latestCompletions[task.id].when).toLocaleString(undefined, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                       </span>
                     )}
                   </div>
-                  
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuPortal>
-                      <DropdownMenuContent
-                        align="end"
-                        sideOffset={6}
-                        collisionPadding={8}
-                        className="z-[2147483000] min-w-[180px]"
-                        onCloseAutoFocus={(e) => e.preventDefault()}
-                      >
-                      <DropdownMenuItem onClick={() => handleToggleComplete(task)}>
-                        <CheckCircle2 className="h-4 w-4 mr-2" />
-                        {task.completed ? t('markIncomplete', language) : t('markComplete', language)}
-                      </DropdownMenuItem>
-                      {!task.completed && (
-                        <DropdownMenuItem onClick={() => handleSnoozeTask(task)}>
-                          <Moon className="h-4 w-4 mr-2" />
-                          {t('snooze', language)}
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem onClick={() => onTaskEdit(task)}>
-                        <Edit className="h-4 w-4 mr-2" />
-                        {t('edit', language)}
-                      </DropdownMenuItem>
-                      {task.is_shared && task.share_link && (
-                        <DropdownMenuItem onClick={() => handleShareTask(task)}>
-                          <Share2 className="h-4 w-4 mr-2" />
-                          {t('shareLink', language)}
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem 
-                        onClick={() => handleDeleteTask(task)}
-                        className="text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        {t('delete', language)}
-                      </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenuPortal>
-                  </DropdownMenu>
-                </div>
 
-                {/* Task Details */}
-                {task.due_date && (
-                  <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-                    <Clock className="w-4 h-4" />
-                    <span>
-                      {t('dueOn', language)} {format(parseISO(task.due_date), 'MMM dd, yyyy')}
-                      {task.due_time && ` at ${task.due_time}`}
-                    </span>
-                  </div>
-                )}
+                  {/* Description */}
+                  {task.description && (
+                    <p className="text-sm text-muted-foreground/80 mt-2 leading-relaxed">{task.description}</p>
+                  )}
 
-                {/* Status Badge */}
-                <div className="mt-2">
-                  <StatusBadge completed={task.completed} isOverdue={isOverdue(task)} />
-                  {task.is_shared && task.completed && latestCompletions[task.id]?.when && (
-                    <div className="mt-1 text-[11px] text-emerald-700">
-                      {new Date(latestCompletions[task.id].when).toLocaleString(undefined, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  {/* Subtasks Toggle */}
+                  <button
+                    onClick={() => toggleTaskExpanded(task.id)}
+                    className="mt-3 inline-flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl transition-all duration-200 touch-manipulation
+                      bg-[#060541]/5 text-[#060541] hover:bg-[#060541]/10
+                      dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10
+                      active:scale-95"
+                  >
+                    {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    {expanded
+                      ? (language === 'ar' ? 'إخفاء المهام الفرعية' : 'Hide Subtasks')
+                      : (language === 'ar' ? 'عرض المهام الفرعية' : 'Show Subtasks')}
+                  </button>
+
+                  {/* Subtasks - Controls + List */}
+                  {expanded && (
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+                          {language === 'ar' ? 'المهام الفرعية' : 'Subtasks'}
+                        </div>
+                        <div className="flex gap-1.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleLayoutForTask(task.id)}
+                            className="h-7 px-2.5 text-[11px] rounded-lg hidden md:inline-flex gap-1 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          >
+                            {gridLayoutTasks.has(task.id)
+                              ? <><ListChecks className="w-3 h-3" />{language === 'ar' ? 'قائمة' : 'List'}</>
+                              : <><Grid2X2 className="w-3 h-3" />{language === 'ar' ? 'شبكة' : 'Grid'}</>}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleMarkAll(task.id, true)}
+                            className="h-7 px-2.5 text-[11px] rounded-lg gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+                          >
+                            <CheckCheck className="w-3 h-3" />
+                            {language === 'ar' ? 'إتمام الكل' : 'All done'}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleMarkAll(task.id, false)}
+                            className="h-7 px-2.5 text-[11px] rounded-lg gap-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            {language === 'ar' ? 'إلغاء' : 'Reset'}
+                          </Button>
+                        </div>
+                      </div>
+                      <SubtaskManager 
+                        key={task.id}
+                        taskId={task.id} 
+                        onSubtasksChange={() => setSubtaskVersion((prev) => ({ ...prev, [task.id]: (prev[task.id] || 0) + 1 }))}
+                        readOnly={false}
+                        layout={(gridLayoutTasks.has(task.id) || isMdUp) ? 'grid' : 'list'}
+                        overrideAllCompleted={optimisticAll[task.id]?.completed}
+                        overrideNonce={optimisticAll[task.id]?.nonce}
+                        refreshTrigger={subtaskVersion[task.id] || 0}
+                      />
                     </div>
                   )}
                 </div>
-
-                {/* Description */}
-                {task.description && (
-                  <p className="text-sm text-muted-foreground mt-2">{task.description}</p>
-                )}
-
-                {/* Subtasks Toggle */}
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => toggleTaskExpanded(task.id)}
-                  className="mt-2 h-9 px-4 text-xs shadow-sm hover:shadow touch-manipulation"
-                >
-                  {expandedTasks.has(task.id) ? t('hideSubtasks', language) : t('showSubtasks', language)} {t('subtasks', language)}
-                </Button>
-
-                {/* Subtasks - Controls + List */}
-                {expandedTasks.has(task.id) && (
-                  <div className="mt-3 pt-3 border-t">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-sm text-muted-foreground">
-                        {language === 'ar' ? 'المهام الفرعية' : 'Subtasks'}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => toggleLayoutForTask(task.id)}
-                          className="h-8 hidden md:inline-flex"
-                        >
-                          {gridLayoutTasks.has(task.id)
-                            ? (language === 'ar' ? 'عرض قائمة' : 'List view')
-                            : (language === 'ar' ? 'عرض مدمج' : 'Compact grid')}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleMarkAll(task.id, true)}
-                          className="h-8"
-                        >
-                          {language === 'ar' ? 'اجعل الكل تمّ' : 'Mark all done'}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleMarkAll(task.id, false)}
-                          className="h-8"
-                        >
-                          {language === 'ar' ? 'إلغاء الكل' : 'Unmark all'}
-                        </Button>
-                      </div>
-                    </div>
-                    <SubtaskManager 
-                      key={task.id}
-                      taskId={task.id} 
-                      onSubtasksChange={() => setSubtaskVersion((prev) => ({ ...prev, [task.id]: (prev[task.id] || 0) + 1 }))}
-                      readOnly={false}
-                      layout={(gridLayoutTasks.has(task.id) || isMdUp) ? 'grid' : 'list'}
-                      overrideAllCompleted={optimisticAll[task.id]?.completed}
-                      overrideNonce={optimisticAll[task.id]?.nonce}
-                      refreshTrigger={subtaskVersion[task.id] || 0}
-                    />
-                  </div>
-                )}
               </div>
             </div>
-          </CardContent>
-        </Card>
-      ))}
+          </div>
+        );
+      })}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
