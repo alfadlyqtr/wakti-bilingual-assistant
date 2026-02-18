@@ -332,7 +332,7 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                   variant="secondary"
                   size="sm"
                   onClick={() => toggleTaskExpanded(task.id)}
-                  className="mt-2 h-8 px-3 text-xs shadow-sm hover:shadow"
+                  className="mt-2 h-9 px-4 text-xs shadow-sm hover:shadow touch-manipulation"
                 >
                   {expandedTasks.has(task.id) ? t('hideSubtasks', language) : t('showSubtasks', language)} {t('subtasks', language)}
                 </Button>
@@ -374,13 +374,14 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                       </div>
                     </div>
                     <SubtaskManager 
-                      key={`${task.id}-${subtaskVersion[task.id] || 0}`}
+                      key={task.id}
                       taskId={task.id} 
                       onSubtasksChange={() => setSubtaskVersion((prev) => ({ ...prev, [task.id]: (prev[task.id] || 0) + 1 }))}
                       readOnly={false}
                       layout={(gridLayoutTasks.has(task.id) || isMdUp) ? 'grid' : 'list'}
                       overrideAllCompleted={optimisticAll[task.id]?.completed}
                       overrideNonce={optimisticAll[task.id]?.nonce}
+                      refreshTrigger={subtaskVersion[task.id] || 0}
                     />
                   </div>
                 )}

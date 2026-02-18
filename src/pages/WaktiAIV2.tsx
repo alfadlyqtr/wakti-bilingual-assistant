@@ -334,7 +334,7 @@ const WaktiAIV2 = () => {
           ];
         case 'vision':
           return [
-            { ...baseTool, id: `tool-1`, name: 'Vision Analysis', icon: 'eye' },
+            { ...baseTool, id: `tool-1`, name: 'Vision Analysis', icon: 'scan' },
             { ...baseTool, id: `tool-2`, name: 'AI Processing', icon: 'brain', status: 'pending' as const }
           ];
         default:
@@ -419,7 +419,7 @@ const WaktiAIV2 = () => {
             thinkingDuration: visionThinkingDuration,
             toolsUsed: 2,
             toolCalls: [
-              { id: 'vision-1', name: 'Vision Analysis', icon: 'eye', status: 'completed', duration: Math.round(visionThinkingDuration * 0.6) },
+              { id: 'vision-1', name: 'Vision Analysis', icon: 'scan', status: 'completed', duration: Math.round(visionThinkingDuration * 0.6) },
               { id: 'vision-2', name: 'AI Processing', icon: 'brain', status: 'completed', duration: Math.round(visionThinkingDuration * 0.4) }
             ]
           },
@@ -643,6 +643,8 @@ const WaktiAIV2 = () => {
       // and provide a smoother UX (user usually wants to chat about the result)
       if (trigger === 'vision') {
         visionInFlightRef.current = false;
+        setActiveTrigger('chat');
+        console.log('🔄 AUTO-SWITCH: Vision completed → Chat mode');
       }
       // Study mode only persists when user explicitly stays in chat trigger
     }

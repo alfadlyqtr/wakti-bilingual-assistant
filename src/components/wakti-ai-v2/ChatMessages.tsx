@@ -2058,14 +2058,13 @@ export function ChatMessages({
                             <div className="w-full">
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <span>{language === 'ar' ? 'جاري تحليل الصورة...' : 'Wakti Vision is analyzing...'}</span>
-                                <img
-                                  src="/assets/wakti-eye-soft.svg"
-                                  alt={language === 'ar' ? 'عين وقتي تومض' : 'Wakti eye blinking'}
-                                  className="h-5 w-auto"
-                                  loading="eager"
-                                  decoding="sync"
-                                  aria-hidden="true"
-                                />
+                                <svg className="h-5 w-5 animate-spin text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+                                  <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                                  <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+                                  <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+                                  <line x1="3" y1="12" x2="21" y2="12" />
+                                </svg>
                               </div>
                             </div>
                           );

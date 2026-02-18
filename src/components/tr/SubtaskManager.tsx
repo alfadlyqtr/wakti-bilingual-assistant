@@ -1,11 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Plus, Trash2, Edit3, Calendar as CalendarIcon, Clock, ThumbsUp } from 'lucide-react';
+import { Plus, Trash2, Edit3, Calendar as CalendarIcon, Clock } from 'lucide-react';
 import { format, isAfter, parseISO, differenceInHours } from 'date-fns';
 import { TRService, TRSubtask } from '@/services/trService';
 import { TRSharedService } from '@/services/trSharedService';
@@ -22,6 +22,7 @@ interface SubtaskManagerProps {
   layout?: 'list' | 'grid';
   overrideAllCompleted?: boolean;
   overrideNonce?: number;
+  refreshTrigger?: number;
 }
 
 export const SubtaskManager: React.FC<SubtaskManagerProps> = ({ 
@@ -31,6 +32,7 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
   layout = 'list',
   overrideAllCompleted,
   overrideNonce,
+  refreshTrigger,
 }) => {
   const { language } = useTheme();
   const [subtasks, setSubtasks] = useState<TRSubtask[]>([]);
@@ -39,18 +41,29 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [openDueFor, setOpenDueFor] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
+    isMountedRef.current = true;
     loadSubtasks();
+    return () => { isMountedRef.current = false; };
   }, [taskId]);
+
+  // Reload when parent bumps refreshTrigger (e.g. Mark All Done)
+  useEffect(() => {
+    if (refreshTrigger !== undefined && refreshTrigger > 0) {
+      loadSubtasks();
+    }
+  }, [refreshTrigger]);
 
   // Realtime: listen for subtask changes for this task and reload
   useEffect(() => {
     const channel = supabase
       .channel(`rt-subtasks-${taskId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_subtasks', filter: `task_id=eq.${taskId}` }, () => {
-        // Small debounce to avoid double loads if many events arrive
-        setTimeout(() => loadSubtasks(), 150);
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => { if (isMountedRef.current) loadSubtasks(); }, 400);
       })
       .subscribe();
 
@@ -123,32 +136,32 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
     }
   };
 
-  const handleToggleSubtask = async (id: string, completed: boolean) => {
+  const handleToggleSubtask = useCallback(async (id: string, completed: boolean) => {
+    // Optimistic update — instant UI feedback
+    setSubtasks((prev) => prev.map((s) => s.id === id ? { ...s, completed } : s));
     try {
       await TRService.updateSubtask(id, { completed });
       if (completed) {
-        // Record owner-side completion as a shared response so ActivityMonitor and Shared view reflect it immediately
         try {
           await TRSharedService.markSubtaskCompleted(taskId, id, 'Owner (You)', true);
         } catch (e) {
           console.warn('Non-fatal: failed to record owner completion response', e);
         }
       } else {
-        // Owner unchecks: clear ALL completion responses for this subtask so assignee checkboxes uncheck in real time
         try {
           await TRSharedService.clearAllSubtaskCompletions(taskId, id);
         } catch (e) {
           console.warn('Non-fatal: failed to clear subtask completion responses', e);
         }
       }
-      await loadSubtasks();
       onSubtasksChange?.();
-      toast.success('Subtask updated');
     } catch (error) {
+      // Revert optimistic update on failure
+      setSubtasks((prev) => prev.map((s) => s.id === id ? { ...s, completed: !completed } : s));
       console.error('Error updating subtask:', error);
       toast.error('Failed to update subtask');
     }
-  };
+  }, [taskId, onSubtasksChange]);
 
   const handleDeleteSubtask = async (id: string) => {
     try {
@@ -219,24 +232,12 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
   };
 
   const renderItem = (subtask: TRSubtask) => (
-    <div key={subtask.id} className={`relative flex items-center gap-2 ${layout === 'grid' ? 'p-2 border bg-secondary/10' : 'p-2 bg-secondary/20'} rounded-md`}>
-      {subtask.completed && (
-        <div className="pointer-events-none absolute left-2 right-2 top-1/2 h-px bg-emerald-500/40" />
-      )}
-      {subtask.completed && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="w-[80%] h-[80%] rounded-xl bg-emerald-500/15 border border-emerald-500/30 backdrop-blur-sm shadow-[0_0_2rem_rgba(16,185,129,0.15)] flex items-center justify-center">
-            <span className="inline-flex items-center gap-2 text-[12px] font-medium text-emerald-700 dark:text-emerald-300">
-              <ThumbsUp className="w-4 h-4" />
-              {language === 'ar' ? 'مكتملة' : 'Completed'}
-            </span>
-          </div>
-        </div>
-      )}
+    <div key={subtask.id} className={`relative flex items-center gap-2 ${layout === 'grid' ? 'p-2.5 border bg-secondary/10' : 'p-2.5 bg-secondary/20'} rounded-md transition-colors duration-200 ${subtask.completed ? 'bg-emerald-500/10 dark:bg-emerald-500/5' : ''}`}>
       <Checkbox
         checked={subtask.completed}
         onCheckedChange={(checked) => handleToggleSubtask(subtask.id, checked as boolean)}
         disabled={readOnly}
+        className="h-5 w-5 min-w-[20px]"
       />
       {editingId === subtask.id ? (
         <div className="flex-1 flex items-center gap-2">
@@ -276,19 +277,16 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
               </span>
             </span>
           )}
-          {false && subtask.completed && (
-            <span />
-          )}
-          {!readOnly && (
-            <div className="flex items-center gap-1">
-              <Button size="sm" variant="ghost" onClick={() => handleStartEdit(subtask)} className="h-6 w-6 p-0">
-                <Edit3 className="h-3 w-3" />
+              {!readOnly && (
+            <div className="flex items-center gap-0.5">
+              <Button size="sm" variant="ghost" onClick={() => handleStartEdit(subtask)} className="h-8 w-8 p-0 touch-manipulation">
+                <Edit3 className="h-3.5 w-3.5" />
               </Button>
               {/* Due editor trigger */}
               <Popover open={openDueFor === subtask.id} onOpenChange={(open) => setOpenDueFor(open ? subtask.id : null)}>
                 <PopoverTrigger asChild>
-                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
-                    <CalendarIcon className="h-3 w-3" />
+                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0 touch-manipulation">
+                    <CalendarIcon className="h-3.5 w-3.5" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-72 p-3" align="end">
@@ -338,8 +336,8 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
                   </div>
                 </PopoverContent>
               </Popover>
-              <Button size="sm" variant="ghost" onClick={() => handleDeleteSubtask(subtask.id)} className="h-6 w-6 p-0 text-destructive hover:text-destructive">
-                <Trash2 className="h-3 w-3" />
+              <Button size="sm" variant="ghost" onClick={() => handleDeleteSubtask(subtask.id)} className="h-8 w-8 p-0 text-destructive hover:text-destructive touch-manipulation">
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>
           )}
