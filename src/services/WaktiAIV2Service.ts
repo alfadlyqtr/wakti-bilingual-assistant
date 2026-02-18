@@ -1377,15 +1377,22 @@ class WaktiAIV2ServiceClass {
               const signed = await supabase.storage.from(bucketName).createSignedUrl(path, 600);
               if (signed?.data?.signedUrl) uploadedUrl = signed.data.signedUrl;
             }
-          } catch (_) {
+          } catch (uploadErr: any) {
+            console.error('❌ VISION UPLOAD error (will try base64 fallback):', uploadErr?.message || uploadErr, 'mime:', mime, 'request:', requestId);
             uploadedUrl = null;
           }
           if (uploadedUrl) {
             payloadImages.push({ mimeType: mime, url: uploadedUrl });
           } else {
-            // Do NOT fallback to base64 for large requests; fail fast to avoid EOF on body read
-            console.error('❌ VISION UPLOAD failed for image index', i, 'mime:', mime, 'request:', requestId);
-            throw new Error('vision_upload_failed');
+            // Fallback: send base64 directly (capped at 1.2MB to avoid gateway abort)
+            const approxBytes = Math.round(base64.length * 0.75);
+            if (approxBytes <= 1.2 * 1024 * 1024) {
+              console.warn('⚠️ VISION: Upload failed, using base64 fallback (size:', approxBytes, 'bytes)');
+              payloadImages.push({ mimeType: mime, base64 });
+            } else {
+              console.error('❌ VISION: Upload failed and image too large for base64 fallback', approxBytes, 'bytes');
+              throw new Error('vision_upload_failed');
+            }
           }
         }
 
