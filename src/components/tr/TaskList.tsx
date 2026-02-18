@@ -24,7 +24,7 @@ interface TaskListProps {
 export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksChanged }) => {
   const { language } = useTheme();
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
-  const [gridLayoutTasks, setGridLayoutTasks] = useState<Set<string>>(new Set());
+  const [listLayoutTasks, setListLayoutTasks] = useState<Set<string>>(new Set());
   const [subtaskVersion, setSubtaskVersion] = useState<Record<string, number>>({});
   const [optimisticAll, setOptimisticAll] = useState<Record<string, {completed: boolean; nonce: number}>>({});
   const [isMdUp, setIsMdUp] = useState<boolean>(false);
@@ -88,9 +88,9 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
   };
 
   const toggleLayoutForTask = (taskId: string) => {
-    const next = new Set(gridLayoutTasks);
+    const next = new Set(listLayoutTasks);
     if (next.has(taskId)) next.delete(taskId); else next.add(taskId);
-    setGridLayoutTasks(next);
+    setListLayoutTasks(next);
   };
 
   const handleMarkAll = async (taskId: string, completed: boolean) => {
@@ -388,11 +388,11 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                             variant="ghost"
                             size="sm"
                             onClick={() => toggleLayoutForTask(task.id)}
-                            className="h-7 px-2.5 text-[11px] rounded-lg hidden md:inline-flex gap-1 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            className="h-7 px-2.5 text-[11px] rounded-lg inline-flex gap-1 hover:bg-slate-100 dark:hover:bg-slate-800"
                           >
-                            {gridLayoutTasks.has(task.id)
-                              ? <><ListChecks className="w-3 h-3" />{language === 'ar' ? 'قائمة' : 'List'}</>
-                              : <><Grid2X2 className="w-3 h-3" />{language === 'ar' ? 'شبكة' : 'Grid'}</>}
+                            {listLayoutTasks.has(task.id)
+                              ? <><Grid2X2 className="w-3 h-3" />{language === 'ar' ? 'شبكة' : 'Grid'}</>
+                              : <><ListChecks className="w-3 h-3" />{language === 'ar' ? 'قائمة' : 'List'}</>}
                           </Button>
                           <Button
                             variant="ghost"
@@ -419,7 +419,7 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                         taskId={task.id} 
                         onSubtasksChange={() => setSubtaskVersion((prev) => ({ ...prev, [task.id]: (prev[task.id] || 0) + 1 }))}
                         readOnly={false}
-                        layout={(gridLayoutTasks.has(task.id) || isMdUp) ? 'grid' : 'list'}
+                        layout={listLayoutTasks.has(task.id) ? 'list' : 'grid'}
                         overrideAllCompleted={optimisticAll[task.id]?.completed}
                         overrideNonce={optimisticAll[task.id]?.nonce}
                         refreshTrigger={subtaskVersion[task.id] || 0}
