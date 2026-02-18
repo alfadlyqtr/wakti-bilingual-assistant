@@ -46,7 +46,7 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
 
   useEffect(() => {
     isMountedRef.current = true;
-    loadSubtasks();
+    loadSubtasks(true);
     return () => { isMountedRef.current = false; };
   }, [taskId]);
 
@@ -102,16 +102,15 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overrideNonce]);
 
-  const loadSubtasks = async () => {
+  const loadSubtasks = async (showSpinner = false) => {
     try {
-      setLoading(true);
+      if (showSpinner) setLoading(true);
       const data = await TRService.getSubtasks(taskId);
-      setSubtasks(data);
+      if (isMountedRef.current) setSubtasks(data);
     } catch (error) {
       console.error('Error loading subtasks:', error);
-      toast.error('Failed to load subtasks');
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   };
 
@@ -129,6 +128,7 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
       setNewSubtaskTitle('');
       await loadSubtasks();
       onSubtasksChange?.();
+
       toast.success('Subtask added');
     } catch (error) {
       console.error('Error adding subtask:', error);
@@ -137,31 +137,22 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
   };
 
   const handleToggleSubtask = useCallback(async (id: string, completed: boolean) => {
-    // Optimistic update — instant UI feedback
+    // Optimistic update — instant UI feedback, no reload needed
     setSubtasks((prev) => prev.map((s) => s.id === id ? { ...s, completed } : s));
     try {
       await TRService.updateSubtask(id, { completed });
       if (completed) {
-        try {
-          await TRSharedService.markSubtaskCompleted(taskId, id, 'Owner (You)', true);
-        } catch (e) {
-          console.warn('Non-fatal: failed to record owner completion response', e);
-        }
+        TRSharedService.markSubtaskCompleted(taskId, id, 'Owner (You)', true).catch(() => {});
       } else {
-        try {
-          await TRSharedService.clearAllSubtaskCompletions(taskId, id);
-        } catch (e) {
-          console.warn('Non-fatal: failed to clear subtask completion responses', e);
-        }
+        TRSharedService.clearAllSubtaskCompletions(taskId, id).catch(() => {});
       }
-      onSubtasksChange?.();
     } catch (error) {
       // Revert optimistic update on failure
       setSubtasks((prev) => prev.map((s) => s.id === id ? { ...s, completed: !completed } : s));
       console.error('Error updating subtask:', error);
       toast.error('Failed to update subtask');
     }
-  }, [taskId, onSubtasksChange]);
+  }, [taskId]);
 
   const handleDeleteSubtask = async (id: string) => {
     try {
@@ -201,7 +192,7 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
     setEditingTitle('');
   };
 
-  if (loading) {
+  if (loading && subtasks.length === 0) {
     return <div className="text-sm text-muted-foreground">Loading subtasks...</div>;
   }
 
