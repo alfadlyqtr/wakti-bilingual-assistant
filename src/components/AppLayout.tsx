@@ -307,14 +307,14 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
 
         <div className="space-y-4 py-4">
           {/* Features */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-1.5">
             {txt.features.map((feature, i) => {
               const item = typeof feature === 'string' ? { title: feature } : feature;
               return (
-                <div key={i} className="flex items-center gap-2 text-sm rounded-md bg-accent/5 px-2 py-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-accent-green" />
+                <div key={i} className="flex items-center gap-2 text-sm rounded-md px-2 py-1.5 bg-[hsl(210,100%,65%,0.06)] border border-[hsl(210,100%,65%,0.15)] hover:border-[hsl(210,100%,65%,0.3)] transition-colors">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[hsl(142,76%,55%)] shadow-[0_0_6px_hsl(142,76%,55%)] flex-shrink-0" />
                   <span className="flex items-center gap-1">
-                    <span>{item.title}</span>
+                    <span className="text-foreground/90 font-medium">{item.title}</span>
                     {item.sublabel ? (
                       <span className="text-xs text-muted-foreground">{item.sublabel}</span>
                     ) : null}
@@ -325,7 +325,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
           </div>
 
           {/* Price */}
-          <div className="bg-accent/10 rounded-lg p-4 text-center space-y-1">
+          <div className="rounded-lg p-4 text-center space-y-1 border border-[hsl(210,100%,65%,0.2)] bg-[hsl(210,100%,65%,0.05)] shadow-[0_0_20px_hsl(210,100%,65%,0.08)]">
             <p className="text-sm text-muted-foreground">{txt.trial}</p>
             {(() => {
               const normalize = (s?: string) => s || '';
@@ -362,7 +362,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
             <Button
               onClick={() => { onOpenChange(false); navigate('/account?tab=billing'); }}
               variant="outline"
-              className="w-full"
+              className="w-full border-foreground/20 hover:border-foreground/40 hover:bg-foreground/5 text-foreground/80 font-medium transition-all"
             >
               {language === 'ar' ? 'الحساب / الفوترة' : 'Account / Billing'}
             </Button>
@@ -370,7 +370,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
             <Button
               onClick={handleSubscribe}
               disabled={loading}
-              className="w-full bg-gradient-to-r from-blue-500 via-violet-500 to-purple-600 hover:from-blue-400 hover:via-violet-400 hover:to-purple-500 text-white font-bold text-lg shadow-[0_0_28px_rgba(139,92,246,0.7),0_0_60px_rgba(99,102,241,0.4)] hover:shadow-[0_0_40px_rgba(139,92,246,0.9),0_0_80px_rgba(99,102,241,0.5)] active:scale-95 transition-all duration-150 border-0"
+              className="w-full bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:from-[hsl(210,100%,60%)] hover:via-[hsl(195,100%,55%)] hover:to-[hsl(175,100%,50%)] text-white font-bold text-lg tracking-wide shadow-[0_0_30px_hsl(200,100%,55%,0.6),0_0_60px_hsl(200,100%,55%,0.3),0_4px_20px_hsl(200,100%,55%,0.4)] hover:shadow-[0_0_40px_hsl(200,100%,55%,0.8),0_0_80px_hsl(200,100%,55%,0.4)] active:scale-[0.98] transition-all duration-150 border-0"
               size="lg"
               style={{minHeight: '56px'}}
             >
@@ -386,7 +386,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
               onClick={handleRestore}
               disabled={restoring}
               variant="outline"
-              className="w-full"
+              className="w-full border-foreground/20 hover:border-foreground/40 hover:bg-foreground/5 text-foreground/80 font-medium transition-all"
             >
               {restoring ? (
                 <RefreshCw className="w-4 h-4 animate-spin mr-2" />
@@ -398,14 +398,14 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
 
             <button
               onClick={() => window.open(contactUrl, "_blank", "noopener,noreferrer")}
-              className="w-full flex items-center justify-center gap-3 rounded-lg px-4 py-3 bg-muted/60 border border-border hover:bg-muted hover:border-foreground/20 active:scale-95 transition-all duration-150 group"
+              className="w-full flex items-center justify-center gap-3 rounded-lg px-4 py-3 bg-[hsl(142,76%,55%,0.07)] border border-[hsl(142,76%,55%,0.4)] hover:bg-[hsl(142,76%,55%,0.12)] hover:border-[hsl(142,76%,55%,0.7)] hover:shadow-[0_0_16px_hsl(142,76%,55%,0.25)] active:scale-[0.98] transition-all duration-150 group"
             >
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-foreground/10 group-hover:bg-foreground/15 transition-colors">
-                <MessageCircle className="w-4 h-4 text-foreground/70" />
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[hsl(142,76%,55%,0.15)] group-hover:bg-[hsl(142,76%,55%,0.25)] transition-colors">
+                <MessageCircle className="w-4 h-4 text-[hsl(142,76%,60%)]" />
               </div>
               <div className={`flex flex-col ${language === 'ar' ? 'items-end' : 'items-start'}`}>
-                <span className="text-sm font-semibold text-foreground">{txt.contact}</span>
-                <span className="text-xs text-muted-foreground">{txt.contactSub}</span>
+                <span className="text-sm font-semibold text-[hsl(142,76%,65%)]">{txt.contact}</span>
+                <span className="text-xs text-foreground/60">{txt.contactSub}</span>
               </div>
             </button>
 
