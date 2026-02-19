@@ -18,7 +18,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export default function TasksReminders() {
   const { language } = useTheme();
-  const [activeTab, setActiveTab] = useState('tasks');
+  const [activeTab, setActiveTab] = useState('activity_main');
   const { tasks, reminders, loading, error, refresh } = useTRData();
   // Auto-delete toggle (24h after completion). Default OFF. Persist to localStorage.
   const [autoDelete24h, setAutoDelete24h] = useState<boolean>(() => {
@@ -140,20 +140,20 @@ export default function TasksReminders() {
                   : `${tasks.length} tasks · ${reminders.length} reminders`}
               </p>
             </div>
-            <button
-              onClick={activeTab === 'tasks' ? handleCreateTask : activeTab === 'reminders' ? handleCreateReminder : undefined}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold
-                bg-white/15 backdrop-blur-md text-white border border-white/20
-                hover:bg-white/25 active:scale-95 transition-all duration-200 touch-manipulation
-                shadow-[0_0_20px_hsla(210,100%,65%,0.15),inset_0_1px_0_hsla(0,0%,100%,0.1)]"
-            >
-              <Plus className="w-4 h-4" />
-              {activeTab === 'tasks'
-                ? (language === 'ar' ? 'مهمة جديدة' : 'New Task')
-                : activeTab === 'reminders'
-                  ? (language === 'ar' ? 'تذكير جديد' : 'New Reminder')
-                  : null}
-            </button>
+            {(activeTab === 'tasks' || activeTab === 'reminders') && (
+              <button
+                onClick={activeTab === 'tasks' ? handleCreateTask : handleCreateReminder}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold
+                  bg-white/15 backdrop-blur-md text-white border border-white/20
+                  hover:bg-white/25 active:scale-95 transition-all duration-200 touch-manipulation
+                  shadow-[0_0_20px_hsla(210,100%,65%,0.15),inset_0_1px_0_hsla(0,0%,100%,0.1)]"
+              >
+                <Plus className="w-4 h-4" />
+                {activeTab === 'tasks'
+                  ? (language === 'ar' ? 'مهمة جديدة' : 'New Task')
+                  : (language === 'ar' ? 'تذكير جديد' : 'New Reminder')}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -161,10 +161,17 @@ export default function TasksReminders() {
       <div className="max-w-4xl mx-auto px-4 -mt-3 space-y-4">
         {/* ── Glass-morphism Tabs ── */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full grid grid-cols-3 h-12 rounded-2xl p-1.5 gap-1
+          <TabsList className="w-full grid grid-cols-4 h-12 rounded-2xl p-1.5 gap-1
             bg-white/80 dark:bg-white/[0.06] backdrop-blur-xl
             border border-white/60 dark:border-white/[0.08]
             shadow-[0_4px_24px_hsla(0,0%,0%,0.06)] dark:shadow-[0_4px_24px_hsla(0,0%,0%,0.4)]">
+            <TabsTrigger value="activity_main" className="rounded-xl text-[13px] font-bold tracking-wide
+              data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#060541] data-[state=active]:to-[#1a1080]
+              dark:data-[state=active]:from-indigo-600 dark:data-[state=active]:to-indigo-500
+              data-[state=active]:text-white data-[state=active]:shadow-[0_2px_12px_hsla(240,80%,30%,0.3)]
+              data-[state=inactive]:text-muted-foreground transition-all duration-200">
+              {language === 'ar' ? 'النشاط' : 'Activity'}
+            </TabsTrigger>
             <TabsTrigger value="tasks" className="rounded-xl text-[13px] font-bold tracking-wide
               data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#060541] data-[state=active]:to-[#1a1080]
               dark:data-[state=active]:from-indigo-600 dark:data-[state=active]:to-indigo-500
@@ -199,6 +206,22 @@ export default function TasksReminders() {
               {language === 'ar' ? 'المهام المشتركة' : 'Shared Tasks'}
             </TabsTrigger>
           </TabsList>
+
+          {/* ── Activity Tab (main/default) ── */}
+          <TabsContent value="activity_main" className="mt-5">
+            <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+              <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-[#060541]/10 to-indigo-500/10 dark:from-indigo-500/10 dark:to-purple-500/10 flex items-center justify-center
+                shadow-[0_8px_32px_hsla(240,80%,50%,0.08)] mb-6">
+                <span className="text-3xl">✦</span>
+              </div>
+              <p className="text-lg font-bold text-foreground mb-2">
+                {language === 'ar' ? 'النشاط' : 'Activity'}
+              </p>
+              <p className="text-sm text-muted-foreground max-w-[260px] leading-relaxed">
+                {language === 'ar' ? 'قريباً...' : 'Coming soon...'}
+              </p>
+            </div>
+          </TabsContent>
 
           {/* ── Tasks Tab ── */}
           <TabsContent value="tasks" className="mt-5 space-y-4">
