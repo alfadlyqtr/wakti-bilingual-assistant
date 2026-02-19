@@ -23,7 +23,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Sparkles, RefreshCw, LogOut, Home, Shield, Clock } from "lucide-react";
+import { Sparkles, RefreshCw, LogOut, Home, Shield, Clock, MessageCircle } from "lucide-react";
 import { Logo3D } from "@/components/Logo3D";
 import { toast } from "sonner";
 
@@ -65,6 +65,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [price, setPrice] = useState<{ qar?: string; usd?: string }>({});
+  const contactUrl = "https://wa.me/97433994166";
 
   useEffect(() => {
     // When paywall is open, allow header popovers to appear above overlay
@@ -230,6 +231,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
       trial: '',
       subscribe: 'Subscribe Now',
       restore: 'Restore Purchases',
+      contact: 'For payment-related issues, contact us',
       logout: 'Logout',
       home: 'Back to Home',
       terms: 'Terms & Privacy',
@@ -260,6 +262,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
       trial: '',
       subscribe: 'اشترك الآن',
       restore: 'استعادة المشتريات',
+      contact: 'للمشاكل المتعلقة بالدفع، تواصل معنا',
       logout: 'تسجيل الخروج',
       home: 'العودة للرئيسية',
       terms: 'الشروط والخصوصية',
@@ -388,6 +391,15 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
                 <RefreshCw className="w-4 h-4 mr-2" />
               )}
               {txt.restore}
+            </Button>
+
+            <Button
+              onClick={() => window.open(contactUrl, "_blank", "noopener,noreferrer")}
+              variant="outline"
+              className="w-full border-accent/40 bg-accent/5 text-foreground hover:bg-accent/10"
+            >
+              <MessageCircle className="w-4 h-4 mr-2" />
+              {txt.contact}
             </Button>
 
             {/* Terms */}
