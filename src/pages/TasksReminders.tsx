@@ -185,6 +185,13 @@ export default function TasksReminders() {
                 </span>
               )}
             </TabsTrigger>
+            <TabsTrigger value="activity" className="rounded-xl text-[13px] font-bold tracking-wide
+              data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#060541] data-[state=active]:to-[#1a1080]
+              dark:data-[state=active]:from-indigo-600 dark:data-[state=active]:to-indigo-500
+              data-[state=active]:text-white data-[state=active]:shadow-[0_2px_12px_hsla(240,80%,30%,0.3)]
+              data-[state=inactive]:text-muted-foreground transition-all duration-200">
+              {language === 'ar' ? 'المهام المشتركة' : 'Shared Tasks'}
+            </TabsTrigger>
             <TabsTrigger value="reminders" className="rounded-xl text-[13px] font-bold tracking-wide
               data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#060541] data-[state=active]:to-[#1a1080]
               dark:data-[state=active]:from-indigo-600 dark:data-[state=active]:to-indigo-500
@@ -197,13 +204,6 @@ export default function TasksReminders() {
                   {reminders.length}
                 </span>
               )}
-            </TabsTrigger>
-            <TabsTrigger value="activity" className="rounded-xl text-[13px] font-bold tracking-wide
-              data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#060541] data-[state=active]:to-[#1a1080]
-              dark:data-[state=active]:from-indigo-600 dark:data-[state=active]:to-indigo-500
-              data-[state=active]:text-white data-[state=active]:shadow-[0_2px_12px_hsla(240,80%,30%,0.3)]
-              data-[state=inactive]:text-muted-foreground transition-all duration-200">
-              {language === 'ar' ? 'المهام المشتركة' : 'Shared Tasks'}
             </TabsTrigger>
           </TabsList>
 
