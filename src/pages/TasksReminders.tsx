@@ -122,101 +122,141 @@ export default function TasksReminders() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto pb-28 scrollbar-hide bg-background">
-      <div className="max-w-4xl mx-auto px-4 pt-4 space-y-5">
-
-        {/* Page Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">
-              {language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders'}
-            </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {language === 'ar'
-                ? `${tasks.length} مهمة · ${reminders.length} تذكير`
-                : `${tasks.length} tasks · ${reminders.length} reminders`}
-            </p>
+    <div className="flex-1 overflow-y-auto pb-28 scrollbar-hide">
+      {/* ── Luxurious gradient header ── */}
+      <div className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#060541] via-[#0a0960] to-[#1a1080] dark:from-[#0c0f14] dark:via-[#111528] dark:to-[#0c0f14]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_hsla(210,100%,65%,0.15),transparent_60%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_hsla(280,70%,65%,0.1),transparent_60%)]" />
+        <div className="relative max-w-4xl mx-auto px-5 pt-6 pb-5">
+          <div className="flex items-end justify-between">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-white">
+                {language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders'}
+              </h1>
+              <p className="text-[13px] text-white/50 mt-1 font-medium">
+                {language === 'ar'
+                  ? `${tasks.length} مهمة · ${reminders.length} تذكير`
+                  : `${tasks.length} tasks · ${reminders.length} reminders`}
+              </p>
+            </div>
+            <button
+              onClick={activeTab === 'tasks' ? handleCreateTask : activeTab === 'reminders' ? handleCreateReminder : undefined}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold
+                bg-white/15 backdrop-blur-md text-white border border-white/20
+                hover:bg-white/25 active:scale-95 transition-all duration-200 touch-manipulation
+                shadow-[0_0_20px_hsla(210,100%,65%,0.15),inset_0_1px_0_hsla(0,0%,100%,0.1)]"
+            >
+              <Plus className="w-4 h-4" />
+              {activeTab === 'tasks'
+                ? (language === 'ar' ? 'مهمة جديدة' : 'New Task')
+                : activeTab === 'reminders'
+                  ? (language === 'ar' ? 'تذكير جديد' : 'New Reminder')
+                  : null}
+            </button>
           </div>
-          <button
-            onClick={activeTab === 'tasks' ? handleCreateTask : activeTab === 'reminders' ? handleCreateReminder : undefined}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
-              bg-[#060541] text-white dark:bg-indigo-500
-              hover:opacity-90 active:scale-95 transition-all duration-150 touch-manipulation shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            {activeTab === 'tasks'
-              ? (language === 'ar' ? 'مهمة' : 'New Task')
-              : activeTab === 'reminders'
-                ? (language === 'ar' ? 'تذكير' : 'Reminder')
-                : null}
-          </button>
         </div>
+      </div>
 
-        {/* Tabs */}
+      <div className="max-w-4xl mx-auto px-4 -mt-3 space-y-4">
+        {/* ── Glass-morphism Tabs ── */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full grid grid-cols-3 h-10 rounded-xl bg-muted/60 p-1 gap-1">
-            <TabsTrigger value="tasks" className="rounded-lg text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+          <TabsList className="w-full grid grid-cols-3 h-12 rounded-2xl p-1.5 gap-1
+            bg-white/80 dark:bg-white/[0.06] backdrop-blur-xl
+            border border-white/60 dark:border-white/[0.08]
+            shadow-[0_4px_24px_hsla(0,0%,0%,0.06)] dark:shadow-[0_4px_24px_hsla(0,0%,0%,0.4)]">
+            <TabsTrigger value="tasks" className="rounded-xl text-[13px] font-bold tracking-wide
+              data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#060541] data-[state=active]:to-[#1a1080]
+              dark:data-[state=active]:from-indigo-600 dark:data-[state=active]:to-indigo-500
+              data-[state=active]:text-white data-[state=active]:shadow-[0_2px_12px_hsla(240,80%,30%,0.3)]
+              data-[state=inactive]:text-muted-foreground transition-all duration-200">
               {language === 'ar' ? 'المهام' : 'Tasks'}
               {tasks.length > 0 && (
-                <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#060541]/10 dark:bg-indigo-500/20 text-[#060541] dark:text-indigo-300">
+                <span className="ml-1.5 text-[10px] font-black px-1.5 py-0.5 rounded-full
+                  bg-white/20 data-[state=inactive]:bg-[#060541]/10 dark:data-[state=inactive]:bg-indigo-500/20">
                   {tasks.length}
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="reminders" className="rounded-lg text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsTrigger value="reminders" className="rounded-xl text-[13px] font-bold tracking-wide
+              data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#060541] data-[state=active]:to-[#1a1080]
+              dark:data-[state=active]:from-indigo-600 dark:data-[state=active]:to-indigo-500
+              data-[state=active]:text-white data-[state=active]:shadow-[0_2px_12px_hsla(240,80%,30%,0.3)]
+              data-[state=inactive]:text-muted-foreground transition-all duration-200">
               {language === 'ar' ? 'التذكيرات' : 'Reminders'}
               {reminders.length > 0 && (
-                <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#060541]/10 dark:bg-indigo-500/20 text-[#060541] dark:text-indigo-300">
+                <span className="ml-1.5 text-[10px] font-black px-1.5 py-0.5 rounded-full
+                  bg-white/20 data-[state=inactive]:bg-[#060541]/10 dark:data-[state=inactive]:bg-indigo-500/20">
                   {reminders.length}
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="activity" className="rounded-lg text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsTrigger value="activity" className="rounded-xl text-[13px] font-bold tracking-wide
+              data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#060541] data-[state=active]:to-[#1a1080]
+              dark:data-[state=active]:from-indigo-600 dark:data-[state=active]:to-indigo-500
+              data-[state=active]:text-white data-[state=active]:shadow-[0_2px_12px_hsla(240,80%,30%,0.3)]
+              data-[state=inactive]:text-muted-foreground transition-all duration-200">
               {language === 'ar' ? 'النشاط' : 'Activity'}
             </TabsTrigger>
           </TabsList>
 
-          {/* Tasks Tab */}
-          <TabsContent value="tasks" className="mt-4 space-y-4">
-            {/* Auto-delete toggle — subtle, not a big button */}
-            <div className="flex items-center justify-between px-1">
-              <span className="text-xs text-muted-foreground">
-                {language === 'ar' ? 'حذف تلقائي بعد 24 ساعة من الإتمام' : 'Auto-delete 24h after completion'}
-              </span>
+          {/* ── Tasks Tab ── */}
+          <TabsContent value="tasks" className="mt-5 space-y-4">
+            {/* Auto-delete — elegant inline toggle */}
+            <div className="flex items-center justify-between px-1 py-2 rounded-xl
+              bg-muted/30 dark:bg-white/[0.02] border border-transparent dark:border-white/[0.04]">
+              <div className="flex items-center gap-2 pl-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500 animate-pulse" />
+                <span className="text-[12px] font-medium text-muted-foreground">
+                  {language === 'ar' ? 'حذف تلقائي بعد 24 ساعة' : 'Auto-delete after 24h'}
+                </span>
+              </div>
               <button
                 onClick={handleAutoDeleteToggle}
                 title={t('autoDeleteTitle', language)}
-                className={`relative w-9 h-5 rounded-full transition-colors duration-200 touch-manipulation flex-shrink-0
-                  ${autoDelete24h ? 'bg-[#060541] dark:bg-indigo-500' : 'bg-slate-200 dark:bg-slate-700'}`}
+                className={`relative w-10 h-[22px] rounded-full transition-all duration-300 touch-manipulation flex-shrink-0 mr-1
+                  ${autoDelete24h
+                    ? 'bg-gradient-to-r from-[#060541] to-indigo-600 dark:from-indigo-600 dark:to-indigo-500 shadow-[0_0_8px_hsla(240,80%,50%,0.3)]'
+                    : 'bg-slate-200 dark:bg-slate-700'}`}
               >
-                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200
-                  ${autoDelete24h ? 'translate-x-4' : 'translate-x-0'}`} />
+                <span className={`absolute top-[3px] left-[3px] w-4 h-4 rounded-full bg-white shadow-md transition-transform duration-300 ease-out
+                  ${autoDelete24h ? 'translate-x-[18px]' : 'translate-x-0'}`} />
               </button>
             </div>
 
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <div className="w-8 h-8 rounded-full border-2 border-[#060541]/20 dark:border-indigo-500/20 border-t-[#060541] dark:border-t-indigo-500 animate-spin" />
-                <p className="text-xs text-muted-foreground">{t('loadingTasks', language)}</p>
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <div className="relative w-10 h-10">
+                  <div className="absolute inset-0 rounded-full border-2 border-[#060541]/10 dark:border-indigo-500/10" />
+                  <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#060541] dark:border-t-indigo-500 animate-spin" />
+                </div>
+                <p className="text-xs font-medium text-muted-foreground">{t('loadingTasks', language)}</p>
               </div>
             ) : tasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-[#060541]/5 dark:bg-indigo-500/10 flex items-center justify-center mb-4">
-                  <ListTodo className="w-8 h-8 text-[#060541]/40 dark:text-indigo-400/60" />
+              <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+                <div className="relative mb-6">
+                  <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-[#060541]/10 to-indigo-500/10 dark:from-indigo-500/10 dark:to-purple-500/10 flex items-center justify-center
+                    shadow-[0_8px_32px_hsla(240,80%,50%,0.08)]">
+                    <ListTodo className="w-9 h-9 text-[#060541]/30 dark:text-indigo-400/40" />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 flex items-center justify-center shadow-lg">
+                    <Plus className="w-3.5 h-3.5 text-white" />
+                  </div>
                 </div>
-                <p className="font-semibold text-foreground mb-1">
+                <p className="text-lg font-bold text-foreground mb-1.5">
                   {language === 'ar' ? 'لا توجد مهام بعد' : 'No tasks yet'}
                 </p>
-                <p className="text-xs text-muted-foreground mb-5 max-w-xs leading-relaxed">
+                <p className="text-sm text-muted-foreground mb-6 max-w-[280px] leading-relaxed">
                   {language === 'ar'
                     ? 'ابدأ بإضافة أول مهمة لك وسيتم عرضها هنا.'
-                    : 'Create your first task and it will appear here.'}
+                    : 'Create your first task and start organizing your day beautifully.'}
                 </p>
                 <button
                   onClick={handleCreateTask}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold
-                    bg-[#060541] text-white dark:bg-indigo-500
-                    hover:opacity-90 active:scale-95 transition-all touch-manipulation"
+                  className="flex items-center gap-2.5 px-6 py-3 rounded-2xl text-sm font-bold
+                    bg-gradient-to-r from-[#060541] to-[#1a1080] dark:from-indigo-600 dark:to-indigo-500
+                    text-white shadow-[0_4px_20px_hsla(240,80%,40%,0.3)]
+                    hover:shadow-[0_6px_28px_hsla(240,80%,40%,0.4)] active:scale-95 transition-all duration-200 touch-manipulation"
                 >
                   <Plus className="w-4 h-4" />
                   {t('createTask', language)}
@@ -231,12 +271,15 @@ export default function TasksReminders() {
             )}
           </TabsContent>
 
-          {/* Reminders Tab */}
-          <TabsContent value="reminders" className="mt-4 space-y-4">
+          {/* ── Reminders Tab ── */}
+          <TabsContent value="reminders" className="mt-5 space-y-4">
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <div className="w-8 h-8 rounded-full border-2 border-[#060541]/20 dark:border-indigo-500/20 border-t-[#060541] dark:border-t-indigo-500 animate-spin" />
-                <p className="text-xs text-muted-foreground">{t('loadingReminders', language)}</p>
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <div className="relative w-10 h-10">
+                  <div className="absolute inset-0 rounded-full border-2 border-[#060541]/10 dark:border-indigo-500/10" />
+                  <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#060541] dark:border-t-indigo-500 animate-spin" />
+                </div>
+                <p className="text-xs font-medium text-muted-foreground">{t('loadingReminders', language)}</p>
               </div>
             ) : (
               <ReminderList
@@ -247,12 +290,15 @@ export default function TasksReminders() {
             )}
           </TabsContent>
 
-          {/* Activity Tab */}
-          <TabsContent value="activity" className="mt-4 space-y-4">
+          {/* ── Activity Tab ── */}
+          <TabsContent value="activity" className="mt-5 space-y-4">
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <div className="w-8 h-8 rounded-full border-2 border-[#060541]/20 dark:border-indigo-500/20 border-t-[#060541] dark:border-t-indigo-500 animate-spin" />
-                <p className="text-xs text-muted-foreground">{t('loadingActivity', language)}</p>
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <div className="relative w-10 h-10">
+                  <div className="absolute inset-0 rounded-full border-2 border-[#060541]/10 dark:border-indigo-500/10" />
+                  <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#060541] dark:border-t-indigo-500 animate-spin" />
+                </div>
+                <p className="text-xs font-medium text-muted-foreground">{t('loadingActivity', language)}</p>
               </div>
             ) : (
               <ActivityMonitor tasks={tasks} onTasksChanged={handleDataChanged} />

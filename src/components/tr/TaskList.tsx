@@ -216,113 +216,145 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {tasks.map((task) => {
         const completed = task.completed;
         const overdue = isOverdue(task);
         const expanded = expandedTasks.has(task.id);
 
-        const accentColor = completed
-          ? 'bg-emerald-500'
+        // Gradient accent colors for the top shimmer bar
+        const accentGradient = completed
+          ? 'from-emerald-400 via-teal-400 to-emerald-500'
           : overdue
-            ? 'bg-red-500'
+            ? 'from-red-400 via-rose-400 to-red-500'
             : task.priority === 'urgent'
-              ? 'bg-red-500'
+              ? 'from-red-500 via-pink-500 to-rose-500'
               : task.priority === 'high'
-                ? 'bg-orange-400'
-                : 'bg-[#060541] dark:bg-indigo-500';
+                ? 'from-orange-400 via-amber-400 to-orange-500'
+                : 'from-[#060541] via-indigo-500 to-[#060541] dark:from-indigo-500 dark:via-blue-400 dark:to-indigo-600';
+
+        // Card glow for dark mode
+        const cardGlow = completed
+          ? 'dark:shadow-[0_0_20px_hsla(142,76%,55%,0.06)]'
+          : overdue
+            ? 'dark:shadow-[0_0_20px_hsla(0,80%,55%,0.06)]'
+            : 'dark:shadow-[0_0_20px_hsla(210,100%,65%,0.04)]';
 
         return (
           <div
             key={task.id}
-            className={`group relative rounded-2xl overflow-hidden transition-all duration-200
-              bg-card border
-              ${completed
-                ? 'border-emerald-200/60 dark:border-emerald-800/30 opacity-80'
-                : overdue
-                  ? 'border-red-200/70 dark:border-red-800/40'
-                  : 'border-border hover:border-border/80'
-              }
-              shadow-sm`}
+            className={`group relative rounded-2xl overflow-hidden transition-all duration-300
+              ${cardGlow}
+              ${completed ? 'opacity-75' : ''}`}
           >
-            {/* Left accent stripe */}
-            <div className={`absolute left-0 top-0 bottom-0 w-1 ${accentColor}`} />
+            {/* ── Glass card background ── */}
+            <div className="absolute inset-0 bg-white/90 dark:bg-white/[0.04] backdrop-blur-xl" />
+            <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-slate-100/50 dark:to-white/[0.02]" />
+            {/* Border glow */}
+            <div className={`absolute inset-0 rounded-2xl border
+              ${completed
+                ? 'border-emerald-300/40 dark:border-emerald-500/20'
+                : overdue
+                  ? 'border-red-300/40 dark:border-red-500/20'
+                  : 'border-slate-200/80 dark:border-white/[0.08] group-hover:border-[#060541]/20 dark:group-hover:border-indigo-500/20'
+              }
+              transition-colors duration-300`} />
 
-            <div className="pl-4 pr-4 py-4">
-              {/* Row 1: checkbox + title + menu */}
-              <div className="flex items-start gap-3">
-                {/* Checkbox */}
+            {/* ── Top gradient shimmer bar ── */}
+            <div className={`h-[3px] bg-gradient-to-r ${accentGradient} relative overflow-hidden`}>
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
+            </div>
+
+            <div className="relative p-4 md:p-5">
+              {/* ── Row 1: Checkbox + Title + Menu ── */}
+              <div className="flex items-start gap-3.5">
+                {/* Premium checkbox */}
                 <button
                   onClick={() => handleToggleComplete(task)}
-                  className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 touch-manipulation active:scale-90
+                  className={`mt-1 flex-shrink-0 w-[22px] h-[22px] rounded-lg flex items-center justify-center transition-all duration-300 touch-manipulation active:scale-90
                     ${completed
-                      ? 'bg-emerald-500 border-emerald-500 text-white'
-                      : 'border-muted-foreground/30 hover:border-[#060541] dark:hover:border-indigo-400'
+                      ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-[0_2px_8px_hsla(142,76%,45%,0.35)]'
+                      : 'border-2 border-slate-300/80 dark:border-white/20 hover:border-[#060541] dark:hover:border-indigo-400 hover:shadow-[0_0_8px_hsla(240,80%,50%,0.15)]'
                     }`}
                 >
-                  {completed && <CheckCircle2 className="w-3 h-3" />}
+                  {completed && <CheckCircle2 className="w-3.5 h-3.5" />}
                 </button>
 
-                {/* Title + badges */}
+                {/* Title + meta */}
                 <div className="flex-1 min-w-0">
-                  <h3 className={`font-semibold text-[15px] leading-snug ${
-                    completed ? 'line-through text-muted-foreground/50' : 'text-foreground'
+                  <h3 className={`font-bold text-[15px] leading-snug tracking-[-0.01em] ${
+                    completed ? 'line-through text-muted-foreground/40' : 'text-foreground'
                   }`}>
                     {task.title}
                   </h3>
 
-                  {/* Meta row */}
-                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                  {/* Description */}
+                  {task.description && (
+                    <p className="text-[13px] text-muted-foreground/70 mt-1 leading-relaxed line-clamp-2">
+                      {task.description}
+                    </p>
+                  )}
+
+                  {/* ── Jewel badges row ── */}
+                  <div className="flex items-center gap-2 mt-2.5 flex-wrap">
                     <PriorityBadge priority={task.priority} />
+
                     {task.due_date && (
-                      <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full
+                      <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg
                         ${overdue
-                          ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-                          : 'bg-muted text-muted-foreground'
+                          ? 'bg-gradient-to-r from-red-50 to-red-100/80 text-red-600 dark:from-red-900/30 dark:to-red-900/20 dark:text-red-400 shadow-[inset_0_1px_0_hsla(0,0%,100%,0.5)]'
+                          : 'bg-slate-100/80 text-slate-500 dark:bg-white/[0.06] dark:text-slate-400 shadow-[inset_0_1px_0_hsla(0,0%,100%,0.3)]'
                         }`}>
                         <Clock className="w-3 h-3" />
                         {format(parseISO(task.due_date), 'MMM d')}
-                        {task.due_time && <span className="opacity-70"> {task.due_time}</span>}
+                        {task.due_time && <span className="opacity-60">{task.due_time}</span>}
                       </span>
                     )}
+
                     {task.is_shared && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-100/80 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg
+                        bg-gradient-to-r from-blue-50 to-indigo-50/80 text-blue-600
+                        dark:from-blue-900/25 dark:to-indigo-900/20 dark:text-blue-400
+                        shadow-[inset_0_1px_0_hsla(0,0%,100%,0.5)]">
                         <Share2 className="w-3 h-3" />
                         {t('sharedTask', language)}
                       </span>
                     )}
+
                     {completed && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-100/80 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg
+                        bg-gradient-to-r from-emerald-50 to-teal-50/80 text-emerald-600
+                        dark:from-emerald-900/25 dark:to-emerald-900/15 dark:text-emerald-400
+                        shadow-[inset_0_1px_0_hsla(0,0%,100%,0.5)]">
                         <CheckCircle2 className="w-3 h-3" />
                         {t('completed', language)}
                       </span>
                     )}
+
                     {overdue && !completed && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-red-100/80 text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg
+                        bg-gradient-to-r from-red-50 to-rose-50/80 text-red-600
+                        dark:from-red-900/25 dark:to-red-900/15 dark:text-red-400
+                        shadow-[inset_0_1px_0_hsla(0,0%,100%,0.5)]">
                         {t('overdue', language)}
                       </span>
                     )}
                   </div>
 
-                  {/* Description */}
-                  {task.description && (
-                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed line-clamp-2">
-                      {task.description}
-                    </p>
-                  )}
-
                   {/* Shared completion stamp */}
                   {task.is_shared && completed && latestCompletions[task.id]?.when && (
-                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">
+                    <p className="text-[11px] font-medium text-emerald-500 dark:text-emerald-400 mt-2 flex items-center gap-1.5">
+                      <span className="w-1 h-1 rounded-full bg-emerald-400" />
                       {latestCompletions[task.id].who} · {new Date(latestCompletions[task.id].when).toLocaleString(undefined, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </p>
                   )}
                 </div>
 
-                {/* Menu */}
+                {/* ── Menu button ── */}
                 <DropdownMenu modal={false}>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full flex-shrink-0 text-muted-foreground hover:text-foreground">
+                    <Button variant="ghost" size="sm"
+                      className="h-8 w-8 p-0 rounded-xl flex-shrink-0 text-muted-foreground/50 hover:text-foreground hover:bg-slate-100/80 dark:hover:bg-white/[0.06] transition-all">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -331,34 +363,33 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                       align="end"
                       sideOffset={6}
                       collisionPadding={8}
-                      className="z-[2147483000] min-w-[180px] rounded-xl"
+                      className="z-[2147483000] min-w-[200px] rounded-2xl p-1.5 backdrop-blur-xl
+                        bg-white/95 dark:bg-[#1a1d28]/95 border border-slate-200/80 dark:border-white/10
+                        shadow-[0_8px_40px_hsla(0,0%,0%,0.12)] dark:shadow-[0_8px_40px_hsla(0,0%,0%,0.5)]"
                       onCloseAutoFocus={(e) => e.preventDefault()}
                     >
-                      <DropdownMenuItem onClick={() => handleToggleComplete(task)}>
-                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                      <DropdownMenuItem onClick={() => handleToggleComplete(task)} className="rounded-xl py-2.5 px-3 text-[13px] font-medium">
+                        <CheckCircle2 className="h-4 w-4 mr-2.5" />
                         {completed ? t('markIncomplete', language) : t('markComplete', language)}
                       </DropdownMenuItem>
                       {!completed && (
-                        <DropdownMenuItem onClick={() => handleSnoozeTask(task)}>
-                          <Moon className="h-4 w-4 mr-2" />
+                        <DropdownMenuItem onClick={() => handleSnoozeTask(task)} className="rounded-xl py-2.5 px-3 text-[13px] font-medium">
+                          <Moon className="h-4 w-4 mr-2.5" />
                           {t('snooze', language)}
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuItem onClick={() => onTaskEdit(task)}>
-                        <Edit className="h-4 w-4 mr-2" />
+                      <DropdownMenuItem onClick={() => onTaskEdit(task)} className="rounded-xl py-2.5 px-3 text-[13px] font-medium">
+                        <Edit className="h-4 w-4 mr-2.5" />
                         {t('edit', language)}
                       </DropdownMenuItem>
                       {task.is_shared && task.share_link && (
-                        <DropdownMenuItem onClick={() => handleShareTask(task)}>
-                          <Share2 className="h-4 w-4 mr-2" />
+                        <DropdownMenuItem onClick={() => handleShareTask(task)} className="rounded-xl py-2.5 px-3 text-[13px] font-medium">
+                          <Share2 className="h-4 w-4 mr-2.5" />
                           {t('shareLink', language)}
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuItem
-                        onClick={() => handleDeleteTask(task)}
-                        className="text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
+                      <DropdownMenuItem onClick={() => handleDeleteTask(task)} className="rounded-xl py-2.5 px-3 text-[13px] font-medium text-destructive">
+                        <Trash2 className="h-4 w-4 mr-2.5" />
                         {t('delete', language)}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -366,42 +397,42 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                 </DropdownMenu>
               </div>
 
-              {/* Row 2: Subtasks toggle bar */}
-              <div className="mt-3 flex items-center justify-between">
+              {/* ── Subtasks toggle ── */}
+              <div className="mt-4 flex items-center justify-between">
                 <button
                   onClick={() => toggleTaskExpanded(task.id)}
-                  className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors touch-manipulation active:scale-95 py-1"
+                  className={`flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider py-1.5 px-3 rounded-xl transition-all duration-200 touch-manipulation active:scale-95
+                    ${expanded
+                      ? 'bg-[#060541]/8 text-[#060541] dark:bg-indigo-500/10 dark:text-indigo-400'
+                      : 'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50'
+                    }`}
                 >
-                  {expanded
-                    ? <ChevronUp className="w-3.5 h-3.5" />
-                    : <ChevronDown className="w-3.5 h-3.5" />}
+                  {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   <ListChecks className="w-3.5 h-3.5" />
                   {expanded
-                    ? (language === 'ar' ? 'إخفاء المهام الفرعية' : 'Hide subtasks')
-                    : (language === 'ar' ? 'عرض المهام الفرعية' : 'Show subtasks')}
+                    ? (language === 'ar' ? 'إخفاء' : 'Hide')
+                    : (language === 'ar' ? 'المهام الفرعية' : 'Subtasks')}
                 </button>
 
                 {expanded && (
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => toggleLayoutForTask(task.id)}
-                      className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors touch-manipulation"
+                      className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-muted/50 transition-all touch-manipulation"
                       title={listLayoutTasks.has(task.id) ? 'Grid view' : 'List view'}
                     >
-                      {listLayoutTasks.has(task.id)
-                        ? <Grid2X2 className="w-3.5 h-3.5" />
-                        : <ListChecks className="w-3.5 h-3.5" />}
+                      {listLayoutTasks.has(task.id) ? <Grid2X2 className="w-3.5 h-3.5" /> : <ListChecks className="w-3.5 h-3.5" />}
                     </button>
                     <button
                       onClick={() => handleMarkAll(task.id, true)}
-                      className="h-7 px-2 rounded-lg flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors touch-manipulation"
+                      className="h-7 px-2.5 rounded-lg flex items-center gap-1.5 text-[11px] font-bold text-emerald-500 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-all touch-manipulation"
                     >
                       <CheckCheck className="w-3.5 h-3.5" />
                       {language === 'ar' ? 'الكل' : 'All'}
                     </button>
                     <button
                       onClick={() => handleMarkAll(task.id, false)}
-                      className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors touch-manipulation"
+                      className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-muted/50 transition-all touch-manipulation"
                       title="Reset"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
@@ -410,9 +441,9 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                 )}
               </div>
 
-              {/* Subtasks panel */}
+              {/* ── Subtasks panel ── */}
               {expanded && (
-                <div className="mt-3 pt-3 border-t border-border/50">
+                <div className="mt-3 pt-4 border-t border-slate-200/60 dark:border-white/[0.06]">
                   <SubtaskManager
                     key={task.id}
                     taskId={task.id}

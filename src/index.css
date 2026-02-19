@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Premium shimmer animation for task cards */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-shimmer {
+  animation: shimmer 3s ease-in-out infinite;
+}
+
 /* Document Scanner Animation */
 @keyframes scan {
   0% { top: 0; opacity: 0; }
