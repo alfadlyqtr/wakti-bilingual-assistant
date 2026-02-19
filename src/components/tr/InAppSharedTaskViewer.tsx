@@ -40,10 +40,11 @@ export const InAppSharedTaskViewer: React.FC<InAppSharedTaskViewerProps> = ({
       if (!user) return;
       const { data } = await supabase
         .from('profiles')
-        .select('display_name, full_name')
+        .select('display_name, first_name, last_name')
         .eq('id', user.id)
         .single();
-      const name = data?.display_name || data?.full_name || user.email?.split('@')[0] || 'Wakti User';
+      const fullName = [data?.first_name, data?.last_name].filter(Boolean).join(' ');
+      const name = data?.display_name || fullName || user.email?.split('@')[0] || 'Wakti User';
       setVisitorName(name);
     });
   }, []);

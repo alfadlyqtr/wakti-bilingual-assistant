@@ -26,6 +26,7 @@ import { formatDistanceToNow, format, parseISO } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { InAppSharedTaskViewer } from './InAppSharedTaskViewer';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ActivityMonitorProps {
   tasks: TRTask[];
@@ -52,6 +53,24 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   
   // Collapsible state for task cards
   const [collapsedCards, setCollapsedCards] = useState<Set<string>>(new Set());
+
+  // Owner display name (fetched from profile)
+  const [ownerName, setOwnerName] = useState<string>('You');
+
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      const { data } = await supabase
+        .from('profiles')
+        .select('display_name, first_name, last_name')
+        .eq('id', user.id)
+        .single();
+      const fullName = [data?.first_name, data?.last_name].filter(Boolean).join(' ');
+      const name = data?.display_name || fullName || user.email?.split('@')[0] || 'You';
+      
+      setOwnerName(name);
+    });
+  }, []);
 
   // In-app shared task viewer (for Wakti users opening a share link)
   const [activeShareLink, setActiveShareLink] = useState<string | null>(incomingShareLink);
@@ -289,7 +308,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     }
 
     try {
-      await TRSharedService.addComment(taskId, 'Owner (You)', replyContent.trim());
+      await TRSharedService.addComment(taskId, ownerName, replyContent.trim());
       setReplyContent('');
       setReplyingTo(null);
       toast.success(t('reply', language) + ' sent');

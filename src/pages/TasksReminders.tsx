@@ -12,6 +12,7 @@ import { ReminderForm } from '@/components/tr/ReminderForm';
 import { TaskList } from '@/components/tr/TaskList';
 import { ReminderList } from '@/components/tr/ReminderList';
 import { ActivityMonitor } from '@/components/tr/ActivityMonitor';
+import { SharedTasksTab } from '@/components/tr/SharedTasksTab';
 import { ActivityDashboard } from '@/components/tr/ActivityDashboard';
 import { useTRData } from '@/hooks/useTRData';
 import { PageTitle } from '@/components/PageTitle';
@@ -326,7 +327,7 @@ export default function TasksReminders() {
                 <p className="text-xs font-medium text-muted-foreground">{t('loadingActivity', language)}</p>
               </div>
             ) : (
-              <ActivityMonitor tasks={tasks} onTasksChanged={handleDataChanged} incomingShareLink={incomingShareLink} />
+              <SharedTasksTab tasks={tasks} onTasksChanged={handleDataChanged} incomingShareLink={incomingShareLink} />
             )}
           </TabsContent>
         </Tabs>
