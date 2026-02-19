@@ -226,14 +226,18 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
     return (
       <div
         key={subtask.id}
-        className={`group/item relative flex items-center gap-3 rounded-xl px-3.5 py-3 transition-all duration-200
+        className={`group/item relative flex items-center gap-3 rounded-2xl px-3.5 py-3.5 transition-all duration-200
           ${done
-            ? 'bg-gradient-to-r from-emerald-50/70 to-teal-50/40 dark:from-emerald-950/20 dark:to-emerald-950/10'
-            : 'bg-white/60 dark:bg-white/[0.03] hover:bg-white/90 dark:hover:bg-white/[0.05]'
+            ? 'bg-gradient-to-br from-emerald-50 to-teal-50/60 dark:from-emerald-950/30 dark:to-emerald-950/15'
+            : 'bg-white dark:bg-white/[0.06] hover:bg-slate-50/80 dark:hover:bg-white/[0.09]'
           }
-          border border-slate-200/50 dark:border-white/[0.05]
-          ${done ? 'border-emerald-200/40 dark:border-emerald-800/20' : ''}
-          shadow-[0_1px_3px_hsla(0,0%,0%,0.03)] dark:shadow-none`}
+          border
+          ${done
+            ? 'border-emerald-200/60 dark:border-emerald-700/30'
+            : 'border-slate-200/80 dark:border-white/[0.08]'
+          }
+          shadow-[0_2px_12px_hsla(0,0%,0%,0.08),0_1px_3px_hsla(0,0%,0%,0.06)]
+          dark:shadow-[0_2px_12px_hsla(0,0%,0%,0.35),0_1px_4px_hsla(0,0%,0%,0.25)]`}
       >
         {/* Premium checkbox */}
         <button
@@ -291,9 +295,9 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
               </span>
             )}
 
-            {/* Actions — fade in on hover */}
+            {/* Actions — always visible on touch, fade in on hover for desktop */}
             {!readOnly && (
-              <div className="flex items-center gap-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity flex-shrink-0">
+              <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 transition-opacity flex-shrink-0">
                 <button title="Edit" onClick={() => handleStartEdit(subtask)}
                   className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-slate-100/80 dark:hover:bg-white/[0.06] transition-colors touch-manipulation">
                   <Edit3 className="h-3 w-3 text-muted-foreground/60" />
@@ -387,11 +391,11 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
 
       {/* ── Subtask items ── */}
       {layout === 'grid' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 gap-2.5">
           {subtasks.map((s) => renderItem(s))}
         </div>
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {subtasks.map((s) => renderItem(s))}
         </div>
       )}
