@@ -316,7 +316,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
                   <span className="flex items-center gap-1">
                     <span className="text-foreground/90 font-medium">{item.title}</span>
                     {item.sublabel ? (
-                      <span className="text-xs text-muted-foreground">{item.sublabel}</span>
+                      <span className="text-[10px] leading-tight text-muted-foreground">{item.sublabel}</span>
                     ) : null}
                   </span>
                 </div>
@@ -350,7 +350,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
                   <div className="flex items-center justify-center gap-3">
                     <p className="text-2xl font-bold text-primary">{qar}</p>
                     <span className="text-muted-foreground">•</span>
-                    <p className="text-lg text-muted-foreground">{usd} <span className="text-xs align-middle opacity-70">USD</span></p>
+                    <p className="text-sm text-muted-foreground">{usd} <span className="text-[10px] align-middle opacity-60">USD</span></p>
                   </div>
                 );
               }
@@ -370,7 +370,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
             <Button
               onClick={handleSubscribe}
               disabled={loading}
-              className="w-full bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:from-[hsl(210,100%,60%)] hover:via-[hsl(195,100%,55%)] hover:to-[hsl(175,100%,50%)] text-white font-bold text-lg tracking-wide shadow-[0_0_30px_hsl(200,100%,55%,0.6),0_0_60px_hsl(200,100%,55%,0.3),0_4px_20px_hsl(200,100%,55%,0.4)] hover:shadow-[0_0_40px_hsl(200,100%,55%,0.8),0_0_80px_hsl(200,100%,55%,0.4)] active:scale-[0.98] transition-all duration-150 border-0"
+              className="w-full bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:from-[hsl(210,100%,60%)] hover:via-[hsl(195,100%,55%)] hover:to-[hsl(175,100%,50%)] text-white font-bold text-lg tracking-wide shadow-[0_0_30px_hsl(200,100%,55%,0.6),0_0_60px_hsl(200,100%,55%,0.3),0_4px_20px_hsl(200,100%,55%,0.4)] hover:shadow-[0_0_40px_hsl(200,100%,55%,0.8),0_0_80px_hsl(200,100%,55%,0.4)] active:scale-[0.98] transition-all duration-150 ring-2 ring-purple-500 ring-offset-1 ring-offset-background"
               size="lg"
               style={{minHeight: '56px'}}
             >
