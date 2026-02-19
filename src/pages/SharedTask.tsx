@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from 'react';
-import { useParams, Navigate } from 'react-router-dom';
+import { useParams, Navigate, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,10 +20,12 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { toast } from 'sonner';
 import InAppWaktiEscape from '@/components/public/InAppWaktiEscape';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function SharedTask() {
   const { shareLink } = useParams<{ shareLink: string }>();
   const { language } = useTheme();
+  const navigate = useNavigate();
   const [task, setTask] = useState<TRTask | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +39,21 @@ export default function SharedTask() {
   
   // Responses
   const [responses, setResponses] = useState<TRSharedResponse[]>([]);
+
+  // ── Wakti user detection ──
+  // If the visitor is already logged into Wakti, redirect them into the app
+  // so they interact from the Shared Tasks tab with their real identity.
+  // Non-Wakti users (no session) continue to the public page unchanged.
+  useEffect(() => {
+    if (!shareLink) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        // Logged-in Wakti user — send them into the app
+        navigate(`/tr?shared=${shareLink}`, { replace: true });
+      }
+      // No session → fall through to normal public page flow
+    });
+  }, [shareLink, navigate]);
 
   useEffect(() => {
     if (shareLink) {

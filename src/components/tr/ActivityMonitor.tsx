@@ -25,15 +25,18 @@ import { toast } from 'sonner';
 import { formatDistanceToNow, format, parseISO } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { InAppSharedTaskViewer } from './InAppSharedTaskViewer';
 
 interface ActivityMonitorProps {
   tasks: TRTask[];
   onTasksChanged: () => void;
+  incomingShareLink?: string | null;
 }
 
 export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   tasks,
-  onTasksChanged
+  onTasksChanged,
+  incomingShareLink = null,
 }) => {
   const { language } = useTheme();
   const [responses, setResponses] = useState<{ [taskId: string]: TRSharedResponse[] }>({});
@@ -49,6 +52,14 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   
   // Collapsible state for task cards
   const [collapsedCards, setCollapsedCards] = useState<Set<string>>(new Set());
+
+  // In-app shared task viewer (for Wakti users opening a share link)
+  const [activeShareLink, setActiveShareLink] = useState<string | null>(incomingShareLink);
+
+  // Sync if incomingShareLink changes (e.g. URL param update)
+  useEffect(() => {
+    if (incomingShareLink) setActiveShareLink(incomingShareLink);
+  }, [incomingShareLink]);
   
   const loadingRef = useRef(false);
   
@@ -550,6 +561,15 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
   return (
     <div className="space-y-3">
+
+      {/* ── In-app shared task viewer (Wakti users opening a share link) ── */}
+      {activeShareLink && (
+        <InAppSharedTaskViewer
+          shareLink={activeShareLink}
+          onDismiss={() => setActiveShareLink(null)}
+        />
+      )}
+
       {/* Header with refresh */}
       <div className="flex items-center justify-between px-1">
         <p className="text-[12px] font-medium text-muted-foreground/60">

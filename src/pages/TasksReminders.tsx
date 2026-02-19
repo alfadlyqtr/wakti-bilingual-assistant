@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, ListTodo } from 'lucide-react';
@@ -19,8 +20,19 @@ import { supabase } from '@/integrations/supabase/client';
 
 export default function TasksReminders() {
   const { language } = useTheme();
-  const [activeTab, setActiveTab] = useState('activity_main');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const incomingShareLink = searchParams.get('shared') || null;
+  const [activeTab, setActiveTab] = useState(
+    incomingShareLink ? 'activity' : 'activity_main'
+  );
   const { tasks, reminders, loading, error, refresh } = useTRData();
+
+  // When a ?shared= param arrives, switch to Shared Tasks tab
+  useEffect(() => {
+    if (incomingShareLink) {
+      setActiveTab('activity');
+    }
+  }, [incomingShareLink]);
   // Auto-delete toggle (24h after completion). Default OFF. Persist to localStorage.
   const [autoDelete24h, setAutoDelete24h] = useState<boolean>(() => {
     try {
@@ -314,7 +326,7 @@ export default function TasksReminders() {
                 <p className="text-xs font-medium text-muted-foreground">{t('loadingActivity', language)}</p>
               </div>
             ) : (
-              <ActivityMonitor tasks={tasks} onTasksChanged={handleDataChanged} />
+              <ActivityMonitor tasks={tasks} onTasksChanged={handleDataChanged} incomingShareLink={incomingShareLink} />
             )}
           </TabsContent>
         </Tabs>
