@@ -143,10 +143,6 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       setSubtasks(allSubtasks);
       setVisitors(allVisitors);
       setLastUpdate(new Date());
-      // Collapse all cards by default on first load
-      if (!isRefresh) {
-        setCollapsedCards(new Set(sharedTasks.map(t => t.id)));
-      }
     } catch (error) {
       console.error('Error loading activity data:', error);
       toast.error('Failed to load activity data');
