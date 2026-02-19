@@ -20,12 +20,12 @@ export default function TasksReminders() {
   const { language } = useTheme();
   const [activeTab, setActiveTab] = useState('tasks');
   const { tasks, reminders, loading, error, refresh } = useTRData();
-  // Auto-delete toggle (24h after completion). Default ON. Persist to localStorage.
+  // Auto-delete toggle (24h after completion). Default OFF. Persist to localStorage.
   const [autoDelete24h, setAutoDelete24h] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('tr:autoDelete24hEnabled');
-      return saved === null ? true : saved === 'true';
-    } catch { return true; }
+      return saved === null ? false : saved === 'true';
+    } catch { return false; }
   });
 
   useEffect(() => {
