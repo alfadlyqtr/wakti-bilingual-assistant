@@ -113,6 +113,10 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       setSubtasks(allSubtasks);
       setVisitors(allVisitors);
       setLastUpdate(new Date());
+      // Collapse all cards by default on first load
+      if (!isRefresh) {
+        setCollapsedCards(new Set(sharedTasks.map(t => t.id)));
+      }
     } catch (error) {
       console.error('Error loading activity data:', error);
       toast.error('Failed to load activity data');
@@ -521,43 +525,48 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
   if (loading) {
     return (
-      <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-        <p className="text-muted-foreground mt-2">{t('loading', language)}</p>
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <div className="relative w-10 h-10">
+          <div className="absolute inset-0 rounded-full border-2 border-slate-200/40 dark:border-white/[0.06]" />
+          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#060541] dark:border-t-indigo-500 animate-spin" />
+        </div>
+        <p className="text-sm font-medium text-muted-foreground/60">{t('loading', language)}</p>
       </div>
     );
   }
 
   if (sharedTasks.length === 0) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <div className="text-center py-8">
-            <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">{t('noSharedTasks', language)}</h3>
-            <p className="text-muted-foreground">{t('shareTaskToStartMonitoring', language)}</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-500/10 dark:to-purple-500/10
+          flex items-center justify-center shadow-[0_8px_32px_hsla(240,80%,50%,0.08)] mb-6">
+          <Users className="h-9 w-9 text-indigo-400 dark:text-indigo-500" />
+        </div>
+        <p className="text-base font-bold text-foreground mb-2">{t('noSharedTasks', language)}</p>
+        <p className="text-sm text-muted-foreground/70 max-w-[260px] leading-relaxed">{t('shareTaskToStartMonitoring', language)}</p>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Header with refresh */}
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
+      <div className="flex items-center justify-between px-1">
+        <p className="text-[12px] font-medium text-muted-foreground/60">
           {t('lastUpdated', language)}: {formatRelativeTime(lastUpdate.toISOString())}
-        </div>
-        <Button
+        </p>
+        <button
           onClick={handleRefresh}
           disabled={refreshing}
-          size="sm"
-          variant="outline"
+          className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-[12px] font-bold
+            bg-indigo-100 dark:bg-indigo-500/20
+            text-indigo-600 dark:text-indigo-400
+            hover:bg-indigo-200 dark:hover:bg-indigo-500/30
+            disabled:opacity-50 transition-all touch-manipulation active:scale-95"
         >
-          <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           {refreshing ? `${t('refreshing', language)}...` : t('refresh', language)}
-        </Button>
+        </button>
       </div>
 
       {/* Dialog for assignee details */}
@@ -658,70 +667,97 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         const stats = getTaskStats(task.id);
         const activeView = activeViews[task.id] || 'all';
         const isCollapsed = collapsedCards.has(task.id);
-        
+        const pendingCount = stats.completionRequests.filter(r => !parseSnoozeStatus(r.content)).length
+          + stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length
+          + stats.uncheckRequests.length;
+
         return (
           <Collapsible key={task.id} open={!isCollapsed} onOpenChange={() => toggleCardCollapse(task.id)}>
-            <Card className="overflow-hidden">
+            <div className={`rounded-2xl overflow-hidden
+              bg-white dark:bg-white/[0.04]
+              border border-slate-200/80 dark:border-white/[0.07]
+              shadow-[0_2px_16px_hsla(0,0%,0%,0.07),0_1px_4px_hsla(0,0%,0%,0.05)]
+              dark:shadow-[0_2px_16px_hsla(0,0%,0%,0.4),0_1px_4px_hsla(0,0%,0%,0.3)]
+              transition-all duration-200`}>
+
+              {/* ── Premium card header (collapsible trigger) ── */}
               <CollapsibleTrigger asChild>
-                <CardHeader className="pb-3 cursor-pointer hover:bg-muted/30 transition-colors">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-base leading-tight break-words" dir="auto">
-                          {task.title}
-                        </CardTitle>
-                        {isCollapsed ? (
-                          <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 mt-2">
-                        <Badge variant="outline" className="text-xs">
-                          {t('sharedTask', language)}
-                        </Badge>
-                        {/* Airport-stamp style badge for main task completion */}
-                        {task.completed && (() => {
-                          const latestTaskCompletion = stats.allResponses
-                            .filter(r => r.response_type === 'completion' && r.is_completed && !r.subtask_id)
-                            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-                          const who = latestTaskCompletion?.visitor_name || 'Someone';
-                          const when = latestTaskCompletion?.created_at ? format(parseISO(latestTaskCompletion.created_at), 'MMM dd, HH:mm') : '';
-                          return (
-                            <Badge variant="secondary" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">
-                              ✓ Completed by: {who}{when ? ` • ${when}` : ''}
-                            </Badge>
-                          );
-                        })()}
-                        <Badge variant="secondary" className="text-xs">
-                          {stats.totalSubtasksCount > 0 
-                            ? `${stats.completedSubtasksCount} ${language === 'ar' ? 'من' : 'of'} ${stats.totalSubtasksCount} ${language === 'ar' ? 'مهمة فرعية مكتملة' : 'subtasks completed'}`
-                            : stats.taskCompletionsCount > 0 ? (language === 'ar' ? 'المهمة مكتملة' : 'Task completed') : (language === 'ar' ? 'غير مكتملة' : 'Not completed')}
-                        </Badge>
-                        
-                        {/* Show activity indicators when collapsed */}
-                        {isCollapsed && (
-                          <>
-                            <Badge variant="outline" className="text-xs">
-                              <Users className="h-3 w-3 mr-1" />
-                              {stats.assignees.length}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              <MessageCircle className="h-3 w-3 mr-1" />
-                              {stats.comments.length}
-                            </Badge>
-                            {stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length > 0 && (
-                              <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-200">
-                                <AlertCircle className="h-3 w-3 mr-1" />
-                                {stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length} {t('pending', language)}
-                              </Badge>
-                            )}
-                          </>
-                        )}
-                      </div>
+                <button className="w-full text-left px-4 py-4 flex items-center gap-3
+                  hover:bg-slate-50/80 dark:hover:bg-white/[0.03] transition-colors touch-manipulation">
+
+                  {/* Status dot */}
+                  <div className={`flex-shrink-0 w-2.5 h-2.5 rounded-full
+                    ${task.completed
+                      ? 'bg-emerald-400 shadow-[0_0_6px_hsla(142,76%,55%,0.5)]'
+                      : 'bg-indigo-400 dark:bg-indigo-500 shadow-[0_0_6px_hsla(240,80%,60%,0.4)]'
+                    }`} />
+
+                  {/* Title + badges */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-bold text-foreground leading-tight truncate" dir="auto">
+                      {task.title}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                      {/* Shared badge */}
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg
+                        bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400">
+                        <Users className="h-2.5 w-2.5" />
+                        {t('sharedTask', language)}
+                      </span>
+                      {/* Completion stamp */}
+                      {task.completed && (() => {
+                        const latest = stats.allResponses
+                          .filter(r => r.response_type === 'completion' && r.is_completed && !r.subtask_id)
+                          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+                        const who = latest?.visitor_name || 'Someone';
+                        const when = latest?.created_at ? format(parseISO(latest.created_at), 'MMM dd, HH:mm') : '';
+                        return (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg
+                            bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">
+                            <Check className="h-2.5 w-2.5" />
+                            {who}{when ? ` · ${when}` : ''}
+                          </span>
+                        );
+                      })()}
+                      {/* Subtask progress */}
+                      {stats.totalSubtasksCount > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg
+                          bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-400">
+                          <CheckCircle className="h-2.5 w-2.5" />
+                          {stats.completedSubtasksCount}/{stats.totalSubtasksCount}
+                        </span>
+                      )}
+                      {/* Assignees */}
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg
+                        bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-400">
+                        <Users className="h-2.5 w-2.5" />
+                        {stats.assignees.length}
+                      </span>
+                      {/* Comments */}
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg
+                        bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-400">
+                        <MessageCircle className="h-2.5 w-2.5" />
+                        {stats.comments.length}
+                      </span>
+                      {/* Pending requests badge */}
+                      {pendingCount > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg
+                          bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-400
+                          shadow-[0_0_8px_hsla(25,95%,55%,0.2)]">
+                          <AlertCircle className="h-2.5 w-2.5" />
+                          {pendingCount} {t('pending', language)}
+                        </span>
+                      )}
                     </div>
                   </div>
-                </CardHeader>
+
+                  {/* Chevron */}
+                  <div className={`flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center
+                    bg-slate-100 dark:bg-white/[0.06] transition-transform duration-200
+                    ${isCollapsed ? '' : 'rotate-180'}`}>
+                    <ChevronDown className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                  </div>
+                </button>
               </CollapsibleTrigger>
 
               <CollapsibleContent>
@@ -1191,7 +1227,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                   )}
                 </CardContent>
               </CollapsibleContent>
-            </Card>
+            </div>
           </Collapsible>
         );
       })}
