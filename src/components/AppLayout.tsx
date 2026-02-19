@@ -231,7 +231,8 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
       trial: '',
       subscribe: 'Subscribe Now',
       restore: 'Restore Purchases',
-      contact: 'For payment-related issues, contact us',
+      contact: 'Contact Us',
+      contactSub: 'Payment issues? We\'re here to help',
       logout: 'Logout',
       home: 'Back to Home',
       terms: 'Terms & Privacy',
@@ -262,7 +263,8 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
       trial: '',
       subscribe: 'اشترك الآن',
       restore: 'استعادة المشتريات',
-      contact: 'للمشاكل المتعلقة بالدفع، تواصل معنا',
+      contact: 'تواصل معنا',
+      contactSub: 'مشكلة في الدفع؟ نحن هنا للمساعدة',
       logout: 'تسجيل الخروج',
       home: 'العودة للرئيسية',
       terms: 'الشروط والخصوصية',
@@ -393,14 +395,18 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
               {txt.restore}
             </Button>
 
-            <Button
+            <button
               onClick={() => window.open(contactUrl, "_blank", "noopener,noreferrer")}
-              variant="outline"
-              className="w-full border-accent/40 bg-accent/5 text-foreground hover:bg-accent/10"
+              className="w-full flex items-center justify-center gap-3 rounded-lg px-4 py-3 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 hover:from-emerald-500/30 hover:to-teal-500/30 hover:border-emerald-400/60 active:scale-95 transition-all duration-150 group"
             >
-              <MessageCircle className="w-4 h-4 mr-2" />
-              {txt.contact}
-            </Button>
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500/20 group-hover:bg-emerald-500/30 transition-colors">
+                <MessageCircle className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div className={`flex flex-col ${language === 'ar' ? 'items-end' : 'items-start'}`}>
+                <span className="text-sm font-semibold text-emerald-400">{txt.contact}</span>
+                <span className="text-xs text-muted-foreground">{txt.contactSub}</span>
+              </div>
+            </button>
 
             {/* Terms */}
             <div className="text-center pt-1">
