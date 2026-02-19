@@ -800,470 +800,237 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
               </CollapsibleTrigger>
 
               <CollapsibleContent>
-                <CardContent className="pt-0 space-y-4">
-                  {/* Activity Stats */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <button 
-                      className={`${
-                        activeView === 'assignees' ? 'bg-primary/20 border-primary/30' : 'bg-secondary/20 hover:bg-secondary/30'
-                      } transition-colors rounded-lg p-3 text-center border-2 border-transparent`}
-                      onClick={() => handleViewChange(task.id, 'assignees')}
+                <CardContent className="pt-0 space-y-0">
+
+                  {/* ── Sub-tab bar: Approvals / Interactions ── */}
+                  <div className="flex items-center gap-1 px-1 pb-3 pt-1">
+                    {/* Approvals tab */}
+                    <button
+                      onClick={() => handleViewChange(task.id, 'approvals')}
+                      className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-all touch-manipulation
+                        ${activeView === 'approvals' || activeView === 'all' || activeView === 'assignees' || activeView === 'completions' || activeView === 'requests'
+                          ? activeView === 'approvals'
+                            ? 'bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300'
+                            : 'bg-slate-100 dark:bg-white/[0.06] text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/[0.1]'
+                          : 'bg-slate-100 dark:bg-white/[0.06] text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/[0.1]'
+                        }
+                        ${activeView === 'approvals' ? 'bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300' : 'bg-slate-100 dark:bg-white/[0.06] text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/[0.1]'}
+                      `}
                     >
-                      <div className="text-lg font-semibold">{stats.assignees.length}</div>
-                      <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-                        <Users className="h-3 w-3" />
-                        {t('assignees', language)}
-                      </div>
-                    </button>
-                    
-                    <button 
-                      className={`${
-                        activeView === 'completions' ? 'bg-primary/20 border-primary/30' : 'bg-secondary/20 hover:bg-secondary/30'
-                      } transition-colors rounded-lg p-3 text-center border-2 border-transparent`}
-                      onClick={() => handleViewChange(task.id, 'completions')}
-                    >
-                      <div className="text-lg font-semibold">{stats.completedSubtasksCount}</div>
-                      <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-                        <CheckCircle className="h-3 w-3" />
-                        {t('completions', language)}
-                      </div>
-                    </button>
-                    
-                    <button 
-                      className={`${
-                        activeView === 'comments' ? 'bg-primary/20 border-primary/30' : 'bg-secondary/20 hover:bg-secondary/30'
-                      } transition-colors rounded-lg p-3 text-center border-2 border-transparent`}
-                      onClick={() => handleViewChange(task.id, 'comments')}
-                    >
-                      <div className="text-lg font-semibold">{stats.comments.length}</div>
-                      <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-                        <MessageCircle className="h-3 w-3" />
-                        {t('comments', language)}
-                      </div>
-                    </button>
-                    
-                    <button 
-                      className={`${
-                        activeView === 'requests' ? 'bg-primary/20 border-primary/30' : 'bg-secondary/20 hover:bg-secondary/30'
-                      } ${
-                        (stats.completionRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.uncheckRequests.length) > 0 ? 'ring-2 ring-orange-400 ring-offset-2' : ''
-                      } transition-colors rounded-lg p-3 text-center border-2 border-transparent relative`}
-                      onClick={() => handleViewChange(task.id, 'requests')}
-                    >
-                      {(stats.completionRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.uncheckRequests.length) > 0 && (
-                        <Badge className="absolute -top-2 -right-2 bg-orange-500 h-6 w-6 rounded-full p-0 flex items-center justify-center text-xs">
-                          {stats.completionRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.uncheckRequests.length}
-                        </Badge>
+                      <AlertCircle className="h-3 w-3" />
+                      {language === 'ar' ? 'الموافقات' : 'Approvals'}
+                      {pendingCount > 0 && (
+                        <span className="ml-0.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-black
+                          bg-orange-500 text-white flex items-center justify-center">
+                          {pendingCount}
+                        </span>
                       )}
-                      <div className="text-lg font-semibold">{stats.completionRequests.length + stats.snoozeRequests.length + stats.uncheckRequests.length}</div>
-                      <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {t('requests', language)}
-                      </div>
+                    </button>
+                    {/* Interactions tab */}
+                    <button
+                      onClick={() => handleViewChange(task.id, 'interactions')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-all touch-manipulation
+                        ${activeView === 'interactions'
+                          ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300'
+                          : 'bg-slate-100 dark:bg-white/[0.06] text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/[0.1]'
+                        }
+                      `}
+                    >
+                      <MessageCircle className="h-3 w-3" />
+                      {language === 'ar' ? 'التفاعلات' : 'Interactions'}
+                      {stats.allResponses.length > 0 && (
+                        <span className="ml-0.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-black
+                          bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                          {stats.allResponses.length}
+                        </span>
+                      )}
                     </button>
                   </div>
 
-                  {/* Content based on active view */}
-                  {/* All Activities View */}
-                  {activeView === 'all' && (
-                    <>
-                      <button 
-                        className="bg-secondary/20 hover:bg-secondary/30 transition-colors rounded-lg p-3 text-center border-2 border-transparent w-full mb-4"
-                        onClick={() => handleViewChange(task.id, 'all')}
-                      >
-                        <div className="text-lg font-semibold">{stats.allResponses.length}</div>
-                        <div className="text-xs text-muted-foreground">{t('allActivities', language)}</div>
-                      </button>
-                      
-                      {stats.allResponses.length > 0 ? (
-                        <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                          {stats.allResponses
-                            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                            .slice(0, 10)
-                            .map((activity) => (
-                              <div key={activity.id} className="flex items-start gap-3 text-sm bg-muted/30 rounded-lg p-3">
-                                {getActivityIcon(activity.response_type)}
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className="font-medium" dir="auto">{activity.visitor_name}</span>
-                                    <span className="text-xs text-muted-foreground">
-                                      {format(parseISO(activity.created_at), 'MMM dd, HH:mm')}
-                                    </span>
-                                  </div>
-                                  <p className="text-muted-foreground" dir="auto">
-                                    {getActivityDescription(activity, stats.subtasks)}
-                                  </p>
-                                  
-                                  {activity.response_type === 'comment' && activity.content && (
-                                    <div className="bg-background mt-2 p-2 rounded border text-sm" dir="auto">
-                                      {activity.content}
-                                    </div>
-                                  )}
-                                  
-                                  {activity.response_type === 'snooze_request' && (
-                                    <div className="mt-2">
-                                      {renderSnoozeRequestStatus(activity)}
-                                    </div>
-                                  )}
-                                  
-                                  {activity.response_type === 'completion_request' && (
-                                    <div className="mt-2">
-                                      {renderCompletionRequestStatus(activity)}
-                                    </div>
-                                  )}
-                                </div>
+                  {/* ── APPROVALS panel ── */}
+                  {(activeView === 'approvals' || activeView === 'all' || activeView === 'assignees' || activeView === 'completions' || activeView === 'requests' || !['interactions'].includes(activeView)) && activeView !== 'interactions' && (
+                  <div className="space-y-4 pb-4">
+
+                    {/* Completion Requests */}
+                    {stats.completionRequests.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider px-1 flex items-center gap-1.5">
+                          <CheckCircle className="h-3 w-3" />
+                          {language === 'ar' ? 'طلبات إكمال المهمة' : 'Completion Requests'} · {stats.completionRequests.length}
+                        </p>
+                        {stats.completionRequests.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(request => (
+                          <div key={request.id} className="rounded-xl p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200/70 dark:border-amber-500/30">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-[13px] font-bold text-foreground" dir="auto">{request.visitor_name}</span>
+                              <span className="text-[10px] text-muted-foreground/60">{format(parseISO(request.created_at), 'MMM dd, HH:mm')}</span>
+                            </div>
+                            {renderCompletionRequestStatus(request)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Snooze Requests */}
+                    {stats.snoozeRequests.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-wider px-1 flex items-center gap-1.5">
+                          <Pause className="h-3 w-3" />
+                          {t('snoozeRequestsTitle', language)} · {stats.snoozeRequests.length}
+                        </p>
+                        {stats.snoozeRequests.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(request => (
+                          <div key={request.id} className="rounded-xl p-3 bg-orange-50 dark:bg-orange-500/10 border border-orange-200/70 dark:border-orange-500/30">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-[13px] font-bold text-foreground" dir="auto">{request.visitor_name}</span>
+                              <span className="text-[10px] text-muted-foreground/60">{format(parseISO(request.created_at), 'MMM dd, HH:mm')}</span>
+                            </div>
+                            {request.content && !parseSnoozeStatus(request.content) && (
+                              <p className="text-[12px] text-muted-foreground mb-2" dir="auto">{t('reason', language)}: {request.content}</p>
+                            )}
+                            {renderSnoozeRequestStatus(request)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Uncheck Requests */}
+                    {stats.uncheckRequests.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-wider px-1 flex items-center gap-1.5">
+                          <AlertCircle className="h-3 w-3" />
+                          {language === 'ar' ? 'طلبات إلغاء التحديد' : 'Uncheck Requests'} · {stats.uncheckRequests.length}
+                        </p>
+                        {stats.uncheckRequests.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(request => {
+                          const st = stats.subtasks.find(s => s.id === request.subtask_id);
+                          return (
+                            <div key={request.id} className="rounded-xl p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200/70 dark:border-blue-500/30">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[13px] font-bold text-foreground" dir="auto">{request.visitor_name}</span>
+                                <span className="text-[10px] text-muted-foreground/60">{format(parseISO(request.created_at), 'MMM dd, HH:mm')}</span>
                               </div>
-                            ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 text-muted-foreground text-sm">
-                          {t('noActivityYet', language)}
-                        </div>
-                      )}
-                    </>
+                              <p className="text-[12px] text-muted-foreground mb-1" dir="auto">"{st?.title || 'subtask'}"</p>
+                              {request.content && <p className="text-[12px] text-muted-foreground" dir="auto">{t('reason', language)}: {request.content}</p>}
+                              <p className="text-[11px] text-muted-foreground/50 mt-1">{language === 'ar' ? 'سيقوم المالك بإلغاء التحديد من جانبه' : 'Owner will uncheck from their side after review'}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Empty approvals */}
+                    {stats.completionRequests.length === 0 && stats.snoozeRequests.length === 0 && stats.uncheckRequests.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground/50 text-[13px]">
+                        {language === 'ar' ? 'لا توجد طلبات معلقة' : 'No pending approvals'}
+                      </div>
+                    )}
+                  </div>
                   )}
-                  
-                  {/* Assignees View */}
-                  {activeView === 'assignees' && (
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-medium">{t('assignees', language)} ({stats.assignees.length})</h3>
-                      
-                      {stats.assignees.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {stats.assignees.map(assignee => {
-                            const assigneeInfo = stats.visitors.find(v => v.viewer_name === assignee);
-                            const assigneeActivities = stats.allResponses.filter(r => r.visitor_name === assignee);
-                            
-                            const completions = assigneeActivities.filter(a => 
-                              a.response_type === 'completion' && a.is_completed
-                            ).length;
-                            
-                            const comments = assigneeActivities.filter(a => 
-                              a.response_type === 'comment'
-                            ).length;
-                            
-                            let lastActivity = '';
-                            if (assigneeActivities.length > 0) {
-                              const mostRecent = assigneeActivities.sort((a, b) => 
-                                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-                              )[0];
-                              lastActivity = formatRelativeTime(mostRecent.created_at);
-                            } else if (assigneeInfo) {
-                              lastActivity = formatRelativeTime(assigneeInfo.last_accessed);
-                            } else {
-                              lastActivity = t('noActivityRecorded', language);
-                            }
-                            
+
+                  {/* ── INTERACTIONS panel ── */}
+                  {activeView === 'interactions' && (
+                  <div className="space-y-4 pb-4">
+
+                    {/* Subtask progress */}
+                    {stats.totalSubtasksCount > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider px-1 flex items-center gap-1.5">
+                          <CheckCircle className="h-3 w-3" />
+                          {language === 'ar' ? 'تقدم المهام الفرعية' : 'Subtask Progress'} · {stats.completedSubtasksCount}/{stats.totalSubtasksCount}
+                        </p>
+                        <div className="space-y-1.5">
+                          {stats.subtasks.map(subtask => {
+                            const completions = stats.allResponses.filter(r => r.response_type === 'completion' && r.subtask_id === subtask.id && r.is_completed);
+                            const latest = completions.length > 0 ? [...completions].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] : null;
+                            const isCompleted = !!subtask.completed;
                             return (
-                              <div 
-                                key={assignee} 
-                                className="border rounded-lg p-4 flex items-center space-x-3 cursor-pointer hover:bg-muted/50 transition-colors"
-                                onClick={() => setSelectedVisitor(assignee)}
-                              >
-                                <Avatar className="h-10 w-10">
-                                  <AvatarFallback>{getInitials(assignee)}</AvatarFallback>
-                                </Avatar>
-                                
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-sm truncate" dir="auto">{assignee}</p>
-                                  <div className="flex items-center text-xs text-muted-foreground space-x-3 mt-1">
-                                    <span className="flex items-center">
-                                      <Clock className="h-3 w-3 mr-1" />
-                                      {lastActivity}
-                                    </span>
-                                    
-                                    <span className="flex items-center">
-                                      <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
-                                      {completions}
-                                    </span>
-                                    
-                                    <span className="flex items-center">
-                                      <MessageCircle className="h-3 w-3 mr-1 text-blue-600" />
-                                      {comments}
-                                    </span>
-                                  </div>
+                              <div key={subtask.id} className={`rounded-xl px-3 py-2.5 flex items-center gap-3 ${isCompleted ? 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20' : 'bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05]'}`}>
+                                <div className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center ${isCompleted ? 'bg-emerald-500' : 'border-2 border-slate-300 dark:border-white/20'}`}>
+                                  {isCompleted && <Check className="h-2.5 w-2.5 text-white" />}
                                 </div>
-                                
-                                <EyeIcon className="h-4 w-4 text-muted-foreground" />
+                                <div className="flex-1 min-w-0">
+                                  <p className={`text-[12px] font-medium ${isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'}`} dir="auto">{subtask.title}</p>
+                                  {isCompleted && latest && (
+                                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5" dir="auto">
+                                      {latest.visitor_name} · {format(parseISO(latest.created_at), 'MMM dd, HH:mm')}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}
                         </div>
-                      ) : (
-                        <div className="text-center py-8 text-muted-foreground text-sm">
-                          {t('noAssigneesYet', language)}
-                        </div>
-                      )}
-                      
-                      <div className="text-xs text-muted-foreground">
-                        <p>{t('clickOnAssignee', language)}</p>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Comments View */}
-                  {activeView === 'comments' && (
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-medium">{t('comments', language)} ({stats.comments.length})</h3>
-                      
-                      {stats.comments.length > 0 ? (
-                        <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                          {stats.comments
-                            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                            .map((comment) => (
-                              <div key={comment.id} className="bg-muted/30 rounded-lg p-4">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <MessageCircle className="h-4 w-4 text-blue-600" />
-                                  <span className="font-medium" dir="auto">{comment.visitor_name}</span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {formatRelativeTime(comment.created_at)}
-                                  </span>
+                    {/* Comments */}
+                    {stats.comments.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider px-1 flex items-center gap-1.5">
+                          <MessageCircle className="h-3 w-3" />
+                          {t('comments', language)} · {stats.comments.length}
+                        </p>
+                        <div className="space-y-2 max-h-[320px] overflow-y-auto">
+                          {stats.comments.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(comment => (
+                            <div key={comment.id} className="rounded-xl p-3 bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06]">
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-[10px] font-black text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                                  {comment.visitor_name.charAt(0).toUpperCase()}
                                 </div>
-                                
-                                <div className="bg-background p-3 rounded border mb-2" dir="auto">
-                                  {comment.content}
-                                </div>
-                                
-                                {replyingTo === comment.id ? (
-                                  <div className="mt-3 space-y-2">
-                                    <Textarea
-                                      value={replyContent}
-                                      onChange={(e) => setReplyContent(e.target.value)}
-                                      placeholder={`${t('typeYourReply', language)}...`}
-                                      rows={2}
-                                      className="text-sm"
-                                    />
-                                    <div className="flex gap-2 justify-end">
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        onClick={() => {
-                                          setReplyingTo(null);
-                                          setReplyContent('');
-                                        }}
-                                      >
-                                        {t('cancel', language)}
-                                      </Button>
-                                      <Button 
-                                        size="sm"
-                                        onClick={() => handleReply(task.id)}
-                                        disabled={!replyContent.trim()}
-                                      >
-                                        {t('reply', language)}
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <Button
-                                    variant="ghost" 
-                                    size="sm" 
-                                    className="text-xs"
-                                    onClick={() => setReplyingTo(comment.id)}
-                                  >
-                                    <Mail className="h-3 w-3 mr-1" />
-                                    {t('reply', language)}
-                                  </Button>
-                                )}
+                                <span className="text-[12px] font-bold text-foreground" dir="auto">{comment.visitor_name}</span>
+                                <span className="text-[10px] text-muted-foreground/50">{formatRelativeTime(comment.created_at)}</span>
                               </div>
-                            ))}
+                              <div className="bg-white dark:bg-white/[0.04] rounded-lg px-3 py-2 text-[13px] text-foreground border border-slate-200/50 dark:border-white/[0.06]" dir="auto">
+                                {comment.content}
+                              </div>
+                              {replyingTo === comment.id ? (
+                                <div className="mt-2 space-y-2">
+                                  <Textarea value={replyContent} onChange={e => setReplyContent(e.target.value)} placeholder={`${t('typeYourReply', language)}...`} rows={2} className="text-sm" />
+                                  <div className="flex gap-2 justify-end">
+                                    <Button size="sm" variant="outline" onClick={() => { setReplyingTo(null); setReplyContent(''); }}>{t('cancel', language)}</Button>
+                                    <Button size="sm" onClick={() => handleReply(task.id)} disabled={!replyContent.trim()}>{t('reply', language)}</Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button onClick={() => setReplyingTo(comment.id)} className="mt-1.5 text-[11px] font-bold text-indigo-500 hover:text-indigo-600 flex items-center gap-1">
+                                  <Mail className="h-3 w-3" />{t('reply', language)}
+                                </button>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      ) : (
-                        <div className="text-center py-8 text-muted-foreground text-sm">
-                          {t('noCommentsYet', language)}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                      </div>
+                    )}
 
-                  {/* Completions View */}
-                  {activeView === 'completions' && (
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-medium">{t('completions', language)}</h3>
-                      
-                      {stats.allResponses.filter(r => r.response_type === 'completion').length > 0 ? (
-                        <div className="space-y-4">
-                          {/* Subtask completion status */}
-                          {stats.totalSubtasksCount > 0 && (
-                            <div className="space-y-3">
-                              <h4 className="text-base font-medium">{t('subtaskStatus', language)}</h4>
-                              <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                                {stats.subtasks.map(subtask => {
-                                  const completions = stats.allResponses.filter(r => 
-                                    r.response_type === 'completion' && 
-                                    r.subtask_id === subtask.id &&
-                                    r.is_completed
-                                  );
-                                  const completedBy = [...new Set(completions.map(c => c.visitor_name))];
-                                  const isCompleted = !!subtask.completed; // owner truth for visual state
-                                  const latest = completions.length > 0 ? [...completions].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] : null;
-                                  
-                                  return (
-                                    <div 
-                                      key={subtask.id} 
-                                      className={`p-3 rounded-lg flex items-center gap-3 ${
-                                        isCompleted ? 'bg-green-50 border border-green-200' : 'bg-muted/30'
-                                      }`}
-                                    >
-                                      <div>
-                                        {isCompleted ? (
-                                          <CheckCircle className="h-5 w-5 text-green-600" />
-                                        ) : (
-                                          <div className="h-5 w-5 border-2 rounded-full" />
-                                        )}
-                                      </div>
-                                      
-                                      <div className="flex-1 min-w-0">
-                                        <p className={`text-sm ${isCompleted ? 'line-through text-muted-foreground' : ''}`} dir="auto">
-                                          {subtask.title}
-                                        </p>
-                                        
-                                        {isCompleted && latest && (
-                                          <p className="text-[11px] text-green-700 flex items-center gap-2 mt-0.5" dir="auto">
-                                            <span>{format(parseISO(latest.created_at), 'MMM dd, HH:mm')}</span>
-                                            <span className="inline-flex items-center gap-1">
-                                              <User className="h-3 w-3" />
-                                              {completedBy.join(', ')}
-                                            </span>
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
+                    {/* All activity feed */}
+                    {stats.allResponses.filter(r => r.response_type !== 'comment').length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1">
+                          {language === 'ar' ? 'سجل النشاط' : 'Activity Log'}
+                        </p>
+                        <div className="space-y-1.5 max-h-[240px] overflow-y-auto">
+                          {stats.allResponses.filter(r => r.response_type !== 'comment').sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 20).map(activity => (
+                            <div key={activity.id} className="flex items-start gap-2.5 px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/50 dark:border-white/[0.05]">
+                              {getActivityIcon(activity.response_type)}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[12px] font-bold text-foreground" dir="auto">{activity.visitor_name}</span>
+                                  <span className="text-[10px] text-muted-foreground/50">{format(parseISO(activity.created_at), 'MMM dd, HH:mm')}</span>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground" dir="auto">{getActivityDescription(activity, stats.subtasks)}</p>
                               </div>
                             </div>
-                          )}
-                          
-                          {/* Completion activity history removed to keep view compact; info is inline on subtask cards. */}
+                          ))}
                         </div>
-                      ) : (
-                        <div className="text-center py-8 text-muted-foreground text-sm">
-                          {t('noCompletionsYet', language)}
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
+
+                    {stats.allResponses.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground/50 text-[13px]">
+                        {t('noActivityYet', language)}
+                      </div>
+                    )}
+                  </div>
                   )}
 
-                  {/* Requests View */}
-                  {activeView === 'requests' && (
-                    <div className="space-y-6">
-                      {/* Completion Requests - Most Important */}
-                      <div className="space-y-4">
-                        <h3 className="text-lg font-medium flex items-center gap-2 text-amber-600">
-                          <CheckCircle className="h-5 w-5" />
-                          {language === 'ar' ? 'طلبات إكمال المهمة' : 'Completion Requests'} ({stats.completionRequests.length})
-                        </h3>
-                        {stats.completionRequests.length > 0 ? (
-                          <div className="space-y-4 max-h-[300px] overflow-y-auto">
-                            {stats.completionRequests
-                              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                              .map((request) => (
-                                <div key={request.id} className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <CheckCircle className="h-4 w-4 text-amber-600" />
-                                    <span className="font-medium" dir="auto">{request.visitor_name}</span>
-                                    <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800">
-                                      {language === 'ar' ? 'طلب إكمال' : 'Completion Request'}
-                                    </Badge>
-                                  </div>
-                                  <div className="text-xs text-muted-foreground mb-3">
-                                    {format(parseISO(request.created_at), 'MMM dd, HH:mm')}
-                                  </div>
-                                  <div className="flex gap-2">
-                                    {renderCompletionRequestStatus(request)}
-                                  </div>
-                                </div>
-                              ))}
-                          </div>
-                        ) : (
-                          <div className="text-center py-8 text-muted-foreground text-sm">
-                            {language === 'ar' ? 'لا توجد طلبات إكمال' : 'No completion requests'}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Snooze Requests */}
-                      <div className="space-y-4">
-                        <h3 className="text-lg font-medium flex items-center gap-2 text-orange-600">
-                          <AlertCircle className="h-5 w-5" />
-                          {t('snoozeRequestsTitle', language)} ({stats.snoozeRequests.length})
-                        </h3>
-                        {stats.snoozeRequests.length > 0 ? (
-                          <div className="space-y-4 max-h-[300px] overflow-y-auto">
-                            {stats.snoozeRequests
-                              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                              .map((request) => (
-                                <div key={request.id} className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <Pause className="h-4 w-4 text-orange-600" />
-                                    <span className="font-medium" dir="auto">{request.visitor_name}</span>
-                                    <Badge variant="secondary" className="text-xs">{t('snoozeRequests', language)}</Badge>
-                                  </div>
-                                  <div className="text-xs text-muted-foreground mb-2">
-                                    {format(parseISO(request.created_at), 'MMM dd, HH:mm')}
-                                  </div>
-                                  {request.content && !parseSnoozeStatus(request.content) && (
-                                    <div className="bg-background/50 p-3 rounded border mb-3" dir="auto">
-                                      <p className="text-sm">{t('reason', language)}: {request.content}</p>
-                                    </div>
-                                  )}
-                                  <div className="flex gap-2">
-                                    {renderSnoozeRequestStatus(request)}
-                                  </div>
-                                </div>
-                              ))}
-                          </div>
-                        ) : (
-                          <div className="text-center py-8 text-muted-foreground text-sm">
-                            {t('noSnoozeRequests', language)}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="space-y-4">
-                        <h3 className="text-lg font-medium flex items-center gap-2 text-blue-700">
-                          <AlertCircle className="h-5 w-5" />
-                          {language === 'ar' ? 'طلبات إلغاء التحديد' : 'Uncheck Requests'} ({stats.uncheckRequests.length})
-                        </h3>
-                        {stats.uncheckRequests.length > 0 ? (
-                          <div className="space-y-4 max-h-[300px] overflow-y-auto">
-                            {stats.uncheckRequests
-                              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                              .map((request) => {
-                                const st = stats.subtasks.find(s => s.id === request.subtask_id);
-                                return (
-                                  <div key={request.id} className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <CheckCircle className="h-4 w-4 text-blue-600" />
-                                      <span className="font-medium" dir="auto">{request.visitor_name}</span>
-                                      <Badge variant="secondary" className="text-xs">{language === 'ar' ? 'طلب إلغاء' : 'Uncheck request'}</Badge>
-                                    </div>
-                                    <div className="text-xs text-muted-foreground mb-2">
-                                      {format(parseISO(request.created_at), 'MMM dd, HH:mm')}
-                                    </div>
-                                    <p className="text-sm mb-2" dir="auto">{language === 'ar' ? 'المهمة الفرعية' : 'Subtask'}: "{st?.title || 'subtask'}"</p>
-                                    {request.content && (
-                                      <div className="bg-background/50 p-3 rounded border mb-3" dir="auto">
-                                        <p className="text-sm">{t('reason', language)}: {request.content}</p>
-                                      </div>
-                                    )}
-                                    <div className="text-xs text-muted-foreground">
-                                      {language === 'ar'
-                                        ? 'تنبيه: سيقوم المالك بإلغاء التحديد من جانبه عند المراجعة.'
-                                        : 'FYI: The owner will uncheck from their side after review.'}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                          </div>
-                        ) : (
-                          <div className="text-center py-8 text-muted-foreground text-sm">
-                            {language === 'ar' ? 'لا توجد طلبات إلغاء' : 'No uncheck requests'}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </CardContent>
               </CollapsibleContent>
             </div>

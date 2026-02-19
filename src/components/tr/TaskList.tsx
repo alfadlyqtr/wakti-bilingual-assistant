@@ -14,6 +14,7 @@ import { StatusBadge } from './StatusBadge';
 import { SubtaskManager } from './SubtaskManager';
 import { toast } from 'sonner';
 import { format, isAfter, parseISO, addDays } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
 
 interface TaskListProps {
   tasks: TRTask[];
@@ -23,7 +24,17 @@ interface TaskListProps {
 
 export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksChanged }) => {
   const { language } = useTheme();
+  const [ownerName, setOwnerName] = useState<string>('Owner');
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      const { data } = await supabase.from('profiles').select('display_name, first_name, last_name').eq('id', user.id).single();
+      const full = [data?.first_name, data?.last_name].filter(Boolean).join(' ');
+      setOwnerName(data?.display_name || full || user.email?.split('@')[0] || 'Owner');
+    });
+  }, []);
   // gridLayoutTasks: tasks explicitly set to grid. Default is LIST (better for mobile)
   const [gridLayoutTasks, setGridLayoutTasks] = useState<Set<string>>(new Set());
   const [subtaskVersion, setSubtaskVersion] = useState<Record<string, number>>({});
@@ -144,9 +155,9 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
       // Mirror owner action into shared responses so ActivityMonitor and stamps show correct actor
       try {
         if (!task.completed) {
-          await TRSharedService.markTaskCompleted(task.id, 'Owner (You)', true);
+          await TRSharedService.markTaskCompleted(task.id, ownerName, true);
         } else {
-          await TRSharedService.markTaskCompleted(task.id, 'Owner (You)', false);
+          await TRSharedService.markTaskCompleted(task.id, ownerName, false);
         }
       } catch (e) {
         console.warn('Non-fatal: failed to mirror owner main-task completion to shared responses', e);

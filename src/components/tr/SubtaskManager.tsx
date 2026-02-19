@@ -34,7 +34,17 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
   refreshTrigger,
 }) => {
   const { language } = useTheme();
+  const [ownerName, setOwnerName] = useState<string>('Owner');
   const [subtasks, setSubtasks] = useState<TRSubtask[]>([]);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      const { data } = await supabase.from('profiles').select('display_name, first_name, last_name').eq('id', user.id).single();
+      const full = [data?.first_name, data?.last_name].filter(Boolean).join(' ');
+      setOwnerName(data?.display_name || full || user.email?.split('@')[0] || 'Owner');
+    });
+  }, []);
   const [loading, setLoading] = useState(true);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -141,7 +151,7 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
     try {
       await TRService.updateSubtask(id, { completed });
       if (completed) {
-        TRSharedService.markSubtaskCompleted(taskId, id, 'Owner (You)', true).catch(() => {});
+        TRSharedService.markSubtaskCompleted(taskId, id, ownerName, true).catch(() => {});
       } else {
         TRSharedService.clearAllSubtaskCompletions(taskId, id).catch(() => {});
       }
