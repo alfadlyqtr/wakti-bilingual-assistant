@@ -192,20 +192,17 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
   };
 
   if (loading && subtasks.length === 0) {
-    return <div className="text-sm text-muted-foreground">Loading subtasks...</div>;
+    return (
+      <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground">
+        <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground/60 animate-spin" />
+        {language === 'ar' ? 'جارٍ التحميل...' : 'Loading...'}
+      </div>
+    );
   }
 
   if (subtasks.length === 0 && readOnly) {
-    return <div className="text-sm text-muted-foreground">No subtasks</div>;
+    return <div className="text-xs text-muted-foreground py-2">{language === 'ar' ? 'لا توجد مهام فرعية' : 'No subtasks'}</div>;
   }
-
-  const isSubtaskOverdue = (s: TRSubtask) => {
-    try {
-      if (!s.due_date) return false;
-      const dueDateTime = s.due_time ? parseISO(`${s.due_date}T${s.due_time}`) : parseISO(`${s.due_date}T23:59:59`);
-      return isAfter(new Date(), dueDateTime) && !s.completed;
-    } catch { return false; }
-  };
 
   const getDueStatus = (s: TRSubtask): 'overdue' | 'soon' | 'ok' | 'none' => {
     if (!s.due_date) return 'none';
@@ -216,9 +213,7 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
       const hours = differenceInHours(due, now);
       if (hours <= 24 && hours >= 0) return 'soon';
       return 'ok';
-    } catch {
-      return 'none';
-    }
+    } catch { return 'none'; }
   };
 
   const renderItem = (subtask: TRSubtask) => {
@@ -228,28 +223,27 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
     return (
       <div
         key={subtask.id}
-        className={`group/item relative flex items-center gap-3 rounded-xl border transition-all duration-200
-          ${layout === 'grid' ? 'p-3' : 'p-3'}
+        className={`group/item flex items-center gap-2.5 rounded-xl px-3 py-2.5 transition-all duration-150
           ${done
-            ? 'bg-emerald-50/50 dark:bg-emerald-950/15 border-emerald-200/40 dark:border-emerald-800/30'
-            : 'bg-white/60 dark:bg-white/[0.03] border-slate-200/60 dark:border-slate-700/40 hover:border-slate-300 dark:hover:border-slate-600'
+            ? 'bg-emerald-50/60 dark:bg-emerald-950/20'
+            : 'bg-muted/40 hover:bg-muted/70 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]'
           }`}
       >
-        {/* Custom checkbox */}
+        {/* Checkbox */}
         <button
           onClick={() => !readOnly && handleToggleSubtask(subtask.id, !done)}
           disabled={readOnly}
-          className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 touch-manipulation
+          className={`flex-shrink-0 w-[18px] h-[18px] rounded-md border-2 flex items-center justify-center transition-all duration-150 touch-manipulation active:scale-90
             ${done
-              ? 'bg-emerald-500 border-emerald-500 text-white scale-100'
-              : 'border-slate-300 dark:border-slate-600 hover:border-[#060541] dark:hover:border-indigo-400 active:scale-90'
+              ? 'bg-emerald-500 border-emerald-500 text-white'
+              : 'border-muted-foreground/30 hover:border-[#060541] dark:hover:border-indigo-400'
             }`}
         >
-          {done && <Check className="w-3 h-3" strokeWidth={3} />}
+          {done && <Check className="w-2.5 h-2.5" strokeWidth={3} />}
         </button>
 
         {editingId === subtask.id ? (
-          <div className="flex-1 flex items-center gap-2">
+          <div className="flex-1 flex items-center gap-1.5">
             <Input
               value={editingTitle}
               onChange={(e) => setEditingTitle(e.target.value)}
@@ -257,54 +251,54 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
                 if (e.key === 'Enter') handleSaveEdit();
                 if (e.key === 'Escape') handleCancelEdit();
               }}
-              className="flex-1 h-8 rounded-lg text-sm"
+              className="flex-1 h-7 rounded-lg text-xs px-2"
               autoFocus
             />
-            <Button size="sm" onClick={handleSaveEdit} className="h-8 px-2.5 rounded-lg gap-1 bg-emerald-500 hover:bg-emerald-600 text-white">
+            <button title="Save" onClick={handleSaveEdit} className="h-7 w-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-600 transition-colors touch-manipulation">
               <Save className="w-3 h-3" />
-            </Button>
-            <Button size="sm" variant="ghost" onClick={handleCancelEdit} className="h-8 px-2.5 rounded-lg">
-              <X className="w-3 h-3" />
-            </Button>
+            </button>
+            <button title="Cancel" onClick={handleCancelEdit} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-muted transition-colors touch-manipulation">
+              <X className="w-3 h-3 text-muted-foreground" />
+            </button>
           </div>
         ) : (
           <>
-            <span className={`flex-1 text-sm leading-snug transition-all duration-200 ${
-              done ? 'line-through text-muted-foreground/50' : 'text-foreground'
+            <span className={`flex-1 text-sm leading-snug min-w-0 ${
+              done ? 'line-through text-muted-foreground/40' : 'text-foreground'
             }`}>
               {subtask.title}
             </span>
 
             {/* Due pill */}
             {subtask.due_date && (
-              <span className={`flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-md whitespace-nowrap ${
-                dueStatus === 'overdue' ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400' :
-                dueStatus === 'soon' ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400' :
-                dueStatus === 'ok' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400' :
-                'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-              }`}>
-                <span className="inline-flex items-center gap-1">
-                  <Clock className="w-2.5 h-2.5" />
-                  {format(new Date(subtask.due_date), 'MMM d')}{subtask.due_time ? ` ${subtask.due_time}` : ''}
-                </span>
+              <span className={`flex-shrink-0 inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md whitespace-nowrap
+                ${dueStatus === 'overdue' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' :
+                  dueStatus === 'soon' ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' :
+                  'bg-muted text-muted-foreground'}`}>
+                <Clock className="w-2.5 h-2.5" />
+                {format(new Date(subtask.due_date), 'MMM d')}
               </span>
             )}
 
-            {/* Action buttons - visible on hover/touch */}
+            {/* Actions — fade in on hover */}
             {!readOnly && (
-              <div className="flex items-center gap-0.5 opacity-40 group-hover/item:opacity-100 transition-opacity">
-                <button title="Edit" onClick={() => handleStartEdit(subtask)} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors touch-manipulation">
-                  <Edit3 className="h-3 w-3 text-slate-500" />
+              <div className="flex items-center gap-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity flex-shrink-0">
+                <button title="Edit" onClick={() => handleStartEdit(subtask)}
+                  className="h-6 w-6 rounded-md flex items-center justify-center hover:bg-background dark:hover:bg-white/10 transition-colors touch-manipulation">
+                  <Edit3 className="h-3 h-3 text-muted-foreground" />
                 </button>
                 <Popover open={openDueFor === subtask.id} onOpenChange={(open) => setOpenDueFor(open ? subtask.id : null)}>
                   <PopoverTrigger asChild>
-                    <button title="Due date" className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors touch-manipulation">
-                      <CalendarIcon className="h-3 w-3 text-slate-500" />
+                    <button title="Set due date"
+                      className="h-6 w-6 rounded-md flex items-center justify-center hover:bg-background dark:hover:bg-white/10 transition-colors touch-manipulation">
+                      <CalendarIcon className="h-3 w-3 text-muted-foreground" />
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className="w-72 p-3 rounded-xl" align="end">
                     <div className="space-y-2">
-                      <div className="text-[11px] font-medium text-muted-foreground">{language === 'ar' ? 'تاريخ ووقت المهمة الفرعية' : 'Subtask due date & time'}</div>
+                      <p className="text-[11px] font-medium text-muted-foreground">
+                        {language === 'ar' ? 'تاريخ ووقت المهمة الفرعية' : 'Subtask due date & time'}
+                      </p>
                       <Calendar
                         mode="single"
                         selected={subtask.due_date ? new Date(subtask.due_date) : undefined}
@@ -323,7 +317,7 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
                           value={subtask.due_time || ''}
                           placeholder="HH:mm"
                           type="time"
-                          className="h-8 text-[12px] rounded-lg"
+                          className="h-8 text-xs rounded-lg"
                           onChange={async (e) => {
                             try {
                               await TRService.updateSubtask(subtask.id, { due_time: e.target.value || null });
@@ -331,26 +325,23 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
                             } catch (er) { console.error(er); toast.error('Failed to set time'); }
                           }}
                         />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-[12px] rounded-lg"
+                        <Button size="sm" variant="outline" className="h-8 text-xs rounded-lg"
                           onClick={async () => {
                             try {
                               await TRService.updateSubtask(subtask.id, { due_date: null, due_time: null });
                               onSubtasksChange?.();
                               setOpenDueFor(null);
                             } catch (er) { console.error(er); toast.error('Failed to clear'); }
-                          }}
-                        >
+                          }}>
                           {language === 'ar' ? 'مسح' : 'Clear'}
                         </Button>
                       </div>
                     </div>
                   </PopoverContent>
                 </Popover>
-                <button title="Delete" onClick={() => handleDeleteSubtask(subtask.id)} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors touch-manipulation">
-                  <Trash2 className="h-3 w-3 text-red-400 dark:text-red-500" />
+                <button title="Delete" onClick={() => handleDeleteSubtask(subtask.id)}
+                  className="h-6 w-6 rounded-md flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors touch-manipulation">
+                  <Trash2 className="h-3 w-3 text-red-400" />
                 </button>
               </div>
             )}
@@ -364,51 +355,52 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
   const progress = subtasks.length > 0 ? (completedCount / subtasks.length) * 100 : 0;
 
   return (
-    <div className="space-y-3">
-      {/* Progress bar */}
-      <div className="flex items-center gap-3">
-        <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-500 ease-out bg-gradient-to-r from-emerald-400 to-teal-400"
-            style={{ width: `${progress}%` }}
-          />
+    <div className="space-y-2.5">
+      {/* Progress bar + count */}
+      {subtasks.length > 0 && (
+        <div className="flex items-center gap-2.5">
+          <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-all duration-500 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <span className="text-[11px] font-semibold tabular-nums text-muted-foreground">
+            {completedCount}/{subtasks.length}
+          </span>
         </div>
-        <span className="text-[11px] font-semibold text-muted-foreground/70 tabular-nums">
-          {completedCount}/{subtasks.length}
-        </span>
-      </div>
+      )}
 
+      {/* Subtask items */}
       {layout === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5">
           {subtasks.map((s) => renderItem(s))}
         </div>
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {subtasks.map((s) => renderItem(s))}
         </div>
       )}
 
+      {/* Add input */}
       {!readOnly && (
-        <div className="relative mt-2">
+        <div className="flex items-center gap-2 mt-1">
           <Input
             value={newSubtaskTitle}
             onChange={(e) => setNewSubtaskTitle(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleAddSubtask();
-              }
+              if (e.key === 'Enter') { e.preventDefault(); handleAddSubtask(); }
             }}
             placeholder={language === 'ar' ? 'أضف مهمة فرعية...' : 'Add a subtask...'}
-            className="pr-10 h-10 rounded-xl border-dashed border-slate-300 dark:border-slate-700 bg-transparent placeholder:text-muted-foreground/40 focus:border-solid focus:border-[#060541] dark:focus:border-indigo-400"
+            className="flex-1 h-9 rounded-xl text-sm border-dashed focus:border-solid focus:border-[#060541] dark:focus:border-indigo-400 bg-transparent placeholder:text-muted-foreground/40"
           />
           <button
             type="button"
             onClick={handleAddSubtask}
             title="Add subtask"
-            className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-lg flex items-center justify-center bg-[#060541] dark:bg-indigo-500 text-white hover:opacity-90 transition-opacity touch-manipulation active:scale-95"
+            className="h-9 w-9 rounded-xl flex items-center justify-center bg-[#060541] dark:bg-indigo-500 text-white hover:opacity-90 active:scale-95 transition-all touch-manipulation flex-shrink-0"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="h-4 w-4" />
           </button>
         </div>
       )}

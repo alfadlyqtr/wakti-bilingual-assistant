@@ -216,218 +216,215 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {tasks.map((task) => {
         const completed = task.completed;
         const overdue = isOverdue(task);
         const expanded = expandedTasks.has(task.id);
 
+        const accentColor = completed
+          ? 'bg-emerald-500'
+          : overdue
+            ? 'bg-red-500'
+            : task.priority === 'urgent'
+              ? 'bg-red-500'
+              : task.priority === 'high'
+                ? 'bg-orange-400'
+                : 'bg-[#060541] dark:bg-indigo-500';
+
         return (
           <div
             key={task.id}
-            className={`group relative rounded-2xl border transition-all duration-300 overflow-hidden
-              ${
-                completed
-                  ? 'bg-gradient-to-br from-emerald-50/80 via-white to-emerald-50/40 dark:from-emerald-950/30 dark:via-[#0c0f14] dark:to-emerald-950/10 border-emerald-200/60 dark:border-emerald-800/40'
-                  : overdue
-                    ? 'bg-gradient-to-br from-red-50/60 via-white to-orange-50/30 dark:from-red-950/20 dark:via-[#0c0f14] dark:to-red-950/10 border-red-200/60 dark:border-red-800/40'
-                    : 'bg-gradient-to-br from-white via-slate-50/50 to-indigo-50/30 dark:from-[#0c0f14] dark:via-[#12151c] dark:to-[#0f1219] border-slate-200/80 dark:border-slate-700/50'
-              }
-              shadow-sm hover:shadow-md dark:shadow-black/20`}
-          >
-            {/* Top accent bar */}
-            <div className={`h-1 w-full ${
-              completed
-                ? 'bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400'
+            className={`group relative rounded-2xl overflow-hidden transition-all duration-200
+              bg-card border
+              ${completed
+                ? 'border-emerald-200/60 dark:border-emerald-800/30 opacity-80'
                 : overdue
-                  ? 'bg-gradient-to-r from-red-400 via-orange-400 to-red-400'
-                  : task.priority === 'urgent'
-                    ? 'bg-gradient-to-r from-red-500 via-pink-500 to-red-500'
-                    : task.priority === 'high'
-                      ? 'bg-gradient-to-r from-orange-400 via-amber-400 to-orange-400'
-                      : 'bg-gradient-to-r from-[#060541] via-indigo-500 to-[#060541] dark:from-indigo-500 dark:via-blue-400 dark:to-indigo-500'
-            }`} />
+                  ? 'border-red-200/70 dark:border-red-800/40'
+                  : 'border-border hover:border-border/80'
+              }
+              shadow-sm`}
+          >
+            {/* Left accent stripe */}
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${accentColor}`} />
 
-            <div className="p-4 md:p-5">
-              {/* Task Header */}
+            <div className="pl-4 pr-4 py-4">
+              {/* Row 1: checkbox + title + menu */}
               <div className="flex items-start gap-3">
+                {/* Checkbox */}
                 <button
                   onClick={() => handleToggleComplete(task)}
-                  className={`mt-0.5 flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300 touch-manipulation
-                    ${
-                      completed
-                        ? 'bg-emerald-500 border-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.4)]'
-                        : 'border-slate-300 dark:border-slate-600 hover:border-indigo-400 dark:hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
+                  className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 touch-manipulation active:scale-90
+                    ${completed
+                      ? 'bg-emerald-500 border-emerald-500 text-white'
+                      : 'border-muted-foreground/30 hover:border-[#060541] dark:hover:border-indigo-400'
                     }`}
                 >
-                  {completed && <CheckCircle2 className="w-4 h-4" />}
+                  {completed && <CheckCircle2 className="w-3 h-3" />}
                 </button>
 
+                {/* Title + badges */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <h3 className={`font-semibold text-base leading-tight ${
-                        completed
-                          ? 'line-through text-muted-foreground/70'
-                          : 'text-foreground'
-                      }`}>
-                        {task.title}
-                      </h3>
-                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                        <PriorityBadge priority={task.priority} />
-                        {task.is_shared && (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-100/80 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 border border-blue-200/50 dark:border-blue-700/50">
-                            <Share2 className="w-3 h-3" />
-                            {t('sharedTask', language)}
-                          </span>
-                        )}
-                        {task.is_shared && completed && latestCompletions[task.id] && (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-100/80 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-700/50">
-                            <CheckCircle2 className="w-3 h-3" />
-                            {latestCompletions[task.id].who}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <DropdownMenu modal={false}>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full opacity-60 hover:opacity-100 transition-opacity">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuPortal>
-                        <DropdownMenuContent
-                          align="end"
-                          sideOffset={6}
-                          collisionPadding={8}
-                          className="z-[2147483000] min-w-[180px] rounded-xl"
-                          onCloseAutoFocus={(e) => e.preventDefault()}
-                        >
-                        <DropdownMenuItem onClick={() => handleToggleComplete(task)}>
-                          <CheckCircle2 className="h-4 w-4 mr-2" />
-                          {completed ? t('markIncomplete', language) : t('markComplete', language)}
-                        </DropdownMenuItem>
-                        {!completed && (
-                          <DropdownMenuItem onClick={() => handleSnoozeTask(task)}>
-                            <Moon className="h-4 w-4 mr-2" />
-                            {t('snooze', language)}
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem onClick={() => onTaskEdit(task)}>
-                          <Edit className="h-4 w-4 mr-2" />
-                          {t('edit', language)}
-                        </DropdownMenuItem>
-                        {task.is_shared && task.share_link && (
-                          <DropdownMenuItem onClick={() => handleShareTask(task)}>
-                            <Share2 className="h-4 w-4 mr-2" />
-                            {t('shareLink', language)}
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem 
-                          onClick={() => handleDeleteTask(task)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          {t('delete', language)}
-                        </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenuPortal>
-                    </DropdownMenu>
-                  </div>
+                  <h3 className={`font-semibold text-[15px] leading-snug ${
+                    completed ? 'line-through text-muted-foreground/50' : 'text-foreground'
+                  }`}>
+                    {task.title}
+                  </h3>
 
-                  {/* Due date + Status row */}
-                  <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+                  {/* Meta row */}
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    <PriorityBadge priority={task.priority} />
                     {task.due_date && (
-                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ${
-                        overdue
-                          ? 'bg-red-100/80 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                          : 'bg-slate-100/80 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300'
-                      }`}>
-                        <Clock className="w-3.5 h-3.5" />
-                        {format(parseISO(task.due_date), 'MMM dd, yyyy')}
-                        {task.due_time && <span className="opacity-70">at {task.due_time}</span>}
+                      <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full
+                        ${overdue
+                          ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                          : 'bg-muted text-muted-foreground'
+                        }`}>
+                        <Clock className="w-3 h-3" />
+                        {format(parseISO(task.due_date), 'MMM d')}
+                        {task.due_time && <span className="opacity-70"> {task.due_time}</span>}
                       </span>
                     )}
-                    <StatusBadge completed={completed} isOverdue={overdue} />
-                    {task.is_shared && completed && latestCompletions[task.id]?.when && (
-                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400">
-                        {new Date(latestCompletions[task.id].when).toLocaleString(undefined, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    {task.is_shared && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-100/80 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                        <Share2 className="w-3 h-3" />
+                        {t('sharedTask', language)}
+                      </span>
+                    )}
+                    {completed && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-100/80 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                        <CheckCircle2 className="w-3 h-3" />
+                        {t('completed', language)}
+                      </span>
+                    )}
+                    {overdue && !completed && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-red-100/80 text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                        {t('overdue', language)}
                       </span>
                     )}
                   </div>
 
                   {/* Description */}
                   {task.description && (
-                    <p className="text-sm text-muted-foreground/80 mt-2 leading-relaxed">{task.description}</p>
+                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed line-clamp-2">
+                      {task.description}
+                    </p>
                   )}
 
-                  {/* Subtasks Toggle */}
-                  <button
-                    onClick={() => toggleTaskExpanded(task.id)}
-                    className="mt-3 inline-flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl transition-all duration-200 touch-manipulation
-                      bg-[#060541]/5 text-[#060541] hover:bg-[#060541]/10
-                      dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10
-                      active:scale-95"
-                  >
-                    {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                    {expanded
-                      ? (language === 'ar' ? 'إخفاء المهام الفرعية' : 'Hide Subtasks')
-                      : (language === 'ar' ? 'عرض المهام الفرعية' : 'Show Subtasks')}
-                  </button>
-
-                  {/* Subtasks - Controls + List */}
-                  {expanded && (
-                    <div className="mt-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
-                          {language === 'ar' ? 'المهام الفرعية' : 'Subtasks'}
-                        </div>
-                        <div className="flex gap-1.5">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleLayoutForTask(task.id)}
-                            className="h-7 px-2.5 text-[11px] rounded-lg inline-flex gap-1 hover:bg-slate-100 dark:hover:bg-slate-800"
-                          >
-                            {listLayoutTasks.has(task.id)
-                              ? <><Grid2X2 className="w-3 h-3" />{language === 'ar' ? 'شبكة' : 'Grid'}</>
-                              : <><ListChecks className="w-3 h-3" />{language === 'ar' ? 'قائمة' : 'List'}</>}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleMarkAll(task.id, true)}
-                            className="h-7 px-2.5 text-[11px] rounded-lg gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
-                          >
-                            <CheckCheck className="w-3 h-3" />
-                            {language === 'ar' ? 'إتمام الكل' : 'All done'}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleMarkAll(task.id, false)}
-                            className="h-7 px-2.5 text-[11px] rounded-lg gap-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-                          >
-                            <RotateCcw className="w-3 h-3" />
-                            {language === 'ar' ? 'إلغاء' : 'Reset'}
-                          </Button>
-                        </div>
-                      </div>
-                      <SubtaskManager 
-                        key={task.id}
-                        taskId={task.id} 
-                        onSubtasksChange={() => setSubtaskVersion((prev) => ({ ...prev, [task.id]: (prev[task.id] || 0) + 1 }))}
-                        readOnly={false}
-                        layout={listLayoutTasks.has(task.id) ? 'list' : 'grid'}
-                        overrideAllCompleted={optimisticAll[task.id]?.completed}
-                        overrideNonce={optimisticAll[task.id]?.nonce}
-                        refreshTrigger={subtaskVersion[task.id] || 0}
-                      />
-                    </div>
+                  {/* Shared completion stamp */}
+                  {task.is_shared && completed && latestCompletions[task.id]?.when && (
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">
+                      {latestCompletions[task.id].who} · {new Date(latestCompletions[task.id].when).toLocaleString(undefined, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </p>
                   )}
                 </div>
+
+                {/* Menu */}
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full flex-shrink-0 text-muted-foreground hover:text-foreground">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuPortal>
+                    <DropdownMenuContent
+                      align="end"
+                      sideOffset={6}
+                      collisionPadding={8}
+                      className="z-[2147483000] min-w-[180px] rounded-xl"
+                      onCloseAutoFocus={(e) => e.preventDefault()}
+                    >
+                      <DropdownMenuItem onClick={() => handleToggleComplete(task)}>
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        {completed ? t('markIncomplete', language) : t('markComplete', language)}
+                      </DropdownMenuItem>
+                      {!completed && (
+                        <DropdownMenuItem onClick={() => handleSnoozeTask(task)}>
+                          <Moon className="h-4 w-4 mr-2" />
+                          {t('snooze', language)}
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem onClick={() => onTaskEdit(task)}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        {t('edit', language)}
+                      </DropdownMenuItem>
+                      {task.is_shared && task.share_link && (
+                        <DropdownMenuItem onClick={() => handleShareTask(task)}>
+                          <Share2 className="h-4 w-4 mr-2" />
+                          {t('shareLink', language)}
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        onClick={() => handleDeleteTask(task)}
+                        className="text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        {t('delete', language)}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenuPortal>
+                </DropdownMenu>
               </div>
+
+              {/* Row 2: Subtasks toggle bar */}
+              <div className="mt-3 flex items-center justify-between">
+                <button
+                  onClick={() => toggleTaskExpanded(task.id)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors touch-manipulation active:scale-95 py-1"
+                >
+                  {expanded
+                    ? <ChevronUp className="w-3.5 h-3.5" />
+                    : <ChevronDown className="w-3.5 h-3.5" />}
+                  <ListChecks className="w-3.5 h-3.5" />
+                  {expanded
+                    ? (language === 'ar' ? 'إخفاء المهام الفرعية' : 'Hide subtasks')
+                    : (language === 'ar' ? 'عرض المهام الفرعية' : 'Show subtasks')}
+                </button>
+
+                {expanded && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => toggleLayoutForTask(task.id)}
+                      className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors touch-manipulation"
+                      title={listLayoutTasks.has(task.id) ? 'Grid view' : 'List view'}
+                    >
+                      {listLayoutTasks.has(task.id)
+                        ? <Grid2X2 className="w-3.5 h-3.5" />
+                        : <ListChecks className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => handleMarkAll(task.id, true)}
+                      className="h-7 px-2 rounded-lg flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors touch-manipulation"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5" />
+                      {language === 'ar' ? 'الكل' : 'All'}
+                    </button>
+                    <button
+                      onClick={() => handleMarkAll(task.id, false)}
+                      className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors touch-manipulation"
+                      title="Reset"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Subtasks panel */}
+              {expanded && (
+                <div className="mt-3 pt-3 border-t border-border/50">
+                  <SubtaskManager
+                    key={task.id}
+                    taskId={task.id}
+                    onSubtasksChange={() => setSubtaskVersion((prev) => ({ ...prev, [task.id]: (prev[task.id] || 0) + 1 }))}
+                    readOnly={false}
+                    layout={listLayoutTasks.has(task.id) ? 'list' : 'grid'}
+                    overrideAllCompleted={optimisticAll[task.id]?.completed}
+                    overrideNonce={optimisticAll[task.id]?.nonce}
+                    refreshTrigger={subtaskVersion[task.id] || 0}
+                  />
+                </div>
+              )}
             </div>
           </div>
         );

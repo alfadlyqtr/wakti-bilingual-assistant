@@ -104,165 +104,175 @@ export default function TasksReminders() {
     );
   }
 
+  const handleAutoDeleteToggle = async () => {
+    const next = !autoDelete24h;
+    setAutoDelete24h(next);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const uid = user?.id;
+      if (uid) {
+        await supabase
+          .from('tr_settings')
+          .upsert({ user_id: uid, auto_delete_24h_enabled: next, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+      }
+    } catch (e) {
+      console.warn('Failed to persist auto-delete setting', e);
+    }
+    toast.success(next ? t('autoDeleteEnabledToast', language) : t('autoDeleteDisabledToast', language));
+  };
+
   return (
-    <div className="flex-1 overflow-y-auto p-4 pb-28 bg-gradient-to-b from-background to-background/95 scrollbar-hide">
-      <div className="w-full space-y-6">
-        <div className="max-w-4xl mx-auto">
-          {/* Ensure page starts at the title on load */}
+    <div className="flex-1 overflow-y-auto pb-28 scrollbar-hide bg-background">
+      <div className="max-w-4xl mx-auto px-4 pt-4 space-y-5">
+
+        {/* Page Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <PageTitle
-              title={t('tasks', language)}
-              Icon={ListTodo}
-              colorClass="nav-icon-tr"
-            />
+            <h1 className="text-xl font-bold tracking-tight text-foreground">
+              {language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders'}
+            </h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {language === 'ar'
+                ? `${tasks.length} مهمة · ${reminders.length} تذكير`
+                : `${tasks.length} tasks · ${reminders.length} reminders`}
+            </p>
           </div>
-
-          {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3 gap-1">
-              <TabsTrigger value="tasks" className="text-xs sm:text-sm px-2 sm:px-4">
-                <span className="hidden sm:inline">{t('tasks', language)}</span>
-                <span className="sm:hidden">Tasks</span>
-                <span className="ml-1">({tasks.length})</span>
-              </TabsTrigger>
-              <TabsTrigger value="reminders" className="text-xs sm:text-sm px-2 sm:px-4">
-                <span className="hidden sm:inline">{t('reminders', language)}</span>
-                <span className="sm:hidden">Remind</span>
-                <span className="ml-1">({reminders.length})</span>
-              </TabsTrigger>
-              <TabsTrigger value="activity" className="text-xs sm:text-sm px-2 sm:px-4">
-                <span className="hidden sm:inline">{t('activityMonitor', language)}</span>
-                <span className="sm:hidden">Activity</span>
-              </TabsTrigger>
-            </TabsList>
-
-            {/* Tasks Tab */}
-            <TabsContent value="tasks" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 text-xs">
-                  <Button
-                    variant={autoDelete24h ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={async () => {
-                      const next = !autoDelete24h;
-                      setAutoDelete24h(next);
-                      
-                      try {
-                        const { data: { user } } = await supabase.auth.getUser();
-                        const uid = user?.id;
-                        if (uid) {
-                          const { error } = await supabase
-                            .from('tr_settings')
-                            .upsert({ user_id: uid, auto_delete_24h_enabled: next, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
-                          if (error) throw error;
-                        }
-                      } catch (e) {
-                        console.warn('Failed to persist auto-delete setting', e);
-                      }
-                      
-                      toast.success(next ? t('autoDeleteEnabledToast', language) : t('autoDeleteDisabledToast', language));
-                    }}
-                    className="h-8"
-                    title={t('autoDeleteTitle', language)}
-                  >
-                    {autoDelete24h ? t('autoDelete24hOn', language) : t('autoDelete24hOff', language)}
-                  </Button>
-                </div>
-                <Button onClick={handleCreateTask} size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
-                  {t('createTask', language)}
-                </Button>
-              </div>
-
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                  <p className="text-sm text-muted-foreground mt-2">{t('loadingTasks', language)}</p>
-                </div>
-              ) : tasks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 px-4 text-center text-muted-foreground">
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-dashed border-primary/40 bg-primary/5">
-                    <ListTodo className="h-6 w-6 text-primary" />
-                  </div>
-                  <p className="text-sm mb-1 font-medium">
-                    {language === 'ar' ? 'لا توجد مهام بعد' : 'No tasks yet'}
-                  </p>
-                  <p className="text-xs mb-4 max-w-xs">
-                    {language === 'ar'
-                      ? 'ابدأ بإضافة أول مهمة لك، وسيتم عرضها هنا بشكل منظم مع التذكيرات والمتابعة.'
-                      : 'Start by creating your first task. It will appear here with reminders and activity tracking.'}
-                  </p>
-                  <Button size="sm" onClick={handleCreateTask} className="mt-1">
-                    <Plus className="w-4 h-4 mr-2" />
-                    {t('createTask', language)}
-                  </Button>
-                </div>
-              ) : (
-                <TaskList 
-                  tasks={tasks} 
-                  onTaskEdit={handleEditTask}
-                  onTasksChanged={handleDataChanged}
-                />
-              )}
-            </TabsContent>
-
-            {/* Reminders Tab */}
-            <TabsContent value="reminders" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">{t('reminders', language)}</h2>
-                <Button onClick={handleCreateReminder} size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
-                  {t('createReminder', language)}
-                </Button>
-              </div>
-
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                  <p className="text-sm text-muted-foreground mt-2">{t('loadingReminders', language)}</p>
-                </div>
-              ) : (
-                <ReminderList 
-                  reminders={reminders} 
-                  onReminderEdit={handleEditReminder}
-                  onRemindersChanged={handleDataChanged}
-                />
-              )}
-            </TabsContent>
-
-            {/* Activity Monitor Tab */}
-            <TabsContent value="activity" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">{t('activityMonitor', language)}</h2>
-                {/* Removed outer Refresh to avoid duplicate with ActivityMonitor's internal refresh */}
-              </div>
-
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                  <p className="text-sm text-muted-foreground mt-2">{t('loadingActivity', language)}</p>
-                </div>
-              ) : (
-                <ActivityMonitor tasks={tasks} onTasksChanged={handleDataChanged} />
-              )}
-            </TabsContent>
-          </Tabs>
-
-          {/* Forms */}
-          <TaskForm
-            isOpen={taskFormOpen}
-            onClose={handleTaskFormClose}
-            task={editingTask}
-            onTaskSaved={handleDataChanged}
-          />
-
-          <ReminderForm
-            isOpen={reminderFormOpen}
-            onClose={handleReminderFormClose}
-            reminder={editingReminder}
-            onReminderSaved={handleDataChanged}
-          />
+          <button
+            onClick={activeTab === 'tasks' ? handleCreateTask : activeTab === 'reminders' ? handleCreateReminder : undefined}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
+              bg-[#060541] text-white dark:bg-indigo-500
+              hover:opacity-90 active:scale-95 transition-all duration-150 touch-manipulation shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            {activeTab === 'tasks'
+              ? (language === 'ar' ? 'مهمة' : 'New Task')
+              : activeTab === 'reminders'
+                ? (language === 'ar' ? 'تذكير' : 'Reminder')
+                : null}
+          </button>
         </div>
+
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="w-full grid grid-cols-3 h-10 rounded-xl bg-muted/60 p-1 gap-1">
+            <TabsTrigger value="tasks" className="rounded-lg text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              {language === 'ar' ? 'المهام' : 'Tasks'}
+              {tasks.length > 0 && (
+                <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#060541]/10 dark:bg-indigo-500/20 text-[#060541] dark:text-indigo-300">
+                  {tasks.length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="reminders" className="rounded-lg text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              {language === 'ar' ? 'التذكيرات' : 'Reminders'}
+              {reminders.length > 0 && (
+                <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#060541]/10 dark:bg-indigo-500/20 text-[#060541] dark:text-indigo-300">
+                  {reminders.length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="activity" className="rounded-lg text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              {language === 'ar' ? 'النشاط' : 'Activity'}
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Tasks Tab */}
+          <TabsContent value="tasks" className="mt-4 space-y-4">
+            {/* Auto-delete toggle — subtle, not a big button */}
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs text-muted-foreground">
+                {language === 'ar' ? 'حذف تلقائي بعد 24 ساعة من الإتمام' : 'Auto-delete 24h after completion'}
+              </span>
+              <button
+                onClick={handleAutoDeleteToggle}
+                title={t('autoDeleteTitle', language)}
+                className={`relative w-9 h-5 rounded-full transition-colors duration-200 touch-manipulation flex-shrink-0
+                  ${autoDelete24h ? 'bg-[#060541] dark:bg-indigo-500' : 'bg-slate-200 dark:bg-slate-700'}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200
+                  ${autoDelete24h ? 'translate-x-4' : 'translate-x-0'}`} />
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <div className="w-8 h-8 rounded-full border-2 border-[#060541]/20 dark:border-indigo-500/20 border-t-[#060541] dark:border-t-indigo-500 animate-spin" />
+                <p className="text-xs text-muted-foreground">{t('loadingTasks', language)}</p>
+              </div>
+            ) : tasks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-[#060541]/5 dark:bg-indigo-500/10 flex items-center justify-center mb-4">
+                  <ListTodo className="w-8 h-8 text-[#060541]/40 dark:text-indigo-400/60" />
+                </div>
+                <p className="font-semibold text-foreground mb-1">
+                  {language === 'ar' ? 'لا توجد مهام بعد' : 'No tasks yet'}
+                </p>
+                <p className="text-xs text-muted-foreground mb-5 max-w-xs leading-relaxed">
+                  {language === 'ar'
+                    ? 'ابدأ بإضافة أول مهمة لك وسيتم عرضها هنا.'
+                    : 'Create your first task and it will appear here.'}
+                </p>
+                <button
+                  onClick={handleCreateTask}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold
+                    bg-[#060541] text-white dark:bg-indigo-500
+                    hover:opacity-90 active:scale-95 transition-all touch-manipulation"
+                >
+                  <Plus className="w-4 h-4" />
+                  {t('createTask', language)}
+                </button>
+              </div>
+            ) : (
+              <TaskList
+                tasks={tasks}
+                onTaskEdit={handleEditTask}
+                onTasksChanged={handleDataChanged}
+              />
+            )}
+          </TabsContent>
+
+          {/* Reminders Tab */}
+          <TabsContent value="reminders" className="mt-4 space-y-4">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <div className="w-8 h-8 rounded-full border-2 border-[#060541]/20 dark:border-indigo-500/20 border-t-[#060541] dark:border-t-indigo-500 animate-spin" />
+                <p className="text-xs text-muted-foreground">{t('loadingReminders', language)}</p>
+              </div>
+            ) : (
+              <ReminderList
+                reminders={reminders}
+                onReminderEdit={handleEditReminder}
+                onRemindersChanged={handleDataChanged}
+              />
+            )}
+          </TabsContent>
+
+          {/* Activity Tab */}
+          <TabsContent value="activity" className="mt-4 space-y-4">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <div className="w-8 h-8 rounded-full border-2 border-[#060541]/20 dark:border-indigo-500/20 border-t-[#060541] dark:border-t-indigo-500 animate-spin" />
+                <p className="text-xs text-muted-foreground">{t('loadingActivity', language)}</p>
+              </div>
+            ) : (
+              <ActivityMonitor tasks={tasks} onTasksChanged={handleDataChanged} />
+            )}
+          </TabsContent>
+        </Tabs>
+
+        {/* Forms */}
+        <TaskForm
+          isOpen={taskFormOpen}
+          onClose={handleTaskFormClose}
+          task={editingTask}
+          onTaskSaved={handleDataChanged}
+        />
+        <ReminderForm
+          isOpen={reminderFormOpen}
+          onClose={handleReminderFormClose}
+          reminder={editingReminder}
+          onReminderSaved={handleDataChanged}
+        />
       </div>
     </div>
   );
