@@ -316,7 +316,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
                   <span className="flex items-center gap-1">
                     <span className="text-foreground/90 font-medium">{item.title}</span>
                     {item.sublabel ? (
-                      <span className="text-[10px] leading-tight text-muted-foreground">{item.sublabel}</span>
+                      <span className="text-[9px] leading-tight text-[hsl(210,100%,65%)] whitespace-nowrap">{item.sublabel}</span>
                     ) : null}
                   </span>
                 </div>
