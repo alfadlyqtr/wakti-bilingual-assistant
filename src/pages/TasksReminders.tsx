@@ -11,6 +11,7 @@ import { ReminderForm } from '@/components/tr/ReminderForm';
 import { TaskList } from '@/components/tr/TaskList';
 import { ReminderList } from '@/components/tr/ReminderList';
 import { ActivityMonitor } from '@/components/tr/ActivityMonitor';
+import { ActivityDashboard } from '@/components/tr/ActivityDashboard';
 import { useTRData } from '@/hooks/useTRData';
 import { PageTitle } from '@/components/PageTitle';
 import { toast } from 'sonner';
@@ -209,18 +210,7 @@ export default function TasksReminders() {
 
           {/* ── Activity Tab (main/default) ── */}
           <TabsContent value="activity_main" className="mt-5">
-            <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
-              <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-[#060541]/10 to-indigo-500/10 dark:from-indigo-500/10 dark:to-purple-500/10 flex items-center justify-center
-                shadow-[0_8px_32px_hsla(240,80%,50%,0.08)] mb-6">
-                <span className="text-3xl">✦</span>
-              </div>
-              <p className="text-lg font-bold text-foreground mb-2">
-                {language === 'ar' ? 'النشاط' : 'Activity'}
-              </p>
-              <p className="text-sm text-muted-foreground max-w-[260px] leading-relaxed">
-                {language === 'ar' ? 'قريباً...' : 'Coming soon...'}
-              </p>
-            </div>
+            <ActivityDashboard tasks={tasks} />
           </TabsContent>
 
           {/* ── Tasks Tab ── */}
