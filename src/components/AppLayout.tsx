@@ -370,7 +370,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
             <Button
               onClick={handleSubscribe}
               disabled={loading}
-              className="w-full bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 hover:from-amber-300 hover:via-orange-400 hover:to-pink-400 text-white font-bold text-lg shadow-[0_0_24px_rgba(251,146,60,0.6)] hover:shadow-[0_0_36px_rgba(251,146,60,0.8)] active:scale-95 transition-all duration-150 border-0"
+              className="w-full bg-gradient-to-r from-blue-500 via-violet-500 to-purple-600 hover:from-blue-400 hover:via-violet-400 hover:to-purple-500 text-white font-bold text-lg shadow-[0_0_28px_rgba(139,92,246,0.7),0_0_60px_rgba(99,102,241,0.4)] hover:shadow-[0_0_40px_rgba(139,92,246,0.9),0_0_80px_rgba(99,102,241,0.5)] active:scale-95 transition-all duration-150 border-0"
               size="lg"
               style={{minHeight: '56px'}}
             >
@@ -398,14 +398,14 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
 
             <button
               onClick={() => window.open(contactUrl, "_blank", "noopener,noreferrer")}
-              className="w-full flex items-center justify-center gap-3 rounded-lg px-4 py-3 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 hover:from-emerald-500/30 hover:to-teal-500/30 hover:border-emerald-400/60 active:scale-95 transition-all duration-150 group"
+              className="w-full flex items-center justify-center gap-3 rounded-lg px-4 py-3 bg-muted/60 border border-border hover:bg-muted hover:border-foreground/20 active:scale-95 transition-all duration-150 group"
             >
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500/20 group-hover:bg-emerald-500/30 transition-colors">
-                <MessageCircle className="w-4 h-4 text-emerald-400" />
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-foreground/10 group-hover:bg-foreground/15 transition-colors">
+                <MessageCircle className="w-4 h-4 text-foreground/70" />
               </div>
               <div className={`flex flex-col ${language === 'ar' ? 'items-end' : 'items-start'}`}>
-                <span className="text-sm font-semibold text-emerald-400">{txt.contact}</span>
-                <span className="text-xs text-emerald-300/80">{txt.contactSub}</span>
+                <span className="text-sm font-semibold text-foreground">{txt.contact}</span>
+                <span className="text-xs text-muted-foreground">{txt.contactSub}</span>
               </div>
             </button>
 
