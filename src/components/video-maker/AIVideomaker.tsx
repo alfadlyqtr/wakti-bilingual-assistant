@@ -267,7 +267,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const q = data?.[0] || data;
       setQuota({
         used: q?.videos_generated || 0,
-        limit: q?.videos_limit || 20,
+        limit: q?.videos_limit || 60,
         extra: q?.extra_videos || 0,
         canGenerate: q?.can_generate ?? true,
       });
@@ -702,9 +702,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
   };
 
-  const remaining = quota ? quota.limit - quota.used + quota.extra : 10;
+  const remaining = quota ? quota.limit - quota.used + quota.extra : 60;
   const used = quota?.used || 0;
-  const limit = quota?.limit || 10;
+  const limit = quota?.limit || 60;
   const limitReached = quota !== null && !quota.canGenerate;
 
   const needsArabicTranslation =
