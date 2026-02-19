@@ -196,7 +196,7 @@ export default function TasksReminders() {
               dark:data-[state=active]:from-indigo-600 dark:data-[state=active]:to-indigo-500
               data-[state=active]:text-white data-[state=active]:shadow-[0_2px_12px_hsla(240,80%,30%,0.3)]
               data-[state=inactive]:text-muted-foreground transition-all duration-200">
-              {language === 'ar' ? 'النشاط' : 'Activity'}
+              {language === 'ar' ? 'المهام المشتركة' : 'Shared Tasks'}
             </TabsTrigger>
           </TabsList>
 
