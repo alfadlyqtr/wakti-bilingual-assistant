@@ -355,7 +355,12 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                 <DropdownMenu modal={false}>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm"
-                      className="h-8 w-8 p-0 rounded-xl flex-shrink-0 text-muted-foreground/50 hover:text-foreground hover:bg-slate-100/80 dark:hover:bg-white/[0.06] transition-all">
+                      className="h-8 w-8 p-0 rounded-xl flex-shrink-0
+                        bg-slate-100 dark:bg-white/[0.08]
+                        text-slate-500 dark:text-slate-300
+                        hover:bg-slate-200 dark:hover:bg-white/[0.14]
+                        hover:text-slate-700 dark:hover:text-white
+                        transition-all">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -419,7 +424,11 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => toggleLayoutForTask(task.id)}
-                      className="h-7 px-2 rounded-lg flex items-center gap-1 text-[11px] font-bold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all touch-manipulation"
+                      className="h-7 px-2.5 rounded-lg flex items-center gap-1.5 text-[11px] font-bold
+                        bg-indigo-100 dark:bg-indigo-500/20
+                        text-indigo-600 dark:text-indigo-400
+                        hover:bg-indigo-200 dark:hover:bg-indigo-500/30
+                        transition-all touch-manipulation active:scale-95"
                       title={gridLayoutTasks.has(task.id) ? 'Switch to list' : 'Switch to grid'}
                     >
                       {gridLayoutTasks.has(task.id)
@@ -428,14 +437,23 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                     </button>
                     <button
                       onClick={() => handleMarkAll(task.id, true)}
-                      className="h-7 px-2.5 rounded-lg flex items-center gap-1.5 text-[11px] font-bold text-emerald-500 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-all touch-manipulation"
+                      className="h-7 px-2.5 rounded-lg flex items-center gap-1.5 text-[11px] font-bold
+                        bg-emerald-100 dark:bg-emerald-500/20
+                        text-emerald-700 dark:text-emerald-400
+                        hover:bg-emerald-200 dark:hover:bg-emerald-500/30
+                        transition-all touch-manipulation active:scale-95"
                     >
                       <CheckCheck className="w-3.5 h-3.5" />
                       {language === 'ar' ? 'الكل' : 'All'}
                     </button>
                     <button
                       onClick={() => handleMarkAll(task.id, false)}
-                      className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-muted/50 transition-all touch-manipulation"
+                      className="h-7 w-7 rounded-lg flex items-center justify-center
+                        bg-slate-100 dark:bg-white/[0.08]
+                        text-slate-500 dark:text-slate-400
+                        hover:bg-slate-200 dark:hover:bg-white/[0.14]
+                        hover:text-slate-700 dark:hover:text-white
+                        transition-all touch-manipulation active:scale-95"
                       title="Reset"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
