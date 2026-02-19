@@ -134,46 +134,50 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
             label: language === 'ar' ? 'مكتملة' : 'Completed',
             value: kpis.completed,
             icon: <CheckCircle2 className="h-4 w-4" />,
-            bg: 'from-emerald-500/15 to-emerald-600/5 dark:from-emerald-500/20 dark:to-emerald-600/10',
-            ib: 'bg-emerald-500/20 text-emerald-500',
-            border: 'border-emerald-200/50 dark:border-emerald-500/20',
-            glow: 'dark:shadow-[0_4px_24px_hsla(142,76%,45%,0.15)]',
+            bg: 'from-emerald-50 to-emerald-100/60 dark:from-emerald-500/25 dark:to-emerald-600/10',
+            ib: 'bg-emerald-500/25 text-emerald-600 dark:text-emerald-400',
+            border: 'border-emerald-300/70 dark:border-emerald-500/30',
+            glow: 'shadow-[0_4px_20px_hsla(142,76%,45%,0.18)] dark:shadow-[0_4px_28px_hsla(142,76%,45%,0.25)]',
+            valColor: 'text-emerald-700 dark:text-emerald-300',
           },
           {
             label: language === 'ar' ? 'معلقة' : 'Pending',
             value: kpis.pending,
             icon: <Clock className="h-4 w-4" />,
-            bg: 'from-blue-500/15 to-blue-600/5 dark:from-blue-500/20 dark:to-blue-600/10',
-            ib: 'bg-blue-500/20 text-blue-400',
-            border: 'border-blue-200/50 dark:border-blue-500/20',
-            glow: 'dark:shadow-[0_4px_24px_hsla(210,100%,55%,0.15)]',
+            bg: 'from-blue-50 to-blue-100/60 dark:from-blue-500/25 dark:to-blue-600/10',
+            ib: 'bg-blue-500/25 text-blue-600 dark:text-blue-400',
+            border: 'border-blue-300/70 dark:border-blue-500/30',
+            glow: 'shadow-[0_4px_20px_hsla(210,100%,55%,0.18)] dark:shadow-[0_4px_28px_hsla(210,100%,55%,0.25)]',
+            valColor: 'text-blue-700 dark:text-blue-300',
           },
           {
             label: language === 'ar' ? 'متأخرة' : 'Late',
             value: kpis.late,
             icon: <AlertTriangle className="h-4 w-4" />,
             bg: kpis.late > 0
-              ? 'from-orange-500/15 to-orange-600/5 dark:from-orange-500/20 dark:to-orange-600/10'
-              : 'from-slate-100/80 to-slate-50 dark:from-white/[0.04] dark:to-white/[0.02]',
-            ib: kpis.late > 0 ? 'bg-orange-500/20 text-orange-400' : 'bg-slate-200/60 dark:bg-white/[0.06] text-muted-foreground',
-            border: kpis.late > 0 ? 'border-orange-200/50 dark:border-orange-500/20' : 'border-slate-200/60 dark:border-white/[0.07]',
-            glow: kpis.late > 0 ? 'dark:shadow-[0_4px_24px_hsla(25,95%,55%,0.2)]' : '',
+              ? 'from-orange-50 to-orange-100/60 dark:from-orange-500/25 dark:to-orange-600/10'
+              : 'from-slate-50 to-slate-100/60 dark:from-white/[0.05] dark:to-white/[0.02]',
+            ib: kpis.late > 0 ? 'bg-orange-500/25 text-orange-600 dark:text-orange-400' : 'bg-slate-200/60 dark:bg-white/[0.06] text-muted-foreground',
+            border: kpis.late > 0 ? 'border-orange-300/70 dark:border-orange-500/30' : 'border-slate-200/80 dark:border-white/[0.08]',
+            glow: kpis.late > 0 ? 'shadow-[0_4px_20px_hsla(25,95%,55%,0.2)] dark:shadow-[0_4px_28px_hsla(25,95%,55%,0.3)]' : 'shadow-[0_2px_12px_hsla(0,0%,0%,0.06)]',
+            valColor: kpis.late > 0 ? 'text-orange-700 dark:text-orange-300' : 'text-foreground',
           },
           {
             label: language === 'ar' ? 'الأداء' : 'Performance',
             value: kpis.performance + '%',
             icon: <TrendingUp className="h-4 w-4" />,
-            bg: 'from-purple-500/15 to-purple-600/5 dark:from-purple-500/20 dark:to-purple-600/10',
-            ib: 'bg-purple-500/20 text-purple-400',
-            border: 'border-purple-200/50 dark:border-purple-500/20',
-            glow: 'dark:shadow-[0_4px_24px_hsla(280,70%,55%,0.15)]',
+            bg: 'from-purple-50 to-purple-100/60 dark:from-purple-500/25 dark:to-purple-600/10',
+            ib: 'bg-purple-500/25 text-purple-600 dark:text-purple-400',
+            border: 'border-purple-300/70 dark:border-purple-500/30',
+            glow: 'shadow-[0_4px_20px_hsla(280,70%,55%,0.18)] dark:shadow-[0_4px_28px_hsla(280,70%,55%,0.25)]',
+            valColor: 'text-purple-700 dark:text-purple-300',
           },
         ].map((k, i) => (
           <div key={i} className={`rounded-2xl p-4 bg-gradient-to-br ${k.bg} border ${k.border} ${k.glow}`}>
             <div className="mb-3">
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${k.ib}`}>{k.icon}</div>
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${k.ib}`}>{k.icon}</div>
             </div>
-            <p className="text-2xl font-black text-foreground">{k.value}</p>
+            <p className={`text-2xl font-black ${k.valColor}`}>{k.value}</p>
             <p className="text-[11px] font-semibold text-muted-foreground/70 mt-0.5">{k.label}</p>
           </div>
         ))}
@@ -181,8 +185,9 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
 
       {/* ── Subtask progress strip ── */}
       <div className="rounded-2xl px-4 py-3 flex items-center gap-4
-        bg-gradient-to-r from-[#060541]/5 to-indigo-500/5 dark:from-indigo-500/10 dark:to-purple-500/10
-        border border-indigo-200/40 dark:border-indigo-500/20">
+        bg-gradient-to-r from-indigo-50 to-purple-50/60 dark:from-indigo-500/15 dark:to-purple-500/10
+        border border-indigo-200/70 dark:border-indigo-500/30
+        shadow-[0_3px_16px_hsla(240,80%,50%,0.12)] dark:shadow-[0_3px_20px_hsla(240,80%,50%,0.2)]">
         <div className="flex items-center gap-2 flex-shrink-0">
           <ListChecks className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
           <span className="text-[12px] font-bold text-foreground">
@@ -218,9 +223,9 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
 
         {/* Area chart */}
         <div className="lg:col-span-2 rounded-2xl p-4
-          bg-white dark:bg-white/[0.03]
-          border border-slate-200/80 dark:border-white/[0.07]
-          shadow-[0_2px_16px_hsla(0,0%,0%,0.06)] dark:shadow-[0_2px_16px_hsla(0,0%,0%,0.4)]">
+          bg-white dark:bg-white/[0.04]
+          border border-slate-200 dark:border-white/[0.09]
+          shadow-[0_4px_24px_hsla(0,0%,0%,0.10),0_1px_4px_hsla(0,0%,0%,0.06)] dark:shadow-[0_4px_32px_hsla(0,0%,0%,0.5),0_1px_8px_hsla(210,100%,60%,0.08)]">
           <p className="text-[13px] font-bold text-foreground">
             {language === 'ar' ? 'اتجاه الإنجاز' : 'Completion Trend'}
           </p>
@@ -268,9 +273,9 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
 
         {/* Donut pie */}
         <div className="rounded-2xl p-4
-          bg-white dark:bg-white/[0.03]
-          border border-slate-200/80 dark:border-white/[0.07]
-          shadow-[0_2px_16px_hsla(0,0%,0%,0.06)] dark:shadow-[0_2px_16px_hsla(0,0%,0%,0.4)]">
+          bg-white dark:bg-white/[0.04]
+          border border-slate-200 dark:border-white/[0.09]
+          shadow-[0_4px_24px_hsla(0,0%,0%,0.10),0_1px_4px_hsla(0,0%,0%,0.06)] dark:shadow-[0_4px_32px_hsla(0,0%,0%,0.5),0_1px_8px_hsla(280,70%,60%,0.08)]">
           <p className="text-[13px] font-bold text-foreground">
             {language === 'ar' ? 'حالة المهام' : 'Task Status'}
           </p>
@@ -317,9 +322,9 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
       {/* ── Per-user bar chart ── */}
       {userBarData.length > 0 && (
         <div className="rounded-2xl p-4
-          bg-white dark:bg-white/[0.03]
-          border border-slate-200/80 dark:border-white/[0.07]
-          shadow-[0_2px_16px_hsla(0,0%,0%,0.06)] dark:shadow-[0_2px_16px_hsla(0,0%,0%,0.4)]">
+          bg-white dark:bg-white/[0.04]
+          border border-slate-200 dark:border-white/[0.09]
+          shadow-[0_4px_24px_hsla(0,0%,0%,0.10),0_1px_4px_hsla(0,0%,0%,0.06)] dark:shadow-[0_4px_32px_hsla(0,0%,0%,0.5),0_1px_8px_hsla(142,76%,50%,0.08)]">
           <p className="text-[13px] font-bold text-foreground">
             {language === 'ar' ? 'أداء المستخدمين' : 'User Performance'}
           </p>
