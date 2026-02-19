@@ -704,7 +704,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
       {sharedTasks.map((task) => {
         const stats = getTaskStats(task.id);
-        const activeView = activeViews[task.id] || 'all';
+        const activeView = activeViews[task.id] || 'approvals';
         const isCollapsed = collapsedCards.has(task.id);
         const pendingCount = stats.completionRequests.filter(r => !parseSnoozeStatus(r.content)).length
           + stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length
@@ -808,13 +808,10 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                     <button
                       onClick={() => handleViewChange(task.id, 'approvals')}
                       className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-all touch-manipulation
-                        ${activeView === 'approvals' || activeView === 'all' || activeView === 'assignees' || activeView === 'completions' || activeView === 'requests'
-                          ? activeView === 'approvals'
-                            ? 'bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300'
-                            : 'bg-slate-100 dark:bg-white/[0.06] text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/[0.1]'
-                          : 'bg-slate-100 dark:bg-white/[0.06] text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/[0.1]'
+                        ${activeView === 'interactions'
+                          ? 'bg-slate-100 dark:bg-white/[0.06] text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/[0.1]'
+                          : 'bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300'
                         }
-                        ${activeView === 'approvals' ? 'bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300' : 'bg-slate-100 dark:bg-white/[0.06] text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/[0.1]'}
                       `}
                     >
                       <AlertCircle className="h-3 w-3" />
