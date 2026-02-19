@@ -297,16 +297,22 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
 
             {/* Actions — always visible on touch, fade in on hover for desktop */}
             {!readOnly && (
-              <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 transition-opacity flex-shrink-0">
+              <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 transition-opacity flex-shrink-0">
                 <button title="Edit" onClick={() => handleStartEdit(subtask)}
-                  className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-slate-100/80 dark:hover:bg-white/[0.06] transition-colors touch-manipulation">
-                  <Edit3 className="h-3 w-3 text-muted-foreground/60" />
+                  className="h-7 w-7 rounded-lg flex items-center justify-center
+                    bg-blue-100 dark:bg-blue-500/20 hover:bg-blue-200 dark:hover:bg-blue-500/30
+                    text-blue-600 dark:text-blue-400
+                    transition-colors touch-manipulation active:scale-90">
+                  <Edit3 className="h-3.5 w-3.5" />
                 </button>
                 <Popover open={openDueFor === subtask.id} onOpenChange={(open) => setOpenDueFor(open ? subtask.id : null)}>
                   <PopoverTrigger asChild>
                     <button title="Set due date"
-                      className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-slate-100/80 dark:hover:bg-white/[0.06] transition-colors touch-manipulation">
-                      <CalendarIcon className="h-3 w-3 text-muted-foreground/60" />
+                      className="h-7 w-7 rounded-lg flex items-center justify-center
+                        bg-amber-100 dark:bg-amber-500/20 hover:bg-amber-200 dark:hover:bg-amber-500/30
+                        text-amber-600 dark:text-amber-400
+                        transition-colors touch-manipulation active:scale-90">
+                      <CalendarIcon className="h-3.5 w-3.5" />
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className="w-72 p-3 rounded-2xl backdrop-blur-xl
@@ -357,8 +363,11 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
                   </PopoverContent>
                 </Popover>
                 <button title="Delete" onClick={() => handleDeleteSubtask(subtask.id)}
-                  className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-red-50/80 dark:hover:bg-red-950/20 transition-colors touch-manipulation">
-                  <Trash2 className="h-3 w-3 text-red-400/70" />
+                  className="h-7 w-7 rounded-lg flex items-center justify-center
+                    bg-red-100 dark:bg-red-500/20 hover:bg-red-200 dark:hover:bg-red-500/30
+                    text-red-600 dark:text-red-400
+                    transition-colors touch-manipulation active:scale-90">
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
             )}
