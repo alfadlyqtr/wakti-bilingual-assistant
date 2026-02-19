@@ -370,13 +370,14 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
             <Button
               onClick={handleSubscribe}
               disabled={loading}
-              className="w-full bg-gradient-to-r from-accent-purple to-accent-pink hover:opacity-90 text-white font-semibold"
+              className="w-full bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 hover:from-amber-300 hover:via-orange-400 hover:to-pink-400 text-white font-bold text-lg shadow-[0_0_24px_rgba(251,146,60,0.6)] hover:shadow-[0_0_36px_rgba(251,146,60,0.8)] active:scale-95 transition-all duration-150 border-0"
               size="lg"
+              style={{minHeight: '56px'}}
             >
               {loading ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
+                <RefreshCw className="w-5 h-5 animate-spin" />
               ) : (
-                <Sparkles className="w-4 h-4 mr-2" />
+                <Sparkles className="w-5 h-5 mr-2" />
               )}
               {txt.subscribe}
             </Button>
@@ -404,7 +405,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
               </div>
               <div className={`flex flex-col ${language === 'ar' ? 'items-end' : 'items-start'}`}>
                 <span className="text-sm font-semibold text-emerald-400">{txt.contact}</span>
-                <span className="text-xs text-muted-foreground">{txt.contactSub}</span>
+                <span className="text-xs text-emerald-300/80">{txt.contactSub}</span>
               </div>
             </button>
 
