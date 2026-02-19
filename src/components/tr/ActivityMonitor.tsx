@@ -798,82 +798,37 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
               <CollapsibleContent>
                 <CardContent className="pt-0 space-y-0">
 
-                  {/* ── Sub-tab bar: Approvals / Interactions ── */}
-                  <div className="flex items-center gap-1 px-1 pb-3 pt-1">
-                    {/* Approvals tab */}
-                    <button
-                      onClick={() => handleViewChange(task.id, 'approvals')}
-                      className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-all touch-manipulation
-                        ${activeView === 'interactions'
-                          ? 'bg-slate-100 dark:bg-white/[0.06] text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/[0.1]'
-                          : 'bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300'
-                        }
-                      `}
-                    >
-                      <AlertCircle className="h-3 w-3" />
-                      {language === 'ar' ? 'الموافقات' : 'Approvals'}
-                      {pendingCount > 0 && (
-                        <span className="ml-0.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-black
-                          bg-orange-500 text-white flex items-center justify-center">
-                          {pendingCount}
-                        </span>
-                      )}
-                    </button>
-                    {/* Interactions tab */}
-                    <button
-                      onClick={() => handleViewChange(task.id, 'interactions')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-all touch-manipulation
-                        ${activeView === 'interactions'
-                          ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300'
-                          : 'bg-slate-100 dark:bg-white/[0.06] text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/[0.1]'
-                        }
-                      `}
-                    >
-                      <MessageCircle className="h-3 w-3" />
-                      {language === 'ar' ? 'التفاعلات' : 'Interactions'}
-                      {stats.allResponses.length > 0 && (
-                        <span className="ml-0.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-black
-                          bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                          {stats.allResponses.length}
-                        </span>
-                      )}
-                    </button>
-                  </div>
+                  <div className="space-y-5 pb-4 pt-1">
 
-                  {/* ── APPROVALS panel ── */}
-                  {(activeView === 'approvals' || activeView === 'all' || activeView === 'assignees' || activeView === 'completions' || activeView === 'requests' || !['interactions'].includes(activeView)) && activeView !== 'interactions' && (
-                  <div className="space-y-4 pb-4">
-
-                    {/* Completion Requests */}
-                    {stats.completionRequests.length > 0 && (
+                    {/* ── APPROVALS: only shown when there are pending requests ── */}
+                    {pendingCount > 0 && (
                       <div className="space-y-2">
-                        <p className="text-[11px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider px-1 flex items-center gap-1.5">
-                          <CheckCircle className="h-3 w-3" />
-                          {language === 'ar' ? 'طلبات إكمال المهمة' : 'Completion Requests'} · {stats.completionRequests.length}
-                        </p>
-                        {stats.completionRequests.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(request => (
+                        <div className="flex items-center gap-2 px-1">
+                          <div className="w-1 h-4 rounded-full bg-orange-500" />
+                          <p className="text-[11px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-wider">
+                            {language === 'ar' ? 'الموافقات المعلقة' : 'Pending Approvals'} · {pendingCount}
+                          </p>
+                        </div>
+                        {stats.completionRequests.filter(r => !parseSnoozeStatus(r.content)).map(request => (
                           <div key={request.id} className="rounded-xl p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200/70 dark:border-amber-500/30">
                             <div className="flex items-center gap-2 mb-2">
-                              <span className="text-[13px] font-bold text-foreground" dir="auto">{request.visitor_name}</span>
+                              <div className="w-6 h-6 rounded-full bg-amber-200 dark:bg-amber-500/30 flex items-center justify-center text-[10px] font-black text-amber-700 dark:text-amber-300 flex-shrink-0">
+                                {request.visitor_name.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="text-[13px] font-bold text-foreground flex-1" dir="auto">{request.visitor_name}</span>
                               <span className="text-[10px] text-muted-foreground/60">{format(parseISO(request.created_at), 'MMM dd, HH:mm')}</span>
                             </div>
+                            <p className="text-[11px] text-amber-700 dark:text-amber-400 mb-2">{language === 'ar' ? 'طلب إكمال المهمة' : 'Requesting task completion'}</p>
                             {renderCompletionRequestStatus(request)}
                           </div>
                         ))}
-                      </div>
-                    )}
-
-                    {/* Snooze Requests */}
-                    {stats.snoozeRequests.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-[11px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-wider px-1 flex items-center gap-1.5">
-                          <Pause className="h-3 w-3" />
-                          {t('snoozeRequestsTitle', language)} · {stats.snoozeRequests.length}
-                        </p>
-                        {stats.snoozeRequests.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(request => (
+                        {stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).map(request => (
                           <div key={request.id} className="rounded-xl p-3 bg-orange-50 dark:bg-orange-500/10 border border-orange-200/70 dark:border-orange-500/30">
                             <div className="flex items-center gap-2 mb-2">
-                              <span className="text-[13px] font-bold text-foreground" dir="auto">{request.visitor_name}</span>
+                              <div className="w-6 h-6 rounded-full bg-orange-200 dark:bg-orange-500/30 flex items-center justify-center text-[10px] font-black text-orange-700 dark:text-orange-300 flex-shrink-0">
+                                {request.visitor_name.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="text-[13px] font-bold text-foreground flex-1" dir="auto">{request.visitor_name}</span>
                               <span className="text-[10px] text-muted-foreground/60">{format(parseISO(request.created_at), 'MMM dd, HH:mm')}</span>
                             </div>
                             {request.content && !parseSnoozeStatus(request.content) && (
@@ -882,68 +837,82 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                             {renderSnoozeRequestStatus(request)}
                           </div>
                         ))}
-                      </div>
-                    )}
-
-                    {/* Uncheck Requests */}
-                    {stats.uncheckRequests.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-[11px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-wider px-1 flex items-center gap-1.5">
-                          <AlertCircle className="h-3 w-3" />
-                          {language === 'ar' ? 'طلبات إلغاء التحديد' : 'Uncheck Requests'} · {stats.uncheckRequests.length}
-                        </p>
-                        {stats.uncheckRequests.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(request => {
+                        {stats.uncheckRequests.map(request => {
                           const st = stats.subtasks.find(s => s.id === request.subtask_id);
                           return (
                             <div key={request.id} className="rounded-xl p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200/70 dark:border-blue-500/30">
                               <div className="flex items-center gap-2 mb-1">
-                                <span className="text-[13px] font-bold text-foreground" dir="auto">{request.visitor_name}</span>
+                                <div className="w-6 h-6 rounded-full bg-blue-200 dark:bg-blue-500/30 flex items-center justify-center text-[10px] font-black text-blue-700 dark:text-blue-300 flex-shrink-0">
+                                  {request.visitor_name.charAt(0).toUpperCase()}
+                                </div>
+                                <span className="text-[13px] font-bold text-foreground flex-1" dir="auto">{request.visitor_name}</span>
                                 <span className="text-[10px] text-muted-foreground/60">{format(parseISO(request.created_at), 'MMM dd, HH:mm')}</span>
                               </div>
-                              <p className="text-[12px] text-muted-foreground mb-1" dir="auto">"{st?.title || 'subtask'}"</p>
-                              {request.content && <p className="text-[12px] text-muted-foreground" dir="auto">{t('reason', language)}: {request.content}</p>}
-                              <p className="text-[11px] text-muted-foreground/50 mt-1">{language === 'ar' ? 'سيقوم المالك بإلغاء التحديد من جانبه' : 'Owner will uncheck from their side after review'}</p>
+                              <p className="text-[12px] text-blue-700 dark:text-blue-400">{language === 'ar' ? 'طلب إلغاء تحديد' : 'Requesting uncheck'}: "{st?.title || 'subtask'}"</p>
+                              {request.content && <p className="text-[12px] text-muted-foreground mt-1">{t('reason', language)}: {request.content}</p>}
                             </div>
                           );
                         })}
                       </div>
                     )}
 
-                    {/* Empty approvals */}
-                    {stats.completionRequests.length === 0 && stats.snoozeRequests.length === 0 && stats.uncheckRequests.length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground/50 text-[13px]">
-                        {language === 'ar' ? 'لا توجد طلبات معلقة' : 'No pending approvals'}
+                    {/* ── ASSIGNEES: who has access ── */}
+                    {stats.assignees.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 px-1">
+                          <div className="w-1 h-4 rounded-full bg-indigo-500" />
+                          <p className="text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                            {language === 'ar' ? 'المشاركون' : 'Assignees'} · {stats.assignees.length}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {stats.assignees.map(assignee => {
+                            const activities = stats.allResponses.filter(r => r.visitor_name === assignee);
+                            const lastAct = activities.length > 0
+                              ? [...activities].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+                              : null;
+                            return (
+                              <div key={assignee} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07]">
+                                <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-[11px] font-black text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                                  {assignee.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-[12px] font-bold text-foreground truncate" dir="auto">{assignee}</p>
+                                  {lastAct && <p className="text-[10px] text-muted-foreground/50">{formatRelativeTime(lastAct.created_at)}</p>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
-                  </div>
-                  )}
 
-                  {/* ── INTERACTIONS panel ── */}
-                  {activeView === 'interactions' && (
-                  <div className="space-y-4 pb-4">
-
-                    {/* Subtask progress */}
+                    {/* ── SUBTASK PROGRESS: who completed what when ── */}
                     {stats.totalSubtasksCount > 0 && (
                       <div className="space-y-2">
-                        <p className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider px-1 flex items-center gap-1.5">
-                          <CheckCircle className="h-3 w-3" />
-                          {language === 'ar' ? 'تقدم المهام الفرعية' : 'Subtask Progress'} · {stats.completedSubtasksCount}/{stats.totalSubtasksCount}
-                        </p>
+                        <div className="flex items-center gap-2 px-1">
+                          <div className="w-1 h-4 rounded-full bg-emerald-500" />
+                          <p className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                            {language === 'ar' ? 'المهام الفرعية' : 'Subtasks'} · {stats.completedSubtasksCount}/{stats.totalSubtasksCount}
+                          </p>
+                        </div>
                         <div className="space-y-1.5">
                           {stats.subtasks.map(subtask => {
                             const completions = stats.allResponses.filter(r => r.response_type === 'completion' && r.subtask_id === subtask.id && r.is_completed);
+                            const allWho = [...new Set(completions.map(c => c.visitor_name))];
                             const latest = completions.length > 0 ? [...completions].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] : null;
                             const isCompleted = !!subtask.completed;
                             return (
-                              <div key={subtask.id} className={`rounded-xl px-3 py-2.5 flex items-center gap-3 ${isCompleted ? 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20' : 'bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05]'}`}>
-                                <div className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center ${isCompleted ? 'bg-emerald-500' : 'border-2 border-slate-300 dark:border-white/20'}`}>
+                              <div key={subtask.id} className={`rounded-xl px-3 py-2.5 flex items-start gap-3 ${isCompleted ? 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20' : 'bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05]'}`}>
+                                <div className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center mt-0.5 ${isCompleted ? 'bg-emerald-500' : 'border-2 border-slate-300 dark:border-white/20'}`}>
                                   {isCompleted && <Check className="h-2.5 w-2.5 text-white" />}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className={`text-[12px] font-medium ${isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'}`} dir="auto">{subtask.title}</p>
+                                  <p className={`text-[12px] font-semibold ${isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'}`} dir="auto">{subtask.title}</p>
                                   {isCompleted && latest && (
-                                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5" dir="auto">
-                                      {latest.visitor_name} · {format(parseISO(latest.created_at), 'MMM dd, HH:mm')}
+                                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center gap-1" dir="auto">
+                                      <Users className="h-2.5 w-2.5 flex-shrink-0" />
+                                      {allWho.join(', ')} · {format(parseISO(latest.created_at), 'MMM dd, HH:mm')}
                                     </p>
                                   )}
                                 </div>
@@ -954,22 +923,24 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       </div>
                     )}
 
-                    {/* Comments */}
+                    {/* ── COMMENTS: full thread with reply ── */}
                     {stats.comments.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider px-1 flex items-center gap-1.5">
-                          <MessageCircle className="h-3 w-3" />
-                          {t('comments', language)} · {stats.comments.length}
-                        </p>
+                        <div className="flex items-center gap-2 px-1">
+                          <div className="w-1 h-4 rounded-full bg-purple-500" />
+                          <p className="text-[11px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider">
+                            {t('comments', language)} · {stats.comments.length}
+                          </p>
+                        </div>
                         <div className="space-y-2 max-h-[320px] overflow-y-auto">
-                          {stats.comments.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(comment => (
+                          {stats.comments.sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map(comment => (
                             <div key={comment.id} className="rounded-xl p-3 bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06]">
                               <div className="flex items-center gap-2 mb-1.5">
-                                <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-[10px] font-black text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                                <div className="w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center text-[10px] font-black text-purple-600 dark:text-purple-400 flex-shrink-0">
                                   {comment.visitor_name.charAt(0).toUpperCase()}
                                 </div>
                                 <span className="text-[12px] font-bold text-foreground" dir="auto">{comment.visitor_name}</span>
-                                <span className="text-[10px] text-muted-foreground/50">{formatRelativeTime(comment.created_at)}</span>
+                                <span className="text-[10px] text-muted-foreground/50 ml-auto">{formatRelativeTime(comment.created_at)}</span>
                               </div>
                               <div className="bg-white dark:bg-white/[0.04] rounded-lg px-3 py-2 text-[13px] text-foreground border border-slate-200/50 dark:border-white/[0.06]" dir="auto">
                                 {comment.content}
@@ -983,7 +954,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                   </div>
                                 </div>
                               ) : (
-                                <button onClick={() => setReplyingTo(comment.id)} className="mt-1.5 text-[11px] font-bold text-indigo-500 hover:text-indigo-600 flex items-center gap-1">
+                                <button onClick={() => setReplyingTo(comment.id)} className="mt-1.5 text-[11px] font-bold text-purple-500 hover:text-purple-600 flex items-center gap-1">
                                   <Mail className="h-3 w-3" />{t('reply', language)}
                                 </button>
                               )}
@@ -993,12 +964,15 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       </div>
                     )}
 
-                    {/* All activity feed */}
+                    {/* ── ACTIVITY LOG ── */}
                     {stats.allResponses.filter(r => r.response_type !== 'comment').length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1">
-                          {language === 'ar' ? 'سجل النشاط' : 'Activity Log'}
-                        </p>
+                        <div className="flex items-center gap-2 px-1">
+                          <div className="w-1 h-4 rounded-full bg-slate-400" />
+                          <p className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            {language === 'ar' ? 'سجل النشاط' : 'Activity Log'}
+                          </p>
+                        </div>
                         <div className="space-y-1.5 max-h-[240px] overflow-y-auto">
                           {stats.allResponses.filter(r => r.response_type !== 'comment').sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 20).map(activity => (
                             <div key={activity.id} className="flex items-start gap-2.5 px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/50 dark:border-white/[0.05]">
@@ -1006,7 +980,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                   <span className="text-[12px] font-bold text-foreground" dir="auto">{activity.visitor_name}</span>
-                                  <span className="text-[10px] text-muted-foreground/50">{format(parseISO(activity.created_at), 'MMM dd, HH:mm')}</span>
+                                  <span className="text-[10px] text-muted-foreground/50 ml-auto">{format(parseISO(activity.created_at), 'MMM dd, HH:mm')}</span>
                                 </div>
                                 <p className="text-[11px] text-muted-foreground" dir="auto">{getActivityDescription(activity, stats.subtasks)}</p>
                               </div>
@@ -1016,13 +990,14 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       </div>
                     )}
 
-                    {stats.allResponses.length === 0 && (
+                    {/* Empty state */}
+                    {stats.allResponses.length === 0 && stats.assignees.length === 0 && (
                       <div className="text-center py-8 text-muted-foreground/50 text-[13px]">
                         {t('noActivityYet', language)}
                       </div>
                     )}
+
                   </div>
-                  )}
 
                 </CardContent>
               </CollapsibleContent>
