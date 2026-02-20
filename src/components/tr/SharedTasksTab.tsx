@@ -126,6 +126,29 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
         toast.info(msgs[existing.status] || 'Already requested'); return;
       }
       await supabase.from('tr_task_assignments').insert({ task_id: taskData.id, assignee_id: currentUserId, assignee_name: currentUserName, status: 'pending' });
+
+      // Send push notification to task owner
+      try {
+        const notifTitle = language === 'ar' ? 'طلب انضمام جديد' : 'New Join Request';
+        const notifBody = language === 'ar'
+          ? `${currentUserName} يريد الانضمام إلى "${taskData.title}" — يرجى الموافقة`
+          : `${currentUserName} wants to join "${taskData.title}" — please approve`;
+        const { data: notifRow } = await supabase.from('notification_history').insert({
+          user_id: taskData.user_id,
+          type: 'tr_task_join_request',
+          title: notifTitle,
+          body: notifBody,
+          data: { task_id: taskData.id, task_title: taskData.title, requester_name: currentUserName, deep_link: '/tr' },
+          deep_link: '/tr',
+          push_sent: false,
+        }).select('id').single();
+        if (notifRow?.id) {
+          await supabase.functions.invoke('wakti-send-push', { body: { notification_id: notifRow.id } });
+        }
+      } catch (pushErr) {
+        console.warn('Push notification failed (non-critical):', pushErr);
+      }
+
       setJoinCode(''); setShowJoinInput(false);
       toast.success(language === 'ar' ? `تم إرسال الطلب لـ "${taskData.title}"` : `Request sent for "${taskData.title}"`);
       await loadAssignments();
