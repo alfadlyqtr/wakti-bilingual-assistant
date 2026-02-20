@@ -920,10 +920,10 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         badge: stats.assignees.length > 0 ? String(stats.assignees.length) : null,
                         activeBg: 'bg-[#060541] dark:bg-blue-600',
                         activeShadow: 'shadow-[0_2px_8px_hsla(243,84%,14%,0.4)]',
-                        inactiveBg: 'bg-slate-100 dark:bg-white/[0.07] border border-slate-200 dark:border-white/[0.09]',
-                        inactiveText: 'text-slate-600 dark:text-slate-300',
+                        inactiveBg: 'bg-white dark:bg-white/[0.08] border-2 border-slate-300 dark:border-white/[0.15]',
+                        inactiveText: 'text-slate-700 dark:text-slate-200',
                         badgeActive: 'bg-white/25 text-white',
-                        badgeInactive: 'bg-slate-300 dark:bg-white/[0.15] text-slate-600 dark:text-slate-300',
+                        badgeInactive: 'bg-slate-200 dark:bg-white/[0.2] text-slate-700 dark:text-slate-200',
                       },
                       ...(stats.totalSubtasksCount > 0 ? [{
                         key: 'subtasks',
@@ -932,10 +932,10 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         badge: `${stats.completedSubtasksCount}/${stats.totalSubtasksCount}`,
                         activeBg: 'bg-emerald-500 dark:bg-emerald-600',
                         activeShadow: 'shadow-[0_2px_8px_hsla(142,76%,45%,0.4)]',
-                        inactiveBg: 'bg-slate-100 dark:bg-white/[0.07] border border-slate-200 dark:border-white/[0.09]',
-                        inactiveText: 'text-slate-600 dark:text-slate-300',
+                        inactiveBg: 'bg-white dark:bg-white/[0.08] border-2 border-slate-300 dark:border-white/[0.15]',
+                        inactiveText: 'text-slate-700 dark:text-slate-200',
                         badgeActive: 'bg-white/25 text-white',
-                        badgeInactive: 'bg-slate-300 dark:bg-white/[0.15] text-slate-600 dark:text-slate-300',
+                        badgeInactive: 'bg-slate-200 dark:bg-white/[0.2] text-slate-700 dark:text-slate-200',
                       }] : []),
                       {
                         key: 'comments',
@@ -944,10 +944,10 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         badge: stats.comments.length > 0 ? String(stats.comments.length) : null,
                         activeBg: 'bg-sky-500 dark:bg-sky-600',
                         activeShadow: 'shadow-[0_2px_8px_hsla(199,89%,48%,0.4)]',
-                        inactiveBg: 'bg-slate-100 dark:bg-white/[0.07] border border-slate-200 dark:border-white/[0.09]',
-                        inactiveText: 'text-slate-600 dark:text-slate-300',
+                        inactiveBg: 'bg-white dark:bg-white/[0.08] border-2 border-slate-300 dark:border-white/[0.15]',
+                        inactiveText: 'text-slate-700 dark:text-slate-200',
                         badgeActive: 'bg-white/25 text-white',
-                        badgeInactive: 'bg-slate-300 dark:bg-white/[0.15] text-slate-600 dark:text-slate-300',
+                        badgeInactive: 'bg-slate-200 dark:bg-white/[0.2] text-slate-700 dark:text-slate-200',
                       },
                       {
                         key: 'activity',
@@ -956,10 +956,10 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         badge: null,
                         activeBg: 'bg-slate-700 dark:bg-slate-500',
                         activeShadow: 'shadow-[0_2px_8px_hsla(0,0%,0%,0.3)]',
-                        inactiveBg: 'bg-slate-100 dark:bg-white/[0.07] border border-slate-200 dark:border-white/[0.09]',
-                        inactiveText: 'text-slate-600 dark:text-slate-300',
+                        inactiveBg: 'bg-white dark:bg-white/[0.08] border-2 border-slate-300 dark:border-white/[0.15]',
+                        inactiveText: 'text-slate-700 dark:text-slate-200',
                         badgeActive: 'bg-white/25 text-white',
-                        badgeInactive: 'bg-slate-300 dark:bg-white/[0.15] text-slate-600 dark:text-slate-300',
+                        badgeInactive: 'bg-slate-200 dark:bg-white/[0.2] text-slate-700 dark:text-slate-200',
                       },
                     ].map(tab => {
                       const isActive = activeView === tab.key;
@@ -969,7 +969,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                             transition-all touch-manipulation active:scale-95
                             ${isActive
                               ? `${tab.activeBg} text-white ${tab.activeShadow}`
-                              : `${tab.inactiveBg} ${tab.inactiveText} hover:bg-slate-200 dark:hover:bg-white/[0.12] shadow-[0_1px_3px_hsla(0,0%,0%,0.07)]`
+                              : `${tab.inactiveBg} ${tab.inactiveText} hover:border-slate-400 dark:hover:border-white/[0.25] shadow-[0_1px_4px_hsla(0,0%,0%,0.1)]`
                             }`}>
                           {tab.icon}
                           {tab.label}
