@@ -166,7 +166,11 @@ export const SandpackErrorListener = ({ onErrorDetected }: ErrorListenerProps) =
           errorMsg.includes("ReferenceError") ||
           errorMsg.includes("SyntaxError") ||
           errorMsg.includes("Error:") ||
-          errorMsg.includes("failed to compile")
+          errorMsg.includes("failed to compile") ||
+          errorMsg.includes("Element type is invalid") ||
+          errorMsg.includes("got: undefined") ||
+          errorMsg.includes("Objects are not valid as a React child") ||
+          errorMsg.includes("Maximum update depth exceeded")
         ) {
           handleError(errorMsg, 'sandpack-bundler');
         }

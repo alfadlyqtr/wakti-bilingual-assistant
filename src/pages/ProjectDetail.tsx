@@ -235,6 +235,8 @@ export default function ProjectDetail() {
 
   const autoCaptureTimeoutRef = useRef<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const isGeneratingRef = useRef(false); // Ref to avoid stale closure in auto-fix timer
+  useEffect(() => { isGeneratingRef.current = isGenerating; }, [isGenerating]);
   const [generationSteps, setGenerationSteps] = useState<{ label: string, status: 'pending' | 'loading' | 'completed' | 'error' }[]>([]);
   
   // Lovable-style thinking timer and edited files tracking
@@ -3258,10 +3260,10 @@ ${convertToGlobalComponent(content, componentName)}
     }
     
     // If currently generating, queue the error to be processed after generation completes
-    if (isGenerating) {
+    if (isGeneratingRef.current) {
       // Store error and check again after a delay
       setTimeout(() => {
-        if (!autoFixTriggeredRef.current && !isGenerating) {
+        if (!autoFixTriggeredRef.current && !isGeneratingRef.current) {
           const currentAttempts = autoFixAttemptsRef.current.get(errorKey) || 0;
           if (currentAttempts > FIXER_ATTEMPT) return; // Double-check attempts
           
@@ -3312,7 +3314,7 @@ ${convertToGlobalComponent(content, componentName)}
         setAutoFixCountdown(count);
       }
     }, 1000);
-  }, [crashReport, isGenerating]);
+  }, [crashReport]);
   
   // Cleanup timer on unmount
   useEffect(() => {

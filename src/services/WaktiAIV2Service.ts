@@ -1897,8 +1897,8 @@ class WaktiAIV2ServiceClass {
             } as any;
           }
 
-          const top = Array.isArray(data?.results) ? data.results[0] : null;
-          if (!top?.videoId) {
+          const results = Array.isArray(data?.results) ? data.results.filter((r: any) => r?.videoId) : [];
+          if (results.length === 0) {
             return {
               response: language === 'ar' ? 'لم يتم العثور على نتائج صالحة.' : 'No valid results found.',
               error: false,
@@ -1907,18 +1907,21 @@ class WaktiAIV2ServiceClass {
             } as any;
           }
 
-          const title = top.title ? String(top.title) : '';
-          const videoId = String(top.videoId);
-          const description = top.description ? String(top.description) : '';
-          const thumbnail = top.thumbnail ? String(top.thumbnail) : '';
+          const youtubeResults = results.map((r: any) => ({
+            videoId: String(r.videoId),
+            title: r.title ? String(r.title) : '',
+            description: r.description ? String(r.description) : '',
+            thumbnail: r.thumbnail ? String(r.thumbnail) : '',
+            publishedAt: r.publishedAt ? String(r.publishedAt) : '',
+          }));
 
           return {
-            response: title || (language === 'ar' ? 'نتيجة من يوتيوب' : 'YouTube result'),
+            response: language === 'ar' ? 'إليك نتائج يوتيوب' : 'Here are the YouTube results',
             error: false,
             intent: 'search',
             modelUsed: 'youtube-search',
             browsingUsed: true,
-            metadata: { youtube: { videoId, title, description, thumbnail } }
+            metadata: { youtubeResults }
           } as any;
         }
       }

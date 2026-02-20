@@ -92,27 +92,73 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'gemini-2.5-flash': { input: 0.15, output: 0.60 },
   'gemini-2.0-flash': { input: 0.10, output: 0.40 },
   'gemini-2.5-pro': { input: 1.25, output: 5.00 },
+  // Gemini 3.x preview models
+  'gemini-3-flash-preview': { input: 0.15, output: 0.60 },
+  'gemini-3.1-pro-preview': { input: 1.25, output: 5.00 },
+};
+
+// ============================================================================
+// GEMINI 3.x MODEL SELECTION (env-driven, auto-fallback to 2.5)
+// ============================================================================
+const GEMINI_MODEL_CREATE  = Deno.env.get('GEMINI_MODEL_CREATE')  || 'gemini-3.1-pro-preview';
+const GEMINI_MODEL_AGENT   = Deno.env.get('GEMINI_MODEL_AGENT')   || 'gemini-3.1-pro-preview';
+const GEMINI_MODEL_PLAN    = Deno.env.get('GEMINI_MODEL_PLAN')    || 'gemini-3-flash-preview';
+const GEMINI_MODEL_SIMPLE  = Deno.env.get('GEMINI_MODEL_SIMPLE')  || 'gemini-3-flash-preview';
+const GEMINI_MODEL_VISION  = Deno.env.get('GEMINI_MODEL_VISION')  || 'gemini-3-flash-preview';
+
+// Fallback map: if a 3.x model fails, retry with this 2.5 equivalent
+const MODEL_FALLBACK: Record<string, string> = {
+  'gemini-3.1-pro-preview': 'gemini-2.5-pro',
+  'gemini-3-flash-preview': 'gemini-2.5-flash',
 };
 
 function selectOptimalModel(
   prompt: string, 
   hasImages: boolean, 
   mode: string,
-  fileCount: number = 0
+  _fileCount: number = 0
 ): ModelSelection {
-  // PRO tier: Creation, vision, and complex operations ALWAYS use Pro
+  // PRO tier: Creation always uses the best Pro model
   if (mode === 'create') {
-    return { model: 'gemini-2.5-pro', reason: 'Project creation requires Pro', tier: 'pro' };
+    return { model: GEMINI_MODEL_CREATE, reason: 'Project creation requires Pro (3.1)', tier: 'pro' };
   }
   
   if (hasImages) {
-    return { model: 'gemini-2.5-pro', reason: 'Vision/screenshot analysis requires Pro', tier: 'pro' };
+    return { model: GEMINI_MODEL_VISION, reason: 'Vision/screenshot analysis (3 Flash)', tier: 'flash' };
+  }
+
+  // Agent/edit mode always uses Pro for superior tool-use reasoning
+  if (mode === 'agent') {
+    // Analyze prompt complexity
+    const promptLower = prompt.toLowerCase();
+
+    // SIMPLE patterns → Flash (still a big upgrade from Flash-Lite)
+    const simplePatterns = [
+      /\b(change|update|set|fix)\s+(the\s+)?(color|colour|text|font|size|background|bg)/i,
+      /\b(typo|spelling|text)\s*(fix|error|mistake|change)/i,
+      /\b(remove|delete|hide)\s+(the\s+)?(button|text|element|section)/i,
+      /\b(show|display|unhide)\s+(the\s+)?(button|text|element|section)/i,
+      /\b(change|update)\s+(the\s+)?(title|heading|label|placeholder)/i,
+      /\bmake\s+(it\s+)?(bigger|smaller|larger|wider|taller|shorter)/i,
+      /\b(add|change)\s+(the\s+)?(padding|margin|spacing|border)/i,
+      /\brename\s/i,
+      /\bchange\s.*\s(to|into)\s/i,
+    ];
+
+    for (const pattern of simplePatterns) {
+      if (pattern.test(promptLower)) {
+        return { model: GEMINI_MODEL_SIMPLE, reason: 'Simple agent edit (3 Flash)', tier: 'flash' };
+      }
+    }
+
+    // Everything else in agent mode → Pro
+    return { model: GEMINI_MODEL_AGENT, reason: 'Agent/edit mode requires Pro (3.1)', tier: 'pro' };
   }
   
-  // Analyze prompt complexity
+  // Analyze prompt complexity for plan/execute/chat modes
   const promptLower = prompt.toLowerCase();
   
-  // SIMPLE patterns (Flash-Lite) - ~10x cheaper than Pro
+  // SIMPLE patterns → Flash
   const simplePatterns = [
     /\b(change|update|set|fix)\s+(the\s+)?(color|colour|text|font|size|background|bg)/i,
     /\b(typo|spelling|text)\s*(fix|error|mistake|change)/i,
@@ -125,7 +171,7 @@ function selectOptimalModel(
     /\bchange\s.*\s(to|into)\s/i,
   ];
   
-  // COMPLEX patterns (Pro) - Full capabilities needed
+  // COMPLEX patterns → Pro
   const complexPatterns = [
     /\b(refactor|restructure|redesign|rebuild|rewrite|architect)/i,
     /\b(create|build|implement|add)\s+(a\s+)?(new\s+)?(page|feature|system|module|component)/i,
@@ -135,27 +181,20 @@ function selectOptimalModel(
     /\b(debug|fix\s+crash|runtime\s+error|broken)/i,
   ];
   
-  // Check for simple edits first
   for (const pattern of simplePatterns) {
     if (pattern.test(promptLower)) {
-      // Simple edit with small project = Flash-Lite
-      if (fileCount < 10) {
-        return { model: 'gemini-2.5-flash-lite', reason: 'Simple edit detected', tier: 'lite' };
-      }
-      // Simple edit with larger project = Flash (needs more context handling)
-      return { model: 'gemini-2.5-flash', reason: 'Simple edit in larger project', tier: 'flash' };
+      return { model: GEMINI_MODEL_SIMPLE, reason: 'Simple edit (3 Flash)', tier: 'flash' };
     }
   }
   
-  // Check for complex operations
   for (const pattern of complexPatterns) {
     if (pattern.test(promptLower)) {
-      return { model: 'gemini-2.5-pro', reason: 'Complex operation detected', tier: 'pro' };
+      return { model: GEMINI_MODEL_AGENT, reason: 'Complex operation (3.1 Pro)', tier: 'pro' };
     }
   }
   
-  // Default: Flash for medium complexity (5x cheaper than Pro)
-  return { model: 'gemini-2.5-flash', reason: 'Standard edit', tier: 'flash' };
+  // Default: Flash for planning/aux (fast + smart)
+  return { model: GEMINI_MODEL_PLAN, reason: 'Standard planning (3 Flash)', tier: 'flash' };
 }
 
 // ============================================================================
@@ -809,6 +848,7 @@ async function callGeminiWithModel(
   console.log(`[Gemini] Calling model: ${model}`);
 
   let lastError: Error | null = null;
+  let activeModel = model;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) {
@@ -821,7 +861,7 @@ async function callGeminiWithModel(
     try {
       const response = await withTimeout(
         fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent`,
           {
             method: "POST",
             headers: {
@@ -853,7 +893,13 @@ async function callGeminiWithModel(
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[Gemini ${model}] HTTP ${response.status}: ${errorText}`);
+        console.error(`[Gemini ${activeModel}] HTTP ${response.status}: ${errorText}`);
+        if ((response.status === 404 || response.status === 503) && MODEL_FALLBACK[activeModel]) {
+          const fallbackModel = MODEL_FALLBACK[activeModel];
+          console.warn(`[Gemini] ${activeModel} unavailable (${response.status}), falling back to ${fallbackModel}`);
+          activeModel = fallbackModel;
+          continue;
+        }
         throw new Error(`Gemini API error: ${response.status}`);
       }
 
@@ -2775,6 +2821,20 @@ You may ONLY import from these packages (they are pre-installed):
 
 DO NOT use react-icons, heroicons, or any other icon library. ONLY use lucide-react.
 Example: import { Mail, Phone, Linkedin, Instagram, ChevronDown, Menu, X } from 'lucide-react';
+
+⚠️ CRITICAL - LUCIDE ICON NAMES (ONLY USE ICONS FROM THIS LIST - NEVER INVENT ICON NAMES):
+Layout/Nav: Menu, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Home, Search, Settings, Bell, User, Users, LogIn, LogOut, Shield
+Actions: Plus, Minus, Edit, Trash2, Copy, Download, Upload, Share2, Send, Save, RefreshCw, RotateCcw, Check, CheckCircle, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Info
+Media: Play, Pause, Volume2, VolumeX, Image, Camera, Video, Music, Mic, MicOff
+Commerce: ShoppingBag, ShoppingCart, Package, Tag, CreditCard, DollarSign, Star, Heart, Bookmark
+Communication: Mail, Phone, MessageSquare, MessageCircle, Globe, Link, ExternalLink
+Files: File, FileText, Folder, FolderOpen, Clipboard, ClipboardList
+Time: Calendar, Clock, Timer
+Nature/Places: MapPin, Map, Navigation, Building, Building2, Briefcase, Coffee, Utensils, Car, Plane, Flower2, Leaf, Sun, Moon, Cloud, Wind, Droplets, Flame, Zap
+Tech: Code, Terminal, Database, Server, Wifi, Bluetooth, Monitor, Smartphone, Laptop, Cpu
+Misc: Loader2, Sparkles, Award, Gift, Key, Lock, Unlock, Eye, EyeOff, Filter, Grid, List, BarChart, PieChart, TrendingUp, Layers, Sliders, ToggleLeft, ToggleRight, Maximize, Minimize, HelpCircle, ThumbsUp, ThumbsDown, Flag, Paperclip, Scissors, Printer, QrCode, ScanLine, Instagram, Facebook, Twitter, Youtube, Linkedin, Github, Twitch
+
+⛔ NEVER use: Spa, Wellness, Beauty, Salon, Massage, or ANY icon name you are not 100% sure exists in the list above.
 
 ### PART 4: i18n SETUP (ONLY IF USER ASKS)
 DO NOT add i18n/translations unless the user EXPLICITLY asks for:

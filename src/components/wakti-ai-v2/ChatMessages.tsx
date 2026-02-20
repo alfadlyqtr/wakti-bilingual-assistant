@@ -12,6 +12,7 @@ import { stripReminderBlocks, parseReminderFromResponse } from '@/services/Remin
 import { Badge } from '@/components/ui/badge';
 import { ImageModal } from './ImageModal';
 import { YouTubePreview } from './YouTubePreview';
+import { YouTubeResultsCard } from './YouTubeResultsCard';
 import { StudyModeMessage } from './StudyModeMessage';
 import { SearchResultActions } from './SearchResultActions';
 // Note: ToolUsageIndicator, ErrorExplanationCard, MessageTimestamp, EnhancedQuickActions
@@ -1298,11 +1299,17 @@ export function ChatMessages({
   const renderMessageContent = (message: AIMessage) => {
     const content = message.content;
     const yt = (message as any)?.metadata?.youtube;
+    const ytResults = (message as any)?.metadata?.youtubeResults;
     const ytErr = (message as any)?.metadata?.youtubeError as string | undefined;
     const searchMeta = (message as any)?.metadata?.search;
     const geminiSearchMeta = (message as any)?.metadata?.geminiSearch;
 
-    // YouTube search result preview
+    // YouTube multi-result cards (new Option A flow)
+    if (message.role === 'assistant' && Array.isArray(ytResults) && ytResults.length > 0) {
+      return <YouTubeResultsCard results={ytResults} />;
+    }
+
+    // YouTube search result preview (legacy single result)
     if (message.role === 'assistant' && yt && yt.videoId) {
       return (
         <YouTubePreview
@@ -2229,7 +2236,7 @@ export function ChatMessages({
                     
                     {/* Mini Buttons Bar - Always visible Copy + TTS */}
                     {(() => {
-                      const isAssistantYouTube = message.role === 'assistant' && (metadata.youtube || metadata.youtubeError);
+                      const isAssistantYouTube = message.role === 'assistant' && (metadata.youtube || metadata.youtubeResults || metadata.youtubeError);
                       if (isAssistantYouTube) return null;
                       return (
                         <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/30">
