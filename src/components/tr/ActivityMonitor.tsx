@@ -892,18 +892,18 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 <CardContent className="pt-0 space-y-0">
 
                   {/* ── Per-card mini tab bar ── */}
-                  <div className="grid grid-cols-5 gap-1 px-3 py-2.5 border-t border-slate-100 dark:border-white/[0.06]">
+                  <div className="flex items-stretch gap-1 px-3 py-2.5 border-t border-slate-100 dark:border-white/[0.06]">
                     {/* Approvals pill — always visible */}
                     <button onClick={() => handleViewChange(task.id, 'approvals')}
-                      className={`flex items-center justify-center gap-1 h-8 px-1 rounded-full text-[10px] font-bold
+                      className={`flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[48px] px-1 py-1.5 rounded-xl text-[10px] font-bold
                         transition-all touch-manipulation active:scale-95
                         ${activeView === 'approvals'
                           ? 'bg-orange-500 text-white shadow-[0_2px_8px_hsla(25,95%,55%,0.4)]'
                           : 'bg-white dark:bg-white/[0.08] border-2 border-slate-300 dark:border-white/[0.15] text-slate-700 dark:text-slate-200 hover:border-slate-400 shadow-[0_1px_4px_hsla(0,0%,0%,0.1)]'}`}>
-                      <AlertCircle className="h-3 w-3 flex-shrink-0" />
-                      <span className="truncate">{language === 'ar' ? 'موافقات' : 'Approvals'}</span>
+                      <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                      <span className="leading-tight text-center">{language === 'ar' ? 'موافقات' : 'Approvals'}</span>
                       {pendingCount > 0 && (
-                        <span className={`flex-shrink-0 min-w-[14px] h-3.5 px-1 rounded-full text-[9px] font-black flex items-center justify-center
+                        <span className={`min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black flex items-center justify-center
                           ${activeView === 'approvals' ? 'bg-white/30 text-white' : 'bg-orange-500 text-white'}`}>
                           {pendingCount}
                         </span>
@@ -964,16 +964,16 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       const isActive = activeView === tab.key;
                       return (
                         <button key={tab.key} onClick={() => handleViewChange(task.id, tab.key)}
-                          className={`flex items-center justify-center gap-1 h-8 px-1 rounded-full text-[10px] font-bold
+                          className={`flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[48px] px-1 py-1.5 rounded-xl text-[10px] font-bold
                             transition-all touch-manipulation active:scale-95
                             ${isActive
                               ? `${tab.activeBg} text-white ${tab.activeShadow}`
                               : `${tab.inactiveBg} ${tab.inactiveText} hover:border-slate-400 dark:hover:border-white/[0.25] shadow-[0_1px_4px_hsla(0,0%,0%,0.1)]`
                             }`}>
                           <span className="flex-shrink-0">{tab.icon}</span>
-                          <span className="truncate">{tab.label}</span>
+                          <span className="leading-tight text-center">{tab.label}</span>
                           {tab.badge && (
-                            <span className={`flex-shrink-0 min-w-[14px] h-3.5 px-1 rounded-full text-[9px] font-black flex items-center justify-center
+                            <span className={`min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black flex items-center justify-center
                               ${isActive ? tab.badgeActive : tab.badgeInactive}`}>
                               {tab.badge}
                             </span>
