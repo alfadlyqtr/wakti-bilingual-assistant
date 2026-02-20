@@ -158,9 +158,9 @@ export default function TasksReminders() {
               <button
                 onClick={activeTab === 'tasks' ? handleCreateTask : handleCreateReminder}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold
-                  bg-white/15 backdrop-blur-md text-white border border-white/20
-                  hover:bg-white/25 active:scale-95 transition-all duration-200 touch-manipulation
-                  shadow-[0_0_20px_hsla(210,100%,65%,0.15),inset_0_1px_0_hsla(0,0%,100%,0.1)]"
+                  bg-white text-[#060541] border border-white/80
+                  hover:bg-white/90 active:scale-95 transition-all duration-200 touch-manipulation
+                  shadow-[0_4px_16px_hsla(0,0%,0%,0.25),0_0_20px_hsla(210,100%,65%,0.2)]"
               >
                 <Plus className="w-4 h-4" />
                 {activeTab === 'tasks'
