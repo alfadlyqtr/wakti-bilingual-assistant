@@ -278,45 +278,6 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
             </span>
           </div>
 
-          {/* Pending join requests */}
-          {joinRequests.length > 0 && (
-            <div className="rounded-2xl overflow-hidden bg-orange-50 dark:bg-orange-500/10 border border-orange-200/70 dark:border-orange-500/30">
-              <div className="px-4 py-2.5 border-b border-orange-200/50 dark:border-orange-500/20">
-                <p className="text-[12px] font-black text-orange-700 dark:text-orange-400 flex items-center gap-2">
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  {language === 'ar' ? `${joinRequests.length} طلب انضمام` : `${joinRequests.length} join request${joinRequests.length > 1 ? 's' : ''}`}
-                </p>
-              </div>
-              {joinRequests.map(req => {
-                const task = mySharedTasks.find(t => t.id === req.task_id);
-                const isProc = processingRequest === req.id;
-                return (
-                  <div key={req.id} className="px-4 py-3 flex items-center gap-3 border-b border-orange-200/30 dark:border-orange-500/10 last:border-0">
-                    <div className="w-8 h-8 rounded-full bg-orange-200 dark:bg-orange-500/30 flex items-center justify-center text-[12px] font-black text-orange-700 dark:text-orange-300 flex-shrink-0">
-                      {req.assignee_name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-bold text-foreground truncate">{req.assignee_name}</p>
-                      <p className="text-[11px] text-muted-foreground/60 truncate">
-                        {language === 'ar' ? 'يريد الانضمام لـ' : 'wants to join'} "{task?.title || '...'}"
-                      </p>
-                    </div>
-                    <div className="flex gap-1.5 flex-shrink-0">
-                      <button onClick={() => handleApproveJoin(req.id)} disabled={!!isProc}
-                        className="w-8 h-8 rounded-xl flex items-center justify-center bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition-all touch-manipulation active:scale-95">
-                        {isProc ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                      </button>
-                      <button onClick={() => handleDenyJoin(req.id)} disabled={!!isProc}
-                        className="w-8 h-8 rounded-xl flex items-center justify-center bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-500/30 disabled:opacity-50 transition-all touch-manipulation active:scale-95">
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
           {/* Owner activity monitor — code/link/New buttons are rendered inside each card header */}
           <ActivityMonitor
             tasks={tasks}
