@@ -56,7 +56,7 @@ serve(async (req: Request) => {
       q: query,
       type: 'video',
       videoEmbeddable: 'true',
-      maxResults: '5',
+      maxResults: '10',
       safeSearch: 'moderate'
     });
 
