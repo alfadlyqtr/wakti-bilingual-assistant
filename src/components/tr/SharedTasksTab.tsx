@@ -136,8 +136,12 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
       if (taskData.user_id === currentUserId) { toast.error(language === 'ar' ? 'لا يمكنك الانضمام لمهمتك' : 'Cannot join your own task'); return; }
       const { data: existing } = await supabase.from('tr_task_assignments').select('id,status').eq('task_id', taskData.id).eq('assignee_id', currentUserId).maybeSingle();
       if (existing) {
-        const msgs = { approved: 'Already have access', pending: 'Request already pending', denied: 'Request was denied' };
-        toast.info(msgs[existing.status] || 'Already requested'); return;
+        if (existing.status === 'approved') { toast.info('Already have access'); return; }
+        if (existing.status === 'pending') { toast.info('Request already pending'); return; }
+        if (existing.status === 'denied') {
+          // Delete old denied row so user can re-request
+          await supabase.from('tr_task_assignments').delete().eq('id', existing.id);
+        }
       }
       await supabase.from('tr_task_assignments').insert({ task_id: taskData.id, assignee_id: currentUserId, assignee_name: currentUserName, status: 'pending' });
 
@@ -350,19 +354,47 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
 
               {/* Denied requests */}
               {deniedAssignments.map(req => (
-                <div key={req.id} className="rounded-xl px-4 py-3 flex items-center gap-3 bg-red-50 dark:bg-red-500/10 border border-red-200/70 dark:border-red-500/30">
-                  <X className="h-4 w-4 text-red-500 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-bold text-red-700 dark:text-red-300 truncate">
-                      {req.task?.title || (language === 'ar' ? 'مهمة...' : 'Task...')}
-                    </p>
-                    <p className="text-[11px] text-red-600/70 dark:text-red-400/70">
-                      {language === 'ar' ? 'تم رفض طلبك من قبل المالك' : 'Your request was denied by the owner'}
-                    </p>
+                <div key={req.id} className="rounded-xl px-4 py-3 bg-red-50 dark:bg-red-500/10 border border-red-200/70 dark:border-red-500/30">
+                  <div className="flex items-center gap-3">
+                    <X className="h-4 w-4 text-red-500 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-bold text-red-700 dark:text-red-300 truncate">
+                        {req.task?.title || (language === 'ar' ? 'مهمة...' : 'Task...')}
+                      </p>
+                      <p className="text-[11px] text-red-600/70 dark:text-red-400/70">
+                        {language === 'ar' ? 'تم رفض طلبك من قبل المالك' : 'Your request was denied by the owner'}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-red-200/60 dark:bg-red-500/20 text-red-700 dark:text-red-400 flex-shrink-0">
+                      {language === 'ar' ? 'مرفوض' : 'Denied'}
+                    </span>
                   </div>
-                  <span className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-red-200/60 dark:bg-red-500/20 text-red-700 dark:text-red-400">
-                    {language === 'ar' ? 'مرفوض' : 'Denied'}
-                  </span>
+                  <div className="flex gap-2 mt-2.5">
+                    <button
+                      onClick={async () => {
+                        if (!req.task?.task_code) { toast.info(language === 'ar' ? 'لا يوجد كود لهذه المهمة' : 'No code for this task'); return; }
+                        setJoinCode(req.task.task_code);
+                        setShowJoinInput(true);
+                        await supabase.from('tr_task_assignments').delete().eq('id', req.id);
+                        await loadAssignments();
+                      }}
+                      className="flex-1 py-1.5 rounded-lg text-[11px] font-bold
+                        bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300
+                        hover:bg-indigo-200 dark:hover:bg-indigo-500/30 transition-all active:scale-95">
+                      {language === 'ar' ? 'طلب مجدداً' : 'Request Again'}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await supabase.from('tr_task_assignments').delete().eq('id', req.id);
+                        await loadAssignments();
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-[11px] font-bold
+                        bg-white dark:bg-white/[0.06] border border-red-200 dark:border-red-500/30
+                        text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10
+                        transition-all active:scale-95">
+                      {language === 'ar' ? 'إغلاق' : 'Dismiss'}
+                    </button>
+                  </div>
                 </div>
               ))}
 
