@@ -294,42 +294,19 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
             </div>
           )}
 
-          {/* Task code strip per task */}
-          <div className="space-y-2">
-            {mySharedTasks.map(task => {
-              const code = taskCodes[task.id] || task.task_code;
-              const isGen = generatingCode === task.id;
-              return (
-                <div key={task.id} className="rounded-xl px-4 py-3 flex items-center gap-3 bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06]">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-bold text-foreground truncate">{task.title}</p>
-                    {code
-                      ? <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[12px] font-black tracking-widest text-indigo-600 dark:text-indigo-400">{code}</span>
-                          <button onClick={() => { navigator.clipboard.writeText(code); toast.success(language === 'ar' ? 'تم النسخ' : 'Copied!'); }} className="text-muted-foreground/40 hover:text-indigo-500 transition-colors"><Copy className="h-3 w-3" /></button>
-                        </div>
-                      : <p className="text-[11px] text-muted-foreground/40 mt-0.5">{language === 'ar' ? 'لا يوجد كود' : 'No code yet'}</p>
-                    }
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/shared-task/${task.share_link}`); toast.success(language === 'ar' ? 'تم نسخ الرابط' : 'Link copied!'); }}
-                      title={language === 'ar' ? 'نسخ الرابط' : 'Copy URL'}
-                      className="w-8 h-8 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-white/[0.06] text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/[0.1] transition-all touch-manipulation active:scale-95">
-                      <Link2 className="h-3.5 w-3.5" />
-                    </button>
-                    <button onClick={() => handleGenerateCode(task.id)} disabled={isGen}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-500/30 disabled:opacity-50 transition-all touch-manipulation active:scale-95">
-                      {isGen ? <Loader2 className="h-3 w-3 animate-spin" /> : <Hash className="h-3 w-3" />}
-                      {code ? (language === 'ar' ? 'تجديد' : 'New') : (language === 'ar' ? 'كود' : 'Code')}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Owner activity monitor (approvals + interactions) */}
-          <ActivityMonitor tasks={tasks} onTasksChanged={onTasksChanged} incomingShareLink={null} />
+          {/* Owner activity monitor — code/link/New buttons are rendered inside each card header */}
+          <ActivityMonitor
+            tasks={tasks}
+            onTasksChanged={onTasksChanged}
+            incomingShareLink={null}
+            taskCodes={taskCodes}
+            onCopyLink={(task) => {
+              navigator.clipboard.writeText(`${window.location.origin}/shared-task/${task.share_link}`);
+              toast.success(language === 'ar' ? 'تم نسخ الرابط' : 'Link copied!');
+            }}
+            onGenerateCode={handleGenerateCode}
+            generatingCode={generatingCode}
+          />
         </div>
       )}
 
