@@ -659,29 +659,12 @@ export class TRService {
   }
 
   // Shared access operations
-  static async recordSharedAccess(taskId: string, viewerName?: string): Promise<void> {
-    const userId = await getCurrentUserId();
-    
-    await ensurePassport();
-    const { error } = await supabase
-      .from('tr_shared_access')
-      .insert([{
-        task_id: taskId,
-        viewer_id: userId || null,
-        viewer_name: viewerName || 'Guest'
-      }]);
-    
-    if (error) throw error;
+  static async recordSharedAccess(_taskId: string, _viewerName?: string): Promise<void> {
+    // tr_shared_access table removed; visitors tracked via tr_shared_responses
   }
 
-  static async getSharedAccess(taskId: string): Promise<TRSharedAccess[]> {
-    const { data, error } = await supabase
-      .from('tr_shared_access')
-      .select('*')
-      .eq('task_id', taskId)
-      .order('last_accessed', { ascending: false });
-    
-    if (error) throw error;
-    return data || [];
+  static async getSharedAccess(_taskId: string): Promise<TRSharedAccess[]> {
+    // tr_shared_access table removed; visitors tracked via tr_shared_responses
+    return [];
   }
 }

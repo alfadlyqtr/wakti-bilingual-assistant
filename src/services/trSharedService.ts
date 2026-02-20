@@ -115,13 +115,19 @@ export class TRSharedService {
   static async getTaskVisitors(taskId: string): Promise<TRSharedAccess[]> {
     try {
       const { data, error } = await supabase
-        .from('tr_shared_access')
-        .select('*')
+        .from('tr_shared_responses')
+        .select('id, task_id, visitor_name, created_at')
         .eq('task_id', taskId)
-        .order('last_accessed', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data || [];
+      const seen = new Set<string>();
+      const unique = (data || []).filter(r => {
+        if (seen.has(r.visitor_name)) return false;
+        seen.add(r.visitor_name);
+        return true;
+      });
+      return unique.map(r => ({ id: r.id, task_id: r.task_id, viewer_name: r.visitor_name, last_accessed: r.created_at, created_at: r.created_at }));
     } catch (error) {
       console.error('Error getting task visitors:', error);
       return [];
@@ -425,7 +431,7 @@ export class TRSharedService {
       // Subtasks (title/complete/due updates)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_subtasks', filter: `task_id=eq.${taskId}` }, () => onUpdate())
       // Visitors / access pings
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_shared_access', filter: `task_id=eq.${taskId}` }, () => onUpdate())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_shared_responses', filter: `task_id=eq.${taskId}` }, () => onUpdate())
       // Parent task updates (e.g., task completed, snoozed)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_tasks', filter: `id=eq.${taskId}` }, () => onUpdate())
       .subscribe();
