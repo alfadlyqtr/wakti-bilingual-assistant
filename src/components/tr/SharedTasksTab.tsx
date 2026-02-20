@@ -95,6 +95,20 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
     if (currentUserId) { loadAssignments(); loadJoinRequests(); loadTaskCodes(); }
   }, [currentUserId, loadAssignments, loadJoinRequests, loadTaskCodes]);
 
+  // Realtime: re-fetch when any of the current user's assignment rows change
+  useEffect(() => {
+    if (!currentUserId) return;
+    const channel = supabase
+      .channel(`assignments-user-${currentUserId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tr_task_assignments', filter: `assignee_id=eq.${currentUserId}` },
+        () => { loadAssignments(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [currentUserId, loadAssignments]);
+
   const handleGenerateCode = async (taskId: string) => {
     setGeneratingCode(taskId);
     try {
