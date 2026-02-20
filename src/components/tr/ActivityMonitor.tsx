@@ -822,7 +822,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                     <p className="text-[14px] font-bold text-foreground leading-tight truncate" dir="auto">
                       {task.title}
                     </p>
-                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                    <div className="flex items-center gap-1.5 mt-1.5 overflow-x-auto" style={{scrollbarWidth:'none',msOverflowStyle:'none'}}>
                       {/* Shared badge */}
                       <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg
                         bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400">
@@ -892,7 +892,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 <CardContent className="pt-0 space-y-0">
 
                   {/* ── Per-card mini tab bar ── */}
-                  <div className="flex items-center gap-1.5 px-3 py-2.5 overflow-x-auto border-t border-slate-100 dark:border-white/[0.06]" style={{scrollbarWidth:'none', msOverflowStyle:'none'}}>
+                  <div className="relative">
+                  <div className="flex items-center gap-1.5 px-3 py-2.5 overflow-x-auto border-t border-slate-100 dark:border-white/[0.06]" style={{scrollbarWidth:'none',msOverflowStyle:'none',WebkitOverflowScrolling:'touch'}}>
                     {/* Approvals pill — only when pending */}
                     {pendingCount > 0 && (
                       <button onClick={() => handleViewChange(task.id, 'approvals')}
@@ -982,6 +983,9 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         </button>
                       );
                     })}
+                  </div>
+                  {/* Fade-out right edge to hint scrollability */}
+                  <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white dark:from-[#0f1318] to-transparent" />
                   </div>
 
                   <div className="space-y-3 pb-4 px-1">
