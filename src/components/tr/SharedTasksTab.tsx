@@ -192,6 +192,7 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
   const mySharedTasks = tasks.filter(t => t.is_shared && t.share_link);
   const approvedAssignments = assignments.filter(a => a.status === 'approved');
   const pendingMyRequests = assignments.filter(a => a.status === 'pending');
+  const deniedAssignments = assignments.filter(a => a.status === 'denied');
 
   return (
     <div className="space-y-4">
@@ -309,7 +310,7 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
       )}
 
       {/* ── SECTION 2: ASSIGNED TO ME ── */}
-      {innerTab === 'assigned' && (approvedAssignments.length > 0 || pendingMyRequests.length > 0 || loadingAssignments) && (
+      {innerTab === 'assigned' && (approvedAssignments.length > 0 || pendingMyRequests.length > 0 || deniedAssignments.length > 0 || loadingAssignments) && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 px-1">
             <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-emerald-500 to-teal-500" />
@@ -343,6 +344,24 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
                   </div>
                   <span className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-amber-200/60 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400">
                     {language === 'ar' ? 'معلق' : 'Pending'}
+                  </span>
+                </div>
+              ))}
+
+              {/* Denied requests */}
+              {deniedAssignments.map(req => (
+                <div key={req.id} className="rounded-xl px-4 py-3 flex items-center gap-3 bg-red-50 dark:bg-red-500/10 border border-red-200/70 dark:border-red-500/30">
+                  <X className="h-4 w-4 text-red-500 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-bold text-red-700 dark:text-red-300 truncate">
+                      {req.task?.title || (language === 'ar' ? 'مهمة...' : 'Task...')}
+                    </p>
+                    <p className="text-[11px] text-red-600/70 dark:text-red-400/70">
+                      {language === 'ar' ? 'تم رفض طلبك من قبل المالك' : 'Your request was denied by the owner'}
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-red-200/60 dark:bg-red-500/20 text-red-700 dark:text-red-400">
+                    {language === 'ar' ? 'مرفوض' : 'Denied'}
                   </span>
                 </div>
               ))}
@@ -395,7 +414,7 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
         </div>
       )}
       {/* Empty state — assigned tab */}
-      {innerTab === 'assigned' && approvedAssignments.length === 0 && pendingMyRequests.length === 0 && !loadingAssignments && (
+      {innerTab === 'assigned' && approvedAssignments.length === 0 && pendingMyRequests.length === 0 && deniedAssignments.length === 0 && !loadingAssignments && (
         <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
           <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-500/10 dark:to-purple-500/10 flex items-center justify-center shadow-[0_8px_32px_hsla(240,80%,50%,0.08)] mb-6">
             <Users className="h-9 w-9 text-indigo-400/50" />
