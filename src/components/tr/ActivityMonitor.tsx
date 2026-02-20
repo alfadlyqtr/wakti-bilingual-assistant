@@ -893,23 +893,22 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
                   {/* ── Per-card mini tab bar ── */}
                   <div className="flex flex-wrap items-center gap-1.5 px-3 py-2.5 border-t border-slate-100 dark:border-white/[0.06]">
-                    {/* Approvals pill — only when pending */}
-                    {pendingCount > 0 && (
-                      <button onClick={() => handleViewChange(task.id, 'approvals')}
-                        className={`flex-shrink-0 flex items-center gap-1 h-8 px-3 rounded-full text-[11px] font-bold
-                          transition-all touch-manipulation active:scale-95
-                          shadow-[0_1px_4px_hsla(0,0%,0%,0.12)]
-                          ${activeView === 'approvals'
-                            ? 'bg-orange-500 text-white shadow-[0_2px_8px_hsla(25,95%,55%,0.4)]'
-                            : 'bg-orange-50 dark:bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-500/30'}`}>
-                        <AlertCircle className="h-3 w-3" />
-                        {language === 'ar' ? 'موافقات' : 'Approvals'}
+                    {/* Approvals pill — always visible */}
+                    <button onClick={() => handleViewChange(task.id, 'approvals')}
+                      className={`flex-shrink-0 flex items-center gap-1 h-8 px-3 rounded-full text-[11px] font-bold
+                        transition-all touch-manipulation active:scale-95
+                        ${activeView === 'approvals'
+                          ? 'bg-orange-500 text-white shadow-[0_2px_8px_hsla(25,95%,55%,0.4)]'
+                          : 'bg-white dark:bg-white/[0.08] border-2 border-slate-300 dark:border-white/[0.15] text-slate-700 dark:text-slate-200 hover:border-slate-400 shadow-[0_1px_4px_hsla(0,0%,0%,0.1)]'}`}>
+                      <AlertCircle className="h-3 w-3" />
+                      {language === 'ar' ? 'موافقات' : 'Approvals'}
+                      {pendingCount > 0 && (
                         <span className={`min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black flex items-center justify-center
                           ${activeView === 'approvals' ? 'bg-white/30 text-white' : 'bg-orange-500 text-white'}`}>
                           {pendingCount}
                         </span>
-                      </button>
-                    )}
+                      )}
+                    </button>
 
                     {/* Main tabs as solid pills */}
                     {[
