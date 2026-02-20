@@ -914,7 +914,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                           ? 'bg-orange-500 text-white shadow-[0_2px_8px_hsla(25,95%,55%,0.4)]'
                           : 'bg-white dark:bg-white/[0.08] border-2 border-slate-300 dark:border-white/[0.15] text-slate-700 dark:text-slate-200 hover:border-slate-400 shadow-[0_1px_4px_hsla(0,0%,0%,0.1)]'}`}>
                       <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-                      <span className="leading-tight text-center">{language === 'ar' ? 'موافقات' : 'Approvals'}</span>
+                      <span className="leading-tight text-center">{language === 'ar' ? 'موافقات' : 'Approve'}</span>
                       {pendingCount > 0 && (
                         <span className={`min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black flex items-center justify-center
                           ${activeView === 'approvals' ? 'bg-white/30 text-white' : 'bg-orange-500 text-white'}`}>
@@ -928,7 +928,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       {
                         key: 'assignees',
                         icon: <Users className="h-3 w-3" />,
-                        label: language === 'ar' ? 'المشاركون' : 'Assignees',
+                        label: language === 'ar' ? 'المشاركون' : 'People',
                         badge: stats.assignees.length > 0 ? String(stats.assignees.length) : null,
                         activeBg: 'bg-[#060541] dark:bg-blue-600',
                         activeShadow: 'shadow-[0_2px_8px_hsla(243,84%,14%,0.4)]',
@@ -940,7 +940,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       ...(stats.totalSubtasksCount > 0 ? [{
                         key: 'subtasks',
                         icon: <CheckCircle className="h-3 w-3" />,
-                        label: language === 'ar' ? 'المهام' : 'Subtasks',
+                        label: language === 'ar' ? 'المهام' : 'Tasks',
                         badge: `${stats.completedSubtasksCount}/${stats.totalSubtasksCount}`,
                         activeBg: 'bg-emerald-500 dark:bg-emerald-600',
                         activeShadow: 'shadow-[0_2px_8px_hsla(142,76%,45%,0.4)]',
@@ -952,7 +952,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       {
                         key: 'comments',
                         icon: <MessageCircle className="h-3 w-3" />,
-                        label: language === 'ar' ? 'تعليقات' : 'Comments',
+                        label: language === 'ar' ? 'تعليقات' : 'Chat',
                         badge: stats.comments.length > 0 ? String(stats.comments.length) : null,
                         activeBg: 'bg-sky-500 dark:bg-sky-600',
                         activeShadow: 'shadow-[0_2px_8px_hsla(199,89%,48%,0.4)]',
@@ -964,7 +964,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       {
                         key: 'activity',
                         icon: <Clock className="h-3 w-3" />,
-                        label: language === 'ar' ? 'النشاط' : 'Activity',
+                        label: language === 'ar' ? 'النشاط' : 'Log',
                         badge: null,
                         activeBg: 'bg-slate-700 dark:bg-slate-500',
                         activeShadow: 'shadow-[0_2px_8px_hsla(0,0%,0%,0.3)]',
