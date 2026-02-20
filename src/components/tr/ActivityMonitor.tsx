@@ -892,18 +892,18 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 <CardContent className="pt-0 space-y-0">
 
                   {/* ── Per-card mini tab bar ── */}
-                  <div className="flex flex-wrap items-center gap-1.5 px-3 py-2.5 border-t border-slate-100 dark:border-white/[0.06]">
+                  <div className="grid grid-cols-5 gap-1 px-3 py-2.5 border-t border-slate-100 dark:border-white/[0.06]">
                     {/* Approvals pill — always visible */}
                     <button onClick={() => handleViewChange(task.id, 'approvals')}
-                      className={`flex-shrink-0 flex items-center gap-1 h-8 px-3 rounded-full text-[11px] font-bold
+                      className={`flex items-center justify-center gap-1 h-8 px-1 rounded-full text-[10px] font-bold
                         transition-all touch-manipulation active:scale-95
                         ${activeView === 'approvals'
                           ? 'bg-orange-500 text-white shadow-[0_2px_8px_hsla(25,95%,55%,0.4)]'
                           : 'bg-white dark:bg-white/[0.08] border-2 border-slate-300 dark:border-white/[0.15] text-slate-700 dark:text-slate-200 hover:border-slate-400 shadow-[0_1px_4px_hsla(0,0%,0%,0.1)]'}`}>
-                      <AlertCircle className="h-3 w-3" />
-                      {language === 'ar' ? 'موافقات' : 'Approvals'}
+                      <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                      <span className="truncate">{language === 'ar' ? 'موافقات' : 'Approvals'}</span>
                       {pendingCount > 0 && (
-                        <span className={`min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black flex items-center justify-center
+                        <span className={`flex-shrink-0 min-w-[14px] h-3.5 px-1 rounded-full text-[9px] font-black flex items-center justify-center
                           ${activeView === 'approvals' ? 'bg-white/30 text-white' : 'bg-orange-500 text-white'}`}>
                           {pendingCount}
                         </span>
@@ -964,16 +964,16 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       const isActive = activeView === tab.key;
                       return (
                         <button key={tab.key} onClick={() => handleViewChange(task.id, tab.key)}
-                          className={`flex-shrink-0 flex items-center gap-1 h-8 px-3 rounded-full text-[11px] font-bold
+                          className={`flex items-center justify-center gap-1 h-8 px-1 rounded-full text-[10px] font-bold
                             transition-all touch-manipulation active:scale-95
                             ${isActive
                               ? `${tab.activeBg} text-white ${tab.activeShadow}`
                               : `${tab.inactiveBg} ${tab.inactiveText} hover:border-slate-400 dark:hover:border-white/[0.25] shadow-[0_1px_4px_hsla(0,0%,0%,0.1)]`
                             }`}>
-                          {tab.icon}
-                          {tab.label}
+                          <span className="flex-shrink-0">{tab.icon}</span>
+                          <span className="truncate">{tab.label}</span>
                           {tab.badge && (
-                            <span className={`min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black flex items-center justify-center
+                            <span className={`flex-shrink-0 min-w-[14px] h-3.5 px-1 rounded-full text-[9px] font-black flex items-center justify-center
                               ${isActive ? tab.badgeActive : tab.badgeInactive}`}>
                               {tab.badge}
                             </span>
@@ -1069,32 +1069,52 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                     )}
 
                     {/* ── SUBTASKS tab ── */}
-                    {activeView === 'subtasks' && (
-                      <div className="space-y-1.5 pt-1">
-                        {stats.subtasks.map(subtask => {
-                          const completions = stats.allResponses.filter(r => r.response_type === 'completion' && r.subtask_id === subtask.id && r.is_completed);
-                          const allWho = [...new Set(completions.map(c => c.visitor_name))];
-                          const latest = completions.length > 0 ? [...completions].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] : null;
-                          const isCompleted = !!subtask.completed;
-                          return (
-                            <div key={subtask.id} className={`rounded-xl px-3 py-2.5 flex items-start gap-3 ${isCompleted ? 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20' : 'bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05]'}`}>
-                              <div className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center mt-0.5 ${isCompleted ? 'bg-emerald-500' : 'border-2 border-slate-300 dark:border-white/20'}`}>
-                                {isCompleted && <Check className="h-2.5 w-2.5 text-white" />}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className={`text-[12px] font-semibold ${isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'}`} dir="auto">{subtask.title}</p>
-                                {isCompleted && latest && (
-                                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center gap-1" dir="auto">
-                                    <Users className="h-2.5 w-2.5 flex-shrink-0" />
-                                    {allWho.join(', ')} · {format(parseISO(latest.created_at), 'MMM dd, HH:mm')}
-                                  </p>
-                                )}
-                              </div>
+                    {activeView === 'subtasks' && (() => {
+                      const pending = stats.subtasks.filter(s => !s.completed);
+                      const completed = stats.subtasks.filter(s => s.completed);
+                      const renderSubtask = (subtask: typeof stats.subtasks[0]) => {
+                        const completions = stats.allResponses.filter(r => r.response_type === 'completion' && r.subtask_id === subtask.id && r.is_completed);
+                        const allWho = [...new Set(completions.map(c => c.visitor_name))];
+                        const latest = completions.length > 0 ? [...completions].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] : null;
+                        const isCompleted = !!subtask.completed;
+                        return (
+                          <div key={subtask.id} className={`rounded-xl px-3 py-2.5 flex items-start gap-3 ${isCompleted ? 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20' : 'bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05]'}`}>
+                            <div className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center mt-0.5 ${isCompleted ? 'bg-emerald-500' : 'border-2 border-slate-300 dark:border-white/20'}`}>
+                              {isCompleted && <Check className="h-2.5 w-2.5 text-white" />}
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-[12px] font-semibold ${isCompleted ? 'line-through text-muted-foreground/60' : 'text-foreground'}`} dir="auto">{subtask.title}</p>
+                              {isCompleted && latest && (
+                                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center gap-1" dir="auto">
+                                  <Users className="h-2.5 w-2.5 flex-shrink-0" />
+                                  {allWho.join(', ')} · {format(parseISO(latest.created_at), 'MMM dd, HH:mm')}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      };
+                      return (
+                        <div className="space-y-3 pt-1">
+                          {pending.length > 0 && (
+                            <div className="space-y-1.5">
+                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1">
+                                {language === 'ar' ? 'معلق' : 'Pending'} · {pending.length}
+                              </p>
+                              {pending.map(renderSubtask)}
+                            </div>
+                          )}
+                          {completed.length > 0 && (
+                            <div className="space-y-1.5">
+                              <p className="text-[10px] font-black uppercase tracking-wider text-emerald-500 dark:text-emerald-400 px-1">
+                                {language === 'ar' ? 'مكتمل' : 'Completed'} · {completed.length}
+                              </p>
+                              {completed.map(renderSubtask)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* ── COMMENTS tab ── */}
                     {activeView === 'comments' && (
