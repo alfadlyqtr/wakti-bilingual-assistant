@@ -1270,9 +1270,10 @@ export function ChatMessages({
     if (message.intent === 'vision') return '👁️ Vision';
     if (message.intent === 'search') {
       const yt = (message as any)?.metadata?.youtube;
+      const ytResults = (message as any)?.metadata?.youtubeResults;
       const ytErr = (message as any)?.metadata?.youtubeError;
       const ytLoading = (message as any)?.metadata?.youtubeLoading;
-      if (yt || ytErr || ytLoading) return 'YouTube';
+      if (yt || ytResults || ytErr || ytLoading) return 'YouTube';
       return '🔍 Search';
     }
     if (message.intent === 'image') return '🎨 Image';
@@ -1900,9 +1901,10 @@ export function ChatMessages({
     switch (message.intent) {
       case 'search': {
         const yt = (message as any)?.metadata?.youtube;
+        const ytResults = (message as any)?.metadata?.youtubeResults;
         const ytErr = (message as any)?.metadata?.youtubeError;
         const ytLoading = (message as any)?.metadata?.youtubeLoading;
-        return (yt || ytErr || ytLoading) ? 'border-red-400' : 'border-green-400';
+        return (yt || ytResults || ytErr || ytLoading) ? 'border-red-400' : 'border-green-400';
       }
       case 'image':
         return 'border-orange-400';
