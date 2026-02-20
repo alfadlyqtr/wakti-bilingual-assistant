@@ -892,57 +892,93 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 <CardContent className="pt-0 space-y-0">
 
                   {/* ── Per-card mini tab bar ── */}
-                  <div className="flex items-center gap-1.5 px-3 pt-1 pb-0 overflow-x-auto border-t border-slate-100 dark:border-white/[0.06]" style={{scrollbarWidth:'none'}}>
+                  <div className="flex items-center gap-1.5 px-3 py-2.5 overflow-x-auto border-t border-slate-100 dark:border-white/[0.06]" style={{scrollbarWidth:'none', msOverflowStyle:'none'}}>
+                    {/* Approvals pill — only when pending */}
                     {pendingCount > 0 && (
                       <button onClick={() => handleViewChange(task.id, 'approvals')}
-                        className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2.5 text-[12px] font-bold transition-all touch-manipulation active:scale-95 relative
+                        className={`flex-shrink-0 flex items-center gap-1 h-8 px-3 rounded-full text-[11px] font-bold
+                          transition-all touch-manipulation active:scale-95
+                          shadow-[0_1px_4px_hsla(0,0%,0%,0.12)]
                           ${activeView === 'approvals'
-                            ? 'text-orange-600 dark:text-orange-400'
-                            : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
-                        <AlertCircle className="h-3.5 w-3.5" />
+                            ? 'bg-orange-500 text-white shadow-[0_2px_8px_hsla(25,95%,55%,0.4)]'
+                            : 'bg-orange-50 dark:bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-500/30'}`}>
+                        <AlertCircle className="h-3 w-3" />
                         {language === 'ar' ? 'موافقات' : 'Approvals'}
-                        <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black bg-orange-500 text-white flex items-center justify-center">{pendingCount}</span>
-                        {activeView === 'approvals' && <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-orange-500" />}
+                        <span className={`min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black flex items-center justify-center
+                          ${activeView === 'approvals' ? 'bg-white/30 text-white' : 'bg-orange-500 text-white'}`}>
+                          {pendingCount}
+                        </span>
                       </button>
                     )}
+
+                    {/* Main tabs as solid pills */}
                     {[
-                      { key: 'assignees', icon: <Users className="h-3.5 w-3.5" />, label: language === 'ar' ? 'المشاركون' : 'Assignees', badge: stats.assignees.length > 0 ? String(stats.assignees.length) : null, color: 'blue' },
-                      ...(stats.totalSubtasksCount > 0 ? [{ key: 'subtasks', icon: <CheckCircle className="h-3.5 w-3.5" />, label: language === 'ar' ? 'المهام الفرعية' : 'Subtasks', badge: `${stats.completedSubtasksCount}/${stats.totalSubtasksCount}`, color: 'emerald' }] : []),
-                      { key: 'comments', icon: <MessageCircle className="h-3.5 w-3.5" />, label: language === 'ar' ? 'تعليقات' : 'Comments', badge: stats.comments.length > 0 ? String(stats.comments.length) : null, color: 'cyan' },
-                      { key: 'activity', icon: <Clock className="h-3.5 w-3.5" />, label: language === 'ar' ? 'النشاط' : 'Activity', badge: null, color: 'slate' },
+                      {
+                        key: 'assignees',
+                        icon: <Users className="h-3 w-3" />,
+                        label: language === 'ar' ? 'المشاركون' : 'Assignees',
+                        badge: stats.assignees.length > 0 ? String(stats.assignees.length) : null,
+                        activeBg: 'bg-[#060541] dark:bg-blue-600',
+                        activeShadow: 'shadow-[0_2px_8px_hsla(243,84%,14%,0.4)]',
+                        inactiveBg: 'bg-slate-100 dark:bg-white/[0.07] border border-slate-200 dark:border-white/[0.09]',
+                        inactiveText: 'text-slate-600 dark:text-slate-300',
+                        badgeActive: 'bg-white/25 text-white',
+                        badgeInactive: 'bg-slate-300 dark:bg-white/[0.15] text-slate-600 dark:text-slate-300',
+                      },
+                      ...(stats.totalSubtasksCount > 0 ? [{
+                        key: 'subtasks',
+                        icon: <CheckCircle className="h-3 w-3" />,
+                        label: language === 'ar' ? 'المهام' : 'Subtasks',
+                        badge: `${stats.completedSubtasksCount}/${stats.totalSubtasksCount}`,
+                        activeBg: 'bg-emerald-500 dark:bg-emerald-600',
+                        activeShadow: 'shadow-[0_2px_8px_hsla(142,76%,45%,0.4)]',
+                        inactiveBg: 'bg-slate-100 dark:bg-white/[0.07] border border-slate-200 dark:border-white/[0.09]',
+                        inactiveText: 'text-slate-600 dark:text-slate-300',
+                        badgeActive: 'bg-white/25 text-white',
+                        badgeInactive: 'bg-slate-300 dark:bg-white/[0.15] text-slate-600 dark:text-slate-300',
+                      }] : []),
+                      {
+                        key: 'comments',
+                        icon: <MessageCircle className="h-3 w-3" />,
+                        label: language === 'ar' ? 'تعليقات' : 'Comments',
+                        badge: stats.comments.length > 0 ? String(stats.comments.length) : null,
+                        activeBg: 'bg-sky-500 dark:bg-sky-600',
+                        activeShadow: 'shadow-[0_2px_8px_hsla(199,89%,48%,0.4)]',
+                        inactiveBg: 'bg-slate-100 dark:bg-white/[0.07] border border-slate-200 dark:border-white/[0.09]',
+                        inactiveText: 'text-slate-600 dark:text-slate-300',
+                        badgeActive: 'bg-white/25 text-white',
+                        badgeInactive: 'bg-slate-300 dark:bg-white/[0.15] text-slate-600 dark:text-slate-300',
+                      },
+                      {
+                        key: 'activity',
+                        icon: <Clock className="h-3 w-3" />,
+                        label: language === 'ar' ? 'النشاط' : 'Activity',
+                        badge: null,
+                        activeBg: 'bg-slate-700 dark:bg-slate-500',
+                        activeShadow: 'shadow-[0_2px_8px_hsla(0,0%,0%,0.3)]',
+                        inactiveBg: 'bg-slate-100 dark:bg-white/[0.07] border border-slate-200 dark:border-white/[0.09]',
+                        inactiveText: 'text-slate-600 dark:text-slate-300',
+                        badgeActive: 'bg-white/25 text-white',
+                        badgeInactive: 'bg-slate-300 dark:bg-white/[0.15] text-slate-600 dark:text-slate-300',
+                      },
                     ].map(tab => {
                       const isActive = activeView === tab.key;
-                      const colorMap: Record<string, string> = {
-                        blue: 'text-blue-600 dark:text-blue-400',
-                        emerald: 'text-emerald-600 dark:text-emerald-400',
-                        cyan: 'text-cyan-600 dark:text-cyan-400',
-                        slate: 'text-slate-600 dark:text-slate-300',
-                      };
-                      const badgeMap: Record<string, string> = {
-                        blue: 'bg-blue-500',
-                        emerald: 'bg-emerald-500',
-                        cyan: 'bg-cyan-500',
-                        slate: 'bg-slate-400',
-                      };
-                      const lineMap: Record<string, string> = {
-                        blue: 'bg-blue-500',
-                        emerald: 'bg-emerald-500',
-                        cyan: 'bg-cyan-500',
-                        slate: 'bg-slate-400',
-                      };
                       return (
                         <button key={tab.key} onClick={() => handleViewChange(task.id, tab.key)}
-                          className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2.5 text-[12px] font-bold transition-all touch-manipulation active:scale-95 relative
-                            ${isActive ? colorMap[tab.color] : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
+                          className={`flex-shrink-0 flex items-center gap-1 h-8 px-3 rounded-full text-[11px] font-bold
+                            transition-all touch-manipulation active:scale-95
+                            ${isActive
+                              ? `${tab.activeBg} text-white ${tab.activeShadow}`
+                              : `${tab.inactiveBg} ${tab.inactiveText} hover:bg-slate-200 dark:hover:bg-white/[0.12] shadow-[0_1px_3px_hsla(0,0%,0%,0.07)]`
+                            }`}>
                           {tab.icon}
                           {tab.label}
                           {tab.badge && (
-                            <span className={`min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black flex items-center justify-center
-                              ${isActive ? `${badgeMap[tab.color]} text-white` : 'bg-slate-200 dark:bg-white/[0.1] text-slate-500 dark:text-slate-400'}`}>
+                            <span className={`min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black flex items-center justify-center
+                              ${isActive ? tab.badgeActive : tab.badgeInactive}`}>
                               {tab.badge}
                             </span>
                           )}
-                          {isActive && <span className={`absolute bottom-0 left-0 right-0 h-0.5 rounded-full ${lineMap[tab.color]}`} />}
                         </button>
                       );
                     })}
