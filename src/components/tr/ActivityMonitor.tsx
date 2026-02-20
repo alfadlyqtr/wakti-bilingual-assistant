@@ -452,6 +452,27 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     }
   };
 
+  const handleJoinRequest = async (requestId: string, action: 'approved' | 'denied') => {
+    setProcessingRequests(prev => new Set(prev).add(requestId));
+    try {
+      await supabase
+        .from('tr_task_assignments')
+        .update({ status: action, responded_at: new Date().toISOString() })
+        .eq('id', requestId);
+      toast.success(action === 'approved'
+        ? (language === 'ar' ? 'تم قبول الطلب' : 'Join request approved')
+        : (language === 'ar' ? 'تم رفض الطلب' : 'Join request denied'),
+        { duration: 3000, position: 'bottom-center' }
+      );
+      setTimeout(() => loadAllData(true), 500);
+    } catch (error) {
+      console.error('Error handling join request:', error);
+      toast.error('Failed to process join request');
+    } finally {
+      setProcessingRequests(prev => { const s = new Set(prev); s.delete(requestId); return s; });
+    }
+  };
+
   const getInitials = (name: string) => {
     return name
       .split(' ')
@@ -1024,6 +1045,46 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                             {language === 'ar' ? 'الموافقات المعلقة' : 'Pending Approvals'} · {pendingCount}
                           </p>
                         </div>
+                        {/* ── Join requests ── */}
+                        {stats.joinRequests.map(jr => {
+                          const isProcessing = processingRequests.has(jr.id);
+                          return (
+                            <div key={jr.id} className="rounded-xl p-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200/70 dark:border-indigo-500/30">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="w-6 h-6 rounded-full bg-indigo-200 dark:bg-indigo-500/30 flex items-center justify-center text-[10px] font-black text-indigo-700 dark:text-indigo-300 flex-shrink-0">
+                                  {jr.assignee_name.charAt(0).toUpperCase()}
+                                </div>
+                                <span className="text-[13px] font-bold text-foreground flex-1" dir="auto">{jr.assignee_name}</span>
+                                <span className="text-[10px] text-muted-foreground/60">{format(parseISO(jr.requested_at), 'MMM dd, HH:mm')}</span>
+                              </div>
+                              <p className="text-[11px] text-indigo-700 dark:text-indigo-400 mb-2">
+                                {language === 'ar' ? 'يريد الانضمام إلى هذه المهمة' : 'Wants to join this task'}
+                              </p>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleJoinRequest(jr.id, 'approved')}
+                                  disabled={isProcessing}
+                                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold
+                                    bg-emerald-500 hover:bg-emerald-600 text-white
+                                    disabled:opacity-50 transition-all active:scale-95">
+                                  {isProcessing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                                  {language === 'ar' ? 'قبول' : 'Approve'}
+                                </button>
+                                <button
+                                  onClick={() => handleJoinRequest(jr.id, 'denied')}
+                                  disabled={isProcessing}
+                                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold
+                                    bg-red-100 dark:bg-red-500/20 hover:bg-red-200 dark:hover:bg-red-500/30
+                                    text-red-600 dark:text-red-400
+                                    disabled:opacity-50 transition-all active:scale-95">
+                                  <X className="h-3 w-3" />
+                                  {language === 'ar' ? 'رفض' : 'Deny'}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+
                         {stats.completionRequests.filter(r => !parseSnoozeStatus(r.content)).map(request => (
                           <div key={request.id} className="rounded-xl p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200/70 dark:border-amber-500/30">
                             <div className="flex items-center gap-2 mb-2">
