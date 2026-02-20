@@ -719,7 +719,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
           <Collapsible key={task.id} open={!isCollapsed} onOpenChange={() => toggleCardCollapse(task.id)}>
             <div className={`rounded-2xl overflow-hidden
               bg-white dark:bg-[#0f1318]
-              border-2 ${pendingCount > 0 ? 'border-orange-300 dark:border-orange-500/40' : 'border-slate-200 dark:border-white/[0.09]'}
+              border-2 ${pendingCount > 0 ? 'border-orange-300 dark:border-orange-500/40' : 'border-slate-200 dark:border-white/[0.08]'}
               shadow-[0_4px_24px_hsla(0,0%,0%,0.08),0_1px_6px_hsla(0,0%,0%,0.05)]
               dark:shadow-[0_4px_24px_hsla(0,0%,0%,0.5),0_1px_6px_hsla(0,0%,0%,0.4)]
               transition-all duration-200`}>
@@ -730,56 +730,76 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 const isGen = generatingCode === task.id;
                 return (
                   <div className="flex items-center gap-2 px-4 pt-3 pb-1">
-                    {/* Code pill */}
                     {code ? (
-                      <button
-                        title="Copy code"
-                        onClick={() => { navigator.clipboard.writeText(code); toast.success(language === 'ar' ? 'تم النسخ' : 'Copied!'); }}
-                        className="flex items-center gap-1.5 h-8 px-3 rounded-xl
-                          bg-indigo-50 dark:bg-indigo-500/15
-                          border border-indigo-200 dark:border-indigo-500/30
-                          text-[12px] font-black tracking-widest text-indigo-600 dark:text-indigo-400
-                          hover:bg-indigo-100 dark:hover:bg-indigo-500/25
-                          shadow-[0_1px_3px_hsla(240,80%,50%,0.12)]
-                          transition-all touch-manipulation active:scale-95">
-                        {code}
-                        <Copy className="h-3 w-3 opacity-60" />
-                      </button>
+                      /* Code exists: show pill + small refresh icon + link */
+                      <>
+                        <button
+                          title="Copy code"
+                          onClick={() => { navigator.clipboard.writeText(code); toast.success(language === 'ar' ? 'تم النسخ' : 'Copied!'); }}
+                          className="flex items-center gap-1.5 h-8 px-3 rounded-xl
+                            bg-[#060541]/8 dark:bg-blue-500/15
+                            border border-[#060541]/20 dark:border-blue-400/30
+                            text-[12px] font-black tracking-widest text-[#060541] dark:text-blue-300
+                            hover:bg-[#060541]/12 dark:hover:bg-blue-500/25
+                            shadow-[0_1px_3px_hsla(243,84%,14%,0.1)]
+                            transition-all touch-manipulation active:scale-95">
+                          {code}
+                          <Copy className="h-3 w-3 opacity-50" />
+                        </button>
+                        <div className="flex-1" />
+                        {onCopyLink && (
+                          <button
+                            title="Copy share link"
+                            onClick={() => onCopyLink(task)}
+                            className="flex items-center gap-1.5 h-8 px-3 rounded-xl
+                              bg-slate-100 dark:bg-white/[0.07]
+                              border border-slate-200 dark:border-white/[0.1]
+                              text-[11px] font-bold text-slate-600 dark:text-slate-300
+                              hover:bg-slate-200 dark:hover:bg-white/[0.12]
+                              shadow-[0_1px_3px_hsla(0,0%,0%,0.08)]
+                              transition-all touch-manipulation active:scale-95">
+                            <Link2 className="h-3.5 w-3.5" />
+                            {language === 'ar' ? 'رابط' : 'Link'}
+                          </button>
+                        )}
+                      </>
                     ) : (
-                      <span className="text-[11px] text-muted-foreground/40 italic">{language === 'ar' ? 'لا يوجد كود' : 'No code'}</span>
-                    )}
-                    <div className="flex-1" />
-                    {/* Copy link */}
-                    {onCopyLink && (
-                      <button
-                        title="Copy share link"
-                        onClick={() => onCopyLink(task)}
-                        className="flex items-center gap-1.5 h-8 px-3 rounded-xl
-                          bg-slate-100 dark:bg-white/[0.07]
-                          border border-slate-200 dark:border-white/[0.1]
-                          text-[11px] font-bold text-slate-600 dark:text-slate-300
-                          hover:bg-slate-200 dark:hover:bg-white/[0.12]
-                          shadow-[0_1px_3px_hsla(0,0%,0%,0.08)]
-                          transition-all touch-manipulation active:scale-95">
-                        <Link2 className="h-3.5 w-3.5" />
-                        {language === 'ar' ? 'رابط' : 'Link'}
-                      </button>
-                    )}
-                    {/* Generate / renew code */}
-                    {onGenerateCode && (
-                      <button
-                        title={code ? 'Renew code' : 'Generate code'}
-                        onClick={() => onGenerateCode(task.id)}
-                        disabled={!!isGen}
-                        className="flex items-center gap-1.5 h-8 px-3 rounded-xl
-                          bg-indigo-500 dark:bg-indigo-600
-                          text-[11px] font-bold text-white
-                          hover:bg-indigo-600 dark:hover:bg-indigo-500
-                          shadow-[0_2px_8px_hsla(240,80%,50%,0.35)]
-                          disabled:opacity-50 transition-all touch-manipulation active:scale-95">
-                        {isGen ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Hash className="h-3.5 w-3.5" />}
-                        {code ? (language === 'ar' ? 'تجديد' : 'New') : (language === 'ar' ? 'كود' : 'Code')}
-                      </button>
+                      /* No code yet: show generate button */
+                      <>
+                        <span className="text-[11px] text-muted-foreground/40 italic flex-1">
+                          {language === 'ar' ? 'لا يوجد كود بعد' : 'No code yet'}
+                        </span>
+                        {onCopyLink && (
+                          <button
+                            title="Copy share link"
+                            onClick={() => onCopyLink(task)}
+                            className="flex items-center gap-1.5 h-8 px-3 rounded-xl
+                              bg-slate-100 dark:bg-white/[0.07]
+                              border border-slate-200 dark:border-white/[0.1]
+                              text-[11px] font-bold text-slate-600 dark:text-slate-300
+                              hover:bg-slate-200 dark:hover:bg-white/[0.12]
+                              shadow-[0_1px_3px_hsla(0,0%,0%,0.08)]
+                              transition-all touch-manipulation active:scale-95">
+                            <Link2 className="h-3.5 w-3.5" />
+                            {language === 'ar' ? 'رابط' : 'Link'}
+                          </button>
+                        )}
+                        {onGenerateCode && (
+                          <button
+                            title="Generate code"
+                            onClick={() => onGenerateCode(task.id)}
+                            disabled={!!isGen}
+                            className="flex items-center gap-1.5 h-8 px-3 rounded-xl
+                              bg-[#060541] dark:bg-blue-600
+                              text-[11px] font-bold text-white
+                              hover:bg-[#060541]/85 dark:hover:bg-blue-500
+                              shadow-[0_2px_8px_hsla(243,84%,14%,0.35)]
+                              disabled:opacity-50 transition-all touch-manipulation active:scale-95">
+                            {isGen ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Hash className="h-3.5 w-3.5" />}
+                            {language === 'ar' ? 'كود' : 'Get Code'}
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 );
@@ -886,28 +906,28 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       </button>
                     )}
                     {[
-                      { key: 'assignees', icon: <Users className="h-3.5 w-3.5" />, label: language === 'ar' ? 'المشاركون' : 'Assignees', badge: stats.assignees.length > 0 ? String(stats.assignees.length) : null, color: 'indigo' },
+                      { key: 'assignees', icon: <Users className="h-3.5 w-3.5" />, label: language === 'ar' ? 'المشاركون' : 'Assignees', badge: stats.assignees.length > 0 ? String(stats.assignees.length) : null, color: 'blue' },
                       ...(stats.totalSubtasksCount > 0 ? [{ key: 'subtasks', icon: <CheckCircle className="h-3.5 w-3.5" />, label: language === 'ar' ? 'المهام الفرعية' : 'Subtasks', badge: `${stats.completedSubtasksCount}/${stats.totalSubtasksCount}`, color: 'emerald' }] : []),
-                      { key: 'comments', icon: <MessageCircle className="h-3.5 w-3.5" />, label: language === 'ar' ? 'تعليقات' : 'Comments', badge: stats.comments.length > 0 ? String(stats.comments.length) : null, color: 'purple' },
+                      { key: 'comments', icon: <MessageCircle className="h-3.5 w-3.5" />, label: language === 'ar' ? 'تعليقات' : 'Comments', badge: stats.comments.length > 0 ? String(stats.comments.length) : null, color: 'cyan' },
                       { key: 'activity', icon: <Clock className="h-3.5 w-3.5" />, label: language === 'ar' ? 'النشاط' : 'Activity', badge: null, color: 'slate' },
                     ].map(tab => {
                       const isActive = activeView === tab.key;
                       const colorMap: Record<string, string> = {
-                        indigo: 'text-indigo-600 dark:text-indigo-400',
+                        blue: 'text-blue-600 dark:text-blue-400',
                         emerald: 'text-emerald-600 dark:text-emerald-400',
-                        purple: 'text-purple-600 dark:text-purple-400',
+                        cyan: 'text-cyan-600 dark:text-cyan-400',
                         slate: 'text-slate-600 dark:text-slate-300',
                       };
                       const badgeMap: Record<string, string> = {
-                        indigo: 'bg-indigo-500',
+                        blue: 'bg-blue-500',
                         emerald: 'bg-emerald-500',
-                        purple: 'bg-purple-500',
+                        cyan: 'bg-cyan-500',
                         slate: 'bg-slate-400',
                       };
                       const lineMap: Record<string, string> = {
-                        indigo: 'bg-indigo-500',
+                        blue: 'bg-blue-500',
                         emerald: 'bg-emerald-500',
-                        purple: 'bg-purple-500',
+                        cyan: 'bg-cyan-500',
                         slate: 'bg-slate-400',
                       };
                       return (
