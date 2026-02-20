@@ -718,52 +718,77 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         return (
           <Collapsible key={task.id} open={!isCollapsed} onOpenChange={() => toggleCardCollapse(task.id)}>
             <div className={`rounded-2xl overflow-hidden
-              bg-white dark:bg-white/[0.04]
-              border border-slate-200/80 dark:border-white/[0.07]
-              shadow-[0_2px_16px_hsla(0,0%,0%,0.07),0_1px_4px_hsla(0,0%,0%,0.05)]
-              dark:shadow-[0_2px_16px_hsla(0,0%,0%,0.4),0_1px_4px_hsla(0,0%,0%,0.3)]
+              bg-white dark:bg-[#0f1318]
+              border-2 ${pendingCount > 0 ? 'border-orange-300 dark:border-orange-500/40' : 'border-slate-200 dark:border-white/[0.09]'}
+              shadow-[0_4px_24px_hsla(0,0%,0%,0.08),0_1px_6px_hsla(0,0%,0%,0.05)]
+              dark:shadow-[0_4px_24px_hsla(0,0%,0%,0.5),0_1px_6px_hsla(0,0%,0%,0.4)]
               transition-all duration-200`}>
 
               {/* ── Top action bar: code + link + generate ── */}
-              {(onCopyLink || onGenerateCode) && (
-                <div className="flex items-center gap-2 px-4 pt-3 pb-0">
-                  {(() => {
-                    const code = taskCodes[task.id] || (task as TRTask & { task_code?: string }).task_code;
-                    const isGen = generatingCode === task.id;
-                    return (
-                      <>
-                        {code && (
-                          <span className="text-[12px] font-black tracking-widest text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-                            {code}
-                            <button onClick={() => { navigator.clipboard.writeText(code); toast.success(language === 'ar' ? 'تم النسخ' : 'Copied!'); }}
-                              className="text-muted-foreground/40 hover:text-indigo-500 transition-colors ml-0.5">
-                              <Copy className="h-3 w-3" />
-                            </button>
-                          </span>
-                        )}
-                        {onCopyLink && (
-                          <button onClick={() => onCopyLink(task)}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-white/[0.06] text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/[0.1] transition-all touch-manipulation active:scale-95">
-                            <Link2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                        {onGenerateCode && (
-                          <button onClick={() => onGenerateCode(task.id)} disabled={!!isGen}
-                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-500/30 disabled:opacity-50 transition-all touch-manipulation active:scale-95">
-                            {isGen ? <Loader2 className="h-3 w-3 animate-spin" /> : <Hash className="h-3 w-3" />}
-                            {code ? (language === 'ar' ? 'تجديد' : 'New') : (language === 'ar' ? 'كود' : 'Code')}
-                          </button>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
+              {(onCopyLink || onGenerateCode) && (() => {
+                const code = taskCodes[task.id] || (task as TRTask & { task_code?: string }).task_code;
+                const isGen = generatingCode === task.id;
+                return (
+                  <div className="flex items-center gap-2 px-4 pt-3 pb-1">
+                    {/* Code pill */}
+                    {code ? (
+                      <button
+                        title="Copy code"
+                        onClick={() => { navigator.clipboard.writeText(code); toast.success(language === 'ar' ? 'تم النسخ' : 'Copied!'); }}
+                        className="flex items-center gap-1.5 h-8 px-3 rounded-xl
+                          bg-indigo-50 dark:bg-indigo-500/15
+                          border border-indigo-200 dark:border-indigo-500/30
+                          text-[12px] font-black tracking-widest text-indigo-600 dark:text-indigo-400
+                          hover:bg-indigo-100 dark:hover:bg-indigo-500/25
+                          shadow-[0_1px_3px_hsla(240,80%,50%,0.12)]
+                          transition-all touch-manipulation active:scale-95">
+                        {code}
+                        <Copy className="h-3 w-3 opacity-60" />
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground/40 italic">{language === 'ar' ? 'لا يوجد كود' : 'No code'}</span>
+                    )}
+                    <div className="flex-1" />
+                    {/* Copy link */}
+                    {onCopyLink && (
+                      <button
+                        title="Copy share link"
+                        onClick={() => onCopyLink(task)}
+                        className="flex items-center gap-1.5 h-8 px-3 rounded-xl
+                          bg-slate-100 dark:bg-white/[0.07]
+                          border border-slate-200 dark:border-white/[0.1]
+                          text-[11px] font-bold text-slate-600 dark:text-slate-300
+                          hover:bg-slate-200 dark:hover:bg-white/[0.12]
+                          shadow-[0_1px_3px_hsla(0,0%,0%,0.08)]
+                          transition-all touch-manipulation active:scale-95">
+                        <Link2 className="h-3.5 w-3.5" />
+                        {language === 'ar' ? 'رابط' : 'Link'}
+                      </button>
+                    )}
+                    {/* Generate / renew code */}
+                    {onGenerateCode && (
+                      <button
+                        title={code ? 'Renew code' : 'Generate code'}
+                        onClick={() => onGenerateCode(task.id)}
+                        disabled={!!isGen}
+                        className="flex items-center gap-1.5 h-8 px-3 rounded-xl
+                          bg-indigo-500 dark:bg-indigo-600
+                          text-[11px] font-bold text-white
+                          hover:bg-indigo-600 dark:hover:bg-indigo-500
+                          shadow-[0_2px_8px_hsla(240,80%,50%,0.35)]
+                          disabled:opacity-50 transition-all touch-manipulation active:scale-95">
+                        {isGen ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Hash className="h-3.5 w-3.5" />}
+                        {code ? (language === 'ar' ? 'تجديد' : 'New') : (language === 'ar' ? 'كود' : 'Code')}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
 
-              {/* ── Premium card header (collapsible trigger) ── */}
+              {/* ── Card header (collapsible trigger) ── */}
               <CollapsibleTrigger asChild>
-                <button className="w-full text-left px-4 py-4 flex items-center gap-3
-                  hover:bg-slate-50/80 dark:hover:bg-white/[0.03] transition-colors touch-manipulation">
+                <button className="w-full text-left px-4 py-3.5 flex items-center gap-3
+                  hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors touch-manipulation">
 
                   {/* Status dot */}
                   <div className={`flex-shrink-0 w-2.5 h-2.5 rounded-full
@@ -832,10 +857,13 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                   </div>
 
                   {/* Chevron */}
-                  <div className={`flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center
-                    bg-slate-100 dark:bg-white/[0.06] transition-transform duration-200
+                  <div className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center
+                    bg-slate-100 dark:bg-white/[0.08]
+                    border border-slate-200 dark:border-white/[0.08]
+                    shadow-[0_1px_3px_hsla(0,0%,0%,0.08)]
+                    transition-transform duration-200
                     ${isCollapsed ? '' : 'rotate-180'}`}>
-                    <ChevronDown className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                    <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-300" />
                   </div>
                 </button>
               </CollapsibleTrigger>
@@ -844,45 +872,60 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 <CardContent className="pt-0 space-y-0">
 
                   {/* ── Per-card mini tab bar ── */}
-                  <div className="flex items-center gap-1 px-1 pt-3 pb-2 overflow-x-auto" style={{scrollbarWidth:'none'}}>
+                  <div className="flex items-center gap-1.5 px-3 pt-1 pb-0 overflow-x-auto border-t border-slate-100 dark:border-white/[0.06]" style={{scrollbarWidth:'none'}}>
                     {pendingCount > 0 && (
                       <button onClick={() => handleViewChange(task.id, 'approvals')}
-                        className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all touch-manipulation
-                          ${activeView === 'approvals' ? 'bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300' : 'bg-slate-100 dark:bg-white/[0.05] text-muted-foreground'}`}>
-                        <AlertCircle className="h-3 w-3" />
+                        className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2.5 text-[12px] font-bold transition-all touch-manipulation active:scale-95 relative
+                          ${activeView === 'approvals'
+                            ? 'text-orange-600 dark:text-orange-400'
+                            : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
+                        <AlertCircle className="h-3.5 w-3.5" />
                         {language === 'ar' ? 'موافقات' : 'Approvals'}
-                        <span className="min-w-[16px] h-4 px-1 rounded-full text-[10px] font-black bg-orange-500 text-white flex items-center justify-center">{pendingCount}</span>
+                        <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black bg-orange-500 text-white flex items-center justify-center">{pendingCount}</span>
+                        {activeView === 'approvals' && <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-orange-500" />}
                       </button>
                     )}
-                    <button onClick={() => handleViewChange(task.id, 'assignees')}
-                      className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all touch-manipulation
-                        ${activeView === 'assignees' ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300' : 'bg-slate-100 dark:bg-white/[0.05] text-muted-foreground'}`}>
-                      <Users className="h-3 w-3" />
-                      {language === 'ar' ? 'المشاركون' : 'Assignees'}
-                      {stats.assignees.length > 0 && <span className={`min-w-[16px] h-4 px-1 rounded-full text-[10px] font-black flex items-center justify-center ${activeView === 'assignees' ? 'bg-indigo-500 text-white' : 'bg-slate-200 dark:bg-white/[0.1] text-muted-foreground'}`}>{stats.assignees.length}</span>}
-                    </button>
-                    {stats.totalSubtasksCount > 0 && (
-                      <button onClick={() => handleViewChange(task.id, 'subtasks')}
-                        className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all touch-manipulation
-                          ${activeView === 'subtasks' ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-white/[0.05] text-muted-foreground'}`}>
-                        <CheckCircle className="h-3 w-3" />
-                        {language === 'ar' ? 'المهام الفرعية' : 'Subtasks'}
-                        <span className={`min-w-[16px] h-4 px-1 rounded-full text-[10px] font-black flex items-center justify-center ${activeView === 'subtasks' ? 'bg-emerald-500 text-white' : 'bg-slate-200 dark:bg-white/[0.1] text-muted-foreground'}`}>{stats.completedSubtasksCount}/{stats.totalSubtasksCount}</span>
-                      </button>
-                    )}
-                    <button onClick={() => handleViewChange(task.id, 'comments')}
-                      className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all touch-manipulation
-                        ${activeView === 'comments' ? 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300' : 'bg-slate-100 dark:bg-white/[0.05] text-muted-foreground'}`}>
-                      <MessageCircle className="h-3 w-3" />
-                      {language === 'ar' ? 'تعليقات' : 'Comments'}
-                      {stats.comments.length > 0 && <span className={`min-w-[16px] h-4 px-1 rounded-full text-[10px] font-black flex items-center justify-center ${activeView === 'comments' ? 'bg-purple-500 text-white' : 'bg-slate-200 dark:bg-white/[0.1] text-muted-foreground'}`}>{stats.comments.length}</span>}
-                    </button>
-                    <button onClick={() => handleViewChange(task.id, 'activity')}
-                      className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all touch-manipulation
-                        ${activeView === 'activity' ? 'bg-slate-200 dark:bg-white/[0.12] text-foreground' : 'bg-slate-100 dark:bg-white/[0.05] text-muted-foreground'}`}>
-                      <Clock className="h-3 w-3" />
-                      {language === 'ar' ? 'النشاط' : 'Activity'}
-                    </button>
+                    {[
+                      { key: 'assignees', icon: <Users className="h-3.5 w-3.5" />, label: language === 'ar' ? 'المشاركون' : 'Assignees', badge: stats.assignees.length > 0 ? String(stats.assignees.length) : null, color: 'indigo' },
+                      ...(stats.totalSubtasksCount > 0 ? [{ key: 'subtasks', icon: <CheckCircle className="h-3.5 w-3.5" />, label: language === 'ar' ? 'المهام الفرعية' : 'Subtasks', badge: `${stats.completedSubtasksCount}/${stats.totalSubtasksCount}`, color: 'emerald' }] : []),
+                      { key: 'comments', icon: <MessageCircle className="h-3.5 w-3.5" />, label: language === 'ar' ? 'تعليقات' : 'Comments', badge: stats.comments.length > 0 ? String(stats.comments.length) : null, color: 'purple' },
+                      { key: 'activity', icon: <Clock className="h-3.5 w-3.5" />, label: language === 'ar' ? 'النشاط' : 'Activity', badge: null, color: 'slate' },
+                    ].map(tab => {
+                      const isActive = activeView === tab.key;
+                      const colorMap: Record<string, string> = {
+                        indigo: 'text-indigo-600 dark:text-indigo-400',
+                        emerald: 'text-emerald-600 dark:text-emerald-400',
+                        purple: 'text-purple-600 dark:text-purple-400',
+                        slate: 'text-slate-600 dark:text-slate-300',
+                      };
+                      const badgeMap: Record<string, string> = {
+                        indigo: 'bg-indigo-500',
+                        emerald: 'bg-emerald-500',
+                        purple: 'bg-purple-500',
+                        slate: 'bg-slate-400',
+                      };
+                      const lineMap: Record<string, string> = {
+                        indigo: 'bg-indigo-500',
+                        emerald: 'bg-emerald-500',
+                        purple: 'bg-purple-500',
+                        slate: 'bg-slate-400',
+                      };
+                      return (
+                        <button key={tab.key} onClick={() => handleViewChange(task.id, tab.key)}
+                          className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2.5 text-[12px] font-bold transition-all touch-manipulation active:scale-95 relative
+                            ${isActive ? colorMap[tab.color] : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
+                          {tab.icon}
+                          {tab.label}
+                          {tab.badge && (
+                            <span className={`min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black flex items-center justify-center
+                              ${isActive ? `${badgeMap[tab.color]} text-white` : 'bg-slate-200 dark:bg-white/[0.1] text-slate-500 dark:text-slate-400'}`}>
+                              {tab.badge}
+                            </span>
+                          )}
+                          {isActive && <span className={`absolute bottom-0 left-0 right-0 h-0.5 rounded-full ${lineMap[tab.color]}`} />}
+                        </button>
+                      );
+                    })}
                   </div>
 
                   <div className="space-y-3 pb-4 px-1">
