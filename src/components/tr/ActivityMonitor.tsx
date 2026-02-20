@@ -700,7 +700,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
       {sharedTasks.map((task) => {
         const stats = getTaskStats(task.id);
-        const activeView = activeViews[task.id] || 'approvals';
+        const activeView = activeViews[task.id] || 'assignees';
         const isCollapsed = collapsedCards.has(task.id);
         const pendingCount = stats.completionRequests.filter(r => !parseSnoozeStatus(r.content)).length
           + stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length
@@ -798,10 +798,52 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
               <CollapsibleContent>
                 <CardContent className="pt-0 space-y-0">
 
-                  <div className="space-y-5 pb-4 pt-1">
-
-                    {/* ── APPROVALS: only shown when there are pending requests ── */}
+                  {/* ── Per-card mini tab bar ── */}
+                  <div className="flex items-center gap-1 px-1 pt-3 pb-2 overflow-x-auto" style={{scrollbarWidth:'none'}}>
                     {pendingCount > 0 && (
+                      <button onClick={() => handleViewChange(task.id, 'approvals')}
+                        className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all touch-manipulation
+                          ${activeView === 'approvals' ? 'bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300' : 'bg-slate-100 dark:bg-white/[0.05] text-muted-foreground'}`}>
+                        <AlertCircle className="h-3 w-3" />
+                        {language === 'ar' ? 'موافقات' : 'Approvals'}
+                        <span className="min-w-[16px] h-4 px-1 rounded-full text-[10px] font-black bg-orange-500 text-white flex items-center justify-center">{pendingCount}</span>
+                      </button>
+                    )}
+                    <button onClick={() => handleViewChange(task.id, 'assignees')}
+                      className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all touch-manipulation
+                        ${activeView === 'assignees' ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300' : 'bg-slate-100 dark:bg-white/[0.05] text-muted-foreground'}`}>
+                      <Users className="h-3 w-3" />
+                      {language === 'ar' ? 'المشاركون' : 'Assignees'}
+                      {stats.assignees.length > 0 && <span className={`min-w-[16px] h-4 px-1 rounded-full text-[10px] font-black flex items-center justify-center ${activeView === 'assignees' ? 'bg-indigo-500 text-white' : 'bg-slate-200 dark:bg-white/[0.1] text-muted-foreground'}`}>{stats.assignees.length}</span>}
+                    </button>
+                    {stats.totalSubtasksCount > 0 && (
+                      <button onClick={() => handleViewChange(task.id, 'subtasks')}
+                        className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all touch-manipulation
+                          ${activeView === 'subtasks' ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-white/[0.05] text-muted-foreground'}`}>
+                        <CheckCircle className="h-3 w-3" />
+                        {language === 'ar' ? 'المهام الفرعية' : 'Subtasks'}
+                        <span className={`min-w-[16px] h-4 px-1 rounded-full text-[10px] font-black flex items-center justify-center ${activeView === 'subtasks' ? 'bg-emerald-500 text-white' : 'bg-slate-200 dark:bg-white/[0.1] text-muted-foreground'}`}>{stats.completedSubtasksCount}/{stats.totalSubtasksCount}</span>
+                      </button>
+                    )}
+                    <button onClick={() => handleViewChange(task.id, 'comments')}
+                      className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all touch-manipulation
+                        ${activeView === 'comments' ? 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300' : 'bg-slate-100 dark:bg-white/[0.05] text-muted-foreground'}`}>
+                      <MessageCircle className="h-3 w-3" />
+                      {language === 'ar' ? 'تعليقات' : 'Comments'}
+                      {stats.comments.length > 0 && <span className={`min-w-[16px] h-4 px-1 rounded-full text-[10px] font-black flex items-center justify-center ${activeView === 'comments' ? 'bg-purple-500 text-white' : 'bg-slate-200 dark:bg-white/[0.1] text-muted-foreground'}`}>{stats.comments.length}</span>}
+                    </button>
+                    <button onClick={() => handleViewChange(task.id, 'activity')}
+                      className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all touch-manipulation
+                        ${activeView === 'activity' ? 'bg-slate-200 dark:bg-white/[0.12] text-foreground' : 'bg-slate-100 dark:bg-white/[0.05] text-muted-foreground'}`}>
+                      <Clock className="h-3 w-3" />
+                      {language === 'ar' ? 'النشاط' : 'Activity'}
+                    </button>
+                  </div>
+
+                  <div className="space-y-3 pb-4 px-1">
+
+                    {/* ── APPROVALS tab ── */}
+                    {activeView === 'approvals' && (
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 px-1">
                           <div className="w-1 h-4 rounded-full bg-orange-500" />
@@ -856,144 +898,121 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       </div>
                     )}
 
-                    {/* ── ASSIGNEES: who has access ── */}
-                    {stats.assignees.length > 0 && (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 px-1">
-                          <div className="w-1 h-4 rounded-full bg-indigo-500" />
-                          <p className="text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
-                            {language === 'ar' ? 'المشاركون' : 'Assignees'} · {stats.assignees.length}
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {stats.assignees.map(assignee => {
-                            const activities = stats.allResponses.filter(r => r.visitor_name === assignee);
-                            const lastAct = activities.length > 0
-                              ? [...activities].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
-                              : null;
-                            return (
-                              <div key={assignee} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07]">
-                                <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-[11px] font-black text-indigo-600 dark:text-indigo-400 flex-shrink-0">
-                                  {assignee.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="text-[12px] font-bold text-foreground truncate" dir="auto">{assignee}</p>
-                                  {lastAct && <p className="text-[10px] text-muted-foreground/50">{formatRelativeTime(lastAct.created_at)}</p>}
-                                </div>
+                    {/* ── ASSIGNEES tab ── */}
+                    {activeView === 'assignees' && (
+                      <div className="space-y-2 pt-1">
+                        {stats.assignees.length === 0 ? (
+                          <p className="text-center py-6 text-muted-foreground/50 text-[13px]">{language === 'ar' ? 'لا يوجد مشاركون بعد' : 'No assignees yet'}</p>
+                        ) : stats.assignees.map(assignee => {
+                          const acts = stats.allResponses.filter(r => r.visitor_name === assignee);
+                          const lastAct = acts.length > 0 ? [...acts].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] : null;
+                          const doneCount = stats.subtasks.filter(s => s.completed && stats.allResponses.some(r => r.subtask_id === s.id && r.visitor_name === assignee && r.is_completed)).length;
+                          return (
+                            <div key={assignee} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07]">
+                              <div className="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-[13px] font-black text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                                {assignee.charAt(0).toUpperCase()}
                               </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ── SUBTASK PROGRESS: who completed what when ── */}
-                    {stats.totalSubtasksCount > 0 && (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 px-1">
-                          <div className="w-1 h-4 rounded-full bg-emerald-500" />
-                          <p className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-                            {language === 'ar' ? 'المهام الفرعية' : 'Subtasks'} · {stats.completedSubtasksCount}/{stats.totalSubtasksCount}
-                          </p>
-                        </div>
-                        <div className="space-y-1.5">
-                          {stats.subtasks.map(subtask => {
-                            const completions = stats.allResponses.filter(r => r.response_type === 'completion' && r.subtask_id === subtask.id && r.is_completed);
-                            const allWho = [...new Set(completions.map(c => c.visitor_name))];
-                            const latest = completions.length > 0 ? [...completions].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] : null;
-                            const isCompleted = !!subtask.completed;
-                            return (
-                              <div key={subtask.id} className={`rounded-xl px-3 py-2.5 flex items-start gap-3 ${isCompleted ? 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20' : 'bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05]'}`}>
-                                <div className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center mt-0.5 ${isCompleted ? 'bg-emerald-500' : 'border-2 border-slate-300 dark:border-white/20'}`}>
-                                  {isCompleted && <Check className="h-2.5 w-2.5 text-white" />}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className={`text-[12px] font-semibold ${isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'}`} dir="auto">{subtask.title}</p>
-                                  {isCompleted && latest && (
-                                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center gap-1" dir="auto">
-                                      <Users className="h-2.5 w-2.5 flex-shrink-0" />
-                                      {allWho.join(', ')} · {format(parseISO(latest.created_at), 'MMM dd, HH:mm')}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ── COMMENTS: full thread with reply ── */}
-                    {stats.comments.length > 0 && (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 px-1">
-                          <div className="w-1 h-4 rounded-full bg-purple-500" />
-                          <p className="text-[11px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider">
-                            {t('comments', language)} · {stats.comments.length}
-                          </p>
-                        </div>
-                        <div className="space-y-2 max-h-[320px] overflow-y-auto">
-                          {stats.comments.sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map(comment => (
-                            <div key={comment.id} className="rounded-xl p-3 bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06]">
-                              <div className="flex items-center gap-2 mb-1.5">
-                                <div className="w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center text-[10px] font-black text-purple-600 dark:text-purple-400 flex-shrink-0">
-                                  {comment.visitor_name.charAt(0).toUpperCase()}
-                                </div>
-                                <span className="text-[12px] font-bold text-foreground" dir="auto">{comment.visitor_name}</span>
-                                <span className="text-[10px] text-muted-foreground/50 ml-auto">{formatRelativeTime(comment.created_at)}</span>
-                              </div>
-                              <div className="bg-white dark:bg-white/[0.04] rounded-lg px-3 py-2 text-[13px] text-foreground border border-slate-200/50 dark:border-white/[0.06]" dir="auto">
-                                {comment.content}
-                              </div>
-                              {replyingTo === comment.id ? (
-                                <div className="mt-2 space-y-2">
-                                  <Textarea value={replyContent} onChange={e => setReplyContent(e.target.value)} placeholder={`${t('typeYourReply', language)}...`} rows={2} className="text-sm" />
-                                  <div className="flex gap-2 justify-end">
-                                    <Button size="sm" variant="outline" onClick={() => { setReplyingTo(null); setReplyContent(''); }}>{t('cancel', language)}</Button>
-                                    <Button size="sm" onClick={() => handleReply(task.id)} disabled={!replyContent.trim()}>{t('reply', language)}</Button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <button onClick={() => setReplyingTo(comment.id)} className="mt-1.5 text-[11px] font-bold text-purple-500 hover:text-purple-600 flex items-center gap-1">
-                                  <Mail className="h-3 w-3" />{t('reply', language)}
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ── ACTIVITY LOG ── */}
-                    {stats.allResponses.filter(r => r.response_type !== 'comment').length > 0 && (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 px-1">
-                          <div className="w-1 h-4 rounded-full bg-slate-400" />
-                          <p className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                            {language === 'ar' ? 'سجل النشاط' : 'Activity Log'}
-                          </p>
-                        </div>
-                        <div className="space-y-1.5 max-h-[240px] overflow-y-auto">
-                          {stats.allResponses.filter(r => r.response_type !== 'comment').sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 20).map(activity => (
-                            <div key={activity.id} className="flex items-start gap-2.5 px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/50 dark:border-white/[0.05]">
-                              {getActivityIcon(activity.response_type)}
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[12px] font-bold text-foreground" dir="auto">{activity.visitor_name}</span>
-                                  <span className="text-[10px] text-muted-foreground/50 ml-auto">{format(parseISO(activity.created_at), 'MMM dd, HH:mm')}</span>
-                                </div>
-                                <p className="text-[11px] text-muted-foreground" dir="auto">{getActivityDescription(activity, stats.subtasks)}</p>
+                                <p className="text-[13px] font-bold text-foreground truncate" dir="auto">{assignee}</p>
+                                <p className="text-[10px] text-muted-foreground/50">
+                                  {lastAct ? formatRelativeTime(lastAct.created_at) : '—'}
+                                  {stats.totalSubtasksCount > 0 && ` · ${doneCount}/${stats.totalSubtasksCount} subtasks`}
+                                </p>
                               </div>
                             </div>
-                          ))}
-                        </div>
+                          );
+                        })}
                       </div>
                     )}
 
-                    {/* Empty state */}
-                    {stats.allResponses.length === 0 && stats.assignees.length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground/50 text-[13px]">
-                        {t('noActivityYet', language)}
+                    {/* ── SUBTASKS tab ── */}
+                    {activeView === 'subtasks' && (
+                      <div className="space-y-1.5 pt-1">
+                        {stats.subtasks.map(subtask => {
+                          const completions = stats.allResponses.filter(r => r.response_type === 'completion' && r.subtask_id === subtask.id && r.is_completed);
+                          const allWho = [...new Set(completions.map(c => c.visitor_name))];
+                          const latest = completions.length > 0 ? [...completions].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] : null;
+                          const isCompleted = !!subtask.completed;
+                          return (
+                            <div key={subtask.id} className={`rounded-xl px-3 py-2.5 flex items-start gap-3 ${isCompleted ? 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20' : 'bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05]'}`}>
+                              <div className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center mt-0.5 ${isCompleted ? 'bg-emerald-500' : 'border-2 border-slate-300 dark:border-white/20'}`}>
+                                {isCompleted && <Check className="h-2.5 w-2.5 text-white" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-[12px] font-semibold ${isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'}`} dir="auto">{subtask.title}</p>
+                                {isCompleted && latest && (
+                                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center gap-1" dir="auto">
+                                    <Users className="h-2.5 w-2.5 flex-shrink-0" />
+                                    {allWho.join(', ')} · {format(parseISO(latest.created_at), 'MMM dd, HH:mm')}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* ── COMMENTS tab ── */}
+                    {activeView === 'comments' && (
+                      <div className="space-y-2 pt-1">
+                        {stats.comments.length === 0 ? (
+                          <p className="text-center py-6 text-muted-foreground/50 text-[13px]">{language === 'ar' ? 'لا توجد تعليقات بعد' : 'No comments yet'}</p>
+                        ) : (
+                          <div className="space-y-2 max-h-[320px] overflow-y-auto">
+                            {stats.comments.sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map(comment => (
+                              <div key={comment.id} className="rounded-xl p-3 bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06]">
+                                <div className="flex items-center gap-2 mb-1.5">
+                                  <div className="w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center text-[10px] font-black text-purple-600 dark:text-purple-400 flex-shrink-0">
+                                    {comment.visitor_name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <span className="text-[12px] font-bold text-foreground" dir="auto">{comment.visitor_name}</span>
+                                  <span className="text-[10px] text-muted-foreground/50 ml-auto">{formatRelativeTime(comment.created_at)}</span>
+                                </div>
+                                <div className="bg-white dark:bg-white/[0.04] rounded-lg px-3 py-2 text-[13px] text-foreground border border-slate-200/50 dark:border-white/[0.06]" dir="auto">
+                                  {comment.content}
+                                </div>
+                                {replyingTo === comment.id ? (
+                                  <div className="mt-2 space-y-2">
+                                    <Textarea value={replyContent} onChange={e => setReplyContent(e.target.value)} placeholder={`${t('typeYourReply', language)}...`} rows={2} className="text-sm" />
+                                    <div className="flex gap-2 justify-end">
+                                      <Button size="sm" variant="outline" onClick={() => { setReplyingTo(null); setReplyContent(''); }}>{t('cancel', language)}</Button>
+                                      <Button size="sm" onClick={() => handleReply(task.id)} disabled={!replyContent.trim()}>{t('reply', language)}</Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <button onClick={() => setReplyingTo(comment.id)} className="mt-1.5 text-[11px] font-bold text-purple-500 hover:text-purple-600 flex items-center gap-1">
+                                    <Mail className="h-3 w-3" />{t('reply', language)}
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── ACTIVITY tab ── */}
+                    {activeView === 'activity' && (
+                      <div className="space-y-1.5 pt-1">
+                        {stats.allResponses.filter(r => r.response_type !== 'comment').length === 0 ? (
+                          <p className="text-center py-6 text-muted-foreground/50 text-[13px]">{t('noActivityYet', language)}</p>
+                        ) : (
+                          <div className="space-y-1.5 max-h-[280px] overflow-y-auto">
+                            {stats.allResponses.filter(r => r.response_type !== 'comment').sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 30).map(activity => (
+                              <div key={activity.id} className="flex items-start gap-2.5 px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/50 dark:border-white/[0.05]">
+                                {getActivityIcon(activity.response_type)}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[12px] font-bold text-foreground" dir="auto">{activity.visitor_name}</span>
+                                    <span className="text-[10px] text-muted-foreground/50 ml-auto">{format(parseISO(activity.created_at), 'MMM dd, HH:mm')}</span>
+                                  </div>
+                                  <p className="text-[11px] text-muted-foreground" dir="auto">{getActivityDescription(activity, stats.subtasks)}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
 
