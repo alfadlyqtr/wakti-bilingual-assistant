@@ -52,6 +52,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const [responses, setResponses] = useState<{ [taskId: string]: TRSharedResponse[] }>({});
   const [subtasks, setSubtasks] = useState<{ [taskId: string]: TRSubtask[] }>({});
   const [visitors, setVisitors] = useState<{ [taskId: string]: TRSharedAccess[] }>({});
+  const [joinRequests, setJoinRequests] = useState<{ [taskId: string]: { id: string; assignee_name: string; requested_at: string }[] }>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
@@ -147,7 +148,19 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       const allResponses: { [taskId: string]: TRSharedResponse[] } = {};
       const allSubtasks: { [taskId: string]: TRSubtask[] } = {};
       const allVisitors: { [taskId: string]: TRSharedAccess[] } = {};
+      const allJoinRequests: { [taskId: string]: { id: string; assignee_name: string; requested_at: string }[] } = {};
       
+      const taskIds = sharedTasks.map(t => t.id);
+      const { data: joinData } = await supabase
+        .from('tr_task_assignments')
+        .select('id, task_id, assignee_name, requested_at')
+        .in('task_id', taskIds)
+        .eq('status', 'pending');
+      (joinData || []).forEach(r => {
+        if (!allJoinRequests[r.task_id]) allJoinRequests[r.task_id] = [];
+        allJoinRequests[r.task_id].push({ id: r.id, assignee_name: r.assignee_name, requested_at: r.requested_at });
+      });
+
       for (const task of sharedTasks) {
         // Load all data in parallel for each task
         const [taskResponses, taskSubtasks, taskVisitors] = await Promise.all([
@@ -164,6 +177,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       setResponses(allResponses);
       setSubtasks(allSubtasks);
       setVisitors(allVisitors);
+      setJoinRequests(allJoinRequests);
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Error loading activity data:', error);
@@ -228,6 +242,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     const taskResponses = responses[taskId] || [];
     const taskSubtaskList = subtasks[taskId] || [];
     const taskVisitors = visitors[taskId] || [];
+    const taskJoinRequests = joinRequests[taskId] || [];
     
     // Get unique assignees
     const uniqueAssignees = [...new Set(taskResponses.map(r => r.visitor_name))];
@@ -255,11 +270,12 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       snoozeRequests: snoozeRequests,
       uncheckRequests: uncheckRequests,
       completionRequests: completionRequests,
+      joinRequests: taskJoinRequests,
       allResponses: taskResponses,
       subtasks: taskSubtaskList,
       visitors: taskVisitors
     };
-  }, [responses, subtasks, visitors]);
+  }, [responses, subtasks, visitors, joinRequests]);
 
   const formatRelativeTime = useCallback((dateString: string) => {
     try {
@@ -726,7 +742,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         const isCollapsed = collapsedCards.has(task.id);
         const pendingCount = stats.completionRequests.filter(r => !parseSnoozeStatus(r.content)).length
           + stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length
-          + stats.uncheckRequests.length;
+          + stats.uncheckRequests.length
+          + stats.joinRequests.length;
 
         return (
           <Collapsible key={task.id} open={!isCollapsed} onOpenChange={() => toggleCardCollapse(task.id)}>
