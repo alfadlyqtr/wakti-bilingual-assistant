@@ -94,6 +94,19 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   // Active view for each task
   const [activeViews, setActiveViews] = useState<{ [taskId: string]: string }>({});
 
+  // Collapsed sections inside subtasks tab: { taskId: { pending: bool, completed: bool } }
+  const [subtaskSections, setSubtaskSections] = useState<{ [taskId: string]: { pending: boolean; completed: boolean } }>({});
+  const toggleSubtaskSection = (taskId: string, section: 'pending' | 'completed') => {
+    setSubtaskSections(prev => ({
+      ...prev,
+      [taskId]: {
+        pending: prev[taskId]?.pending ?? true,
+        completed: prev[taskId]?.completed ?? true,
+        [section]: !(prev[taskId]?.[section] ?? true),
+      }
+    }));
+  };
+
   // Memoize shared tasks to prevent unnecessary re-calculations
   const sharedTasks = useMemo(() => {
     const shared = tasks.filter(task => task.is_shared && task.share_link);
@@ -1094,22 +1107,38 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                           </div>
                         );
                       };
+                      const isPendingOpen = subtaskSections[task.id]?.pending ?? true;
+                      const isCompletedOpen = subtaskSections[task.id]?.completed ?? true;
                       return (
-                        <div className="space-y-3 pt-1">
+                        <div className="space-y-2 pt-1">
                           {pending.length > 0 && (
                             <div className="space-y-1.5">
-                              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1">
-                                {language === 'ar' ? 'معلق' : 'Pending'} · {pending.length}
-                              </p>
-                              {pending.map(renderSubtask)}
+                              <button
+                                onClick={() => toggleSubtaskSection(task.id, 'pending')}
+                                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg
+                                  bg-slate-100 dark:bg-white/[0.05] hover:bg-slate-200 dark:hover:bg-white/[0.08]
+                                  transition-colors touch-manipulation active:scale-[0.98]">
+                                <ChevronDown className={`h-3.5 w-3.5 text-slate-500 transition-transform duration-200 ${isPendingOpen ? '' : '-rotate-90'}`} />
+                                <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex-1 text-left">
+                                  {language === 'ar' ? 'معلق' : 'Pending'} · {pending.length}
+                                </span>
+                              </button>
+                              {isPendingOpen && <div className="space-y-1.5">{pending.map(renderSubtask)}</div>}
                             </div>
                           )}
                           {completed.length > 0 && (
                             <div className="space-y-1.5">
-                              <p className="text-[10px] font-black uppercase tracking-wider text-emerald-500 dark:text-emerald-400 px-1">
-                                {language === 'ar' ? 'مكتمل' : 'Completed'} · {completed.length}
-                              </p>
-                              {completed.map(renderSubtask)}
+                              <button
+                                onClick={() => toggleSubtaskSection(task.id, 'completed')}
+                                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg
+                                  bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/15
+                                  transition-colors touch-manipulation active:scale-[0.98]">
+                                <ChevronDown className={`h-3.5 w-3.5 text-emerald-500 transition-transform duration-200 ${isCompletedOpen ? '' : '-rotate-90'}`} />
+                                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex-1 text-left">
+                                  {language === 'ar' ? 'مكتمل' : 'Completed'} · {completed.length}
+                                </span>
+                              </button>
+                              {isCompletedOpen && <div className="space-y-1.5">{completed.map(renderSubtask)}</div>}
                             </div>
                           )}
                         </div>
