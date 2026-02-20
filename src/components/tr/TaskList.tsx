@@ -332,6 +332,14 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                         {t('sharedTask', language)}
                       </span>
                     )}
+                    {task.is_shared && (task as TRTask & { task_code?: string }).task_code && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-black px-2.5 py-1 rounded-lg tracking-widest
+                        bg-[#060541]/8 dark:bg-blue-500/15
+                        border border-[#060541]/20 dark:border-blue-400/30
+                        text-[#060541] dark:text-blue-300">
+                        {(task as TRTask & { task_code?: string }).task_code}
+                      </span>
+                    )}
 
                     {completed && (
                       <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg

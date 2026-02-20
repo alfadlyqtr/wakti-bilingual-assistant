@@ -732,7 +732,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
           <Collapsible key={task.id} open={!isCollapsed} onOpenChange={() => toggleCardCollapse(task.id)}>
             <div className={`rounded-2xl overflow-hidden
               bg-white dark:bg-[#0f1318]
-              border-2 ${pendingCount > 0 ? 'border-orange-300 dark:border-orange-500/40' : 'border-slate-200 dark:border-white/[0.08]'}
+              border-2 ${pendingCount > 0 ? 'border-orange-300 dark:border-orange-500/40' : task.completed ? 'border-emerald-300 dark:border-emerald-500/30' : 'border-slate-200 dark:border-white/[0.08]'}
               shadow-[0_4px_24px_hsla(0,0%,0%,0.08),0_1px_6px_hsla(0,0%,0%,0.05)]
               dark:shadow-[0_4px_24px_hsla(0,0%,0%,0.5),0_1px_6px_hsla(0,0%,0%,0.4)]
               transition-all duration-200`}>
