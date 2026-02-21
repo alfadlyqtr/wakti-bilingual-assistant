@@ -2,14 +2,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users, Hash, Loader2, Clock, AlertTriangle,
-  X, Check, UserPlus, Link2, Copy
+  X, Check, UserPlus, Link2, Copy, CheckCircle, MessageCircle, ChevronDown, Send
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { TRTask } from '@/services/trService';
 import { ActivityMonitor } from './ActivityMonitor';
-import { InAppSharedTaskViewer } from './InAppSharedTaskViewer';
 import { useTheme } from '@/providers/ThemeProvider';
 import { toast } from 'sonner';
+import { format, parseISO } from 'date-fns';
 
 interface Assignment {
   id: string;
@@ -27,6 +27,211 @@ interface SharedTasksTabProps {
   onTasksChanged: () => void;
   incomingShareLink?: string | null;
 }
+
+// ── Assignee tabbed card (mirrors owner's ActivityMonitor card, no Approvals tab) ──
+const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> = ({ assignment, language }) => {
+  const task = assignment.task;
+  const shareLink = task?.share_link;
+  const [activeTab, setActiveTab] = useState<'subtasks' | 'people' | 'chat' | 'log'>('subtasks');
+  const [subtasks, setSubtasks] = useState<{ id: string; title: string; completed: boolean }[]>([]);
+  const [responses, setResponses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [commentText, setCommentText] = useState('');
+  const [sendingComment, setSendingComment] = useState(false);
+  const [visitorName, setVisitorName] = useState('');
+
+  useEffect(() => {
+    if (!task?.id) return;
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (user) {
+        const { data: p } = await supabase.from('profiles').select('display_name,first_name,last_name').eq('id', user.id).single();
+        const full = [p?.first_name, p?.last_name].filter(Boolean).join(' ');
+        setVisitorName(p?.display_name || full || assignment.assignee_name);
+      }
+    });
+    const load = async () => {
+      setLoading(true);
+      const [{ data: st }, { data: rs }] = await Promise.all([
+        supabase.from('tr_subtasks').select('id,title,completed').eq('task_id', task.id).order('position'),
+        supabase.from('tr_shared_responses').select('*').eq('task_id', task.id).order('created_at'),
+      ]);
+      setSubtasks(st || []);
+      setResponses(rs || []);
+      setLoading(false);
+    };
+    load();
+    // realtime
+    const ch = supabase.channel(`assigned-card-${task.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_subtasks', filter: `task_id=eq.${task.id}` }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_shared_responses', filter: `task_id=eq.${task.id}` }, load)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [task?.id]);
+
+  const comments = responses.filter(r => r.response_type === 'comment');
+  const activityLog = responses.filter(r => r.response_type !== 'comment');
+  const people = [...new Set(responses.map(r => r.visitor_name).filter(Boolean))];
+  const completedCount = subtasks.filter(s => s.completed).length;
+
+  const sendComment = async () => {
+    if (!commentText.trim() || !task?.id || !shareLink) return;
+    setSendingComment(true);
+    try {
+      await supabase.from('tr_shared_responses').insert({
+        task_id: task.id,
+        share_link: shareLink,
+        visitor_name: visitorName || assignment.assignee_name,
+        response_type: 'comment',
+        content: commentText.trim(),
+        is_completed: false,
+      });
+      setCommentText('');
+    } catch { toast.error('Failed to send'); } finally { setSendingComment(false); }
+  };
+
+  const tabs = [
+    { key: 'subtasks', icon: <CheckCircle className="h-3 w-3" />, label: language === 'ar' ? 'المهام' : 'Tasks', badge: subtasks.length > 0 ? `${completedCount}/${subtasks.length}` : null, activeBg: 'bg-emerald-500', activeShadow: 'shadow-[0_2px_8px_hsla(142,76%,45%,0.4)]' },
+    { key: 'people', icon: <Users className="h-3 w-3" />, label: language === 'ar' ? 'الأشخاص' : 'People', badge: people.length > 0 ? String(people.length) : null, activeBg: 'bg-[#060541] dark:bg-blue-600', activeShadow: 'shadow-[0_2px_8px_hsla(243,84%,14%,0.4)]' },
+    { key: 'chat', icon: <MessageCircle className="h-3 w-3" />, label: language === 'ar' ? 'تعليقات' : 'Chat', badge: comments.length > 0 ? String(comments.length) : null, activeBg: 'bg-sky-500', activeShadow: 'shadow-[0_2px_8px_hsla(199,89%,48%,0.4)]' },
+    { key: 'log', icon: <Clock className="h-3 w-3" />, label: language === 'ar' ? 'النشاط' : 'Log', badge: null, activeBg: 'bg-slate-700 dark:bg-slate-500', activeShadow: 'shadow-[0_2px_8px_hsla(0,0%,0%,0.3)]' },
+  ];
+
+  if (loading) return <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-indigo-400" /></div>;
+
+  return (
+    <div className="space-y-0">
+      {/* Tab bar */}
+      <div className="flex items-stretch gap-1 px-1 py-2.5 border-t border-slate-100 dark:border-white/[0.06]">
+        {tabs.map(tab => {
+          const isActive = activeTab === tab.key;
+          return (
+            <button key={tab.key} onClick={() => setActiveTab(tab.key as any)}
+              className={`flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[48px] px-1 py-1.5 rounded-xl text-[10px] font-bold
+                transition-all touch-manipulation active:scale-95
+                ${ isActive
+                  ? `${tab.activeBg} text-white ${tab.activeShadow}`
+                  : 'bg-white dark:bg-white/[0.08] border-2 border-slate-300 dark:border-white/[0.15] text-slate-700 dark:text-slate-200 hover:border-slate-400 shadow-[0_1px_4px_hsla(0,0%,0%,0.1)]'
+                }`}>
+              <span className="flex-shrink-0">{tab.icon}</span>
+              <span className="leading-tight text-center">{tab.label}</span>
+              {tab.badge && (
+                <span className={`min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black flex items-center justify-center
+                  ${isActive ? 'bg-white/30 text-white' : 'bg-slate-200 dark:bg-white/[0.2] text-slate-700 dark:text-slate-200'}`}>
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="space-y-2 pb-4 px-1">
+
+        {/* TASKS tab */}
+        {activeTab === 'subtasks' && (
+          <div className="space-y-1.5 pt-1">
+            {subtasks.length === 0 ? (
+              <p className="text-center py-6 text-muted-foreground/50 text-[13px]">{language === 'ar' ? 'لا توجد مهام فرعية' : 'No subtasks'}</p>
+            ) : subtasks.map(st => (
+              <div key={st.id} className={`rounded-xl px-3 py-2.5 flex items-center gap-3 ${ st.completed ? 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20' : 'bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05]' }`}>
+                <div className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center ${ st.completed ? 'bg-emerald-500' : 'border-2 border-slate-300 dark:border-white/20' }`}>
+                  {st.completed && <Check className="h-2.5 w-2.5 text-white" />}
+                </div>
+                <p className={`text-[12px] font-semibold flex-1 ${ st.completed ? 'line-through text-muted-foreground/60' : 'text-foreground' }`} dir="auto">{st.title}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* PEOPLE tab */}
+        {activeTab === 'people' && (
+          <div className="space-y-2 pt-1">
+            {people.length === 0 ? (
+              <p className="text-center py-6 text-muted-foreground/50 text-[13px]">{language === 'ar' ? 'لا يوجد مشاركون بعد' : 'No activity yet'}</p>
+            ) : people.map(name => {
+              const acts = responses.filter(r => r.visitor_name === name);
+              const last = acts.length > 0 ? [...acts].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] : null;
+              return (
+                <div key={name} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07]">
+                  <div className="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-[13px] font-black text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                    {name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-bold text-foreground truncate" dir="auto">{name}</p>
+                    <p className="text-[10px] text-muted-foreground/50">{last ? format(parseISO(last.created_at), 'MMM dd, HH:mm') : '—'}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* CHAT tab */}
+        {activeTab === 'chat' && (
+          <div className="space-y-2 pt-1">
+            {comments.length === 0 ? (
+              <p className="text-center py-4 text-muted-foreground/50 text-[13px]">{language === 'ar' ? 'لا توجد تعليقات بعد' : 'No comments yet'}</p>
+            ) : (
+              <div className="space-y-2 max-h-[280px] overflow-y-auto">
+                {[...comments].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map(c => (
+                  <div key={c.id} className="rounded-xl p-3 bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06]">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center text-[10px] font-black text-purple-600 dark:text-purple-400 flex-shrink-0">
+                        {c.visitor_name.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-[12px] font-bold text-foreground" dir="auto">{c.visitor_name}</span>
+                      <span className="text-[10px] text-muted-foreground/50 ml-auto">{format(parseISO(c.created_at), 'MMM dd, HH:mm')}</span>
+                    </div>
+                    <div className="bg-white dark:bg-white/[0.04] rounded-lg px-3 py-2 text-[13px] text-foreground border border-slate-200/50 dark:border-white/[0.06]" dir="auto">{c.content}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Comment input */}
+            <div className="flex gap-2 pt-1">
+              <input
+                value={commentText}
+                onChange={e => setCommentText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendComment(); } }}
+                placeholder={language === 'ar' ? 'اكتب تعليقاً...' : 'Write a comment...'}
+                className="flex-1 px-3 py-2 rounded-xl text-[13px] bg-slate-50 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.1] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 transition-colors"
+                dir="auto"
+              />
+              <button onClick={sendComment} disabled={!commentText.trim() || sendingComment}
+                className="w-9 h-9 rounded-xl flex items-center justify-center bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-40 transition-all active:scale-95 flex-shrink-0">
+                {sendingComment ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* LOG tab */}
+        {activeTab === 'log' && (
+          <div className="space-y-1.5 pt-1">
+            {activityLog.length === 0 ? (
+              <p className="text-center py-6 text-muted-foreground/50 text-[13px]">{language === 'ar' ? 'لا يوجد نشاط بعد' : 'No activity yet'}</p>
+            ) : (
+              <div className="space-y-1.5 max-h-[280px] overflow-y-auto">
+                {[...activityLog].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 30).map(act => (
+                  <div key={act.id} className="flex items-start gap-2.5 px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/50 dark:border-white/[0.05]">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[12px] font-bold text-foreground" dir="auto">{act.visitor_name}</span>
+                        <span className="text-[10px] text-muted-foreground/50 ml-auto">{format(parseISO(act.created_at), 'MMM dd, HH:mm')}</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground" dir="auto">{act.response_type?.replace(/_/g, ' ')}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+};
 
 function generateTaskCode(): string {
   return `W${Math.floor(10000 + Math.random() * 90000)}`;
@@ -412,8 +617,8 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
                       </div>
                     </button>
                     {isExpanded && (
-                      <div className="px-3 pb-3">
-                        <InAppSharedTaskViewer shareLink={shareLink} onDismiss={() => setExpandedAssigned(prev => { const n = new Set(prev); n.delete(a.id); return n; })} />
+                      <div className="px-2 pb-2">
+                        <AssignedTaskCard assignment={a} language={language} />
                       </div>
                     )}
                   </div>
