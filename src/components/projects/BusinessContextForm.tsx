@@ -55,7 +55,7 @@ export default function BusinessContextForm({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', left: 'var(--current-sidebar-width, 70px)' }}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -64,13 +64,13 @@ export default function BusinessContextForm({
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         className={cn(
           "w-full max-w-md rounded-2xl overflow-hidden shadow-2xl",
-          "bg-[#0c0f14] border border-white/10"
+          "bg-[#13171f] border border-white/20"
         )}
-        style={{ boxShadow: '0 0 60px hsla(210,100%,65%,0.15), 0 0 120px hsla(280,70%,65%,0.1)' }}
+        style={{ boxShadow: '0 0 60px hsla(210,100%,65%,0.25), 0 0 120px hsla(280,70%,65%,0.15), 0 25px 50px rgba(0,0,0,0.8)' }}
         dir={isRTL ? 'rtl' : 'ltr'}
       >
         {/* Header */}
-        <div className="px-6 pt-6 pb-4 border-b border-white/10">
+        <div className="px-6 pt-6 pb-4 border-b border-white/15">
           <div className="flex items-center gap-3 mb-1">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center"
               style={{ background: 'linear-gradient(135deg, hsl(210,100%,65%), hsl(280,70%,65%))' }}>
@@ -82,7 +82,7 @@ export default function BusinessContextForm({
             </span>
           </div>
           <h2 className="text-lg font-semibold text-white mt-2">{heading}</h2>
-          <p className="text-sm mt-1" style={{ color: '#858384' }}>
+          <p className="text-sm mt-1 text-white/50">
             {isRTL
               ? 'سيستخدم الذكاء الاصطناعي هذه المعلومات لبناء موقعك بمحتوى حقيقي'
               : 'The AI will use this to build your site with real content'}
@@ -93,7 +93,7 @@ export default function BusinessContextForm({
         <div className="px-6 py-4 space-y-3 max-h-[50vh] overflow-y-auto">
           {!hasUpload && fields.map((field) => (
             <div key={field.id}>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#858384' }}>
+              <label className="block text-xs font-medium mb-1.5 text-white/70">
                 {field.label}
               </label>
               {field.type === 'textarea' ? (
@@ -104,10 +104,10 @@ export default function BusinessContextForm({
                   rows={3}
                   className={cn(
                     "w-full rounded-xl px-4 py-2.5 text-sm text-white resize-none",
-                    "border border-white/10 outline-none transition-all",
-                    "placeholder:text-white/25 focus:border-white/30"
+                    "border border-white/20 outline-none transition-all",
+                    "placeholder:text-white/35 focus:border-blue-400/60 focus:ring-1 focus:ring-blue-400/20"
                   )}
-                  style={{ background: 'rgba(255,255,255,0.05)' }}
+                  style={{ background: 'rgba(255,255,255,0.08)' }}
                 />
               ) : (
                 <input
@@ -117,10 +117,10 @@ export default function BusinessContextForm({
                   placeholder={field.placeholder}
                   className={cn(
                     "w-full rounded-xl px-4 py-2.5 text-sm text-white",
-                    "border border-white/10 outline-none transition-all",
-                    "placeholder:text-white/25 focus:border-white/30"
+                    "border border-white/20 outline-none transition-all",
+                    "placeholder:text-white/35 focus:border-blue-400/60 focus:ring-1 focus:ring-blue-400/20"
                   )}
-                  style={{ background: 'rgba(255,255,255,0.05)' }}
+                  style={{ background: 'rgba(255,255,255,0.08)' }}
                 />
               )}
             </div>
@@ -133,8 +133,8 @@ export default function BusinessContextForm({
               "rounded-xl border border-dashed px-4 py-4 cursor-pointer transition-all",
               "flex items-center gap-3",
               hasUpload
-                ? "border-green-500/50 bg-green-500/10"
-                : "border-white/15 hover:border-white/30 bg-white/5 hover:bg-white/8"
+                ? "border-green-500/60 bg-green-500/10"
+                : "border-white/20 hover:border-white/40 bg-white/8 hover:bg-white/12"
             )}
           >
             <div className={cn(

@@ -1608,63 +1608,105 @@ Apply these styles consistently throughout the entire design.`;
     let contextLabel = 'PROJECT DETAILS';
     let usageInstructions = 'Use this information throughout the entire project. Never use placeholder names or fake content.';
 
-    if (/game|gaming|shooter|racing|puzzle|platformer|arcade|rpg|strategy|adventure|simulation|sport|chess|card game|لعبة|سباق|مطلق|ألغاز/.test(siteType)) {
+    // --- GAMES (template: any game type) ---
+    if (/game|gaming|shooter|racing|puzzle|platformer|arcade|rpg|strategy|adventure|simulation|chess|card game|trivia|quiz game|battle|fighter|runner|clicker|tower defense|لعبة|سباق|مطلق|ألغاز|قتال|مغامرة/.test(siteType)) {
       contextLabel = 'GAME DETAILS';
-      usageInstructions = 'Use this information in the game UI — title screen, loading screen, HUD, leaderboard, game over screen, pause menu, and any in-game text. Never use placeholder names.';
-    } else if (/portfolio|personal|cv|resume|freelance|designer|developer|photographer|artist|creative|شخصي|معرض/.test(siteType)) {
-      contextLabel = 'PORTFOLIO DETAILS';
-      usageInstructions = 'Use this information in the bio section, about page, skills section, project cards, contact section, and footer. Never use placeholder names or fake contact info.';
-    } else if (/restaurant|cafe|food|menu|delivery|catering|مطعم|كافيه|طعام|وجبات/.test(siteType)) {
-      contextLabel = 'RESTAURANT DETAILS';
-      usageInstructions = 'Use this information in the hero section, menu page, about section, reservation form, contact page, and footer. Never use placeholder names or fake addresses.';
-    } else if (/shop|store|ecommerce|e-commerce|product|marketplace|متجر|تسوق/.test(siteType)) {
+      usageInstructions = 'Use this information in the game UI — title screen, loading screen, HUD, score display, leaderboard, game over screen, pause menu, level names, and any in-game text. Never use placeholder names.';
+
+    // --- ONLINE STORE / ECOMMERCE (template: ecommerce) ---
+    } else if (/online store|ecommerce|e-commerce|shop|store|marketplace|abayas|fashion|accessories|bags|traditional|heritage|luxury|watches|coffee|specialty|متجر|تسوق|أزياء|عباءات|إكسسوارات/.test(siteType)) {
       contextLabel = 'STORE DETAILS';
-      usageInstructions = 'Use this information in the store header, product listings, about page, checkout flow, and footer. Never use placeholder product names or fake prices.';
-    } else if (/dashboard|admin|panel|crm|analytics|saas|management|لوحة|إدارة/.test(siteType)) {
-      contextLabel = 'APP DETAILS';
-      usageInstructions = 'Use this information in the dashboard header, sidebar branding, welcome messages, data labels, and any onboarding screens. Never use placeholder company names.';
-    } else if (/blog|news|magazine|article|journal|مدونة|أخبار/.test(siteType)) {
-      contextLabel = 'BLOG DETAILS';
-      usageInstructions = 'Use this information in the blog header, author bio, article bylines, about page, and footer. Never use placeholder author names or fake publication names.';
-    } else if (/landing|startup|product|launch|saas|app|تطبيق|منتج/.test(siteType)) {
+      usageInstructions = 'Use this information in the store header, hero section, product listings, category names, about page, checkout flow, and footer. Never use placeholder product names or fake prices.';
+
+    // --- RESTAURANT / FOOD (template: restaurant) ---
+    } else if (/restaurant|cafe|coffee shop|bakery|food truck|catering|fine dining|fast food|burger|pizza|seafood|bbq|grill|desserts|tea house|breakfast|brunch|مطعم|كافيه|مقهى|مخبز|طعام|وجبات|بيتزا|برجر|شواء/.test(siteType)) {
+      contextLabel = 'RESTAURANT DETAILS';
+      usageInstructions = 'Use this information in the hero section, menu page, about section, reservation form, contact page, and footer. Never use placeholder restaurant names or fake addresses.';
+
+    // --- PORTFOLIO (template: portfolio) ---
+    } else if (/portfolio|photography|graphic design|illustration|architect|interior design|fashion design|videography|filmmaker|musician|fitness coach|writer|copywriter|developer|personal cv|student portfolio|job seeker|model|talent|chef|makeup|beauty artist|freelancer|معرض|بورتفوليو|مصور|مصمم|مستقل/.test(siteType)) {
+      contextLabel = 'PORTFOLIO DETAILS';
+      usageInstructions = 'Use this information in the bio section, about page, skills section, project cards, work gallery, contact section, and footer. Never use placeholder names or fake contact info.';
+
+    // --- BOOKING SYSTEM (template: booking) ---
+    } else if (/booking|appointment|beauty salon|barbershop|spa|wellness|medical clinic|fitness studio|consulting|dentist|personal trainer|tutor|lessons|car wash|home services|photography sessions|coach|law firm|legal|therapy|counseling|pet grooming|repair|cleaning|massage|nail salon|حجز|مواعيد|صالون|عيادة|سبا|تدريب|استشارات/.test(siteType)) {
+      contextLabel = 'BOOKING DETAILS';
+      usageInstructions = 'Use this information in the hero, services list, staff profiles, booking form, location & hours section, and contact page. Never use placeholder business names or fake service prices.';
+
+    // --- LANDING PAGE (template: landing) ---
+    } else if (/landing page|mobile app|saas|software|e-book|agency services|gym promo|app download|course|webinar|newsletter|waitlist|influencer|creator|product launch|startup|صفحة هبوط|تطبيق|دورة|وكالة|منتج/.test(siteType)) {
       contextLabel = 'PRODUCT DETAILS';
       usageInstructions = 'Use this information in the hero section, features section, pricing page, testimonials, CTA buttons, and footer. Never use placeholder names or fake testimonials.';
+
+    // --- EVENT PAGE (template: event) ---
+    } else if (/event|wedding|birthday party|conference|workshop|product launch|graduation|baby shower|corporate event|ramadan|eid|concert|exhibition|sports event|engagement|henna|school event|charity|fundraiser|community meetup|tournament|open house|حفل|زفاف|مؤتمر|فعالية|عيد|رمضان|خطوبة|حناء|بطولة/.test(siteType)) {
+      contextLabel = 'EVENT DETAILS';
+      usageInstructions = 'Use this information in the event hero, countdown timer, schedule section, venue details, RSVP form, and contact section. Never use placeholder dates or fake venue names.';
+
+    // --- INTERACTIVE DECK / PRESENTATION (template: interactive-deck) ---
+    } else if (/interactive deck|presentation|pitch deck|startup pitch|investor deck|product demo|company overview|annual report|training deck|educational deck|عرض تفاعلي|عرض تقديمي|شرائح/.test(siteType)) {
+      contextLabel = 'PRESENTATION DETAILS';
+      usageInstructions = 'Use this information in the deck title slide, company overview slide, product/service slides, team slide, and closing slide. Never use placeholder company names or fake statistics.';
+
+    // --- BLOG / NEWS / MAGAZINE ---
+    } else if (/blog|news|magazine|article|journal|publication|مدونة|أخبار|مجلة/.test(siteType)) {
+      contextLabel = 'BLOG DETAILS';
+      usageInstructions = 'Use this information in the blog header, author bio, article bylines, about page, and footer. Never use placeholder author names or fake publication names.';
+
+    // --- AGENCY / COMPANY / STUDIO ---
     } else if (/agency|studio|firm|company|corporate|شركة|وكالة/.test(siteType)) {
       contextLabel = 'COMPANY DETAILS';
       usageInstructions = 'Use this information in the hero, services section, team section, about page, contact page, and footer. Never use placeholder names or fake addresses.';
-    } else if (/event|wedding|conference|concert|festival|party|حفل|زفاف|مؤتمر/.test(siteType)) {
-      contextLabel = 'EVENT DETAILS';
-      usageInstructions = 'Use this information in the event hero, schedule section, venue details, RSVP form, and countdown timer. Never use placeholder dates or fake venue names.';
+
+    // --- CLINIC / MEDICAL ---
     } else if (/clinic|hospital|doctor|medical|health|dental|عيادة|طبيب|صحة/.test(siteType)) {
       contextLabel = 'CLINIC DETAILS';
       usageInstructions = 'Use this information in the hero, services section, doctor profile, booking form, contact page, and footer. Never use placeholder doctor names or fake addresses.';
+
+    // --- EDUCATION / SCHOOL / ACADEMY ---
     } else if (/school|academy|course|education|learning|university|مدرسة|أكاديمية|تعليم/.test(siteType)) {
       contextLabel = 'EDUCATION DETAILS';
       usageInstructions = 'Use this information in the hero, course listings, instructor bio, enrollment form, and footer. Never use placeholder names or fake course titles.';
-    } else if (/hotel|resort|airbnb|rental|booking|accommodation|فندق|منتجع|إقامة/.test(siteType)) {
+
+    // --- HOTEL / PROPERTY / RENTAL ---
+    } else if (/hotel|resort|airbnb|rental|accommodation|فندق|منتجع|إقامة/.test(siteType)) {
       contextLabel = 'PROPERTY DETAILS';
       usageInstructions = 'Use this information in the hero, room listings, amenities section, booking form, and footer. Never use placeholder property names or fake locations.';
-    } else if (/app|mobile|tool|utility|calculator|converter|تطبيق|أداة/.test(siteType)) {
-      contextLabel = 'APP DETAILS';
-      usageInstructions = 'Use this information in the app header, onboarding screens, feature descriptions, and about section. Never use placeholder app names or fake features.';
-    } else if (/music|band|artist|album|concert|podcast|موسيقى|فنان|ألبوم/.test(siteType)) {
+
+    // --- MUSIC / ARTIST / PODCAST ---
+    } else if (/music|band|artist|album|podcast|موسيقى|فنان|ألبوم/.test(siteType)) {
       contextLabel = 'ARTIST DETAILS';
       usageInstructions = 'Use this information in the hero, discography section, bio, tour dates, and contact section. Never use placeholder artist names or fake album titles.';
-    } else if (/real estate|property|realty|عقار|عقارات/.test(siteType)) {
+
+    // --- REAL ESTATE ---
+    } else if (/real estate|realty|property listing|عقار|عقارات/.test(siteType)) {
       contextLabel = 'REAL ESTATE DETAILS';
       usageInstructions = 'Use this information in the hero, property listings, agent profile, contact form, and footer. Never use placeholder property names or fake prices.';
+
+    // --- GYM / FITNESS ---
     } else if (/gym|fitness|sport|trainer|workout|صالة|رياضة|تدريب/.test(siteType)) {
       contextLabel = 'FITNESS DETAILS';
       usageInstructions = 'Use this information in the hero, class schedule, trainer profile, membership plans, and contact section. Never use placeholder gym names or fake trainer names.';
+
+    // --- CHARITY / NGO ---
     } else if (/charity|nonprofit|ngo|donation|volunteer|خيري|تبرع|جمعية/.test(siteType)) {
       contextLabel = 'ORGANIZATION DETAILS';
       usageInstructions = 'Use this information in the hero, mission section, donation form, team page, and footer. Never use placeholder organization names or fake causes.';
-    } else if (/spa|salon|beauty|barber|nail|صالون|سبا|تجميل/.test(siteType)) {
-      contextLabel = 'SALON DETAILS';
-      usageInstructions = 'Use this information in the hero, services menu, booking form, team section, and footer. Never use placeholder salon names or fake service prices.';
+
+    // --- FAN / COMMUNITY / CLUB ---
     } else if (/fan|tribute|community|forum|club|مشجع|نادي|مجتمع/.test(siteType)) {
       contextLabel = 'COMMUNITY DETAILS';
       usageInstructions = 'Use this information in the hero, about section, community highlights, and footer. Never use placeholder names or fake community info.';
+
+    // --- DASHBOARD / ADMIN / SAAS APP ---
+    } else if (/dashboard|admin|panel|crm|analytics|management|لوحة|إدارة/.test(siteType)) {
+      contextLabel = 'APP DETAILS';
+      usageInstructions = 'Use this information in the dashboard header, sidebar branding, welcome messages, data labels, and any onboarding screens. Never use placeholder company names.';
+
+    // --- TOOL / UTILITY / CALCULATOR ---
+    } else if (/tool|utility|calculator|converter|timer|tracker|أداة|حاسبة/.test(siteType)) {
+      contextLabel = 'TOOL DETAILS';
+      usageInstructions = 'Use this information in the tool header, description, result labels, and about section. Never use placeholder tool names or fake features.';
     }
 
     const enriched = `${originalPrompt}\n\n=== ${contextLabel} (USE AS REAL CONTENT — NOT PLACEHOLDERS) ===\n${contextBlock}\n\n${usageInstructions}`;
