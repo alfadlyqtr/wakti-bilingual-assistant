@@ -8482,7 +8482,7 @@ ${fixInstructions}
                 <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
               </div>
             }>
-              {(codeContent || Object.keys(generatedFiles).length > 0) ? (
+              {Object.keys(generatedFiles).length > 0 ? (
                 <div className="w-full h-full relative">
                   <MatrixOverlay isVisible={aiEditing} />
                   <div className={cn(
@@ -8493,7 +8493,7 @@ ${fixInstructions}
                   )}>
                     <SandpackStudio 
                       key={`sandpack-studio-${sandpackKey}`}
-                      files={Object.keys(generatedFiles).length > 0 ? generatedFiles : { "/App.js": codeContent || "" }}
+                      files={generatedFiles}
                       onRuntimeError={handleRuntimeCrash}
                       elementSelectMode={elementSelectMode}
                       isLoading={isGenerating}

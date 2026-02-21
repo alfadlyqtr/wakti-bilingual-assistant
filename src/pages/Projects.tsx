@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { AnimatePresence } from 'framer-motion';
+import BusinessContextForm, { type ContextField, type BusinessContextData } from '@/components/projects/BusinessContextForm';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -810,6 +812,9 @@ export default function Projects() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [prompt, setPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [isDetectingContext, setIsDetectingContext] = useState(false);
+  const [contextFormData, setContextFormData] = useState<{ siteType: string; heading: string; fields: ContextField[] } | null>(null);
+  const pendingPromptRef = useRef<string>('');
   const [selectedTheme, setSelectedTheme] = useState('user_prompt');
   const [backendStatus, setBackendStatus] = useState<Record<string, boolean>>({});
   const [togglingBackend, setTogglingBackend] = useState<string | null>(null);
@@ -1326,8 +1331,9 @@ Apply these styles consistently throughout the entire design.`;
     return result;
   };
 
-  const createProject = async () => {
-    if (!prompt.trim()) {
+  const createProject = async (enrichedPrompt?: string) => {
+    const finalUserPrompt = enrichedPrompt || prompt;
+    if (!finalUserPrompt.trim()) {
       toast.error(isRTL ? 'صف ما تريد بناءه' : 'Describe what you want to build');
       return;
     }
@@ -1335,6 +1341,25 @@ Apply these styles consistently throughout the entire design.`;
     if (!user?.id) {
       toast.error(isRTL ? 'يرجى تسجيل الدخول' : 'Please log in first');
       return;
+    }
+
+    if (!enrichedPrompt) {
+      setIsDetectingContext(true);
+      pendingPromptRef.current = finalUserPrompt;
+      try {
+        const response = await supabase.functions.invoke('projects-context-detect', {
+          body: { prompt: finalUserPrompt },
+        });
+        console.log('[ContextDetect] Response:', response.data, response.error);
+        if (!response.error && response.data?.ok && response.data?.fields?.length > 0) {
+          setContextFormData({ siteType: response.data.siteType, heading: response.data.heading, fields: response.data.fields });
+          setIsDetectingContext(false);
+          return;
+        }
+      } catch (e) {
+        console.warn('[ContextDetect] Failed, proceeding without form:', e);
+      }
+      setIsDetectingContext(false);
     }
 
     if (projects.length >= MAX_PROJECTS) {
@@ -1348,7 +1373,7 @@ Apply these styles consistently throughout the entire design.`;
 
     try {
       setGenerating(true);
-      console.log('[createProject] Step 0: Starting...');
+      console.log('[createProject] Step 0: Starting with prompt:', finalUserPrompt.substring(0, 60));
 
       // Step 0: Assets are uploaded AFTER project creation so we can scope them to {userId}/{projectId}
       let assetUrls: string[] = [];
@@ -1364,7 +1389,7 @@ Apply these styles consistently throughout the entire design.`;
       console.log('[createProject] Step 1: Session OK');
 
       // Step 2: Create project immediately with placeholder
-      const projectName = generateProjectTitle(prompt);
+      const projectName = generateProjectTitle(finalUserPrompt);
       const slug = projectName
         .toLowerCase()
         .replace(/[^a-z0-9\s-]/g, '')
@@ -1380,7 +1405,7 @@ Apply these styles consistently throughout the entire design.`;
           user_id: session.user.id,
           name: projectName,
           slug: `${slug}-${Date.now().toString(36)}`,
-          description: prompt,
+          description: finalUserPrompt,
           template_type: 'ai-generated',
           status: 'generating',
         })
@@ -1500,9 +1525,8 @@ Apply these styles consistently throughout the entire design.`;
       const assetParams = assetUrls.length > 0 ? `&assets=${encodeURIComponent(JSON.stringify(assetUrls))}` : '';
       const themeInstructions = getSelectedThemeInstructions();
       const instructionsParam = themeInstructions ? `&themeInstructions=${encodeURIComponent(themeInstructions)}` : '';
-      // Pass language to ensure generated content matches user's language preference
       const langParam = `&lang=${language}`;
-      navigate(`/projects/${projectData.id}?generating=true&prompt=${encodeURIComponent(prompt)}&theme=${selectedTheme}${assetParams}${instructionsParam}${langParam}`);
+      navigate(`/projects/${projectData.id}?generating=true&prompt=${encodeURIComponent(finalUserPrompt)}&theme=${selectedTheme}${assetParams}${instructionsParam}${langParam}`);
 
     } catch (err: any) {
       console.error('[createProject] FAILED:', err);
@@ -1553,8 +1577,125 @@ Apply these styles consistently throughout the entire design.`;
     }
   };
 
+  const handleContextFormSubmit = async (data: BusinessContextData) => {
+    setContextFormData(null);
+    const originalPrompt = pendingPromptRef.current;
+
+    if (data.uploadedFile) {
+      // File uploaded — attach it and proceed directly, AI reads it from the uploaded asset
+      setAttachedFiles(prev => [...prev, data.uploadedFile!]);
+      createProject(originalPrompt);
+      return;
+    }
+
+    // Build context block from filled fields
+    const filledEntries = Object.entries(data.fields).filter(([, v]) => v.trim());
+    if (filledEntries.length === 0) {
+      createProject(originalPrompt);
+      return;
+    }
+
+    const contextBlock = filledEntries
+      .map(([id, val]) => {
+        const field = contextFormData?.fields.find(f => f.id === id);
+        return `${field?.label || id}: ${val}`;
+      })
+      .join('\n');
+
+    const siteType = (contextFormData?.siteType || '').toLowerCase();
+
+    // Determine context label + usage instructions based on what's being built
+    let contextLabel = 'PROJECT DETAILS';
+    let usageInstructions = 'Use this information throughout the entire project. Never use placeholder names or fake content.';
+
+    if (/game|gaming|shooter|racing|puzzle|platformer|arcade|rpg|strategy|adventure|simulation|sport|chess|card game|لعبة|سباق|مطلق|ألغاز/.test(siteType)) {
+      contextLabel = 'GAME DETAILS';
+      usageInstructions = 'Use this information in the game UI — title screen, loading screen, HUD, leaderboard, game over screen, pause menu, and any in-game text. Never use placeholder names.';
+    } else if (/portfolio|personal|cv|resume|freelance|designer|developer|photographer|artist|creative|شخصي|معرض/.test(siteType)) {
+      contextLabel = 'PORTFOLIO DETAILS';
+      usageInstructions = 'Use this information in the bio section, about page, skills section, project cards, contact section, and footer. Never use placeholder names or fake contact info.';
+    } else if (/restaurant|cafe|food|menu|delivery|catering|مطعم|كافيه|طعام|وجبات/.test(siteType)) {
+      contextLabel = 'RESTAURANT DETAILS';
+      usageInstructions = 'Use this information in the hero section, menu page, about section, reservation form, contact page, and footer. Never use placeholder names or fake addresses.';
+    } else if (/shop|store|ecommerce|e-commerce|product|marketplace|متجر|تسوق/.test(siteType)) {
+      contextLabel = 'STORE DETAILS';
+      usageInstructions = 'Use this information in the store header, product listings, about page, checkout flow, and footer. Never use placeholder product names or fake prices.';
+    } else if (/dashboard|admin|panel|crm|analytics|saas|management|لوحة|إدارة/.test(siteType)) {
+      contextLabel = 'APP DETAILS';
+      usageInstructions = 'Use this information in the dashboard header, sidebar branding, welcome messages, data labels, and any onboarding screens. Never use placeholder company names.';
+    } else if (/blog|news|magazine|article|journal|مدونة|أخبار/.test(siteType)) {
+      contextLabel = 'BLOG DETAILS';
+      usageInstructions = 'Use this information in the blog header, author bio, article bylines, about page, and footer. Never use placeholder author names or fake publication names.';
+    } else if (/landing|startup|product|launch|saas|app|تطبيق|منتج/.test(siteType)) {
+      contextLabel = 'PRODUCT DETAILS';
+      usageInstructions = 'Use this information in the hero section, features section, pricing page, testimonials, CTA buttons, and footer. Never use placeholder names or fake testimonials.';
+    } else if (/agency|studio|firm|company|corporate|شركة|وكالة/.test(siteType)) {
+      contextLabel = 'COMPANY DETAILS';
+      usageInstructions = 'Use this information in the hero, services section, team section, about page, contact page, and footer. Never use placeholder names or fake addresses.';
+    } else if (/event|wedding|conference|concert|festival|party|حفل|زفاف|مؤتمر/.test(siteType)) {
+      contextLabel = 'EVENT DETAILS';
+      usageInstructions = 'Use this information in the event hero, schedule section, venue details, RSVP form, and countdown timer. Never use placeholder dates or fake venue names.';
+    } else if (/clinic|hospital|doctor|medical|health|dental|عيادة|طبيب|صحة/.test(siteType)) {
+      contextLabel = 'CLINIC DETAILS';
+      usageInstructions = 'Use this information in the hero, services section, doctor profile, booking form, contact page, and footer. Never use placeholder doctor names or fake addresses.';
+    } else if (/school|academy|course|education|learning|university|مدرسة|أكاديمية|تعليم/.test(siteType)) {
+      contextLabel = 'EDUCATION DETAILS';
+      usageInstructions = 'Use this information in the hero, course listings, instructor bio, enrollment form, and footer. Never use placeholder names or fake course titles.';
+    } else if (/hotel|resort|airbnb|rental|booking|accommodation|فندق|منتجع|إقامة/.test(siteType)) {
+      contextLabel = 'PROPERTY DETAILS';
+      usageInstructions = 'Use this information in the hero, room listings, amenities section, booking form, and footer. Never use placeholder property names or fake locations.';
+    } else if (/app|mobile|tool|utility|calculator|converter|تطبيق|أداة/.test(siteType)) {
+      contextLabel = 'APP DETAILS';
+      usageInstructions = 'Use this information in the app header, onboarding screens, feature descriptions, and about section. Never use placeholder app names or fake features.';
+    } else if (/music|band|artist|album|concert|podcast|موسيقى|فنان|ألبوم/.test(siteType)) {
+      contextLabel = 'ARTIST DETAILS';
+      usageInstructions = 'Use this information in the hero, discography section, bio, tour dates, and contact section. Never use placeholder artist names or fake album titles.';
+    } else if (/real estate|property|realty|عقار|عقارات/.test(siteType)) {
+      contextLabel = 'REAL ESTATE DETAILS';
+      usageInstructions = 'Use this information in the hero, property listings, agent profile, contact form, and footer. Never use placeholder property names or fake prices.';
+    } else if (/gym|fitness|sport|trainer|workout|صالة|رياضة|تدريب/.test(siteType)) {
+      contextLabel = 'FITNESS DETAILS';
+      usageInstructions = 'Use this information in the hero, class schedule, trainer profile, membership plans, and contact section. Never use placeholder gym names or fake trainer names.';
+    } else if (/charity|nonprofit|ngo|donation|volunteer|خيري|تبرع|جمعية/.test(siteType)) {
+      contextLabel = 'ORGANIZATION DETAILS';
+      usageInstructions = 'Use this information in the hero, mission section, donation form, team page, and footer. Never use placeholder organization names or fake causes.';
+    } else if (/spa|salon|beauty|barber|nail|صالون|سبا|تجميل/.test(siteType)) {
+      contextLabel = 'SALON DETAILS';
+      usageInstructions = 'Use this information in the hero, services menu, booking form, team section, and footer. Never use placeholder salon names or fake service prices.';
+    } else if (/fan|tribute|community|forum|club|مشجع|نادي|مجتمع/.test(siteType)) {
+      contextLabel = 'COMMUNITY DETAILS';
+      usageInstructions = 'Use this information in the hero, about section, community highlights, and footer. Never use placeholder names or fake community info.';
+    }
+
+    const enriched = `${originalPrompt}\n\n=== ${contextLabel} (USE AS REAL CONTENT — NOT PLACEHOLDERS) ===\n${contextBlock}\n\n${usageInstructions}`;
+    createProject(enriched);
+  };
+
   return (
     <div className={cn("min-h-[calc(100vh-64px)] flex flex-col", isRTL && "rtl")}>
+      {/* Context Detect Loading Overlay */}
+      {isDetectingContext && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}>
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'hsl(210,100%,65%)' }} />
+            <p className="text-sm text-white/70">{isRTL ? 'جاري التحليل...' : 'Analyzing your request...'}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Business Context Form Popup */}
+      <AnimatePresence>
+        {contextFormData && (
+          <BusinessContextForm
+            siteType={contextFormData.siteType}
+            heading={contextFormData.heading}
+            fields={contextFormData.fields}
+            onSubmit={handleContextFormSubmit}
+            isRTL={isRTL}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Hero Section with Wakti Vibrant Gradient */}
       <div className="relative flex-1 flex flex-col min-h-[400px]">
         {/* Wakti Vibrant Gradient Background */}
@@ -1958,7 +2099,7 @@ Apply these styles consistently throughout the entire design.`;
                 {/* Generate Button */}
                 <Button
                   size="sm"
-                  onClick={createProject}
+                  onClick={() => createProject()}
                   disabled={generating || !prompt.trim() || projects.length >= MAX_PROJECTS}
                   className="bg-[#060541] hover:bg-[#060541]/90 text-white gap-1.5"
                 >

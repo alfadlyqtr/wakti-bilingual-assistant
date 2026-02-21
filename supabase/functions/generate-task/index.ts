@@ -39,18 +39,8 @@ const TASK_SCHEMA = {
         type: "string",
         enum: ["normal", "high", "urgent"]
       },
-      due_date: {
-        anyOf: [
-          { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
-          { type: "null" }
-        ]
-      },
-      due_time: {
-        anyOf: [
-          { type: "string", pattern: "^\\d{2}:\\d{2}$" },
-          { type: "null" }
-        ]
-      },
+      due_date: { type: ["string", "null"] },
+      due_time: { type: ["string", "null"] },
       subtasks: {
         type: "array",
         items: { type: "string" },
@@ -58,7 +48,7 @@ const TASK_SCHEMA = {
         maxItems: 12
       }
     },
-    required: ["title", "description", "priority", "subtasks"],
+    required: ["title", "description", "priority", "due_date", "due_time", "subtasks"],
     additionalProperties: false
   }
 };
