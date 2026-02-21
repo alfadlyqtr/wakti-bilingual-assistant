@@ -64,7 +64,7 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
       // Fetch task meta, subtasks, and responses in parallel
       const [{ data: taskData }, { data: st }, { data: rs }] = await Promise.all([
         supabase.from('tr_tasks').select('id,share_link,user_id,title').eq('id', taskId).single(),
-        supabase.from('tr_subtasks').select('id,title,completed').eq('task_id', taskId).order('position'),
+        supabase.from('tr_subtasks').select('id,title,completed').eq('task_id', taskId).order('order_index'),
         supabase.from('tr_shared_responses').select('*').eq('task_id', taskId).order('created_at'),
       ]);
       if (taskData) {
