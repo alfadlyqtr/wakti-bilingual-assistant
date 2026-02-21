@@ -30,11 +30,10 @@ interface SharedTasksTabProps {
 
 // ── Assignee tabbed card (mirrors owner's ActivityMonitor card, no Approvals tab) ──
 const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> = ({ assignment, language }) => {
-  // Supabase join returns task as array — unwrap
-  const taskRaw = assignment.task;
-  const task = Array.isArray(taskRaw) ? taskRaw[0] : taskRaw;
-  const taskId = task?.id || assignment.task_id;
-  const shareLink = task?.share_link;
+  // Always use assignment.task_id directly — never rely on the join which may be null
+  const taskId = assignment.task_id;
+  const [taskMeta, setTaskMeta] = useState<{ share_link: string; user_id: string; title: string } | null>(null);
+  const shareLink = taskMeta?.share_link || (assignment.task as any)?.share_link;
   const [activeTab, setActiveTab] = useState<'subtasks' | 'people' | 'chat' | 'log' | 'requests'>('subtasks');
   const [subtasks, setSubtasks] = useState<{ id: string; title: string; completed: boolean }[]>([]);
   const [responses, setResponses] = useState<any[]>([]);
@@ -43,7 +42,8 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
   const [commentText, setCommentText] = useState('');
   const [sendingComment, setSendingComment] = useState(false);
   const [visitorName, setVisitorName] = useState('');
-  const [snoozeTarget, setSnoozeTarget] = useState<string>('task');
+  // Snooze request state
+  const [snoozeSubtask, setSnoozeSubtask] = useState<{ id: string; title: string } | null>(null); // null = main task
   const [snoozeDate, setSnoozeDate] = useState('');
   const [snoozeTime, setSnoozeTime] = useState('');
   const [snoozeReason, setSnoozeReason] = useState('');
@@ -51,6 +51,7 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
 
   useEffect(() => {
     if (!taskId) return;
+    // Get current user's display name
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (user) {
         const { data: p } = await supabase.from('profiles').select('display_name,first_name,last_name').eq('id', user.id).single();
@@ -58,17 +59,23 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
         setVisitorName(p?.display_name || full || assignment.assignee_name);
       }
     });
-    if (task?.user_id) {
-      supabase.from('profiles').select('display_name,first_name,last_name').eq('id', task.user_id).single().then(({ data: p }) => {
-        if (p) { const full = [p.first_name, p.last_name].filter(Boolean).join(' '); setOwnerName(p.display_name || full || 'Owner'); }
-      });
-    }
     const load = async () => {
       setLoading(true);
-      const [{ data: st }, { data: rs }] = await Promise.all([
+      // Fetch task meta, subtasks, and responses in parallel
+      const [{ data: taskData }, { data: st }, { data: rs }] = await Promise.all([
+        supabase.from('tr_tasks').select('id,share_link,user_id,title').eq('id', taskId).single(),
         supabase.from('tr_subtasks').select('id,title,completed').eq('task_id', taskId).order('position'),
         supabase.from('tr_shared_responses').select('*').eq('task_id', taskId).order('created_at'),
       ]);
+      if (taskData) {
+        setTaskMeta(taskData);
+        // Fetch owner name
+        const { data: ownerProfile } = await supabase.from('profiles').select('display_name,first_name,last_name').eq('id', taskData.user_id).single();
+        if (ownerProfile) {
+          const full = [ownerProfile.first_name, ownerProfile.last_name].filter(Boolean).join(' ');
+          setOwnerName(ownerProfile.display_name || full || 'Owner');
+        }
+      }
       setSubtasks(st || []);
       setResponses(rs || []);
       setLoading(false);
@@ -79,31 +86,29 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_shared_responses', filter: `task_id=eq.${taskId}` }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [taskId, task?.user_id]);
+  }, [taskId]);
 
   const comments = responses.filter(r => r.response_type === 'comment');
   const activityLog = responses.filter(r => r.response_type !== 'comment');
   const activityPeople = [...new Set(responses.map(r => r.visitor_name).filter(Boolean))];
   const completedCount = subtasks.filter(s => s.completed).length;
 
-  const sendSnoozeRequest = async () => {
-    if (!snoozeDate || !taskId || !shareLink) { toast.error(language === 'ar' ? 'اختر تاريخاً' : 'Pick a date'); return; }
+  const sendSnoozeRequest = async (targetSubtask: { id: string; title: string } | null) => {
+    if (!snoozeDate || !taskId || !shareLink) { toast.error(language === 'ar' ? 'اختر تاريخاً' : 'Pick a date first'); return; }
     setSendingSnooze(true);
     try {
       const snoozeUntil = snoozeTime ? `${snoozeDate}T${snoozeTime}` : `${snoozeDate}T00:00`;
-      const targetLabel = snoozeTarget === 'task'
-        ? (language === 'ar' ? 'المهمة الرئيسية' : 'Main task')
-        : (subtasks.find(s => s.id === snoozeTarget)?.title || snoozeTarget);
-      const content = JSON.stringify({ snooze_until: snoozeUntil, reason: snoozeReason.trim() || null, target: snoozeTarget, target_label: targetLabel });
+      const targetLabel = targetSubtask ? targetSubtask.title : (language === 'ar' ? 'المهمة الرئيسية' : 'Main task');
+      const content = JSON.stringify({ snooze_until: snoozeUntil, reason: snoozeReason.trim() || null, target_label: targetLabel });
       await supabase.from('tr_shared_responses').insert({
         task_id: taskId, share_link: shareLink,
         visitor_name: visitorName || assignment.assignee_name,
         response_type: 'snooze_request', content,
-        subtask_id: snoozeTarget !== 'task' ? snoozeTarget : null,
+        subtask_id: targetSubtask ? targetSubtask.id : null,
         is_completed: false,
       });
-      toast.success(language === 'ar' ? 'تم إرسال طلب التأجيل' : 'Snooze request sent');
-      setSnoozeDate(''); setSnoozeTime(''); setSnoozeReason(''); setSnoozeTarget('task');
+      toast.success(language === 'ar' ? 'تم إرسال طلب التأجيل' : 'Snooze request sent!');
+      setSnoozeDate(''); setSnoozeTime(''); setSnoozeReason(''); setSnoozeSubtask(null);
     } catch { toast.error('Failed'); } finally { setSendingSnooze(false); }
   };
 
@@ -258,50 +263,73 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
         {/* REQUESTS tab */}
         {activeTab === 'requests' && (
           <div className="space-y-3 pt-1">
-            <div className="flex items-center gap-2 px-1">
+            <div className="flex items-center gap-2 px-1 pb-1">
               <div className="w-1 h-4 rounded-full bg-orange-500" />
               <p className="text-[11px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-wider">
-                {language === 'ar' ? 'طلب تأجيل' : 'Request Snooze'}
+                {language === 'ar' ? 'طلب تأجيل' : 'Request a Snooze'}
               </p>
             </div>
-            {/* Target selector */}
-            <div className="space-y-1">
-              <p className="text-[11px] font-bold text-muted-foreground px-1">{language === 'ar' ? 'تأجيل ماذا؟' : 'Snooze what?'}</p>
-              <select
-                value={snoozeTarget}
-                onChange={e => setSnoozeTarget(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl text-[13px] bg-slate-50 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.1] text-foreground focus:outline-none focus:border-orange-400 transition-colors">
-                <option value="task">{language === 'ar' ? 'المهمة الرئيسية' : 'Main task'}</option>
-                {subtasks.map(st => (
-                  <option key={st.id} value={st.id}>{st.title}</option>
-                ))}
-              </select>
+            <p className="text-[11px] text-muted-foreground/70 px-1">
+              {language === 'ar' ? 'اختر المهمة أو المهمة الفرعية التي تريد تأجيلها:' : 'Pick what you want to snooze, then set a date:'}
+            </p>
+
+            {/* Step 1: Pick target — Main task + each subtask as tappable cards */}
+            <div className="space-y-1.5">
+              {/* Main task card */}
+              <button
+                onClick={() => setSnoozeSubtask(null)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all active:scale-95
+                  ${ snoozeSubtask === null
+                    ? 'bg-orange-50 dark:bg-orange-500/10 border-orange-400 dark:border-orange-500'
+                    : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/[0.07] hover:border-orange-300' }`}>
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${ snoozeSubtask === null ? 'border-orange-500 bg-orange-500' : 'border-slate-300 dark:border-white/20' }`}>
+                  {snoozeSubtask === null && <div className="w-2 h-2 rounded-full bg-white" />}
+                </div>
+                <span className={`text-[13px] font-bold ${ snoozeSubtask === null ? 'text-orange-700 dark:text-orange-300' : 'text-foreground' }`}>
+                  {language === 'ar' ? 'المهمة الرئيسية' : 'Main task'}
+                </span>
+              </button>
+              {/* Subtask cards */}
+              {subtasks.map(st => (
+                <button key={st.id}
+                  onClick={() => setSnoozeSubtask({ id: st.id, title: st.title })}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all active:scale-95
+                    ${ snoozeSubtask?.id === st.id
+                      ? 'bg-orange-50 dark:bg-orange-500/10 border-orange-400 dark:border-orange-500'
+                      : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/[0.07] hover:border-orange-300' }`}>
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${ snoozeSubtask?.id === st.id ? 'border-orange-500 bg-orange-500' : 'border-slate-300 dark:border-white/20' }`}>
+                    {snoozeSubtask?.id === st.id && <div className="w-2 h-2 rounded-full bg-white" />}
+                  </div>
+                  <span className={`text-[13px] font-semibold flex-1 truncate ${ snoozeSubtask?.id === st.id ? 'text-orange-700 dark:text-orange-300' : 'text-foreground' }`} dir="auto">{st.title}</span>
+                  {st.completed && <Check className="h-3 w-3 text-emerald-500 flex-shrink-0" />}
+                </button>
+              ))}
             </div>
-            {/* Date + Time */}
-            <div className="grid grid-cols-2 gap-2">
+
+            {/* Step 2: Date + Time */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
               <div className="space-y-1">
-                <p className="text-[11px] font-bold text-muted-foreground px-1">{language === 'ar' ? 'التاريخ' : 'Date'}</p>
+                <p className="text-[11px] font-bold text-muted-foreground px-1">{language === 'ar' ? 'التاريخ *' : 'Date *'}</p>
                 <input type="date" value={snoozeDate} onChange={e => setSnoozeDate(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl text-[13px] bg-slate-50 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.1] text-foreground focus:outline-none focus:border-orange-400 transition-colors" />
               </div>
               <div className="space-y-1">
-                <p className="text-[11px] font-bold text-muted-foreground px-1">{language === 'ar' ? 'الوقت (اختياري)' : 'Time (optional)'}</p>
+                <p className="text-[11px] font-bold text-muted-foreground px-1">{language === 'ar' ? 'الوقت' : 'Time'}</p>
                 <input type="time" value={snoozeTime} onChange={e => setSnoozeTime(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl text-[13px] bg-slate-50 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.1] text-foreground focus:outline-none focus:border-orange-400 transition-colors" />
               </div>
             </div>
+
             {/* Reason */}
-            <div className="space-y-1">
-              <p className="text-[11px] font-bold text-muted-foreground px-1">{language === 'ar' ? 'السبب (اختياري)' : 'Reason (optional)'}</p>
-              <input value={snoozeReason} onChange={e => setSnoozeReason(e.target.value)}
-                placeholder={language === 'ar' ? 'اكتب سبباً...' : 'Write a reason...'}
-                className="w-full px-3 py-2 rounded-xl text-[13px] bg-slate-50 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.1] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-orange-400 transition-colors"
-                dir="auto" />
-            </div>
-            <button onClick={sendSnoozeRequest} disabled={!snoozeDate || sendingSnooze}
+            <input value={snoozeReason} onChange={e => setSnoozeReason(e.target.value)}
+              placeholder={language === 'ar' ? 'السبب (اختياري)...' : 'Reason (optional)...'}
+              className="w-full px-3 py-2 rounded-xl text-[13px] bg-slate-50 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.1] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-orange-400 transition-colors"
+              dir="auto" />
+
+            <button onClick={() => sendSnoozeRequest(snoozeSubtask)} disabled={!snoozeDate || sendingSnooze}
               className="w-full py-2.5 rounded-xl text-[13px] font-bold bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-40 transition-all active:scale-95 flex items-center justify-center gap-2">
               {sendingSnooze ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
-              {language === 'ar' ? 'إرسال طلب التأجيل' : 'Send Snooze Request'}
+              {language === 'ar' ? 'إرسال الطلب' : 'Send Request'}
             </button>
           </div>
         )}
