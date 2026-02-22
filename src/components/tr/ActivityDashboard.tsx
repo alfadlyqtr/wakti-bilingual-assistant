@@ -157,7 +157,9 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
         <p className="text-[12px] font-bold text-muted-foreground/60 uppercase tracking-wider">
           {language === 'ar' ? 'المؤشرات الرئيسية' : 'Key Metrics'}
         </p>
-        <ChevronDown className={`h-4 w-4 text-muted-foreground/40 transition-transform duration-200 ${openKPIs ? '' : '-rotate-90'}`} />
+        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center border border-slate-200 dark:border-white/10 flex-shrink-0">
+          <ChevronDown className={`h-5 w-5 text-foreground/70 transition-transform duration-200 ${openKPIs ? '' : '-rotate-90'}`} />
+        </div>
       </button>
       {openKPIs && <div className="grid grid-cols-2 gap-3">
         {/* Row 1: Total + Performance (wide feel) */}
@@ -278,7 +280,9 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
                 <span className={`text-[13px] font-black ${subPct >= 70 ? 'text-emerald-600 dark:text-emerald-400' : subPct >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-indigo-600 dark:text-indigo-400'}`}>
                   {subPct}%
                 </span>
-                <ChevronDown className={`h-4 w-4 text-muted-foreground/40 transition-transform duration-200 ${openSubtasks ? '' : '-rotate-90'}`} />
+                <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center border border-slate-200 dark:border-white/10 flex-shrink-0">
+                  <ChevronDown className={`h-5 w-5 text-foreground/70 transition-transform duration-200 ${openSubtasks ? '' : '-rotate-90'}`} />
+                </div>
               </div>
             </button>
             {/* Overall progress bar */}
@@ -359,7 +363,9 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
               {language === 'ar' ? 'المكتملة والمتأخرة وقيد التنفيذ والمتجاوزة للموعد عبر الزمن (المهام)' : 'Completed, late, in-progress & overdue over time (Tasks)'}
             </p>
           </div>
-          <ChevronDown className={`h-4 w-4 text-muted-foreground/40 flex-shrink-0 transition-transform duration-200 ${openTaskTrend ? '' : '-rotate-90'}`} />
+          <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center border border-slate-200 dark:border-white/10 flex-shrink-0">
+            <ChevronDown className={`h-5 w-5 text-foreground/70 transition-transform duration-200 ${openTaskTrend ? '' : '-rotate-90'}`} />
+          </div>
         </button>
         {openTaskTrend && (
           <div className="px-4 pb-4">
@@ -438,7 +444,9 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
               {language === 'ar' ? 'المكتملة والمتأخرة وقيد التنفيذ والمتجاوزة للموعد عبر الزمن (المهام الفرعية)' : 'Completed, late, in-progress & overdue over time (Subtasks)'}
             </p>
           </div>
-          <ChevronDown className={`h-4 w-4 text-muted-foreground/40 flex-shrink-0 transition-transform duration-200 ${openSubtaskTrend ? '' : '-rotate-90'}`} />
+          <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center border border-slate-200 dark:border-white/10 flex-shrink-0">
+            <ChevronDown className={`h-5 w-5 text-foreground/70 transition-transform duration-200 ${openSubtaskTrend ? '' : '-rotate-90'}`} />
+          </div>
         </button>
         {openSubtaskTrend && (
           <div className="px-4 pb-4">
@@ -517,7 +525,9 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
               {language === 'ar' ? 'توزيع المهام حسب الحالة' : 'Distribution across all tasks'}
             </p>
           </div>
-          <ChevronDown className={`h-4 w-4 text-muted-foreground/40 flex-shrink-0 transition-transform duration-200 ${openStatus ? '' : '-rotate-90'}`} />
+          <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center border border-slate-200 dark:border-white/10 flex-shrink-0">
+            <ChevronDown className={`h-5 w-5 text-foreground/70 transition-transform duration-200 ${openStatus ? '' : '-rotate-90'}`} />
+          </div>
         </button>
         {openStatus && (
           <div className="px-4 pb-4">
@@ -581,7 +591,9 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
                 {language === 'ar' ? 'المهام الفرعية المنجزة مقابل المعلقة' : 'Subtasks completed vs remaining — shared tasks'}
               </p>
             </div>
-            <ChevronDown className={`h-4 w-4 text-muted-foreground/40 flex-shrink-0 transition-transform duration-200 ${openUserPerf ? '' : '-rotate-90'}`} />
+            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center border border-slate-200 dark:border-white/10 flex-shrink-0">
+              <ChevronDown className={`h-5 w-5 text-foreground/70 transition-transform duration-200 ${openUserPerf ? '' : '-rotate-90'}`} />
+            </div>
           </button>
           {openUserPerf && (
             <div className="px-4 pb-4">
@@ -629,7 +641,9 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
                 {userStats.length} {language === 'ar' ? 'مستخدم' : 'users'}
               </p>
             </div>
-            <ChevronDown className={`h-4 w-4 text-muted-foreground/40 flex-shrink-0 transition-transform duration-200 ${openUserTable ? '' : '-rotate-90'}`} />
+            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center border border-slate-200 dark:border-white/10 flex-shrink-0">
+              <ChevronDown className={`h-5 w-5 text-foreground/70 transition-transform duration-200 ${openUserTable ? '' : '-rotate-90'}`} />
+            </div>
           </button>
           {openUserTable && <ActivityUserTable userStats={userStats} />}
         </div>
