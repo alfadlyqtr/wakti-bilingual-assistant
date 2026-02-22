@@ -781,12 +781,13 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
           + stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length
           + stats.uncheckRequests.length
           + stats.joinRequests.length;
+        const isOverdue = task.due_date && new Date(`${task.due_date}T${task.due_time || '23:59:59'}`) < new Date() && !task.completed;
 
         return (
           <Collapsible key={task.id} open={!isCollapsed} onOpenChange={() => toggleCardCollapse(task.id)}>
             <div className={`rounded-2xl overflow-hidden
               bg-white dark:bg-[#0f1318]
-              border-2 ${pendingCount > 0 ? 'border-orange-300 dark:border-orange-500/40' : task.completed ? 'border-emerald-300 dark:border-emerald-500/30' : 'border-slate-200 dark:border-white/[0.08]'}
+              border-2 ${pendingCount > 0 ? 'border-orange-300 dark:border-orange-500/40' : task.completed ? 'border-emerald-300 dark:border-emerald-500/30' : isOverdue ? 'border-red-300 dark:border-red-500/30' : 'border-slate-200 dark:border-white/[0.08]'}
               shadow-[0_4px_24px_hsla(0,0%,0%,0.08),0_1px_6px_hsla(0,0%,0%,0.05)]
               dark:shadow-[0_4px_24px_hsla(0,0%,0%,0.5),0_1px_6px_hsla(0,0%,0%,0.4)]
               transition-all duration-200`}>
@@ -896,6 +897,24 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         <Users className="h-2.5 w-2.5" />
                         {t('sharedTask', language)}
                       </span>
+                      {/* Due date */}
+                      {task.due_date && (() => {
+                        return (
+                          <>
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg
+                              bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-400">
+                              <Clock className="h-2.5 w-2.5" />
+                              {format(parseISO(task.due_date), 'MMM dd')} {task.due_time && `, ${task.due_time}`}
+                            </span>
+                            {isOverdue && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-lg
+                                bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 uppercase tracking-wider">
+                                {language === 'ar' ? 'متأخر' : 'Overdue'}
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
                       {/* Completion stamp */}
                       {task.completed && (() => {
                         const latest = stats.allResponses
