@@ -35,6 +35,9 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
   const [taskMeta, setTaskMeta] = useState<{ share_link: string; user_id: string; title: string } | null>(null);
   const shareLink = taskMeta?.share_link || (assignment.task as any)?.share_link;
   const [activeTab, setActiveTab] = useState<'subtasks' | 'people' | 'chat' | 'log' | 'requests'>('subtasks');
+  const [subtaskTab, setSubtaskTab] = useState<'pending' | 'completed'>('pending');
+  const [pendingOpen, setPendingOpen] = useState(true);
+  const [completedOpen, setCompletedOpen] = useState(true);
   const [subtasks, setSubtasks] = useState<{ id: string; title: string; completed: boolean }[]>([]);
   const [responses, setResponses] = useState<any[]>([]);
   const [ownerName, setOwnerName] = useState('');
@@ -165,19 +168,68 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
 
       <div className="space-y-2 pb-4 px-1">
 
-        {/* TASKS tab */}
+        {/* SUBTASKS tab */}
         {activeTab === 'subtasks' && (
-          <div className="space-y-1.5 pt-1">
-            {subtasks.length === 0 ? (
-              <p className="text-center py-6 text-muted-foreground/50 text-[13px]">{language === 'ar' ? 'لا توجد مهام فرعية' : 'No subtasks'}</p>
-            ) : subtasks.map(st => (
-              <div key={st.id} className={`rounded-xl px-3 py-2.5 flex items-center gap-3 ${ st.completed ? 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20' : 'bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05]' }`}>
-                <div className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center ${ st.completed ? 'bg-emerald-500' : 'border-2 border-slate-300 dark:border-white/20' }`}>
-                  {st.completed && <Check className="h-2.5 w-2.5 text-white" />}
+          <div className="space-y-3 pt-1">
+            {/* Subtask tabs */}
+            <div className="flex gap-3 px-1">
+              <button onClick={() => setSubtaskTab('pending')}
+                className={`text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5
+                  ${subtaskTab === 'pending' ? 'text-indigo-600 dark:text-indigo-400' : 'text-muted-foreground/50 hover:text-muted-foreground'}`}>
+                <div className={`w-1 h-3 rounded-full ${subtaskTab === 'pending' ? 'bg-indigo-500' : 'bg-muted-foreground/20'}`} />
+                {language === 'ar' ? 'قيد الانتظار' : 'Pending'} ({subtasks.filter(s => !s.completed).length})
+              </button>
+              <button onClick={() => setSubtaskTab('completed')}
+                className={`text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5
+                  ${subtaskTab === 'completed' ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground/50 hover:text-muted-foreground'}`}>
+                <div className={`w-1 h-3 rounded-full ${subtaskTab === 'completed' ? 'bg-emerald-500' : 'bg-muted-foreground/20'}`} />
+                {language === 'ar' ? 'مكتمل' : 'Completed'} ({subtasks.filter(s => s.completed).length})
+              </button>
+            </div>
+
+            {/* Pending subtasks */}
+            {subtaskTab === 'pending' && (
+              <div className="space-y-1.5">
+                <button onClick={() => setPendingOpen(!pendingOpen)}
+                  className="w-full flex items-center gap-2 px-1 py-1 text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors">
+                  <ChevronDown className={`h-3 w-3 transition-transform ${pendingOpen ? 'rotate-0' : '-rotate-90'}`} />
+                  {language === 'ar' ? 'المهام المعلقة' : 'Pending Tasks'}
+                </button>
+                <div className={`space-y-1.5 overflow-hidden transition-all ${pendingOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                  {subtasks.filter(st => !st.completed).length === 0 ? (
+                    <p className="text-center py-4 text-muted-foreground/50 text-[13px]">{language === 'ar' ? 'لا يوجد مهام معلقة' : 'No pending tasks'}</p>
+                  ) : subtasks.filter(st => !st.completed).map(st => (
+                    <div key={st.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07]">
+                      <div className="w-4 h-4 rounded-full border-2 border-slate-300 dark:border-white/20 flex items-center justify-center" />
+                      <p className="text-[12px] font-semibold flex-1 text-foreground" dir="auto">{st.title}</p>
+                    </div>
+                  ))}
                 </div>
-                <p className={`text-[12px] font-semibold flex-1 ${ st.completed ? 'line-through text-muted-foreground/60' : 'text-foreground' }`} dir="auto">{st.title}</p>
               </div>
-            ))}
+            )}
+
+            {/* Completed subtasks */}
+            {subtaskTab === 'completed' && (
+              <div className="space-y-1.5">
+                <button onClick={() => setCompletedOpen(!completedOpen)}
+                  className="w-full flex items-center gap-2 px-1 py-1 text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors">
+                  <ChevronDown className={`h-3 w-3 transition-transform ${completedOpen ? 'rotate-0' : '-rotate-90'}`} />
+                  {language === 'ar' ? 'المهام المكتملة' : 'Completed Tasks'}
+                </button>
+                <div className={`space-y-1.5 overflow-hidden transition-all ${completedOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                  {subtasks.filter(st => st.completed).length === 0 ? (
+                    <p className="text-center py-4 text-muted-foreground/50 text-[13px]">{language === 'ar' ? 'لا يوجد مهام مكتملة' : 'No completed tasks'}</p>
+                  ) : subtasks.filter(st => st.completed).map(st => (
+                    <div key={st.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07]">
+                      <div className="w-4 h-4 rounded-full border-2 border-slate-300 dark:border-white/20 flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                      </div>
+                      <p className="text-[12px] font-semibold flex-1 line-through text-muted-foreground/60" dir="auto">{st.title}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
