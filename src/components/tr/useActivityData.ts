@@ -203,10 +203,14 @@ export function useActivityData(tasks: TRTask[]) {
     const now = new Date();
     const allResp = Object.values(responses).flat().filter(r => isAfter(parseISO(r.created_at), rangeStart));
 
-    // Also include personal task completions in the trend (tasks completed within range)
+    // Personal task completions within range
     const personalCompletions = allTasks
       .filter(t => t.completed && t.completed_at && isAfter(parseISO(t.completed_at), rangeStart))
-      .map(t => ({ created_at: t.completed_at!, type: 'task_completion' as const }));
+      .map(t => ({
+        created_at: t.completed_at!,
+        // "late" = completed after due date
+        isLate: !!(t.due_date && isAfter(parseISO(t.completed_at!), new Date(`${t.due_date}T${t.due_time || '23:59:59'}`))),
+      }));
 
     const intervals = (range === '1W' || range === '1M')
       ? eachWeekOfInterval({ start: rangeStart, end: now })
@@ -214,10 +218,12 @@ export function useActivityData(tasks: TRTask[]) {
     return intervals.map((date, i) => {
       const periodEnd = i < intervals.length - 1 ? intervals[i + 1] : now;
       const inP = (created: string) => isAfter(parseISO(created), date) && !isAfter(parseISO(created), periodEnd);
+      const personalInP = personalCompletions.filter(c => inP(c.created_at));
       return {
         label: getIntervalLabel(date, range),
         completions: allResp.filter(r => r.response_type === 'completion' && r.is_completed && inP(r.created_at)).length
-          + personalCompletions.filter(c => inP(c.created_at)).length,
+          + personalInP.length,
+        lateDone: personalInP.filter(c => c.isLate).length,
         comments: allResp.filter(r => r.response_type === 'comment' && inP(r.created_at)).length,
       };
     });

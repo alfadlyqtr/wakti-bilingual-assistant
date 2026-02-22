@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import {
   CheckCircle2, Clock, AlertTriangle, TrendingUp,
-  ListChecks, RefreshCw, LayoutGrid
+  ListChecks, RefreshCw, LayoutGrid, ChevronDown
 } from 'lucide-react';
 import { TRTask } from '@/services/trService';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -66,6 +66,14 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
 
   const subPct = kpis.totalSub > 0 ? Math.round((kpis.completedSub / kpis.totalSub) * 100) : 0;
   const subLeft = kpis.totalSub - kpis.completedSub;
+
+  // Collapsible section state — all open by default
+  const [openKPIs, setOpenKPIs] = useState(true);
+  const [openSubtasks, setOpenSubtasks] = useState(true);
+  const [openTrend, setOpenTrend] = useState(true);
+  const [openStatus, setOpenStatus] = useState(true);
+  const [openUserPerf, setOpenUserPerf] = useState(true);
+  const [openUserTable, setOpenUserTable] = useState(true);
 
   // Per-task subtask breakdown — only tasks that have subtasks
   const taskSubtaskRows = useMemo(() =>
@@ -143,7 +151,14 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
       </div>
 
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-2 gap-3">
+      <button onClick={() => setOpenKPIs(o => !o)}
+        className="w-full flex items-center justify-between px-1 touch-manipulation">
+        <p className="text-[12px] font-bold text-muted-foreground/60 uppercase tracking-wider">
+          {language === 'ar' ? 'المؤشرات الرئيسية' : 'Key Metrics'}
+        </p>
+        <ChevronDown className={`h-4 w-4 text-muted-foreground/40 transition-transform duration-200 ${openKPIs ? '' : '-rotate-90'}`} />
+      </button>
+      {openKPIs && <div className="grid grid-cols-2 gap-3">
         {/* Row 1: Total + Performance (wide feel) */}
         <div className="rounded-2xl p-4 bg-gradient-to-br from-[#060541]/5 to-indigo-100/60 dark:from-indigo-500/20 dark:to-indigo-600/10
           border border-indigo-200/80 dark:border-indigo-500/30
@@ -215,7 +230,7 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
             {language === 'ar' ? 'في الانتظار' : 'In Progress / Waiting'}
           </p>
         </div>
-      </div>
+      </div>}
 
       {/* Late tasks — full width alert strip if any */}
       {kpis.late > 0 && (
@@ -248,7 +263,8 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
           {/* Header */}
           <div className="px-4 pt-4 pb-3 bg-gradient-to-r from-indigo-50 to-purple-50/60 dark:from-indigo-500/15 dark:to-purple-500/10
             border-b border-indigo-100 dark:border-indigo-500/20">
-            <div className="flex items-center justify-between mb-2">
+            <button onClick={() => setOpenSubtasks(o => !o)}
+              className="w-full flex items-center justify-between mb-2 touch-manipulation">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-indigo-500/20 text-indigo-600 dark:text-indigo-400">
                   <ListChecks className="h-4 w-4" />
@@ -257,10 +273,13 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
                   {language === 'ar' ? 'المهام الفرعية' : 'Subtasks'}
                 </span>
               </div>
-              <span className={`text-[13px] font-black ${subPct >= 70 ? 'text-emerald-600 dark:text-emerald-400' : subPct >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-indigo-600 dark:text-indigo-400'}`}>
-                {subPct}%
-              </span>
-            </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-[13px] font-black ${subPct >= 70 ? 'text-emerald-600 dark:text-emerald-400' : subPct >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-indigo-600 dark:text-indigo-400'}`}>
+                  {subPct}%
+                </span>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground/40 transition-transform duration-200 ${openSubtasks ? '' : '-rotate-90'}`} />
+              </div>
+            </button>
             {/* Overall progress bar */}
             <div className="h-2 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden mb-2">
               <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700"
@@ -285,7 +304,7 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
           </div>
 
           {/* Per-task breakdown */}
-          <div className="divide-y divide-slate-100 dark:divide-white/[0.04]">
+          {openSubtasks && <div className="divide-y divide-slate-100 dark:divide-white/[0.04]">
             {taskSubtaskRows.map((row) => {
               const barColor = row.pct === 100
                 ? 'bg-emerald-500'
@@ -320,157 +339,211 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
                 </div>
               );
             })}
-          </div>
+          </div>}
         </div>
       )}
 
-      {/* ── Charts row ── */}
-      <div className="grid grid-cols-1 gap-3">
-
-        {/* Area chart */}
-        <div className="rounded-2xl p-4
-          bg-white dark:bg-white/[0.04]
-          border border-slate-200 dark:border-white/[0.09]
-          shadow-[0_4px_24px_hsla(0,0%,0%,0.10),0_1px_4px_hsla(0,0%,0%,0.06)] dark:shadow-[0_4px_32px_hsla(0,0%,0%,0.5),0_1px_8px_hsla(210,100%,60%,0.08)]">
-          <p className="text-[13px] font-bold text-foreground">
-            {language === 'ar' ? 'اتجاه الإنجاز' : 'Completion Trend'}
-          </p>
-          <p className="text-[11px] text-muted-foreground/60 mb-4">
-            {language === 'ar' ? 'الإنجازات والتعليقات عبر الزمن' : 'Completions & comments over time'}
-          </p>
-          <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={trendData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
-              <defs>
-                <linearGradient id="gBlue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(210,100%,65%)" stopOpacity={0.35} />
-                  <stop offset="95%" stopColor="hsl(210,100%,65%)" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="gGreen" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(142,76%,55%)" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="hsl(142,76%,55%)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsla(0,0%,50%,0.08)" />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'hsla(0,0%,50%,0.6)' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: 'hsla(0,0%,50%,0.6)' }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <Tooltip content={<ChartTooltip />} />
-              <Area type="monotone" dataKey="completions"
-                name={language === 'ar' ? 'إنجازات' : 'Completions'}
-                stroke="hsl(210,100%,65%)" strokeWidth={2.5} fill="url(#gBlue)"
-                dot={false} activeDot={{ r: 4, fill: 'hsl(210,100%,65%)' }} />
-              <Area type="monotone" dataKey="comments"
-                name={language === 'ar' ? 'تعليقات' : 'Comments'}
-                stroke="hsl(142,76%,55%)" strokeWidth={2.5} fill="url(#gGreen)"
-                dot={false} activeDot={{ r: 4, fill: 'hsl(142,76%,55%)' }} />
-            </AreaChart>
-          </ResponsiveContainer>
-          <div className="flex items-center gap-4 mt-2">
-            {[
-              { color: 'hsl(210,100%,65%)', label: language === 'ar' ? 'إنجازات' : 'Completions' },
-              { color: 'hsl(142,76%,55%)', label: language === 'ar' ? 'تعليقات' : 'Comments' },
-            ].map((l, i) => (
-              <div key={i} className="flex items-center gap-1.5">
-                <div className="w-3 h-1.5 rounded-full" style={{ background: l.color }} />
-                <span className="text-[10px] text-muted-foreground/60">{l.label}</span>
-              </div>
-            ))}
+      {/* ── Completion Trend ── */}
+      <div className="rounded-2xl overflow-hidden
+        bg-white dark:bg-white/[0.04]
+        border border-slate-200 dark:border-white/[0.09]
+        shadow-[0_4px_24px_hsla(0,0%,0%,0.10),0_1px_4px_hsla(0,0%,0%,0.06)] dark:shadow-[0_4px_32px_hsla(0,0%,0%,0.5),0_1px_8px_hsla(210,100%,60%,0.08)]">
+        <button onClick={() => setOpenTrend(o => !o)}
+          className="w-full flex items-center justify-between px-4 pt-4 pb-3 touch-manipulation">
+          <div className="text-left">
+            <p className="text-[13px] font-bold text-foreground">
+              {language === 'ar' ? 'اتجاه الإنجاز' : 'Completion Trend'}
+            </p>
+            <p className="text-[11px] text-muted-foreground/60">
+              {language === 'ar' ? 'الإنجازات والمتأخرة والتعليقات عبر الزمن' : 'Completions, late-done & comments over time'}
+            </p>
           </div>
-        </div>
-
-        {/* Donut pie + legend side by side */}
-        <div className="rounded-2xl p-4
-          bg-white dark:bg-white/[0.04]
-          border border-slate-200 dark:border-white/[0.09]
-          shadow-[0_4px_24px_hsla(0,0%,0%,0.10),0_1px_4px_hsla(0,0%,0%,0.06)] dark:shadow-[0_4px_32px_hsla(0,0%,0%,0.5),0_1px_8px_hsla(280,70%,60%,0.08)]">
-          <p className="text-[13px] font-bold text-foreground mb-1">
-            {language === 'ar' ? 'حالة المهام' : 'Task Status'}
-          </p>
-          <p className="text-[11px] text-muted-foreground/60 mb-3">
-            {language === 'ar' ? 'توزيع المهام حسب الحالة' : 'Distribution across all tasks'}
-          </p>
-          {pieData.length > 0 ? (
-            <div className="flex items-center gap-4">
-              <div className="flex-shrink-0 relative">
-                <ResponsiveContainer width={120} height={120}>
-                  <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={38} outerRadius={56}
-                      paddingAngle={3} dataKey="value" strokeWidth={0}>
-                      {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                    </Pie>
-                    <Tooltip content={<ChartTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-[18px] font-black text-foreground">{allTasks.length}</span>
-                  <span className="text-[9px] text-muted-foreground/50">{language === 'ar' ? 'مهمة' : 'tasks'}</span>
+          <ChevronDown className={`h-4 w-4 text-muted-foreground/40 flex-shrink-0 transition-transform duration-200 ${openTrend ? '' : '-rotate-90'}`} />
+        </button>
+        {openTrend && (
+          <div className="px-4 pb-4">
+            <ResponsiveContainer width="100%" height={180}>
+              <AreaChart data={trendData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gBlue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(210,100%,65%)" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="hsl(210,100%,65%)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gOrange" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(25,95%,60%)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="hsl(25,95%,60%)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gGreen" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(142,76%,55%)" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="hsl(142,76%,55%)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsla(0,0%,50%,0.08)" />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'hsla(0,0%,50%,0.6)' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: 'hsla(0,0%,50%,0.6)' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip content={<ChartTooltip />} />
+                <Area type="monotone" dataKey="completions"
+                  name={language === 'ar' ? 'إنجازات' : 'Completions'}
+                  stroke="hsl(210,100%,65%)" strokeWidth={2.5} fill="url(#gBlue)"
+                  dot={false} activeDot={{ r: 4, fill: 'hsl(210,100%,65%)' }} />
+                <Area type="monotone" dataKey="lateDone"
+                  name={language === 'ar' ? 'منجزة متأخرة' : 'Completed Late'}
+                  stroke="hsl(25,95%,60%)" strokeWidth={2} fill="url(#gOrange)"
+                  dot={false} activeDot={{ r: 4, fill: 'hsl(25,95%,60%)' }} />
+                <Area type="monotone" dataKey="comments"
+                  name={language === 'ar' ? 'تعليقات' : 'Comments'}
+                  stroke="hsl(142,76%,55%)" strokeWidth={2.5} fill="url(#gGreen)"
+                  dot={false} activeDot={{ r: 4, fill: 'hsl(142,76%,55%)' }} />
+              </AreaChart>
+            </ResponsiveContainer>
+            <div className="flex items-center gap-4 mt-2 flex-wrap">
+              {[
+                { color: 'hsl(210,100%,65%)', label: language === 'ar' ? 'إنجازات' : 'Completions' },
+                { color: 'hsl(25,95%,60%)', label: language === 'ar' ? 'منجزة متأخرة' : 'Completed Late' },
+                { color: 'hsl(142,76%,55%)', label: language === 'ar' ? 'تعليقات' : 'Comments' },
+              ].map((l, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <div className="w-3 h-1.5 rounded-full" style={{ background: l.color }} />
+                  <span className="text-[10px] text-muted-foreground/60">{l.label}</span>
                 </div>
-              </div>
-              <div className="flex-1 space-y-2.5">
-                {pieData.map((d, i) => (
-                  <div key={i} className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: d.color }} />
-                      <span className="text-[12px] font-semibold text-muted-foreground/80 truncate">{d.name}</span>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <div className="w-16 h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-500"
-                          style={{ background: d.color, width: `${allTasks.length > 0 ? (d.value / allTasks.length) * 100 : 0}%` }} />
-                      </div>
-                      <span className="text-[13px] font-black text-foreground w-5 text-right">{d.value}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              ))}
             </div>
-          ) : (
-            <div className="flex items-center justify-center h-[120px] text-muted-foreground/40 text-sm">
-              {language === 'ar' ? 'لا توجد بيانات' : 'No data'}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* ── Per-user bar chart (only for shared tasks with responses) ── */}
+      {/* ── Task Status (Donut) ── */}
+      <div className="rounded-2xl overflow-hidden
+        bg-white dark:bg-white/[0.04]
+        border border-slate-200 dark:border-white/[0.09]
+        shadow-[0_4px_24px_hsla(0,0%,0%,0.10),0_1px_4px_hsla(0,0%,0%,0.06)] dark:shadow-[0_4px_32px_hsla(0,0%,0%,0.5),0_1px_8px_hsla(280,70%,60%,0.08)]">
+        <button onClick={() => setOpenStatus(o => !o)}
+          className="w-full flex items-center justify-between px-4 pt-4 pb-3 touch-manipulation">
+          <div className="text-left">
+            <p className="text-[13px] font-bold text-foreground">
+              {language === 'ar' ? 'حالة المهام' : 'Task Status'}
+            </p>
+            <p className="text-[11px] text-muted-foreground/60">
+              {language === 'ar' ? 'توزيع المهام حسب الحالة' : 'Distribution across all tasks'}
+            </p>
+          </div>
+          <ChevronDown className={`h-4 w-4 text-muted-foreground/40 flex-shrink-0 transition-transform duration-200 ${openStatus ? '' : '-rotate-90'}`} />
+        </button>
+        {openStatus && (
+          <div className="px-4 pb-4">
+            {pieData.length > 0 ? (
+              <div className="flex items-center gap-4">
+                <div className="flex-shrink-0 relative">
+                  <ResponsiveContainer width={120} height={120}>
+                    <PieChart>
+                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={38} outerRadius={56}
+                        paddingAngle={3} dataKey="value" strokeWidth={0}>
+                        {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                      </Pie>
+                      <Tooltip content={<ChartTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-[18px] font-black text-foreground">{allTasks.length}</span>
+                    <span className="text-[9px] text-muted-foreground/50">{language === 'ar' ? 'مهمة' : 'tasks'}</span>
+                  </div>
+                </div>
+                <div className="flex-1 space-y-2.5">
+                  {pieData.map((d, i) => (
+                    <div key={i} className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: d.color }} />
+                        <span className="text-[12px] font-semibold text-muted-foreground/80 truncate">{d.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="w-16 h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden">
+                          <div className="h-full rounded-full transition-all duration-500"
+                            style={{ background: d.color, width: `${allTasks.length > 0 ? (d.value / allTasks.length) * 100 : 0}%` }} />
+                        </div>
+                        <span className="text-[13px] font-black text-foreground w-5 text-right">{d.value}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-[120px] text-muted-foreground/40 text-sm">
+                {language === 'ar' ? 'لا توجد بيانات' : 'No data'}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Per-user bar chart ── */}
       {userBarData.length > 0 && (
-        <div className="rounded-2xl p-4
+        <div className="rounded-2xl overflow-hidden
           bg-white dark:bg-white/[0.04]
           border border-slate-200 dark:border-white/[0.09]
           shadow-[0_4px_24px_hsla(0,0%,0%,0.10),0_1px_4px_hsla(0,0%,0%,0.06)] dark:shadow-[0_4px_32px_hsla(0,0%,0%,0.5),0_1px_8px_hsla(142,76%,50%,0.08)]">
-          <p className="text-[13px] font-bold text-foreground">
-            {language === 'ar' ? 'أداء المستخدمين' : 'User Performance'}
-          </p>
-          <p className="text-[11px] text-muted-foreground/60 mb-4">
-            {language === 'ar' ? 'المهام الفرعية المنجزة مقابل المعلقة لكل مستخدم' : 'Subtasks completed vs remaining — shared tasks only'}
-          </p>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={userBarData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }} barSize={14} barGap={2}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsla(0,0%,50%,0.08)" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'hsla(0,0%,50%,0.6)' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: 'hsla(0,0%,50%,0.6)' }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <Tooltip content={<ChartTooltip />} />
-              <Bar dataKey="completed" name={language === 'ar' ? 'منجزة' : 'Completed'} radius={[4, 4, 0, 0]}>
-                {userBarData.map((u, i) => <Cell key={i} fill={u.color} />)}
-              </Bar>
-              <Bar dataKey="pending" name={language === 'ar' ? 'معلقة' : 'Pending'}
-                radius={[4, 4, 0, 0]} fill="hsla(0,0%,50%,0.15)" />
-            </BarChart>
-          </ResponsiveContainer>
-          <div className="flex items-center gap-4 mt-2">
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-1.5 rounded-full bg-indigo-400" />
-              <span className="text-[10px] text-muted-foreground/60">{language === 'ar' ? 'منجزة' : 'Completed'}</span>
+          <button onClick={() => setOpenUserPerf(o => !o)}
+            className="w-full flex items-center justify-between px-4 pt-4 pb-3 touch-manipulation">
+            <div className="text-left">
+              <p className="text-[13px] font-bold text-foreground">
+                {language === 'ar' ? 'أداء المستخدمين' : 'User Performance'}
+              </p>
+              <p className="text-[11px] text-muted-foreground/60">
+                {language === 'ar' ? 'المهام الفرعية المنجزة مقابل المعلقة' : 'Subtasks completed vs remaining — shared tasks'}
+              </p>
             </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-1.5 rounded-full bg-slate-300 dark:bg-white/20" />
-              <span className="text-[10px] text-muted-foreground/60">{language === 'ar' ? 'معلقة' : 'Pending'}</span>
+            <ChevronDown className={`h-4 w-4 text-muted-foreground/40 flex-shrink-0 transition-transform duration-200 ${openUserPerf ? '' : '-rotate-90'}`} />
+          </button>
+          {openUserPerf && (
+            <div className="px-4 pb-4">
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={userBarData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }} barSize={14} barGap={2}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsla(0,0%,50%,0.08)" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'hsla(0,0%,50%,0.6)' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: 'hsla(0,0%,50%,0.6)' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Bar dataKey="completed" name={language === 'ar' ? 'منجزة' : 'Completed'} radius={[4, 4, 0, 0]}>
+                    {userBarData.map((u, i) => <Cell key={i} fill={u.color} />)}
+                  </Bar>
+                  <Bar dataKey="pending" name={language === 'ar' ? 'معلقة' : 'Pending'}
+                    radius={[4, 4, 0, 0]} fill="hsla(0,0%,50%,0.15)" />
+                </BarChart>
+              </ResponsiveContainer>
+              <div className="flex items-center gap-4 mt-2">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-1.5 rounded-full bg-indigo-400" />
+                  <span className="text-[10px] text-muted-foreground/60">{language === 'ar' ? 'منجزة' : 'Completed'}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-1.5 rounded-full bg-slate-300 dark:bg-white/20" />
+                  <span className="text-[10px] text-muted-foreground/60">{language === 'ar' ? 'معلقة' : 'Pending'}</span>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
       {/* ── User breakdown table ── */}
-      <ActivityUserTable userStats={userStats} />
+      {userStats.length > 0 && (
+        <div className="rounded-2xl overflow-hidden
+          bg-white dark:bg-white/[0.04]
+          border border-slate-200 dark:border-white/[0.09]
+          shadow-[0_4px_24px_hsla(0,0%,0%,0.08)] dark:shadow-[0_4px_32px_hsla(0,0%,0%,0.4)]">
+          <button onClick={() => setOpenUserTable(o => !o)}
+            className="w-full flex items-center justify-between px-4 pt-4 pb-3 touch-manipulation">
+            <div className="text-left">
+              <p className="text-[13px] font-bold text-foreground">
+                {language === 'ar' ? 'تفاصيل المستخدمين' : 'User Breakdown'}
+              </p>
+              <p className="text-[11px] text-muted-foreground/60">
+                {userStats.length} {language === 'ar' ? 'مستخدم' : 'users'}
+              </p>
+            </div>
+            <ChevronDown className={`h-4 w-4 text-muted-foreground/40 flex-shrink-0 transition-transform duration-200 ${openUserTable ? '' : '-rotate-90'}`} />
+          </button>
+          {openUserTable && <ActivityUserTable userStats={userStats} />}
+        </div>
+      )}
 
     </div>
   );
