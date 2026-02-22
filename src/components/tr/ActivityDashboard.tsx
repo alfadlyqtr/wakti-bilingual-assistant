@@ -48,7 +48,7 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
   const [timeRange, setTimeRange] = useState<TimeRange>('1M');
   const { allTasks, sharedTasks, subtasks, loading, refreshing, loadData, kpis, userStats, getTrendData } = useActivityData(tasks);
 
-  const trendData = useMemo(() => getTrendData(timeRange), [getTrendData, timeRange]);
+  const { taskTrend, subtaskTrend } = useMemo(() => getTrendData(timeRange), [getTrendData, timeRange]);
 
   const userBarData = useMemo(() =>
     userStats.slice(0, 8).map(u => ({
@@ -70,7 +70,8 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
   // Collapsible section state — all open by default
   const [openKPIs, setOpenKPIs] = useState(true);
   const [openSubtasks, setOpenSubtasks] = useState(true);
-  const [openTrend, setOpenTrend] = useState(true);
+  const [openTaskTrend, setOpenTaskTrend] = useState(true);
+  const [openSubtaskTrend, setOpenSubtaskTrend] = useState(true);
   const [openStatus, setOpenStatus] = useState(true);
   const [openUserPerf, setOpenUserPerf] = useState(true);
   const [openUserTable, setOpenUserTable] = useState(true);
@@ -343,41 +344,41 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
         </div>
       )}
 
-      {/* ── Completion Trend ── */}
+      {/* ── Task Completion Trend ── */}
       <div className="rounded-2xl overflow-hidden
         bg-white dark:bg-white/[0.04]
         border border-slate-200 dark:border-white/[0.09]
         shadow-[0_4px_24px_hsla(0,0%,0%,0.10),0_1px_4px_hsla(0,0%,0%,0.06)] dark:shadow-[0_4px_32px_hsla(0,0%,0%,0.5),0_1px_8px_hsla(210,100%,60%,0.08)]">
-        <button onClick={() => setOpenTrend(o => !o)}
+        <button onClick={() => setOpenTaskTrend(o => !o)}
           className="w-full flex items-center justify-between px-4 pt-4 pb-3 touch-manipulation">
           <div className="text-left">
             <p className="text-[13px] font-bold text-foreground">
-              {language === 'ar' ? 'اتجاه الإنجاز' : 'Completion Trend'}
+              {language === 'ar' ? 'اتجاه إنجاز المهام' : 'Task Completion Trend'}
             </p>
             <p className="text-[11px] text-muted-foreground/60">
-              {language === 'ar' ? 'المكتملة والمتأخرة وقيد التنفيذ والمتجاوزة للموعد عبر الزمن' : 'Completed, completed-late, in-progress & overdue over time'}
+              {language === 'ar' ? 'المكتملة والمتأخرة وقيد التنفيذ والمتجاوزة للموعد عبر الزمن (المهام)' : 'Completed, late, in-progress & overdue over time (Tasks)'}
             </p>
           </div>
-          <ChevronDown className={`h-4 w-4 text-muted-foreground/40 flex-shrink-0 transition-transform duration-200 ${openTrend ? '' : '-rotate-90'}`} />
+          <ChevronDown className={`h-4 w-4 text-muted-foreground/40 flex-shrink-0 transition-transform duration-200 ${openTaskTrend ? '' : '-rotate-90'}`} />
         </button>
-        {openTrend && (
+        {openTaskTrend && (
           <div className="px-4 pb-4">
             <ResponsiveContainer width="100%" height={180}>
-              <AreaChart data={trendData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+              <AreaChart data={taskTrend} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="gBlue" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="gBlueTask" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="hsl(210,100%,65%)" stopOpacity={0.35} />
                     <stop offset="95%" stopColor="hsl(210,100%,65%)" stopOpacity={0} />
                   </linearGradient>
-                  <linearGradient id="gOrange" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="gOrangeTask" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="hsl(25,95%,60%)" stopOpacity={0.3} />
                     <stop offset="95%" stopColor="hsl(25,95%,60%)" stopOpacity={0} />
                   </linearGradient>
-                  <linearGradient id="gGreen" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="gGreenTask" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="hsl(210,100%,65%)" stopOpacity={0.15} />
                     <stop offset="95%" stopColor="hsl(210,100%,65%)" stopOpacity={0} />
                   </linearGradient>
-                  <linearGradient id="gRed" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="gRedTask" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="hsl(0,85%,62%)" stopOpacity={0.22} />
                     <stop offset="95%" stopColor="hsl(0,85%,62%)" stopOpacity={0} />
                   </linearGradient>
@@ -388,20 +389,99 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
                 <Tooltip content={<ChartTooltip />} />
                 <Area type="monotone" dataKey="completions"
                   name={language === 'ar' ? 'إنجازات' : 'Completions'}
-                  stroke="hsl(210,100%,65%)" strokeWidth={2.5} fill="url(#gBlue)"
+                  stroke="hsl(210,100%,65%)" strokeWidth={2.5} fill="url(#gBlueTask)"
                   dot={false} activeDot={{ r: 4, fill: 'hsl(210,100%,65%)' }} />
                 <Area type="monotone" dataKey="lateDone"
                   name={language === 'ar' ? 'منجزة متأخرة' : 'Completed Late'}
-                  stroke="hsl(25,95%,60%)" strokeWidth={2} fill="url(#gOrange)"
+                  stroke="hsl(25,95%,60%)" strokeWidth={2} fill="url(#gOrangeTask)"
                   dot={false} activeDot={{ r: 4, fill: 'hsl(25,95%,60%)' }} />
                 <Area type="monotone" dataKey="inProgress"
                   name={language === 'ar' ? 'قيد التنفيذ' : 'In Progress'}
-                  stroke="hsl(210,100%,45%)" strokeWidth={1.5} fill="url(#gGreen)"
+                  stroke="hsl(210,100%,45%)" strokeWidth={1.5} fill="url(#gGreenTask)"
                   strokeDasharray="4 2"
                   dot={false} activeDot={{ r: 4, fill: 'hsl(210,100%,45%)' }} />
                 <Area type="monotone" dataKey="overdue"
                   name={language === 'ar' ? 'متأخرة' : 'Overdue'}
-                  stroke="hsl(0,85%,62%)" strokeWidth={2} fill="url(#gRed)"
+                  stroke="hsl(0,85%,62%)" strokeWidth={2} fill="url(#gRedTask)"
+                  dot={false} activeDot={{ r: 4, fill: 'hsl(0,85%,62%)' }} />
+              </AreaChart>
+            </ResponsiveContainer>
+            <div className="flex items-center gap-4 mt-2 flex-wrap">
+              {[
+                { color: 'hsl(210,100%,65%)', label: language === 'ar' ? 'إنجازات' : 'Completions' },
+                { color: 'hsl(25,95%,60%)', label: language === 'ar' ? 'منجزة متأخرة' : 'Completed Late' },
+                { color: 'hsl(210,100%,45%)', label: language === 'ar' ? 'قيد التنفيذ' : 'In Progress' },
+                { color: 'hsl(0,85%,62%)', label: language === 'ar' ? 'متأخرة' : 'Overdue' },
+              ].map((l, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <div className="w-3 h-1.5 rounded-full" style={{ background: l.color }} />
+                  <span className="text-[10px] text-muted-foreground/60">{l.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Subtask Completion Trend ── */}
+      <div className="rounded-2xl overflow-hidden
+        bg-white dark:bg-white/[0.04]
+        border border-slate-200 dark:border-white/[0.09]
+        shadow-[0_4px_24px_hsla(0,0%,0%,0.10),0_1px_4px_hsla(0,0%,0%,0.06)] dark:shadow-[0_4px_32px_hsla(0,0%,0%,0.5),0_1px_8px_hsla(280,70%,60%,0.08)]">
+        <button onClick={() => setOpenSubtaskTrend(o => !o)}
+          className="w-full flex items-center justify-between px-4 pt-4 pb-3 touch-manipulation">
+          <div className="text-left">
+            <p className="text-[13px] font-bold text-foreground">
+              {language === 'ar' ? 'اتجاه إنجاز المهام الفرعية' : 'Subtask Completion Trend'}
+            </p>
+            <p className="text-[11px] text-muted-foreground/60">
+              {language === 'ar' ? 'المكتملة والمتأخرة وقيد التنفيذ والمتجاوزة للموعد عبر الزمن (المهام الفرعية)' : 'Completed, late, in-progress & overdue over time (Subtasks)'}
+            </p>
+          </div>
+          <ChevronDown className={`h-4 w-4 text-muted-foreground/40 flex-shrink-0 transition-transform duration-200 ${openSubtaskTrend ? '' : '-rotate-90'}`} />
+        </button>
+        {openSubtaskTrend && (
+          <div className="px-4 pb-4">
+            <ResponsiveContainer width="100%" height={180}>
+              <AreaChart data={subtaskTrend} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gBlueSub" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(210,100%,65%)" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="hsl(210,100%,65%)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gOrangeSub" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(25,95%,60%)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="hsl(25,95%,60%)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gGreenSub" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(210,100%,65%)" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="hsl(210,100%,65%)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gRedSub" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(0,85%,62%)" stopOpacity={0.22} />
+                    <stop offset="95%" stopColor="hsl(0,85%,62%)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsla(0,0%,50%,0.08)" />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'hsla(0,0%,50%,0.6)' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: 'hsla(0,0%,50%,0.6)' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip content={<ChartTooltip />} />
+                <Area type="monotone" dataKey="completions"
+                  name={language === 'ar' ? 'إنجازات' : 'Completions'}
+                  stroke="hsl(210,100%,65%)" strokeWidth={2.5} fill="url(#gBlueSub)"
+                  dot={false} activeDot={{ r: 4, fill: 'hsl(210,100%,65%)' }} />
+                <Area type="monotone" dataKey="lateDone"
+                  name={language === 'ar' ? 'منجزة متأخرة' : 'Completed Late'}
+                  stroke="hsl(25,95%,60%)" strokeWidth={2} fill="url(#gOrangeSub)"
+                  dot={false} activeDot={{ r: 4, fill: 'hsl(25,95%,60%)' }} />
+                <Area type="monotone" dataKey="inProgress"
+                  name={language === 'ar' ? 'قيد التنفيذ' : 'In Progress'}
+                  stroke="hsl(210,100%,45%)" strokeWidth={1.5} fill="url(#gGreenSub)"
+                  strokeDasharray="4 2"
+                  dot={false} activeDot={{ r: 4, fill: 'hsl(210,100%,45%)' }} />
+                <Area type="monotone" dataKey="overdue"
+                  name={language === 'ar' ? 'متأخرة' : 'Overdue'}
+                  stroke="hsl(0,85%,62%)" strokeWidth={2} fill="url(#gRedSub)"
                   dot={false} activeDot={{ r: 4, fill: 'hsl(0,85%,62%)' }} />
               </AreaChart>
             </ResponsiveContainer>

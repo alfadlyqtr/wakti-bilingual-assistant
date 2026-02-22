@@ -201,44 +201,77 @@ export function useActivityData(tasks: TRTask[]) {
   function getTrendData(range: TimeRange) {
     const rangeStart = getRangeStart(range);
     const now = new Date();
-    const allResp = Object.values(responses).flat().filter(r => isAfter(parseISO(r.created_at), rangeStart));
-
-    // Personal task completions within range
-    const personalCompletions = allTasks
-      .filter(t => t.completed && t.completed_at && isAfter(parseISO(t.completed_at), rangeStart))
-      .map(t => ({
-        created_at: t.completed_at!,
-        // "late" = completed after due date
-        isLate: !!(t.due_date && isAfter(parseISO(t.completed_at!), new Date(`${t.due_date}T${t.due_time || '23:59:59'}`))),
-      }));
 
     const intervals = (range === '1W' || range === '1M')
       ? eachWeekOfInterval({ start: rangeStart, end: now })
       : eachMonthOfInterval({ start: rangeStart, end: now });
-    return intervals.map((date, i) => {
+
+    const allSubtasks = Object.values(subtasks).flat();
+    const allResp = Object.values(responses).flat();
+
+    const taskTrend = intervals.map((date, i) => {
       const periodEnd = i < intervals.length - 1 ? intervals[i + 1] : now;
       const inP = (created: string) => isAfter(parseISO(created), date) && !isAfter(parseISO(created), periodEnd);
-      const personalInP = personalCompletions.filter(c => inP(c.created_at));
-      // inProgress = tasks created before periodEnd that are still not completed
+      
+      const periodCompletions = allTasks.filter(t => t.completed && t.completed_at && inP(t.completed_at));
+      const completions = periodCompletions.length;
+      
+      const lateDone = periodCompletions.filter(t => 
+        t.due_date && isAfter(parseISO(t.completed_at!), new Date(`${t.due_date}T${t.due_time || '23:59:59'}`))
+      ).length;
+
       const inProgress = allTasks.filter(t =>
         !t.completed &&
         t.created_at && isAfter(periodEnd, parseISO(t.created_at))
       ).length;
-      // overdue = not completed and due date/time has passed by periodEnd
+      
       const overdue = allTasks.filter(t =>
         !t.completed &&
         t.due_date &&
         isAfter(periodEnd, new Date(`${t.due_date}T${t.due_time || '23:59:59'}`))
       ).length;
+      
       return {
         label: getIntervalLabel(date, range),
-        completions: allResp.filter(r => r.response_type === 'completion' && r.is_completed && inP(r.created_at)).length
-          + personalInP.length,
-        lateDone: personalInP.filter(c => c.isLate).length,
+        completions,
+        lateDone,
         inProgress,
         overdue,
       };
     });
+
+    const subtaskTrend = intervals.map((date, i) => {
+      const periodEnd = i < intervals.length - 1 ? intervals[i + 1] : now;
+      const inP = (created: string) => isAfter(parseISO(created), date) && !isAfter(parseISO(created), periodEnd);
+
+      const sharedSubtaskCompletions = allResp.filter(r => r.response_type === 'completion' && r.is_completed && r.subtask_id && inP(r.created_at));
+      const sharedSubtaskIds = new Set(sharedSubtaskCompletions.map(r => r.subtask_id));
+      const personalSubtaskCompletions = allSubtasks.filter(s => s.completed && inP(s.updated_at) && !sharedSubtaskIds.has(s.id));
+      const completions = sharedSubtaskCompletions.length + personalSubtaskCompletions.length;
+
+      const lateDone = allSubtasks.filter(s => {
+        if (!s.completed || !s.due_date) return false;
+        return inP(s.updated_at) && isAfter(parseISO(s.updated_at), new Date(`${s.due_date}T${s.due_time || '23:59:59'}`));
+      }).length;
+
+      const inProgress = allSubtasks.filter(s => 
+        !s.completed && s.created_at && isAfter(periodEnd, parseISO(s.created_at))
+      ).length;
+
+      const overdue = allSubtasks.filter(s => 
+        !s.completed && s.due_date && isAfter(periodEnd, new Date(`${s.due_date}T${s.due_time || '23:59:59'}`))
+      ).length;
+
+      return {
+        label: getIntervalLabel(date, range),
+        completions,
+        lateDone,
+        inProgress,
+        overdue,
+      };
+    });
+
+    return { taskTrend, subtaskTrend };
   }
 
   return { sharedTasks, allTasks, subtasks, responses, loading, refreshing, loadData, kpis, userStats, getTrendData };
