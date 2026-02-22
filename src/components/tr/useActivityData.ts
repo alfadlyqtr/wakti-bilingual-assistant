@@ -219,12 +219,17 @@ export function useActivityData(tasks: TRTask[]) {
       const periodEnd = i < intervals.length - 1 ? intervals[i + 1] : now;
       const inP = (created: string) => isAfter(parseISO(created), date) && !isAfter(parseISO(created), periodEnd);
       const personalInP = personalCompletions.filter(c => inP(c.created_at));
+      // inProgress = tasks created before periodEnd that are still not completed
+      const inProgress = allTasks.filter(t =>
+        !t.completed &&
+        t.created_at && isAfter(periodEnd, parseISO(t.created_at))
+      ).length;
       return {
         label: getIntervalLabel(date, range),
         completions: allResp.filter(r => r.response_type === 'completion' && r.is_completed && inP(r.created_at)).length
           + personalInP.length,
         lateDone: personalInP.filter(c => c.isLate).length,
-        comments: allResp.filter(r => r.response_type === 'comment' && inP(r.created_at)).length,
+        inProgress,
       };
     });
   }
