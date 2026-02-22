@@ -67,14 +67,14 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
   const subPct = kpis.totalSub > 0 ? Math.round((kpis.completedSub / kpis.totalSub) * 100) : 0;
   const subLeft = kpis.totalSub - kpis.completedSub;
 
-  // Collapsible section state — all open by default
+  // Collapsible section state — only KPIs open by default
   const [openKPIs, setOpenKPIs] = useState(true);
-  const [openSubtasks, setOpenSubtasks] = useState(true);
-  const [openTaskTrend, setOpenTaskTrend] = useState(true);
-  const [openSubtaskTrend, setOpenSubtaskTrend] = useState(true);
-  const [openStatus, setOpenStatus] = useState(true);
-  const [openUserPerf, setOpenUserPerf] = useState(true);
-  const [openUserTable, setOpenUserTable] = useState(true);
+  const [openSubtasks, setOpenSubtasks] = useState(false);
+  const [openTaskTrend, setOpenTaskTrend] = useState(false);
+  const [openSubtaskTrend, setOpenSubtaskTrend] = useState(false);
+  const [openStatus, setOpenStatus] = useState(false);
+  const [openUserPerf, setOpenUserPerf] = useState(false);
+  const [openUserTable, setOpenUserTable] = useState(false);
 
   // Per-task subtask breakdown — only tasks that have subtasks
   const taskSubtaskRows = useMemo(() =>
