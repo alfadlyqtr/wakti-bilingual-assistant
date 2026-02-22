@@ -46,7 +46,7 @@ const ChartTooltip = ({ active, payload, label }: any) => {
 export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) => {
   const { language } = useTheme();
   const [timeRange, setTimeRange] = useState<TimeRange>('1M');
-  const { allTasks, sharedTasks, loading, refreshing, loadData, kpis, userStats, getTrendData } = useActivityData(tasks);
+  const { allTasks, sharedTasks, subtasks, loading, refreshing, loadData, kpis, userStats, getTrendData } = useActivityData(tasks);
 
   const trendData = useMemo(() => getTrendData(timeRange), [getTrendData, timeRange]);
 
@@ -66,6 +66,20 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
 
   const subPct = kpis.totalSub > 0 ? Math.round((kpis.completedSub / kpis.totalSub) * 100) : 0;
   const subLeft = kpis.totalSub - kpis.completedSub;
+
+  // Per-task subtask breakdown — only tasks that have subtasks
+  const taskSubtaskRows = useMemo(() =>
+    allTasks
+      .map(t => {
+        const subs = subtasks[t.id] || [];
+        if (subs.length === 0) return null;
+        const done = subs.filter(s => s.completed).length;
+        const pct = Math.round((done / subs.length) * 100);
+        return { id: t.id, title: t.title, total: subs.length, done, pct, taskCompleted: t.completed };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.pct - b.pct), // least progress first
+  [allTasks, subtasks]);
 
   if (loading) {
     return (
@@ -226,41 +240,86 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
 
       {/* ── Subtask progress card ── */}
       {kpis.totalSub > 0 && (
-        <div className="rounded-2xl p-4
-          bg-gradient-to-br from-indigo-50 to-purple-50/60 dark:from-indigo-500/15 dark:to-purple-500/10
-          border border-indigo-200/70 dark:border-indigo-500/30
-          shadow-[0_3px_16px_hsla(240,80%,50%,0.12)] dark:shadow-[0_3px_20px_hsla(240,80%,50%,0.2)]">
-          {/* Header row */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-indigo-500/20 text-indigo-600 dark:text-indigo-400">
-                <ListChecks className="h-4 w-4" />
+        <div className="rounded-2xl overflow-hidden
+          bg-white dark:bg-white/[0.04]
+          border border-slate-200 dark:border-white/[0.09]
+          shadow-[0_4px_24px_hsla(0,0%,0%,0.08)] dark:shadow-[0_4px_32px_hsla(0,0%,0%,0.4)]">
+
+          {/* Header */}
+          <div className="px-4 pt-4 pb-3 bg-gradient-to-r from-indigo-50 to-purple-50/60 dark:from-indigo-500/15 dark:to-purple-500/10
+            border-b border-indigo-100 dark:border-indigo-500/20">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-indigo-500/20 text-indigo-600 dark:text-indigo-400">
+                  <ListChecks className="h-4 w-4" />
+                </div>
+                <span className="text-[13px] font-bold text-foreground">
+                  {language === 'ar' ? 'المهام الفرعية' : 'Subtasks'}
+                </span>
               </div>
-              <span className="text-[13px] font-bold text-foreground">
-                {language === 'ar' ? 'المهام الفرعية' : 'Subtasks'}
+              <span className={`text-[13px] font-black ${subPct >= 70 ? 'text-emerald-600 dark:text-emerald-400' : subPct >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-indigo-600 dark:text-indigo-400'}`}>
+                {subPct}%
               </span>
             </div>
-            <span className={`text-[13px] font-black ${subPct >= 70 ? 'text-emerald-600 dark:text-emerald-400' : subPct >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-indigo-600 dark:text-indigo-400'}`}>
-              {subPct}%
-            </span>
+            {/* Overall progress bar */}
+            <div className="h-2 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden mb-2">
+              <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700"
+                style={{ width: `${subPct}%` }} />
+            </div>
+            {/* Summary stats */}
+            <div className="flex items-center gap-4">
+              {[
+                { val: kpis.completedSub, label: language === 'ar' ? 'منجزة' : 'Done', cls: 'text-emerald-600 dark:text-emerald-400' },
+                { val: subLeft, label: language === 'ar' ? 'متبقية' : 'Left', cls: 'text-muted-foreground' },
+                { val: kpis.totalSub, label: language === 'ar' ? 'المجموع' : 'Total', cls: 'text-indigo-600 dark:text-indigo-400' },
+              ].map((s, i, arr) => (
+                <React.Fragment key={i}>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[14px] font-black ${s.cls}`}>{s.val}</span>
+                    <span className="text-[10px] text-muted-foreground/60">{s.label}</span>
+                  </div>
+                  {i < arr.length - 1 && <div className="w-px h-4 bg-slate-200 dark:bg-white/10" />}
+                </React.Fragment>
+              ))}
+            </div>
           </div>
-          {/* Progress bar */}
-          <div className="h-2.5 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden mb-3">
-            <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700"
-              style={{ width: `${subPct}%` }} />
-          </div>
-          {/* Stats row */}
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { val: kpis.completedSub, label: language === 'ar' ? 'منجزة' : 'Done', cls: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
-              { val: subLeft, label: language === 'ar' ? 'متبقية' : 'Left', cls: 'text-slate-600 dark:text-slate-300', bg: 'bg-white/60 dark:bg-white/[0.04]' },
-              { val: kpis.totalSub, label: language === 'ar' ? 'المجموع' : 'Total', cls: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-500/10' },
-            ].map((s, i) => (
-              <div key={i} className={`rounded-xl px-3 py-2 text-center ${s.bg}`}>
-                <p className={`text-[18px] font-black ${s.cls}`}>{s.val}</p>
-                <p className="text-[10px] font-semibold text-muted-foreground/60">{s.label}</p>
-              </div>
-            ))}
+
+          {/* Per-task breakdown */}
+          <div className="divide-y divide-slate-100 dark:divide-white/[0.04]">
+            {taskSubtaskRows.map((row) => {
+              const barColor = row.pct === 100
+                ? 'bg-emerald-500'
+                : row.taskCompleted
+                  ? 'bg-emerald-400'
+                  : row.pct >= 50
+                    ? 'bg-indigo-500'
+                    : 'bg-amber-500';
+              const pctColor = row.pct === 100
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : row.pct >= 50
+                  ? 'text-indigo-600 dark:text-indigo-400'
+                  : 'text-amber-600 dark:text-amber-400';
+              return (
+                <div key={row.id} className="px-4 py-3 flex items-center gap-3">
+                  {/* Task title */}
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-[12px] font-semibold truncate ${row.taskCompleted ? 'line-through text-muted-foreground/50' : 'text-foreground'}`}>
+                      {row.title}
+                    </p>
+                    {/* Mini progress bar */}
+                    <div className="h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden mt-1.5">
+                      <div className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                        style={{ width: `${row.pct}%` }} />
+                    </div>
+                  </div>
+                  {/* Count + pct */}
+                  <div className="flex-shrink-0 text-right">
+                    <p className={`text-[12px] font-black ${pctColor}`}>{row.pct}%</p>
+                    <p className="text-[10px] text-muted-foreground/50">{row.done}/{row.total}</p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

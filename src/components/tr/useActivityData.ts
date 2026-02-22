@@ -223,5 +223,5 @@ export function useActivityData(tasks: TRTask[]) {
     });
   }
 
-  return { sharedTasks, allTasks, responses, loading, refreshing, loadData, kpis, userStats, getTrendData };
+  return { sharedTasks, allTasks, subtasks, responses, loading, refreshing, loadData, kpis, userStats, getTrendData };
 }
