@@ -44,6 +44,7 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
   const [visitorName, setVisitorName] = useState('');
   // Snooze request state
   const [snoozeSubtask, setSnoozeSubtask] = useState<{ id: string; title: string } | null>(null); // null = main task
+  const [subtasksOpen, setSubtasksOpen] = useState(false); // Collapse state
   const [snoozeDate, setSnoozeDate] = useState('');
   const [snoozeTime, setSnoozeTime] = useState('');
   const [snoozeReason, setSnoozeReason] = useState('');
@@ -273,7 +274,7 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
               {language === 'ar' ? 'اختر المهمة أو المهمة الفرعية التي تريد تأجيلها:' : 'Pick what you want to snooze, then set a date:'}
             </p>
 
-            {/* Step 1: Pick target — Main task + each subtask as tappable cards */}
+            {/* Step 1: Pick target — Main task + collapsible subtasks */}
             <div className="space-y-1.5">
               {/* Main task card */}
               <button
@@ -289,21 +290,32 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
                   {language === 'ar' ? 'المهمة الرئيسية' : 'Main task'}
                 </span>
               </button>
-              {/* Subtask cards */}
-              {subtasks.map(st => (
-                <button key={st.id}
-                  onClick={() => setSnoozeSubtask({ id: st.id, title: st.title })}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all active:scale-95
-                    ${ snoozeSubtask?.id === st.id
-                      ? 'bg-orange-50 dark:bg-orange-500/10 border-orange-400 dark:border-orange-500'
-                      : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/[0.07] hover:border-orange-300' }`}>
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${ snoozeSubtask?.id === st.id ? 'border-orange-500 bg-orange-500' : 'border-slate-300 dark:border-white/20' }`}>
-                    {snoozeSubtask?.id === st.id && <div className="w-2 h-2 rounded-full bg-white" />}
-                  </div>
-                  <span className={`text-[13px] font-semibold flex-1 truncate ${ snoozeSubtask?.id === st.id ? 'text-orange-700 dark:text-orange-300' : 'text-foreground' }`} dir="auto">{st.title}</span>
-                  {st.completed && <Check className="h-3 w-3 text-emerald-500 flex-shrink-0" />}
+              {/* Subtasks section */}
+              <div className="relative">
+                <button
+                  onClick={() => setSubtasksOpen(!subtasksOpen)}
+                  className="w-full flex items-center gap-2 px-1 py-1.5 text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors">
+                  <ChevronDown className={`h-3 w-3 transition-transform ${subtasksOpen ? 'rotate-0' : '-rotate-90'}`} />
+                  {language === 'ar' ? 'المهام الفرعية' : 'Subtasks'} ({subtasks.length})
                 </button>
-              ))}
+                {/* Subtask cards */}
+                <div className={`space-y-1.5 overflow-hidden transition-all ${subtasksOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                  {subtasks.map(st => (
+                    <button key={st.id}
+                      onClick={() => setSnoozeSubtask({ id: st.id, title: st.title })}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all active:scale-95
+                        ${ snoozeSubtask?.id === st.id
+                          ? 'bg-orange-50 dark:bg-orange-500/10 border-orange-400 dark:border-orange-500'
+                          : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/[0.07] hover:border-orange-300' }`}>
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${ snoozeSubtask?.id === st.id ? 'border-orange-500 bg-orange-500' : 'border-slate-300 dark:border-white/20' }`}>
+                        {snoozeSubtask?.id === st.id && <div className="w-2 h-2 rounded-full bg-white" />}
+                      </div>
+                      <span className={`text-[13px] font-semibold flex-1 truncate ${ snoozeSubtask?.id === st.id ? 'text-orange-700 dark:text-orange-300' : 'text-foreground' }`} dir="auto">{st.title}</span>
+                      {st.completed && <Check className="h-3 w-3 text-emerald-500 flex-shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Step 2: Date + Time */}
