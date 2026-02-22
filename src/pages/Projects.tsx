@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import BusinessContextForm, { type ContextField, type BusinessContextData } from '@/components/projects/BusinessContextForm';
 import { useNavigate } from 'react-router-dom';
@@ -33,7 +33,8 @@ import {
   Check,
   Globe,
   Server,
-  Bot
+  Bot,
+  MessageCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -52,6 +53,8 @@ interface Project {
   thumbnail_url?: string | null;
   files?: Record<string, string>;
 }
+
+const WaktiAssistant = lazy(() => import('./WaktiAssistant'));
 
 const MAX_PROJECTS = 2;
 
@@ -849,6 +852,8 @@ export default function Projects() {
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'coder' | 'assistant'>('coder');
+
   const [showEmpTooltip, setShowEmpTooltip] = useState(() => {
     // Show tooltip only on first visit (check localStorage)
     if (typeof window !== 'undefined') {
@@ -1715,6 +1720,61 @@ Apply these styles consistently throughout the entire design.`;
 
   return (
     <div className={cn("min-h-[calc(100vh-64px)] flex flex-col", isRTL && "rtl")}>
+      {/* ============ TOP TABS: AI Coder | AI Assistant ============ */}
+      <div className="sticky top-0 z-40 border-b border-border/50 bg-background/90 backdrop-blur-xl">
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="flex items-center gap-8">
+            <button
+              onClick={() => setActiveTab('coder')}
+              className={cn(
+                "relative py-4 text-sm font-bold transition-colors",
+                activeTab === 'coder'
+                  ? "text-[#060541] dark:text-[#f2f2f2]"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <Code2 className="h-4 w-4" />
+                {isRTL ? 'مبرمج الذكاء' : 'AI Coder'}
+              </div>
+              {activeTab === 'coder' && (
+                <div className="absolute bottom-0 left-0 right-0 h-[3px] rounded-t-full bg-[#060541] dark:bg-[#f2f2f2]" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('assistant')}
+              className={cn(
+                "relative py-4 text-sm font-bold transition-colors",
+                activeTab === 'assistant'
+                  ? "text-[#060541] dark:text-[#f2f2f2]"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <MessageCircle className="h-4 w-4" />
+                {isRTL ? 'شات بوت الذكاء' : 'AI Chat Bot'}
+              </div>
+              {activeTab === 'assistant' && (
+                <div className="absolute bottom-0 left-0 right-0 h-[3px] rounded-t-full bg-[#060541] dark:bg-[#f2f2f2]" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ============ AI ASSISTANT TAB ============ */}
+      {activeTab === 'assistant' && (
+        <Suspense fallback={
+          <div className="flex justify-center py-20">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        }>
+          <WaktiAssistant />
+        </Suspense>
+      )}
+
+      {/* ============ AI CODER TAB ============ */}
+      {activeTab === 'coder' && (<>
       {/* Context Detect Loading Overlay */}
       {isDetectingContext && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}>
@@ -2527,9 +2587,10 @@ Apply these styles consistently throughout the entire design.`;
           )}
         </div>
       </div>
+      </>)}
 
       {/* Custom Theme Creator Modal - Mobile Optimized */}
-      {showThemeCreator && (
+      {activeTab === 'coder' && showThemeCreator && (
         <div className="fixed inset-0 z-[10000] flex items-end md:items-center justify-center" onClick={() => setShowThemeCreator(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div 
