@@ -665,10 +665,13 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
                 hover:bg-indigo-600 disabled:opacity-40 transition-all touch-manipulation active:scale-95">
               {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : (language === 'ar' ? 'إرسال' : 'Send')}
             </button>
-            <button onClick={() => { setShowJoinInput(false); setJoinCode(''); }}
+            <button
+              onClick={() => { setShowJoinInput(false); setJoinCode(''); }}
               className="w-9 h-9 rounded-xl flex items-center justify-center bg-white dark:bg-white/[0.06]
                 border border-slate-200 dark:border-white/[0.09] text-muted-foreground
-                hover:bg-slate-100 dark:hover:bg-white/[0.1] transition-all">
+                hover:bg-slate-100 dark:hover:bg-white/[0.1] transition-all"
+              aria-label={language === 'ar' ? 'إغلاق' : 'Close'}
+            >
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -687,20 +690,42 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
               {mySharedTasks.length}
             </span>
           </div>
+          
+          {/* Shared tasks list */}
+          <div className="space-y-2">
+            {mySharedTasks.map(task => {
+              const isOverdue = task.due_date && new Date(task.due_date + (task.due_time || 'T23:59:59')) < new Date();
+              return (
+                <div key={task.id} className={`rounded-2xl border ${isOverdue ? 'border-red-200/70 dark:border-red-500/30 bg-red-50/50 dark:bg-red-500/5' : 'border-slate-200/80 dark:border-white/[0.07] bg-white dark:bg-slate-900'} overflow-hidden`}>
+                  <div className="flex items-center gap-2 p-4 pb-3">
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isOverdue ? 'bg-red-500' : 'bg-indigo-500'}`} />
+                    <p className={`text-[13px] font-bold flex-1 truncate ${isOverdue ? 'text-red-700 dark:text-red-400' : 'text-foreground'}`} dir="auto">{task.title}</p>
+                    <button onClick={() => copyShareLink(task)} className="text-muted-foreground/50 hover:text-muted-foreground">
+                      <Link2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="px-4 pb-3 flex items-center gap-4 text-[11px] text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <Hash className="h-3.5 w-3.5" />
+                      <span>{task.task_code || task.id.slice(0, 6)}</span>
+                    </div>
+                    {task.due_date && (
+                      <div className={`flex items-center gap-1.5 ${isOverdue ? 'text-red-500 dark:text-red-400 font-bold' : ''}`}>
+                        <Clock className="h-3.5 w-3.5" />
+                        <span>{format(parseISO(task.due_date), task.due_time ? 'MMM dd, HH:mm' : 'MMM dd')}</span>
+                        {isOverdue && <span className="text-[10px] font-black tracking-wider">(OVERDUE)</span>}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5" />
+                      <span>{task.assignees_count || 0}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
-          {/* Owner activity monitor — code/link/New buttons are rendered inside each card header */}
-          <ActivityMonitor
-            tasks={tasks}
-            onTasksChanged={onTasksChanged}
-            incomingShareLink={null}
-            taskCodes={taskCodes}
-            onCopyLink={(task) => {
-              navigator.clipboard.writeText(`${window.location.origin}/shared-task/${task.share_link}`);
-              toast.success(language === 'ar' ? 'تم نسخ الرابط' : 'Link copied!');
-            }}
-            onGenerateCode={handleGenerateCode}
-            generatingCode={generatingCode}
-          />
         </div>
       )}
 
