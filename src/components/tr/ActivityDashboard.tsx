@@ -46,7 +46,7 @@ const ChartTooltip = ({ active, payload, label }: any) => {
 export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) => {
   const { language } = useTheme();
   const [timeRange, setTimeRange] = useState<TimeRange>('1M');
-  const { sharedTasks, loading, refreshing, loadData, kpis, userStats, getTrendData } = useActivityData(tasks);
+  const { allTasks, sharedTasks, loading, refreshing, loadData, kpis, userStats, getTrendData } = useActivityData(tasks);
 
   const trendData = useMemo(() => getTrendData(timeRange), [getTrendData, timeRange]);
 
@@ -80,7 +80,7 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
     );
   }
 
-  if (sharedTasks.length === 0) {
+  if (allTasks.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
         <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-500/10 dark:to-purple-500/10
@@ -88,10 +88,10 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
           <TrendingUp className="h-9 w-9 text-indigo-400 dark:text-indigo-500" />
         </div>
         <p className="text-base font-bold text-foreground mb-2">
-          {language === 'ar' ? 'لا توجد مهام مشتركة' : 'No shared tasks yet'}
+          {language === 'ar' ? 'لا توجد مهام بعد' : 'No tasks yet'}
         </p>
         <p className="text-sm text-muted-foreground/70 max-w-[260px] leading-relaxed">
-          {language === 'ar' ? 'شارك مهمة لبدء تتبع الأداء' : 'Share a task to start tracking performance and activity.'}
+          {language === 'ar' ? 'أنشئ مهمة لبدء تتبع الأداء' : 'Create a task to start tracking performance and activity.'}
         </p>
       </div>
     );
@@ -303,7 +303,7 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
                     <div className="flex items-center gap-2">
                       <div className="w-14 h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden">
                         <div className="h-full rounded-full transition-all duration-500"
-                          style={{ background: d.color, width: `${sharedTasks.length > 0 ? (d.value / sharedTasks.length) * 100 : 0}%` }} />
+                          style={{ background: d.color, width: `${allTasks.length > 0 ? (d.value / allTasks.length) * 100 : 0}%` }} />
                       </div>
                       <span className="text-[11px] font-black text-foreground w-4 text-right">{d.value}</span>
                     </div>

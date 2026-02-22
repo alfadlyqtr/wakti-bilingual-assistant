@@ -1,8 +1,9 @@
 // @ts-nocheck
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { subWeeks, subMonths, isAfter, parseISO, eachWeekOfInterval, eachMonthOfInterval, format } from 'date-fns';
-import { TRTask, TRSubtask } from '@/services/trService';
+import { TRTask, TRSubtask, TRService } from '@/services/trService';
 import { TRSharedService, TRSharedResponse } from '@/services/trSharedService';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export type TimeRange = '1W' | '1M' | '3M' | '6M' | '1Y';
@@ -42,25 +43,74 @@ export function getIntervalLabel(date: Date, range: TimeRange): string {
 export function useActivityData(tasks: TRTask[]) {
   const [responses, setResponses] = useState<{ [taskId: string]: TRSharedResponse[] }>({});
   const [subtasks, setSubtasks] = useState<{ [taskId: string]: TRSubtask[] }>({});
+  const [assignedTasks, setAssignedTasks] = useState<TRTask[]>([]);
+  const [assignedSubtasks, setAssignedSubtasks] = useState<{ [taskId: string]: TRSubtask[] }>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const sharedTasks = useMemo(() => tasks.filter(t => t.is_shared && t.share_link), [tasks]);
 
   const loadData = useCallback(async (isRefresh = false) => {
-    if (sharedTasks.length === 0) { setLoading(false); return; }
     if (isRefresh) setRefreshing(true); else setLoading(true);
     try {
+      // 1. Fetch shared task responses + subtasks
       const allR: { [id: string]: TRSharedResponse[] } = {};
       const allS: { [id: string]: TRSubtask[] } = {};
-      await Promise.all(sharedTasks.map(async (task) => {
-        const [r, s] = await Promise.all([
-          TRSharedService.getTaskResponses(task.id),
-          TRSharedService.getTaskSubtasks(task.id),
-        ]);
-        allR[task.id] = r;
-        allS[task.id] = s;
-      }));
+      if (sharedTasks.length > 0) {
+        await Promise.all(sharedTasks.map(async (task) => {
+          const [r, s] = await Promise.all([
+            TRSharedService.getTaskResponses(task.id),
+            TRSharedService.getTaskSubtasks(task.id),
+          ]);
+          allR[task.id] = r;
+          allS[task.id] = s;
+        }));
+      }
+
+      // 2. Fetch subtasks for ALL personal tasks (including non-shared)
+      const personalTasks = tasks.filter(t => !allS[t.id]); // tasks not already fetched
+      if (personalTasks.length > 0) {
+        await Promise.all(personalTasks.map(async (task) => {
+          const s = await TRService.getSubtasks(task.id);
+          allS[task.id] = s;
+        }));
+      }
+
+      // 3. Fetch assigned-to-me tasks + their subtasks
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: assignmentData } = await supabase
+          .from('tr_task_assignments')
+          .select('id,task_id,status,task:tr_tasks(id,title,completed,due_date,due_time,priority,is_shared,share_link,created_at,updated_at,user_id)')
+          .eq('assignee_id', user.id)
+          .eq('status', 'approved');
+
+        const assignedTasksList: TRTask[] = [];
+        const assignedSubs: { [taskId: string]: TRSubtask[] } = {};
+
+        if (assignmentData && assignmentData.length > 0) {
+          for (const a of assignmentData) {
+            const t = a.task;
+            if (t && !tasks.some(own => own.id === t.id)) {
+              // Only include tasks not already in user's own tasks list
+              assignedTasksList.push(t as TRTask);
+              // Fetch subtasks for assigned tasks
+              try {
+                const { data: subs } = await supabase
+                  .from('tr_subtasks')
+                  .select('*')
+                  .eq('task_id', t.id)
+                  .order('order_index', { ascending: true });
+                assignedSubs[t.id] = subs || [];
+                allS[t.id] = subs || [];
+              } catch { assignedSubs[t.id] = []; }
+            }
+          }
+        }
+        setAssignedTasks(assignedTasksList);
+        setAssignedSubtasks(assignedSubs);
+      }
+
       setResponses(allR);
       setSubtasks(allS);
     } catch {
@@ -69,22 +119,29 @@ export function useActivityData(tasks: TRTask[]) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [sharedTasks]);
+  }, [sharedTasks, tasks]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // All tasks combined: personal (own) + assigned-to-me (deduped)
+  const allTasks = useMemo(() => {
+    const ownIds = new Set(tasks.map(t => t.id));
+    const extra = assignedTasks.filter(t => !ownIds.has(t.id));
+    return [...tasks, ...extra];
+  }, [tasks, assignedTasks]);
 
   const allSubtasks = useMemo(() => Object.values(subtasks).flat(), [subtasks]);
 
   const kpis = useMemo(() => {
-    const completed = sharedTasks.filter(t => t.completed).length;
-    const pending = sharedTasks.filter(t => !t.completed).length;
+    const completed = allTasks.filter(t => t.completed).length;
+    const pending = allTasks.filter(t => !t.completed).length;
     const now = new Date();
-    const late = sharedTasks.filter(t => !t.completed && t.due_date && isAfter(now, parseISO(t.due_date))).length;
+    const late = allTasks.filter(t => !t.completed && t.due_date && isAfter(now, parseISO(t.due_date))).length;
     const totalSub = allSubtasks.length;
     const completedSub = allSubtasks.filter(s => s.completed).length;
-    const performance = sharedTasks.length > 0 ? Math.round((completed / sharedTasks.length) * 100) : 0;
+    const performance = allTasks.length > 0 ? Math.round((completed / allTasks.length) * 100) : 0;
     return { completed, pending, late, totalSub, completedSub, performance };
-  }, [sharedTasks, allSubtasks]);
+  }, [allTasks, allSubtasks]);
 
   const userStats = useMemo((): UserStats[] => {
     const map: { [name: string]: Omit<UserStats, 'color'> } = {};
@@ -113,19 +170,26 @@ export function useActivityData(tasks: TRTask[]) {
     const rangeStart = getRangeStart(range);
     const now = new Date();
     const allResp = Object.values(responses).flat().filter(r => isAfter(parseISO(r.created_at), rangeStart));
+
+    // Also include personal task completions in the trend (tasks completed within range)
+    const personalCompletions = allTasks
+      .filter(t => t.completed && t.completed_at && isAfter(parseISO(t.completed_at), rangeStart))
+      .map(t => ({ created_at: t.completed_at!, type: 'task_completion' as const }));
+
     const intervals = (range === '1W' || range === '1M')
       ? eachWeekOfInterval({ start: rangeStart, end: now })
       : eachMonthOfInterval({ start: rangeStart, end: now });
     return intervals.map((date, i) => {
       const periodEnd = i < intervals.length - 1 ? intervals[i + 1] : now;
-      const inP = (r: TRSharedResponse) => isAfter(parseISO(r.created_at), date) && !isAfter(parseISO(r.created_at), periodEnd);
+      const inP = (created: string) => isAfter(parseISO(created), date) && !isAfter(parseISO(created), periodEnd);
       return {
         label: getIntervalLabel(date, range),
-        completions: allResp.filter(r => r.response_type === 'completion' && r.is_completed && inP(r)).length,
-        comments: allResp.filter(r => r.response_type === 'comment' && inP(r)).length,
+        completions: allResp.filter(r => r.response_type === 'completion' && r.is_completed && inP(r.created_at)).length
+          + personalCompletions.filter(c => inP(c.created_at)).length,
+        comments: allResp.filter(r => r.response_type === 'comment' && inP(r.created_at)).length,
       };
     });
   }
 
-  return { sharedTasks, responses, loading, refreshing, loadData, kpis, userStats, getTrendData };
+  return { sharedTasks, allTasks, responses, loading, refreshing, loadData, kpis, userStats, getTrendData };
 }
