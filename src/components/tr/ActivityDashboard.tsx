@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import {
   CheckCircle2, Clock, AlertTriangle, TrendingUp,
-  ListChecks, RefreshCw
+  ListChecks, RefreshCw, LayoutGrid
 } from 'lucide-react';
 import { TRTask } from '@/services/trService';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -65,6 +65,7 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
   ].filter(d => d.value > 0), [kpis, language]);
 
   const subPct = kpis.totalSub > 0 ? Math.round((kpis.completedSub / kpis.totalSub) * 100) : 0;
+  const subLeft = kpis.totalSub - kpis.completedSub;
 
   if (loading) {
     return (
@@ -128,95 +129,141 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
       </div>
 
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          {
-            label: language === 'ar' ? 'مكتملة' : 'Completed',
-            value: kpis.completed,
-            icon: <CheckCircle2 className="h-4 w-4" />,
-            bg: 'from-emerald-50 to-emerald-100/60 dark:from-emerald-500/25 dark:to-emerald-600/10',
-            ib: 'bg-emerald-500/25 text-emerald-600 dark:text-emerald-400',
-            border: 'border-emerald-300/70 dark:border-emerald-500/30',
-            glow: 'shadow-[0_4px_20px_hsla(142,76%,45%,0.18)] dark:shadow-[0_4px_28px_hsla(142,76%,45%,0.25)]',
-            valColor: 'text-emerald-700 dark:text-emerald-300',
-          },
-          {
-            label: language === 'ar' ? 'معلقة' : 'Pending',
-            value: kpis.pending,
-            icon: <Clock className="h-4 w-4" />,
-            bg: 'from-blue-50 to-blue-100/60 dark:from-blue-500/25 dark:to-blue-600/10',
-            ib: 'bg-blue-500/25 text-blue-600 dark:text-blue-400',
-            border: 'border-blue-300/70 dark:border-blue-500/30',
-            glow: 'shadow-[0_4px_20px_hsla(210,100%,55%,0.18)] dark:shadow-[0_4px_28px_hsla(210,100%,55%,0.25)]',
-            valColor: 'text-blue-700 dark:text-blue-300',
-          },
-          {
-            label: language === 'ar' ? 'متأخرة' : 'Late',
-            value: kpis.late,
-            icon: <AlertTriangle className="h-4 w-4" />,
-            bg: kpis.late > 0
-              ? 'from-orange-50 to-orange-100/60 dark:from-orange-500/25 dark:to-orange-600/10'
-              : 'from-slate-50 to-slate-100/60 dark:from-white/[0.05] dark:to-white/[0.02]',
-            ib: kpis.late > 0 ? 'bg-orange-500/25 text-orange-600 dark:text-orange-400' : 'bg-slate-200/60 dark:bg-white/[0.06] text-muted-foreground',
-            border: kpis.late > 0 ? 'border-orange-300/70 dark:border-orange-500/30' : 'border-slate-200/80 dark:border-white/[0.08]',
-            glow: kpis.late > 0 ? 'shadow-[0_4px_20px_hsla(25,95%,55%,0.2)] dark:shadow-[0_4px_28px_hsla(25,95%,55%,0.3)]' : 'shadow-[0_2px_12px_hsla(0,0%,0%,0.06)]',
-            valColor: kpis.late > 0 ? 'text-orange-700 dark:text-orange-300' : 'text-foreground',
-          },
-          {
-            label: language === 'ar' ? 'الأداء' : 'Performance',
-            value: kpis.performance + '%',
-            icon: <TrendingUp className="h-4 w-4" />,
-            bg: 'from-purple-50 to-purple-100/60 dark:from-purple-500/25 dark:to-purple-600/10',
-            ib: 'bg-purple-500/25 text-purple-600 dark:text-purple-400',
-            border: 'border-purple-300/70 dark:border-purple-500/30',
-            glow: 'shadow-[0_4px_20px_hsla(280,70%,55%,0.18)] dark:shadow-[0_4px_28px_hsla(280,70%,55%,0.25)]',
-            valColor: 'text-purple-700 dark:text-purple-300',
-          },
-        ].map((k, i) => (
-          <div key={i} className={`rounded-2xl p-4 bg-gradient-to-br ${k.bg} border ${k.border} ${k.glow}`}>
-            <div className="mb-3">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${k.ib}`}>{k.icon}</div>
+      <div className="grid grid-cols-2 gap-3">
+        {/* Row 1: Total + Performance (wide feel) */}
+        <div className="rounded-2xl p-4 bg-gradient-to-br from-[#060541]/5 to-indigo-100/60 dark:from-indigo-500/20 dark:to-indigo-600/10
+          border border-indigo-200/80 dark:border-indigo-500/30
+          shadow-[0_4px_20px_hsla(240,80%,50%,0.12)] dark:shadow-[0_4px_28px_hsla(240,80%,50%,0.2)]">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-indigo-500/20 text-indigo-600 dark:text-indigo-400">
+              <LayoutGrid className="h-4 w-4" />
             </div>
-            <p className={`text-2xl font-black ${k.valColor}`}>{k.value}</p>
-            <p className="text-[11px] font-semibold text-muted-foreground/70 mt-0.5">{k.label}</p>
+            <span className="text-[10px] font-bold text-indigo-400/70 uppercase tracking-wider">
+              {language === 'ar' ? 'المجموع' : 'Total'}
+            </span>
           </div>
-        ))}
+          <p className="text-3xl font-black text-indigo-700 dark:text-indigo-300">{kpis.total}</p>
+          <p className="text-[11px] font-semibold text-muted-foreground/70 mt-0.5">
+            {language === 'ar' ? 'إجمالي المهام' : 'All Tasks'}
+          </p>
+        </div>
+
+        <div className="rounded-2xl p-4 bg-gradient-to-br from-purple-50 to-purple-100/60 dark:from-purple-500/20 dark:to-purple-600/10
+          border border-purple-200/80 dark:border-purple-500/30
+          shadow-[0_4px_20px_hsla(280,70%,55%,0.14)] dark:shadow-[0_4px_28px_hsla(280,70%,55%,0.22)]">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-purple-500/20 text-purple-600 dark:text-purple-400">
+              <TrendingUp className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-purple-400/70 uppercase tracking-wider">
+              {language === 'ar' ? 'الأداء' : 'Score'}
+            </span>
+          </div>
+          <p className={`text-3xl font-black ${kpis.performance >= 70 ? 'text-purple-700 dark:text-purple-300' : kpis.performance >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
+            {kpis.performance}%
+          </p>
+          <p className="text-[11px] font-semibold text-muted-foreground/70 mt-0.5">
+            {language === 'ar' ? 'معدل الإنجاز' : 'Completion Rate'}
+          </p>
+        </div>
+
+        {/* Row 2: Completed + Pending + Late */}
+        <div className="rounded-2xl p-4 bg-gradient-to-br from-emerald-50 to-emerald-100/60 dark:from-emerald-500/20 dark:to-emerald-600/10
+          border border-emerald-200/80 dark:border-emerald-500/30
+          shadow-[0_4px_20px_hsla(142,76%,45%,0.14)] dark:shadow-[0_4px_28px_hsla(142,76%,45%,0.22)]">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-emerald-400/70 uppercase tracking-wider">
+              {language === 'ar' ? 'مكتملة' : 'Done'}
+            </span>
+          </div>
+          <p className="text-3xl font-black text-emerald-700 dark:text-emerald-300">{kpis.completed}</p>
+          <p className="text-[11px] font-semibold text-muted-foreground/70 mt-0.5">
+            {language === 'ar' ? 'مهام مكتملة' : 'Completed Tasks'}
+          </p>
+        </div>
+
+        <div className="rounded-2xl p-4 bg-gradient-to-br from-blue-50 to-blue-100/60 dark:from-blue-500/20 dark:to-blue-600/10
+          border border-blue-200/80 dark:border-blue-500/30
+          shadow-[0_4px_20px_hsla(210,100%,55%,0.14)] dark:shadow-[0_4px_28px_hsla(210,100%,55%,0.22)]">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-blue-500/20 text-blue-600 dark:text-blue-400">
+              <Clock className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-blue-400/70 uppercase tracking-wider">
+              {language === 'ar' ? 'معلقة' : 'Pending'}
+            </span>
+          </div>
+          <p className="text-3xl font-black text-blue-700 dark:text-blue-300">{kpis.pending}</p>
+          <p className="text-[11px] font-semibold text-muted-foreground/70 mt-0.5">
+            {language === 'ar' ? 'في الانتظار' : 'In Progress / Waiting'}
+          </p>
+        </div>
       </div>
 
-      {/* ── Subtask progress strip ── */}
-      <div className="rounded-2xl px-4 py-3 flex items-center gap-4
-        bg-gradient-to-r from-indigo-50 to-purple-50/60 dark:from-indigo-500/15 dark:to-purple-500/10
-        border border-indigo-200/70 dark:border-indigo-500/30
-        shadow-[0_3px_16px_hsla(240,80%,50%,0.12)] dark:shadow-[0_3px_20px_hsla(240,80%,50%,0.2)]">
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <ListChecks className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
-          <span className="text-[12px] font-bold text-foreground">
-            {language === 'ar' ? 'المهام الفرعية' : 'Subtasks'}
-          </span>
+      {/* Late tasks — full width alert strip if any */}
+      {kpis.late > 0 && (
+        <div className="rounded-2xl px-4 py-3.5 flex items-center gap-3
+          bg-gradient-to-r from-red-50 to-orange-50/60 dark:from-red-500/15 dark:to-orange-500/10
+          border border-red-200/80 dark:border-red-500/30
+          shadow-[0_4px_20px_hsla(0,80%,55%,0.14)] dark:shadow-[0_4px_28px_hsla(0,80%,55%,0.22)]">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-500/20 text-red-600 dark:text-red-400 flex-shrink-0">
+            <AlertTriangle className="h-4 w-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-black text-red-700 dark:text-red-300">
+              {kpis.late} {language === 'ar' ? (kpis.late === 1 ? 'مهمة متأخرة' : 'مهام متأخرة') : (kpis.late === 1 ? 'Overdue Task' : 'Overdue Tasks')}
+            </p>
+            <p className="text-[11px] text-red-500/70 dark:text-red-400/60">
+              {language === 'ar' ? 'تجاوزت موعد الاستحقاق' : 'Past their due date — needs attention'}
+            </p>
+          </div>
+          <span className="text-3xl font-black text-red-600 dark:text-red-400 flex-shrink-0">{kpis.late}</span>
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
-          {[
-            { val: kpis.completedSub, label: language === 'ar' ? 'منجزة' : 'Done', cls: 'text-emerald-500' },
-            { val: kpis.totalSub - kpis.completedSub, label: language === 'ar' ? 'متبقية' : 'Left', cls: 'text-foreground' },
-            { val: kpis.totalSub, label: language === 'ar' ? 'المجموع' : 'Total', cls: 'text-indigo-500' },
-          ].map((s, i, arr) => (
-            <React.Fragment key={i}>
-              <div className="text-center">
-                <p className={`text-base font-black ${s.cls}`}>{s.val}</p>
-                <p className="text-[9px] text-muted-foreground/60">{s.label}</p>
+      )}
+
+      {/* ── Subtask progress card ── */}
+      {kpis.totalSub > 0 && (
+        <div className="rounded-2xl p-4
+          bg-gradient-to-br from-indigo-50 to-purple-50/60 dark:from-indigo-500/15 dark:to-purple-500/10
+          border border-indigo-200/70 dark:border-indigo-500/30
+          shadow-[0_3px_16px_hsla(240,80%,50%,0.12)] dark:shadow-[0_3px_20px_hsla(240,80%,50%,0.2)]">
+          {/* Header row */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-indigo-500/20 text-indigo-600 dark:text-indigo-400">
+                <ListChecks className="h-4 w-4" />
               </div>
-              {i < arr.length - 1 && <div className="w-px h-6 bg-slate-200 dark:bg-white/10" />}
-            </React.Fragment>
-          ))}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="h-2 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
+              <span className="text-[13px] font-bold text-foreground">
+                {language === 'ar' ? 'المهام الفرعية' : 'Subtasks'}
+              </span>
+            </div>
+            <span className={`text-[13px] font-black ${subPct >= 70 ? 'text-emerald-600 dark:text-emerald-400' : subPct >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-indigo-600 dark:text-indigo-400'}`}>
+              {subPct}%
+            </span>
+          </div>
+          {/* Progress bar */}
+          <div className="h-2.5 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden mb-3">
             <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700"
               style={{ width: `${subPct}%` }} />
           </div>
-          <p className="text-[10px] font-bold text-muted-foreground/60 mt-0.5 text-right">{subPct}%</p>
+          {/* Stats row */}
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { val: kpis.completedSub, label: language === 'ar' ? 'منجزة' : 'Done', cls: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
+              { val: subLeft, label: language === 'ar' ? 'متبقية' : 'Left', cls: 'text-slate-600 dark:text-slate-300', bg: 'bg-white/60 dark:bg-white/[0.04]' },
+              { val: kpis.totalSub, label: language === 'ar' ? 'المجموع' : 'Total', cls: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-500/10' },
+            ].map((s, i) => (
+              <div key={i} className={`rounded-xl px-3 py-2 text-center ${s.bg}`}>
+                <p className={`text-[18px] font-black ${s.cls}`}>{s.val}</p>
+                <p className="text-[10px] font-semibold text-muted-foreground/60">{s.label}</p>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Charts row ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
