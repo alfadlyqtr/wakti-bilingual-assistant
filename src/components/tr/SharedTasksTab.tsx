@@ -665,13 +665,10 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
                 hover:bg-indigo-600 disabled:opacity-40 transition-all touch-manipulation active:scale-95">
               {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : (language === 'ar' ? 'إرسال' : 'Send')}
             </button>
-            <button
-              onClick={() => { setShowJoinInput(false); setJoinCode(''); }}
+            <button onClick={() => { setShowJoinInput(false); setJoinCode(''); }}
               className="w-9 h-9 rounded-xl flex items-center justify-center bg-white dark:bg-white/[0.06]
                 border border-slate-200 dark:border-white/[0.09] text-muted-foreground
-                hover:bg-slate-100 dark:hover:bg-white/[0.1] transition-all"
-              aria-label={language === 'ar' ? 'إغلاق' : 'Close'}
-            >
+                hover:bg-slate-100 dark:hover:bg-white/[0.1] transition-all">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -690,42 +687,20 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
               {mySharedTasks.length}
             </span>
           </div>
-          
-          {/* Shared tasks list */}
-          <div className="space-y-2">
-            {mySharedTasks.map(task => {
-              const isOverdue = task.due_date && new Date(task.due_date + (task.due_time || 'T23:59:59')) < new Date();
-              return (
-                <div key={task.id} className={`rounded-2xl border ${isOverdue ? 'border-red-200/70 dark:border-red-500/30 bg-red-50/50 dark:bg-red-500/5' : 'border-slate-200/80 dark:border-white/[0.07] bg-white dark:bg-slate-900'} overflow-hidden`}>
-                  <div className="flex items-center gap-2 p-4 pb-3">
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isOverdue ? 'bg-red-500' : 'bg-indigo-500'}`} />
-                    <p className={`text-[13px] font-bold flex-1 truncate ${isOverdue ? 'text-red-700 dark:text-red-400' : 'text-foreground'}`} dir="auto">{task.title}</p>
-                    <button onClick={() => copyShareLink(task)} className="text-muted-foreground/50 hover:text-muted-foreground">
-                      <Link2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="px-4 pb-3 flex items-center gap-4 text-[11px] text-muted-foreground">
-                    <div className="flex items-center gap-1.5">
-                      <Hash className="h-3.5 w-3.5" />
-                      <span>{task.task_code || task.id.slice(0, 6)}</span>
-                    </div>
-                    {task.due_date && (
-                      <div className={`flex items-center gap-1.5 ${isOverdue ? 'text-red-500 dark:text-red-400 font-bold' : ''}`}>
-                        <Clock className="h-3.5 w-3.5" />
-                        <span>{format(parseISO(task.due_date), task.due_time ? 'MMM dd, HH:mm' : 'MMM dd')}</span>
-                        {isOverdue && <span className="text-[10px] font-black tracking-wider">(OVERDUE)</span>}
-                      </div>
-                    )}
-                    <div className="flex items-center gap-1.5">
-                      <Users className="h-3.5 w-3.5" />
-                      <span>{task.assignees_count || 0}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
 
+          {/* Owner activity monitor — code/link/New buttons are rendered inside each card header */}
+          <ActivityMonitor
+            tasks={tasks}
+            onTasksChanged={onTasksChanged}
+            incomingShareLink={null}
+            taskCodes={taskCodes}
+            onCopyLink={(task) => {
+              navigator.clipboard.writeText(`${window.location.origin}/shared-task/${task.share_link}`);
+              toast.success(language === 'ar' ? 'تم نسخ الرابط' : 'Link copied!');
+            }}
+            onGenerateCode={handleGenerateCode}
+            generatingCode={generatingCode}
+          />
         </div>
       )}
 
@@ -819,19 +794,30 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
                 const shareLink = a.task?.share_link;
                 if (!shareLink) return null;
                 const isExpanded = expandedAssigned.has(a.id);
+                const isOverdue = a.task?.due_date && new Date(`${a.task.due_date}T${a.task.due_time || '23:59:59'}`) < new Date() && !a.task.completed;
                 return (
-                  <div key={a.id} className="rounded-2xl overflow-hidden bg-white dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.07] shadow-[0_2px_16px_hsla(0,0%,0%,0.07)] dark:shadow-[0_2px_16px_hsla(0,0%,0%,0.4)]">
+                  <div key={a.id} className={`rounded-2xl overflow-hidden bg-white dark:bg-white/[0.04] border ${isOverdue ? 'border-red-200/80 dark:border-red-500/30' : 'border-slate-200/80 dark:border-white/[0.07]'} shadow-[0_2px_16px_hsla(0,0%,0%,0.07)] dark:shadow-[0_2px_16px_hsla(0,0%,0%,0.4)] transition-colors duration-300`}>
                     <button onClick={() => setExpandedAssigned(prev => { const n = new Set(prev); isExpanded ? n.delete(a.id) : n.add(a.id); return n; })}
                       className="w-full text-left px-4 py-3.5 flex items-center gap-3 hover:bg-slate-50/80 dark:hover:bg-white/[0.03] transition-colors touch-manipulation">
-                      <div className={`flex-shrink-0 w-2.5 h-2.5 rounded-full ${a.task?.completed ? 'bg-emerald-400' : 'bg-teal-400'}`} />
+                      <div className={`flex-shrink-0 w-2.5 h-2.5 rounded-full ${a.task?.completed ? 'bg-emerald-400' : isOverdue ? 'bg-red-400' : 'bg-teal-400'}`} />
                       <div className="flex-1 min-w-0">
                         <p className="text-[14px] font-bold text-foreground truncate">{a.task?.title || '...'}</p>
-                        <p className="text-[11px] text-muted-foreground/50 mt-0.5">
-                          {language === 'ar' ? 'مسندة إليك · انقر للتفاعل' : 'Assigned to you · tap to interact'}
-                        </p>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          {a.task?.due_date && (
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.1] text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                              <Clock className="h-3 w-3" />
+                              {format(parseISO(a.task.due_date), 'MMM dd')} {a.task.due_time && `, ${a.task.due_time}`}
+                            </span>
+                          )}
+                          {isOverdue && (
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-500/20 text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-wider">
+                              {language === 'ar' ? 'متأخر' : 'Overdue'}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-white/[0.06] transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
-                        <svg className="h-3.5 w-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-white/[0.08] border border-slate-200 dark:border-white/[0.08] transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
+                        <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-300" />
                       </div>
                     </button>
                     {isExpanded && (
