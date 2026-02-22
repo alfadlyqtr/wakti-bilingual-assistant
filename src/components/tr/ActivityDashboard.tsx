@@ -266,10 +266,10 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
       )}
 
       {/* ── Charts row ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3">
 
         {/* Area chart */}
-        <div className="lg:col-span-2 rounded-2xl p-4
+        <div className="rounded-2xl p-4
           bg-white dark:bg-white/[0.04]
           border border-slate-200 dark:border-white/[0.09]
           shadow-[0_4px_24px_hsla(0,0%,0%,0.10),0_1px_4px_hsla(0,0%,0%,0.06)] dark:shadow-[0_4px_32px_hsla(0,0%,0%,0.5),0_1px_8px_hsla(210,100%,60%,0.08)]">
@@ -318,55 +318,61 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
           </div>
         </div>
 
-        {/* Donut pie */}
+        {/* Donut pie + legend side by side */}
         <div className="rounded-2xl p-4
           bg-white dark:bg-white/[0.04]
           border border-slate-200 dark:border-white/[0.09]
           shadow-[0_4px_24px_hsla(0,0%,0%,0.10),0_1px_4px_hsla(0,0%,0%,0.06)] dark:shadow-[0_4px_32px_hsla(0,0%,0%,0.5),0_1px_8px_hsla(280,70%,60%,0.08)]">
-          <p className="text-[13px] font-bold text-foreground">
+          <p className="text-[13px] font-bold text-foreground mb-1">
             {language === 'ar' ? 'حالة المهام' : 'Task Status'}
           </p>
-          <p className="text-[11px] text-muted-foreground/60 mb-2">
-            {language === 'ar' ? 'التوزيع' : 'Distribution'}
+          <p className="text-[11px] text-muted-foreground/60 mb-3">
+            {language === 'ar' ? 'توزيع المهام حسب الحالة' : 'Distribution across all tasks'}
           </p>
           {pieData.length > 0 ? (
-            <>
-              <ResponsiveContainer width="100%" height={130}>
-                <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={36} outerRadius={56}
-                    paddingAngle={4} dataKey="value" strokeWidth={0}>
-                    {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                  </Pie>
-                  <Tooltip content={<ChartTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="space-y-2 mt-2">
+            <div className="flex items-center gap-4">
+              <div className="flex-shrink-0 relative">
+                <ResponsiveContainer width={120} height={120}>
+                  <PieChart>
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={38} outerRadius={56}
+                      paddingAngle={3} dataKey="value" strokeWidth={0}>
+                      {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                    </Pie>
+                    <Tooltip content={<ChartTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-[18px] font-black text-foreground">{allTasks.length}</span>
+                  <span className="text-[9px] text-muted-foreground/50">{language === 'ar' ? 'مهمة' : 'tasks'}</span>
+                </div>
+              </div>
+              <div className="flex-1 space-y-2.5">
                 {pieData.map((d, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: d.color }} />
-                      <span className="text-[11px] text-muted-foreground/70">{d.name}</span>
+                  <div key={i} className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: d.color }} />
+                      <span className="text-[12px] font-semibold text-muted-foreground/80 truncate">{d.name}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-14 h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden">
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="w-16 h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden">
                         <div className="h-full rounded-full transition-all duration-500"
                           style={{ background: d.color, width: `${allTasks.length > 0 ? (d.value / allTasks.length) * 100 : 0}%` }} />
                       </div>
-                      <span className="text-[11px] font-black text-foreground w-4 text-right">{d.value}</span>
+                      <span className="text-[13px] font-black text-foreground w-5 text-right">{d.value}</span>
                     </div>
                   </div>
                 ))}
               </div>
-            </>
+            </div>
           ) : (
-            <div className="flex items-center justify-center h-[160px] text-muted-foreground/40 text-sm">
+            <div className="flex items-center justify-center h-[120px] text-muted-foreground/40 text-sm">
               {language === 'ar' ? 'لا توجد بيانات' : 'No data'}
             </div>
           )}
         </div>
       </div>
 
-      {/* ── Per-user bar chart ── */}
+      {/* ── Per-user bar chart (only for shared tasks with responses) ── */}
       {userBarData.length > 0 && (
         <div className="rounded-2xl p-4
           bg-white dark:bg-white/[0.04]
@@ -376,7 +382,7 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
             {language === 'ar' ? 'أداء المستخدمين' : 'User Performance'}
           </p>
           <p className="text-[11px] text-muted-foreground/60 mb-4">
-            {language === 'ar' ? 'المهام الفرعية المنجزة مقابل المعلقة' : 'Subtasks completed vs pending per user'}
+            {language === 'ar' ? 'المهام الفرعية المنجزة مقابل المعلقة لكل مستخدم' : 'Subtasks completed vs remaining — shared tasks only'}
           </p>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={userBarData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }} barSize={14} barGap={2}>
