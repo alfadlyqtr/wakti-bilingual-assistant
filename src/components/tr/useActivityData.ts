@@ -224,12 +224,19 @@ export function useActivityData(tasks: TRTask[]) {
         !t.completed &&
         t.created_at && isAfter(periodEnd, parseISO(t.created_at))
       ).length;
+      // overdue = not completed and due date/time has passed by periodEnd
+      const overdue = allTasks.filter(t =>
+        !t.completed &&
+        t.due_date &&
+        isAfter(periodEnd, new Date(`${t.due_date}T${t.due_time || '23:59:59'}`))
+      ).length;
       return {
         label: getIntervalLabel(date, range),
         completions: allResp.filter(r => r.response_type === 'completion' && r.is_completed && inP(r.created_at)).length
           + personalInP.length,
         lateDone: personalInP.filter(c => c.isLate).length,
         inProgress,
+        overdue,
       };
     });
   }

@@ -355,7 +355,7 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
               {language === 'ar' ? 'اتجاه الإنجاز' : 'Completion Trend'}
             </p>
             <p className="text-[11px] text-muted-foreground/60">
-              {language === 'ar' ? 'المكتملة والمتأخرة وقيد التنفيذ عبر الزمن' : 'Completed, late-done & in-progress over time'}
+              {language === 'ar' ? 'المكتملة والمتأخرة وقيد التنفيذ والمتجاوزة للموعد عبر الزمن' : 'Completed, completed-late, in-progress & overdue over time'}
             </p>
           </div>
           <ChevronDown className={`h-4 w-4 text-muted-foreground/40 flex-shrink-0 transition-transform duration-200 ${openTrend ? '' : '-rotate-90'}`} />
@@ -377,6 +377,10 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
                     <stop offset="5%" stopColor="hsl(210,100%,65%)" stopOpacity={0.15} />
                     <stop offset="95%" stopColor="hsl(210,100%,65%)" stopOpacity={0} />
                   </linearGradient>
+                  <linearGradient id="gRed" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(0,85%,62%)" stopOpacity={0.22} />
+                    <stop offset="95%" stopColor="hsl(0,85%,62%)" stopOpacity={0} />
+                  </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsla(0,0%,50%,0.08)" />
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'hsla(0,0%,50%,0.6)' }} axisLine={false} tickLine={false} />
@@ -395,6 +399,10 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
                   stroke="hsl(210,100%,45%)" strokeWidth={1.5} fill="url(#gGreen)"
                   strokeDasharray="4 2"
                   dot={false} activeDot={{ r: 4, fill: 'hsl(210,100%,45%)' }} />
+                <Area type="monotone" dataKey="overdue"
+                  name={language === 'ar' ? 'متأخرة' : 'Overdue'}
+                  stroke="hsl(0,85%,62%)" strokeWidth={2} fill="url(#gRed)"
+                  dot={false} activeDot={{ r: 4, fill: 'hsl(0,85%,62%)' }} />
               </AreaChart>
             </ResponsiveContainer>
             <div className="flex items-center gap-4 mt-2 flex-wrap">
@@ -402,6 +410,7 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
                 { color: 'hsl(210,100%,65%)', label: language === 'ar' ? 'إنجازات' : 'Completions' },
                 { color: 'hsl(25,95%,60%)', label: language === 'ar' ? 'منجزة متأخرة' : 'Completed Late' },
                 { color: 'hsl(210,100%,45%)', label: language === 'ar' ? 'قيد التنفيذ' : 'In Progress' },
+                { color: 'hsl(0,85%,62%)', label: language === 'ar' ? 'متأخرة' : 'Overdue' },
               ].map((l, i) => (
                 <div key={i} className="flex items-center gap-1.5">
                   <div className="w-3 h-1.5 rounded-full" style={{ background: l.color }} />
