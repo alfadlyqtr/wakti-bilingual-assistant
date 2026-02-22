@@ -62,8 +62,10 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const [selectedVisitor, setSelectedVisitor] = useState<string | null>(null);
   const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
   
-  // Collapsible state for task cards
-  const [collapsedCards, setCollapsedCards] = useState<Set<string>>(new Set());
+  // Collapsible state for task cards — starts with ALL collapsed, user toggles persist
+  const [collapsedCards, setCollapsedCards] = useState<Set<string>>(() =>
+    new Set(tasks.filter(t => t.is_shared && t.share_link).map(t => t.id))
+  );
 
   // Owner display name (fetched from profile)
   const [ownerName, setOwnerName] = useState<string>('You');
