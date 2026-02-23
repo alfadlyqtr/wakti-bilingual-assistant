@@ -1128,6 +1128,12 @@ body {
   padding-bottom: var(--app-bottom-tabs-h) !important;
 }
 
+/* Android scroll fix: ensure touch scrolling works */
+.app-main-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
 /* Desktop/Tablet layout: DesktopLayout/TabletLayout handle sizing + top padding in JSX */
 .app-layout-desktop main,
 .app-layout-tablet main {
@@ -2544,4 +2550,61 @@ body.landing-page #root {
   .scroll-snap-container {
     scroll-snap-type: none;
   }
+}
+
+/* ============================================
+   REACT FLOW / XYFLOW - Dark Mode Overrides
+   ============================================ */
+.dark-flow .react-flow__background {
+  background: #0c0f14;
+}
+.dark-flow .react-flow__edge-path {
+  stroke: #606062;
+}
+.dark-flow .react-flow__controls {
+  background: #1a1d24;
+  border-color: rgba(255,255,255,0.1);
+}
+.dark-flow .react-flow__controls-button {
+  background: #1a1d24;
+  border-color: rgba(255,255,255,0.1);
+  fill: #f2f2f2;
+}
+.dark-flow .react-flow__controls-button:hover {
+  background: #2a2d34;
+}
+.dark-flow .react-flow__minimap {
+  background: #0c0f14;
+}
+.dark-flow .react-flow__attribution {
+  display: none;
+}
+.react-flow__attribution {
+  display: none;
+}
+
+/* ── Flow Builder ── */
+.builder-fill {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: hsl(var(--background));
+  overflow: hidden;
+  /* Ensure it fills to the very bottom of the viewport */
+  min-height: 100%;
+}
+.builder-header {
+  flex-shrink: 0;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.06);
+}
+.builder-canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.builder-canvas .react-flow {
+  width: 100% !important;
+  height: 100% !important;
 }

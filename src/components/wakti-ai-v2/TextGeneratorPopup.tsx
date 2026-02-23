@@ -22,12 +22,55 @@ type ModelPreference = 'gpt-4o' | 'gpt-4o-mini' | 'auto';
 
 // Stable keys for option values; labels are localized at render time
 type ContentTypeKey =
-  | 'auto' | 'email' | 'text_message' | 'message' | 'blog_post' | 'story' | 'press_release' | 'cover_letter'
-  | 'research_brief' | 'research_report' | 'case_study' | 'how_to_guide' | 'policy_note' | 'product_description' | 'report' | 'essay' | 'proposal' | 'official_letter' | 'poem' | 'captions'
-  | 'school_project' | 'questionnaire';
+  | 'auto'
+  | 'summarize'
+  | 'email'
+  | 'text_message'
+  | 'message'
+  | 'blog_post'
+  | 'story'
+  | 'press_release'
+  | 'cover_letter'
+  | 'research_brief'
+  | 'research_report'
+  | 'case_study'
+  | 'how_to_guide'
+  | 'policy_note'
+  | 'product_description'
+  | 'report'
+  | 'essay'
+  | 'proposal'
+  | 'official_letter'
+  | 'poem'
+  | 'captions'
+  | 'school_project'
+  | 'questionnaire';
 type ToneKey =
-  | 'auto' | 'human' | 'professional' | 'casual' | 'formal' | 'friendly' | 'persuasive' | 'romantic' | 'neutral' | 'empathetic' | 'confident' | 'humorous' | 'urgent'
-  | 'apologetic' | 'inspirational' | 'motivational' | 'sympathetic' | 'sincere' | 'informative' | 'concise' | 'dramatic' | 'suspenseful' | 'authoritative' | 'educational';
+  | 'auto'
+  | 'human'
+  | 'professional'
+  | 'casual'
+  | 'formal'
+  | 'friendly'
+  | 'persuasive'
+  | 'romantic'
+  | 'neutral'
+  | 'empathetic'
+  | 'confident'
+  | 'humorous'
+  | 'urgent'
+  | 'apologetic'
+  | 'inspirational'
+  | 'motivational'
+  | 'sympathetic'
+  | 'sincere'
+  | 'informative'
+  | 'concise'
+  | 'dramatic'
+  | 'suspenseful'
+  | 'authoritative'
+  | 'educational'
+  | 'sales';
 type RegisterKey = 'auto' | 'formal' | 'neutral' | 'casual' | 'slang' | 'poetic' | 'gen_z' | 'business_formal' | 'executive_brief';
 type LanguageVariantKey =
   | 'auto'
@@ -42,22 +85,61 @@ type CaptionPlatformKey = 'auto' | 'instagram' | 'tiktok' | 'youtube' | 'snapcha
 
 const CONTENT_TYPE_KEYS: ContentTypeKey[] = [
   'auto',
-  'email', 'text_message', 'message', 'blog_post', 'story', 'press_release', 'cover_letter',
-  'research_brief', 'research_report', 'case_study', 'how_to_guide', 'policy_note', 'product_description', 'report', 'essay', 'proposal', 'official_letter', 'poem', 'captions',
-  'school_project', 'questionnaire'
+  'blog_post',
+  'captions',
+  'case_study',
+  'cover_letter',
+  'email',
+  'essay',
+  'how_to_guide',
+  'message',
+  'official_letter',
+  'poem',
+  'policy_note',
+  'press_release',
+  'product_description',
+  'proposal',
+  'questionnaire',
+  'report',
+  'research_brief',
+  'research_report',
+  'story',
+  'summarize',
+  'text_message'
 ];
 const TONE_KEYS: ToneKey[] = [
   'auto',
+  'apologetic',
+  'authoritative',
+  'casual',
+  'concise',
+  'confident',
+  'dramatic',
+  'educational',
+  'empathetic',
+  'formal',
+  'friendly',
+  'humorous',
   'human',
-  'professional', 'casual', 'formal', 'friendly', 'persuasive', 'romantic', 'neutral', 'empathetic', 'confident', 'humorous', 'urgent',
-  'apologetic', 'inspirational', 'motivational', 'sympathetic', 'sincere', 'informative', 'concise', 'dramatic', 'suspenseful', 'authoritative', 'educational'
+  'informative',
+  'inspirational',
+  'motivational',
+  'neutral',
+  'persuasive',
+  'professional',
+  'romantic',
+  'sales',
+  'sincere',
+  'sympathetic',
+  'suspenseful',
+  'urgent'
 ];
-const REGISTER_KEYS: RegisterKey[] = ['auto', 'formal', 'neutral', 'casual', 'slang', 'poetic', 'gen_z', 'business_formal', 'executive_brief'];
+const REGISTER_KEYS: RegisterKey[] = ['auto', 'business_formal', 'casual', 'executive_brief', 'formal', 'gen_z', 'neutral', 'poetic', 'slang'];
 // Base English variants. For Arabic UI we will present Arabic-specific variants instead.
-const LANGUAGE_VARIANT_KEYS_EN: LanguageVariantKey[] = ['auto', 'us_english', 'uk_english', 'canadian_english', 'australian_english'];
-const LANGUAGE_VARIANT_KEYS_AR: LanguageVariantKey[] = ['auto', 'msa', 'gulf_arabic'];
-const EMOJIS_KEYS: EmojisKey[] = ['auto', 'none', 'light', 'rich', 'extra'];
-const CAPTION_PLATFORM_KEYS: CaptionPlatformKey[] = ['auto', 'instagram', 'tiktok', 'youtube', 'snapchat', 'x', 'linkedin'];
+const LANGUAGE_VARIANT_KEYS_EN: LanguageVariantKey[] = ['auto', 'australian_english', 'canadian_english', 'uk_english', 'us_english'];
+const LANGUAGE_VARIANT_KEYS_AR: LanguageVariantKey[] = ['auto', 'gulf_arabic', 'msa'];
+const EMOJIS_KEYS: EmojisKey[] = ['auto', 'extra', 'light', 'none', 'rich'];
+const CAPTION_PLATFORM_KEYS: CaptionPlatformKey[] = ['auto', 'instagram', 'linkedin', 'snapchat', 'tiktok', 'x', 'youtube'];
 
 const WEB_SEARCH_ALLOWED_CONTENT_TYPES = new Set<ContentTypeKey>([
   'research_brief',
@@ -74,17 +156,53 @@ const WEB_SEARCH_ALLOWED_CONTENT_TYPES = new Set<ContentTypeKey>([
 const ctLabel = (k: ContentTypeKey, lang: 'en' | 'ar') => {
   const en: Record<ContentTypeKey, string> = {
     auto: 'Auto',
-    email: 'Email', text_message: 'Text Message', message: 'Message', blog_post: 'Blog Post', story: 'Story', press_release: 'Press Release', cover_letter: 'Cover Letter',
-    research_brief: 'Research Brief', research_report: 'Research Report', case_study: 'Case Study', how_to_guide: 'How-to Guide', policy_note: 'Policy Note', product_description: 'Product Description', report: 'Report', essay: 'Essay', proposal: 'Proposal', official_letter: 'Official Letter', poem: 'Poem',
+    summarize: 'Summarize',
+    email: 'Email',
+    text_message: 'Text Message',
+    message: 'Message',
+    blog_post: 'Blog Post',
+    story: 'Story',
+    press_release: 'Press Release',
+    cover_letter: 'Cover Letter',
+    research_brief: 'Research Brief',
+    research_report: 'Research Report',
+    case_study: 'Case Study',
+    how_to_guide: 'How-to Guide',
+    policy_note: 'Policy Note',
+    product_description: 'Product Description',
+    report: 'Report',
+    essay: 'Essay',
+    proposal: 'Proposal',
+    official_letter: 'Official Letter',
+    poem: 'Poem',
     captions: 'Captions',
-    school_project: 'School Project', questionnaire: 'Questionnaire'
+    school_project: 'School Project',
+    questionnaire: 'Questionnaire'
   };
   const ar: Record<ContentTypeKey, string> = {
     auto: 'تلقائي',
-    email: 'بريد إلكتروني', text_message: 'رسالة نصية', message: 'رسالة', blog_post: 'مقال مدونة', story: 'قصة', press_release: 'بيان صحفي', cover_letter: 'خطاب تقديم', poem: 'قصيدة',
+    summarize: 'تلخيص',
+    email: 'بريد إلكتروني',
+    text_message: 'رسالة نصية',
+    message: 'رسالة',
+    blog_post: 'مقال مدونة',
+    story: 'قصة',
+    press_release: 'بيان صحفي',
+    cover_letter: 'خطاب تقديم',
+    poem: 'قصيدة',
     captions: 'كابتشن / تسميات',
-    research_brief: 'موجز بحثي', research_report: 'تقرير بحثي', case_study: 'دراسة حالة', how_to_guide: 'دليل إرشادي', policy_note: 'مذكرة سياسات', product_description: 'وصف منتج', report: 'تقرير', essay: 'مقال', proposal: 'اقتراح', official_letter: 'خطاب رسمي',
-    school_project: 'مشروع مدرسي', questionnaire: 'استبيان'
+    research_brief: 'موجز بحثي',
+    research_report: 'تقرير بحثي',
+    case_study: 'دراسة حالة',
+    how_to_guide: 'دليل إرشادي',
+    policy_note: 'مذكرة سياسات',
+    product_description: 'وصف منتج',
+    report: 'تقرير',
+    essay: 'مقال',
+    proposal: 'اقتراح',
+    official_letter: 'خطاب رسمي',
+    school_project: 'مشروع مدرسي',
+    questionnaire: 'استبيان'
   };
   return lang === 'ar' ? ar[k] : en[k];
 };
@@ -114,13 +232,13 @@ const toneLabel = (k: ToneKey, lang: 'en' | 'ar') => {
     auto: 'Auto',
     human: 'Human (never sounds like AI)',
     professional: 'Professional', casual: 'Casual', formal: 'Formal', friendly: 'Friendly', persuasive: 'Persuasive', romantic: 'Romantic', neutral: 'Neutral', empathetic: 'Empathetic', confident: 'Confident', humorous: 'Humorous', urgent: 'Urgent',
-    apologetic: 'Apologetic', inspirational: 'Inspirational', motivational: 'Motivational', sympathetic: 'Sympathetic', sincere: 'Sincere', informative: 'Informative', concise: 'Concise', dramatic: 'Dramatic', suspenseful: 'Suspenseful', authoritative: 'Authoritative', educational: 'Educational'
+    apologetic: 'Apologetic', inspirational: 'Inspirational', motivational: 'Motivational', sympathetic: 'Sympathetic', sincere: 'Sincere', informative: 'Informative', concise: 'Concise', dramatic: 'Dramatic', suspenseful: 'Suspenseful', authoritative: 'Authoritative', educational: 'Educational', sales: 'Sales'
   };
   const ar: Record<ToneKey, string> = {
     auto: 'تلقائي',
     human: 'بشري (بدون أسلوب ذكاء اصطناعي)',
     professional: 'مهني', casual: 'غير رسمي', formal: 'رسمي', friendly: 'ودود', persuasive: 'إقناعي', romantic: 'رومانسي', neutral: 'محايد', empathetic: 'متعاطف', confident: 'واثق', humorous: 'مرح', urgent: 'عاجل',
-    apologetic: 'اعتذاري', inspirational: 'ملهم', motivational: 'تحفيزي', sympathetic: 'متعاطف', sincere: 'صادق', informative: 'معلوماتي', concise: 'موجز', dramatic: 'درامي', suspenseful: 'مشوّق', authoritative: 'موثوق', educational: 'تثقيفي'
+    apologetic: 'اعتذاري', inspirational: 'ملهم', motivational: 'تحفيزي', sympathetic: 'متعاطف', sincere: 'صادق', informative: 'معلوماتي', concise: 'موجز', dramatic: 'درامي', suspenseful: 'مشوّق', authoritative: 'موثوق', educational: 'تثقيفي', sales: 'مبيعات'
   };
   return lang === 'ar' ? ar[k] : en[k];
 };
@@ -914,9 +1032,9 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                     <input
                       ref={composeFileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/*,.pdf,application/pdf"
                       multiple
-                      aria-label={language === 'ar' ? 'رفع صور' : 'Upload screenshots'}
+                      aria-label={language === 'ar' ? 'رفع صور' : 'Upload screenshots or PDFs'}
                       className="hidden"
                       onChange={(e) => {
                         const files = Array.from(e.target.files || []);
@@ -929,8 +1047,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                       onClick={() => composeFileInputRef.current?.click()}
                       disabled={isExtractingCompose}
                       className={`text-xs px-2 py-1 rounded-md border hover:bg-muted flex items-center gap-1 ${isExtractingCompose ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-400 animate-pulse' : ''}`}
-                      aria-label={language === 'ar' ? 'رفع صورة' : 'Upload screenshot'}
-                      title={language === 'ar' ? 'رفع صورة لاستخراج النص' : 'Upload screenshot to extract text'}
+                      aria-label={language === 'ar' ? 'رفع صورة' : 'Upload screenshot or PDF'}
+                      title={language === 'ar' ? 'رفع صورة لاستخراج النص' : 'Upload screenshot or PDF to extract text'}
                     >
                       {isExtractingCompose
                         ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1225,9 +1343,9 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                     <input
                       ref={replyFileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/*,.pdf,application/pdf"
                       multiple
-                      aria-label={language === 'ar' ? 'رفع صور' : 'Upload screenshots'}
+                      aria-label={language === 'ar' ? 'رفع صور' : 'Upload screenshots or PDFs'}
                       className="hidden"
                       onChange={(e) => {
                         const files = Array.from(e.target.files || []);
@@ -1240,8 +1358,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                       onClick={() => replyFileInputRef.current?.click()}
                       disabled={isExtractingReply}
                       className={`text-xs px-2 py-1 rounded-md border hover:bg-muted flex items-center gap-1 ${isExtractingReply ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-400 animate-pulse' : ''}`}
-                      aria-label={language === 'ar' ? 'رفع صورة' : 'Upload screenshot'}
-                      title={language === 'ar' ? 'رفع صورة لاستخراج النص' : 'Upload screenshot to extract text'}
+                      aria-label={language === 'ar' ? 'رفع صورة' : 'Upload screenshot or PDF'}
+                      title={language === 'ar' ? 'رفع صورة لاستخراج النص' : 'Upload screenshot or PDF to extract text'}
                     >
                       {isExtractingReply
                         ? <Loader2 className="w-3.5 h-3.5 animate-spin" />

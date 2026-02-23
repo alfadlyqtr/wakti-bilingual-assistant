@@ -1747,6 +1747,7 @@ export default function ProjectDetail() {
       }, 5000);
     } finally {
       setIsGenerating(false);
+      setLeftPanelMode('chat'); // Return to chat mode after generation completes
     }
   };
 

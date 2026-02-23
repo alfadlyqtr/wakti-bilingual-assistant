@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import BusinessContextForm, { type ContextField, type BusinessContextData } from '@/components/projects/BusinessContextForm';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import RippleGrid from '../components/landing/RippleGrid';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -56,7 +57,7 @@ interface Project {
 
 const WaktiAssistant = lazy(() => import('./WaktiAssistant'));
 
-const MAX_PROJECTS = 2;
+const MAX_PROJECTS = 3;
 
 // Project Preview Thumbnail Component - premium fallback card
 const ProjectPreviewThumbnail = ({ project, isRTL }: { project: Project; isRTL: boolean }) => {
@@ -797,6 +798,58 @@ Make all text realistic and tailored to {PRODUCT}.`,
     ],
     defaultOption: { en: 'Startup Pitch Deck', ar: 'عرض شركة ناشئة' },
     color: 'from-violet-500 to-indigo-500'
+  },
+  {
+    id: 'game',
+    icon: '🎮',
+    title: { en: 'Browser Game', ar: 'لعبة متصفح' },
+    desc: { en: 'Playable game with score & levels', ar: 'لعبة قابلة للعب مع نقاط ومستويات' },
+    promptTemplate: {
+      en: `Build a fully playable browser game: {PRODUCT}.
+
+GAME REQUIREMENTS:
+- Use Phaser.js (loaded from CDN inside App.js onload callback)
+- All scene classes defined INSIDE the script.onload callback — never at module top level
+- Include: MenuScene (title + start), GameScene (core gameplay), GameOverScene
+- Score HUD, lives/health display, level indicator using this.add.text()
+- Keyboard controls (arrow keys / WASD / spacebar) + touch support for mobile
+- Colorful shapes using this.add.rectangle() and this.add.graphics() — no external images needed
+- Scrolling background using tileSprite where appropriate
+- Increasing difficulty as score/level rises
+- Polished game feel: particle effects, screen shake, sound cues (optional)
+
+PLAYER OBJECT (always use this pattern):
+  this.player = this.add.rectangle(x, y, w, h, 0x00ff88);
+  this.physics.add.existing(this.player);
+  this.player.body.setCollideWorldBounds(true);
+
+Make it fun, addictive, and fully playable from the first second.`,
+      ar: `ابنِ لعبة متصفح قابلة للعب بالكامل: {PRODUCT}.
+
+متطلبات اللعبة:
+- استخدم Phaser.js (محمّل من CDN داخل callback الـ onload في App.js)
+- جميع كلاسات المشاهد تُعرَّف داخل callback الـ onload فقط
+- يجب أن تتضمن: MenuScene (عنوان + ابدأ)، GameScene (اللعب الأساسي)، GameOverScene
+- عرض النقاط والحياة والمستوى باستخدام this.add.text()
+- تحكم بالكيبورد (أسهم / WASD / مسافة) + دعم اللمس للموبايل
+- أشكال ملونة باستخدام this.add.rectangle() و this.add.graphics()
+- صعوبة متزايدة مع ارتفاع النقاط والمستوى
+- تجربة لعب ممتعة وإدمانية من اللحظة الأولى`
+    },
+    options: [
+      { en: 'Racing Game', ar: 'لعبة سباق' },
+      { en: 'Space Shooter', ar: 'مطلق فضائي' },
+      { en: 'Platformer', ar: 'لعبة منصات' },
+      { en: 'Endless Runner', ar: 'عداء لا نهائي' },
+      { en: 'Puzzle Game', ar: 'لعبة ألغاز' },
+      { en: 'Tower Defense', ar: 'دفاع عن البرج' },
+      { en: 'Brick Breaker', ar: 'كسر الطوب' },
+      { en: 'Snake Game', ar: 'لعبة الثعبان' },
+      { en: 'Flappy Bird Clone', ar: 'نسخة فلابي بيرد' },
+      { en: 'Math Quiz Game', ar: 'لعبة اختبار رياضيات' },
+    ],
+    defaultOption: { en: 'Racing Game', ar: 'لعبة سباق' },
+    color: 'from-green-500 to-emerald-500'
   },
 ];
 
@@ -1719,48 +1772,59 @@ Apply these styles consistently throughout the entire design.`;
   };
 
   return (
-    <div className={cn("min-h-[calc(100vh-64px)] flex flex-col", isRTL && "rtl")}>
-      {/* ============ TOP TABS: AI Coder | AI Assistant ============ */}
-      <div className="sticky top-0 z-40 border-b border-border/50 bg-background/90 backdrop-blur-xl">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="flex items-center gap-8">
+    <div className={cn("h-full flex flex-col overflow-hidden", isRTL && "rtl")}>
+      {/* ============ TOP TABS: PINNED ============ */}
+      <div className="w-full shrink-0 z-50 bg-background/90 supports-[backdrop-filter]:bg-background/70 backdrop-blur-3xl pt-6 pb-5 border-b border-zinc-200/50 dark:border-zinc-800/50">
+        <div className="flex justify-center px-4">
+          <div className="relative inline-flex items-center p-1.5 bg-white/50 dark:bg-[#0c0f14]/50 backdrop-blur-xl rounded-[2rem] shadow-[0_8px_32px_rgba(0,0,0,0.04),inset_0_1px_1px_rgba(255,255,255,0.5)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.05)] border border-black/5 dark:border-white/10">
+            
             <button
               onClick={() => setActiveTab('coder')}
               className={cn(
-                "relative py-4 text-sm font-bold transition-colors",
-                activeTab === 'coder'
-                  ? "text-[#060541] dark:text-[#f2f2f2]"
-                  : "text-muted-foreground hover:text-foreground"
+                "relative z-10 flex items-center gap-3 px-8 py-3.5 rounded-[1.75rem] text-[13px] font-bold tracking-[0.15em] uppercase transition-colors duration-500",
+                activeTab === 'coder' 
+                  ? "text-white dark:text-[#0c0f14]" 
+                  : "text-zinc-500 hover:text-[#060541] dark:text-zinc-400 dark:hover:text-white"
               )}
             >
-              <div className="flex items-center gap-2">
-                <Code2 className="h-4 w-4" />
-                {isRTL ? 'مبرمج الذكاء' : 'AI Coder'}
-              </div>
               {activeTab === 'coder' && (
-                <div className="absolute bottom-0 left-0 right-0 h-[3px] rounded-t-full bg-[#060541] dark:bg-[#f2f2f2]" />
+                <motion.div 
+                  layoutId="luxuryMainTab"
+                  className="absolute inset-0 bg-[#060541] dark:bg-[#f2f2f2] rounded-[1.75rem] shadow-[0_4px_16px_rgba(6,5,65,0.3)] dark:shadow-[0_4px_16px_rgba(255,255,255,0.2)]"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 400, damping: 35 }}
+                />
               )}
+              <Code2 className="relative z-20 w-4.5 h-4.5" />
+              <span className="relative z-20">{isRTL ? 'مبرمج الذكاء' : 'AI CODER'}</span>
             </button>
+
             <button
               onClick={() => setActiveTab('assistant')}
               className={cn(
-                "relative py-4 text-sm font-bold transition-colors",
-                activeTab === 'assistant'
-                  ? "text-[#060541] dark:text-[#f2f2f2]"
-                  : "text-muted-foreground hover:text-foreground"
+                "relative z-10 flex items-center gap-3 px-8 py-3.5 rounded-[1.75rem] text-[13px] font-bold tracking-[0.15em] uppercase transition-colors duration-500",
+                activeTab === 'assistant' 
+                  ? "text-white dark:text-[#0c0f14]" 
+                  : "text-zinc-500 hover:text-[#060541] dark:text-zinc-400 dark:hover:text-white"
               )}
             >
-              <div className="flex items-center gap-2">
-                <MessageCircle className="h-4 w-4" />
-                {isRTL ? 'شات بوت الذكاء' : 'AI Chat Bot'}
-              </div>
               {activeTab === 'assistant' && (
-                <div className="absolute bottom-0 left-0 right-0 h-[3px] rounded-t-full bg-[#060541] dark:bg-[#f2f2f2]" />
+                <motion.div 
+                  layoutId="luxuryMainTab"
+                  className="absolute inset-0 bg-[#060541] dark:bg-[#f2f2f2] rounded-[1.75rem] shadow-[0_4px_16px_rgba(6,5,65,0.3)] dark:shadow-[0_4px_16px_rgba(255,255,255,0.2)]"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 400, damping: 35 }}
+                />
               )}
+              <MessageCircle className="relative z-20 w-4.5 h-4.5" />
+              <span className="relative z-20">{isRTL ? 'شات بوت الذكاء' : 'AI CHAT BOT'}</span>
             </button>
           </div>
         </div>
       </div>
+
+      {/* ============ SCROLLABLE CONTENT ============ */}
+      <div className="flex-1 min-h-0 overflow-y-auto relative h-full" id="projects-scroll">
 
       {/* ============ AI ASSISTANT TAB ============ */}
       {activeTab === 'assistant' && (
@@ -1798,27 +1862,59 @@ Apply these styles consistently throughout the entire design.`;
         )}
       </AnimatePresence>
 
-      {/* Hero Section with Wakti Vibrant Gradient */}
+      {/* Hero Section */}
       <div className="relative flex-1 flex flex-col min-h-[400px]">
-        {/* Wakti Vibrant Gradient Background */}
+        {/* Theme-aware base layer */}
+        <div className={cn(
+          "absolute inset-0",
+          isDark ? "bg-[#04051a]" : "bg-[#f8f9fc]"
+        )} />
+        {/* RippleGrid on top — reduced wobble */}
+        <div className="absolute inset-0">
+          <RippleGrid
+            enableRainbow
+            gridColor={isDark ? "#0016bd" : "#3333ff"}
+            rippleIntensity={0}
+            gridSize={isDark ? 30 : 28}
+            gridThickness={isDark ? 50 : 35}
+            fadeDistance={4.9}
+            vignetteStrength={isDark ? 1.5 : 0.6}
+            glowIntensity={isDark ? 0.15 : 0.12}
+            opacity={isDark ? 1 : 0.2}
+            gridRotation={0}
+            mouseInteraction={false}
+            mouseInteractionRadius={2.1}
+          />
+        </div>
+        {/* Subtle radial glow for depth */}
         <div 
-          className="absolute inset-0"
-          style={{
+          className="absolute inset-0" 
+          style={{ 
             background: isDark 
-              ? 'linear-gradient(135deg, hsl(210,100%,65%) 0%, hsl(280,70%,65%) 50%, hsl(25,95%,60%) 100%)'
-              : 'linear-gradient(135deg, hsl(210,100%,75%) 0%, hsl(280,60%,75%) 50%, hsl(25,95%,70%) 100%)'
-          }}
+              ? 'radial-gradient(ellipse 80% 60% at 50% 40%, hsla(230,100%,20%,0.45) 0%, transparent 70%)'
+              : 'radial-gradient(ellipse 80% 60% at 50% 40%, hsla(230,100%,90%,0.3) 0%, transparent 70%)'
+          }} 
         />
-        {/* Overlay for better text readability */}
-        <div className="absolute inset-0 bg-black/10" />
+        {/* Light overlay for readability — dark mode only */}
+        {isDark && <div className="absolute inset-0 bg-black/20" />}
         
         {/* Content */}
         <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 py-16">
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white text-center mb-10 drop-shadow-lg">
+          <h1 className={cn(
+            "text-3xl md:text-4xl lg:text-5xl font-bold text-center mb-10",
+            isDark
+              ? "text-white drop-shadow-lg"
+              : "text-[#060541] drop-shadow-[0_2px_8px_rgba(6,5,65,0.25)]"
+          )}>
             {isRTL ? `جاهز للبناء، ${userName}؟` : `Ready to build, ${userName}?`}
           </h1>
 
-          <div className="w-full max-w-2xl bg-white dark:bg-[#0c0f14] rounded-2xl shadow-2xl border border-white/20 relative">
+          <div className={cn(
+            "w-full max-w-2xl rounded-2xl border relative",
+            isDark
+              ? "bg-[#0c0f14] border-white/20 shadow-[0_20px_60px_rgba(0,0,0,0.7),0_8px_24px_rgba(0,22,189,0.25),0_0_0_1px_rgba(255,255,255,0.05)]"
+              : "bg-white border-[#060541]/15 shadow-[0_20px_60px_rgba(6,5,65,0.25),0_8px_24px_rgba(6,5,65,0.15),0_0_0_1px_rgba(6,5,65,0.05),inset_0_-2px_0_rgba(6,5,65,0.05)]"
+          )} style={{ transform: 'translateZ(0)', perspective: '1000px' }}>
             {/* Limit Reached Overlay */}
             {projects.length >= MAX_PROJECTS && (
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm rounded-2xl z-20 flex items-center justify-center">
@@ -1831,8 +1927,8 @@ Apply these styles consistently throughout the entire design.`;
                   </div>
                   <p className="text-white/90 text-sm font-medium">
                     {isRTL 
-                      ? 'لديك مشروعان نشطان. احذف مشروعًا لإنشاء جديد.'
-                      : 'You have 2 active projects. Delete one to create a new one.'}
+                      ? 'لديك 3 مشاريع نشطة. احذف مشروعًا لإنشاء جديد.'
+                      : 'You have 3 active projects. Delete one to create a new one.'}
                   </p>
                 </div>
               </div>
@@ -2220,14 +2316,19 @@ Apply these styles consistently throughout the entire design.`;
             <p className="mt-4 text-sm text-white/80">
               {isRTL 
                 ? 'وصلت للحد الأقصى. احذف مشروعًا لإنشاء جديد.'
-                : 'You\'ve reached the limit. Delete a project to create a new one.'}
+                : 'You\'ve reached the limit of 3 projects. Delete a project to create a new one.'}
             </p>
           )}
 
           {/* Onboarding Gallery - What can you build? */}
           {projects.length < MAX_PROJECTS && !generating && (
             <div className="mt-8">
-              <p className="text-sm text-white/70 mb-4 text-center">
+              <p className={cn(
+                "inline-block px-4 py-2 rounded-full text-sm font-semibold text-center mb-4",
+                isDark 
+                  ? "bg-[#060541]/20 text-[#060541] shadow-[0_2px_8px_rgba(0,0,0,0.3)]" 
+                  : "bg-[#060541]/20 text-[#060541] shadow-[0_2px_8px_rgba(6,5,65,0.15)]"
+              )}>
                 {isRTL ? '✨ أو اختر نوع المشروع للبدء سريعاً' : '✨ Or pick a project type to get started quickly'}
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -2249,28 +2350,31 @@ Apply these styles consistently throughout the entire design.`;
                           }
                         }}
                         className={cn(
-                          "w-full group relative p-4 rounded-2xl border bg-white/5 backdrop-blur-sm",
-                          "hover:bg-white/10 hover:scale-[1.02] transition-all duration-200",
-                          "text-left",
-                          isActive ? "border-white/50 bg-white/10" : "border-white/20 hover:border-white/40"
+                          "w-full group relative p-4 rounded-2xl border backdrop-blur-sm",
+                          "hover:scale-[1.02] hover:-translate-y-1 transition-all duration-300",
+                          "text-left shadow-[0_4px_16px_rgba(6,5,65,0.08),0_2px_8px_rgba(6,5,65,0.04)]",
+                          "hover:shadow-[0_12px_32px_rgba(6,5,65,0.2),0_8px_16px_rgba(6,5,65,0.12)]",
+                          isDark
+                            ? isActive ? "bg-white/10 border-white/50 shadow-[0_4px_16px_rgba(0,0,0,0.4)] hover:shadow-[0_12px_32px_rgba(0,0,0,0.5)]" : "bg-white/5 border-white/20 hover:bg-white/10 hover:border-white/40 shadow-[0_4px_16px_rgba(0,0,0,0.3)] hover:shadow-[0_12px_32px_rgba(0,0,0,0.4)]"
+                            : isActive ? "bg-[#060541]/25 border-[#060541]/50" : "bg-[#060541]/15 border-[#060541]/30 hover:bg-[#060541]/25 hover:border-[#060541]/50"
                         )}
                       >
                         <div className={cn(
-                          "absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity",
+                          "absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-50 transition-opacity",
                           `bg-gradient-to-br ${example.color}`
                         )} />
                         <div className="relative z-10">
                           <span className="text-2xl mb-2 block">{example.icon}</span>
-                          <h3 className="font-semibold text-white text-sm mb-1">
+                          <h3 className={cn("font-semibold text-sm mb-1", isDark ? "text-white" : "text-[#060541]")}>
                             {isRTL ? example.title.ar : example.title.en}
                           </h3>
-                          <p className="text-[11px] text-white/60 leading-tight">
+                          <p className={cn("text-[11px] leading-tight", isDark ? "text-white/60" : "text-[#060541]/60")}>
                             {isRTL ? example.desc.ar : example.desc.en}
                           </p>
                           {/* Show selected option as a pill */}
-                          <div className="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-white/10 rounded-full text-[10px] text-white/80">
+                          <div className={cn("mt-2 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-medium border", isDark ? "bg-white/15 text-white border-white/25" : "bg-[#060541] text-white border-[#060541]")}>
                             <span className="truncate max-w-[100px]">{selectedOption}</span>
-                            <ChevronDown className="h-3 w-3 shrink-0" />
+                            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
                           </div>
                         </div>
                       </button>
@@ -2363,7 +2467,7 @@ Apply these styles consistently throughout the entire design.`;
       </div>
 
       {/* Projects Section */}
-      <div className="bg-background">
+      <div className={cn(isDark ? "bg-[#04051a]" : "bg-[#f8f9fc]")}>
         <div className="max-w-5xl mx-auto px-4 py-8">
           {/* Section Header */}
           <div className="flex items-center justify-between mb-6">
@@ -2845,6 +2949,7 @@ Apply these styles consistently throughout the entire design.`;
           </div>
         </div>
       )}
+      </div>{/* end scrollable content */}
     </div>
   );
 }

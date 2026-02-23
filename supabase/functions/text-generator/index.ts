@@ -339,11 +339,67 @@ serve(async (req) => {
       try {
         // Prepare the image for OpenAI Vision API
         let imageUrl = image;
+          const isPdf = image.startsWith("data:application/pdf") || image.includes("JVBERi");
         if (!image.startsWith('http') && !image.startsWith('data:')) {
           imageUrl = `data:image/jpeg;base64,${image}`;
         }
 
-        // Use structured extraction prompt to detect form fields
+        if (isPdf) {
+            console.log("?? Text Generator: PDF detected, routing to Gemini");
+            if (!GEMINI_API_KEY) {
+              return new Response(
+                JSON.stringify({ success: false, error: "Gemini API key required for PDF extraction" }),
+                { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
+            
+            // Extract base64 part
+            const base64Data = image.split(",")[1] || image;
+            
+            try {
+              const geminiResponse = await generateGemini(
+                "gemini-2.5-flash",
+                [
+                  {
+                    role: "user",
+                    parts: [
+                      { text: "Extract the meaningful content from this document and format it nicely into structured Markdown. CRITICAL INSTRUCTIONS: 1. Ignore and exclude all UI boilerplate, system text, phone status bars (time, battery, signal), navigation menus, and repetitive icons. 2. Focus ONLY on the actual content, presentation slides, paragraphs, and core messages. 3. Clean up any weird line breaks or formatting artifacts. 4. Organize the text with appropriate Markdown headers (##), bullet points, and paragraphs to make it highly readable. 5. Return ONLY a valid JSON object using this exact structure: {\"isScreenshot\":false,\"sourceType\":\"document\",\"deviceType\":\"unknown\",\"isForm\":false,\"formType\":\"other\",\"fields\":{},\"rawText\":\"your beautifully formatted markdown text goes here\"} Do NOT wrap the JSON in markdown code blocks. Just return the raw JSON." },
+                        { inlineData: { mimeType: "application/pdf", data: base64Data } }
+                    ]
+                  }
+                ],
+                undefined,
+                { response_mime_type: "application/json" }
+              );
+              
+              const textContent = geminiResponse?.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (!textContent) throw new Error("No text returned from Gemini");
+              
+              let extractedData = {};
+              try {
+                extractedData = JSON.parse(textContent);
+              } catch (e) {
+                extractedData = { rawText: textContent };
+              }
+              
+              return new Response(
+                JSON.stringify({ 
+                  success: true, 
+                  extractedText: extractedData.rawText || textContent,
+                  extractedForm: extractedData 
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            } catch (err) {
+              console.error("?? Text Generator: Gemini PDF extraction failed:", err);
+              return new Response(
+                JSON.stringify({ success: false, error: "Failed to extract text from PDF: " + (err.message || "") }),
+                { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
+          }
+
+          // Use structured extraction prompt to detect form fields
         const structuredPrompt = language === 'ar'
           ? `انظر إلى هذه الصورة بعناية وحدد ما الذي تراه بالضبط (نوع المحتوى ومصدره)، ثم استخرج النص كاملاً قدر الإمكان.
 
@@ -431,7 +487,7 @@ Return ONLY the JSON, no additional text.`;
           const errText = await visionResponse.text();
           console.error("🎯 Text Generator: Vision API error:", errText);
           return new Response(
-            JSON.stringify({ success: false, error: "Failed to extract text from image" }),
+            JSON.stringify({ success: false, error: "Failed to extract text from image: " + errText }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
@@ -537,7 +593,7 @@ Return ONLY the JSON, no additional text.`;
           error: "Prompt is required" 
         }),
         { 
-          status: 400, 
+          status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         }
       );
@@ -546,6 +602,15 @@ Return ONLY the JSON, no additional text.`;
     console.log("🎯 Text Generator: Calling AI provider for text generation");
     console.log("🎯 Mode:", mode, "| Language:", language, "| Prompt length:", prompt.length);
     console.log("🎯 Structured fields:", { tone, register, languageVariant, emojis, contentType });
+
+    // ── Handle Summarize Content Type ──
+    let finalPrompt = prompt;
+    if (contentType === 'summarize') {
+      console.log("🎯 Text Generator: Summarize mode detected - wrapping prompt with summarization instructions");
+      finalPrompt = language === 'ar'
+        ? `اقرأ النص التالي بعناية وأعد ملخصاً واضحاً وموجزاً يحتفظ بأهم النقاط والمعلومات الأساسية. الملخص يجب أن يكون قصيراً وسهل الفهم وخالياً من التفاصيل غير الضرورية.\n\nالنص المراد تلخيصه:\n${prompt}`
+        : `Read the following text carefully and provide a clear, concise summary that captures the key points and essential information. The summary should be brief, easy to understand, and free of unnecessary details.\n\nText to summarize:\n${prompt}`;
+    }
 
     const webSearchAllowed = !!contentType && WEB_SEARCH_ALLOWED_CONTENT_TYPES.has(contentType);
     const webSearchEnabled = !!webSearch && webSearchAllowed;
@@ -604,14 +669,14 @@ Return ONLY the JSON, no additional text.`;
 ${urlText}
 
 طلب المستخدم:
-${prompt}`
+${finalPrompt}`
             : `You are a professional writer. Use the URL content below to write accurate, relevant text. Follow user settings strictly.
 
 URL content:
 ${urlText}
 
 User request:
-${prompt}`;
+${finalPrompt}`;
 
           const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
@@ -685,7 +750,7 @@ ${prompt}`;
 
         const tavilyPayload: Record<string, unknown> = {
           api_key: TAVILY_API_KEY,
-          query: prompt,
+          query: finalPrompt,
           search_depth: "basic",
           max_results: 6,
           include_raw_content: true,
@@ -738,14 +803,14 @@ ${prompt}`;
 ${contextChunks}
 
 طلب المستخدم:
-${prompt}`
+${finalPrompt}`
               : `You are a professional writer. Use the search results below to write accurate, information-rich content. Follow user settings strictly.
 
 Search results:
 ${contextChunks}
 
 User request:
-${prompt}`;
+${finalPrompt}`;
 
             const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
               method: "POST",
@@ -831,7 +896,7 @@ ${prompt}`;
             model: CLAUDE_MODEL,
             system: systemPrompt,
             messages: [
-              { role: "user", content: prompt }
+              { role: "user", content: finalPrompt }
             ],
             temperature: genParams.temperature,
             max_tokens: genParams.max_tokens,
@@ -900,7 +965,7 @@ ${prompt}`;
             model: 'gpt-4.1-mini',
             messages: [
               { role: "system", content: systemPrompt },
-              { role: "user", content: prompt }
+              { role: "user", content: finalPrompt }
             ],
             temperature: genParams.temperature,
             max_tokens: genParams.max_tokens,
@@ -957,7 +1022,7 @@ ${prompt}`;
         const startGemini = Date.now();
         const result = await generateGemini(
           'gemini-2.5-flash-lite',
-          [{ role: 'user', parts: [{ text: prompt }] }],
+          [{ role: 'user', parts: [{ text: finalPrompt }] }],
           systemPrompt,
           { temperature: genParams.temperature, maxOutputTokens: genParams.max_tokens },
           []
@@ -970,7 +1035,7 @@ ${prompt}`;
           await logAIFromRequest(req, {
             functionName: "text-generator",
             provider: "gemini",
-            model: "gemini-2.5-flash-lite",
+            model: "gemini-2.5-flash",
             inputText: prompt,
             outputText: generatedText,
             durationMs: geminiDuration,
@@ -1014,7 +1079,7 @@ ${prompt}`;
             model: 'deepseek-chat',
             messages: [
               { role: "system", content: systemPrompt },
-              { role: "user", content: prompt }
+              { role: "user", content: finalPrompt }
             ],
             temperature: genParams.temperature,
             max_tokens: genParams.max_tokens,
@@ -1310,6 +1375,10 @@ function buildSystemPrompt(language: string, fields: StructuredFields): string {
       educational: {
         en: '🎭 TONE = EDUCATIONAL: Write as a teacher. Break down complex ideas simply. Use examples. Guide the reader step by step.',
         ar: '🎭 النبرة = تثقيفي: اكتب كمعلم. بسّط الأفكار المعقدة. استخدم أمثلة. ارشد القارئ خطوة بخطوة.'
+      },
+      sales: {
+        en: '🎭 TONE = SALES: Write to persuade and convert. Highlight benefits, create urgency, build desire. Use power words, social proof, and clear calls to action. Focus on value and outcomes.',
+        ar: '🎭 النبرة = مبيعات: اكتب لإقناع وتحويل. ركز على الفوائد، أنشئ إلحاح، بناء الرغبة. استخدم كلمات قوية وإثبات اجتماعي ودعوات واضحة للعمل. ركز على القيمة والنتائج.'
       },
     };
     const ti = toneInstructions[tone];
