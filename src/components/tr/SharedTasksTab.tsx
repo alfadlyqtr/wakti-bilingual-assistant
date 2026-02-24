@@ -51,7 +51,22 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string; onC
   const [hasPendingCompletionRequest, setHasPendingCompletionRequest] = useState(false);
   // Snooze request state
   const [snoozeSubtask, setSnoozeSubtask] = useState<{ id: string; title: string } | null>(null); // null = main task
+  const [subtasksOpen, setSubtasksOpen] = useState(false);
+  const [allAssignees, setAllAssignees] = useState<{ name: string; status: string }[]>([]);
   // Mark all pending subtasks as completed at once
+  const handleSubtaskToggle = async (subtask: { id: string; title: string; completed: boolean }) => {
+    const newCompleted = !subtask.completed;
+    // Optimistic update
+    setSubtasks(prev => prev.map(s => s.id === subtask.id ? { ...s, completed: newCompleted } : s));
+    try {
+      await TRSharedService.markSubtaskCompleted(taskId, subtask.id, visitorName, newCompleted);
+    } catch (error) {
+      // Revert on failure
+      setSubtasks(prev => prev.map(s => s.id === subtask.id ? { ...s, completed: !newCompleted } : s));
+      toast.error(language === 'ar' ? 'فشل التحديث' : 'Failed to update', { duration: 2000 });
+    }
+  };
+
   const handleMarkAllDone = async () => {
     const pending = subtasks.filter(s => !s.completed);
     if (pending.length === 0) return;
@@ -118,10 +133,11 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string; onC
     const load = async () => {
       setLoading(true);
       // Fetch task meta, subtasks, and responses in parallel
-      const [{ data: taskData }, { data: st }, { data: rs }] = await Promise.all([
+      const [{ data: taskData }, { data: st }, { data: rs }, { data: assigneesData }] = await Promise.all([
         supabase.from('tr_tasks').select('id,share_link,user_id,title').eq('id', taskId).single(),
         supabase.from('tr_subtasks').select('id,title,completed').eq('task_id', taskId).order('order_index'),
         supabase.from('tr_shared_responses').select('*').eq('task_id', taskId).order('created_at'),
+        supabase.from('tr_task_assignments').select('assignee_name,status').eq('task_id', taskId),
       ]);
       if (taskData) {
         setTaskMeta(taskData);
@@ -131,6 +147,9 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string; onC
           const full = [ownerProfile.first_name, ownerProfile.last_name].filter(Boolean).join(' ');
           setOwnerName(ownerProfile.display_name || full || 'Owner');
         }
+      }
+      if (assigneesData) {
+        setAllAssignees(assigneesData.filter(a => a.status === 'approved').map(a => ({ name: a.assignee_name, status: a.status })));
       }
       // Fetch task completed status directly (assignment join may be stale)
       const { data: freshTask } = await supabase.from('tr_tasks').select('completed').eq('id', taskId).single();
@@ -317,10 +336,11 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string; onC
                   {subtasks.filter(st => !st.completed).length === 0 ? (
                     <p className="text-center py-4 text-muted-foreground/50 text-[13px]">{language === 'ar' ? 'لا يوجد مهام معلقة' : 'No pending tasks'}</p>
                   ) : subtasks.filter(st => !st.completed).map(st => (
-                    <div key={st.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07]">
-                      <div className="w-4 h-4 rounded-full border-2 border-slate-300 dark:border-white/20 flex items-center justify-center" />
+                    <button key={st.id} onClick={() => handleSubtaskToggle(st)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07] hover:bg-slate-100 dark:hover:bg-white/[0.07] transition-colors text-left touch-manipulation active:scale-[0.99]">
+                      <div className="w-4 h-4 rounded-full border-2 border-slate-300 dark:border-white/20 flex-shrink-0" />
                       <p className="text-[12px] font-semibold flex-1 text-foreground" dir="auto">{st.title}</p>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -383,24 +403,36 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string; onC
                 </div>
               </div>
             )}
-            {/* Activity people */}
-            {activityPeople.length === 0 && !ownerName ? (
-              <p className="text-center py-6 text-muted-foreground/50 text-[13px]">{language === 'ar' ? 'لا يوجد نشاط بعد' : 'No activity yet'}</p>
-            ) : activityPeople.map(name => {
-              const acts = responses.filter(r => r.visitor_name === name);
-              const last = acts.length > 0 ? [...acts].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] : null;
-              return (
-                <div key={name} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07]">
-                  <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/[0.1] flex items-center justify-center text-[13px] font-black text-slate-600 dark:text-slate-300 flex-shrink-0">
-                    {name.charAt(0).toUpperCase()}
+            {/* All approved assignees (deduplicated) */}
+            {(() => {
+              // Merge approved assignees from DB + anyone with activity in responses, excluding owner
+              const allNames = [...new Set([
+                ...allAssignees.map(a => a.name),
+                ...activityPeople,
+              ])].filter(n => n && n !== ownerName);
+              if (allNames.length === 0) {
+                return <p className="text-center py-6 text-muted-foreground/50 text-[13px]">{language === 'ar' ? 'لا يوجد مشاركون بعد' : 'No participants yet'}</p>;
+              }
+              return allNames.map(name => {
+                const acts = responses.filter(r => r.visitor_name === name);
+                const last = acts.length > 0 ? [...acts].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] : null;
+                const doneCount = subtasks.filter(s => s.completed && responses.some(r => r.subtask_id === s.id && r.visitor_name === name && r.is_completed)).length;
+                return (
+                  <div key={name} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07]">
+                    <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/[0.1] flex items-center justify-center text-[13px] font-black text-slate-600 dark:text-slate-300 flex-shrink-0">
+                      {name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-bold text-foreground truncate" dir="auto">{name}</p>
+                      <p className="text-[10px] text-muted-foreground/50">
+                        {last ? format(parseISO(last.created_at), 'MMM dd, HH:mm') : (language === 'ar' ? 'لا نشاط بعد' : 'No activity yet')}
+                        {subtasks.length > 0 && doneCount > 0 && ` · ${doneCount}/${subtasks.length} subtasks`}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-bold text-foreground truncate" dir="auto">{name}</p>
-                    <p className="text-[10px] text-muted-foreground/50">{last ? format(parseISO(last.created_at), 'MMM dd, HH:mm') : '—'}</p>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              });
+            })()}
           </div>
         )}
 
