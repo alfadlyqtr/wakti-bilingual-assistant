@@ -49,6 +49,7 @@ import {
   createCalendarIfSupported
 } from "@/integrations/natively/calendarBridge";
 import { AppleLogo } from "./AppleLogo";
+import { GoogleCalendarLogo } from "./GoogleCalendarLogo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -1229,6 +1230,7 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
             </div>
             <div className="flex items-center gap-1">
               <AppleLogo size={12} className="text-black dark:text-white" />
+              <GoogleCalendarLogo size={12} />
               <span>{language === 'ar' ? 'الهاتف' : 'Phone'}</span>
             </div>
           </div>

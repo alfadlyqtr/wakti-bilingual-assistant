@@ -1870,7 +1870,7 @@ Apply these styles consistently throughout the entire design.`;
           isDark ? "bg-[#04051a]" : "bg-[#f8f9fc]"
         )} />
         {/* RippleGrid on top — reduced wobble */}
-        <div className="absolute inset-0">
+        <div className="absolute -top-10 left-0 right-0 bottom-0">
           <RippleGrid
             enableRainbow
             gridColor={isDark ? "#0016bd" : "#3333ff"}
@@ -2326,8 +2326,8 @@ Apply these styles consistently throughout the entire design.`;
               <p className={cn(
                 "inline-block px-4 py-2 rounded-full text-sm font-semibold text-center mb-4",
                 isDark 
-                  ? "bg-white/15 text-white shadow-[0_2px_8px_rgba(255,255,255,0.15)]" 
-                  : "bg-[#060541]/20 text-[#060541] shadow-[0_2px_8px_rgba(6,5,65,0.15)]"
+                  ? "bg-[#060541]/60 text-white shadow-[0_2px_8px_rgba(0,22,189,0.4)]" 
+                  : "bg-[#060541] text-white shadow-[0_2px_8px_rgba(6,5,65,0.25)]"
               )}>
                 {isRTL ? '✨ أو اختر نوع المشروع للبدء سريعاً' : '✨ Or pick a project type to get started quickly'}
               </p>

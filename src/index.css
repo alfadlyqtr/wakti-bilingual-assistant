@@ -189,8 +189,8 @@
   }
 
   body, html {
-    --app-header-h: calc(64px + env(safe-area-inset-top, 0px));
-    --app-bottom-tabs-h: calc(64px + env(safe-area-inset-bottom, 0px));
+    --app-header-h: 64px;
+    --app-bottom-tabs-h: 64px;
     /* Allow page content to scroll; keep only horizontal hidden */
     overflow-x: hidden;
     overflow-y: visible;
@@ -1593,7 +1593,7 @@ body.keyboard-visible {
 /* Option B: Hard overrides for the fixed AppHeader on mobile/PWA */
 .app-header-fixed {
   position: fixed !important;
-  top: env(safe-area-inset-top, 0px) !important;
+  top: 0 !important;
   left: 0 !important;
   right: 0 !important;
   z-index: 990 !important;
@@ -1610,7 +1610,7 @@ body.keyboard-visible {
 @supports (-webkit-touch-callout: none) {
   .app-header-fixed {
     position: fixed !important;
-    top: env(safe-area-inset-top, 0px) !important;
+    top: 0 !important;
     left: 0 !important;
     right: 0 !important;
     transform: none !important;
@@ -1622,7 +1622,7 @@ body.keyboard-visible {
 @media (display-mode: standalone) {
   .app-header-fixed {
     position: fixed !important;
-    top: env(safe-area-inset-top, 0px) !important;
+    top: 0 !important;
     left: 0 !important;
     right: 0 !important;
     transform: none !important;
