@@ -54,6 +54,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const [visitors, setVisitors] = useState<{ [taskId: string]: TRSharedAccess[] }>({});
   const [joinRequests, setJoinRequests] = useState<{ [taskId: string]: { id: string; assignee_name: string; requested_at: string }[] }>({});
   const [approvedAssignees, setApprovedAssignees] = useState<{ [taskId: string]: { id: string; assignee_name: string; responded_at: string | null }[] }>({});
+  const [taskPeople, setTaskPeople] = useState<{ [taskId: string]: { owner: { name: string; userId: string } | null; participants: { name: string; source: 'app' | 'link'; lastActivity: string | null }[] } }>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
@@ -174,17 +175,20 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         }
       });
 
+      const allPeople: typeof taskPeople = {};
       for (const task of sharedTasks) {
         // Load all data in parallel for each task
-        const [taskResponses, taskSubtasks, taskVisitors] = await Promise.all([
+        const [taskResponses, taskSubtasks, taskVisitors, people] = await Promise.all([
           TRSharedService.getTaskResponses(task.id),
           TRSharedService.getTaskSubtasks(task.id),
-          TRSharedService.getTaskVisitors(task.id)
+          TRSharedService.getTaskVisitors(task.id),
+          TRSharedService.getTaskPeople(task.id),
         ]);
         
         allResponses[task.id] = taskResponses;
         allSubtasks[task.id] = taskSubtasks;
         allVisitors[task.id] = taskVisitors;
+        allPeople[task.id] = people;
       }
       
       setResponses(allResponses);
@@ -192,6 +196,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       setVisitors(allVisitors);
       setJoinRequests(allJoinRequests);
       setApprovedAssignees(allApprovedAssignees);
+      setTaskPeople(allPeople);
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Error loading activity data:', error);
@@ -276,16 +281,19 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     const completionRequests = taskResponses.filter(r => r.response_type === 'completion_request');
     
     const taskApprovedAssignees = approvedAssignees[taskId] || [];
-    // Merge: approved assignees from tr_task_assignments + anyone who has activity in responses
-    // Exclude the owner themselves (they show activity under their own name/email)
-    const allPeopleNames = [...new Set([
-      ...taskApprovedAssignees.map(a => a.assignee_name),
-      ...uniqueAssignees,
-    ])].filter(name => name !== ownerName && name !== 'Owner' && name !== 'Owner (You)');
+    // Use unified people from getTaskPeople (single source of truth)
+    const unifiedPeople = taskPeople[taskId];
+    const allPeopleNames = unifiedPeople
+      ? unifiedPeople.participants.map(p => p.name)
+      : [...new Set([
+          ...taskApprovedAssignees.map(a => a.assignee_name),
+          ...uniqueAssignees,
+        ])].filter(name => name !== ownerName && name !== 'Owner' && name !== 'Owner (You)');
 
     return {
       assignees: allPeopleNames,
       approvedAssigneesList: taskApprovedAssignees,
+      unifiedPeople: unifiedPeople || null,
       completedSubtasksCount,
       taskCompletionsCount: taskCompletions.length,
       totalSubtasksCount: taskSubtaskList.length,
@@ -298,7 +306,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       subtasks: taskSubtaskList,
       visitors: taskVisitors
     };
-  }, [responses, subtasks, visitors, joinRequests, approvedAssignees]);
+  }, [responses, subtasks, visitors, joinRequests, approvedAssignees, taskPeople]);
 
   const formatRelativeTime = useCallback((dateString: string) => {
     try {

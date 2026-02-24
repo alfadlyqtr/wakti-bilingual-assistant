@@ -134,6 +134,83 @@ export class TRSharedService {
     }
   }
 
+  // ── Unified People list for a task ──
+  // Returns owner + all approved app assignees + all link visitors (deduplicated)
+  static async getTaskPeople(taskId: string): Promise<{ owner: { name: string; userId: string } | null; participants: { name: string; source: 'app' | 'link'; lastActivity: string | null }[] }> {
+    try {
+      // 1. Get task owner userId
+      const { data: taskData } = await supabase
+        .from('tr_tasks')
+        .select('user_id')
+        .eq('id', taskId)
+        .single();
+
+      let owner: { name: string; userId: string } | null = null;
+      if (taskData?.user_id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('display_name, first_name, last_name')
+          .eq('id', taskData.user_id)
+          .single();
+        if (profile) {
+          const full = [profile.first_name, profile.last_name].filter(Boolean).join(' ');
+          owner = { name: profile.display_name || full || 'Owner', userId: taskData.user_id };
+        }
+      }
+
+      // 2. Get approved assignees from tr_task_assignments
+      const { data: assignments } = await supabase
+        .from('tr_task_assignments')
+        .select('assignee_name')
+        .eq('task_id', taskId)
+        .eq('status', 'approved');
+
+      // 3. Get unique visitor names from tr_shared_responses
+      const { data: responseNames } = await supabase
+        .from('tr_shared_responses')
+        .select('visitor_name, created_at')
+        .eq('task_id', taskId)
+        .order('created_at', { ascending: false });
+
+      // Build deduplicated participants map (name → { source, lastActivity })
+      const participantMap = new Map<string, { source: 'app' | 'link'; lastActivity: string | null }>();
+
+      // Add app assignees first
+      for (const a of (assignments || [])) {
+        if (a.assignee_name && (!owner || a.assignee_name !== owner.name)) {
+          participantMap.set(a.assignee_name, { source: 'app', lastActivity: null });
+        }
+      }
+
+      // Add link visitors from responses (merge, don't overwrite app source)
+      const ownerAliases = new Set(['Owner', 'Owner (You)']);
+      if (owner) ownerAliases.add(owner.name);
+      for (const r of (responseNames || [])) {
+        if (!r.visitor_name || ownerAliases.has(r.visitor_name)) continue;
+        if (!participantMap.has(r.visitor_name)) {
+          participantMap.set(r.visitor_name, { source: 'link', lastActivity: r.created_at });
+        } else {
+          // Update lastActivity if newer
+          const existing = participantMap.get(r.visitor_name)!;
+          if (!existing.lastActivity || (r.created_at && r.created_at > existing.lastActivity)) {
+            existing.lastActivity = r.created_at;
+          }
+        }
+      }
+
+      const participants = Array.from(participantMap.entries()).map(([name, info]) => ({
+        name,
+        source: info.source,
+        lastActivity: info.lastActivity,
+      }));
+
+      return { owner, participants };
+    } catch (error) {
+      console.error('Error getting task people:', error);
+      return { owner: null, participants: [] };
+    }
+  }
+
   // Get subtasks for a task
   static async getTaskSubtasks(taskId: string): Promise<TRSubtask[]> {
     try {

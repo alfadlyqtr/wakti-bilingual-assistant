@@ -53,6 +53,7 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string; onC
   const [snoozeSubtask, setSnoozeSubtask] = useState<{ id: string; title: string } | null>(null); // null = main task
   const [subtasksOpen, setSubtasksOpen] = useState(false);
   const [allAssignees, setAllAssignees] = useState<{ name: string; status: string }[]>([]);
+  const [taskPeopleData, setTaskPeopleData] = useState<{ owner: { name: string; userId: string } | null; participants: { name: string; source: 'app' | 'link'; lastActivity: string | null }[] } | null>(null);
   // Mark all pending subtasks as completed at once
   const handleSubtaskToggle = async (subtask: { id: string; title: string; completed: boolean }) => {
     const newCompleted = !subtask.completed;
@@ -151,6 +152,9 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string; onC
       if (assigneesData) {
         setAllAssignees(assigneesData.filter(a => a.status === 'approved').map(a => ({ name: a.assignee_name, status: a.status })));
       }
+      // Fetch unified people list
+      const people = await TRSharedService.getTaskPeople(taskId);
+      setTaskPeopleData(people);
       // Fetch task completed status directly (assignment join may be stale)
       const { data: freshTask } = await supabase.from('tr_tasks').select('completed').eq('id', taskId).single();
       if (freshTask) {
@@ -403,30 +407,31 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string; onC
                 </div>
               </div>
             )}
-            {/* All approved assignees (deduplicated) */}
+            {/* All participants from unified source */}
             {(() => {
-              // Merge approved assignees from DB + anyone with activity in responses, excluding owner
-              const allNames = [...new Set([
-                ...allAssignees.map(a => a.name),
-                ...activityPeople,
-              ])].filter(n => n && n !== ownerName);
-              if (allNames.length === 0) {
+              const participants = taskPeopleData?.participants || [];
+              if (participants.length === 0) {
                 return <p className="text-center py-6 text-muted-foreground/50 text-[13px]">{language === 'ar' ? 'لا يوجد مشاركون بعد' : 'No participants yet'}</p>;
               }
-              return allNames.map(name => {
-                const acts = responses.filter(r => r.visitor_name === name);
+              return participants.map(person => {
+                const acts = responses.filter(r => r.visitor_name === person.name && r.response_type !== 'visit');
                 const last = acts.length > 0 ? [...acts].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] : null;
-                const doneCount = subtasks.filter(s => s.completed && responses.some(r => r.subtask_id === s.id && r.visitor_name === name && r.is_completed)).length;
+                const isMe = person.name === visitorName;
+                const isBrowser = person.source === 'link';
                 return (
-                  <div key={name} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07]">
-                    <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/[0.1] flex items-center justify-center text-[13px] font-black text-slate-600 dark:text-slate-300 flex-shrink-0">
-                      {name.charAt(0).toUpperCase()}
+                  <div key={person.name} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${isMe ? 'bg-teal-50 dark:bg-teal-500/10 border-teal-200/80 dark:border-teal-500/30' : 'bg-slate-50 dark:bg-white/[0.04] border-slate-200/60 dark:border-white/[0.07]'}`}>
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-black flex-shrink-0 ${isMe ? 'bg-teal-100 dark:bg-teal-500/20 text-teal-600 dark:text-teal-400' : 'bg-slate-200 dark:bg-white/[0.1] text-slate-600 dark:text-slate-300'}`}>
+                      {person.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-bold text-foreground truncate" dir="auto">{name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[13px] font-bold text-foreground truncate" dir="auto">{person.name}</p>
+                        {isMe && <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-teal-200 dark:bg-teal-500/30 text-teal-700 dark:text-teal-300 flex-shrink-0">{language === 'ar' ? 'أنت' : 'You'}</span>}
+                        {isBrowser && <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-purple-200 dark:bg-purple-500/30 text-purple-700 dark:text-purple-300 flex-shrink-0">{language === 'ar' ? 'رابط' : 'Link'}</span>}
+                        {!isBrowser && !isMe && <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-emerald-200 dark:bg-emerald-500/30 text-emerald-700 dark:text-emerald-300 flex-shrink-0">{language === 'ar' ? 'تطبيق' : 'App'}</span>}
+                      </div>
                       <p className="text-[10px] text-muted-foreground/50">
                         {last ? format(parseISO(last.created_at), 'MMM dd, HH:mm') : (language === 'ar' ? 'لا نشاط بعد' : 'No activity yet')}
-                        {subtasks.length > 0 && doneCount > 0 && ` · ${doneCount}/${subtasks.length} subtasks`}
                       </p>
                     </div>
                   </div>
