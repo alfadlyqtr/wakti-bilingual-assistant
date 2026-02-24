@@ -412,7 +412,7 @@ export class TRService {
       .from('tr_subtasks')
       .select('*')
       .eq('task_id', taskId)
-      .order('order_index', { ascending: true });
+      .order('created_at', { ascending: false });
     
     if (error) throw error;
     return data || [];

@@ -277,10 +277,11 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     
     const taskApprovedAssignees = approvedAssignees[taskId] || [];
     // Merge: approved assignees from tr_task_assignments + anyone who has activity in responses
+    // Exclude the owner themselves (they show activity under their own name/email)
     const allPeopleNames = [...new Set([
       ...taskApprovedAssignees.map(a => a.assignee_name),
       ...uniqueAssignees,
-    ])];
+    ])].filter(name => name !== ownerName && name !== 'Owner');
 
     return {
       assignees: allPeopleNames,
