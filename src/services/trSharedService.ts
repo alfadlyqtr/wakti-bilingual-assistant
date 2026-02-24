@@ -341,6 +341,26 @@ export class TRSharedService {
   // Request task completion (assignee cannot directly complete main task)
   static async requestTaskCompletion(taskId: string, visitorName: string): Promise<void> {
     try {
+      // First check if there's already a pending request to prevent duplicates
+      const { data: existing } = await supabase
+        .from('tr_shared_responses')
+        .select('id, content')
+        .eq('task_id', taskId)
+        .eq('response_type', 'completion_request');
+        
+      const hasPending = existing?.some(r => {
+        try {
+          const parsed = JSON.parse(r.content || '{}');
+          return parsed.status !== 'approved' && parsed.status !== 'denied';
+        } catch {
+          return true; // if no content or unparseable, it's pending
+        }
+      });
+
+      if (hasPending) {
+        throw new Error('A completion request is already pending');
+      }
+
       const { error } = await supabase
         .from('tr_shared_responses')
         .insert({
@@ -360,7 +380,8 @@ export class TRSharedService {
   // Approve completion request - marks task as completed
   static async approveCompletionRequest(requestId: string, taskId: string, visitorName: string): Promise<void> {
     try {
-      // Update the completion request with approval status
+      // Update ALL completion requests for this task to 'approved' to clean up duplicates
+      // Since the task is being marked completed, any pending requests from anyone are resolved.
       const { error: updateError } = await supabase
         .from('tr_shared_responses')
         .update({
@@ -369,7 +390,8 @@ export class TRSharedService {
             actionTime: new Date().toISOString()
           })
         })
-        .eq('id', requestId);
+        .eq('task_id', taskId)
+        .eq('response_type', 'completion_request');
 
       if (updateError) throw updateError;
 

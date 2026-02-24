@@ -46,6 +46,7 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
   const [commentText, setCommentText] = useState('');
   const [sendingComment, setSendingComment] = useState(false);
   const [visitorName, setVisitorName] = useState('');
+  const [hasPendingCompletionRequest, setHasPendingCompletionRequest] = useState(false);
   // Snooze request state
   const [snoozeSubtask, setSnoozeSubtask] = useState<{ id: string; title: string } | null>(null); // null = main task
   // Mark all pending subtasks as completed at once
@@ -79,6 +80,8 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
 
   // Assignee requests task completion (requires owner approval)
   const handleRequestTaskCompletion = async () => {
+    // Optimistic update
+    setHasPendingCompletionRequest(true);
     try {
       await TRSharedService.requestTaskCompletion(taskId, visitorName);
       toast.success(
@@ -86,8 +89,13 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
         { duration: 3000 }
       );
     } catch (error) {
+      // Revert on failure
+      setHasPendingCompletionRequest(false);
       console.error('Error requesting task completion:', error);
-      toast.error(language === 'ar' ? 'فشل إرسال الطلب' : 'Failed to send request', { duration: 2000 });
+      // If error is about duplicate, it's fine, we keep it disabled
+      if (error.message !== 'A completion request is already pending') {
+        toast.error(language === 'ar' ? 'فشل إرسال الطلب' : 'Failed to send request', { duration: 2000 });
+      }
     }
   };
   const [snoozeDate, setSnoozeDate] = useState('');
@@ -122,8 +130,21 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
           setOwnerName(ownerProfile.display_name || full || 'Owner');
         }
       }
-      setSubtasks(st || []);
-      setResponses(rs || []);
+      if (st) setSubtasks(st);
+      if (rs) {
+        setResponses(rs);
+        // Check if there is a pending completion request from this user
+        const pendingCompletion = rs.some(r => {
+          if (r.response_type !== 'completion_request') return false;
+          try {
+            const parsed = JSON.parse(r.content || '{}');
+            return parsed.status !== 'approved' && parsed.status !== 'denied';
+          } catch {
+            return true;
+          }
+        });
+        setHasPendingCompletionRequest(pendingCompletion);
+      }
       setLoading(false);
     };
     load();
@@ -226,11 +247,16 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
                 </button>
                 <button
                   onClick={handleRequestTaskCompletion}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg
-                    bg-amber-500 hover:bg-amber-600 text-white
-                    text-[12px] font-bold transition-all active:scale-[0.98] touch-manipulation">
+                  disabled={hasPendingCompletionRequest}
+                  className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg
+                    text-[12px] font-bold transition-all active:scale-[0.98] touch-manipulation
+                    ${hasPendingCompletionRequest 
+                      ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 opacity-80 cursor-not-allowed'
+                      : 'bg-amber-500 hover:bg-amber-600 text-white'}`}>
                   <AlertTriangle className="h-4 w-4" />
-                  {language === 'ar' ? 'طلب إكمال المهمة' : 'Request Task Completion'}
+                  {hasPendingCompletionRequest 
+                    ? (language === 'ar' ? 'تم الطلب، في انتظار الموافقة' : 'Requested, awaiting approval')
+                    : (language === 'ar' ? 'طلب إكمال المهمة' : 'Request Task Completion')}
                 </button>
               </div>
             )}

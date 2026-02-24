@@ -873,10 +873,19 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         const stats = getTaskStats(task.id);
         const activeView = activeViews[task.id] || 'assignees';
         const isCollapsed = collapsedCards.has(task.id);
-        const pendingCount = stats.completionRequests.filter(r => {
-            const status = parseSnoozeStatus(r.content);
-            return status !== 'approved' && status !== 'denied';
-          }).length
+        
+        // Deduplicate completion requests by visitor_name for the count
+        const uniquePendingCompletionRequests = stats.completionRequests.filter(r => {
+          const status = parseSnoozeStatus(r.content);
+          return status !== 'approved' && status !== 'denied';
+        }).reduce((acc, curr) => {
+          if (!acc.find(r => r.visitor_name === curr.visitor_name)) {
+            acc.push(curr);
+          }
+          return acc;
+        }, [] as typeof stats.completionRequests);
+
+        const pendingCount = uniquePendingCompletionRequests.length
           + stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length
           + stats.uncheckRequests.length
           + stats.joinRequests.length;
@@ -1266,19 +1275,29 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                 })}
 
                                 {/* ── Completion requests ── */}
-                                {pendingRequests.completion.map(request => (
-                                  <div key={request.id} className="rounded-xl p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200/70 dark:border-amber-500/30">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <div className="w-6 h-6 rounded-full bg-amber-200 dark:bg-amber-500/30 flex items-center justify-center text-[10px] font-black text-amber-700 dark:text-amber-300 flex-shrink-0">
-                                        {request.visitor_name.charAt(0).toUpperCase()}
+                                {(() => {
+                                  // Deduplicate by visitor_name to avoid showing multiple pending requests for the same person
+                                  const uniqueRequests = pendingRequests.completion.reduce((acc, curr) => {
+                                    if (!acc.find(r => r.visitor_name === curr.visitor_name)) {
+                                      acc.push(curr);
+                                    }
+                                    return acc;
+                                  }, [] as typeof pendingRequests.completion);
+
+                                  return uniqueRequests.map(request => (
+                                    <div key={request.id} className="rounded-xl p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200/70 dark:border-amber-500/30">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <div className="w-6 h-6 rounded-full bg-amber-200 dark:bg-amber-500/30 flex items-center justify-center text-[10px] font-black text-amber-700 dark:text-amber-300 flex-shrink-0">
+                                          {request.visitor_name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <span className="text-[13px] font-bold text-foreground flex-1" dir="auto">{request.visitor_name}</span>
+                                        <span className="text-[10px] text-muted-foreground/60">{format(parseISO(request.created_at), 'MMM dd, HH:mm')}</span>
                                       </div>
-                                      <span className="text-[13px] font-bold text-foreground flex-1" dir="auto">{request.visitor_name}</span>
-                                      <span className="text-[10px] text-muted-foreground/60">{format(parseISO(request.created_at), 'MMM dd, HH:mm')}</span>
+                                      <p className="text-[11px] text-amber-700 dark:text-amber-400 mb-2">{language === 'ar' ? 'طلب إكمال المهمة' : 'Requesting task completion'}</p>
+                                      {renderCompletionRequestStatus(request)}
                                     </div>
-                                    <p className="text-[11px] text-amber-700 dark:text-amber-400 mb-2">{language === 'ar' ? 'طلب إكمال المهمة' : 'Requesting task completion'}</p>
-                                    {renderCompletionRequestStatus(request)}
-                                  </div>
-                                ))}
+                                  ));
+                                })()}
 
                                 {/* ── Snooze requests ── */}
                                 {pendingRequests.snooze.map(request => (
@@ -1485,16 +1504,29 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                           )}
                           
                           {/* Request Task Completion - for assignees only (not owner) */}
-                          {!isTaskOwner && hasPendingSubtasks && (
-                            <button
-                              onClick={() => handleRequestTaskCompletion(task.id)}
-                              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg
-                                bg-amber-500 hover:bg-amber-600 text-white
-                                text-[12px] font-bold transition-all active:scale-[0.98] touch-manipulation">
-                              <AlertCircle className="h-4 w-4" />
-                              {language === 'ar' ? 'طلب إكمال المهمة' : 'Request Task Completion'}
-                            </button>
-                          )}
+                          {!isTaskOwner && hasPendingSubtasks && (() => {
+                            const hasPendingRequest = stats.completionRequests.some(r => {
+                              if (r.visitor_name !== ownerName) return false;
+                              const status = parseSnoozeStatus(r.content);
+                              return status !== 'approved' && status !== 'denied';
+                            });
+                            
+                            return (
+                              <button
+                                onClick={() => handleRequestTaskCompletion(task.id)}
+                                disabled={hasPendingRequest}
+                                className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg
+                                  text-[12px] font-bold transition-all active:scale-[0.98] touch-manipulation
+                                  ${hasPendingRequest 
+                                    ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 opacity-80 cursor-not-allowed'
+                                    : 'bg-amber-500 hover:bg-amber-600 text-white'}`}>
+                                <AlertCircle className="h-4 w-4" />
+                                {hasPendingRequest 
+                                  ? (language === 'ar' ? 'تم الطلب، في انتظار الموافقة' : 'Requested, awaiting approval')
+                                  : (language === 'ar' ? 'طلب إكمال المهمة' : 'Request Task Completion')}
+                              </button>
+                            );
+                          })()}
                           
                           {pending.length > 0 && (
                             <div className="space-y-1.5">
