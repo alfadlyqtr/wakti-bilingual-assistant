@@ -69,10 +69,12 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
   // Owner display name (fetched from profile)
   const [ownerName, setOwnerName] = useState<string>('You');
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
+      setCurrentUserId(user.id);
       const { data } = await supabase
         .from('profiles')
         .select('display_name, first_name, last_name')
@@ -488,6 +490,96 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       toast.error('Failed to process join request');
     } finally {
       setProcessingRequests(prev => { const s = new Set(prev); s.delete(requestId); return s; });
+    }
+  };
+
+  // Toggle subtask completion when pressed - instant optimistic update
+  const handleSubtaskToggle = async (taskId: string, subtaskId: string, currentCompleted: boolean) => {
+    // Optimistic update - toggle local state immediately
+    setSubtasks(prev => ({
+      ...prev,
+      [taskId]: prev[taskId]?.map(s => 
+        s.id === subtaskId ? { ...s, completed: !currentCompleted } : s
+      ) || []
+    }));
+    
+    // Fire API call in background - no loading states, no refresh
+    try {
+      await TRSharedService.markSubtaskCompleted(taskId, subtaskId, ownerName, !currentCompleted);
+      // Silently succeed - UI already updated
+    } catch (error) {
+      // Revert on failure
+      setSubtasks(prev => ({
+        ...prev,
+        [taskId]: prev[taskId]?.map(s => 
+          s.id === subtaskId ? { ...s, completed: currentCompleted } : s
+        ) || []
+      }));
+      toast.error(language === 'ar' ? 'فشل التحديث' : 'Update failed', { duration: 2000 });
+    }
+  };
+
+  // Mark all pending subtasks as completed at once
+  const handleMarkAllDone = async (taskId: string, pendingSubtasks: TRSubtask[]) => {
+    if (pendingSubtasks.length === 0) return;
+    
+    // Optimistic update - mark all as completed immediately
+    setSubtasks(prev => ({
+      ...prev,
+      [taskId]: prev[taskId]?.map(s => 
+        pendingSubtasks.some(p => p.id === s.id) ? { ...s, completed: true } : s
+      ) || []
+    }));
+    
+    // Fire API calls in background
+    try {
+      await Promise.all(
+        pendingSubtasks.map(subtask => 
+          TRSharedService.markSubtaskCompleted(taskId, subtask.id, ownerName, true)
+        )
+      );
+      toast.success(
+        language === 'ar' ? `تم إنجاز ${pendingSubtasks.length} مهام فرعية` : `${pendingSubtasks.length} subtasks marked done`,
+        { duration: 2000 }
+      );
+    } catch (error) {
+      // Revert on failure
+      setSubtasks(prev => ({
+        ...prev,
+        [taskId]: prev[taskId]?.map(s => 
+          pendingSubtasks.some(p => p.id === s.id) ? { ...s, completed: false } : s
+        ) || []
+      }));
+      toast.error(language === 'ar' ? 'فشل تحديث بعض المهام' : 'Failed to update some subtasks', { duration: 2000 });
+    }
+  };
+
+  // Assignee requests task completion (requires owner approval)
+  const handleRequestTaskCompletion = async (taskId: string) => {
+    try {
+      await TRSharedService.requestTaskCompletion(taskId, ownerName);
+      toast.success(
+        language === 'ar' ? 'تم إرسال طلب إكمال المهمة للمالك' : 'Completion request sent to owner',
+        { duration: 3000 }
+      );
+    } catch (error) {
+      console.error('Error requesting task completion:', error);
+      toast.error(language === 'ar' ? 'فشل إرسال الطلب' : 'Failed to send request', { duration: 2000 });
+    }
+  };
+
+  // Owner marks main task as completed directly (no approval needed)
+  const handleMarkTaskCompleted = async (taskId: string) => {
+    try {
+      await TRSharedService.markTaskCompleted(taskId, ownerName, true);
+      toast.success(
+        language === 'ar' ? 'تم إكمال المهمة بنجاح' : 'Task marked as completed',
+        { duration: 3000 }
+      );
+      onTasksChanged?.();
+    } catch (error) {
+      console.error('Error marking task completed:', error);
+      toast.error(language === 'ar' ? 'فشل تحديث المهمة' : 'Failed to update task', { duration: 2000 });
     }
   };
 
@@ -1208,13 +1300,17 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                     {activeView === 'subtasks' && (() => {
                       const pending = stats.subtasks.filter(s => !s.completed);
                       const completed = stats.subtasks.filter(s => s.completed);
+                      const isTaskOwner = task.user_id === currentUserId;
+                      const hasPendingSubtasks = pending.length > 0;
                       const renderSubtask = (subtask: typeof stats.subtasks[0]) => {
                         const completions = stats.allResponses.filter(r => r.response_type === 'completion' && r.subtask_id === subtask.id && r.is_completed);
                         const allWho = [...new Set(completions.map(c => c.visitor_name))];
                         const latest = completions.length > 0 ? [...completions].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] : null;
                         const isCompleted = !!subtask.completed;
                         return (
-                          <div key={subtask.id} className={`rounded-xl px-3 py-2.5 flex items-start gap-3 ${isCompleted ? 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20' : 'bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05]'}`}>
+                          <button key={subtask.id} 
+                            onClick={() => handleSubtaskToggle(task.id, subtask.id, isCompleted)}
+                            className={`w-full text-left rounded-xl px-3 py-2.5 flex items-start gap-3 touch-manipulation active:scale-[0.98] transition-transform ${isCompleted ? 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20' : 'bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05]'}`}>
                             <div className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center mt-0.5 ${isCompleted ? 'bg-emerald-500' : 'border-2 border-slate-300 dark:border-white/20'}`}>
                               {isCompleted && <Check className="h-2.5 w-2.5 text-white" />}
                             </div>
@@ -1227,13 +1323,49 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                 </p>
                               )}
                             </div>
-                          </div>
+                          </button>
                         );
                       };
                       const isPendingOpen = subtaskSections[task.id]?.pending ?? true;
                       const isCompletedOpen = subtaskSections[task.id]?.completed ?? true;
                       return (
                         <div className="space-y-2 pt-1">
+                          {/* Mark All Done button - shown when there are pending subtasks */}
+                          {hasPendingSubtasks && (
+                            <button
+                              onClick={() => handleMarkAllDone(task.id, pending)}
+                              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg
+                                bg-emerald-500 hover:bg-emerald-600 text-white
+                                text-[12px] font-bold transition-all active:scale-[0.98] touch-manipulation">
+                              <Check className="h-4 w-4" />
+                              {language === 'ar' ? 'تحديد الكل كمكتمل' : 'Mark All Done'}
+                            </button>
+                          )}
+                          
+                          {/* Mark Task Completed - for owner (direct, no approval) */}
+                          {isTaskOwner && hasPendingSubtasks && (
+                            <button
+                              onClick={() => handleMarkTaskCompleted(task.id)}
+                              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg
+                                bg-blue-500 hover:bg-blue-600 text-white
+                                text-[12px] font-bold transition-all active:scale-[0.98] touch-manipulation">
+                              <CheckCircle className="h-4 w-4" />
+                              {language === 'ar' ? 'إكمال المهمة' : 'Mark Task Completed'}
+                            </button>
+                          )}
+                          
+                          {/* Request Task Completion - for assignees only (not owner) */}
+                          {!isTaskOwner && hasPendingSubtasks && (
+                            <button
+                              onClick={() => handleRequestTaskCompletion(task.id)}
+                              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg
+                                bg-amber-500 hover:bg-amber-600 text-white
+                                text-[12px] font-bold transition-all active:scale-[0.98] touch-manipulation">
+                              <AlertCircle className="h-4 w-4" />
+                              {language === 'ar' ? 'طلب إكمال المهمة' : 'Request Task Completion'}
+                            </button>
+                          )}
+                          
                           {pending.length > 0 && (
                             <div className="space-y-1.5">
                               <button

@@ -611,15 +611,26 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     const calendarId = calendarResult.calendarId;
     console.log('[CalendarSync] Using calendar ID:', calendarId, '| Error:', calendarResult.error);
     
-    // If calendar retrieval failed, show error
+    // If calendar retrieval failed, show error with platform-specific instructions
     if (calendarId === null) {
       setIsSyncing(false);
       const errorDetail = calendarResult.error || '';
-      toast.error(
-        language === 'ar' 
-          ? `لا يمكن الوصول إلى التقويم: ${errorDetail}. يرجى السماح بالوصول في الإعدادات → الخصوصية → التقويمات → Wakti` 
-          : `Cannot access calendar: ${errorDetail}. Please allow access in Settings → Privacy → Calendars → Wakti`
-      );
+      const natively = (window as any).natively;
+      const isAndroid = natively?.isAndroidApp === true || /android/i.test(navigator.userAgent);
+      
+      if (isAndroid) {
+        toast.error(
+          language === 'ar'
+            ? `لا يمكن الوصول إلى التقويم: ${errorDetail}. يرجى السماح بالوصول في الإعدادات → التطبيقات → Wakti → الأذونات → التقويم`
+            : `Cannot access calendar: ${errorDetail}. Please allow access in Settings → Apps → Wakti AI → Permissions → Calendar`
+        );
+      } else {
+        toast.error(
+          language === 'ar' 
+            ? `لا يمكن الوصول إلى التقويم: ${errorDetail}. يرجى السماح بالوصول في الإعدادات → الخصوصية → التقويمات → Wakti` 
+            : `Cannot access calendar: ${errorDetail}. Please allow access in Settings → Privacy → Calendars → Wakti`
+        );
+      }
       return;
     }
     
@@ -904,6 +915,38 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
       console.log('[CalendarSync] Sync already in progress, skipping...');
       return;
     }
+
+    // Platform detection
+    const natively = (window as any).natively;
+    const isAndroid = natively?.isAndroidApp === true || /android/i.test(navigator.userAgent);
+    const isInApp = !!natively || 
+                    typeof (window as any).NativelyCalendar !== 'undefined' ||
+                    natively?.isNativeApp === true;
+
+    // Check native calendar availability BEFORE attempting sync
+    if (!nativeCalendarAvailable) {
+      if (!isInApp) {
+        toast.info(
+          language === 'ar' 
+            ? 'افتح التطبيق على هاتفك للمزامنة المباشرة، أو استخدم الاشتراك' 
+            : 'Open the app on your phone for direct sync, or use subscription'
+        );
+        setShowSubscribeDialog(true);
+      } else if (isAndroid) {
+        toast.error(
+          language === 'ar'
+            ? 'التقويم غير متاح. يرجى السماح بالوصول في الإعدادات → التطبيقات → Wakti AI → الأذونات → التقويم'
+            : 'Calendar not available. Please allow access in Settings → Apps → Wakti AI → Permissions → Calendar'
+        );
+      } else {
+        toast.error(
+          language === 'ar'
+            ? 'التقويم غير متاح. يرجى السماح بالوصول في الإعدادات → الخصوصية → التقويمات → Wakti'
+            : 'Calendar not available. Please allow access in Settings → Privacy → Calendars → Wakti'
+        );
+      }
+      return;
+    }
     
     setIsSyncing(true);
     let syncSuccess = false;
@@ -925,22 +968,36 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
         }
       }
       
-      // Fetch from phone (Phone → Wakti)
+      // Fetch from phone (Phone → Wakti) - only if native calendar is confirmed available
       if (direction === 'both' || direction === 'from_phone') {
         console.log('[CalendarSync] Syncing FROM phone...');
         try {
-          await refreshCalendarData(); // This includes retrieveCalendarEventsIfSupported
-          fromPhoneSuccess = true;
-          console.log('[CalendarSync] Sync FROM phone completed');
+          // Verify calendar access is still valid before claiming success
+          const calAccessOk = await new Promise<boolean>((resolve) => {
+            retrieveCalendars((result) => {
+              resolve(result.status === 'SUCCESS');
+            });
+            // Timeout after 8 seconds
+            setTimeout(() => resolve(false), 8000);
+          });
+          
+          if (calAccessOk) {
+            await refreshCalendarData();
+            fromPhoneSuccess = true;
+            console.log('[CalendarSync] Sync FROM phone completed');
+          } else {
+            console.error('[CalendarSync] Calendar access denied when syncing FROM phone');
+            if (!errorMessage) errorMessage = 'Calendar access denied';
+          }
         } catch (fromPhoneError) {
           console.error('[CalendarSync] Error syncing FROM phone:', fromPhoneError);
           if (!errorMessage) errorMessage = String(fromPhoneError);
         }
       }
       
-      // Determine overall success
+      // Determine overall success - require at least one direction to truly succeed
       if (direction === 'both') {
-        syncSuccess = toPhoneSuccess || fromPhoneSuccess; // At least one direction worked
+        syncSuccess = toPhoneSuccess || fromPhoneSuccess;
       } else if (direction === 'to_phone') {
         syncSuccess = toPhoneSuccess;
       } else {
@@ -962,29 +1019,29 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
       setLastSyncAt(new Date());
       toast.success(msg[direction]);
     } else {
-      // Show specific error message
-      const isInApp = typeof (window as any).natively !== 'undefined' || 
-                      typeof (window as any).NativelyCalendar !== 'undefined' ||
-                      (window as any).natively?.isNativeApp === true;
-      if (!isInApp) {
-        // Not in native app - show info and open ICS subscription dialog as fallback
+      if (isAndroid) {
+        toast.error(
+          language === 'ar'
+            ? 'فشلت المزامنة. تأكد من منح صلاحيات التقويم في الإعدادات → التطبيقات → Wakti AI → الأذونات → التقويم'
+            : 'Sync failed. Grant calendar permissions in Settings → Apps → Wakti AI → Permissions → Calendar'
+        );
+      } else if (isInApp) {
+        toast.error(
+          language === 'ar'
+            ? 'فشلت المزامنة. تأكد من منح صلاحيات التقويم في الإعدادات → الخصوصية → التقويمات → Wakti'
+            : 'Sync failed. Grant calendar permissions in Settings → Privacy → Calendars → Wakti'
+        );
+      } else {
         toast.info(
           language === 'ar' 
             ? 'افتح التطبيق على هاتفك للمزامنة المباشرة، أو استخدم الاشتراك' 
             : 'Open the app on your phone for direct sync, or use subscription'
         );
         setShowSubscribeDialog(true);
-        return;
-      } else {
-        toast.error(
-          language === 'ar'
-            ? 'فشلت المزامنة. تأكد من منح صلاحيات التقويم'
-            : 'Sync failed. Please grant calendar permissions'
-        );
       }
       console.error('[CalendarSync] Sync failed:', errorMessage);
     }
-  }, [language, isSyncing, syncToPhoneCalendar, refreshCalendarData]);
+  }, [language, isSyncing, nativeCalendarAvailable, syncToPhoneCalendar, refreshCalendarData]);
 
   // Handle auto-sync toggle
   const handleAutoSyncToggle = useCallback((enabled: boolean) => {
@@ -1034,12 +1091,24 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     const availableNow = isNativeCalendarAvailable();
     setNativeCalendarAvailable(availableNow);
 
+    // Platform detection
+    const nativelyRef = (window as any).natively;
+    const isAndroidDevice = nativelyRef?.isAndroidApp === true || /android/i.test(navigator.userAgent);
+
     if (!availableNow) {
-      toast.error(
-        language === 'ar'
-          ? 'مزامنة التقويم غير متاحة. تأكد من منح صلاحيات التقويم في إعدادات التطبيق.'
-          : 'Calendar sync is not available. Please ensure calendar permissions are granted in the app settings.'
-      );
+      if (isAndroidDevice) {
+        toast.error(
+          language === 'ar'
+            ? 'مزامنة التقويم غير متاحة. تأكد من منح صلاحيات التقويم في الإعدادات → التطبيقات → Wakti AI → الأذونات → التقويم'
+            : 'Calendar sync not available. Grant permissions in Settings → Apps → Wakti AI → Permissions → Calendar'
+        );
+      } else {
+        toast.error(
+          language === 'ar'
+            ? 'مزامنة التقويم غير متاحة. تأكد من منح صلاحيات التقويم في الإعدادات → الخصوصية → التقويمات → Wakti'
+            : 'Calendar sync not available. Grant permissions in Settings → Privacy → Calendars → Wakti'
+        );
+      }
       return;
     }
 
@@ -1048,11 +1117,19 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     timeoutId = setTimeout(() => {
       if (isSyncing) {
-        toast.error(
-          language === 'ar'
-            ? 'انتهت مهلة المزامنة. حاول مرة أخرى وتأكد من صلاحيات التقويم.'
-            : 'Sync timed out. Please try again and confirm calendar permissions.'
-        );
+        if (isAndroidDevice) {
+          toast.error(
+            language === 'ar'
+              ? 'انتهت مهلة المزامنة. تأكد من صلاحيات التقويم في الإعدادات → التطبيقات → Wakti AI → الأذونات'
+              : 'Sync timed out. Check calendar permissions in Settings → Apps → Wakti AI → Permissions'
+          );
+        } else {
+          toast.error(
+            language === 'ar'
+              ? 'انتهت مهلة المزامنة. حاول مرة أخرى وتأكد من صلاحيات التقويم.'
+              : 'Sync timed out. Please try again and confirm calendar permissions.'
+          );
+        }
         setIsSyncing(false);
       }
     }, 15000);
