@@ -102,6 +102,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
   // Collapsed sections inside subtasks tab: { taskId: { pending: bool, completed: bool } }
   const [subtaskSections, setSubtaskSections] = useState<{ [taskId: string]: { pending: boolean; completed: boolean } }>({});
+  const [approvalTabs, setApprovalTabs] = useState<{ [taskId: string]: 'pending' | 'handled' }>({});
+
   const toggleSubtaskSection = (taskId: string, section: 'pending' | 'completed') => {
     setSubtaskSections(prev => ({
       ...prev,
@@ -871,7 +873,10 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         const stats = getTaskStats(task.id);
         const activeView = activeViews[task.id] || 'assignees';
         const isCollapsed = collapsedCards.has(task.id);
-        const pendingCount = stats.completionRequests.filter(r => !parseSnoozeStatus(r.content)).length
+        const pendingCount = stats.completionRequests.filter(r => {
+            const status = parseSnoozeStatus(r.content);
+            return status !== 'approved' && status !== 'denied';
+          }).length
           + stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length
           + stats.uncheckRequests.length
           + stats.joinRequests.length;
@@ -1166,100 +1171,225 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                   <div className="space-y-3 pb-4 px-1">
 
                     {/* ── APPROVALS tab ── */}
-                    {activeView === 'approvals' && (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 px-1">
-                          <div className="w-1 h-4 rounded-full bg-orange-500" />
-                          <p className="text-[11px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-wider">
-                            {language === 'ar' ? 'الموافقات المعلقة' : 'Pending Approvals'} · {pendingCount}
-                          </p>
+                    {activeView === 'approvals' && (() => {
+                      const approvalTab = approvalTabs[task.id] || 'pending';
+                      
+                      const pendingRequests = {
+                        join: stats.joinRequests,
+                        completion: stats.completionRequests.filter(r => {
+                          const status = parseSnoozeStatus(r.content);
+                          return status !== 'approved' && status !== 'denied';
+                        }),
+                        snooze: stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)),
+                        uncheck: stats.uncheckRequests
+                      };
+                      
+                      const handledRequests = {
+                        join: [], // Handled join requests are in approvedAssignees or deleted if denied
+                        completion: stats.completionRequests.filter(r => {
+                          const status = parseSnoozeStatus(r.content);
+                          return status === 'approved' || status === 'denied';
+                        }),
+                        snooze: stats.snoozeRequests.filter(r => parseSnoozeStatus(r.content)),
+                        uncheck: [] // Uncheck requests are deleted when handled
+                      };
+                      
+                      const hasPending = pendingCount > 0;
+                      const hasHandled = handledRequests.completion.length > 0 || handledRequests.snooze.length > 0;
+                      
+                      return (
+                      <div className="space-y-3 pt-1">
+                        {/* Inner Tabs */}
+                        <div className="flex gap-3 px-1">
+                          <button onClick={() => setApprovalTabs(prev => ({ ...prev, [task.id]: 'pending' }))}
+                            className={`text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5
+                              ${approvalTab === 'pending' ? 'text-orange-600 dark:text-orange-400' : 'text-muted-foreground/50 hover:text-muted-foreground'}`}>
+                            <div className={`w-1 h-3 rounded-full ${approvalTab === 'pending' ? 'bg-orange-500' : 'bg-muted-foreground/20'}`} />
+                            {language === 'ar' ? 'معلق' : 'Pending'} ({pendingCount})
+                          </button>
+                          <button onClick={() => setApprovalTabs(prev => ({ ...prev, [task.id]: 'handled' }))}
+                            className={`text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5
+                              ${approvalTab === 'handled' ? 'text-slate-600 dark:text-slate-400' : 'text-muted-foreground/50 hover:text-muted-foreground'}`}>
+                            <div className={`w-1 h-3 rounded-full ${approvalTab === 'handled' ? 'bg-slate-500' : 'bg-muted-foreground/20'}`} />
+                            {language === 'ar' ? 'تم الرد' : 'Handled'} ({handledRequests.completion.length + handledRequests.snooze.length})
+                          </button>
                         </div>
-                        {/* ── Join requests ── */}
-                        {stats.joinRequests.map(jr => {
-                          const isProcessing = processingRequests.has(jr.id);
-                          return (
-                            <div key={jr.id} className="rounded-xl p-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200/70 dark:border-indigo-500/30">
-                              <div className="flex items-center gap-2 mb-2">
-                                <div className="w-6 h-6 rounded-full bg-indigo-200 dark:bg-indigo-500/30 flex items-center justify-center text-[10px] font-black text-indigo-700 dark:text-indigo-300 flex-shrink-0">
-                                  {jr.assignee_name.charAt(0).toUpperCase()}
-                                </div>
-                                <span className="text-[13px] font-bold text-foreground flex-1" dir="auto">{jr.assignee_name}</span>
-                                <span className="text-[10px] text-muted-foreground/60">{format(parseISO(jr.requested_at), 'MMM dd, HH:mm')}</span>
-                              </div>
-                              <p className="text-[11px] text-indigo-700 dark:text-indigo-400 mb-2">
-                                {language === 'ar' ? 'يريد الانضمام إلى هذه المهمة' : 'Wants to join this task'}
-                              </p>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleJoinRequest(jr.id, 'approved')}
-                                  disabled={isProcessing}
-                                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold
-                                    bg-emerald-500 hover:bg-emerald-600 text-white
-                                    disabled:opacity-50 transition-all active:scale-95">
-                                  {isProcessing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                                  {language === 'ar' ? 'قبول' : 'Approve'}
-                                </button>
-                                <button
-                                  onClick={() => handleJoinRequest(jr.id, 'denied')}
-                                  disabled={isProcessing}
-                                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold
-                                    bg-red-100 dark:bg-red-500/20 hover:bg-red-200 dark:hover:bg-red-500/30
-                                    text-red-600 dark:text-red-400
-                                    disabled:opacity-50 transition-all active:scale-95">
-                                  <X className="h-3 w-3" />
-                                  {language === 'ar' ? 'رفض' : 'Deny'}
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
 
-                        {stats.completionRequests.filter(r => !parseSnoozeStatus(r.content)).map(request => (
-                          <div key={request.id} className="rounded-xl p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200/70 dark:border-amber-500/30">
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="w-6 h-6 rounded-full bg-amber-200 dark:bg-amber-500/30 flex items-center justify-center text-[10px] font-black text-amber-700 dark:text-amber-300 flex-shrink-0">
-                                {request.visitor_name.charAt(0).toUpperCase()}
+                        {approvalTab === 'pending' && (
+                          <>
+                            {pendingCount === 0 ? (
+                              <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50 dark:bg-white/[0.02] rounded-xl border border-dashed border-slate-200 dark:border-white/[0.05]">
+                                <CheckCircle className="h-8 w-8 text-emerald-400 mb-2 opacity-50" />
+                                <p className="text-[13px] font-bold text-slate-600 dark:text-slate-300 mb-1">{language === 'ar' ? 'لا توجد طلبات معلقة' : 'No pending requests'}</p>
+                                <p className="text-[11px] text-slate-400 dark:text-slate-500">{language === 'ar' ? 'أنت على اطلاع دائم بكل شيء' : 'You are all caught up'}</p>
                               </div>
-                              <span className="text-[13px] font-bold text-foreground flex-1" dir="auto">{request.visitor_name}</span>
-                              <span className="text-[10px] text-muted-foreground/60">{format(parseISO(request.created_at), 'MMM dd, HH:mm')}</span>
-                            </div>
-                            <p className="text-[11px] text-amber-700 dark:text-amber-400 mb-2">{language === 'ar' ? 'طلب إكمال المهمة' : 'Requesting task completion'}</p>
-                            {renderCompletionRequestStatus(request)}
-                          </div>
-                        ))}
-                        {stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).map(request => (
-                          <div key={request.id} className="rounded-xl p-3 bg-orange-50 dark:bg-orange-500/10 border border-orange-200/70 dark:border-orange-500/30">
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="w-6 h-6 rounded-full bg-orange-200 dark:bg-orange-500/30 flex items-center justify-center text-[10px] font-black text-orange-700 dark:text-orange-300 flex-shrink-0">
-                                {request.visitor_name.charAt(0).toUpperCase()}
+                            ) : (
+                              <div className="space-y-2">
+                                {/* ── Join requests ── */}
+                                {pendingRequests.join.map(jr => {
+                                  const isProcessing = processingRequests.has(jr.id);
+                                  return (
+                                    <div key={jr.id} className="rounded-xl p-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200/70 dark:border-indigo-500/30">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <div className="w-6 h-6 rounded-full bg-indigo-200 dark:bg-indigo-500/30 flex items-center justify-center text-[10px] font-black text-indigo-700 dark:text-indigo-300 flex-shrink-0">
+                                          {jr.assignee_name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <span className="text-[13px] font-bold text-foreground flex-1" dir="auto">{jr.assignee_name}</span>
+                                        <span className="text-[10px] text-muted-foreground/60">{format(parseISO(jr.requested_at), 'MMM dd, HH:mm')}</span>
+                                      </div>
+                                      <p className="text-[11px] text-indigo-700 dark:text-indigo-400 mb-2">
+                                        {language === 'ar' ? 'يريد الانضمام إلى هذه المهمة' : 'Wants to join this task'}
+                                      </p>
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={() => handleJoinRequest(jr.id, 'approved')}
+                                          disabled={isProcessing}
+                                          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold
+                                            bg-emerald-500 hover:bg-emerald-600 text-white
+                                            disabled:opacity-50 transition-all active:scale-95">
+                                          {isProcessing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                                          {language === 'ar' ? 'قبول' : 'Approve'}
+                                        </button>
+                                        <button
+                                          onClick={() => handleJoinRequest(jr.id, 'denied')}
+                                          disabled={isProcessing}
+                                          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold
+                                            bg-red-100 dark:bg-red-500/20 hover:bg-red-200 dark:hover:bg-red-500/30
+                                            text-red-600 dark:text-red-400
+                                            disabled:opacity-50 transition-all active:scale-95">
+                                          <X className="h-3 w-3" />
+                                          {language === 'ar' ? 'رفض' : 'Deny'}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+
+                                {/* ── Completion requests ── */}
+                                {pendingRequests.completion.map(request => (
+                                  <div key={request.id} className="rounded-xl p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200/70 dark:border-amber-500/30">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <div className="w-6 h-6 rounded-full bg-amber-200 dark:bg-amber-500/30 flex items-center justify-center text-[10px] font-black text-amber-700 dark:text-amber-300 flex-shrink-0">
+                                        {request.visitor_name.charAt(0).toUpperCase()}
+                                      </div>
+                                      <span className="text-[13px] font-bold text-foreground flex-1" dir="auto">{request.visitor_name}</span>
+                                      <span className="text-[10px] text-muted-foreground/60">{format(parseISO(request.created_at), 'MMM dd, HH:mm')}</span>
+                                    </div>
+                                    <p className="text-[11px] text-amber-700 dark:text-amber-400 mb-2">{language === 'ar' ? 'طلب إكمال المهمة' : 'Requesting task completion'}</p>
+                                    {renderCompletionRequestStatus(request)}
+                                  </div>
+                                ))}
+
+                                {/* ── Snooze requests ── */}
+                                {pendingRequests.snooze.map(request => (
+                                  <div key={request.id} className="rounded-xl p-3 bg-orange-50 dark:bg-orange-500/10 border border-orange-200/70 dark:border-orange-500/30">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <div className="w-6 h-6 rounded-full bg-orange-200 dark:bg-orange-500/30 flex items-center justify-center text-[10px] font-black text-orange-700 dark:text-orange-300 flex-shrink-0">
+                                        {request.visitor_name.charAt(0).toUpperCase()}
+                                      </div>
+                                      <span className="text-[13px] font-bold text-foreground flex-1" dir="auto">{request.visitor_name}</span>
+                                      <span className="text-[10px] text-muted-foreground/60">{format(parseISO(request.created_at), 'MMM dd, HH:mm')}</span>
+                                    </div>
+                                    {request.content && !parseSnoozeStatus(request.content) && (
+                                      <p className="text-[12px] text-muted-foreground mb-2" dir="auto">{t('reason', language)}: {request.content}</p>
+                                    )}
+                                    {renderSnoozeRequestStatus(request)}
+                                  </div>
+                                ))}
+
+                                {/* ── Uncheck requests ── */}
+                                {pendingRequests.uncheck.map(request => {
+                                  const st = stats.subtasks.find(s => s.id === request.subtask_id);
+                                  return (
+                                    <div key={request.id} className="rounded-xl p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200/70 dark:border-blue-500/30">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <div className="w-6 h-6 rounded-full bg-blue-200 dark:bg-blue-500/30 flex items-center justify-center text-[10px] font-black text-blue-700 dark:text-blue-300 flex-shrink-0">
+                                          {request.visitor_name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <span className="text-[13px] font-bold text-foreground flex-1" dir="auto">{request.visitor_name}</span>
+                                        <span className="text-[10px] text-muted-foreground/60">{format(parseISO(request.created_at), 'MMM dd, HH:mm')}</span>
+                                      </div>
+                                      <p className="text-[12px] text-blue-700 dark:text-blue-400">{language === 'ar' ? 'طلب إلغاء تحديد' : 'Requesting uncheck'}: "{st?.title || 'subtask'}"</p>
+                                      {request.content && <p className="text-[12px] text-muted-foreground mt-1">{t('reason', language)}: {request.content}</p>}
+                                    </div>
+                                  );
+                                })}
                               </div>
-                              <span className="text-[13px] font-bold text-foreground flex-1" dir="auto">{request.visitor_name}</span>
-                              <span className="text-[10px] text-muted-foreground/60">{format(parseISO(request.created_at), 'MMM dd, HH:mm')}</span>
-                            </div>
-                            {request.content && !parseSnoozeStatus(request.content) && (
-                              <p className="text-[12px] text-muted-foreground mb-2" dir="auto">{t('reason', language)}: {request.content}</p>
                             )}
-                            {renderSnoozeRequestStatus(request)}
-                          </div>
-                        ))}
-                        {stats.uncheckRequests.map(request => {
-                          const st = stats.subtasks.find(s => s.id === request.subtask_id);
-                          return (
-                            <div key={request.id} className="rounded-xl p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200/70 dark:border-blue-500/30">
-                              <div className="flex items-center gap-2 mb-1">
-                                <div className="w-6 h-6 rounded-full bg-blue-200 dark:bg-blue-500/30 flex items-center justify-center text-[10px] font-black text-blue-700 dark:text-blue-300 flex-shrink-0">
-                                  {request.visitor_name.charAt(0).toUpperCase()}
-                                </div>
-                                <span className="text-[13px] font-bold text-foreground flex-1" dir="auto">{request.visitor_name}</span>
-                                <span className="text-[10px] text-muted-foreground/60">{format(parseISO(request.created_at), 'MMM dd, HH:mm')}</span>
+                          </>
+                        )}
+
+                        {approvalTab === 'handled' && (
+                          <>
+                            {!hasHandled ? (
+                              <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50 dark:bg-white/[0.02] rounded-xl border border-dashed border-slate-200 dark:border-white/[0.05]">
+                                <Clock className="h-8 w-8 text-slate-400 mb-2 opacity-50" />
+                                <p className="text-[13px] font-bold text-slate-600 dark:text-slate-300 mb-1">{language === 'ar' ? 'لا توجد طلبات سابقة' : 'No handled requests'}</p>
                               </div>
-                              <p className="text-[12px] text-blue-700 dark:text-blue-400">{language === 'ar' ? 'طلب إلغاء تحديد' : 'Requesting uncheck'}: "{st?.title || 'subtask'}"</p>
-                              {request.content && <p className="text-[12px] text-muted-foreground mt-1">{t('reason', language)}: {request.content}</p>}
-                            </div>
-                          );
-                        })}
+                            ) : (
+                              <div className="space-y-2 opacity-75">
+                                {/* ── Handled Completion requests ── */}
+                                {handledRequests.completion.map(request => {
+                                  const status = parseSnoozeStatus(request.content);
+                                  const isApproved = status === 'approved';
+                                  return (
+                                    <div key={request.id} className={`rounded-xl p-3 border ${isApproved ? 'bg-emerald-50 dark:bg-emerald-500/5 border-emerald-200/50' : 'bg-red-50 dark:bg-red-500/5 border-red-200/50'}`}>
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black flex-shrink-0 ${isApproved ? 'bg-emerald-200 text-emerald-700' : 'bg-red-200 text-red-700'}`}>
+                                          {request.visitor_name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <span className="text-[13px] font-bold text-foreground flex-1" dir="auto">{request.visitor_name}</span>
+                                        <span className="text-[10px] text-muted-foreground/60">{format(parseISO(request.created_at), 'MMM dd, HH:mm')}</span>
+                                      </div>
+                                      {isApproved && (
+                                        <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mb-2">{language === 'ar' ? 'طلب إكمال المهمة' : 'Requesting task completion'}</p>
+                                      )}
+                                      {!isApproved && (
+                                        <p className="text-[11px] text-red-700 dark:text-red-400 mb-2">{language === 'ar' ? 'طلب إكمال المهمة' : 'Requesting task completion'}</p>
+                                      )}
+                                      <div className="flex items-center gap-2 mt-1">
+                                        {isApproved ? (
+                                          <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> {language === 'ar' ? 'تم القبول' : 'Approved'}</span>
+                                        ) : (
+                                          <span className="text-[11px] font-bold text-red-600 flex items-center gap-1"><X className="h-3 w-3" /> {language === 'ar' ? 'تم الرفض' : 'Denied'}</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+
+                                {/* ── Handled Snooze requests ── */}
+                                {handledRequests.snooze.map(request => {
+                                  const statusObj = parseSnoozeStatus(request.content);
+                                  const status = statusObj?.status;
+                                  const isApproved = status === 'approved';
+                                  return (
+                                    <div key={request.id} className={`rounded-xl p-3 border ${isApproved ? 'bg-emerald-50 dark:bg-emerald-500/5 border-emerald-200/50' : 'bg-red-50 dark:bg-red-500/5 border-red-200/50'}`}>
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black flex-shrink-0 ${isApproved ? 'bg-emerald-200 text-emerald-700' : 'bg-red-200 text-red-700'}`}>
+                                          {request.visitor_name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <span className="text-[13px] font-bold text-foreground flex-1" dir="auto">{request.visitor_name}</span>
+                                        <span className="text-[10px] text-muted-foreground/60">{format(parseISO(request.created_at), 'MMM dd, HH:mm')}</span>
+                                      </div>
+                                      <p className="text-[11px] text-slate-600 mb-1">{language === 'ar' ? 'طلب تأجيل' : 'Snooze request'}</p>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        {isApproved ? (
+                                          <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> {language === 'ar' ? 'تم القبول' : 'Approved'}</span>
+                                        ) : (
+                                          <span className="text-[11px] font-bold text-red-600 flex items-center gap-1"><X className="h-3 w-3" /> {language === 'ar' ? 'تم الرفض' : 'Denied'}</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
-                    )}
+                    );
+                    })()}
 
                     {/* ── ASSIGNEES tab ── */}
                     {activeView === 'assignees' && (
