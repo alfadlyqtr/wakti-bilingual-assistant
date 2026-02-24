@@ -1,7 +1,4 @@
-<<<<<<< Updated upstream
 // @ts-nocheck
-=======
->>>>>>> Stashed changes
 import { supabase, ensurePassport, getCurrentUserId } from "@/integrations/supabase/client";
 import { TRServiceCache } from "./trServiceCache";
 
@@ -662,24 +659,8 @@ export class TRService {
   }
 
   // Shared access operations
-<<<<<<< Updated upstream
   static async recordSharedAccess(_taskId: string, _viewerName?: string): Promise<void> {
     // tr_shared_access table removed; visitors tracked via tr_shared_responses
-=======
-  static async recordSharedAccess(taskId: string, viewerName?: string): Promise<void> {
-    const userId = await getCurrentUserId();
-    
-    await ensurePassport();
-    const { error } = await supabase
-      .from('tr_shared_access')
-      .insert([{
-        task_id: taskId,
-        viewer_id: userId || null,
-        viewer_name: viewerName || 'Guest'
-      }]);
-    
-    if (error) throw error;
->>>>>>> Stashed changes
   }
 
   static async getSharedAccess(_taskId: string): Promise<TRSharedAccess[]> {

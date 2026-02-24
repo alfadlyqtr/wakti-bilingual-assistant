@@ -106,7 +106,6 @@ export async function getContacts() {
   return results;
 }
 
-<<<<<<< Updated upstream
 // Get count of pending contact requests for the current user (for badge)
 export async function getPendingRequestsCount(): Promise<number> {
   const userId = await getCurrentUserId();
@@ -133,14 +132,6 @@ export async function getContactRequests() {
   if (!userId) {
     throw new Error("User not authenticated");
   }
-=======
-// Get all pending contact requests for the current user
-export async function getContactRequests() {
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    throw new Error("User not authenticated");
-  }
->>>>>>> Stashed changes
   await ensurePassport();
 
   // Step 1: Get user IDs of people who sent requests
@@ -278,13 +269,8 @@ export async function searchUsers(query: string): Promise<UserSearchResult[]> {
   return users;
 }
 
-<<<<<<< Updated upstream
 // Get detailed relationship status between current user and another user
 export async function getContactRelationshipStatus(userId: string): Promise<ContactRelationshipStatus> {
-=======
-// Check if a user is already in contacts
-export async function checkIfUserInContacts(userId: string): Promise<boolean> {
->>>>>>> Stashed changes
   const currentUserId = await getCurrentUserId();
   if (!currentUserId) {
     throw new Error("User not authenticated");

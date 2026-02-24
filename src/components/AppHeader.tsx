@@ -1,10 +1,6 @@
-<<<<<<< Updated upstream
 import React, { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { createPortal } from "react-dom";
-=======
-import React, { useEffect, useState } from "react";
->>>>>>> Stashed changes
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
