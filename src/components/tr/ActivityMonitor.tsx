@@ -18,7 +18,7 @@ import {
   Users, MessageCircle, CheckCircle, ExternalLink, Clock, 
   RefreshCw, Pause, AlertCircle, Mail, User, 
   Calendar, Check, X, EyeIcon, ChevronDown, ChevronRight,
-  Link2, Hash, Copy, Loader2
+  Link2, Hash, Copy, Loader2, Send
 } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
