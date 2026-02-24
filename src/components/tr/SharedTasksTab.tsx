@@ -30,7 +30,7 @@ interface SharedTasksTabProps {
 }
 
 // ── Assignee tabbed card (mirrors owner's ActivityMonitor card, no Approvals tab) ──
-const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> = ({ assignment, language }) => {
+const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string; onCompletedChange?: (taskId: string, completed: boolean) => void }> = ({ assignment, language, onCompletedChange }) => {
   // Always use assignment.task_id directly — never rely on the join which may be null
   const taskId = assignment.task_id;
   const [taskMeta, setTaskMeta] = useState<{ share_link: string; user_id: string; title: string } | null>(null);
@@ -40,6 +40,8 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
   const [pendingOpen, setPendingOpen] = useState(true);
   const [completedOpen, setCompletedOpen] = useState(true);
   const [subtasks, setSubtasks] = useState<{ id: string; title: string; completed: boolean }[]>([]);
+  const [taskCompleted, setTaskCompleted] = useState(false);
+  const [taskCompletedBy, setTaskCompletedBy] = useState<string | null>(null);
   const [responses, setResponses] = useState<any[]>([]);
   const [ownerName, setOwnerName] = useState('');
   const [loading, setLoading] = useState(true);
@@ -130,9 +132,19 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
           setOwnerName(ownerProfile.display_name || full || 'Owner');
         }
       }
+      // Fetch task completed status directly (assignment join may be stale)
+      const { data: freshTask } = await supabase.from('tr_tasks').select('completed').eq('id', taskId).single();
+      if (freshTask) {
+        setTaskCompleted(freshTask.completed || false);
+        onCompletedChange?.(taskId, freshTask.completed || false);
+      }
       if (st) setSubtasks(st);
       if (rs) {
         setResponses(rs);
+        // Who completed the main task?
+        const completionEntry = rs.filter(r => r.response_type === 'completion' && !r.subtask_id && r.is_completed)
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+        setTaskCompletedBy(completionEntry?.visitor_name || null);
         // Check if there is a pending completion request from this user
         const pendingCompletion = rs.some(r => {
           if (r.response_type !== 'completion_request') return false;
@@ -234,8 +246,24 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
         {/* SUBTASKS tab */}
         {activeTab === 'subtasks' && (
           <div className="space-y-3 pt-1">
-            {/* Action buttons */}
-            {subtasks.filter(s => !s.completed).length > 0 && (
+            {/* Task completed banner */}
+            {taskCompleted && (
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/70 dark:border-emerald-500/30">
+                <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-bold text-emerald-700 dark:text-emerald-300">
+                    {language === 'ar' ? 'تم إكمال المهمة' : 'Task Completed'}
+                  </p>
+                  {taskCompletedBy && (
+                    <p className="text-[10px] text-emerald-600/70 dark:text-emerald-400/70">
+                      {language === 'ar' ? `أكملها: ${taskCompletedBy}` : `Completed by ${taskCompletedBy}`}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+            {/* Action buttons — only show when task is NOT completed */}
+            {!taskCompleted && subtasks.filter(s => !s.completed).length > 0 && (
               <div className="space-y-2">
                 <button
                   onClick={handleMarkAllDone}
@@ -309,14 +337,26 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
                 <div className={`space-y-1.5 overflow-hidden transition-all ${completedOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
                   {subtasks.filter(st => st.completed).length === 0 ? (
                     <p className="text-center py-4 text-muted-foreground/50 text-[13px]">{language === 'ar' ? 'لا يوجد مهام مكتملة' : 'No completed tasks'}</p>
-                  ) : subtasks.filter(st => st.completed).map(st => (
-                    <div key={st.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07]">
-                      <div className="w-4 h-4 rounded-full border-2 border-slate-300 dark:border-white/20 flex items-center justify-center">
+                  ) : subtasks.filter(st => st.completed).map(st => {
+                    const completedByEntry = responses
+                      .filter(r => r.response_type === 'completion' && r.subtask_id === st.id && r.is_completed)
+                      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+                    return (
+                    <div key={st.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-emerald-50/50 dark:bg-emerald-500/[0.05] border border-emerald-200/50 dark:border-emerald-500/20">
+                      <div className="w-4 h-4 rounded-full border-2 border-emerald-400 dark:border-emerald-500/50 flex items-center justify-center flex-shrink-0">
                         <div className="w-2 h-2 rounded-full bg-emerald-500" />
                       </div>
-                      <p className="text-[12px] font-semibold flex-1 line-through text-muted-foreground/60" dir="auto">{st.title}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-semibold line-through text-muted-foreground/60" dir="auto">{st.title}</p>
+                        {completedByEntry && (
+                          <p className="text-[10px] text-emerald-600/70 dark:text-emerald-400/60">
+                            {language === 'ar' ? `أكملها: ${completedByEntry.visitor_name}` : `Done by ${completedByEntry.visitor_name}`}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -536,6 +576,7 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
   const [joining, setJoining] = useState(false);
   const [showJoinInput, setShowJoinInput] = useState(false);
   const [expandedAssigned, setExpandedAssigned] = useState<Set<string>>(new Set());
+  const [liveTaskCompleted, setLiveTaskCompleted] = useState<Record<string, boolean>>({});
   const [generatingCode, setGeneratingCode] = useState<string | null>(null);
   const [taskCodes, setTaskCodes] = useState<Record<string, string>>({});
   const [joinRequests, setJoinRequests] = useState<Assignment[]>([]);
@@ -884,19 +925,26 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
                 const shareLink = a.task?.share_link;
                 if (!shareLink) return null;
                 const isExpanded = expandedAssigned.has(a.id);
-                const isOverdue = a.task?.due_date && new Date(`${a.task.due_date}T${a.task.due_time || '23:59:59'}`) < new Date() && !a.task.completed;
+                // Use live completed state if available, fall back to join data
+                const isCompleted = liveTaskCompleted[a.task_id] ?? a.task?.completed ?? false;
+                const isOverdue = a.task?.due_date && new Date(`${a.task.due_date}T23:59:59`) < new Date() && !isCompleted;
                 return (
-                  <div key={a.id} className={`rounded-2xl overflow-hidden bg-white dark:bg-white/[0.04] border ${isOverdue ? 'border-red-200/80 dark:border-red-500/30' : 'border-slate-200/80 dark:border-white/[0.07]'} shadow-[0_2px_16px_hsla(0,0%,0%,0.07)] dark:shadow-[0_2px_16px_hsla(0,0%,0%,0.4)] transition-colors duration-300`}>
+                  <div key={a.id} className={`rounded-2xl overflow-hidden bg-white dark:bg-white/[0.04] border ${isCompleted ? 'border-emerald-200/80 dark:border-emerald-500/30' : isOverdue ? 'border-red-200/80 dark:border-red-500/30' : 'border-slate-200/80 dark:border-white/[0.07]'} shadow-[0_2px_16px_hsla(0,0%,0%,0.07)] dark:shadow-[0_2px_16px_hsla(0,0%,0%,0.4)] transition-colors duration-300`}>
                     <button onClick={() => setExpandedAssigned(prev => { const n = new Set(prev); isExpanded ? n.delete(a.id) : n.add(a.id); return n; })}
                       className="w-full text-left px-4 py-3.5 flex items-center gap-3 hover:bg-slate-50/80 dark:hover:bg-white/[0.03] transition-colors touch-manipulation">
-                      <div className={`flex-shrink-0 w-2.5 h-2.5 rounded-full ${a.task?.completed ? 'bg-emerald-400' : isOverdue ? 'bg-red-400' : 'bg-teal-400'}`} />
+                      <div className={`flex-shrink-0 w-2.5 h-2.5 rounded-full ${isCompleted ? 'bg-emerald-400' : isOverdue ? 'bg-red-400' : 'bg-teal-400'}`} />
                       <div className="flex-1 min-w-0">
                         <p className="text-[14px] font-bold text-foreground truncate">{a.task?.title || '...'}</p>
                         <div className="flex items-center gap-1.5 mt-1">
-                          {a.task?.due_date && (
+                          {a.task?.due_date && !isCompleted && (
                             <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.1] text-[10px] font-bold text-slate-600 dark:text-slate-300">
                               <Clock className="h-3 w-3" />
                               {format(parseISO(a.task.due_date), 'MMM dd')} {a.task.due_time && `, ${a.task.due_time}`}
+                            </span>
+                          )}
+                          {isCompleted && (
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/20 text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                              {language === 'ar' ? 'مكتملة' : 'Completed'}
                             </span>
                           )}
                           {isOverdue && (
@@ -912,7 +960,11 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
                     </button>
                     {isExpanded && (
                       <div className="px-2 pb-2">
-                        <AssignedTaskCard assignment={a} language={language} />
+                        <AssignedTaskCard
+                          assignment={a}
+                          language={language}
+                          onCompletedChange={(taskId, completed) => setLiveTaskCompleted(prev => ({ ...prev, [taskId]: completed }))}
+                        />
                       </div>
                     )}
                   </div>
