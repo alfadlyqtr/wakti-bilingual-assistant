@@ -231,6 +231,10 @@ async function performSearchWithTavily(query: string, userId: string, language: 
           response: language === 'ar' ? 'تم إلغاء البحث' : 'Search was cancelled'
         };
       }
+<<<<<<< Updated upstream
+=======
+    
+>>>>>>> Stashed changes
       const errMsg = error instanceof Error ? error.message : String(error);
       console.error('🔍 SEARCH ERROR:', error);
       return {
@@ -294,6 +298,7 @@ async function fetchWithTimeout(
       return response;
     } catch (error: unknown) {
       clearTimeout(timeoutId);
+<<<<<<< Updated upstream
       if (error instanceof DOMException && error.name === 'AbortError') {
         throw new Error(`Request timeout after ${resolvedTimeout}ms`);
       }
@@ -302,6 +307,19 @@ async function fetchWithTimeout(
         throw (error instanceof Error ? error : new Error(msg));
       }
       console.log(`🔄 Retrying after error (attempt ${attempt + 2}/${resolvedRetries + 1}):`, msg);
+=======
+      
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${timeoutMs}ms`);
+      }
+      
+      const msg = error instanceof Error ? error.message : String(error);
+      if (attempt === retries) {
+        throw (error instanceof Error ? error : new Error(msg));
+      }
+      
+      console.log(`🔄 Retrying after error (attempt ${attempt + 2}/${retries + 1}):`, msg);
+>>>>>>> Stashed changes
       await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
     }
   }
@@ -461,7 +479,11 @@ serve(async (req) => {
       browsingData = { ...baseMeta, success: true, answer: searchResult.answer || null, results: searchResult.results };
       const sourcesList = searchResult.results
         .map((r: SearchResultItem, i: number) => `${i + 1}. ${r.title} - ${r.url}\nSummary: ${r.content}`)
+<<<<<<< Updated upstream
          .join('\n\n');
+=======
+        .join('\n\n');
+>>>>>>> Stashed changes
 
       effectiveMessage = (requestLanguage === 'ar'
         ? `استخدم فقط نتائج البحث التالية للإجابة. لا تذكر أي مصادر أخرى.\n\nنتائج البحث:\n${sourcesList}\n\nسؤال المستخدم: "${message}"\n\nملاحظة مهمة: قدم إجابة مباشرة بدون ذكر المصادر أو إضافة "المصدر:" في النهاية. المعلومات من بحث الويب.`
@@ -471,6 +493,7 @@ serve(async (req) => {
       effectiveTrigger = 'general';
     }
 
+<<<<<<< Updated upstream
     // Determine model order based on override and vision
     const isVision = VisionSystem.shouldUseVisionMode(effectiveTrigger, attachedFiles);
     let modelOrder: string[];
@@ -486,6 +509,10 @@ serve(async (req) => {
           ? ['openai', 'deepseek', 'claude']
           : ['openai', 'claude', 'deepseek'];
     }
+=======
+    // Try models in order: Claude → GPT-4 → DeepSeek
+    const modelOrder = ['claude', 'gpt4', 'deepseek'];
+>>>>>>> Stashed changes
     let lastError: unknown | null = null;
     let fallbackUsed = false;
     const attemptedModels: string[] = [];
@@ -699,8 +726,37 @@ async function callClaude35API(
 
     // Handle vision mode with images using VisionSystem
     if (detectedMode === 'vision' && attachedFiles.length > 0) {
+<<<<<<< Updated upstream
       const visionMessage = VisionSystem.buildVisionMessage(message, attachedFiles, language);
       messages.push(visionMessage);
+=======
+      const imageFiles = attachedFiles.filter(file => file.type?.startsWith('image/'));
+      
+      if (imageFiles.length > 0) {
+        const content: (ClaudeTextContent | ClaudeImageContent)[] = [
+          {
+            type: "text",
+            text: language === 'ar' ? 'يرجى الرد باللغة العربية فقط. ' + message : 'Please respond in English only. ' + message
+          }
+        ];
+
+        imageFiles.forEach(file => {
+          content.push({
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: file.type,
+              data: file.data
+            }
+          });
+        });
+
+        messages.push({
+          role: "user",
+          content: content
+        });
+      }
+>>>>>>> Stashed changes
     } else {
       // Add regular text message using VisionSystem format
       const visionMessage = VisionSystem.buildVisionMessage(message, [], language);
@@ -752,7 +808,11 @@ async function callClaude35API(
   }
 }
 
+<<<<<<< Updated upstream
 async function callOpenAIChatAPI(
+=======
+async function callGPT4API(
+>>>>>>> Stashed changes
   message: string,
   conversationId?: string,
   language: string = 'en',
@@ -839,7 +899,11 @@ ${personalizationContext}`;
     });
 
     // Make API call to OpenAI
+<<<<<<< Updated upstream
     const resp = await fetchWithTimeout(
+=======
+    const response = await fetchWithTimeout(
+>>>>>>> Stashed changes
       'https://api.openai.com/v1/chat/completions',
       {
         method: 'POST',
@@ -848,13 +912,21 @@ ${personalizationContext}`;
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+<<<<<<< Updated upstream
           model: models.openai.model,
+=======
+          model: 'gpt-4o-mini',
+>>>>>>> Stashed changes
           messages: messages,
           max_tokens: 4000,
           temperature: 0.7
         })
       },
+<<<<<<< Updated upstream
       models.openai.timeout
+=======
+      models.gpt4.timeout
+>>>>>>> Stashed changes
     );
 
     if (!resp.ok) {
@@ -875,7 +947,11 @@ ${personalizationContext}`;
     }
 
   } catch (error: unknown) {
+<<<<<<< Updated upstream
     console.error('🤖 OPENAI API ERROR:', error);
+=======
+    console.error('🤖 GPT-4 API ERROR:', error);
+>>>>>>> Stashed changes
     throw error;
   }
 }
@@ -903,8 +979,44 @@ async function callDeepSeekAPI(
       timeZone: 'Asia/Qatar'
     });
 
+<<<<<<< Updated upstream
     // Use VisionSystem to build complete system prompt
     const systemPrompt = VisionSystem.buildCompleteSystemPrompt(language, currentDate, personalTouch);
+=======
+    let personalizationContext = '';
+    if (personalTouch) {
+      const parts: string[] = [];
+      if (personalTouch.nickname) parts.push(`User name: ${personalTouch.nickname}`);
+      if (personalTouch.aiNickname) parts.push(`AI name: ${personalTouch.aiNickname}`);
+      if (personalTouch.tone) parts.push(`Tone: ${personalTouch.tone}`);
+      if (personalTouch.style) parts.push(`Style: ${personalTouch.style}`);
+      if (personalTouch.instruction) parts.push(`Instructions: ${personalTouch.instruction}`);
+      
+      if (parts.length > 0) {
+        personalizationContext = `\n\nPersonalization: ${parts.join(', ')}`;
+      }
+    }
+
+    const systemPrompt = language === 'ar' 
+      ? `⚠️ CRITICAL: استجب باللغة العربية فقط. لا تستخدم الإنجليزية مطلقاً. هذا أمر إجباري.
+
+أنت WAKTI AI، مساعد ذكي متخصص في الإنتاجية والتنظيم.
+التاريخ الحالي: ${currentDate}
+
+أنت هنا لجعل حياة المستخدمين أكثر تنظيماً وإنتاجية!
+
+IMPORTANT: تذكر - استخدم العربية فقط في ردك. أي استخدام للإنجليزية غير مقبول.
+${personalizationContext}`
+      : `⚠️ CRITICAL: Respond ONLY in English. Do not use Arabic at all. This is mandatory.
+
+You are WAKTI AI, an intelligent assistant specializing in productivity and organization.
+Current date: ${currentDate}
+
+You're here to make users' lives more organized and productive!
+
+IMPORTANT: Remember - use only English in your response. Any use of Arabic is unacceptable.
+${personalizationContext}`;
+>>>>>>> Stashed changes
 
     // Build messages array
     const messages: OpenAIMessage[] = [

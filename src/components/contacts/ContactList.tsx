@@ -44,15 +44,22 @@ type ContactType = {
 interface ContactListProps {
   perContactUnread?: Record<string, number>;
   refetchUnreadCounts?: () => void;
+<<<<<<< Updated upstream
   openChatUserId?: string | null;
   clearOpenChat?: () => void;
+=======
+>>>>>>> Stashed changes
 }
 
 export function ContactList({ 
   perContactUnread = {}, 
+<<<<<<< Updated upstream
   refetchUnreadCounts = () => {},
   openChatUserId = null,
   clearOpenChat = () => {}
+=======
+  refetchUnreadCounts = () => {} 
+>>>>>>> Stashed changes
 }: ContactListProps) {
   const { language } = useTheme();
   const { user } = useAuth();

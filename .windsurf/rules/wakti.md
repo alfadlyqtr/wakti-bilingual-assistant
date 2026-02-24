@@ -10,6 +10,7 @@ Supabase Project ID: hxauxozopvpzpdygoqwf
 Supabase Project URL: https://hxauxozopvpzpdygoqwf.supabase.co
 always when desgining always use the 📋 WAKTI Style Guide & Design System rule
 
+<<<<<<< Updated upstream
 Platform & Wrapping
 Natively is the mobile wrapper and publisher for Wakti.
 Natively wraps the Wakti web app using their SDK.
@@ -22,6 +23,13 @@ When we talk about:
 Purpose of Wakti
 Wakti exists to empower individuals and teams with intelligent tools that simplify daily life, enhance productivity, and remove barriers to creativity and communication.
 It is designed to be a digital partner that people can rely on for organizing, learning, connecting, and creating.
+=======
+## Project Identity
+- **Project Name:** Wakti  
+- **Projecturl:** https://hxauxozopvpzpdygoqwf.supabase.co
+- **Supabase Project ID:** hxauxozopvpzpdygoqwf  
+- **App Name:** Wakti AI  
+>>>>>>> Stashed changes
 
 Wakti Mission Statement
 Wakti is the ultimate productivity AI app — built to simplify life, boost creativity, and make technology feel human.
@@ -37,6 +45,7 @@ At its core, Wakti AI drives intelligent chat, smart search, and the ability to 
 
 The goal: make Wakti the most trusted, loved, and indispensable AI app — the intelligent digital partner for modern life.
 
+<<<<<<< Updated upstream
 Project Rules
 ⚠️ THE MOST IMPORTANT RULE: YOU ALWAYS DO EXACTLY AS TOLD ⚠️
 Plain English Only
@@ -97,3 +106,23 @@ When I ask to brainstorm, debug, or investigate:
 Don’t rush.
 Think it through fully.
 Explain carefully and clearl
+=======
+At its core, Wakti AI drives intelligent chat, smart search, and the ability to generate text, images, and videos — all integrated into one seamless platform.  
+
+**The goal:** make Wakti the most trusted, loved, and indispensable AI app — the intelligent digital partner for modern life.  
+
+anon public
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU
+
+service_role
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NzA3MDE2NCwiZXhwIjoyMDYyNjQ2MTY0fQ.5h2M2RiaDlr44NhQPGQnnMHGMYyT-ANUawczbgwFCWU
+
+Legacy JWT secret
+zEG7tYaGSKbRRw4DNzkJTFN6HERGFKzvFQ2FZkoN7QmoKsQEvQn2av/Wr2rCHIFiKQHXpGOBpBugDkhzdPQ7tA==
+
+## Rules
+⚠️ Note: Service Role secrets and JWT secrets must never be exposed to frontend code.
+Use them only in secure server-side environments (e.g., Supabase Edge Functions, backend API).
+- ⚠️ Always obey and follow all **Global Rules (Non-Negotiable)** set in `global_rules.md`.  
+- Any backend work (Supabase, Edge Functions, DB changes) must respect both **Global Rules** and this **project file**.
+>>>>>>> Stashed changes

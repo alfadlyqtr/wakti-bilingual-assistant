@@ -1,7 +1,11 @@
+<<<<<<< Updated upstream
 // @ts-nocheck
 import { supabase, ensurePassport, getCurrentUserId } from '@/integrations/supabase/client';
 import { getNativeLocation, queryNeedsFreshLocation, clearLocationCache } from '@/integrations/natively/locationBridge';
 import { parseReminderFromResponse, createScheduledReminder, cancelRecentPendingReminders } from '@/services/ReminderService';
+=======
+import { supabase, ensurePassport, getCurrentUserId } from '@/integrations/supabase/client';
+>>>>>>> Stashed changes
 
 export interface AIMessage {
   id: string;
@@ -1739,10 +1743,17 @@ class WaktiAIV2ServiceClass {
       const clientLocalHour = new Date().getHours();
       let isWelcomeBack = false;
       try {
+<<<<<<< Updated upstream
         const lastSeenStr = localStorage.getItem('wakti_last_seen_at');
         if (lastSeenStr) {
           const gapMs = Date.now() - Number(lastSeenStr);
           isWelcomeBack = gapMs >= 12 * 60 * 60 * 1000; // 12 hours
+=======
+        if (!userId) {
+          await ensurePassport();
+          userId = await getCurrentUserId();
+          if (!userId) throw new Error('Authentication required');
+>>>>>>> Stashed changes
         }
       } catch {}
 

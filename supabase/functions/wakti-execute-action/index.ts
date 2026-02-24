@@ -2,7 +2,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+<<<<<<< Updated upstream
 import { logAI } from "../_shared/aiLogger.ts";
+=======
+>>>>>>> Stashed changes
 import type {
   ExecuteActionRequest,
   ExecuteActionResult,
@@ -264,7 +267,51 @@ async function generateImage(prompt: string | undefined, userId: string, languag
       });
     }
 
+<<<<<<< Updated upstream
     if (!response.ok) {
+=======
+    if (response.ok) {
+      const runwareRes: RunwareResponse = await response.json();
+      console.log("Runware response data:", runwareRes);
+      
+      // Type guard to locate image inference result
+      const isRunwareImageTask = (item: unknown): item is RunwareImageTask => {
+        return typeof item === 'object' && item !== null && (item as { taskType?: unknown }).taskType === 'imageInference';
+      };
+      const imageResult = (runwareRes.data ?? []).find(isRunwareImageTask);
+      
+      if (imageResult && imageResult.imageURL) {
+        // Create Supabase client to save image
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+
+        // Save image to database
+        try {
+          await supabase
+            .from('images')
+            .insert({
+              user_id: userId,
+              prompt: prompt,
+              image_url: imageResult.imageURL,
+              metadata: { provider: 'runware', imageUUID: imageResult.imageUUID }
+            });
+        } catch (dbError) {
+          console.log("Could not save image to database:", dbError);
+          // Continue anyway, the image was generated successfully
+        }
+
+        return {
+          success: true,
+          message: language === 'ar' ? 'تم إنشاء الصورة بنجاح' : 'Image generated successfully',
+          imageUrl: imageResult.imageURL
+        };
+      } else {
+        throw new Error('No image URL in response');
+      }
+    } else {
+>>>>>>> Stashed changes
       const errorText = await response.text();
       console.error('Runware API error:', response.status, errorText);
       throw new Error(`Runware API failed: ${response.status}`);

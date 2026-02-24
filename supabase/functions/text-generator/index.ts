@@ -603,6 +603,7 @@ Return ONLY the JSON, no additional text.`;
     console.log("🎯 Mode:", mode, "| Language:", language, "| Prompt length:", prompt.length);
     console.log("🎯 Structured fields:", { tone, register, languageVariant, emojis, contentType });
 
+<<<<<<< Updated upstream
     // ── Handle Summarize Content Type ──
     let finalPrompt = prompt;
     if (contentType === 'summarize') {
@@ -611,6 +612,15 @@ Return ONLY the JSON, no additional text.`;
         ? `اقرأ النص التالي بعناية وأعد ملخصاً واضحاً وموجزاً يحتفظ بأهم النقاط والمعلومات الأساسية. الملخص يجب أن يكون قصيراً وسهل الفهم وخالياً من التفاصيل غير الضرورية.\n\nالنص المراد تلخيصه:\n${prompt}`
         : `Read the following text carefully and provide a clear, concise summary that captures the key points and essential information. The summary should be brief, easy to understand, and free of unnecessary details.\n\nText to summarize:\n${prompt}`;
     }
+=======
+    const systemPrompt = getSystemPrompt(language);
+    const temp = typeof temperature === 'number' ? Math.max(0, Math.min(1, temperature)) : 0.7;
+    const preferredOpenAIModel = modelPreference === 'gpt-4o' ? 'gpt-4o' : 'gpt-4o-mini';
+    const temperatureUsed = temp;
+    
+    let generatedText = "";
+    let modelUsed = "";
+>>>>>>> Stashed changes
 
     const webSearchAllowed = !!contentType && WEB_SEARCH_ALLOWED_CONTENT_TYPES.has(contentType);
     const webSearchEnabled = !!webSearch && webSearchAllowed;

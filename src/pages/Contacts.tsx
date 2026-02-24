@@ -1,5 +1,9 @@
+<<<<<<< Updated upstream
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
+=======
+import { useState } from "react";
+>>>>>>> Stashed changes
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ContactSearch } from "@/components/contacts/ContactSearch";
 import { ContactRequests } from "@/components/contacts/ContactRequests";
@@ -10,13 +14,26 @@ import { t } from "@/utils/translations";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Contact, Bell, ShieldCheck } from "lucide-react";
+<<<<<<< Updated upstream
 import { getPendingRequestsCount } from "@/services/contactsService";
 import { getAllUnreadCounts } from "@/services/messageService";
+=======
+>>>>>>> Stashed changes
 
 // Create a client
 const queryClient = new QueryClient();
 
-export default function Contacts() {
+interface ContactsProps {
+  contactCount?: number;
+  perContactUnread?: Record<string, number>;
+  refetchUnreadCounts?: () => void;
+}
+
+export default function Contacts({ 
+  contactCount = 0, 
+  perContactUnread = {}, 
+  refetchUnreadCounts = () => {} 
+}: ContactsProps) {
   const { language } = useTheme();
   const [activeTab, setActiveTab] = useState("contacts");
   const [searchParams, setSearchParams] = useSearchParams();
@@ -30,11 +47,17 @@ export default function Contacts() {
         language={language} 
         activeTab={activeTab} 
         setActiveTab={setActiveTab}
+<<<<<<< Updated upstream
         openChatUserId={openChatUserId}
         clearOpenChat={() => {
           searchParams.delete('openChat');
           setSearchParams(searchParams);
         }}
+=======
+        contactCount={contactCount}
+        perContactUnread={perContactUnread}
+        refetchUnreadCounts={refetchUnreadCounts}
+>>>>>>> Stashed changes
       />
     </QueryClientProvider>
   );
@@ -45,12 +68,19 @@ function ContactsContent({
   language, 
   activeTab, 
   setActiveTab,
+<<<<<<< Updated upstream
   openChatUserId,
   clearOpenChat
+=======
+  contactCount,
+  perContactUnread,
+  refetchUnreadCounts
+>>>>>>> Stashed changes
 }: { 
   language: string; 
   activeTab: string;
   setActiveTab: (tab: string) => void;
+<<<<<<< Updated upstream
   openChatUserId: string | null;
   clearOpenChat: () => void;
 }) {
@@ -72,6 +102,12 @@ function ContactsContent({
     refetchOnWindowFocus: true,
   });
 
+=======
+  contactCount: number;
+  perContactUnread: Record<string, number>;
+  refetchUnreadCounts: () => void;
+}) {
+>>>>>>> Stashed changes
   // Handler for unblock success
   const handleUnblockSuccess = () => {
     setActiveTab("contacts");
@@ -111,8 +147,11 @@ function ContactsContent({
           <ContactList 
             perContactUnread={perContactUnread}
             refetchUnreadCounts={refetchUnreadCounts}
+<<<<<<< Updated upstream
             openChatUserId={openChatUserId}
             clearOpenChat={clearOpenChat}
+=======
+>>>>>>> Stashed changes
           />
         </TabsContent>
         

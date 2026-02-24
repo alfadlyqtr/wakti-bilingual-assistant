@@ -1,5 +1,9 @@
 // This file contains helper functions for interacting with Supabase
+<<<<<<< Updated upstream
 import { createClient, Session, SupabaseClient } from '@supabase/supabase-js';
+=======
+import { createClient, Session } from '@supabase/supabase-js';
+>>>>>>> Stashed changes
 import { TasjeelRecord, AudioUploadOptions } from '@/components/tasjeel/types';
 import type { Database } from '@/integrations/supabase/types';
 
@@ -18,6 +22,7 @@ const supabaseAnonKey =
 const effectiveUrl = supabaseUrl;
 const effectiveAnon = supabaseAnonKey;
 
+<<<<<<< Updated upstream
 // Provide a storage object that works even when WebView blocks web storage
 type MinimalStorage = {
   getItem: (key: string) => string | null;
@@ -104,6 +109,8 @@ export function clearStaleTokensBeforeInit(): void {
 export const SUPABASE_URL = effectiveUrl;
 export const SUPABASE_ANON_KEY = effectiveAnon;
 
+=======
+>>>>>>> Stashed changes
 export const supabase = createClient<Database>(effectiveUrl, effectiveAnon, {
   auth: {
     persistSession: true,
@@ -116,6 +123,7 @@ export const supabase = createClient<Database>(effectiveUrl, effectiveAnon, {
   }
 });
 
+<<<<<<< Updated upstream
 /**
  * Clears all Supabase auth-related keys from localStorage
  * Used during logout to ensure clean state
@@ -186,6 +194,108 @@ if (typeof window !== 'undefined') {
   window.addEventListener('error', (event) => {
     handleAuthError(event.error);
   });
+=======
+// Centralized auth gate to avoid refresh storms across the app.
+// - Coalesces concurrent callers into a single in-flight promise
+// - Resolves when there is a valid (non-expired) session or a token refresh completes
+// - Rejects cleanly on SIGNED_OUT
+let __passportInFlight: Promise<void> | null = null;
+
+const isSessionValid = (session: Session | null | undefined, safetySeconds = 30): boolean => {
+  if (!session) return false;
+  const exp = session.expires_at; // seconds since epoch
+  if (!exp) return true; // be permissive if field missing
+  const nowSec = Math.floor(Date.now() / 1000);
+  return exp - nowSec > safetySeconds;
+};
+
+export async function ensurePassport(timeoutMs = 4000): Promise<void> {
+  // Fast path: if current session is valid enough, return immediately
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (isSessionValid(session)) return;
+  } catch (error) {
+    console.error('[Supabase] Error getting session:', error);
+  }
+
+  if (__passportInFlight) return __passportInFlight;
+
+  __passportInFlight = new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const settle = (ok: boolean, err?: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      __passportInFlight = null;
+      if (ok) {
+        resolve();
+      } else {
+        reject(err instanceof Error ? err : new Error(err ? String(err) : 'Unknown error'));
+      }
+    };
+
+    const cleanup = () => {
+      try { sub?.unsubscribe(); } catch (_e) { void _e; }
+      try { clearTimeout(timer); } catch (_e) { void _e; }
+    };
+
+    // Listen for auth changes that indicate readiness
+    const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'TOKEN_REFRESHED' || (event === 'SIGNED_IN' && session)) {
+        // Extra guard: validate session freshness
+        if (isSessionValid(session)) settle(true);
+      } else if (event === 'SIGNED_OUT') {
+        settle(false, new Error('Signed out'));
+      }
+    });
+
+    // Kick the tires: if we already have a near-valid session, resolve; otherwise, try a single refresh
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (isSessionValid(session)) return settle(true);
+        // Attempt an explicit one-off refresh to avoid multiple implicit refreshers elsewhere
+        try {
+          await supabase.auth.refreshSession();
+          // Resolution will occur via TOKEN_REFRESHED event listener
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.warn('[Supabase] refreshSession failed (will rely on events/timeout):', msg);
+        }
+      } catch (error) {
+        console.error('[Supabase] Error refreshing session:', error);
+      }
+    })();
+
+    // Final fallback: timeout to avoid hanging callers
+    const timer = setTimeout(async () => {
+      try {
+        // As a last check, if we do have any session at all, allow progress to avoid deadlocks
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) return settle(true);
+      } catch (_e) { void _e; }
+      settle(true); // allow proceed; downstream calls may handle 401s
+    }, timeoutMs);
+  });
+
+  return __passportInFlight;
+}
+
+export async function withPassport<T>(op: () => Promise<T>): Promise<T> {
+  await ensurePassport();
+  return op();
+}
+
+// Lightweight helper to get current user id without hitting network
+export async function getCurrentUserId(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user?.id ?? null;
+}
+
+// One-time connectivity check (no UI impact). Logs minimal status to console.
+declare global {
+  interface Window { __SUPABASE_CHECKED__?: boolean }
+>>>>>>> Stashed changes
 }
 
 // Centralized auth gate to avoid refresh storms across the app.
