@@ -280,8 +280,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
       )}
       style={{
         height: 'var(--app-header-h)',
-        width: '100%',
-        backgroundColor: 'transparent'
+        width: '100%'
       }}
     >
       <div

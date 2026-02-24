@@ -913,12 +913,15 @@ textarea::placeholder {
 }
 
 /* Fix header positioning - mobile gets full width header with SOLID background */
-.app-layout-mobile header, .app-layout-mobile .header, .app-layout-mobile [class*="header"] {
+/* NOTE: On mobile the header is portaled to <body>, so .app-layout-mobile header won't match.
+   We target .app-header-fixed directly instead. */
+.app-layout-mobile header, .app-layout-mobile .header, .app-layout-mobile [class*="header"],
+header.app-header-fixed {
   position: fixed !important;
   top: 0 !important;
   left: 0 !important;
   right: 0 !important;
-  z-index: 100 !important;
+  z-index: 990 !important;
   background-color: hsl(var(--background)) !important;
   background: hsl(var(--background)) !important;
   backdrop-filter: none !important;
@@ -928,13 +931,14 @@ textarea::placeholder {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3) !important;
 }
 
-/* Ensure AppHeader is solid only on smaller screens */
+/* Ensure AppHeader is solid on smaller screens */
 @media (max-width: 768px) {
   header.app-header-fixed,
   .app-header-fixed {
     background: hsl(var(--background)) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
+    z-index: 990 !important;
   }
 }
 
@@ -1592,7 +1596,8 @@ body.keyboard-visible {
   top: env(safe-area-inset-top, 0px) !important;
   left: 0 !important;
   right: 0 !important;
-  z-index: 2147480000 !important;
+  z-index: 990 !important;
+  background: hsl(var(--background)) !important;
   transform: none !important;
   -webkit-transform: none !important;
   contain: none !important;
