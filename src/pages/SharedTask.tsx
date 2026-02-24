@@ -39,6 +39,9 @@ export default function SharedTask() {
   
   // Responses
   const [responses, setResponses] = useState<TRSharedResponse[]>([]);
+  // People
+  const [ownerDisplayName, setOwnerDisplayName] = useState<string>('');
+  const [approvedAssignees, setApprovedAssignees] = useState<string[]>([]);
 
   // ── Wakti user detection ──
   // If the visitor is already logged into Wakti, redirect them into the app
@@ -75,6 +78,12 @@ export default function SharedTask() {
         // Show name modal if no stored name
         setShowNameModal(true);
       }
+    }
+  }, [task]);
+
+  useEffect(() => {
+    if (task) {
+      loadPeople();
     }
   }, [task]);
 
@@ -117,11 +126,35 @@ export default function SharedTask() {
     
     try {
       const responsesData = await TRSharedService.getTaskResponses(task.id);
-      console.log('Loaded responses:', responsesData);
       setResponses(responsesData);
     } catch (error) {
       console.error('Error loading responses:', error);
     }
+  };
+
+  const loadPeople = async () => {
+    if (!task) return;
+    try {
+      // Fetch owner profile name
+      const { data: ownerProfile } = await supabase
+        .from('profiles')
+        .select('display_name, first_name, last_name')
+        .eq('id', task.user_id)
+        .single();
+      if (ownerProfile) {
+        const full = [ownerProfile.first_name, ownerProfile.last_name].filter(Boolean).join(' ');
+        setOwnerDisplayName(ownerProfile.display_name || full || 'Owner');
+      }
+      // Fetch approved assignees from tr_task_assignments
+      const { data: assignments } = await supabase
+        .from('tr_task_assignments')
+        .select('assignee_name')
+        .eq('task_id', task.id)
+        .eq('status', 'approved');
+      if (assignments) {
+        setApprovedAssignees(assignments.map(a => a.assignee_name));
+      }
+    } catch (_e) { /* non-critical */ }
   };
 
   const handleManualRefresh = async () => {
@@ -406,6 +439,64 @@ export default function SharedTask() {
                   visitorName={visitorName}
                 />
               )}
+
+              {/* People */}
+              {visitorName && (() => {
+                // Build deduplicated people list: owner + approved assignees + unique visitors from responses
+                const visitorPeople = [...new Set(
+                  responses.map(r => r.visitor_name).filter(Boolean)
+                )].filter(n => n !== ownerDisplayName);
+                const allPeople = [...new Set([...approvedAssignees, ...visitorPeople])];
+                return (
+                  <div className="border-t pt-5">
+                    <h3 className="font-medium mb-3 flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      People ({1 + allPeople.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {/* Owner */}
+                      {ownerDisplayName && (
+                        <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07]">
+                          <div className="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-[13px] font-black text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                            {ownerDisplayName.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-[13px] font-bold text-foreground truncate">{ownerDisplayName}</p>
+                              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-indigo-200 dark:bg-indigo-500/30 text-indigo-700 dark:text-indigo-300 flex-shrink-0">Owner</span>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground/50">Task owner</p>
+                          </div>
+                        </div>
+                      )}
+                      {/* All other participants */}
+                      {allPeople.map(name => {
+                        const acts = responses.filter(r => r.visitor_name === name && r.response_type !== 'visit');
+                        const last = acts.length > 0
+                          ? [...acts].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+                          : null;
+                        const isMe = name === visitorName;
+                        return (
+                          <div key={name} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${isMe ? 'bg-teal-50 dark:bg-teal-500/10 border-teal-200/80 dark:border-teal-500/30' : 'bg-slate-50 dark:bg-white/[0.04] border-slate-200/60 dark:border-white/[0.07]'}`}>
+                            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-black flex-shrink-0 ${isMe ? 'bg-teal-100 dark:bg-teal-500/20 text-teal-600 dark:text-teal-400' : 'bg-slate-200 dark:bg-white/[0.1] text-slate-600 dark:text-slate-300'}`}>
+                              {name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="text-[13px] font-bold text-foreground truncate">{name}</p>
+                                {isMe && <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-teal-200 dark:bg-teal-500/30 text-teal-700 dark:text-teal-300 flex-shrink-0">You</span>}
+                              </div>
+                              <p className="text-[10px] text-muted-foreground/50">
+                                {last ? format(parseISO(last.created_at), 'MMM dd, HH:mm') : 'No activity yet'}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Comments */}
               {visitorName && (

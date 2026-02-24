@@ -281,7 +281,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     const allPeopleNames = [...new Set([
       ...taskApprovedAssignees.map(a => a.assignee_name),
       ...uniqueAssignees,
-    ])].filter(name => name !== ownerName && name !== 'Owner');
+    ])].filter(name => name !== ownerName && name !== 'Owner' && name !== 'Owner (You)');
 
     return {
       assignees: allPeopleNames,
