@@ -563,7 +563,7 @@ function buildAutoFallbackFlowchart(language: Language): {
 
 function buildSystemPrompt(_family: DiagramFamily, language: Language, maxDiagrams: number, krokiStyle: KrokiStyleKey): string {
   const langNote = language === "ar"
-    ? "Use Arabic labels in the diagram. Provide titleAr and descriptionAr fields."
+    ? "CRITICAL: Use ARABIC text for ALL node labels, titles, and descriptions in the diagram. Arabic Unicode characters are fully supported. Provide titleAr and descriptionAr fields. Do NOT transliterate or replace Arabic with English."
     : "Use English labels in the diagram.";
 
   // Get style-specific instructions (this is the key fix!)
@@ -604,7 +604,8 @@ CRITICAL FORMATTING RULES:
 - For Mermaid flowcharts, EACH element must be on a separate line.
 - For Mermaid gantt, EACH line (title, dateFormat, section, task) must be on its own line.
 - Keep node labels SHORT (max 4-5 words).
-- Use simple ASCII characters, avoid special symbols that might break rendering.
+- Arabic and Unicode characters are fully supported in labels — do NOT replace them with ASCII or English.
+- Avoid only these problematic special characters: < > & " (use plain text equivalents).
 - Do NOT use markdown code fences inside diagramSource.
 - Do NOT put multiple elements on the same line - THIS WILL CAUSE ERRORS.
 

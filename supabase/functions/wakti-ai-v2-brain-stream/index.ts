@@ -1,21 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-<<<<<<< Updated upstream
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
-=======
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { executeRegularSearch } from "../wakti-ai-v2-brain/search.ts";
-import type {
-  Attachment,
-  AIMessage,
-  AIContent,
-  Language,
-  ActiveTrigger,
-  RegularSearchResponse,
-  SearchAPIData,
-  OpenAIStreamChunk,
-} from "../_types/shared.ts";
->>>>>>> Stashed changes
 
 const allowedOrigins = [
   'https://wakti.qa',
@@ -63,7 +48,6 @@ type IpGeoLite = {
 
 const ipGeoCache = new Map<string, { at: number; geo: IpGeoLite | null }>();
 
-<<<<<<< Updated upstream
 function extractClientIp(req: Request): string {
   // Check common CDN/proxy headers in priority order
   const headers = [
@@ -80,119 +64,11 @@ function extractClientIp(req: Request): string {
     if (val && val.trim()) {
       const ip = val.split(',')[0]?.trim();
       if (ip) return ip;
-=======
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    console.log("🚀 STREAMING: Processing request");
-    
-    // Authenticate user
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
-      throw new Error('Authentication required');
-    }
-
-    const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-    if (!user) {
-      throw new Error('Invalid authentication');
-    }
-
-    const requestBody = await req.json() as {
-      message?: string;
-      language?: Language;
-      conversationId?: string | null;
-      activeTrigger?: ActiveTrigger;
-      attachedFiles?: Attachment[];
-    };
-    const {
-      message,
-      language = 'en',
-      conversationId = null,
-      activeTrigger = 'chat',
-      attachedFiles = []
-    } = requestBody;
-
-    // Ensure strongly typed values for downstream usage
-    const lang: Language = language ?? 'en';
-    const trig: ActiveTrigger = activeTrigger ?? 'chat';
-
-    if (!message?.trim() && !attachedFiles?.length) {
-      throw new Error('Message or attachment required');
-    }
-
-    console.log("🚀 STREAMING: Starting AI response stream");
-
-    // Process attached files for document support
-    let processedContent = message;
-    if (attachedFiles?.length > 0) {
-      const documentContent = await processDocuments(attachedFiles);
-      if (documentContent) {
-        processedContent = `${message}\n\nDocument content:\n${documentContent}`;
-      }
-    }
-
-    // Create streaming response
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          await streamAIResponse(processedContent, lang, trig, controller, attachedFiles);
-        } catch (error) {
-          console.error("Streaming error:", error);
-          controller.error(error);
-        }
-      }
-    });
-
-    return new Response(stream, {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'text/event-stream; charset=utf-8',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
-
-  } catch (error) {
-    console.error("🚀 STREAMING ERROR:", error);
-    return new Response(JSON.stringify({
-      error: error.message || 'Streaming error'
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
-  }
-});
-
-// Document processing function
-async function processDocuments(attachedFiles: Attachment[]): Promise<string> {
-  let documentContent = '';
-  
-  for (const file of attachedFiles) {
-    try {
-      if (file.type === 'text/plain' && file.content) {
-        // Handle TXT files
-        const textContent = atob(file.content);
-        documentContent += `\n[${file.name}]:\n${textContent}\n`;
-      } else if (file.type === 'application/pdf' && file.content) {
-        // For PDF, we'll extract text using a simple approach
-        // In production, you'd use a proper PDF parsing library
-        documentContent += `\n[${file.name}]: PDF file attached (content extraction not implemented yet)\n`;
-      } else if (file.type?.includes('document') && file.content) {
-        // Handle DOC files
-        documentContent += `\n[${file.name}]: Document file attached (content extraction not implemented yet)\n`;
-      }
-    } catch (error) {
-      console.warn(`Failed to process file ${file.name}:`, error);
->>>>>>> Stashed changes
     }
   }
   return '';
 }
 
-<<<<<<< Updated upstream
 function isPublicRoutableIp(ip: string): boolean {
   const v = (ip || '').trim();
   if (!v) return false;
@@ -604,15 +480,6 @@ async function streamGemini(
   onToken: (token: string) => void,
   systemInstruction?: string,
   generationConfig?: Record<string, unknown>
-=======
-// Ultra-fast streaming AI response
-async function streamAIResponse(
-  message: string,
-  language: Language,
-  activeTrigger: ActiveTrigger,
-  controller: ReadableStreamDefaultController,
-  attachedFiles: Attachment[] = []
->>>>>>> Stashed changes
 ) {
   const key = getGeminiApiKey();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
@@ -635,7 +502,6 @@ async function streamAIResponse(
     throw new Error(`Gemini error: ${resp.status} - ${t}`);
   }
 
-<<<<<<< Updated upstream
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -658,57 +524,6 @@ async function streamAIResponse(
           for (const p of parts) {
             const text = typeof p?.text === "string" ? p.text : undefined;
             if (text) onToken(text);
-=======
-  const startTime = Date.now();
-  let browsingUsed = false;
-  let browsingData: SearchAPIData | null = null;
-
-  // If Search mode, run Tavily and augment the user message
-  let effectiveMessage = message;
-  if (activeTrigger === 'search') {
-    try {
-      const searchRes = await executeRegularSearch(message, language) as RegularSearchResponse;
-      if (searchRes?.success && searchRes?.data) {
-        browsingUsed = true;
-        browsingData = searchRes.data;
-        const sourcesList = Array.isArray(searchRes.data.results)
-          ? searchRes.data.results
-              .map((r, i: number) => `${i + 1}. ${r.title || 'Source'} - ${r.url || ''}`)
-              .join("\n")
-          : '';
-        const instructEn = `\n\nUse the following search context and cite sources inline like [1], [2] when relevant. Start with a concise answer, then include a Sources section listing the URLs.\n\n`;
-        const instructAr = `\n\nاستخدم السياق التالي من نتائج البحث واذكر المصادر داخل النص مثل [1] و[2] عند الحاجة. ابدأ بإجابة مختصرة، ثم أضف قسمًا للمصادر يتضمن الروابط.\n\n`;
-        const preamble = language === 'ar' ? instructAr : instructEn;
-        const sourcesHeader = language === 'ar' ? 'المصادر:' : 'Sources:';
-        const answerHeader = language === 'ar' ? 'ملخص الإجابة:' : 'Answer Summary:';
-        const answer = searchRes.data.answer ? `${answerHeader} ${searchRes.data.answer}\n\n` : '';
-        const contextBlock = searchRes.context ? `${searchRes.context}\n\n` : '';
-        const sourcesBlock = sourcesList ? `${sourcesHeader}\n${sourcesList}\n\n` : '';
-        effectiveMessage = `${message}\n\n${preamble}${answer}${contextBlock}${sourcesBlock}`.trim();
-      }
-    } catch (e) {
-      // If search fails, continue without augmentation
-      console.warn('SEARCH pre-processing failed in stream:', e);
-    }
-  }
-
-  const systemPrompt = language === 'ar' 
-    ? `أنت WAKTI، مساعد ذكي متقدم. كن ودوداً ومفيداً ومختصراً في إجاباتك. استخدم نصاً عادياً واضحاً بدون رموز زائدة.`
-    : `You are WAKTI, an advanced AI assistant. Be friendly, helpful, and concise. Use clean, plain text without excessive formatting.`;
-
-  // Prepare messages with file support
-  let userContent: AIContent = effectiveMessage;
-  
-  if (attachedFiles?.length > 0) {
-    const contentParts: Exclude<AIContent, string> = [{ type: 'text', text: effectiveMessage }];
-    
-    for (const file of attachedFiles) {
-      if (file.type?.startsWith('image/') && file.content) {
-        contentParts.push({
-          type: 'image_url',
-          image_url: {
-            url: `data:${file.type};base64,${file.content}`
->>>>>>> Stashed changes
           }
         }
       } catch { /* ignore */ }
@@ -808,14 +623,7 @@ function buildSearchFollowupContents(
     else summaryLines.push(`- User: ${uText}`);
   }
 
-<<<<<<< Updated upstream
   const compactSummary = summaryLines.join('\n').slice(0, 1200);
-=======
-  const messages: AIMessage[] = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userContent }
-  ];
->>>>>>> Stashed changes
 
   if (compactSummary || lastUser || lastAssistant) {
     const ctx =
@@ -1108,9 +916,11 @@ When the user asks about something SPECIFIC, respond ONLY about that specific th
 - NEVER list everything when user asked about ONE specific thing
 - Be conversational and focused, not a data dump
 
-CRITICAL MULTI-LANGUAGE RULE
-- You are multilingual. Default to the UI language "${language}".
-- If the user asks for a translation or specifies a target language, RESPOND IN THAT TARGET LANGUAGE.
+🌐 LANGUAGE ENFORCEMENT (NON-NEGOTIABLE)
+- The UI language is "${language === 'ar' ? 'Arabic (العربية)' : 'English'}".
+- You MUST ALWAYS respond in ${language === 'ar' ? 'Arabic (العربية)' : 'English'}, regardless of what language the user writes in, unless they EXPLICITLY ask you to translate something or respond in a different language.
+- NEVER switch to English if the UI is Arabic. NEVER switch to Arabic if the UI is English.
+- This rule overrides everything. Even if the topic is technical, academic, or mathematical — respond in ${language === 'ar' ? 'Arabic' : 'English'}.
 ${personalSection}
 CRITICAL OUTPUT FORMAT
 - Markdown table: for structured multi-item results (≥3 items with attributes).
@@ -1586,39 +1396,12 @@ async function queryWolfram(input: string, timeoutMs: number = 4000): Promise<{ 
       }
     }
 
-<<<<<<< Updated upstream
     // Fallback: grab first non-input pod
     if (!answer) {
       for (const pod of pods) {
         if (pod.id !== 'Input' && pod.subpods?.[0]?.plaintext) {
           answer = pod.subpods[0].plaintext;
           break;
-=======
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          
-          if (data === '[DONE]') {
-            sendFinalEvent();
-            controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-            continue;
-          }
-
-          try {
-            const parsed = JSON.parse(data) as OpenAIStreamChunk;
-            const content = parsed.choices?.[0]?.delta?.content;
-            
-            if (content) {
-              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: content })}\n\n`));
-            }
-          } catch (e) {
-            // Skip malformed JSON
-          }
->>>>>>> Stashed changes
         }
       }
     }

@@ -18,12 +18,12 @@ interface ActivityDashboardProps {
   tasks: TRTask[];
 }
 
-const TIME_RANGES: { label: string; value: TimeRange }[] = [
-  { label: '1W', value: '1W' },
-  { label: '1M', value: '1M' },
-  { label: '3M', value: '3M' },
-  { label: '6M', value: '6M' },
-  { label: '1Y', value: '1Y' },
+const getTimeRanges = (language: 'en' | 'ar'): { label: string; value: TimeRange }[] => [
+  { label: language === 'ar' ? 'أسبوع' : '1W', value: '1W' },
+  { label: language === 'ar' ? 'شهر' : '1M', value: '1M' },
+  { label: language === 'ar' ? '3 شهور' : '3M', value: '3M' },
+  { label: language === 'ar' ? '6 شهور' : '6M', value: '6M' },
+  { label: language === 'ar' ? 'سنة' : '1Y', value: '1Y' },
 ];
 
 const ChartTooltip = ({ active, payload, label }: any) => {
@@ -144,7 +144,7 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
         </p>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-0.5 p-1 rounded-xl bg-slate-100 dark:bg-white/[0.06]">
-            {TIME_RANGES.map(({ label, value }) => (
+            {getTimeRanges(language).map(({ label, value }) => (
               <button key={value} onClick={() => setTimeRange(value)}
                 className={`h-6 px-2.5 rounded-lg text-[11px] font-bold transition-all touch-manipulation
                   ${timeRange === value
