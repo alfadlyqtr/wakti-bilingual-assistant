@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { TRTask } from '@/services/trService';
-import { ActivityMonitor } from './ActivityMonitor';
+import { TRSharedService } from '@/services/trSharedService';
 import { useTheme } from '@/providers/ThemeProvider';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
@@ -47,7 +47,48 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
   const [visitorName, setVisitorName] = useState('');
   // Snooze request state
   const [snoozeSubtask, setSnoozeSubtask] = useState<{ id: string; title: string } | null>(null); // null = main task
-  const [subtasksOpen, setSubtasksOpen] = useState(false); // Collapse state
+  // Mark all pending subtasks as completed at once
+  const handleMarkAllDone = async () => {
+    const pending = subtasks.filter(s => !s.completed);
+    if (pending.length === 0) return;
+    
+    // Optimistic update
+    setSubtasks(prev => prev.map(s => 
+      pending.some(p => p.id === s.id) ? { ...s, completed: true } : s
+    ));
+    
+    try {
+      await Promise.all(
+        pending.map(subtask => 
+          TRSharedService.markSubtaskCompleted(taskId, subtask.id, visitorName, true)
+        )
+      );
+      toast.success(
+        language === 'ar' ? `تم إنجاز ${pending.length} مهام فرعية` : `${pending.length} subtasks marked done`,
+        { duration: 2000 }
+      );
+    } catch (error) {
+      // Revert
+      setSubtasks(prev => prev.map(s => 
+        pending.some(p => p.id === s.id) ? { ...s, completed: false } : s
+      ));
+      toast.error(language === 'ar' ? 'فشل تحديث بعض المهام' : 'Failed to update some subtasks', { duration: 2000 });
+    }
+  };
+
+  // Assignee requests task completion (requires owner approval)
+  const handleRequestTaskCompletion = async () => {
+    try {
+      await TRSharedService.requestTaskCompletion(taskId, visitorName);
+      toast.success(
+        language === 'ar' ? 'تم إرسال طلب إكمال المهمة للمالك' : 'Completion request sent to owner',
+        { duration: 3000 }
+      );
+    } catch (error) {
+      console.error('Error requesting task completion:', error);
+      toast.error(language === 'ar' ? 'فشل إرسال الطلب' : 'Failed to send request', { duration: 2000 });
+    }
+  };
   const [snoozeDate, setSnoozeDate] = useState('');
   const [snoozeTime, setSnoozeTime] = useState('');
   const [snoozeReason, setSnoozeReason] = useState('');
@@ -171,6 +212,28 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string }> =
         {/* SUBTASKS tab */}
         {activeTab === 'subtasks' && (
           <div className="space-y-3 pt-1">
+            {/* Action buttons */}
+            {subtasks.filter(s => !s.completed).length > 0 && (
+              <div className="space-y-2">
+                <button
+                  onClick={handleMarkAllDone}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg
+                    bg-emerald-500 hover:bg-emerald-600 text-white
+                    text-[12px] font-bold transition-all active:scale-[0.98] touch-manipulation">
+                  <Check className="h-4 w-4" />
+                  {language === 'ar' ? 'تحديد الكل كمكتمل' : 'Mark All Done'}
+                </button>
+                <button
+                  onClick={handleRequestTaskCompletion}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg
+                    bg-amber-500 hover:bg-amber-600 text-white
+                    text-[12px] font-bold transition-all active:scale-[0.98] touch-manipulation">
+                  <AlertTriangle className="h-4 w-4" />
+                  {language === 'ar' ? 'طلب إكمال المهمة' : 'Request Task Completion'}
+                </button>
+              </div>
+            )}
+
             {/* Subtask tabs */}
             <div className="flex gap-3 px-1">
               <button onClick={() => setSubtaskTab('pending')}

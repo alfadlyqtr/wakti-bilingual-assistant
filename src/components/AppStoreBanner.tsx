@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 
 // App Store URL
 const APP_STORE_URL = 'https://apps.apple.com/us/app/wakti-ai/id6755150700';
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=ai.wakti.app';
 
 // Detect platform based on user agent only (not Natively SDK)
 function getPlatform(): 'ios' | 'android' | 'desktop' {
@@ -139,24 +140,24 @@ export function AppStoreBanner({
             </a>
           )}
 
-          {/* Google Play Badge - Show on Android and Desktop (disabled/coming soon) */}
+          {/* Google Play Badge - Clickable link */}
           {(platform === 'android' || platform === 'desktop') && (
-            <div className="flex-shrink-0 relative group">
-              <img 
-                src="/lovable-uploads/google download.png" 
+            <a
+              href={PLAY_STORE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-shrink-0 transition-transform hover:scale-105 active:scale-95"
+            >
+              <img
+                src="/lovable-uploads/google download.png"
                 alt="Get it on Google Play"
-                className="h-10 w-auto rounded-lg object-contain opacity-50 cursor-not-allowed"
-                style={{ 
+                className="h-10 w-auto rounded-lg object-contain"
+                style={{
                   backgroundColor: 'transparent',
-                  maxWidth: '135px',
-                  filter: 'grayscale(30%)'
+                  maxWidth: '135px'
                 }}
               />
-              {/* Coming soon tooltip */}
-              <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-foreground text-background text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                Coming soon
-              </div>
-            </div>
+            </a>
           )}
 
           {/* Dismiss button */}
