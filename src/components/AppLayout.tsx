@@ -1,8 +1,4 @@
-<<<<<<< Updated upstream
 import React, { createContext, useContext, useState, useEffect } from "react";
-=======
-import React, { createContext, useContext } from "react";
->>>>>>> Stashed changes
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { AppHeader } from "@/components/AppHeader";
 import { DesktopLayout } from "@/components/layouts/DesktopLayout";
@@ -565,32 +561,9 @@ function WelcomeTrialPopup() {
   );
 }
 
-interface UnreadContextType {
-  unreadTotal: number;
-  taskCount: number;
-  maw3dEventCount: number;
-  contactCount: number;
-  sharedTaskCount: number;
-  perContactUnread: Record<string, number>;
-  refetch: () => void;
-}
-
-const UnreadContext = createContext<UnreadContextType>({
-  unreadTotal: 0,
-  taskCount: 0,
-  maw3dEventCount: 0,
-  contactCount: 0,
-  sharedTaskCount: 0,
-  perContactUnread: {},
-  refetch: () => {}
-});
-
-export const useUnreadContext = () => useContext(UnreadContext);
-
 export function AppLayout({ children }: AppLayoutProps) {
   // Single instance of useUnreadMessages hook - the only one in the entire app
   const unreadData = useUnreadMessages();
-<<<<<<< Updated upstream
   
   // Unified notification system - subscribes to notification_history for all notification types
   // including task_due, reminder_due, messages, contacts, RSVPs, etc.
@@ -604,8 +577,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   React.useEffect(() => {
     setupNotificationClickHandler(navigate);
   }, [navigate]);
-=======
->>>>>>> Stashed changes
 
   const { isMobile } = useIsMobile();
   const { isTablet } = useIsTablet();
@@ -714,7 +685,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Desktop
   return (
     <UnreadContext.Provider value={unreadData}>
-<<<<<<< Updated upstream
       <style>
         {`
           body.paywall-open .app-header-fixed{pointer-events:none !important; z-index:0 !important;}
@@ -724,21 +694,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         <WelcomeTrialPopup />
         <PresenceBeacon />
         <DesktopLayout>{content}</DesktopLayout>
-=======
-      <ProtectedRoute>
-        <div className="min-h-screen bg-background">
-          <AppHeader unreadTotal={unreadData.unreadTotal} />
-          <main className="pb-16">
-            {children}
-          </main>
-          <MobileNav 
-            taskCount={unreadData.taskCount}
-            maw3dEventCount={unreadData.maw3dEventCount}
-            contactCount={unreadData.contactCount}
-            sharedTaskCount={unreadData.sharedTaskCount}
-          />
-        </div>
->>>>>>> Stashed changes
       </ProtectedRoute>
     </UnreadContext.Provider>
   );

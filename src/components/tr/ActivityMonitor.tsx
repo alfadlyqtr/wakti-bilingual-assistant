@@ -368,7 +368,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   }, [language]);
 
   const handleReply = async (taskId: string) => {
-    if (!replyContent.trim() || !replyingTo) {
+    if (!replyContent.trim()) {
       return;
     }
 
@@ -376,11 +376,11 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       await TRSharedService.addComment(taskId, ownerName, replyContent.trim());
       setReplyContent('');
       setReplyingTo(null);
-      toast.success(t('reply', language) + ' sent');
+      toast.success(language === 'ar' ? 'تم إرسال الرسالة' : 'Message sent');
       loadAllData(true);
     } catch (error) {
       console.error('Error replying to comment:', error);
-      toast.error('Failed to send reply');
+      toast.error(language === 'ar' ? 'فشل إرسال الرسالة' : 'Failed to send message');
     }
   };
 
@@ -1573,11 +1573,34 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
                     {/* ── COMMENTS tab ── */}
                     {activeView === 'comments' && (
-                      <div className="space-y-2 pt-1">
+                      <div className="space-y-3 pt-1">
+                        {/* New comment input */}
+                        <div className="flex gap-2 items-start bg-slate-50 dark:bg-white/[0.02] p-2 rounded-xl border border-slate-200/60 dark:border-white/[0.06]">
+                          <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-[12px] font-black text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                            {language === 'ar' ? 'أنت' : 'You'}
+                          </div>
+                          <div className="flex-1 relative">
+                            <Textarea 
+                              value={replyContent} 
+                              onChange={e => setReplyContent(e.target.value)} 
+                              placeholder={language === 'ar' ? 'اكتب رسالة...' : 'Type a message...'} 
+                              rows={1} 
+                              className="text-sm min-h-[36px] max-h-[120px] resize-y py-2 pr-10 bg-transparent border-none focus-visible:ring-0 px-0 shadow-none" 
+                            />
+                            <button 
+                              onClick={() => handleReply(task.id)} 
+                              disabled={!replyContent.trim()}
+                              className="absolute right-0 bottom-1 p-1.5 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                            >
+                              <Send className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+
                         {stats.comments.length === 0 ? (
                           <p className="text-center py-6 text-muted-foreground/50 text-[13px]">{language === 'ar' ? 'لا توجد تعليقات بعد' : 'No comments yet'}</p>
                         ) : (
-                          <div className="space-y-2 max-h-[320px] overflow-y-auto">
+                          <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
                             {stats.comments.sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map(comment => (
                               <div key={comment.id} className="rounded-xl p-3 bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06]">
                                 <div className="flex items-center gap-2 mb-1.5">
