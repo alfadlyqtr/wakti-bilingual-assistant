@@ -20,7 +20,7 @@ interface Assignment {
   status: 'pending' | 'approved' | 'denied';
   requested_at: string;
   responded_at: string | null;
-  task?: { id: string; title: string; share_link: string; task_code: string | null; completed: boolean; due_date: string | null; priority: string | null; user_id: string; };
+  task?: { id: string; title: string; share_link: string; task_code: string | null; completed: boolean; due_date: string | null; due_time: string | null; priority: string | null; user_id: string; is_shared: boolean; };
 }
 
 interface SharedTasksTabProps {
@@ -633,7 +633,7 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
     try {
       const { data } = await supabase
         .from('tr_task_assignments')
-        .select('id,task_id,assignee_id,assignee_name,status,requested_at,responded_at,task:tr_tasks(id,title,share_link,task_code,completed,due_date,priority,user_id)')
+        .select('id,task_id,assignee_id,assignee_name,status,requested_at,responded_at,task:tr_tasks(id,title,share_link,task_code,completed,due_date,due_time,priority,user_id,is_shared)')
         .eq('assignee_id', currentUserId)
         .order('requested_at', { ascending: false });
       setAssignments((data || []) as Assignment[]);
@@ -964,7 +964,12 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
                 const isExpanded = expandedAssigned.has(a.id);
                 // Use live completed state if available, fall back to join data
                 const isCompleted = liveTaskCompleted[a.task_id] ?? a.task?.completed ?? false;
-                const isOverdue = a.task?.due_date && new Date(`${a.task.due_date}T23:59:59`) < new Date() && !isCompleted;
+                const isOverdue = a.task?.due_date && !isCompleted && (() => {
+                  const dueStr = a.task.due_time
+                    ? `${a.task.due_date}T${a.task.due_time}`
+                    : `${a.task.due_date}T23:59:59`;
+                  return new Date(dueStr) < new Date();
+                })();
                 return (
                   <div key={a.id} className={`rounded-2xl overflow-hidden bg-white dark:bg-white/[0.04] border ${isCompleted ? 'border-emerald-200/80 dark:border-emerald-500/30' : isOverdue ? 'border-red-200/80 dark:border-red-500/30' : 'border-slate-200/80 dark:border-white/[0.07]'} shadow-[0_2px_16px_hsla(0,0%,0%,0.07)] dark:shadow-[0_2px_16px_hsla(0,0%,0%,0.4)] transition-colors duration-300`}>
                     <button onClick={() => setExpandedAssigned(prev => { const n = new Set(prev); isExpanded ? n.delete(a.id) : n.add(a.id); return n; })}
@@ -972,11 +977,16 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
                       <div className={`flex-shrink-0 w-2.5 h-2.5 rounded-full ${isCompleted ? 'bg-emerald-400' : isOverdue ? 'bg-red-400' : 'bg-teal-400'}`} />
                       <div className="flex-1 min-w-0">
                         <p className="text-[14px] font-bold text-foreground truncate">{a.task?.title || '...'}</p>
-                        <div className="flex items-center gap-1.5 mt-1">
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          {a.task?.is_shared && (
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-500/20 text-[10px] font-black text-indigo-600 dark:text-indigo-400">
+                              {language === 'ar' ? 'مهمة مشتركة' : 'Shared Task'}
+                            </span>
+                          )}
                           {a.task?.due_date && !isCompleted && (
-                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.1] text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                            <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${isOverdue ? 'bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400' : 'bg-slate-100 dark:bg-white/[0.1] text-slate-600 dark:text-slate-300'}`}>
                               <Clock className="h-3 w-3" />
-                              {format(parseISO(a.task.due_date), 'MMM dd')} {a.task.due_time && `, ${a.task.due_time}`}
+                              {format(parseISO(a.task.due_date), 'MMM dd')}{a.task.due_time ? `, ${a.task.due_time}` : ''}
                             </span>
                           )}
                           {isCompleted && (
@@ -986,7 +996,7 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
                           )}
                           {isOverdue && (
                             <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-500/20 text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-wider">
-                              {language === 'ar' ? 'متأخر' : 'Overdue'}
+                              {language === 'ar' ? 'متأخر' : 'OVERDUE'}
                             </span>
                           )}
                         </div>
