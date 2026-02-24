@@ -7,6 +7,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { TRTask } from '@/services/trService';
 import { TRSharedService } from '@/services/trSharedService';
+import { ActivityMonitor } from './ActivityMonitor';
 import { useTheme } from '@/providers/ThemeProvider';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
