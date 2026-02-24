@@ -787,7 +787,7 @@ export default function MusicStudio() {
       key: 'qrcode',
       icon: <QrCode className="h-6 w-6" />,
       titleEn: 'QR Code',
-      titleAr: 'رمز QR',
+      titleAr: 'كود QR رموز',
       descEn: 'Create custom QR codes for links, contacts, Wi-Fi & more.',
       descAr: 'أنشئ رموز QR مخصصة للروابط وجهات الاتصال والواي فاي والمزيد.',
       cardBg: 'bg-gradient-to-br from-sky-50 via-blue-50/80 to-cyan-50 dark:from-sky-950/40 dark:via-blue-950/30 dark:to-cyan-950/40',
@@ -804,12 +804,12 @@ export default function MusicStudio() {
           { key: 'music' as const, icon: <Music className="h-4 w-4" />, labelEn: 'Music', labelAr: 'الموسيقى' },
           { key: 'video' as const, icon: <Video className="h-4 w-4" />, labelEn: 'Video', labelAr: 'الفيديو' },
           { key: 'image' as const, icon: <ImageIcon className="h-4 w-4" />, labelEn: 'Image', labelAr: 'الصورة' },
-          { key: 'qrcode' as const, icon: <QrCode className="h-4 w-4" />, labelEn: 'QR Code', labelAr: 'رمز QR' },
+          { key: 'qrcode' as const, icon: <QrCode className="h-4 w-4" />, labelEn: 'QR Code', labelAr: 'كود QR رموز' },
         ].map((tab) => (
           <button
             key={tab.key}
             onClick={() => setMainTab(tab.key)}
-            className={`flex items-center justify-center gap-1.5 px-2 md:px-4 py-2.5 rounded-xl font-semibold text-xs md:text-sm transition-all active:scale-95 ${
+            className={`flex items-center justify-center gap-1.5 px-2 md:px-4 py-2.5 rounded-xl font-semibold text-xs md:text-sm transition-all active:scale-95 whitespace-nowrap ${
               mainTab === tab.key
                 ? 'bg-[#060541] dark:bg-sky-600 text-white shadow-[0_4px_12px_hsla(220,60%,20%,0.3)] dark:shadow-[0_4px_12px_hsla(200,80%,50%,0.3)]'
                 : 'bg-white dark:bg-white/[0.06] text-foreground hover:bg-gray-100 dark:hover:bg-white/[0.1] shadow-[0_2px_6px_hsla(0,0%,0%,0.08)] dark:shadow-[0_2px_6px_hsla(0,0%,0%,0.3)] border border-gray-200 dark:border-white/[0.1]'

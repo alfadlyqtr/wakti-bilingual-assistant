@@ -286,16 +286,18 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string; onC
               </div>
             )}
             {/* Action buttons — only show when task is NOT completed */}
-            {!taskCompleted && subtasks.filter(s => !s.completed).length > 0 && (
+            {!taskCompleted && (
               <div className="space-y-2">
-                <button
-                  onClick={handleMarkAllDone}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg
-                    bg-emerald-500 hover:bg-emerald-600 text-white
-                    text-[12px] font-bold transition-all active:scale-[0.98] touch-manipulation">
-                  <Check className="h-4 w-4" />
-                  {language === 'ar' ? 'تحديد الكل كمكتمل' : 'Mark All Done'}
-                </button>
+                {subtasks.filter(s => !s.completed).length > 0 && (
+                  <button
+                    onClick={handleMarkAllDone}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg
+                      bg-emerald-500 hover:bg-emerald-600 text-white
+                      text-[12px] font-bold transition-all active:scale-[0.98] touch-manipulation">
+                    <Check className="h-4 w-4" />
+                    {language === 'ar' ? 'تحديد الكل كمكتمل' : 'Mark All Done'}
+                  </button>
+                )}
                 <button
                   onClick={handleRequestTaskCompletion}
                   disabled={hasPendingCompletionRequest}

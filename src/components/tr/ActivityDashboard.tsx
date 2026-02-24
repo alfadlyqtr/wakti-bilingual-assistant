@@ -1,12 +1,13 @@
 // @ts-nocheck
 import React, { useState, useMemo } from 'react';
+import { isAfter } from 'date-fns';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie
 } from 'recharts';
 import {
   CheckCircle2, Clock, AlertTriangle, TrendingUp,
-  ListChecks, RefreshCw, LayoutGrid, ChevronDown
+  ListChecks, RefreshCw, LayoutGrid, ChevronDown, Users, User
 } from 'lucide-react';
 import { TRTask } from '@/services/trService';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -84,7 +85,19 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
         if (subs.length === 0) return null;
         const done = subs.filter(s => s.completed).length;
         const pct = Math.round((done / subs.length) * 100);
-        return { id: t.id, title: t.title, total: subs.length, done, pct, taskCompleted: t.completed };
+        const now = new Date();
+        const isOverdue = !t.completed && t.due_date && 
+          isAfter(now, new Date(`${t.due_date}T${t.due_time || '23:59:59'}`));
+        return { 
+          id: t.id, 
+          title: t.title, 
+          total: subs.length, 
+          done, 
+          pct, 
+          taskCompleted: t.completed,
+          isShared: t.is_shared,
+          isOverdue
+        };
       })
       .filter(Boolean)
       .sort((a, b) => a.pct - b.pct), // least progress first
@@ -233,30 +246,91 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
             {language === 'ar' ? 'في الانتظار' : 'In Progress / Waiting'}
           </p>
         </div>
+
+        {/* Completed Late card */}
+        <div className="rounded-2xl p-4 bg-gradient-to-br from-amber-50 to-orange-100/60 dark:from-amber-500/20 dark:to-orange-600/10
+          border border-amber-200/80 dark:border-amber-500/30
+          shadow-[0_4px_20px_hsla(35,95%,55%,0.14)] dark:shadow-[0_4px_28px_hsla(35,95%,55%,0.22)]">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-amber-500/20 text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-amber-400/70 uppercase tracking-wider">
+              {language === 'ar' ? 'تمت متأخرة' : 'Completed Late'}
+            </span>
+          </div>
+          <p className="text-3xl font-black text-amber-700 dark:text-amber-300">{kpis.completedLateCount || 0}</p>
+          {kpis.avgDelayHours > 0 && (
+            <p className="text-[11px] font-semibold text-amber-600/70 dark:text-amber-400/70 mt-0.5">
+              {language === 'ar' 
+                ? `متوسط التأخير: ${Math.round(kpis.avgDelayHours)} ساعة`
+                : `Avg delay: ${Math.round(kpis.avgDelayHours)} hrs`}
+            </p>
+          )}
+          {kpis.avgDelayHours === 0 && (
+            <p className="text-[11px] font-semibold text-muted-foreground/70 mt-0.5">
+              {language === 'ar' ? 'تمت بعد الموعد' : 'Done after due date'}
+            </p>
+          )}
+        </div>
+
+        {/* Overdue KPI Card */}
+        {kpis.late > 0 && (
+          <div className="rounded-2xl p-4 bg-gradient-to-br from-red-50 to-red-100/60 dark:from-red-500/20 dark:to-red-600/10
+            border border-red-200/80 dark:border-red-500/30
+            shadow-[0_4px_20px_hsla(0,80%,55%,0.14)] dark:shadow-[0_4px_28px_hsla(0,80%,55%,0.22)]">
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-500/20 text-red-600 dark:text-red-400">
+                <AlertTriangle className="h-4 w-4" />
+              </div>
+              <span className="text-[10px] font-bold text-red-400/70 uppercase tracking-wider">
+                {language === 'ar' ? 'متأخرة' : 'Overdue'}
+              </span>
+            </div>
+            <p className="text-3xl font-black text-red-700 dark:text-red-300">{kpis.late}</p>
+            <p className="text-[11px] font-semibold text-muted-foreground/70 mt-0.5">
+              {language === 'ar' ? 'مهام متأخرة' : 'Past due date'}
+            </p>
+          </div>
+        )}
+
+        {/* Shared Tasks card */}
+        <div className="rounded-2xl p-4 bg-gradient-to-br from-indigo-50 to-purple-100/60 dark:from-indigo-500/20 dark:to-purple-600/10
+          border border-indigo-200/80 dark:border-indigo-500/30
+          shadow-[0_4px_20px_hsla(243,84%,55%,0.14)] dark:shadow-[0_4px_28px_hsla(243,84%,55%,0.22)]">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-indigo-500/20 text-indigo-600 dark:text-indigo-400">
+              <Users className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-indigo-400/70 uppercase tracking-wider">
+              {language === 'ar' ? 'مشتركة' : 'Shared'}
+            </span>
+          </div>
+          <p className="text-3xl font-black text-indigo-700 dark:text-indigo-300">{kpis.sharedTaskCount || 0}</p>
+          <p className="text-[11px] font-semibold text-muted-foreground/70 mt-0.5">
+            {language === 'ar' ? 'مهام مشتركة' : 'Shared Tasks'}
+          </p>
+        </div>
+
+        {/* Own Tasks card */}
+        <div className="rounded-2xl p-4 bg-gradient-to-br from-teal-50 to-cyan-100/60 dark:from-teal-500/20 dark:to-cyan-600/10
+          border border-teal-200/80 dark:border-teal-500/30
+          shadow-[0_4px_20px_hsla(170,75%,45%,0.14)] dark:shadow-[0_4px_28px_hsla(170,75%,45%,0.22)]">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-teal-500/20 text-teal-600 dark:text-teal-400">
+              <User className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-teal-400/70 uppercase tracking-wider">
+              {language === 'ar' ? 'شخصية' : 'Own'}
+            </span>
+          </div>
+          <p className="text-3xl font-black text-teal-700 dark:text-teal-300">{kpis.ownTaskCount || 0}</p>
+          <p className="text-[11px] font-semibold text-muted-foreground/70 mt-0.5">
+            {language === 'ar' ? 'مهام شخصية' : 'Personal Tasks'}
+          </p>
+        </div>
       </div>}
 
-      {/* Late tasks — full width alert strip if any */}
-      {kpis.late > 0 && (
-        <div className="rounded-2xl px-4 py-3.5 flex items-center gap-3
-          bg-gradient-to-r from-red-50 to-orange-50/60 dark:from-red-500/15 dark:to-orange-500/10
-          border border-red-200/80 dark:border-red-500/30
-          shadow-[0_4px_20px_hsla(0,80%,55%,0.14)] dark:shadow-[0_4px_28px_hsla(0,80%,55%,0.22)]">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-500/20 text-red-600 dark:text-red-400 flex-shrink-0">
-            <AlertTriangle className="h-4 w-4" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-black text-red-700 dark:text-red-300">
-              {kpis.late} {language === 'ar' ? (kpis.late === 1 ? 'مهمة متأخرة' : 'مهام متأخرة') : (kpis.late === 1 ? 'Overdue Task' : 'Overdue Tasks')}
-            </p>
-            <p className="text-[11px] text-red-500/70 dark:text-red-400/60">
-              {language === 'ar' ? 'تجاوزت موعد الاستحقاق' : 'Past their due date — needs attention'}
-            </p>
-          </div>
-          <span className="text-3xl font-black text-red-600 dark:text-red-400 flex-shrink-0">{kpis.late}</span>
-        </div>
-      )}
-
-      {/* ── Subtask progress card ── */}
       {kpis.totalSub > 0 && (
         <div className="rounded-2xl overflow-hidden
           bg-white dark:bg-white/[0.04]
@@ -323,13 +397,44 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
                 : row.pct >= 50
                   ? 'text-indigo-600 dark:text-indigo-400'
                   : 'text-amber-600 dark:text-amber-400';
+              const isTaskPartiallyDone = row.taskCompleted && row.pct < 100;
+              const titleClass = row.taskCompleted && row.pct === 100
+                ? 'line-through text-muted-foreground/50'
+                : isTaskPartiallyDone
+                  ? 'line-through text-amber-600/70 dark:text-amber-400/70'
+                  : 'text-foreground';
               return (
                 <div key={row.id} className="px-4 py-3 flex items-center gap-3">
                   {/* Task title */}
                   <div className="flex-1 min-w-0">
-                    <p className={`text-[12px] font-semibold truncate ${row.taskCompleted ? 'line-through text-muted-foreground/50' : 'text-foreground'}`}>
-                      {row.title}
-                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className={`text-[12px] font-semibold truncate ${titleClass}`}>
+                        {row.title}
+                      </p>
+                      {/* Badges */}
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {!row.isShared && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-400">
+                            {language === 'ar' ? 'أنا' : 'Mine'}
+                          </span>
+                        )}
+                        {row.isShared && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400">
+                            {language === 'ar' ? 'مشترك' : 'Shared'}
+                          </span>
+                        )}
+                        {isTaskPartiallyDone && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400" title={language === 'ar' ? 'المهمة منجزة لكن المهام الفرعية غير مكتملة' : 'Task done but subtasks incomplete'}>
+                            ⚠️ {language === 'ar' ? 'المهام الفرعية غير مكتملة' : 'sub tasks not all done'}
+                          </span>
+                        )}
+                        {row.isOverdue && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400">
+                            {language === 'ar' ? 'متأخر' : 'Late'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                     {/* Mini progress bar */}
                     <div className="h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden mt-1.5">
                       <div className={`h-full rounded-full transition-all duration-500 ${barColor}`}
@@ -387,6 +492,10 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
                   <linearGradient id="gRedTask" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="hsl(0,85%,62%)" stopOpacity={0.22} />
                     <stop offset="95%" stopColor="hsl(0,85%,62%)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gAmberTask" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(35,95%,55%)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="hsl(35,95%,55%)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsla(0,0%,50%,0.08)" />
@@ -468,6 +577,10 @@ export const ActivityDashboard: React.FC<ActivityDashboardProps> = ({ tasks }) =
                   <linearGradient id="gRedSub" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="hsl(0,85%,62%)" stopOpacity={0.22} />
                     <stop offset="95%" stopColor="hsl(0,85%,62%)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gAmberSub" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(35,95%,55%)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="hsl(35,95%,55%)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsla(0,0%,50%,0.08)" />

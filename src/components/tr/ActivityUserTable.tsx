@@ -109,9 +109,10 @@ export const ActivityUserTable: React.FC<ActivityUserTableProps> = ({ userStats 
                       : language === 'ar' ? 'لم يكن نشطاً' : 'Never active'}
                   </p>
                 </div>
-                <div className={`ml-1 flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center
-                  bg-slate-100 dark:bg-white/[0.06] transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
-                  <ChevronDown className="h-3 w-3 text-muted-foreground/60" />
+                <div className={`ml-1 flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center
+                  bg-indigo-100 dark:bg-indigo-500/20 border border-indigo-200 dark:border-indigo-500/30
+                  transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
+                  <ChevronDown className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
                 </div>
               </div>
 

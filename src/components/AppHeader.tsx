@@ -287,7 +287,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
         className={cn(
           "relative flex items-center justify-between",
           isMobile
-            ? "mx-0 h-14 rounded-none border-b border-border bg-background/90 px-2 py-2 shadow-md"
+            ? "mx-0 h-16 rounded-none border-b border-border bg-background/90 px-2 shadow-md"
             : "mx-auto h-16 max-w-[1280px] rounded-[2rem] border border-border/60 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70 px-4 py-2"
         )}
         style={
