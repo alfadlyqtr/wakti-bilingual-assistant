@@ -187,7 +187,7 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string; onC
   }, [taskId]);
 
   const comments = responses.filter(r => r.response_type === 'comment');
-  const activityLog = responses.filter(r => r.response_type !== 'comment');
+  const activityLog = responses.filter(r => r.response_type !== 'comment' && r.response_type !== 'visit');
   const activityPeople = [...new Set(responses.map(r => r.visitor_name).filter(Boolean))];
   const completedCount = subtasks.filter(s => s.completed).length;
 

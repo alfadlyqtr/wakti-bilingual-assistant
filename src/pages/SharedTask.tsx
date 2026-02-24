@@ -134,11 +134,28 @@ export default function SharedTask() {
     }
   };
 
-  const handleNameSubmit = (name: string) => {
+  const handleNameSubmit = async (name: string) => {
     if (task) {
       // Store the name using the task ID
       VisitorIdentityService.storeName(task.id, name);
-      console.log('Stored name for task', task.id, ':', name);
+      // Insert a visit ping so owner can see this person in the People tab immediately
+      try {
+        const { data: existing } = await supabase
+          .from('tr_shared_responses')
+          .select('id')
+          .eq('task_id', task.id)
+          .eq('visitor_name', name)
+          .eq('response_type', 'visit')
+          .maybeSingle();
+        if (!existing) {
+          await supabase.from('tr_shared_responses').insert({
+            task_id: task.id,
+            visitor_name: name,
+            response_type: 'visit',
+            is_completed: false,
+          });
+        }
+      } catch (_e) { /* non-critical */ }
     }
     setVisitorName(name);
     setShowNameModal(false);

@@ -1605,11 +1605,11 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                     {/* ── ACTIVITY tab ── */}
                     {activeView === 'activity' && (
                       <div className="space-y-1.5 pt-1">
-                        {stats.allResponses.filter(r => r.response_type !== 'comment').length === 0 ? (
+                        {stats.allResponses.filter(r => r.response_type !== 'comment' && r.response_type !== 'visit').length === 0 ? (
                           <p className="text-center py-6 text-muted-foreground/50 text-[13px]">{t('noActivityYet', language)}</p>
                         ) : (
                           <div className="space-y-1.5 max-h-[280px] overflow-y-auto">
-                            {stats.allResponses.filter(r => r.response_type !== 'comment').sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 30).map(activity => (
+                            {stats.allResponses.filter(r => r.response_type !== 'comment' && r.response_type !== 'visit').sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 30).map(activity => (
                               <div key={activity.id} className="flex items-start gap-2.5 px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/50 dark:border-white/[0.05]">
                                 {getActivityIcon(activity.response_type)}
                                 <div className="flex-1 min-w-0">
