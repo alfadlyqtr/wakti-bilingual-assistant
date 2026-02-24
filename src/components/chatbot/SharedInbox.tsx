@@ -79,6 +79,8 @@ export default function SharedInbox({ bots, isRTL }: Props) {
   const [messages, setMessages] = useState<ChatbotMessage[]>([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [replyText, setReplyText] = useState('');
+  // Mobile: 'list' | 'chat'
+  const [mobilePanel, setMobilePanel] = useState<'list' | 'chat'>('list');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Load conversations for selected bot(s)
@@ -145,11 +147,20 @@ export default function SharedInbox({ bots, isRTL }: Props) {
     resolved: conversations.filter(c => c.status === 'resolved').length,
   };
 
+  const handleSelectConv = (conv: ChatbotConversation) => {
+    setSelectedConv(conv);
+    setMobilePanel('chat');
+  };
+
   return (
     <div className="flex h-full overflow-hidden bg-background">
 
-      {/* ── COL 1: Bot Filter Sidebar ── */}
-      <div className="w-[64px] shrink-0 flex flex-col items-center py-3 gap-2 border-r border-border/40 bg-muted/20">
+      {/* ── COL 1: Bot Filter Sidebar — hidden on mobile when chat open ── */}
+      <div className={cn(
+        "shrink-0 flex flex-col items-center py-3 gap-2 border-r border-border/40 bg-muted/20",
+        "w-[48px] md:w-[64px]",
+        mobilePanel === 'chat' ? "hidden md:flex" : "flex"
+      )}>
         {/* All bots */}
         <button
           onClick={() => setSelectedBotId('all')}
@@ -189,8 +200,12 @@ export default function SharedInbox({ bots, isRTL }: Props) {
         ))}
       </div>
 
-      {/* ── COL 2: Conversation List ── */}
-      <div className="w-[280px] shrink-0 flex flex-col border-r border-border/40 overflow-hidden">
+      {/* ── COL 2: Conversation List — hidden on mobile when chat open ── */}
+      <div className={cn(
+        "shrink-0 flex flex-col border-r border-border/40 overflow-hidden",
+        "w-full md:w-[280px] lg:w-[320px]",
+        mobilePanel === 'chat' ? "hidden md:flex" : "flex"
+      )}>
         {/* Header */}
         <div className="px-3 pt-3 pb-2 shrink-0">
           <div className="flex items-center justify-between mb-2">
@@ -263,7 +278,7 @@ export default function SharedInbox({ bots, isRTL }: Props) {
               return (
                 <button
                   key={conv.id}
-                  onClick={() => setSelectedConv(conv)}
+                  onClick={() => handleSelectConv(conv)}
                   className={cn(
                     "w-full flex items-start gap-2.5 px-3 py-3 text-left border-b border-border/20 transition-all duration-150",
                     isSelected
@@ -307,14 +322,25 @@ export default function SharedInbox({ bots, isRTL }: Props) {
         </div>
       </div>
 
-      {/* ── COL 3: Chat View ── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      {/* ── COL 3: Chat View — full screen on mobile when open ── */}
+      <div className={cn(
+        "flex-1 flex flex-col min-w-0 overflow-hidden",
+        mobilePanel === 'list' ? "hidden md:flex" : "flex"
+      )}>
         {!selectedConv ? (
           <NoChatSelected isRTL={isRTL} />
         ) : (
           <>
             {/* Chat header */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-border/40 bg-background shrink-0">
+            <div className="flex items-center gap-3 px-3 py-3 border-b border-border/40 bg-background shrink-0">
+              {/* Mobile back button */}
+              <button
+                onClick={() => setMobilePanel('list')}
+                className="md:hidden p-1.5 rounded-lg hover:bg-muted transition-colors shrink-0"
+                title="Back"
+              >
+                <ChevronRight className="h-4 w-4 text-muted-foreground rotate-180" />
+              </button>
               {(() => {
                 const bot = getBotForConv(selectedConv);
                 const meta = STATUS_META[selectedConv.status];
@@ -436,9 +462,9 @@ export default function SharedInbox({ bots, isRTL }: Props) {
         )}
       </div>
 
-      {/* ── COL 4: Visitor Info Panel ── */}
+      {/* ── COL 4: Visitor Info Panel — hidden on mobile/tablet ── */}
       {selectedConv && (
-        <div className="w-[220px] shrink-0 border-l border-border/40 overflow-y-auto bg-muted/10">
+        <div className="hidden lg:block w-[220px] shrink-0 border-l border-border/40 overflow-y-auto bg-muted/10">
           <div className="p-4 space-y-4">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
               {isRTL ? 'معلومات الزائر' : 'Visitor Info'}

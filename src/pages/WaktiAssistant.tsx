@@ -467,7 +467,7 @@ export default function WaktiAssistant() {
   // RENDER: BOT LIST
   // ============================================
   const renderBotList = () => (
-    <div className="container mx-auto p-3 max-w-4xl">
+    <div className="container mx-auto p-3 w-full max-w-none xl:max-w-7xl">
 
       {/* ── Tab Switcher — above header ── */}
       <div className="flex justify-center mb-4">

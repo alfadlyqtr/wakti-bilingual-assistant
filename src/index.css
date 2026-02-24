@@ -1090,27 +1090,23 @@ textarea::placeholder {
 
 /* --- THE GREAT SIMPLIFICATION --- */
 
-/* 1. GLOBAL SETUP: FORCE SCROLLING - especially for Honor phones */
+/* 1. GLOBAL SETUP */
 html {
   overflow-x: hidden !important;
-  overflow-y: scroll !important; /* FORCE scroll mode */
+  overflow-y: hidden !important; /* main handles scroll inside AppLayout */
   height: 100% !important;
-  position: relative !important;
 }
 
 body {
   overflow-x: hidden !important;
-  overflow-y: scroll !important; /* FORCE scroll mode */
-  height: auto !important; /* Allow expansion */
-  min-height: 100% !important;
-  position: relative !important;
+  overflow-y: hidden !important; /* main handles scroll inside AppLayout */
+  height: 100% !important;
+  margin: 0;
 }
 
 #root {
-  overflow-x: hidden !important;
-  overflow-y: visible !important; /* Let body handle scroll */
-  height: auto !important; /* Allow expansion */
-  min-height: 100% !important;
+  overflow: hidden !important;
+  height: 100% !important;
 }
 
 /* 2. DEFAULT LAYOUT: For APP pages that use <main> (Dashboard, etc) - NOT public pages */
@@ -1160,11 +1156,12 @@ body.public-page div main {
 }
 
 /* Also ensure parent containers don't trap scroll on public pages */
+html:has(body.public-page),
 body.public-page,
 body.public-page #root,
 body.public-page #root > div {
   overflow: visible !important;
-  overflow-y: visible !important;
+  overflow-y: auto !important;
   height: auto !important;
 }
 

@@ -2326,7 +2326,7 @@ Apply these styles consistently throughout the entire design.`;
               <p className={cn(
                 "inline-block px-4 py-2 rounded-full text-sm font-semibold text-center mb-4",
                 isDark 
-                  ? "bg-[#060541]/20 text-[#060541] shadow-[0_2px_8px_rgba(0,0,0,0.3)]" 
+                  ? "bg-white/15 text-white shadow-[0_2px_8px_rgba(255,255,255,0.15)]" 
                   : "bg-[#060541]/20 text-[#060541] shadow-[0_2px_8px_rgba(6,5,65,0.15)]"
               )}>
                 {isRTL ? '✨ أو اختر نوع المشروع للبدء سريعاً' : '✨ Or pick a project type to get started quickly'}
