@@ -5,10 +5,11 @@ import type { Database } from '@/integrations/supabase/types';
 
 // Create a single supabase client for interacting with your database
 // Prefer environment variables; fall back to current values for dev safety
-const supabaseUrl =
+const supabaseUrl = (
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_URL) ||
   (typeof process !== 'undefined' ? process.env.SUPABASE_URL : undefined) ||
-  'https://hxauxozopvpzpdygoqwf.supabase.co';
+  'https://hxauxozopvpzpdygoqwf.supabase.co'
+).trim();
 const supabaseAnonKey =
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_ANON_KEY) ||
   (typeof process !== 'undefined' ? process.env.SUPABASE_ANON_KEY : undefined) ||

@@ -29,7 +29,11 @@ import type { UploadedFile } from '@/types/fileUpload';
 
 type ImageSubmode = 'text2image' | 'image2image' | 'background-removal' | 'draw';
 
-const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co';
+const SUPABASE_URL = ((import.meta as any).env?.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co').trim();
+
+/** Strip stray spaces / %20 from a storage URL before persisting it. */
+const sanitizeImageUrl = (url: string): string =>
+  url.replace(/%20/g, ' ').trim().replace(/^\s+/, '');
 
 interface StudioImageGeneratorProps {
   onSaveSuccess?: () => void;
@@ -348,7 +352,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               .upload(fn, b, { contentType: b.type, upsert: false });
             if (!ue) {
               const { data: ud } = supabase.storage.from('generated-images').getPublicUrl(fn);
-              const publicUrl = ud?.publicUrl?.trim();
+              const publicUrl = sanitizeImageUrl(ud?.publicUrl || '');
               if (publicUrl) {
                 setSavedBucketUrl(publicUrl);
                 // Insert DB row to get an ID for the branded share page
@@ -462,7 +466,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         const { data: urlData } = supabase.storage
           .from('generated-images')
           .getPublicUrl(fileName);
-        bucketUrl = urlData?.publicUrl?.trim();
+        bucketUrl = sanitizeImageUrl(urlData?.publicUrl || '');
         if (!bucketUrl) throw new Error('Failed to get public URL');
         storagePath = fileName;
         setSavedBucketUrl(bucketUrl);

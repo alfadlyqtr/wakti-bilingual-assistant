@@ -1147,7 +1147,7 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
                 const { data: urlData } = supabase.storage
                   .from('generated-images')
                   .getPublicUrl(fileName);
-                const imageUrl = urlData?.publicUrl;
+                const imageUrl = (urlData?.publicUrl || '').replace(/%20/g, ' ').trim();
                 if (!imageUrl) throw new Error('No public URL');
 
                 // Insert into DB

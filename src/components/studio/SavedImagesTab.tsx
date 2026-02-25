@@ -167,7 +167,7 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
         </button>
 
         <img
-          src={lightboxImage.image_url}
+          src={lightboxImage.image_url.replace(/%20/g, ' ').trim()}
           alt="Saved"
           className="max-w-[95vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl"
           onClick={(e) => e.stopPropagation()}
@@ -287,8 +287,8 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
                 onClick={() => setLightboxImage(img)}
               >
                 <img
-                  src={img.image_url}
-                  alt={img.prompt || 'Generated image'}
+                  src={img.image_url.replace(/%20/g, ' ').trim()}
+                  alt="Generated image"
                   className="w-full h-full object-cover"
                   loading="lazy"
                 />
