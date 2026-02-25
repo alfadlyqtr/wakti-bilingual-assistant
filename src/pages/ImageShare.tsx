@@ -70,7 +70,7 @@ export default function ImageShare() {
         el.setAttribute('content', content);
       };
       setMeta('og:title', 'Image by Wakti AI');
-      setMeta('og:description', image.prompt || 'Created with Wakti AI');
+      setMeta('og:description', 'Created with Wakti AI');
       setMeta('og:image', image.image_url);
       setMeta('og:type', 'website');
     }

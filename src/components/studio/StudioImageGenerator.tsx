@@ -620,7 +620,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       <ShareButton
         shareUrl={savedImageId ? `${window.location.origin}/image/${savedImageId}` : (savedBucketUrl || resultImageUrl || '')}
         shareTitle={language === 'ar' ? 'صورة من Wakti AI' : 'Image from Wakti AI'}
-        shareDescription={prompt || ''}
+        shareDescription={language === 'ar' ? 'تم إنشاؤها بواسطة Wakti AI' : 'Created with Wakti AI'}
         size="sm"
       />
 
@@ -673,7 +673,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
           <ShareButton
             shareUrl={resultImageUrl}
             shareTitle={language === 'ar' ? 'صورة من Wakti AI' : 'Image from Wakti AI'}
-            shareDescription={prompt || ''}
+            shareDescription={language === 'ar' ? 'تم إنشاؤها بواسطة Wakti AI' : 'Created with Wakti AI'}
             size="sm"
           />
         </div>

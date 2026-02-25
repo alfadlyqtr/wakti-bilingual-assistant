@@ -188,7 +188,7 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
           <ShareButton
             shareUrl={`${window.location.origin}/image/${lightboxImage.id}`}
             shareTitle={language === 'ar' ? 'صورة من Wakti AI' : 'Image from Wakti AI'}
-            shareDescription={lightboxImage.prompt || ''}
+            shareDescription={language === 'ar' ? 'تم إنشاؤها بواسطة Wakti AI' : 'Created with Wakti AI'}
             size="sm"
           />
           <div className="w-px h-5 bg-white/20" />
@@ -322,7 +322,7 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
                     <ShareButton
                       shareUrl={`${window.location.origin}/image/${img.id}`}
                       shareTitle={language === 'ar' ? 'صورة من Wakti AI' : 'Image from Wakti AI'}
-                      shareDescription={img.prompt || ''}
+                      shareDescription={language === 'ar' ? 'تم إنشاؤها بواسطة Wakti AI' : 'Created with Wakti AI'}
                       size="sm"
                       className="w-full justify-center"
                     />
