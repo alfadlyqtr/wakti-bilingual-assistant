@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
+import { supabase } from '@/integrations/supabase/client';
 
 const isInsideNatively = (): boolean => {
   return typeof (window as any).natively !== 'undefined' || /Natively/i.test(navigator.userAgent);
@@ -15,13 +16,49 @@ const getDeviceOS = (): 'ios' | 'android' | 'other' => {
 };
 
 export default function DiagramView() {
-  const [searchParams] = useSearchParams();
+  const { id } = useParams<{ id: string }>();
   const { language } = useTheme();
-  const url = searchParams.get('url');
-  const name = searchParams.get('name') || 'diagram';
+  const [url, setUrl] = useState<string | null>(null);
+  const [name, setName] = useState('diagram');
   const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const inApp = isInsideNatively();
   const deviceOS = getDeviceOS();
+
+  useEffect(() => {
+    const fetchDiagram = async () => {
+      if (!id) {
+        setError(language === 'ar' ? 'معرف المخطط غير موجود' : 'Diagram ID not found');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const { data, error: dbError } = await (supabase
+          .from('user_diagrams' as any)
+          .select('storage_url, name')
+          .eq('id', id)
+          .single() as any);
+
+        if (dbError || !data) {
+          setError(language === 'ar' ? 'المخطط غير موجود' : 'Diagram not found');
+          setLoading(false);
+          return;
+        }
+
+        setUrl(data?.storage_url || null);
+        setName(data?.name || 'diagram');
+        setLoading(false);
+      } catch (err) {
+        console.error('Failed to fetch diagram:', err);
+        setError(language === 'ar' ? 'حدث خطأ في تحميل المخطط' : 'Error loading diagram');
+        setLoading(false);
+      }
+    };
+
+    fetchDiagram();
+  }, [id, language]);
 
   useEffect(() => {
     document.title = `${name.replace(/\.[^.]+$/, '')} | Wakti`;
@@ -58,9 +95,18 @@ export default function DiagramView() {
 
       {/* Diagram Area */}
       <main className="flex-1 flex items-center justify-center p-6">
-        {!url ? (
+        {loading ? (
           <div className="text-white/50 text-center">
-            <p className="text-lg">No diagram found</p>
+            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-lg">{language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</p>
+          </div>
+        ) : error ? (
+          <div className="text-white/50 text-center">
+            <p className="text-lg">{error}</p>
+          </div>
+        ) : !url ? (
+          <div className="text-white/50 text-center">
+            <p className="text-lg">{language === 'ar' ? 'لم يتم العثور على المخطط' : 'No diagram found'}</p>
           </div>
         ) : (
           <div className="w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ minHeight: 400 }}>

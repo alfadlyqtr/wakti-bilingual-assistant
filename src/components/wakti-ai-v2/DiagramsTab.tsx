@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 import { Download, FileText, Sparkles, Loader2, Wand2, Palette, Zap, FilePlus2 } from 'lucide-react';
 import ShareButton from '@/components/ui/ShareButton';
 import { toast } from 'sonner';
@@ -257,6 +258,26 @@ const DiagramsTab: React.FC = () => {
   // Generate diagrams
   // ─────────────────────────────────────────────────────────────────────────
 
+  const saveDiagramToDb = async (diagram: GeneratedDiagram) => {
+    if (!user?.id) return null;
+    try {
+      const { data, error } = await supabase
+        .from('user_diagrams')
+        .insert({
+          user_id: user.id,
+          storage_url: diagram.imageUrl,
+          name: diagram.title,
+        })
+        .select('id')
+        .single();
+      if (error) throw error;
+      return data?.id;
+    } catch (err) {
+      console.error('Failed to save diagram to DB:', err);
+      return null;
+    }
+  };
+
   const handleGenerate = async () => {
     const textToUse = inputText.trim() || fileContent.trim();
 
@@ -290,7 +311,15 @@ const DiagramsTab: React.FC = () => {
         throw new Error(response.error || 'Failed to generate diagrams');
       }
 
-      setDiagrams(response.diagrams || []);
+      // Save diagrams to DB and add DB IDs
+      const diagramsWithIds = await Promise.all(
+        (response.diagrams || []).map(async (d) => {
+          const dbId = await saveDiagramToDb(d);
+          return { ...d, dbId };
+        })
+      );
+
+      setDiagrams(diagramsWithIds as any);
 
       if (!response.diagrams || response.diagrams.length === 0) {
         setError(isArabic ? 'لم يتم إنشاء أي مخططات. حاول بنص مختلف.' : 'No diagrams were generated. Try different text.');

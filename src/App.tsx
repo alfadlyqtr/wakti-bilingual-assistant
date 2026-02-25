@@ -189,7 +189,7 @@ function App() {
                 <Route path="/p/:token" element={<PresentationSharePlayer />} />
 
                 {/* Public diagram viewer */}
-                <Route path="/diagram-view" element={<DiagramView />} />
+                <Route path="/diagram/:id" element={<DiagramView />} />
 
                 {/* Public business card share */}
                 <Route path="/card/:shareSlug" element={<BusinessCardShare />} />
