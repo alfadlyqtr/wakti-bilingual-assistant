@@ -261,17 +261,17 @@ const DiagramsTab: React.FC = () => {
   const saveDiagramToDb = async (diagram: GeneratedDiagram) => {
     if (!user?.id) return null;
     try {
-      const { data, error } = await supabase
-        .from('user_diagrams')
+      const { data, error } = await (supabase
+        .from('user_diagrams' as any)
         .insert({
           user_id: user.id,
           storage_url: diagram.imageUrl,
           name: diagram.title,
         })
         .select('id')
-        .single();
+        .single() as any);
       if (error) throw error;
-      return data?.id;
+      return data?.id ?? null;
     } catch (err) {
       console.error('Failed to save diagram to DB:', err);
       return null;

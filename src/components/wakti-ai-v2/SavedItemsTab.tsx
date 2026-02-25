@@ -108,26 +108,50 @@ export default function SavedItemsTab() {
     if (!user?.id) return;
     setIsLoading(true);
     try {
-      const { data, error } = await (supabase
+      // Load from DB (new diagrams with short URL IDs)
+      const { data: dbData } = await (supabase
         .from('user_diagrams' as any)
         .select('id, storage_url, name, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false }) as any);
 
-      if (error) throw error;
+      const dbDiagrams: SavedDiagram[] = (dbData && Array.isArray(dbData))
+        ? dbData.map((d: any) => ({
+            id: d.id,
+            name: d.name,
+            created_at: d.created_at,
+            url: d.storage_url
+          }))
+        : [];
 
-      if (data && Array.isArray(data)) {
-        const mappedDiagrams: SavedDiagram[] = data.map((d: any) => ({
-          id: d.id,
-          name: d.name,
-          created_at: d.created_at,
-          url: d.storage_url
-        }));
+      // Also load legacy diagrams from storage (old ones not in DB)
+      const { data: storageData } = await supabase.storage
+        .from('generated-files')
+        .list(`${user.id}/diagrams`, { sortBy: { column: 'created_at', order: 'desc' } });
 
-        setDiagrams(mappedDiagrams);
-      } else {
-        setDiagrams([]);
+      const dbStorageUrls = new Set(dbDiagrams.map(d => d.url));
+      const legacyFiles = (storageData || []).filter(
+        f => f.name && f.name !== '.emptyFolderPlaceholder'
+      );
+
+      let legacyDiagrams: SavedDiagram[] = [];
+      if (legacyFiles.length > 0) {
+        const paths = legacyFiles.map(f => `${user.id}/diagrams/${f.name}`);
+        const { data: signedUrls } = await supabase.storage
+          .from('generated-files')
+          .createSignedUrls(paths, 86400 * 7);
+
+        legacyDiagrams = legacyFiles
+          .map((f, i) => ({
+            id: '',
+            name: f.name,
+            created_at: f.created_at,
+            url: signedUrls?.[i]?.signedUrl || ''
+          }))
+          .filter(d => d.url && !dbStorageUrls.has(d.url));
       }
+
+      setDiagrams([...dbDiagrams, ...legacyDiagrams]);
     } catch (err) {
       console.error('Error loading diagrams:', err);
       toast.error(language === 'ar' ? 'فشل تحميل المخططات' : 'Failed to load diagrams');
@@ -320,7 +344,7 @@ export default function SavedItemsTab() {
                   </div>
                   <div className="flex items-center gap-2">
                     <a 
-                      href={`https://wakti.qa/diagram/${d.id}`}
+                      href={d.id ? `https://wakti.qa/diagram/${d.id}` : d.url}
                       target="_blank"
                       rel="noreferrer"
                       className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded"
@@ -341,7 +365,7 @@ export default function SavedItemsTab() {
                       {language === 'ar' ? 'تحميل' : 'Download'}
                     </a>
                     <ShareButton
-                      shareUrl={`https://wakti.qa/diagram/${d.id}`}
+                      shareUrl={d.id ? `https://wakti.qa/diagram/${d.id}` : d.url}
                       shareTitle={d.name.replace(/\.[^.]+$/, '')}
                       shareDescription={language === 'ar' ? 'مخطط من Wakti' : 'A diagram from Wakti'}
                       size="sm"
