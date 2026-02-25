@@ -43,7 +43,7 @@ export default function DiagramView() {
           </button>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg overflow-hidden flex-shrink-0">
-              <img src="/favicon.ico" alt="Wakti" className="w-full h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              <img src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" alt="Wakti" className="w-full h-full object-contain" />
             </div>
             <span className="font-bold text-white text-sm tracking-wide">Wakti</span>
           </div>
