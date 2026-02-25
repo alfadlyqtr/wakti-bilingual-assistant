@@ -261,11 +261,17 @@ const DiagramsTab: React.FC = () => {
   const saveDiagramToDb = async (diagram: GeneratedDiagram) => {
     if (!user?.id) return null;
     try {
+      // Extract raw storage path from signed URL
+      // Format: .../storage/v1/object/sign/generated-files/{user_id}/diagrams/{file}?token=...
+      let storagePath = diagram.imageUrl;
+      const match = diagram.imageUrl.match(/\/generated-files\/([^?]+)/);
+      if (match) storagePath = match[1];
+
       const { data, error } = await (supabase
         .from('user_diagrams' as any)
         .insert({
           user_id: user.id,
-          storage_url: diagram.imageUrl,
+          storage_url: storagePath,
           name: diagram.title,
         })
         .select('id')

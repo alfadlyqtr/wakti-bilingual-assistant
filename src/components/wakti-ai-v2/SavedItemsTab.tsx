@@ -121,14 +121,34 @@ export default function SavedItemsTab() {
 
       console.log('[SavedItemsTab] user_diagrams from DB:', data?.length ?? 0);
 
-      const mapped: SavedDiagram[] = (data && Array.isArray(data))
-        ? data.map((d: any) => ({
-            id: d.id,
-            name: d.name,
-            created_at: d.created_at,
-            url: d.storage_url
-          }))
-        : [];
+      if (!data || !Array.isArray(data) || data.length === 0) {
+        setDiagrams([]);
+        return;
+      }
+
+      // Generate signed URLs for raw storage paths
+      const pathsToSign = data
+        .filter((d: any) => d.storage_url && !d.storage_url.startsWith('http'))
+        .map((d: any) => d.storage_url);
+
+      let signedMap: Record<string, string> = {};
+      if (pathsToSign.length > 0) {
+        const { data: signedUrls } = await supabase.storage
+          .from('generated-files')
+          .createSignedUrls(pathsToSign, 86400 * 7);
+        if (signedUrls) {
+          signedUrls.forEach((s: any, i: number) => {
+            if (s.signedUrl) signedMap[pathsToSign[i]] = s.signedUrl;
+          });
+        }
+      }
+
+      const mapped: SavedDiagram[] = data.map((d: any) => ({
+        id: d.id,
+        name: d.name,
+        created_at: d.created_at,
+        url: d.storage_url.startsWith('http') ? d.storage_url : (signedMap[d.storage_url] || '')
+      }));
 
       setDiagrams(mapped);
     } catch (err) {

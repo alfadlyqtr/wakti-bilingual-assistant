@@ -52,8 +52,18 @@ export default function DiagramView() {
           return;
         }
 
-        setUrl(data?.storage_url || null);
+        const storagePath = data?.storage_url || '';
         setName(data?.name || 'diagram');
+
+        // If storage_url is a raw path, generate a signed URL
+        if (storagePath && !storagePath.startsWith('http')) {
+          const { data: signedData } = await supabase.storage
+            .from('generated-files')
+            .createSignedUrl(storagePath, 86400);
+          setUrl(signedData?.signedUrl || null);
+        } else {
+          setUrl(storagePath || null);
+        }
         setLoading(false);
       } catch (err) {
         console.error('Failed to fetch diagram:', err);
