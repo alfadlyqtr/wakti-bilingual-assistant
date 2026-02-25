@@ -7,6 +7,13 @@ const isInsideNatively = (): boolean => {
   return typeof (window as any).natively !== 'undefined' || /Natively/i.test(navigator.userAgent);
 };
 
+const getDeviceOS = (): 'ios' | 'android' | 'other' => {
+  const ua = navigator.userAgent;
+  if (/iPad|iPhone|iPod/.test(ua)) return 'ios';
+  if (/Android/.test(ua)) return 'android';
+  return 'other';
+};
+
 export default function DiagramView() {
   const [searchParams] = useSearchParams();
   const { language } = useTheme();
@@ -14,6 +21,7 @@ export default function DiagramView() {
   const name = searchParams.get('name') || 'diagram';
   const [loaded, setLoaded] = useState(false);
   const inApp = isInsideNatively();
+  const deviceOS = getDeviceOS();
 
   useEffect(() => {
     document.title = `${name.replace(/\.[^.]+$/, '')} | Wakti`;
@@ -79,15 +87,30 @@ export default function DiagramView() {
             {language === 'ar' ? 'تم الإنشاء بواسطة' : 'Created with'}{' '}
             <span className="text-white/60 font-medium">Wakti AI</span>
           </p>
-          <a
-            href="https://apps.apple.com/us/app/wakti-ai/id6755150700"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
-            style={{ background: 'linear-gradient(135deg, hsl(210,100%,65%) 0%, hsl(280,70%,65%) 100%)' }}
-          >
-            {language === 'ar' ? 'حمّل تطبيق Wakti AI' : 'Get Wakti AI — Free'}
-          </a>
+          <div className="flex flex-wrap gap-3 justify-center">
+            {(deviceOS === 'ios' || deviceOS === 'other') && (
+              <a
+                href="https://apps.apple.com/us/app/wakti-ai/id6755150700"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
+                style={{ background: 'linear-gradient(135deg, hsl(210,100%,65%) 0%, hsl(280,70%,65%) 100%)' }}
+              >
+                {language === 'ar' ? '📱 App Store' : '📱 App Store'}
+              </a>
+            )}
+            {(deviceOS === 'android' || deviceOS === 'other') && (
+              <a
+                href="https://play.google.com/store/apps/details?id=app.natively.waktiqa"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
+                style={{ background: 'linear-gradient(135deg, hsl(142,76%,55%) 0%, hsl(180,85%,60%) 100%)' }}
+              >
+                {language === 'ar' ? '📱 Google Play' : '📱 Google Play'}
+              </a>
+            )}
+          </div>
           <a href="https://wakti.qa" className="text-white/30 hover:text-white/60 text-xs transition-colors">wakti.qa</a>
         </footer>
       )}
