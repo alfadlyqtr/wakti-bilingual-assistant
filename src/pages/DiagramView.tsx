@@ -105,31 +105,31 @@ export default function DiagramView() {
       </header>
 
       {/* Diagram Area */}
-      <main className="flex items-center justify-center p-6">
+      <main className="flex items-center justify-center px-4 py-6">
         {loading ? (
-          <div className="text-white/50 text-center">
+          <div className="text-white/50 text-center py-20">
             <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
             <p className="text-lg">{language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</p>
           </div>
         ) : error ? (
-          <div className="text-white/50 text-center">
+          <div className="text-white/50 text-center py-20">
             <p className="text-lg">{error}</p>
           </div>
         ) : !url ? (
-          <div className="text-white/50 text-center">
+          <div className="text-white/50 text-center py-20">
             <p className="text-lg">{language === 'ar' ? 'لم يتم العثور على المخطط' : 'No diagram found'}</p>
           </div>
         ) : (
-          <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden">
+          <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden">
             {!loaded && (
-              <div className="flex items-center justify-center h-64">
+              <div className="flex items-center justify-center h-48">
                 <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
               </div>
             )}
             <img
               src={url}
               alt={cleanName}
-              className={`w-full h-auto object-contain transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+              className={`w-full h-auto max-h-[55vh] object-contain p-4 transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
               onLoad={() => setLoaded(true)}
             />
           </div>
