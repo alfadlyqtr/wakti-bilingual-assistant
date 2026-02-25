@@ -844,23 +844,20 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
         // Create end date 1 hour after start
         const endDateObj = new Date(startDateObj.getTime() + 3600000); // Add 1 hour in milliseconds
         
-        // Format to ISO string for NativelyCalendar
-        const startDate = startDateObj.toISOString();
-        const endDate = endDateObj.toISOString();
-        
         console.log('[DirectSDK] Creating event:', { 
           title: entry.title, 
-          startDate, 
-          endDate, 
+          startDate: startDateObj.toISOString(), 
+          endDate: endDateObj.toISOString(), 
           calendarId,
           description: entry.description || ''
         });
         
-        // Create event using direct SDK
+        // iOS fix: pass Date objects directly — iOS Natively SDK calls .toISOString() internally
+        // passing strings causes "i.toISOString is not a function" on iOS
         calendar.createCalendarEvent(
           entry.title,
-          endDate,
-          startDate,
+          endDateObj,
+          startDateObj,
           timezone,
           calendarId,
           entry.description || '',
