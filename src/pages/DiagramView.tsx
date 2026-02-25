@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,6 +17,7 @@ const getDeviceOS = (): 'ios' | 'android' | 'other' => {
 
 export default function DiagramView() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const { language } = useTheme();
   const [url, setUrl] = useState<string | null>(null);
   const [name, setName] = useState('diagram');
@@ -28,6 +29,15 @@ export default function DiagramView() {
 
   useEffect(() => {
     const fetchDiagram = async () => {
+      // Legacy fallback: ?url= param passed directly
+      const legacyUrl = searchParams.get('url');
+      if (legacyUrl) {
+        setUrl(legacyUrl);
+        setName(searchParams.get('name') || 'diagram');
+        setLoading(false);
+        return;
+      }
+
       if (!id) {
         setError(language === 'ar' ? 'معرف المخطط غير موجود' : 'Diagram ID not found');
         setLoading(false);
@@ -58,7 +68,7 @@ export default function DiagramView() {
     };
 
     fetchDiagram();
-  }, [id, language]);
+  }, [id, searchParams, language]);
 
   useEffect(() => {
     document.title = `${name.replace(/\.[^.]+$/, '')} | Wakti`;

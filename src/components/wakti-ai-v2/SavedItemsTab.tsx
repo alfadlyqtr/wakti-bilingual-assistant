@@ -344,7 +344,7 @@ export default function SavedItemsTab() {
                   </div>
                   <div className="flex items-center gap-2">
                     <a 
-                      href={d.id ? `https://wakti.qa/diagram/${d.id}` : d.url}
+                      href={d.id ? `https://wakti.qa/diagram/${d.id}` : `https://wakti.qa/diagram/view?url=${encodeURIComponent(d.url)}&name=${encodeURIComponent(d.name)}`}
                       target="_blank"
                       rel="noreferrer"
                       className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded"
