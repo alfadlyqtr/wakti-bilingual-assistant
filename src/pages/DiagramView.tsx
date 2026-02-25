@@ -1,12 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Download, Share2 } from 'lucide-react';
+import { Download, Share2 } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
-
-const isInsideNatively = (): boolean => {
-  return typeof (window as any).natively !== 'undefined' || /Natively/i.test(navigator.userAgent);
-};
 
 const getDeviceOS = (): 'ios' | 'android' | 'other' => {
   const ua = navigator.userAgent;
@@ -24,7 +20,6 @@ export default function DiagramView() {
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const inApp = isInsideNatively();
   const deviceOS = getDeviceOS();
 
   useEffect(() => {
@@ -90,33 +85,21 @@ export default function DiagramView() {
 
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#0c0f14] sticky top-0 z-10">
-        {/* Left: back (in-app only) or logo */}
-        <div className="flex items-center gap-3">
-          {inApp ? (
-            <button
-              onClick={() => window.history.back()}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              {language === 'ar' ? 'رجوع' : 'Back'}
-            </button>
-          ) : (
-            <a href="https://wakti.qa" className="flex items-center gap-2 group">
-              <div className="w-8 h-8 rounded-xl overflow-hidden flex-shrink-0">
-                <img src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" alt="Wakti" className="w-full h-full object-contain" />
-              </div>
-              <span className="font-bold text-white text-base tracking-wide">Wakti</span>
-            </a>
-          )}
-        </div>
+        {/* Left: Wakti logo */}
+        <a href="https://wakti.qa" className="flex items-center gap-2 group">
+          <div className="w-8 h-8 rounded-xl overflow-hidden flex-shrink-0">
+            <img src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" alt="Wakti" className="w-full h-full object-contain" />
+          </div>
+          <span className="font-bold text-white text-base tracking-wide group-hover:text-white/80 transition-colors">Wakti</span>
+        </a>
 
         {/* Center: diagram name */}
         {cleanName && (
           <span className="text-white/60 text-sm truncate max-w-[200px] hidden sm:block">{cleanName}</span>
         )}
 
-        {/* Right: actions (in-app only gets back, browser gets share+download) */}
-        {!inApp && url && (
+        {/* Right: share + download */}
+        {url && (
           <div className="flex items-center gap-2">
             <button
               onClick={handleShare}
@@ -169,9 +152,8 @@ export default function DiagramView() {
         )}
       </main>
 
-      {/* Footer — always shown outside the app */}
-      {!inApp && (
-        <footer className="flex flex-col items-center gap-4 py-8 px-4 border-t border-white/10">
+      {/* Footer */}
+      <footer className="flex flex-col items-center gap-4 py-8 px-4 border-t border-white/10">
           <p className="text-white/50 text-sm">
             {language === 'ar' ? 'تم الإنشاء بواسطة' : 'Created with'}{' '}
             <span className="text-white font-semibold">Wakti AI</span>
@@ -204,8 +186,7 @@ export default function DiagramView() {
             )}
           </div>
           <a href="https://wakti.qa" className="text-white/20 hover:text-white/50 text-xs transition-colors mt-1">wakti.qa</a>
-        </footer>
-      )}
+      </footer>
     </div>
   );
 }
