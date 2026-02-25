@@ -108,15 +108,21 @@ export default function SavedItemsTab() {
     if (!user?.id) return;
     setIsLoading(true);
     try {
-      // Load from DB (new diagrams with short URL IDs)
-      const { data: dbData } = await (supabase
+      const { data, error } = await (supabase
         .from('user_diagrams' as any)
         .select('id, storage_url, name, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false }) as any);
 
-      const dbDiagrams: SavedDiagram[] = (dbData && Array.isArray(dbData))
-        ? dbData.map((d: any) => ({
+      if (error) {
+        console.error('DB query error for user_diagrams:', error);
+        throw error;
+      }
+
+      console.log('[SavedItemsTab] user_diagrams from DB:', data?.length ?? 0);
+
+      const mapped: SavedDiagram[] = (data && Array.isArray(data))
+        ? data.map((d: any) => ({
             id: d.id,
             name: d.name,
             created_at: d.created_at,
@@ -124,35 +130,7 @@ export default function SavedItemsTab() {
           }))
         : [];
 
-      // Also load legacy diagrams from storage (old ones not in DB)
-      const { data: storageData } = await supabase.storage
-        .from('generated-files')
-        .list(`${user.id}/diagrams`, { sortBy: { column: 'created_at', order: 'desc' } });
-
-      // Deduplicate by filename — migrated diagrams already have DB records
-      const dbFileNames = new Set(dbDiagrams.map(d => d.name));
-      const legacyFiles = (storageData || []).filter(
-        f => f.name && f.name !== '.emptyFolderPlaceholder' && !dbFileNames.has(f.name)
-      );
-
-      let legacyDiagrams: SavedDiagram[] = [];
-      if (legacyFiles.length > 0) {
-        const paths = legacyFiles.map(f => `${user.id}/diagrams/${f.name}`);
-        const { data: signedUrls } = await supabase.storage
-          .from('generated-files')
-          .createSignedUrls(paths, 86400 * 7);
-
-        legacyDiagrams = legacyFiles
-          .map((f, i) => ({
-            id: '',
-            name: f.name,
-            created_at: f.created_at,
-            url: signedUrls?.[i]?.signedUrl || ''
-          }))
-          .filter(d => d.url);
-      }
-
-      setDiagrams([...dbDiagrams, ...legacyDiagrams]);
+      setDiagrams(mapped);
     } catch (err) {
       console.error('Error loading diagrams:', err);
       toast.error(language === 'ar' ? 'فشل تحميل المخططات' : 'Failed to load diagrams');

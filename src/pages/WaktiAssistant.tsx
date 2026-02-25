@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 const ChatbotDesigner = lazy(() => import('@/components/chatbot/ChatbotDesigner'));
 const ChatbotAISettings = lazy(() => import('@/components/chatbot/ChatbotAISettings'));
+import SharedInboxUI from '@/components/chatbot/SharedInboxUI';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -43,6 +44,11 @@ import {
   Inbox,
   Settings,
   Zap,
+  Send,
+  Clock,
+  ChevronRight,
+  Filter,
+  RefreshCw,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -642,18 +648,7 @@ export default function WaktiAssistant() {
           {/* ── INBOX TAB ── */}
           {innerTab === 'inbox' && (
             <motion.div key="inbox" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-              <div className="flex flex-col items-center py-16 text-center">
-                <div className="h-16 w-16 rounded-2xl flex items-center justify-center bg-[#060541]/8 dark:bg-white/8 mb-5">
-                  <Inbox className="h-8 w-8 text-[#060541] dark:text-white/70" />
-                </div>
-                <h2 className="text-lg font-semibold mb-1">{isRTL ? 'صندوق الوارد الموحد' : 'Shared Inbox'}</h2>
-                <p className="text-sm text-muted-foreground max-w-xs">
-                  {isRTL ? 'ستظهر هنا محادثات زوارك من موقعك وانستقرام' : 'All visitor conversations from your website and Instagram'}
-                </p>
-                <span className="mt-4 px-3 py-1 rounded-full text-[11px] font-semibold bg-muted text-muted-foreground">
-                  {isRTL ? 'قريباً' : 'Coming Soon'}
-                </span>
-              </div>
+              <SharedInboxUI bots={bots} isRTL={isRTL} />
             </motion.div>
           )}
 
@@ -736,17 +731,16 @@ export default function WaktiAssistant() {
           </div>
         </button>
 
-        {/* Instagram */}
-        <button
-          onClick={() => { setSelectedPlatform('instagram'); setStep('instagram-connect'); }}
-          className={cn(
-            "relative rounded-2xl border-2 text-left overflow-hidden bg-white dark:bg-card transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5",
-            selectedPlatform === 'instagram' ? "border-pink-500/50 shadow-md" : "border-border/40 hover:border-pink-500/30"
-          )}
+        {/* Instagram - Coming Soon */}
+        <div
+          className="relative rounded-2xl border-2 text-left overflow-hidden bg-white dark:bg-card border-border/40 opacity-60 cursor-not-allowed"
         >
+          {/* Coming Soon badge */}
+          <div className="absolute top-2.5 right-2.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow">
+            {isRTL ? 'قريباً' : 'Coming Soon'}
+          </div>
           {/* Preview banner */}
           <div className="h-40 bg-gradient-to-br from-pink-50 to-purple-50 dark:from-pink-900/10 dark:to-purple-900/10 relative overflow-hidden flex items-center justify-center">
-            {/* Mock Instagram DM preview */}
             <div className="w-44 bg-white dark:bg-zinc-800 rounded-xl shadow-lg overflow-hidden border border-black/5 text-left">
               <div className="bg-gradient-to-r from-pink-500 to-purple-600 px-3 py-2 flex items-center gap-2">
                 <Instagram className="w-4 h-4 text-white" />
@@ -757,11 +751,6 @@ export default function WaktiAssistant() {
                 <div className="bg-gradient-to-r from-pink-500 to-purple-600 rounded-lg rounded-tr-sm px-2 py-1 text-[9px] text-white ml-auto max-w-[75%]">Thanks! Check this out 👇</div>
               </div>
             </div>
-            {selectedPlatform === 'instagram' && (
-              <div className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow">
-                <Check className="h-3.5 w-3.5 text-white" />
-              </div>
-            )}
           </div>
           {/* Info */}
           <div className="px-4 py-3 flex items-start gap-3">
@@ -773,7 +762,7 @@ export default function WaktiAssistant() {
               </p>
             </div>
           </div>
-        </button>
+        </div>
       </div>
     </div>
   );
