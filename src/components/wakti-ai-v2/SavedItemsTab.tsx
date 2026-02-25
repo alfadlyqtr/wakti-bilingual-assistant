@@ -16,6 +16,7 @@ interface SavedPresentation {
 }
 
 interface SavedDiagram {
+  id: string;
   name: string;
   url: string;
   created_at: string;
@@ -107,38 +108,25 @@ export default function SavedItemsTab() {
     if (!user?.id) return;
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.storage
-        .from('generated-files')
-        .list(`${user.id}/diagrams`, {
-          sortBy: { column: 'created_at', order: 'desc' }
-        });
+      const { data, error } = await (supabase
+        .from('user_diagrams' as any)
+        .select('id, storage_url, name, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false }) as any);
 
       if (error) throw error;
 
-      if (data) {
-        // Filter out empty folder placeholder if any
-        const validFiles = data.filter(f => f.name !== '.emptyFolderPlaceholder' && f.name);
-        
-        // Generate signed URLs for all valid files (since bucket might not be fully public)
-        const paths = validFiles.map(f => `${user.id}/diagrams/${f.name}`);
-        
-        if (paths.length > 0) {
-          const { data: signedUrls, error: signError } = await supabase.storage
-            .from('generated-files')
-            .createSignedUrls(paths, 86400 * 7); // 7 days
+      if (data && Array.isArray(data)) {
+        const mappedDiagrams: SavedDiagram[] = data.map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          created_at: d.created_at,
+          url: d.storage_url
+        }));
 
-          if (signError) throw signError;
-
-          const mappedDiagrams: SavedDiagram[] = validFiles.map((f, i) => ({
-            name: f.name,
-            created_at: f.created_at,
-            url: signedUrls?.[i]?.signedUrl || ''
-          })).filter(d => d.url !== '');
-
-          setDiagrams(mappedDiagrams);
-        } else {
-          setDiagrams([]);
-        }
+        setDiagrams(mappedDiagrams);
+      } else {
+        setDiagrams([]);
       }
     } catch (err) {
       console.error('Error loading diagrams:', err);
@@ -332,7 +320,7 @@ export default function SavedItemsTab() {
                   </div>
                   <div className="flex items-center gap-2">
                     <a 
-                      href={`https://wakti.qa/diagram/${d.name}`}
+                      href={`https://wakti.qa/diagram/${d.id}`}
                       target="_blank"
                       rel="noreferrer"
                       className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded"
@@ -353,7 +341,7 @@ export default function SavedItemsTab() {
                       {language === 'ar' ? 'تحميل' : 'Download'}
                     </a>
                     <ShareButton
-                      shareUrl={`https://wakti.qa/diagram/${d.name}`}
+                      shareUrl={`https://wakti.qa/diagram/${d.id}`}
                       shareTitle={d.name.replace(/\.[^.]+$/, '')}
                       shareDescription={language === 'ar' ? 'مخطط من Wakti' : 'A diagram from Wakti'}
                       size="sm"
