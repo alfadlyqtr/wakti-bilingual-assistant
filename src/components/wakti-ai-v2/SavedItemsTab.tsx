@@ -365,7 +365,7 @@ export default function SavedItemsTab() {
                       {language === 'ar' ? 'تحميل' : 'Download'}
                     </a>
                     <ShareButton
-                      shareUrl={d.id ? `https://wakti.qa/diagram/${d.id}` : d.url}
+                      shareUrl={d.id ? `https://wakti.qa/diagram/${d.id}` : `https://wakti.qa/diagram/view?url=${encodeURIComponent(d.url)}&name=${encodeURIComponent(d.name)}`}
                       shareTitle={d.name.replace(/\.[^.]+$/, '')}
                       shareDescription={language === 'ar' ? 'مخطط من Wakti' : 'A diagram from Wakti'}
                       size="sm"
