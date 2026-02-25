@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Download, Share2 } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -76,31 +76,65 @@ export default function DiagramView() {
 
   const cleanName = name.replace(/\.[^.]+$/, '');
 
+  const handleShare = async () => {
+    const shareUrl = window.location.href;
+    if (navigator.share) {
+      await navigator.share({ title: cleanName, url: shareUrl });
+    } else {
+      await navigator.clipboard.writeText(shareUrl);
+    }
+  };
+
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(135deg, #0c0f14 0%, hsl(235,25%,7%) 25%, hsl(250,20%,8%) 50%, #0c0f14 100%)' }}>
+    <div className="min-h-screen flex flex-col bg-[#0c0f14]">
+
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 backdrop-blur-sm sticky top-0 z-10" style={{ background: 'rgba(12,15,20,0.85)' }}>
+      <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#0c0f14] sticky top-0 z-10">
+        {/* Left: back (in-app only) or logo */}
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => window.history.back()}
-            title={language === 'ar' ? 'رجوع' : 'Go back'}
-            className="flex items-center gap-1.5 text-sm text-white/60 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg overflow-hidden flex-shrink-0">
-              <img src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" alt="Wakti" className="w-full h-full object-contain" />
-            </div>
-            <span className="font-bold text-white text-sm tracking-wide">Wakti</span>
-          </div>
-          {cleanName && (
-            <>
-              <span className="text-white/30 text-sm">/</span>
-              <span className="text-white/70 text-sm truncate max-w-[200px]">{cleanName}</span>
-            </>
+          {inApp ? (
+            <button
+              onClick={() => window.history.back()}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              {language === 'ar' ? 'رجوع' : 'Back'}
+            </button>
+          ) : (
+            <a href="https://wakti.qa" className="flex items-center gap-2 group">
+              <div className="w-8 h-8 rounded-xl overflow-hidden flex-shrink-0">
+                <img src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" alt="Wakti" className="w-full h-full object-contain" />
+              </div>
+              <span className="font-bold text-white text-base tracking-wide">Wakti</span>
+            </a>
           )}
         </div>
+
+        {/* Center: diagram name */}
+        {cleanName && (
+          <span className="text-white/60 text-sm truncate max-w-[200px] hidden sm:block">{cleanName}</span>
+        )}
+
+        {/* Right: actions (in-app only gets back, browser gets share+download) */}
+        {!inApp && url && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              {language === 'ar' ? 'مشاركة' : 'Share'}
+            </button>
+            <a
+              href={url}
+              download={name}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              {language === 'ar' ? 'تحميل' : 'Download'}
+            </a>
+          </div>
+        )}
       </header>
 
       {/* Diagram Area */}
@@ -119,7 +153,7 @@ export default function DiagramView() {
             <p className="text-lg">{language === 'ar' ? 'لم يتم العثور على المخطط' : 'No diagram found'}</p>
           </div>
         ) : (
-          <div className="w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ minHeight: 400 }}>
+          <div className="w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden">
             {!loaded && (
               <div className="flex items-center justify-center h-64">
                 <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -129,19 +163,23 @@ export default function DiagramView() {
               src={url}
               alt={cleanName}
               className={`w-full h-auto object-contain transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-              style={{ maxHeight: '80vh' }}
               onLoad={() => setLoaded(true)}
             />
           </div>
         )}
       </main>
 
-      {/* Footer — only shown outside the app */}
+      {/* Footer — always shown outside the app */}
       {!inApp && (
-        <footer className="flex flex-col items-center gap-3 py-6 px-4">
-          <p className="text-white/40 text-xs">
+        <footer className="flex flex-col items-center gap-4 py-8 px-4 border-t border-white/10">
+          <p className="text-white/50 text-sm">
             {language === 'ar' ? 'تم الإنشاء بواسطة' : 'Created with'}{' '}
-            <span className="text-white/60 font-medium">Wakti AI</span>
+            <span className="text-white font-semibold">Wakti AI</span>
+          </p>
+          <p className="text-white/30 text-xs text-center max-w-xs">
+            {language === 'ar'
+              ? 'حمّل Wakti وأنشئ مخططاتك الخاصة بالذكاء الاصطناعي'
+              : 'Download Wakti and create your own AI-powered diagrams'}
           </p>
           <div className="flex flex-wrap gap-3 justify-center">
             {(deviceOS === 'ios' || deviceOS === 'other') && (
@@ -149,10 +187,9 @@ export default function DiagramView() {
                 href="https://apps.apple.com/us/app/wakti-ai/id6755150700"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
-                style={{ background: 'linear-gradient(135deg, hsl(210,100%,65%) 0%, hsl(280,70%,65%) 100%)' }}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:scale-105 bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(280,70%,65%)]"
               >
-                {language === 'ar' ? '📱 App Store' : '📱 App Store'}
+                📱 {language === 'ar' ? 'App Store' : 'App Store'}
               </a>
             )}
             {(deviceOS === 'android' || deviceOS === 'other') && (
@@ -160,14 +197,13 @@ export default function DiagramView() {
                 href="https://play.google.com/store/apps/details?id=app.natively.waktiqa"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
-                style={{ background: 'linear-gradient(135deg, hsl(142,76%,55%) 0%, hsl(180,85%,60%) 100%)' }}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:scale-105 bg-gradient-to-r from-[hsl(142,76%,45%)] to-[hsl(180,85%,50%)]"
               >
-                {language === 'ar' ? '📱 Google Play' : '📱 Google Play'}
+                📱 {language === 'ar' ? 'Google Play' : 'Google Play'}
               </a>
             )}
           </div>
-          <a href="https://wakti.qa" className="text-white/30 hover:text-white/60 text-xs transition-colors">wakti.qa</a>
+          <a href="https://wakti.qa" className="text-white/20 hover:text-white/50 text-xs transition-colors mt-1">wakti.qa</a>
         </footer>
       )}
     </div>

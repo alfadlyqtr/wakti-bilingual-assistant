@@ -129,9 +129,10 @@ export default function SavedItemsTab() {
         .from('generated-files')
         .list(`${user.id}/diagrams`, { sortBy: { column: 'created_at', order: 'desc' } });
 
-      const dbStorageUrls = new Set(dbDiagrams.map(d => d.url));
+      // Deduplicate by filename — migrated diagrams already have DB records
+      const dbFileNames = new Set(dbDiagrams.map(d => d.name));
       const legacyFiles = (storageData || []).filter(
-        f => f.name && f.name !== '.emptyFolderPlaceholder'
+        f => f.name && f.name !== '.emptyFolderPlaceholder' && !dbFileNames.has(f.name)
       );
 
       let legacyDiagrams: SavedDiagram[] = [];
@@ -148,7 +149,7 @@ export default function SavedItemsTab() {
             created_at: f.created_at,
             url: signedUrls?.[i]?.signedUrl || ''
           }))
-          .filter(d => d.url && !dbStorageUrls.has(d.url));
+          .filter(d => d.url);
       }
 
       setDiagrams([...dbDiagrams, ...legacyDiagrams]);
