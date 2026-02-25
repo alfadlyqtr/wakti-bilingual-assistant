@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Download, Share2, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
+
+const isInsideNatively = (): boolean => {
+  return typeof (window as any).natively !== 'undefined' || /Natively/i.test(navigator.userAgent);
+};
 
 export default function DiagramView() {
   const [searchParams] = useSearchParams();
@@ -9,19 +13,11 @@ export default function DiagramView() {
   const url = searchParams.get('url');
   const name = searchParams.get('name') || 'diagram';
   const [loaded, setLoaded] = useState(false);
+  const inApp = isInsideNatively();
 
   useEffect(() => {
     document.title = `${name.replace(/\.[^.]+$/, '')} | Wakti`;
   }, [name]);
-
-  const handleShare = async () => {
-    const shareUrl = window.location.href;
-    if (navigator.share) {
-      await navigator.share({ title: name, url: shareUrl }).catch(() => {});
-    } else {
-      await navigator.clipboard.writeText(shareUrl).catch(() => {});
-    }
-  };
 
   const cleanName = name.replace(/\.[^.]+$/, '');
 
@@ -50,25 +46,6 @@ export default function DiagramView() {
             </>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          {url && (
-            <a
-              href={url}
-              download={name}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all text-white/70 hover:text-white border border-white/10 hover:border-white/30"
-            >
-              <Download className="w-3.5 h-3.5" />
-              {language === 'ar' ? 'تحميل' : 'Download'}
-            </a>
-          )}
-          <button
-            onClick={handleShare}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all text-white/70 hover:text-white border border-white/10 hover:border-white/30"
-          >
-            <Share2 className="w-3.5 h-3.5" />
-            Share
-          </button>
-        </div>
       </header>
 
       {/* Diagram Area */}
@@ -95,10 +72,25 @@ export default function DiagramView() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="text-center py-4 text-white/30 text-xs">
-        Created with <span className="text-white/50 font-medium">Wakti AI</span> · <a href="https://wakti.qa" className="text-white/50 hover:text-white transition-colors">wakti.qa</a>
-      </footer>
+      {/* Footer — only shown outside the app */}
+      {!inApp && (
+        <footer className="flex flex-col items-center gap-3 py-6 px-4">
+          <p className="text-white/40 text-xs">
+            {language === 'ar' ? 'تم الإنشاء بواسطة' : 'Created with'}{' '}
+            <span className="text-white/60 font-medium">Wakti AI</span>
+          </p>
+          <a
+            href="https://apps.apple.com/us/app/wakti-ai/id6755150700"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
+            style={{ background: 'linear-gradient(135deg, hsl(210,100%,65%) 0%, hsl(280,70%,65%) 100%)' }}
+          >
+            {language === 'ar' ? 'حمّل تطبيق Wakti AI' : 'Get Wakti AI — Free'}
+          </a>
+          <a href="https://wakti.qa" className="text-white/30 hover:text-white/60 text-xs transition-colors">wakti.qa</a>
+        </footer>
+      )}
     </div>
   );
 }
