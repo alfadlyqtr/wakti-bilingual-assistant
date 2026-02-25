@@ -119,7 +119,8 @@ import MyWarranty from "./pages/MyWarranty";
 import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
 import ProjectSlugRedirect from "./pages/ProjectSlugRedirect";
-import ProjectPreview from "./pages/ProjectPreview";
+import ProjectPreview from './pages/ProjectPreview';
+import ChatbotPage from './pages/ChatbotPage';
 
 import "./App.css";
 
@@ -187,6 +188,9 @@ function App() {
 
                 {/* Public presentation share player */}
                 <Route path="/p/:token" element={<PresentationSharePlayer />} />
+
+                {/* Public chatbot widget page */}
+                <Route path="/chat/:token" element={<ChatbotPage />} />
 
                 {/* Public diagram viewer */}
                 <Route path="/diagram/view" element={<DiagramView />} />

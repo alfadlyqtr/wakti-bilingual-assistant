@@ -1,61 +1,10 @@
 // @ts-nocheck
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Bot, Globe, Instagram, Search, Send, Clock,
-  ChevronRight, Filter, RefreshCw, Inbox, MessageSquare, User,
-  Check, CheckCheck, Circle,
+  Bot, Search, Send, ChevronRight, RefreshCw, Inbox, MessageSquare, Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
-
-const MOCK_CONVERSATIONS = [
-  {
-    id: '1',
-    visitorName: 'Ahmed Al-Mansouri',
-    lastMessage: 'What are your business hours?',
-    lastMessageTime: new Date(Date.now() - 2 * 60 * 1000),
-    unread: 2,
-    platform: 'website',
-    botName: 'Support Bot',
-    status: 'open',
-    messages: [
-      { id: '1', role: 'user', text: 'Hello, is anyone there?', time: new Date(Date.now() - 10 * 60 * 1000) },
-      { id: '2', role: 'bot', text: 'Hi! How can I help you today?', time: new Date(Date.now() - 9 * 60 * 1000) },
-      { id: '3', role: 'user', text: 'What are your business hours?', time: new Date(Date.now() - 2 * 60 * 1000) },
-    ],
-  },
-  {
-    id: '2',
-    visitorName: 'Sarah Johnson',
-    lastMessage: 'I want to place an order',
-    lastMessageTime: new Date(Date.now() - 15 * 60 * 1000),
-    unread: 0,
-    platform: 'website',
-    botName: 'Sales Bot',
-    status: 'open',
-    messages: [
-      { id: '1', role: 'user', text: 'Hi, I want to place an order', time: new Date(Date.now() - 20 * 60 * 1000) },
-      { id: '2', role: 'bot', text: 'Sure! What would you like to order?', time: new Date(Date.now() - 19 * 60 * 1000) },
-      { id: '3', role: 'user', text: 'I want to place an order', time: new Date(Date.now() - 15 * 60 * 1000) },
-    ],
-  },
-  {
-    id: '3',
-    visitorName: 'Mohammed Khalid',
-    lastMessage: 'شكراً جزيلاً على المساعدة',
-    lastMessageTime: new Date(Date.now() - 45 * 60 * 1000),
-    unread: 0,
-    platform: 'website',
-    botName: 'Support Bot',
-    status: 'resolved',
-    messages: [
-      { id: '1', role: 'user', text: 'هل يمكنكم مساعدتي؟', time: new Date(Date.now() - 60 * 60 * 1000) },
-      { id: '2', role: 'bot', text: 'بالتأكيد! كيف يمكنني مساعدتك؟', time: new Date(Date.now() - 59 * 60 * 1000) },
-      { id: '3', role: 'user', text: 'شكراً جزيلاً على المساعدة', time: new Date(Date.now() - 45 * 60 * 1000) },
-    ],
-  },
-];
 
 function formatTime(date: Date) {
   const now = new Date();
@@ -66,21 +15,139 @@ function formatTime(date: Date) {
   return date.toLocaleDateString();
 }
 
+interface ConvRow {
+  id: string;
+  bot_id: string;
+  botName: string;
+  visitorName: string;
+  lastMessage: string;
+  lastMessageTime: Date;
+  platform: string;
+  status: string; // ai_handling | human_takeover | resolved
+  unread: number;
+}
+
+interface MsgRow {
+  id: string;
+  role: 'user' | 'bot' | 'agent';
+  text: string;
+  time: Date;
+}
+
 interface Props {
   bots: any[];
   isRTL: boolean;
 }
 
 export default function SharedInboxUI({ bots, isRTL }: Props) {
-  const [conversations, setConversations] = useState(MOCK_CONVERSATIONS);
+  const [conversations, setConversations] = useState<ConvRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedConv, setSelectedConv] = useState<string | null>(null);
+  const [messages, setMessages] = useState<MsgRow[]>([]);
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'open' | 'resolved'>('all');
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const botMap = Object.fromEntries(bots.map(b => [b.id, b.name]));
+
+  // Map DB status to display status
+  const displayStatus = (s: string) => {
+    if (s === 'resolved') return 'resolved';
+    return 'open'; // ai_handling + human_takeover = open
+  };
+
+  const loadConversations = useCallback(async () => {
+    if (bots.length === 0) { setLoading(false); return; }
+    setLoading(true);
+    const botIds = bots.map(b => b.id);
+    const { data, error } = await supabase
+      .from('chatbot_conversations')
+      .select('id, bot_id, visitor_name, visitor_email, status, last_message_at, platform')
+      .in('bot_id', botIds)
+      .order('last_message_at', { ascending: false });
+
+    if (!error && data) {
+      // Fetch last message per conversation
+      const convIds = data.map(c => c.id);
+      const { data: lastMsgs } = await supabase
+        .from('chatbot_messages')
+        .select('conversation_id, content, created_at')
+        .in('conversation_id', convIds)
+        .order('created_at', { ascending: false });
+
+      const lastMsgMap: Record<string, string> = {};
+      lastMsgs?.forEach(m => {
+        if (!lastMsgMap[m.conversation_id]) lastMsgMap[m.conversation_id] = m.content;
+      });
+
+      setConversations(data.map(c => ({
+        id: c.id,
+        bot_id: c.bot_id,
+        botName: botMap[c.bot_id] || 'Bot',
+        visitorName: c.visitor_name || c.visitor_email || 'Visitor',
+        lastMessage: lastMsgMap[c.id] || '—',
+        lastMessageTime: new Date(c.last_message_at || c.started_at),
+        platform: c.platform || 'website',
+        status: displayStatus(c.status),
+        unread: 0,
+      })));
+    }
+    setLoading(false);
+  }, [bots]);
+
+  useEffect(() => { loadConversations(); }, [loadConversations]);
+
+  const loadMessages = useCallback(async (convId: string) => {
+    setLoadingMsgs(true);
+    const { data, error } = await supabase
+      .from('chatbot_messages')
+      .select('id, sender_type, content, created_at')
+      .eq('conversation_id', convId)
+      .order('created_at', { ascending: true });
+
+    if (!error && data) {
+      setMessages(data.map(m => ({
+        id: m.id,
+        role: m.sender_type === 'visitor' ? 'user' : m.sender_type === 'human' ? 'agent' : 'bot',
+        text: m.content,
+        time: new Date(m.created_at),
+      })));
+    }
+    setLoadingMsgs(false);
+  }, []);
+
+  useEffect(() => {
+    if (selectedConv) loadMessages(selectedConv);
+    else setMessages([]);
+  }, [selectedConv, loadMessages]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
   const activeConv = conversations.find(c => c.id === selectedConv);
+
+  const handleSendReply = async () => {
+    if (!replyText.trim() || !selectedConv) return;
+    setSending(true);
+    const text = replyText.trim();
+    setReplyText('');
+    const { data: inserted } = await supabase
+      .from('chatbot_messages')
+      .insert({ conversation_id: selectedConv, sender_type: 'human', content: text })
+      .select()
+      .single();
+    if (inserted) {
+      setMessages(prev => [...prev, { id: inserted.id, role: 'agent', text: inserted.content, time: new Date(inserted.created_at) }]);
+      setConversations(prev => prev.map(c =>
+        c.id === selectedConv ? { ...c, lastMessage: text, lastMessageTime: new Date() } : c
+      ));
+    }
+    setSending(false);
+  };
 
   const filteredConvs = conversations.filter(c => {
     const matchesSearch = c.visitorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -88,30 +155,6 @@ export default function SharedInboxUI({ bots, isRTL }: Props) {
     const matchesFilter = filter === 'all' || c.status === filter;
     return matchesSearch && matchesFilter;
   });
-
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [selectedConv, conversations]);
-
-  const handleSendReply = () => {
-    if (!replyText.trim() || !selectedConv) return;
-    setSending(true);
-    const newMsg = {
-      id: Date.now().toString(),
-      role: 'agent',
-      text: replyText.trim(),
-      time: new Date(),
-    };
-    setConversations(prev => prev.map(c =>
-      c.id === selectedConv
-        ? { ...c, messages: [...c.messages, newMsg], lastMessage: replyText.trim(), lastMessageTime: new Date() }
-        : c
-    ));
-    setReplyText('');
-    setSending(false);
-  };
 
   const hasNoBots = bots.length === 0;
 
@@ -140,7 +183,7 @@ export default function SharedInboxUI({ bots, isRTL }: Props) {
         <button
           title="Refresh"
           className="p-2 rounded-xl bg-muted/50 hover:bg-muted transition-colors active:scale-95"
-          onClick={() => setConversations(MOCK_CONVERSATIONS)}
+          onClick={loadConversations}
         >
           <RefreshCw className="h-4 w-4 text-muted-foreground" />
         </button>
@@ -183,10 +226,14 @@ export default function SharedInboxUI({ bots, isRTL }: Props) {
           "flex flex-col gap-2 overflow-y-auto",
           selectedConv ? "hidden md:flex md:w-64 lg:w-72 shrink-0" : "flex-1"
         )}>
-          {filteredConvs.length === 0 ? (
+          {loading ? (
+            <div className="flex flex-col items-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/40" />
+            </div>
+          ) : filteredConvs.length === 0 ? (
             <div className="flex flex-col items-center py-12 text-center">
               <MessageSquare className="h-10 w-10 text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground">{isRTL ? 'لا توجد محادثات' : 'No conversations yet'}</p>
+              <p className="text-sm text-muted-foreground">{isRTL ? 'لا توجد محادثات بعد' : 'No conversations yet'}</p>
             </div>
           ) : (
             filteredConvs.map(conv => (
@@ -237,60 +284,99 @@ export default function SharedInboxUI({ bots, isRTL }: Props) {
         {selectedConv && activeConv && (
           <div className="flex-1 flex flex-col min-h-0 rounded-2xl border border-border/40 bg-white dark:bg-card overflow-hidden">
             {/* Chat header */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-border/40 bg-muted/20 shrink-0">
+            <div className="flex items-center gap-3 px-3 py-3 border-b border-border/40 bg-white dark:bg-card shrink-0 shadow-sm">
+              {/* Back button — prominent, always visible on mobile */}
               <button
                 title="Back"
                 onClick={() => setSelectedConv(null)}
-                className="md:hidden p-1.5 rounded-lg hover:bg-muted transition-colors"
+                className="md:hidden flex items-center justify-center w-9 h-9 rounded-xl bg-[#060541] dark:bg-white text-white dark:text-[#060541] shadow-md active:scale-90 transition-all shrink-0"
               >
-                <ChevronRight className="h-4 w-4 rotate-180 text-muted-foreground" />
+                <ChevronRight className="h-5 w-5 rotate-180" />
               </button>
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+
+              {/* Visitor avatar */}
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold shrink-0 shadow">
                 {activeConv.visitorName.charAt(0)}
               </div>
+
+              {/* Visitor info */}
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm text-foreground truncate">{activeConv.visitorName}</p>
-                <p className="text-[10px] text-muted-foreground">{activeConv.botName} · {activeConv.platform}</p>
+                <p className="font-bold text-sm text-foreground truncate leading-tight">{activeConv.visitorName}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  {/* Bot avatar pill */}
+                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#060541]/8 dark:bg-white/10">
+                    <Bot className="h-3 w-3 text-[#060541] dark:text-white/70" />
+                    <span className="text-[10px] font-semibold text-[#060541] dark:text-white/70">{activeConv.botName}</span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">· {activeConv.platform}</span>
+                </div>
               </div>
+
+              {/* Status badge */}
               <span className={cn(
-                "text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0",
-                activeConv.status === 'open' ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-muted text-muted-foreground"
+                "text-[10px] px-2 py-1 rounded-full font-bold shrink-0",
+                activeConv.status === 'open'
+                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                  : "bg-muted text-muted-foreground"
               )}>
                 {activeConv.status === 'open' ? (isRTL ? 'مفتوح' : 'Open') : (isRTL ? 'محلول' : 'Resolved')}
               </span>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
-              {activeConv.messages.map(msg => (
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 bg-muted/10">
+              {loadingMsgs ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" /></div>
+              ) : messages.length === 0 ? (
+                <div className="flex flex-col items-center py-8 text-center">
+                  <MessageSquare className="h-8 w-8 text-muted-foreground/20 mb-2" />
+                  <p className="text-xs text-muted-foreground">{isRTL ? 'لا توجد رسائل' : 'No messages yet'}</p>
+                </div>
+              ) : null}
+              {messages.map(msg => (
                 <div
                   key={msg.id}
                   className={cn(
-                    "flex",
+                    "flex items-end gap-2",
                     msg.role === 'user' ? "justify-start" : "justify-end"
                   )}
                 >
+                  {/* User avatar dot */}
+                  {msg.role === 'user' && (
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-[9px] font-bold shrink-0 mb-1">
+                      {activeConv.visitorName.charAt(0)}
+                    </div>
+                  )}
                   <div className={cn(
-                    "max-w-[75%] px-3 py-2 rounded-2xl text-sm leading-relaxed",
+                    "max-w-[75%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm",
                     msg.role === 'user'
-                      ? "bg-muted/60 text-foreground rounded-tl-sm"
+                      ? "bg-white dark:bg-zinc-800 text-foreground rounded-bl-sm border border-border/30"
                       : msg.role === 'bot'
-                        ? "bg-[#060541] dark:bg-blue-600 text-white rounded-tr-sm"
-                        : "bg-emerald-500 text-white rounded-tr-sm"
+                        ? "bg-[#060541] dark:bg-blue-600 text-white rounded-br-sm"
+                        : "bg-emerald-500 text-white rounded-br-sm"
                   )}>
                     {msg.role !== 'user' && (
-                      <p className="text-[9px] font-semibold opacity-70 mb-0.5">
-                        {msg.role === 'bot' ? 'Bot' : isRTL ? 'أنت' : 'You'}
+                      <p className="text-[9px] font-bold opacity-70 mb-1 uppercase tracking-wide">
+                        {msg.role === 'bot' ? activeConv.botName : isRTL ? 'أنت' : 'You (Agent)'}
                       </p>
                     )}
                     <p>{msg.text}</p>
                     <p className={cn(
-                      "text-[9px] mt-1 opacity-60",
+                      "text-[9px] mt-1.5 opacity-50",
                       msg.role === 'user' ? "text-left" : "text-right"
                     )}>
                       {formatTime(msg.time)}
                     </p>
                   </div>
+                  {/* Bot/agent avatar dot */}
+                  {msg.role !== 'user' && (
+                    <div className={cn(
+                      "w-6 h-6 rounded-full flex items-center justify-center shrink-0 mb-1",
+                      msg.role === 'bot' ? "bg-[#060541] dark:bg-blue-600" : "bg-emerald-500"
+                    )}>
+                      <Bot className="h-3 w-3 text-white" />
+                    </div>
+                  )}
                 </div>
               ))}
               <div ref={messagesEndRef} />
@@ -302,14 +388,14 @@ export default function SharedInboxUI({ bots, isRTL }: Props) {
                 value={replyText}
                 onChange={e => setReplyText(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendReply(); } }}
-                placeholder={isRTL ? 'اكتب ردك...' : 'Type your reply...'}
-                className="flex-1 px-3 py-2 text-sm bg-muted/40 border border-border/40 rounded-xl focus:outline-none focus:border-[#060541]/30 dark:focus:border-white/30"
+                placeholder={isRTL ? 'اكتب ردك كوكيل...' : 'Reply as agent...'}
+                className="flex-1 px-4 py-2.5 text-sm bg-muted/40 border border-border/40 rounded-2xl focus:outline-none focus:border-[#060541]/40 dark:focus:border-white/30"
               />
               <button
                 title="Send"
                 onClick={handleSendReply}
                 disabled={!replyText.trim() || sending}
-                className="p-2.5 rounded-xl bg-[#060541] dark:bg-white text-white dark:text-[#060541] hover:opacity-90 disabled:opacity-40 transition-all active:scale-95 shrink-0"
+                className="p-2.5 rounded-xl bg-[#060541] dark:bg-white text-white dark:text-[#060541] hover:opacity-90 disabled:opacity-30 transition-all active:scale-90 shrink-0 shadow-md"
               >
                 <Send className="h-4 w-4" />
               </button>

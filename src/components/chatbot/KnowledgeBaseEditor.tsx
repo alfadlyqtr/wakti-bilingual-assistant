@@ -1,8 +1,12 @@
 // @ts-nocheck
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronUp, Save, Loader2, BookOpen, HelpCircle, ShoppingBag, Clock, FileText } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Trash2, ChevronDown, ChevronUp, Save, Loader2, BookOpen, HelpCircle, ShoppingBag, Clock, FileText, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import * as pdfjsLib from 'pdfjs-dist';
+import mammoth from 'mammoth';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
 interface QAPair {
   id: string;
@@ -116,6 +120,47 @@ interface Props {
 export default function KnowledgeBaseEditor({ value, onChange, onSave, saving, isRTL }: Props) {
   const [sections, setSections] = useState<KBSection[]>(() => parseKB(value, DEFAULT_SECTIONS(isRTL)));
   const [mode, setMode] = useState<'structured' | 'raw'>('structured');
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+
+    try {
+      let extracted = '';
+
+      if (file.name.endsWith('.txt')) {
+        extracted = await file.text();
+
+      } else if (file.name.endsWith('.pdf')) {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const pages: string[] = [];
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          pages.push(content.items.map((item: any) => item.str).join(' '));
+        }
+        extracted = pages.join('\n\n');
+
+      } else if (file.name.endsWith('.doc') || file.name.endsWith('.docx')) {
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        extracted = result.value;
+      }
+
+      if (extracted.trim()) {
+        onChange((value ? value + '\n\n' : '') + extracted.trim());
+      }
+    } catch (err) {
+      console.error('File extraction error:', err);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   useEffect(() => {
     if (mode === 'structured') {
@@ -261,15 +306,35 @@ export default function KnowledgeBaseEditor({ value, onChange, onSave, saving, i
 
       {/* Raw text mode */}
       {mode === 'raw' && (
-        <textarea
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          rows={8}
-          className="w-full border border-border/60 rounded-xl px-3 py-2 text-sm bg-background focus:outline-none focus:border-[#060541]/40 dark:focus:border-white/30 resize-none font-mono text-xs"
-          placeholder={isRTL
-            ? 'أضف معلومات عن منتجاتك، الأسئلة الشائعة، ساعات العمل...'
-            : 'Add any info about your business, products, FAQs, policies...'}
-        />
+        <div className="flex flex-col gap-2">
+          {/* Upload button */}
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".txt,.pdf,.doc,.docx"
+              className="hidden"
+              aria-label="Upload knowledge base file"
+              onChange={handleFileUpload}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-border/60 hover:border-[#060541]/40 dark:hover:border-white/30 bg-muted/30 hover:bg-muted/50 transition-colors text-xs text-muted-foreground w-full justify-center"
+            >
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              <span>{uploading ? (isRTL ? 'جارٍ القراءة...' : 'Reading...') : (isRTL ? 'رفع ملف (PDF، TXT، Word)' : 'Upload file (PDF, .txt, Word)')}</span>
+            </button>
+          </div>
+          <textarea
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            rows={8}
+            className="w-full border border-border/60 rounded-xl px-3 py-2 text-sm bg-background focus:outline-none focus:border-[#060541]/40 dark:focus:border-white/30 resize-none font-mono text-xs"
+            placeholder={isRTL
+              ? 'أضف معلومات عن منتجاتك، الأسئلة الشائعة، ساعات العمل...'
+              : 'Add any info about your business, products, FAQs, policies...'}
+          />
+        </div>
       )}
 
       {/* Save button */}
