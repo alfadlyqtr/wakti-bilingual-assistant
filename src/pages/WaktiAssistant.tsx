@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from
 const ChatbotDesigner = lazy(() => import('@/components/chatbot/ChatbotDesigner'));
 const ChatbotAISettings = lazy(() => import('@/components/chatbot/ChatbotAISettings'));
 import SharedInboxUI from '@/components/chatbot/SharedInboxUI';
+import KnowledgeBaseEditor from '@/components/chatbot/KnowledgeBaseEditor';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -1449,22 +1450,13 @@ export default function WaktiAssistant() {
                       <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{item.desc}</p>
                     </div>
                   </div>
-                  <textarea
+                  <KnowledgeBaseEditor
                     value={knowledgeBase}
-                    onChange={(e) => setKnowledgeBase(e.target.value)}
-                    rows={4}
-                    className="w-full border border-border/60 rounded-xl px-3 py-2 text-sm bg-background focus:outline-none focus:border-[#060541]/40 dark:focus:border-white/30 resize-none mb-2"
-                    placeholder={isRTL ? 'أضف معلومات عن منتجاتك، الأسئلة الشائعة، ساعات العمل...' : 'Add info about your products, FAQs, business hours, policies...'}
+                    onChange={setKnowledgeBase}
+                    onSave={saveKnowledgeBase}
+                    saving={savingKB}
+                    isRTL={isRTL}
                   />
-                  <Button
-                    size="sm"
-                    className="gap-1.5 text-xs rounded-lg bg-[#060541] hover:bg-[#060541]/90 text-white dark:bg-white dark:text-[#060541]"
-                    onClick={saveKnowledgeBase}
-                    disabled={savingKB}
-                  >
-                    {savingKB ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                    {isRTL ? 'حفظ' : 'Save'}
-                  </Button>
                 </div>
               ) : (
                 <button
