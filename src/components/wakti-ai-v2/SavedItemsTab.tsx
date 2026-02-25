@@ -332,6 +332,16 @@ export default function SavedItemsTab() {
                   </div>
                   <div className="flex items-center gap-2">
                     <a 
+                      href={`https://wakti.qa/diagram-view?url=${encodeURIComponent(d.url)}&name=${encodeURIComponent(d.name)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded"
+                      title={language === 'ar' ? 'عرض المخطط' : 'View diagram'}
+                    >
+                      <Eye className="w-3 h-3" />
+                      {language === 'ar' ? 'عرض' : 'View'}
+                    </a>
+                    <a 
                       href={d.url} 
                       target="_blank" 
                       rel="noreferrer"
@@ -343,7 +353,7 @@ export default function SavedItemsTab() {
                       {language === 'ar' ? 'تحميل' : 'Download'}
                     </a>
                     <ShareButton
-                      shareUrl={d.url}
+                      shareUrl={`https://wakti.qa/diagram-view?url=${encodeURIComponent(d.url)}&name=${encodeURIComponent(d.name)}`}
                       shareTitle={d.name.replace(/\.[^.]+$/, '')}
                       shareDescription={language === 'ar' ? 'مخطط من Wakti' : 'A diagram from Wakti'}
                       size="sm"

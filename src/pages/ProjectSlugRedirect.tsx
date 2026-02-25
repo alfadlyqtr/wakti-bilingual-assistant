@@ -12,6 +12,16 @@ type ProjectRow = {
   published_url: string | null;
 };
 
+const RESERVED_PATHS = new Set([
+  'diagram-view', 'wallet-pass', 'qr', 'home', 'login', 'signup',
+  'forgot-password', 'reset-password', 'reset-success', 'contact',
+  'privacy-terms', 'account-delete', 'goodbye', 'confirmed', 'session-ended',
+  'dashboard', 'account', 'settings', 'tasks-reminders', 'tr', 'wakti-ai',
+  'wakti-ai-v2', 'calendar', 'journal', 'music', 'games', 'contacts',
+  'maw3d', 'tasjeel', 'voice-tts', 'tools', 'my-warranty', 'projects',
+  'help', 'fitness', 'whoop', 'preview', 'admindash', 'admin', 'mqtr',
+]);
+
 export default function ProjectSlugRedirect() {
   const { slug } = useParams();
   const { language, theme } = useTheme();
@@ -23,6 +33,13 @@ export default function ProjectSlugRedirect() {
   const [error, setError] = useState<string | null>(null);
 
   const normalizedSlug = useMemo(() => (slug || "").trim(), [slug]);
+
+  // If slug matches a known app path, navigate there instead
+  useEffect(() => {
+    if (normalizedSlug && RESERVED_PATHS.has(normalizedSlug)) {
+      window.location.replace(`/${normalizedSlug}${window.location.search}`);
+    }
+  }, [normalizedSlug]);
 
   useEffect(() => {
     let mounted = true;

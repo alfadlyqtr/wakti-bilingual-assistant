@@ -114,6 +114,7 @@ import LettersJoin from "./pages/LettersJoin";
 import LettersPlay from "./pages/LettersPlay";
 import LettersResults from "./pages/LettersResults";
 import PresentationSharePlayer from "./pages/PresentationSharePlayer";
+import DiagramView from "./pages/DiagramView";
 import MyWarranty from "./pages/MyWarranty";
 import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
@@ -186,6 +187,9 @@ function App() {
 
                 {/* Public presentation share player */}
                 <Route path="/p/:token" element={<PresentationSharePlayer />} />
+
+                {/* Public diagram viewer */}
+                <Route path="/diagram-view" element={<DiagramView />} />
 
                 {/* Public business card share */}
                 <Route path="/card/:shareSlug" element={<BusinessCardShare />} />
