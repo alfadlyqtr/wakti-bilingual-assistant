@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Download, Share2 } from 'lucide-react';
+// No action buttons in viewer
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -81,57 +81,21 @@ export default function DiagramView() {
 
   const cleanName = name.replace(/\.[^.]+$/, '');
 
-  const handleShare = async () => {
-    const shareUrl = window.location.href;
-    if (navigator.share) {
-      await navigator.share({ title: cleanName, url: shareUrl });
-    } else {
-      await navigator.clipboard.writeText(shareUrl);
-    }
-  };
-
   return (
     <div className="min-h-screen flex flex-col bg-[#0c0f14]">
 
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#0c0f14] sticky top-0 z-10">
-        {/* Left: Wakti logo */}
+      <header className="flex items-center justify-center px-4 py-3 border-b border-white/10 bg-[#0c0f14] sticky top-0 z-10">
         <a href="https://wakti.qa" className="flex items-center gap-2 group">
           <div className="w-8 h-8 rounded-xl overflow-hidden flex-shrink-0">
             <img src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" alt="Wakti" className="w-full h-full object-contain" />
           </div>
           <span className="font-bold text-white text-base tracking-wide group-hover:text-white/80 transition-colors">Wakti</span>
         </a>
-
-        {/* Center: diagram name */}
-        {cleanName && (
-          <span className="text-white/60 text-sm truncate max-w-[200px] hidden sm:block">{cleanName}</span>
-        )}
-
-        {/* Right: share + download */}
-        {url && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleShare}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-              {language === 'ar' ? 'مشاركة' : 'Share'}
-            </button>
-            <a
-              href={url}
-              download={name}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" />
-              {language === 'ar' ? 'تحميل' : 'Download'}
-            </a>
-          </div>
-        )}
       </header>
 
       {/* Diagram Area */}
-      <main className="flex-1 flex items-center justify-center p-6">
+      <main className="flex items-center justify-center p-6">
         {loading ? (
           <div className="text-white/50 text-center">
             <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -146,7 +110,7 @@ export default function DiagramView() {
             <p className="text-lg">{language === 'ar' ? 'لم يتم العثور على المخطط' : 'No diagram found'}</p>
           </div>
         ) : (
-          <div className="w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden">
+          <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden">
             {!loaded && (
               <div className="flex items-center justify-center h-64">
                 <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
