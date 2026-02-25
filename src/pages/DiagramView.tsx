@@ -55,12 +55,22 @@ export default function DiagramView() {
         const storagePath = data?.storage_url || '';
         setName(data?.name || 'diagram');
 
-        // If storage_url is a raw path, generate a signed URL
         if (storagePath && !storagePath.startsWith('http')) {
-          const { data: signedData } = await supabase.storage
+          // Try signed URL first
+          const { data: signedData, error: signError } = await supabase.storage
             .from('generated-files')
             .createSignedUrl(storagePath, 86400);
-          setUrl(signedData?.signedUrl || null);
+
+          if (signedData?.signedUrl) {
+            setUrl(signedData.signedUrl);
+          } else {
+            console.warn('Signed URL failed, using public URL fallback:', signError);
+            // Fallback: construct direct public URL
+            const { data: publicData } = supabase.storage
+              .from('generated-files')
+              .getPublicUrl(storagePath);
+            setUrl(publicData?.publicUrl || null);
+          }
         } else {
           setUrl(storagePath || null);
         }
@@ -137,25 +147,33 @@ export default function DiagramView() {
               ? 'حمّل Wakti وأنشئ مخططاتك الخاصة بالذكاء الاصطناعي'
               : 'Download Wakti and create your own AI-powered diagrams'}
           </p>
-          <div className="flex flex-wrap gap-3 justify-center">
+          <div className="flex flex-wrap gap-4 justify-center items-center">
             {(deviceOS === 'ios' || deviceOS === 'other') && (
               <a
                 href="https://apps.apple.com/us/app/wakti-ai/id6755150700"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:scale-105 bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(280,70%,65%)]"
+                className="transition-all hover:scale-105"
               >
-                📱 {language === 'ar' ? 'App Store' : 'App Store'}
+                <img
+                  src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg"
+                  alt="Download on the App Store"
+                  className="h-10"
+                />
               </a>
             )}
             {(deviceOS === 'android' || deviceOS === 'other') && (
               <a
-                href="https://play.google.com/store/apps/details?id=app.natively.waktiqa"
+                href="https://play.google.com/store/apps/details?id=ai.wakti.app"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:scale-105 bg-gradient-to-r from-[hsl(142,76%,45%)] to-[hsl(180,85%,50%)]"
+                className="transition-all hover:scale-105"
               >
-                📱 {language === 'ar' ? 'Google Play' : 'Google Play'}
+                <img
+                  src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
+                  alt="Get it on Google Play"
+                  className="h-14"
+                />
               </a>
             )}
           </div>
