@@ -1,6 +1,5 @@
-import { useState, useCallback, useRef } from 'react';
-import { ArrowLeft, Save, Send, Smile, X, Check, Loader2, Monitor, Smartphone, Upload } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { useState, useCallback } from 'react';
+import { ArrowLeft, Save, Send, Smile, X, Check, Loader2, Monitor, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ChatbotBot, ChatbotService } from '@/services/chatbotService';
@@ -41,19 +40,15 @@ const POSITION_WEB = [
 const WINDOW_SIZES = ['S', 'M', 'L', 'XL'];
 
 // ─── Live Preview ──────────────────────────────────────────────────────────────
-function ChatPreview({ bot, design, device, avatarUrl = '' }: {
+function ChatPreview({ bot, design, device }: {
   bot: ChatbotBot;
   design: DesignState;
   device: PreviewDevice;
-  avatarUrl?: string;
 }) {
   const accentColor = design.primaryColor || bot.primary_color || '#060541';
   const bgColor = design.bgColor;
   const botName = design.botName || bot.name;
   const welcomeMsg = design.welcomeMessage || bot.welcome_message || 'Hello! 👋 How can I assist you?';
-  const avatarNode = avatarUrl
-    ? <img src={avatarUrl} alt="bot" className="w-full h-full object-cover rounded-full" />
-    : <span>{design.avatar}</span>;
 
   const isMobile = device === 'mobile';
 
@@ -97,8 +92,8 @@ function ChatPreview({ bot, design, device, avatarUrl = '' }: {
       )} style={{ maxHeight: isMobile ? '380px' : '380px' }}>
         {/* Header */}
         <div className="flex items-center gap-2.5 px-3 py-2.5 shrink-0" style={{ background: accentColor }}>
-          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-lg shrink-0 overflow-hidden">
-            {avatarNode}
+          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-lg shrink-0">
+            {design.avatar}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-white font-bold text-sm truncate">{botName}</p>
@@ -115,8 +110,8 @@ function ChatPreview({ bot, design, device, avatarUrl = '' }: {
         <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0" style={{ background: bgColor }}>
           {/* Bot messages */}
           <div className="flex gap-2 items-end">
-            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 overflow-hidden" style={{ background: accentColor }}>
-              {avatarNode}
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0" style={{ background: accentColor }}>
+              {design.avatar}
             </div>
             <div className="max-w-[80%]">
               <div className="bg-white dark:bg-zinc-700 rounded-2xl rounded-bl-sm px-3 py-2 shadow-sm">
@@ -128,8 +123,8 @@ function ChatPreview({ bot, design, device, avatarUrl = '' }: {
 
           {design.callToAction && (
             <div className="flex gap-2 items-end">
-              <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 overflow-hidden" style={{ background: accentColor }}>
-                {avatarNode}
+              <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0" style={{ background: accentColor }}>
+                {design.avatar}
               </div>
               <div className="max-w-[80%]">
                 <div className="bg-white dark:bg-zinc-700 rounded-2xl rounded-bl-sm px-3 py-2 shadow-sm">
@@ -189,37 +184,6 @@ export default function ChatbotDesigner({ bot, onBack, onSave, isRTL }: Props) {
   const [activeTab, setActiveTab] = useState<DesignTab>('content');
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>('desktop');
   const [saving, setSaving] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState<string>(bot.avatar_url || '');
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const avatarInputRef = useRef<HTMLInputElement>(null);
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) { toast.error('Please upload an image file'); return; }
-    if (file.size > 2 * 1024 * 1024) { toast.error('Image must be under 2MB'); return; }
-    setUploadingAvatar(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { toast.error('Not authenticated'); return; }
-      const ext = file.name.split('.').pop();
-      const path = `${user.id}/bot-avatars/${bot.id}-${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
-      if (uploadError) throw uploadError;
-      const { data } = supabase.storage.from('avatars').getPublicUrl(path);
-      const url = data.publicUrl;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from('chatbot_bots').update({ avatar_url: url }).eq('id', bot.id);
-      setAvatarUrl(url);
-      update('avatar', '');
-      toast.success(isRTL ? 'تم رفع الصورة!' : 'Avatar uploaded!');
-    } catch {
-      toast.error(isRTL ? 'فشل رفع الصورة' : 'Upload failed');
-    } finally {
-      setUploadingAvatar(false);
-      e.target.value = '';
-    }
-  };
 
   const [design, setDesign] = useState<DesignState>({
     botName: bot.name,
@@ -243,9 +207,8 @@ export default function ChatbotDesigner({ bot, onBack, onSave, isRTL }: Props) {
         name: design.botName,
         primary_color: design.primaryColor,
         welcome_message: design.welcomeMessage,
-        avatar_url: avatarUrl || undefined,
       });
-      onSave({ ...bot, name: design.botName, primary_color: design.primaryColor, welcome_message: design.welcomeMessage, avatar_url: avatarUrl || null });
+      onSave({ ...bot, name: design.botName, primary_color: design.primaryColor, welcome_message: design.welcomeMessage });
       toast.success(isRTL ? 'تم حفظ التصميم!' : 'Design saved!');
     } catch {
       toast.error(isRTL ? 'فشل الحفظ' : 'Failed to save');
@@ -358,33 +321,10 @@ export default function ChatbotDesigner({ bot, onBack, onSave, isRTL }: Props) {
                   {isRTL ? 'أيقونة البوت' : 'Bot Avatar'}
                 </label>
                 <div className="grid grid-cols-5 gap-2">
-                  {/* Upload custom avatar */}
-                  <button
-                    onClick={() => avatarInputRef.current?.click()}
-                    className={cn(
-                      "w-full aspect-square rounded-xl flex flex-col items-center justify-center border-2 transition-all duration-200 hover:scale-105 gap-0.5",
-                      avatarUrl && !design.avatar
-                        ? "border-[#060541] dark:border-white bg-[#060541]/5 dark:bg-white/10 scale-105"
-                        : "border-dashed border-border/60 hover:border-[#060541]/50"
-                    )}
-                    title={isRTL ? 'رفع صورة' : 'Upload image'}
-                  >
-                    {uploadingAvatar ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    ) : avatarUrl && !design.avatar ? (
-                      <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-xl" />
-                    ) : (
-                      <>
-                        <Upload className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-[9px] text-muted-foreground font-medium leading-tight text-center">{isRTL ? 'رفع' : 'Upload'}</span>
-                      </>
-                    )}
-                  </button>
-                  <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
                   {BOT_AVATARS.map(av => (
                     <button
                       key={av}
-                      onClick={() => { update('avatar', av); setAvatarUrl(''); }}
+                      onClick={() => update('avatar', av)}
                       className={cn(
                         "w-full aspect-square rounded-xl text-2xl flex items-center justify-center border-2 transition-all duration-200 hover:scale-105",
                         design.avatar === av
@@ -593,7 +533,7 @@ export default function ChatbotDesigner({ bot, onBack, onSave, isRTL }: Props) {
             "transition-all duration-500",
             previewDevice === 'desktop' ? "w-full h-full max-h-[600px]" : "h-full flex items-center"
           )}>
-            <ChatPreview bot={bot} design={design} device={previewDevice} avatarUrl={avatarUrl} />
+            <ChatPreview bot={bot} design={design} device={previewDevice} />
           </div>
         </div>
 

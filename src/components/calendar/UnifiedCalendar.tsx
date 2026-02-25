@@ -665,15 +665,19 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
           continue;
         }
         
-        entryDate = new Date(year, month - 1, day, 9, 0, 0); // Default to 9 AM if no time
+        // iOS fix: use UTC constructor for consistent date handling across platforms
+        let hours = 9;
+        let minutes = 0;
         
         if (entry.time && typeof entry.time === 'string') {
           const timeParts = entry.time.split(':');
           if (timeParts.length >= 2) {
-            const [hours, minutes] = timeParts.map(Number);
-            entryDate.setHours(isNaN(hours) ? 9 : hours, isNaN(minutes) ? 0 : minutes, 0, 0);
+            hours = isNaN(parseInt(timeParts[0], 10)) ? 9 : parseInt(timeParts[0], 10);
+            minutes = isNaN(parseInt(timeParts[1], 10)) ? 0 : parseInt(timeParts[1], 10);
           }
         }
+        
+        entryDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0));
         
         // Validate date object is valid
         if (isNaN(entryDate.getTime())) {
@@ -821,21 +825,24 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
           return;
         }
         
-        // Set start and end dates
-        let startDateObj = new Date(year, month - 1, day, 9, 0, 0); // Default to 9 AM
+        // Set start and end dates - iOS fix: use UTC constructor for consistency
+        let hours = 9;
+        let minutes = 0;
         
         // Use time if available
         if (entry.time && typeof entry.time === 'string') {
           const timeParts = entry.time.split(':');
           if (timeParts.length >= 2) {
-            const [hours, minutes] = timeParts.map(Number);
-            startDateObj.setHours(isNaN(hours) ? 9 : hours, isNaN(minutes) ? 0 : minutes, 0, 0);
+            hours = isNaN(parseInt(timeParts[0], 10)) ? 9 : parseInt(timeParts[0], 10);
+            minutes = isNaN(parseInt(timeParts[1], 10)) ? 0 : parseInt(timeParts[1], 10);
           }
         }
         
+        // Create start date using UTC to ensure iOS compatibility
+        const startDateObj = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0));
+        
         // Create end date 1 hour after start
-        let endDateObj = new Date(startDateObj.getTime());
-        endDateObj.setHours(endDateObj.getHours() + 1);
+        const endDateObj = new Date(startDateObj.getTime() + 3600000); // Add 1 hour in milliseconds
         
         // Format to ISO string for NativelyCalendar
         const startDate = startDateObj.toISOString();

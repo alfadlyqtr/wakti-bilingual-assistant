@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Save, Loader2, ChevronDown, ChevronUp, Cpu, MessageSquare, FileText } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, ChevronDown, ChevronUp, Cpu, MessageSquare, FileText, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ChatbotBot, ChatbotService } from '@/services/chatbotService';
@@ -16,8 +16,8 @@ interface Props {
 type SectionId = 'basic' | 'personality' | 'summary';
 
 const GPT_MODELS = [
-  { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', desc: 'Fast ⚡' },
-  { id: 'gpt-4o-mini', label: 'GPT-4o Mini', desc: 'Creative 🎨' },
+  { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', desc: 'Fast' },
+  { id: 'gpt-4o-mini', label: 'GPT-4o Mini', desc: 'Creative' },
 ];
 
 const LANGUAGES = ['English', 'Arabic', 'French', 'Spanish', 'German', 'Portuguese'];
@@ -92,7 +92,7 @@ export default function ChatbotAISettings({ bot, onBack, onSave, isRTL }: Props)
   const [saving, setSaving] = useState(false);
 
   // Basic config state
-  const [model, setModel] = useState('gpt-4o-mini');
+  const [model, setModel] = useState('gemini-2.5-flash-lite');
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(100);
   const [fallbackMsg, setFallbackMsg] = useState("I'm sorry, I didn't understand that. Could you rephrase?");
@@ -171,7 +171,7 @@ export default function ChatbotAISettings({ bot, onBack, onSave, isRTL }: Props)
             <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">
               {isRTL ? 'نموذج الذكاء الاصطناعي' : 'AI Model'}
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {GPT_MODELS.map(m => (
                 <button
                   key={m.id}
@@ -212,23 +212,16 @@ export default function ChatbotAISettings({ bot, onBack, onSave, isRTL }: Props)
 
           {/* Max tokens */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                {isRTL ? 'الحد الأقصى للرموز' : 'Max Response Tokens'}
-              </label>
-              <span className="text-xs font-mono font-bold text-foreground">{maxTokens}</span>
-            </div>
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">
+              {isRTL ? 'الحد الأقصى للرموز' : 'Max Response Tokens'}
+            </label>
             <input
-              type="range" min={10} max={100} step={10}
+              type="number" min={10} max={100} step={10}
               value={maxTokens}
-              onChange={e => setMaxTokens(parseInt(e.target.value))}
-              className="w-full accent-[#060541]"
+              onChange={e => setMaxTokens(Math.min(100, Math.max(1, parseInt(e.target.value) || 10)))}
+              className="w-full border border-border/60 rounded-xl px-3 py-2.5 text-sm bg-background focus:outline-none focus:border-[#060541]/50 dark:focus:border-white/30"
             />
-            <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-              <span>10</span>
-              <span>{isRTL ? 'يؤثر على طول الردود' : 'Affects response length'}</span>
-              <span>100</span>
-            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">{isRTL ? 'يؤثر على طول الردود (الحد الأقصى 100)' : 'Affects response length (Max 100)'}</p>
           </div>
 
           {/* Fallback message */}
@@ -340,6 +333,16 @@ export default function ChatbotAISettings({ bot, onBack, onSave, isRTL }: Props)
 
           {summaryEnabled && (
             <>
+              {/* Info banner */}
+              <div className="flex gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40">
+                <Info className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
+                  {isRTL
+                    ? 'كل توليد ملخص يستهلك رصيداً واحداً من الذكاء الاصطناعي'
+                    : 'Each summary generation consumes one AI credit (Involves your AI messages or API key credits)'}
+                </p>
+              </div>
+
               {/* Language */}
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">

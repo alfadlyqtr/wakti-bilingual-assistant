@@ -305,35 +305,35 @@ const DiagramsTab: React.FC = () => {
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Download diagram (PNG directly from backend - no conversion needed)
+  // Download diagram (SVG directly from backend)
   // ─────────────────────────────────────────────────────────────────────────
 
   const handleDownload = async (diagram: GeneratedDiagram) => {
-    const fileName = `${diagram.title.replace(/\s+/g, '_')}.png`;
+    const fileName = `${diagram.title.replace(/\s+/g, '_')}.svg`;
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     
     try {
-      // Fetch the PNG directly from Supabase
+      // Fetch the SVG directly from Supabase
       const response = await fetch(diagram.imageUrl);
       if (!response.ok) throw new Error('Failed to fetch image');
       
-      const pngBlob = await response.blob();
+      const svgBlob = await response.blob();
 
-      // For iOS: Use Web Share API with PNG file
+      // For iOS: Use Web Share API with SVG file
       if (isIOS) {
-        const pngFile = new File([pngBlob], fileName, { type: 'image/png' });
+        const svgFile = new File([svgBlob], fileName, { type: 'image/svg+xml' });
         
-        if (navigator.share && navigator.canShare?.({ files: [pngFile] })) {
+        if (navigator.share && navigator.canShare?.({ files: [svgFile] })) {
           await navigator.share({
-            files: [pngFile],
+            files: [svgFile],
             title: diagram.title,
           });
           toast.success(isArabic ? 'تم المشاركة' : 'Shared!');
           return;
         }
         
-        // iOS fallback: open PNG in new tab for long-press save
-        const url = URL.createObjectURL(pngBlob);
+        // iOS fallback: open SVG in new tab for long-press save
+        const url = URL.createObjectURL(svgBlob);
         window.open(url, '_blank');
         toast.info(isArabic ? 'اضغط مطولاً للحفظ' : 'Long-press to save', {
           description: isArabic ? 'اضغط مطولاً على الصورة واختر حفظ' : 'Long-press the image and choose Save',
@@ -341,8 +341,8 @@ const DiagramsTab: React.FC = () => {
         return;
       }
       
-      // Desktop/Android: Download as PNG
-      const url = URL.createObjectURL(pngBlob);
+      // Desktop/Android: Download as SVG
+      const url = URL.createObjectURL(svgBlob);
       const a = document.createElement('a');
       a.href = url;
       a.download = fileName;
@@ -351,7 +351,7 @@ const DiagramsTab: React.FC = () => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast.success(isArabic ? 'تم التحميل' : 'Downloaded', {
-        description: isArabic ? 'تم حفظ المخطط كصورة PNG' : 'Diagram saved as PNG image',
+        description: isArabic ? 'تم حفظ المخطط كصورة SVG' : 'Diagram saved as SVG image',
       });
     } catch (err) {
       console.error('Download error:', err);

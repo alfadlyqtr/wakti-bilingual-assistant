@@ -173,16 +173,6 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
           onClick={(e) => e.stopPropagation()}
         />
 
-        {/* Prompt overlay */}
-        {lightboxImage.prompt && (
-          <div
-            className="absolute top-4 left-4 right-16 bg-black/50 backdrop-blur-xl rounded-xl px-3 py-2 text-white/80 text-xs line-clamp-2"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {lightboxImage.prompt}
-          </div>
-        )}
-
         {/* Bottom action bar */}
         <div
           className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-black/60 backdrop-blur-xl rounded-2xl px-4 py-2.5 border border-white/10"
@@ -306,11 +296,6 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
 
               {/* Bottom info bar */}
               <div className="p-2 space-y-1.5">
-                {/* Prompt preview */}
-                {img.prompt && (
-                  <p className="text-xs text-muted-foreground line-clamp-1">{img.prompt}</p>
-                )}
-
                 {/* Meta row */}
                 <div className="flex items-center justify-between gap-1">
                   <span className="text-[10px] font-semibold text-orange-600 dark:text-orange-400 bg-orange-100/80 dark:bg-orange-900/20 px-1.5 py-0.5 rounded">

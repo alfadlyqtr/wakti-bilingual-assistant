@@ -192,18 +192,18 @@ serve(async (req) => {
         console.log(`🔧 Rendering diagram: ${spec.title} (engine: ${spec.engine})`);
         console.log(`📝 Diagram source (first 200 chars): ${spec.diagramSource.substring(0, 200)}`);
         
-        const pngBuffer = await renderWithKroki(spec.engine, spec.diagramSource);
-        console.log(`✅ Kroki rendered PNG (${pngBuffer.length} bytes)`);
+        const svgText = await renderWithKroki(spec.engine, spec.diagramSource);
+        console.log(`✅ Kroki rendered SVG (${svgText.length} characters)`);
 
-        // Upload PNG to Supabase Storage
         const diagramId = crypto.randomUUID();
-        const fileName = `${diagramId}.png`;
+        const fileName = `${diagramId}.svg`;
         const storagePath = `${ownerId}/diagrams/${fileName}`;
 
+        // Upload SVG (text) to Supabase Storage
         const { error: uploadError } = await supabase.storage
           .from("generated-files")
-          .upload(storagePath, pngBuffer, {
-            contentType: "image/png",
+          .upload(storagePath, svgText, {
+            contentType: "image/svg+xml",
             upsert: true,
           });
 
@@ -235,16 +235,17 @@ serve(async (req) => {
           try {
             console.log("🛟 Auto fallback: rendering safe Mermaid flowchart...");
             const fallbackSpec = buildAutoFallbackFlowchart(language);
-            const pngBuffer = await renderWithKroki("mermaid", fallbackSpec.diagramSource);
+            const svgText = await renderWithKroki("mermaid", fallbackSpec.diagramSource);
 
             const diagramId = crypto.randomUUID();
-            const fileName = `${diagramId}.png`;
+            const fileName = `${diagramId}.svg`;
             const storagePath = `${ownerId}/diagrams/${fileName}`;
 
+            // Upload fallback SVG
             const { error: uploadError } = await supabase.storage
               .from("generated-files")
-              .upload(storagePath, pngBuffer, {
-                contentType: "image/png",
+              .upload(storagePath, svgText, {
+                contentType: "image/svg+xml",
                 upsert: true,
               });
 
@@ -1176,10 +1177,10 @@ CRITICAL RULES:
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Kroki: Render diagram to PNG (binary)
+// Kroki: Render diagram to SVG (text) to support Arabic fonts in browser
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function renderWithKroki(engine: string, diagramSource: string): Promise<Uint8Array> {
+async function renderWithKroki(engine: string, diagramSource: string): Promise<string> {
   // Map our engine names to Kroki endpoints
   // See https://kroki.io/#support for full list
   const engineMap: Record<string, string> = {
@@ -1262,8 +1263,8 @@ async function renderWithKroki(engine: string, diagramSource: string): Promise<U
   
   console.log(`🔧 Cleaned diagram source for ${krokiEngine}:\n${cleanSource.substring(0, 500)}`);
   
-  // Request PNG from Kroki (binary response)
-  const response = await fetch(`${KROKI_BASE_URL}/${krokiEngine}/png`, {
+  // Request SVG from Kroki (text response)
+  const response = await fetch(`${KROKI_BASE_URL}/${krokiEngine}/svg`, {
     method: "POST",
     headers: {
       "Content-Type": "text/plain",
@@ -1276,7 +1277,6 @@ async function renderWithKroki(engine: string, diagramSource: string): Promise<U
     throw new Error(`Kroki error (${krokiEngine}): ${response.status} - ${errText}`);
   }
 
-  // Return PNG as binary Uint8Array
-  const arrayBuffer = await response.arrayBuffer();
-  return new Uint8Array(arrayBuffer);
+  // Return SVG as text
+  return await response.text();
 }

@@ -3,9 +3,11 @@ import { ImagePlus, Loader2, Globe } from 'lucide-react';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { safeCopyToClipboard } from '@/utils/clipboardUtils';
+import { toast } from 'sonner';
 import DiagramsTab from './DiagramsTab';
 import PresentationTab from './PresentationTab';
 import TextTranslateTab from './TextTranslateTab';
+import SavedItemsTab from './SavedItemsTab';
 
 interface TextGeneratorPopupProps {
   isOpen?: boolean;
@@ -326,6 +328,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   renderAsPage = false,
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>((initialTab as Tab) || 'compose');
+  const [generatedSubTab, setGeneratedSubTab] = useState<'current' | 'saved'>('current');
   const [mode, setMode] = useState<Mode>('compose');
   const { language } = useTheme();
   const [modelPreference, setModelPreference] = useState<ModelPreference>('auto');
@@ -435,6 +438,20 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   // Cached generated texts (persisted)
   const CACHE_KEY = 'wakti_generated_text_cache_v1';
   const [cachedTexts, setCachedTexts] = useState<string[]>([]);
+
+  // Saved texts (persisted)
+  const SAVED_TEXTS_KEY = 'wakti_saved_texts_v1';
+  const [savedTextsList, setSavedTextsList] = useState<{ id: string; text: string; savedAt: string }[]>([]);
+
+  const loadSavedTexts = () => {
+    try {
+      const raw = localStorage.getItem(SAVED_TEXTS_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) setSavedTextsList(arr);
+      }
+    } catch { }
+  };
 
   // Local accent for this page (match purple Text Generator icon)
   const fieldAccent = "border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500";
@@ -681,6 +698,24 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     return { hasFillFormat, subject, message };
   }, [parsedText.mainText]);
 
+  const handleSaveText = useCallback(() => {
+    const text = parsedText.mainText.trim();
+    if (!text) return;
+    try {
+      const raw = localStorage.getItem(SAVED_TEXTS_KEY);
+      const existing: { id: string; text: string; savedAt: string }[] = raw ? JSON.parse(raw) : [];
+      if (existing.some(s => s.text === text)) {
+        toast.info(language === 'ar' ? 'النص محفوظ مسبقاً' : 'Already saved');
+        return;
+      }
+      const entry = { id: Date.now().toString(), text, savedAt: new Date().toISOString() };
+      const next = [entry, ...existing].slice(0, 20);
+      localStorage.setItem(SAVED_TEXTS_KEY, JSON.stringify(next));
+      setSavedTextsList(next);
+      toast.success(language === 'ar' ? 'تم الحفظ في المحفوظات' : 'Saved to Saved tab');
+    } catch { }
+  }, [parsedText.mainText, language]);
+
   const copyWithFeedback = useCallback(async (text: string) => {
     try {
       await safeCopyToClipboard(text);
@@ -777,6 +812,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         // Capture web search sources if available
         setWebSearchSources(Array.isArray(resp.webSearchSources) ? resp.webSearchSources : []);
         setActiveTab('generated');
+        setGeneratedSubTab('current');
         onTextGenerated(resp.generatedText, body.mode);
 
         // Update cache: newest first, keep max 3, remove duplicates/empties
@@ -1524,145 +1560,182 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           )}
 
           {activeTab === 'generated' && (
-            <div className="space-y-3">
-              <div className="grid gap-2">
-                <label htmlFor="generatedTextArea" className="text-sm font-medium">{language === 'ar' ? 'النص المُولد' : 'Generated Text'}</label>
-                <textarea 
-                  id="generatedTextArea"
-                  className={`w-full border rounded p-3 min-h-[220px] ${fieldAccent}`} 
-                  readOnly 
-                  value={parsedText.mainText} 
-                  title={language === 'ar' ? 'النص المُولد' : 'Generated text'}
-                />
+            <div className="space-y-4">
+              {/* Sub-tabs for Generated: Current vs Saved */}
+              <div className="flex bg-muted/50 p-1 rounded-lg w-fit mb-4">
+                <button
+                  type="button"
+                  onClick={() => setGeneratedSubTab('current')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    generatedSubTab === 'current' ? 'bg-white dark:bg-slate-800 shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {language === 'ar' ? 'النص الحالي' : 'Current'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGeneratedSubTab('saved')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    generatedSubTab === 'saved' ? 'bg-white dark:bg-slate-800 shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {language === 'ar' ? 'المحفوظات' : 'Saved'}
+                </button>
               </div>
-              {parsedText.notes && (
-                <div className="rounded-lg border border-border/50 bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">{parsedText.notes}</p>
-                </div>
-              )}
-              
-              {/* Web Search Sources */}
-              {webSearchSources.length > 0 && (
-                <details className="rounded-xl border border-blue-500/30 bg-blue-500/5 dark:bg-blue-500/10 p-3">
-                  <summary className="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors flex items-center gap-2">
-                    <Globe className="w-4 h-4" />
-                    {language === 'ar' ? `المصادر (${webSearchSources.length})` : `Sources (${webSearchSources.length})`}
-                  </summary>
-                  <ul className="mt-3 space-y-2">
-                    {webSearchSources.slice(0, 10).map((s, idx) => (
-                      <li key={idx} className="flex items-start gap-2 min-w-0">
-                        <span className="text-blue-500 text-xs mt-1">•</span>
-                        <a
-                          href={s.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 dark:text-blue-400 hover:underline text-xs break-words"
+
+              {generatedSubTab === 'current' ? (
+                <div className="space-y-3">
+                  <div className="grid gap-2">
+                    <label htmlFor="generatedTextArea" className="text-sm font-medium">{language === 'ar' ? 'النص المُولد' : 'Generated Text'}</label>
+                    <textarea 
+                      id="generatedTextArea"
+                      className={`w-full border rounded p-3 min-h-[220px] ${fieldAccent}`} 
+                      readOnly 
+                      value={parsedText.mainText} 
+                      title={language === 'ar' ? 'النص المُولد' : 'Generated text'}
+                    />
+                  </div>
+                  {parsedText.notes && (
+                    <div className="rounded-lg border border-border/50 bg-muted/30 p-3">
+                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{parsedText.notes}</p>
+                    </div>
+                  )}
+                  
+                  {/* Web Search Sources */}
+                  {webSearchSources.length > 0 && (
+                    <details className="rounded-xl border border-blue-500/30 bg-blue-500/5 dark:bg-blue-500/10 p-3">
+                      <summary className="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors flex items-center gap-2">
+                        <Globe className="w-4 h-4" />
+                        {language === 'ar' ? `المصادر (${webSearchSources.length})` : `Sources (${webSearchSources.length})`}
+                      </summary>
+                      <ul className="mt-3 space-y-2">
+                        {webSearchSources.slice(0, 10).map((s, idx) => (
+                          <li key={idx} className="flex items-start gap-2 min-w-0">
+                            <span className="text-blue-500 text-xs mt-1">•</span>
+                            <a
+                              href={s.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 dark:text-blue-400 hover:underline text-xs break-words"
+                            >
+                              {s.title || s.url}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                  
+                  {/* Cached texts: show up to 3 previous results */}
+                  {cachedTexts.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-xs text-muted-foreground">
+                        {language === 'ar' ? 'نصوص محفوظة:' : 'Cached texts:'}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {cachedTexts.map((t, idx) => (
+                          <button
+                            key={idx}
+                            className="text-left border rounded p-2 hover:bg-muted"
+                            onClick={() => { setGeneratedText(t); setActiveTab('generated'); setGeneratedSubTab('current'); }}
+                            title={language === 'ar' ? 'تحميل في مربع النص' : 'Load into Generated Text'}
+                          >
+                            <div className="text-xs line-clamp-2 whitespace-pre-wrap break-words">{t}</div>
+                          </button>
+                        ))}
+                      </div>
+                      <div>
+                        <button
+                          className="px-3 py-1.5 rounded border hover:bg-muted"
+                          onClick={() => { saveCache([]); }}
                         >
-                          {s.title || s.url}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-              
-              {/* Cached texts: show up to 3 previous results */}
-              {cachedTexts.length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-xs text-muted-foreground">
-                    {language === 'ar' ? 'نصوص محفوظة:' : 'Cached texts:'}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {cachedTexts.map((t, idx) => (
+                          {language === 'ar' ? 'مسح المحفوظات' : 'Clear Cache'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <div className="relative">
                       <button
-                        key={idx}
-                        className="text-left border rounded p-2 hover:bg-muted"
-                        onClick={() => { setGeneratedText(t); setActiveTab('generated'); }}
-                        title={language === 'ar' ? 'تحميل في مربع النص' : 'Load into Generated Text'}
+                        type="button"
+                        className="px-3 py-1.5 rounded border hover:bg-muted"
+                        onClick={() => setCopyMenuOpen((v) => !v)}
+                        disabled={!generatedText.trim()}
+                        aria-haspopup="menu"
+                        aria-expanded={copyMenuOpen ? "true" : "false"}
                       >
-                        <div className="text-xs line-clamp-2 whitespace-pre-wrap break-words">{t}</div>
+                        {copied ? (language === 'ar' ? 'تم النسخ!' : 'Copied!') : (language === 'ar' ? 'نسخ' : 'Copy')}
                       </button>
-                    ))}
-                  </div>
-                  <div>
+
+                      {copyMenuOpen && (
+                        <div
+                          className="absolute z-50 mt-2 w-44 rounded-md border bg-background shadow-lg p-1"
+                          role="menu"
+                          onMouseLeave={() => setCopyMenuOpen(false)}
+                        >
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className={`w-full text-left px-2 py-1.5 rounded hover:bg-muted text-sm ${parsedGenerated.hasFillFormat ? '' : 'opacity-50 cursor-not-allowed'}`}
+                            onClick={handleCopySubject}
+                            disabled={!parsedGenerated.hasFillFormat}
+                          >
+                            {language === 'ar' ? 'نسخ الموضوع' : 'Copy subject'}
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className={`w-full text-left px-2 py-1.5 rounded hover:bg-muted text-sm ${parsedGenerated.hasFillFormat ? '' : 'opacity-50 cursor-not-allowed'}`}
+                            onClick={handleCopyMessage}
+                            disabled={!parsedGenerated.hasFillFormat}
+                          >
+                            {language === 'ar' ? 'نسخ الرسالة' : 'Copy message'}
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="w-full text-left px-2 py-1.5 rounded hover:bg-muted text-sm"
+                            onClick={handleCopyAll}
+                          >
+                            {language === 'ar' ? 'نسخ الكل' : 'Copy all'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      className="px-3 py-1.5 rounded border-2 border-indigo-500/60 text-indigo-700 dark:text-indigo-200 bg-indigo-500/10 hover:bg-indigo-500/20 shadow-[0_0_18px_rgba(99,102,241,0.45)] hover:shadow-[0_0_26px_rgba(99,102,241,0.6)]"
+                      onClick={handleGenerate}
+                    >
+                      {language === 'ar' ? 'إعادة توليد' : 'Regenerate'}
+                    </button>
+                    <button
+                      className="px-3 py-1.5 rounded border border-emerald-500/50 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20"
+                      onClick={handleSaveText}
+                      disabled={!generatedText.trim()}
+                    >
+                      {language === 'ar' ? 'حفظ' : 'Save'}
+                    </button>
                     <button
                       className="px-3 py-1.5 rounded border hover:bg-muted"
-                      onClick={() => { saveCache([]); }}
+                      onClick={() => setGeneratedText('')}
+                      aria-label="Clear generated text"
                     >
-                      {language === 'ar' ? 'مسح المحفوظات' : 'Clear Cache'}
+                      {language === 'ar' ? 'مسح النص' : 'Clear'}
+                    </button>
+                    <button
+                      className="px-3 py-1.5 rounded border hover:bg-muted"
+                      onClick={handleShare}
+                      disabled={!generatedText.trim()}
+                    >
+                      {language === 'ar' ? 'إرسال' : 'Send'}
                     </button>
                   </div>
                 </div>
-              )}
-              <div className="flex gap-2">
-                <div className="relative">
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 rounded border hover:bg-muted"
-                    onClick={() => setCopyMenuOpen((v) => !v)}
-                    disabled={!generatedText.trim()}
-                    aria-haspopup="menu"
-                    aria-expanded={copyMenuOpen ? "true" : "false"}
-                  >
-                    {copied ? (language === 'ar' ? 'تم النسخ!' : 'Copied!') : (language === 'ar' ? 'نسخ' : 'Copy')}
-                  </button>
-
-                  {copyMenuOpen && (
-                    <div
-                      className="absolute z-50 mt-2 w-44 rounded-md border bg-background shadow-lg p-1"
-                      role="menu"
-                      onMouseLeave={() => setCopyMenuOpen(false)}
-                    >
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className={`w-full text-left px-2 py-1.5 rounded hover:bg-muted text-sm ${parsedGenerated.hasFillFormat ? '' : 'opacity-50 cursor-not-allowed'}`}
-                        onClick={handleCopySubject}
-                        disabled={!parsedGenerated.hasFillFormat}
-                      >
-                        {language === 'ar' ? 'نسخ الموضوع' : 'Copy subject'}
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className={`w-full text-left px-2 py-1.5 rounded hover:bg-muted text-sm ${parsedGenerated.hasFillFormat ? '' : 'opacity-50 cursor-not-allowed'}`}
-                        onClick={handleCopyMessage}
-                        disabled={!parsedGenerated.hasFillFormat}
-                      >
-                        {language === 'ar' ? 'نسخ الرسالة' : 'Copy message'}
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="w-full text-left px-2 py-1.5 rounded hover:bg-muted text-sm"
-                        onClick={handleCopyAll}
-                      >
-                        {language === 'ar' ? 'نسخ الكل' : 'Copy all'}
-                      </button>
-                    </div>
-                  )}
+              ) : (
+                <div className="mt-4 border-t pt-4">
+                  <SavedItemsTab />
                 </div>
-                <button
-                  className="px-3 py-1.5 rounded border-2 border-indigo-500/60 text-indigo-700 dark:text-indigo-200 bg-indigo-500/10 hover:bg-indigo-500/20 shadow-[0_0_18px_rgba(99,102,241,0.45)] hover:shadow-[0_0_26px_rgba(99,102,241,0.6)]"
-                  onClick={handleGenerate}
-                >
-                  {language === 'ar' ? 'إعادة توليد' : 'Regenerate'}
-                </button>
-                <button
-                  className="px-3 py-1.5 rounded border hover:bg-muted"
-                  onClick={() => setGeneratedText('')}
-                  aria-label="Clear generated text"
-                >
-                  {language === 'ar' ? 'مسح النص' : 'Clear'}
-                </button>
-                <button
-                  className="px-3 py-1.5 rounded border hover:bg-muted"
-                  onClick={handleShare}
-                  disabled={!generatedText.trim()}
-                >
-                  {language === 'ar' ? 'إرسال' : 'Send'}
-                </button>
-              </div>
+              )}
             </div>
           )}
 
