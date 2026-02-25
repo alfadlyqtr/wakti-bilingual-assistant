@@ -28,6 +28,7 @@ import {
   Lock,
   FolderOpen,
   Type,
+  GalleryHorizontalEnd,
 } from 'lucide-react';
 
 interface QuotaInfo {
@@ -129,6 +130,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [sourceImageUrl, setSourceImageUrl] = useState<string | null>(null);
   const [sourceImagePath, setSourceImagePath] = useState<string | null>(null);
   const [latestVideo, setLatestVideo] = useState<LatestVideo | null>(null);
+  const [showSavedPicker, setShowSavedPicker] = useState(false);
+  const [savedImages, setSavedImages] = useState<{id:string; image_url:string; submode:string; created_at:string}[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(false);
   const pollInFlightRef = useRef(false);
   const usageIncrementedRef = useRef(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -187,6 +191,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           } else if (imagePreview?.startsWith('data:')) {
             const previewBlob = await dataUrlToBlob(imagePreview);
             sourceBlob = await compressImage(new File([previewBlob], 'preview.jpg', { type: 'image/jpeg' }), 512, 0.5);
+          } else if (imagePreview?.startsWith('http')) {
+            const fetchedBlob = await fetch(imagePreview).then(r => r.blob());
+            sourceBlob = await compressImage(new File([fetchedBlob], 'saved.jpg', { type: fetchedBlob.type || 'image/jpeg' }), 512, 0.5);
           } else {
             throw new Error('Missing image source');
           }
@@ -318,6 +325,36 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   useEffect(() => {
     loadLatestVideo();
   }, [loadLatestVideo]);
+
+  // Fetch saved images for picker
+  const fetchSavedImages = useCallback(async () => {
+    if (!user) return;
+    setLoadingSaved(true);
+    try {
+      const { data, error } = await (supabase as any)
+        .from('user_generated_images')
+        .select('id, image_url, submode, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (error) throw error;
+      setSavedImages((data || []).map((img: any) => ({
+        ...img,
+        image_url: (img.image_url || '').replace(/%20/g, ' ').trim(),
+      })));
+    } catch (e) {
+      console.error('Failed to fetch saved images:', e);
+    } finally {
+      setLoadingSaved(false);
+    }
+  }, [user]);
+
+  const handlePickSaved = (url: string) => {
+    setImageFile(null);
+    setImagePreview(url);
+    setGeneratedVideoUrl(null);
+    setShowSavedPicker(false);
+  };
 
   // Handle image upload
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -513,6 +550,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           } else if (imagePreview?.startsWith('data:')) {
             const previewBlob = await dataUrlToBlob(imagePreview);
             sourceBlob = await compressImage(new File([previewBlob], 'preview.jpg', { type: 'image/jpeg' }), 1024, 0.7);
+          } else if (imagePreview?.startsWith('http')) {
+            const fetchedBlob = await fetch(imagePreview).then(r => r.blob());
+            sourceBlob = await compressImage(new File([fetchedBlob], 'saved.jpg', { type: fetchedBlob.type || 'image/jpeg' }), 1024, 0.7);
           } else {
             throw new Error('Missing image source');
           }
@@ -837,20 +877,37 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             {generationMode === 'image_to_video' && (
               <div className="relative">
                 {!imagePreview ? (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="relative cursor-pointer group h-full min-h-[200px]"
-                  >
-                    <div className="h-full rounded-2xl border-2 border-dashed border-primary/40 bg-gradient-to-br from-[hsl(210,100%,65%)]/5 via-[hsl(180,85%,60%)]/5 to-[hsl(160,80%,55%)]/5 flex flex-col items-center justify-center gap-3 transition-all hover:border-primary hover:shadow-[0_0_30px_hsla(210,100%,65%,0.3)] active:scale-[0.98]">
-                      <div className="p-4 rounded-2xl bg-gradient-to-br from-[#060541] to-[hsl(210,100%,35%)] shadow-lg shadow-primary/40 group-hover:shadow-xl group-hover:shadow-primary/50 transition-all group-hover:scale-105">
-                        <Upload className="h-7 w-7 text-white" />
+                  <div className="h-full min-h-[200px] flex flex-col gap-2">
+                    {/* Upload from device */}
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="relative cursor-pointer group flex-1"
+                    >
+                      <div className="h-full rounded-2xl border-2 border-dashed border-primary/40 bg-gradient-to-br from-[hsl(210,100%,65%)]/5 via-[hsl(180,85%,60%)]/5 to-[hsl(160,80%,55%)]/5 flex flex-col items-center justify-center gap-2 transition-all hover:border-primary hover:shadow-[0_0_30px_hsla(210,100%,65%,0.3)] active:scale-[0.98]">
+                        <div className="p-3 rounded-2xl bg-gradient-to-br from-[#060541] to-[hsl(210,100%,35%)] shadow-lg shadow-primary/40 group-hover:shadow-xl group-hover:shadow-primary/50 transition-all group-hover:scale-105">
+                          <Upload className="h-6 w-6 text-white" />
+                        </div>
+                        <div className="text-center px-3">
+                          <p className="font-semibold text-sm">
+                            {language === 'ar' ? 'رفع صورة' : 'Upload Image'}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {language === 'ar' ? 'PNG, JPG • 10MB' : 'PNG, JPG • 10MB'}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-center px-3">
+                    </div>
+                    {/* Pick from saved images */}
+                    <div
+                      onClick={() => { setShowSavedPicker(true); fetchSavedImages(); }}
+                      className="relative cursor-pointer group"
+                    >
+                      <div className="rounded-2xl border-2 border-dashed border-orange-400/40 bg-gradient-to-br from-orange-500/5 via-amber-500/5 to-orange-400/5 flex items-center justify-center gap-2.5 py-3 px-4 transition-all hover:border-orange-500 hover:shadow-[0_0_30px_hsla(25,95%,60%,0.3)] active:scale-[0.98]">
+                        <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 shadow-lg shadow-orange-500/30 group-hover:shadow-xl group-hover:shadow-orange-500/40 transition-all group-hover:scale-105">
+                          <GalleryHorizontalEnd className="h-4 w-4 text-white" />
+                        </div>
                         <p className="font-semibold text-sm">
-                          {language === 'ar' ? 'اختر صورة' : 'Choose Image'}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {language === 'ar' ? 'PNG, JPG • 10MB' : 'PNG, JPG • 10MB'}
+                          {language === 'ar' ? 'اختر من المحفوظات' : 'Pick from Saved'}
                         </p>
                       </div>
                     </div>
@@ -1182,6 +1239,77 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           )}
         </div>
       </div>
+
+      {/* Saved Images Picker Modal */}
+      {showSavedPicker && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowSavedPicker(false)}
+        >
+          <div
+            className="relative w-full max-w-lg max-h-[80vh] bg-background rounded-t-2xl sm:rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <GalleryHorizontalEnd className="h-5 w-5 text-orange-500" />
+                <h3 className="font-bold text-sm">
+                  {language === 'ar' ? 'اختر من صورك المحفوظة' : 'Pick from Saved Images'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowSavedPicker(false)}
+                className="p-1.5 rounded-full hover:bg-muted transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Image grid */}
+            <div className="flex-1 overflow-y-auto p-3">
+              {loadingSaved ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+                </div>
+              ) : savedImages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-2 text-muted-foreground">
+                  <ImageIcon className="h-10 w-10 opacity-40" />
+                  <p className="text-sm font-medium">
+                    {language === 'ar' ? 'لا توجد صور محفوظة بعد' : 'No saved images yet'}
+                  </p>
+                  <p className="text-xs">
+                    {language === 'ar' ? 'أنشئ صوراً في تبويب الصور أولاً' : 'Generate images in the Image tab first'}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {savedImages.map((img) => (
+                    <button
+                      key={img.id}
+                      onClick={() => handlePickSaved(img.image_url)}
+                      className="relative aspect-square rounded-xl overflow-hidden border-2 border-transparent hover:border-orange-500 focus:border-orange-500 transition-all active:scale-95 group"
+                    >
+                      <img
+                        src={img.image_url}
+                        alt="Saved"
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                        <Check className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                      </div>
+                      <span className="absolute bottom-1 left-1 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-black/50 text-white/80">
+                        {img.submode === 'text2image' ? 'T2I' : img.submode === 'image2image' ? 'I2I' : img.submode === 'background-removal' ? 'BG' : img.submode === 'draw' ? 'Draw' : img.submode}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
