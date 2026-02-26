@@ -124,80 +124,101 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   }, [language, locale]);
 
   if (view === 'year') {
+    const miniDayNames = Array.from({ length: 7 }).map((_, i) =>
+      format(addDays(new Date(2021, 8, 5), i), 'EEEEE', { locale })
+    );
+
     return (
-      <div className="grid grid-cols-3 gap-2 p-2 overflow-y-auto flex-1 pb-20">
-        {days.map((month) => {
-          const entryCounts = getEntryCountByType(month);
-          const hasEntries = Object.values(entryCounts).some(count => count > 0);
-          const isCurrentMonth = isSameMonth(month, today);
-          
-          return (
-            <motion.div
-              key={format(month, 'MMM')}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => {
-                const newDate = new Date(currentDate);
-                newDate.setMonth(month.getMonth());
-                onDayClick(newDate);
-              }}
-              className={cn(
-                "p-2 rounded-md text-center border",
-                isCurrentMonth && "bg-primary/10 border-primary",
-                !isCurrentMonth && "border-border",
-                "cursor-pointer hover:bg-accent/50",
-              )}
-            >
-              <div className="font-medium">{format(month, 'MMM', { locale })}</div>
-              
-              {hasEntries && (
-                <div className="flex justify-center gap-1 mt-2 flex-wrap">
-                  {entryCounts[EntryType.MAW3D_EVENT] > 0 && (
-                    <div className="flex items-center">
-                      <Circle className="h-2 w-2 fill-purple-500 text-purple-500" />
-                      {entryCounts[EntryType.MAW3D_EVENT] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.MAW3D_EVENT]}</span>}
-                    </div>
-                  )}
-                  {entryCounts[EntryType.EVENT] > 0 && (
-                    <div className="flex items-center">
-                      <Circle className="h-2 w-2 fill-blue-500 text-blue-500" />
-                      {entryCounts[EntryType.EVENT] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.EVENT]}</span>}
-                    </div>
-                  )}
-                  {entryCounts[EntryType.MANUAL_NOTE] > 0 && (
-                    <div className="flex items-center">
-                      <Circle className="h-2 w-2 fill-yellow-500 text-yellow-500" />
-                      {entryCounts[EntryType.MANUAL_NOTE] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.MANUAL_NOTE]}</span>}
-                    </div>
-                  )}
-                  {entryCounts[EntryType.TASK] > 0 && (
-                    <div className="flex items-center">
-                      <Circle className="h-2 w-2 fill-green-500 text-green-500" />
-                      {entryCounts[EntryType.TASK] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.TASK]}</span>}
-                    </div>
-                  )}
-                  {entryCounts[EntryType.REMINDER] > 0 && (
-                    <div className="flex items-center">
-                      <Circle className="h-2 w-2 fill-red-500 text-red-500" />
-                      {entryCounts[EntryType.REMINDER] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.REMINDER]}</span>}
-                    </div>
-                  )}
-                  {entryCounts[EntryType.JOURNAL] > 0 && (
-                    <div className="flex items-center">
-                      <Circle className="h-2 w-2 fill-sky-500 text-sky-500" />
-                      {entryCounts[EntryType.JOURNAL] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.JOURNAL]}</span>}
-                    </div>
-                  )}
-                  {entryCounts[EntryType.PHONE_CALENDAR] > 0 && (
-                    <div className="flex items-center">
-                      <AppleLogo size={12} className="text-black dark:text-white" />
-                      {entryCounts[EntryType.PHONE_CALENDAR] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.PHONE_CALENDAR]}</span>}
-                    </div>
-                  )}
+      <div className="overflow-y-auto flex-1 pb-20 p-2">
+        <div className="grid grid-cols-2 gap-3">
+          {days.map((monthDate) => {
+            const isCurrentMonth = isSameMonth(monthDate, today);
+            const mStart = startOfMonth(monthDate);
+            const mEnd = endOfMonth(monthDate);
+            const gridStart = startOfWeek(mStart, { locale });
+            const gridEnd = endOfWeek(mEnd, { locale });
+            const miniDays = eachDayOfInterval({ start: gridStart, end: gridEnd });
+
+            return (
+              <motion.div
+                key={format(monthDate, 'yyyy-MM')}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => {
+                  const newDate = new Date(currentDate);
+                  newDate.setMonth(monthDate.getMonth());
+                  onDayClick(newDate);
+                }}
+                className={cn(
+                  "rounded-xl border p-2 cursor-pointer",
+                  isCurrentMonth ? "border-primary bg-primary/5" : "border-border",
+                  "hover:bg-accent/30"
+                )}
+              >
+                {/* Month name */}
+                <div className={cn(
+                  "text-xs font-semibold text-center mb-1.5",
+                  isCurrentMonth ? "text-primary" : "text-foreground"
+                )}>
+                  {format(monthDate, 'MMMM', { locale })}
                 </div>
-              )}
-            </motion.div>
-          );
-        })}
+
+                {/* Day-of-week headers */}
+                <div className="grid grid-cols-7 mb-0.5">
+                  {miniDayNames.map((d, i) => (
+                    <div key={i} className="text-center text-[8px] text-muted-foreground font-medium">
+                      {d}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Day cells */}
+                <div className="grid grid-cols-7 gap-y-0.5">
+                  {miniDays.map((day) => {
+                    const inMonth = isSameMonth(day, monthDate);
+                    const isToday = isSameDay(day, today);
+                    const dayEntries = calendarEntries.filter(e => {
+                      const ep = e.date.split('T')[0];
+                      return ep === format(day, 'yyyy-MM-dd');
+                    });
+                    const hasDot = dayEntries.length > 0;
+
+                    // Pick dominant dot color
+                    const dotColor = (() => {
+                      if (dayEntries.some(e => e.type === EntryType.MAW3D_EVENT)) return 'bg-purple-500';
+                      if (dayEntries.some(e => e.type === EntryType.TASK)) return 'bg-green-500';
+                      if (dayEntries.some(e => e.type === EntryType.REMINDER)) return 'bg-red-500';
+                      if (dayEntries.some(e => e.type === EntryType.JOURNAL)) return 'bg-sky-500';
+                      if (dayEntries.some(e => e.type === EntryType.MANUAL_NOTE)) return 'bg-yellow-500';
+                      if (dayEntries.some(e => e.type === EntryType.PHONE_CALENDAR)) return 'bg-gray-400';
+                      return 'bg-blue-500';
+                    })();
+
+                    return (
+                      <div
+                        key={day.toISOString()}
+                        className={cn(
+                          "flex flex-col items-center justify-start",
+                          !inMonth && "opacity-0 pointer-events-none"
+                        )}
+                      >
+                        <span className={cn(
+                          "text-[9px] leading-tight w-4 h-4 flex items-center justify-center rounded-full",
+                          isToday && "bg-primary text-primary-foreground font-bold",
+                          !isToday && inMonth && "text-foreground",
+                        )}>
+                          {format(day, 'd')}
+                        </span>
+                        {hasDot && inMonth && (
+                          <span className={cn("w-1 h-1 rounded-full mt-px", dotColor)} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
       </div>
     );
   }
