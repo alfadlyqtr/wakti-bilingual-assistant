@@ -170,7 +170,7 @@ export function useUserProfile() {
     if (!user?.id) return;
 
     const channel = supabase
-      .channel('profile-changes')
+      .channel(`profile-changes-${user.id}`)
       .on(
         'postgres_changes',
         {

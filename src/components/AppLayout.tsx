@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { AppHeader } from "@/components/AppHeader";
 import { DesktopLayout } from "@/components/layouts/DesktopLayout";
@@ -62,6 +63,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
   const { language, setLanguage } = useTheme();
   const { signOut, user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [price, setPrice] = useState<{ qar?: string; usd?: string }>({});
@@ -123,7 +125,8 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
         
         toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
         onOpenChange(false);
-        window.location.reload(); // Refresh to update UI
+        queryClient.invalidateQueries({ queryKey: ['subscription'] });
+        queryClient.invalidateQueries({ queryKey: ['profile'] });
       } else if (resp?.status === 'ERROR') {
         toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
       }
@@ -161,7 +164,8 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
               // Purchases were found and restored!
               toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
               onOpenChange(false);
-              setTimeout(() => window.location.reload(), 500);
+              queryClient.invalidateQueries({ queryKey: ['subscription'] });
+              queryClient.invalidateQueries({ queryKey: ['profile'] });
             } else {
               // No purchases found
               toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');

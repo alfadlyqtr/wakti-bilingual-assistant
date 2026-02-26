@@ -32,13 +32,13 @@ export const ChartsTab: React.FC = () => {
   const { language } = useTheme();
   const [items, setItems] = useState<JournalDay[]>([]);
   const [checkins, setCheckins] = useState<JournalCheckin[]>([]);
-  const [range, setRange] = useState<1 | 7 | 14 | 30>(7);
+  const [range, setRange] = useState<1 | 7 | 30 | 90 | 180 | 365>(7);
 
   useEffect(() => {
     (async () => {
       const [days, cis] = await Promise.all([
-        JournalService.getTimeline(60),
-        JournalService.getCheckinsSince(60)
+        JournalService.getTimeline(365),
+        JournalService.getCheckinsSince(365)
       ]);
       setItems(days);
       setCheckins(cis);
@@ -49,7 +49,7 @@ export const ChartsTab: React.FC = () => {
     // Keep last `range` days using local-day strings (yyyy-MM-dd)
     const now = new Date();
     const from = new Date(now);
-    from.setDate(now.getDate() - (range - 1));
+    from.setDate(now.getDate() - range);
     const fromKey = getLocalDayString(from);
     return items.filter(i => i.date >= fromKey);
   }, [items, range]);
@@ -57,7 +57,7 @@ export const ChartsTab: React.FC = () => {
   const filteredCheckins = useMemo(() => {
     const now = new Date();
     const from = new Date(now);
-    from.setDate(now.getDate() - (range - 1));
+    from.setDate(now.getDate() - range);
     const fromKey = getLocalDayString(from);
     return checkins.filter(c => c.date >= fromKey);
   }, [checkins, range]);
@@ -179,7 +179,7 @@ export const ChartsTab: React.FC = () => {
   // Total top tag count for percentage in table
   const topTagsTotal = useMemo(() => topTags.reduce((s, t) => s + t.count, 0), [topTags]);
 
-  const moodColors: Record<number, string> = { 1: "#ef4444", 2: "#f97316", 3: "#eab308", 4: "#10b981", 5: "#22c55e" };
+  const moodColors: Record<number, string> = { 1: "#ef4444", 2: "#f97316", 3: "#eab308", 4: "#10b981", 5: "#a855f7" };
 
   // Emoji faces for pure-SVG tick labels (mobile-safe, no foreignObject)
   const moodEmoji: Record<number, string> = { 1: '😫', 2: '🙁', 3: '😐', 4: '🙂', 5: '😄' };
@@ -189,7 +189,7 @@ export const ChartsTab: React.FC = () => {
     2: language === 'ar' ? 'سيئ' : 'bad',
     3: language === 'ar' ? 'عادي' : 'meh',
     4: language === 'ar' ? 'جيد' : 'good',
-    5: language === 'ar' ? 'ممتاز' : 'rad',
+    5: language === 'ar' ? 'ممتاز' : 'amazing',
   };
 
   // Custom pie label to ensure all percentages are visible (rendered outside each slice)
@@ -219,12 +219,16 @@ export const ChartsTab: React.FC = () => {
           <div className="text-sm text-muted-foreground">
             {language === 'ar' ? 'تكرار المزاج' : 'Mood Frequency'}
           </div>
-          <div className="flex items-center gap-2">
-            {[1,7,14,30].map((r) => (
-              <button key={r} onClick={() => setRange(r as 1|7|14|30)} className={`px-2.5 py-1 rounded-md border text-xs ${range===r? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:bg-muted border-border'}`}>
-                {r}d
-              </button>
-            ))}
+          <div className="flex items-center gap-1">
+            {([1,7,30,90,180,365] as const).map((r) => {
+              const enLabels: Record<number,string> = {1:'1d',7:'1w',30:'1m',90:'3m',180:'6m',365:'1y'};
+              const arLabels: Record<number,string> = {1:'1ي',7:'1أ',30:'1ش',90:'3ش',180:'6ش',365:'1س'};
+              return (
+                <button key={r} onClick={() => setRange(r as 1|7|30|90|180|365)} className={`px-2 py-1 rounded-md border text-xs ${range===r? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:bg-muted border-border'}`}>
+                  {language === 'ar' ? arLabels[r] : enLabels[r]}
+                </button>
+              );
+            })}
           </div>
         </div>
         <div className="h-64 relative">

@@ -1030,27 +1030,29 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
               {/* Aspect ratio picker - for both modes */}
               <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-0.5 rounded-full border border-primary/20 overflow-hidden">
+                <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/50">
                     <button
                       onClick={() => !isGenerating && setAspectRatio('9:16')}
                       disabled={isGenerating}
-                      className={`px-3 py-1.5 text-xs font-medium transition-all ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
                         aspectRatio === '9:16'
-                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
-                          : 'text-muted-foreground hover:text-primary'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(260,70%,65%)] text-white shadow-md shadow-blue-500/30 scale-[1.02]'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
                       }`}
                     >
+                      <span className="text-[11px] opacity-80">▮</span>
                       {language === 'ar' ? 'عمودي' : 'Portrait'}
                     </button>
                     <button
                       onClick={() => !isGenerating && setAspectRatio('16:9')}
                       disabled={isGenerating}
-                      className={`px-3 py-1.5 text-xs font-medium transition-all ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
                         aspectRatio === '16:9'
-                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
-                          : 'text-muted-foreground hover:text-primary'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(260,70%,65%)] text-white shadow-md shadow-blue-500/30 scale-[1.02]'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
                       }`}
                     >
+                      <span className="text-[11px] opacity-80">▬</span>
                       {language === 'ar' ? 'أفقي' : 'Landscape'}
                     </button>
                   </div>
@@ -1196,7 +1198,19 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           )}
 
           {showLatestVideo && (
-            <div className="rounded-2xl overflow-hidden border border-border bg-gradient-to-b from-primary/5 to-transparent">
+            <div className="rounded-2xl overflow-hidden" style={{background: 'linear-gradient(135deg, hsl(235,25%,8%) 0%, hsl(250,20%,10%) 100%)', border: '1px solid hsla(210,100%,65%,0.2)', boxShadow: '0 4px 32px hsla(0,0%,0%,0.4), 0 0 0 1px hsla(210,100%,65%,0.08)'}}>
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(260,70%,65%)] shadow-[0_0_6px_hsla(210,100%,65%,0.8)]" />
+                  <span className="text-xs font-bold text-white/80 tracking-wide uppercase">
+                    {language === 'ar' ? 'آخر فيديو' : 'Latest Video'}
+                  </span>
+                </div>
+                <span className="text-[10px] text-muted-foreground bg-white/5 px-2 py-0.5 rounded-full">
+                  {language === 'ar' ? 'محفوظ' : 'Saved'}
+                </span>
+              </div>
               <div className="relative bg-black">
                 <video
                   src={latestVideo?.signedUrl || latestVideo?.video_url || undefined}
@@ -1204,36 +1218,22 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   playsInline
                   className="w-full aspect-[9/16] max-h-[60vh] object-contain"
                 />
-                <div className="absolute top-3 left-3 px-3 py-1.5 rounded-full bg-primary text-white text-xs font-bold shadow-lg">
-                  {language === 'ar' ? 'آخر فيديو' : 'Latest Video'}
-                </div>
               </div>
-              <div className="p-4 space-y-3">
-                <p className="text-center text-sm font-medium text-primary">
-                  {language === 'ar' ? 'هذا آخر فيديو محفوظ' : 'This is your latest saved video'}
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  <Button className="h-11 flex-col gap-1 rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300" disabled>
-                    <Check className="h-5 w-5" />
-                    <span className="text-[10px] font-medium">
-                      {language === 'ar' ? 'محفوظ' : 'Saved'}
-                    </span>
-                  </Button>
+              <div className="p-3 flex items-center gap-2">
                   <Button
-                    className="h-11 flex-col gap-1 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-700 dark:text-blue-300"
+                    className="flex-1 h-10 gap-2 rounded-xl bg-gradient-to-r from-blue-500/20 to-blue-600/20 hover:from-blue-500/30 hover:to-blue-600/30 text-blue-300 border border-blue-500/20 text-xs font-semibold"
                     onClick={handleDownloadLatest}
                   >
-                    <Download className="h-5 w-5" />
-                    <span className="text-[10px] font-medium">{language === 'ar' ? 'تحميل' : 'Download'}</span>
+                    <Download className="h-4 w-4" />
+                    {language === 'ar' ? 'تحميل' : 'Download'}
                   </Button>
                   <Button
-                    className="h-11 flex-col gap-1 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-800 dark:text-cyan-300"
+                    className="flex-1 h-10 gap-2 rounded-xl bg-gradient-to-r from-violet-500/20 to-fuchsia-500/20 hover:from-violet-500/30 hover:to-fuchsia-500/30 text-violet-300 border border-violet-500/20 text-xs font-semibold"
                     onClick={() => onSaveSuccess?.()}
                   >
-                    <FolderOpen className="h-5 w-5" />
-                    <span className="text-[10px] font-medium">{language === 'ar' ? 'المحفوظات' : 'Saved'}</span>
+                    <FolderOpen className="h-4 w-4" />
+                    {language === 'ar' ? 'المحفوظات' : 'My Videos'}
                   </Button>
-                </div>
               </div>
             </div>
           )}

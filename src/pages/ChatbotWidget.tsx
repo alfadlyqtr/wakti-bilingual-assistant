@@ -180,6 +180,7 @@ export default function ChatbotWidget({ token, onClose, isPreview, previewNodes,
     allEdges: FlowEdge[],
     currentMessages: Message[],
     botConfig: BotConfig,
+    currentCollectedData: Record<string, string> = {},
   ) => {
     const node = getNode(nodeId, allNodes);
     if (!node) return;
@@ -191,14 +192,20 @@ export default function ChatbotWidget({ token, onClose, isPreview, previewNodes,
     setMessages(prev => [...prev, { id: typingId, role: 'bot', text: '', isTyping: true }]);
     await new Promise(r => setTimeout(r, 600 + Math.random() * 400));
 
+    // Replace {{name}}/{{email}}/{{phone}} with collected visitor data
+    const resolveVars = (text: string) => text
+      .replace(/\{\{name\}\}/gi, currentCollectedData.name || '')
+      .replace(/\{\{email\}\}/gi, currentCollectedData.email || '')
+      .replace(/\{\{phone\}\}/gi, currentCollectedData.phone || '');
+
     switch (node.type) {
       case 'message': {
-        const text = node.data?.text || node.label || 'Hello!';
+        const text = resolveVars(node.data?.text || node.label || 'Hello!');
         const msg: Message = { id: uid(), role: 'bot', text };
         setMessages(prev => prev.filter(m => m.id !== typingId).concat(msg));
         const nexts = nextNodes(nodeId, allEdges);
         if (nexts.length > 0) {
-          await processNode(nexts[0], allNodes, allEdges, [...currentMessages, msg], botConfig);
+          await processNode(nexts[0], allNodes, allEdges, [...currentMessages, msg], botConfig, currentCollectedData);
         } else {
           setFinished(true);
         }
@@ -208,11 +215,11 @@ export default function ChatbotWidget({ token, onClose, isPreview, previewNodes,
       case 'name':
       case 'email':
       case 'phone': {
-        const prompt = node.data?.prompt || (
+        const prompt = resolveVars(node.data?.text || node.data?.prompt || (
           node.type === 'name' ? "What's your name?" :
           node.type === 'email' ? "What's your email?" :
           "What's your phone number?"
-        );
+        ));
         const msg: Message = { id: uid(), role: 'bot', text: prompt, inputType: node.type };
         setMessages(prev => prev.filter(m => m.id !== typingId).concat(msg));
         setInputType(node.type as any);
@@ -222,7 +229,7 @@ export default function ChatbotWidget({ token, onClose, isPreview, previewNodes,
 
       case 'single_choice':
       case 'multiple_choice': {
-        const prompt = node.data?.prompt || 'Please choose an option:';
+        const prompt = resolveVars(node.data?.prompt || 'Please choose an option:');
         const opts = (node.data?.options || []) as Array<{ en: string; ar?: string }>;
         const choices = opts.map((opt, i) => {
           const nexts = nextNodes(nodeId, allEdges, `option-${i}`);
@@ -272,14 +279,14 @@ export default function ChatbotWidget({ token, onClose, isPreview, previewNodes,
       }
 
       case 'rating': {
-        const msg: Message = { id: uid(), role: 'bot', text: node.data?.prompt || 'How would you rate your experience?', inputType: 'rating' };
+        const msg: Message = { id: uid(), role: 'bot', text: resolveVars(node.data?.prompt || 'How would you rate your experience?'), inputType: 'rating' };
         setMessages(prev => prev.filter(m => m.id !== typingId).concat(msg));
         setWaitingForInput(true);
         break;
       }
 
       case 'live_chat': {
-        const text = node.data?.message || 'Connecting you to a team member...';
+        const text = resolveVars(node.data?.message || 'Connecting you to a team member...');
         const msg: Message = { id: uid(), role: 'bot', text };
         setMessages(prev => prev.filter(m => m.id !== typingId).concat(msg));
         if (conversationId) {
@@ -298,7 +305,7 @@ export default function ChatbotWidget({ token, onClose, isPreview, previewNodes,
       }
 
       case 'end': {
-        const text = node.data?.text || 'Thank you! Have a great day. 👋';
+        const text = resolveVars(node.data?.text || 'Thank you! Have a great day. 👋');
         const msg: Message = { id: uid(), role: 'bot', text };
         setMessages(prev => prev.filter(m => m.id !== typingId).concat(msg));
         setFinished(true);
@@ -312,7 +319,7 @@ export default function ChatbotWidget({ token, onClose, isPreview, previewNodes,
         setMessages(prev => prev.filter(m => m.id !== typingId));
         const nexts = nextNodes(nodeId, allEdges);
         if (nexts.length > 0) {
-          await processNode(nexts[0], allNodes, allEdges, currentMessages, botConfig);
+          await processNode(nexts[0], allNodes, allEdges, currentMessages, botConfig, currentCollectedData);
         }
       }
     }
@@ -337,8 +344,10 @@ export default function ChatbotWidget({ token, onClose, isPreview, previewNodes,
     if (!currentNode) return;
 
     // Update collected data for info-collection nodes
+    let updatedCollectedData = { ...collectedData };
     if (['name', 'email', 'phone'].includes(currentNode.type)) {
-      setCollectedData(prev => ({ ...prev, [currentNode.type]: text }));
+      updatedCollectedData = { ...updatedCollectedData, [currentNode.type]: text };
+      setCollectedData(updatedCollectedData);
       if (currentNode.type === 'email' && conversationId) {
         await (supabase.from('chatbot_conversations' as any).update({ visitor_email: text }).eq('id', conversationId) as any);
       }
@@ -382,7 +391,7 @@ export default function ChatbotWidget({ token, onClose, isPreview, previewNodes,
 
     if (nexts.length > 0) {
       const allMsgs = messages.concat(userMsg);
-      await processNode(nexts[0], nodes, edges, allMsgs, bot);
+      await processNode(nexts[0], nodes, edges, allMsgs, bot, updatedCollectedData);
     } else {
       // Only end if we truly have nowhere to go and it's not a looping node
       if (!['ai_response', 'live_chat'].includes(currentNode.type)) {
@@ -408,7 +417,7 @@ export default function ChatbotWidget({ token, onClose, isPreview, previewNodes,
 
     if (nextNodeId) {
       const allMsgs = messages.concat(userMsg);
-      await processNode(nextNodeId, nodes, edges, allMsgs, bot);
+      await processNode(nextNodeId, nodes, edges, allMsgs, bot, collectedData);
     } else {
       setFinished(true);
     }

@@ -592,15 +592,14 @@ export default function Maw3dCreate() {
 
           {/* Buttons Row */}
           <div className="flex items-center justify-between">
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <button
+              type="button"
               onClick={() => navigate('/maw3d')}
-              className="group hover:bg-accent/20 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-soft"
+              className="group flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 backdrop-blur-md text-sm font-semibold text-foreground/80 hover:text-foreground hover:bg-white/10 hover:border-white/25 hover:shadow-[0_0_18px_hsla(210,100%,65%,0.35)] active:scale-95 transition-all duration-300"
             >
-              <ArrowLeft className="w-4 h-4 mr-2 transition-transform duration-300 group-hover:-translate-x-1" />
-              <span className="font-medium">{t('back', language)}</span>
-            </Button>
+              <ArrowLeft className="w-4 h-4 transition-transform duration-300 group-hover:-translate-x-1 text-blue-400" />
+              <span>{t('back', language)}</span>
+            </button>
 
             <Button 
               type="submit" 

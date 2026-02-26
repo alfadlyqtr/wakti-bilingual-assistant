@@ -52,7 +52,7 @@
     <script>
       function nativelyOnLoad() {
         try {
-          if (window?.natively?.setDebug) {
+          if (window?.natively?.setDebug && window.location.hostname === 'localhost') {
             window.natively.setDebug(true);
           }
         } catch (err) {

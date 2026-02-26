@@ -78,7 +78,7 @@ const DEFAULT_SECTIONS = (isRTL: boolean): KBSection[] => [
     icon: <HelpCircle className="h-4 w-4" />,
     color: '#3b82f6',
     pairs: [{ id: makeId(), question: '', answer: '' }],
-    expanded: true,
+    expanded: false,
   },
   {
     id: 'products',
@@ -255,10 +255,14 @@ export default function KnowledgeBaseEditor({ value, onChange, onSave, saving, i
                     {section.pairs.filter(p => p.question.trim() || p.answer.trim()).length} {isRTL ? 'إدخال' : 'entries'}
                   </p>
                 </div>
-                {section.expanded
-                  ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
-                  : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                }
+                <div className={cn(
+                  "w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 shrink-0",
+                  section.expanded
+                    ? "bg-foreground/10 text-foreground rotate-180"
+                    : "bg-muted/60 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+                )}>
+                  <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200" />
+                </div>
               </button>
 
               {/* Pairs */}

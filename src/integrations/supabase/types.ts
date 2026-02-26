@@ -3865,18 +3865,21 @@ export type Database = {
         Row: {
           device_info: string | null
           last_login: string | null
+          login_id: string | null
           session_id: string
           user_id: string
         }
         Insert: {
           device_info?: string | null
           last_login?: string | null
+          login_id?: string | null
           session_id: string
           user_id: string
         }
         Update: {
           device_info?: string | null
           last_login?: string | null
+          login_id?: string | null
           session_id?: string
           user_id?: string
         }

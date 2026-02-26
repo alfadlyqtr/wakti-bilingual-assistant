@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 const ChatbotDesigner = lazy(() => import('@/components/chatbot/ChatbotDesigner'));
 const ChatbotAISettings = lazy(() => import('@/components/chatbot/ChatbotAISettings'));
 const ChatbotWidget = lazy(() => import('@/pages/ChatbotWidget'));
@@ -225,6 +225,14 @@ export default function WaktiAssistant() {
   const [activeBot, setActiveBot] = useState<ChatbotBot | null>(null);
   const [saving, setSaving] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [addComponentSearch, setAddComponentSearch] = useState('');
+  const [builderMode, setBuilderMode] = useState<'canvas' | 'classic'>('canvas');
+  const [classicSelectedId, setClassicSelectedId] = useState<string | null>(null);
+  const [classicInsertAfterIdx, setClassicInsertAfterIdx] = useState<number | null>(null);
+  const [classicDragIdx, setClassicDragIdx] = useState<number | null>(null);
+  const [classicShowMobilePanel, setClassicShowMobilePanel] = useState(false);
+  const [showVarMenu, setShowVarMenu] = useState(false);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
   const [editingNode, setEditingNode] = useState<any | null>(null);
   const [editText, setEditText] = useState('');
@@ -246,10 +254,13 @@ export default function WaktiAssistant() {
   useEffect(() => {
     const el = document.getElementById('projects-scroll');
     if (!el) return;
-    if (step === 'builder' || step === 'designer') {
+    const isBuilder = step === 'builder' || step === 'designer' || step === 'ai-settings';
+    if (isBuilder) {
       el.classList.add('overflow-hidden');
+      document.body.classList.add('chatbot-builder-page');
     } else {
       el.classList.remove('overflow-hidden');
+      document.body.classList.remove('chatbot-builder-page');
     }
     if (step === 'builder') {
       const rect = el.getBoundingClientRect();
@@ -257,6 +268,7 @@ export default function WaktiAssistant() {
     } else {
       setBuilderRect(null);
     }
+    return () => { document.body.classList.remove('chatbot-builder-page'); };
   }, [step]);
 
   // React Flow state
@@ -410,6 +422,81 @@ export default function WaktiAssistant() {
   const addNode = (type: FlowNodeType) => {
     const meta = NODE_TYPE_META[type];
     const id = `${type}-${Date.now()}`;
+
+    if (builderMode === 'classic') {
+      // Compute tail synchronously from current nodes/edges snapshots
+      const currentNodes = nodes as any[];
+      const currentEdges = edges as any[];
+
+      const findTailId = (): string | null => {
+        const startNode = currentNodes.find((n: any) => n.data.flowType === 'start');
+        if (!startNode) {
+          return currentNodes.length > 0 ? currentNodes[currentNodes.length - 1].id : null;
+        }
+        const visited = new Set<string>();
+        let cur = startNode.id;
+        while (cur && !visited.has(cur)) {
+          visited.add(cur);
+          const nextEdge = currentEdges.find((e: any) => e.source === cur);
+          if (!nextEdge) return cur;
+          cur = nextEdge.target;
+        }
+        return startNode.id;
+      };
+
+      const tailId = findTailId();
+      const tailNode = tailId ? currentNodes.find((n: any) => n.id === tailId) : null;
+      const newPos = tailNode
+        ? { x: tailNode.position.x, y: tailNode.position.y + 160 }
+        : { x: 300, y: currentNodes.length * 160 };
+
+      const newNode = {
+        id,
+        type: 'chatFlowNode',
+        position: newPos,
+        data: {
+          flowType: type,
+          label: meta.label,
+          text: '',
+          prompt: '',
+          nodeId: id,
+          onDelete: deleteNode,
+          onEdit: editNode,
+          options: type === 'single_choice' || type === 'multiple_choice'
+            ? [{ en: 'Option 1', ar: 'خيار 1' }, { en: 'Option 2', ar: 'خيار 2' }]
+            : undefined,
+        },
+      };
+
+      setNodes((nds: any[]) => [...nds, newNode]);
+
+      // Auto-wire: connect tail → new node
+      if (tailId) {
+        setEdges((eds: any[]) => {
+          if (eds.some((e: any) => e.source === tailId && e.target === id)) return eds;
+          return [...eds, {
+            id: `e-${tailId}-${id}`,
+            source: tailId,
+            target: id,
+            markerEnd: { type: MarkerType.ArrowClosed },
+            style: { strokeWidth: 2 },
+          }];
+        });
+      }
+
+      // Auto-select the new node for editing
+      setClassicSelectedId(id);
+      setEditText('');
+      setEditOptions(
+        type === 'single_choice' || type === 'multiple_choice'
+          ? ['Option 1', 'Option 2']
+          : []
+      );
+      setShowAddMenu(false);
+      return;
+    }
+
+    // Canvas mode: original random position
     const newNode = {
       id,
       type: 'chatFlowNode',
@@ -988,9 +1075,9 @@ export default function WaktiAssistant() {
     if (!activeBot) return null;
 
     return (
-      <div className="builder-fill" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }}>
-        {/* Builder Header */}
-        <div className="builder-header flex flex-col bg-white dark:bg-[#0c0f14]">
+      <div className="builder-fill">
+        {/* Builder sub-header (bot identity + mode switcher) */}
+        <div className="flex flex-col bg-white dark:bg-[#0c0f14] shrink-0 z-10" style={{ boxShadow: '0 1px 0 0 hsl(var(--border))' }}>
           {/* Colored accent bar — bot's brand color */}
           <div 
             className={cn("h-[3px] w-full", activeBot.platform === 'instagram' ? "bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-600" : "")} 
@@ -1025,90 +1112,597 @@ export default function WaktiAssistant() {
               </div>
             </div>
 
-            {/* Active toggle */}
-            <Button
-              size="sm"
-              variant={activeBot.is_active ? "default" : "outline"}
-              className={cn("gap-1.5 text-xs rounded-lg h-7 px-2.5 shrink-0", activeBot.is_active && "bg-emerald-600 hover:bg-emerald-700 text-white border-0")}
-              onClick={() => toggleBotActive(activeBot)}
-            >
-              <Power className="h-3 w-3" />
-              <span className="hidden sm:inline">{activeBot.is_active ? (isRTL ? 'نشط' : 'Live') : (isRTL ? 'متوقف' : 'Off')}</span>
-            </Button>
+              {/* Action buttons — icon-only on mobile, labeled on desktop */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Live/Off pill */}
+              <button
+                onClick={() => toggleBotActive(activeBot)}
+                title={activeBot.is_active ? 'Deactivate bot' : 'Activate bot'}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95",
+                  activeBot.is_active
+                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                    : "bg-muted/60 text-muted-foreground border border-border/40"
+                )}
+              >
+                <div className={cn("w-1.5 h-1.5 rounded-full", activeBot.is_active ? "bg-emerald-500 animate-pulse" : "bg-zinc-400")} />
+                <span className="hidden sm:inline">{activeBot.is_active ? (isRTL ? 'نشط' : 'Live') : (isRTL ? 'متوقف' : 'Off')}</span>
+              </button>
+
+              {/* Save */}
+              <button
+                onClick={handleSaveFlow}
+                disabled={saving}
+                title={isRTL ? 'حفظ' : 'Save'}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#060541] hover:bg-[#060541]/90 text-white dark:bg-white dark:hover:bg-white/90 dark:text-[#060541] transition-all active:scale-95 disabled:opacity-50 shrink-0"
+              >
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                <span className="hidden sm:inline">{isRTL ? 'حفظ' : 'Save'}</span>
+              </button>
+
+              {/* Embed */}
+              <button
+                onClick={() => copyEmbedCode(activeBot.embed_token)}
+                title={isRTL ? 'كود التضمين' : 'Embed code'}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-border/50 bg-background hover:bg-muted/60 text-foreground transition-all active:scale-95 shrink-0"
+              >
+                {copiedEmbed ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                <span className="hidden sm:inline">{isRTL ? 'تضمين' : 'Embed'}</span>
+              </button>
+
+              {/* Preview */}
+              <button
+                onClick={() => setShowPreview(true)}
+                title={isRTL ? 'معاينة' : 'Preview'}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-emerald-500/40 bg-emerald-50/50 dark:bg-emerald-900/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/20 transition-all active:scale-95 shrink-0"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{isRTL ? 'معاينة' : 'Preview'}</span>
+              </button>
+            </div>
           </div>
 
-          {/* Save + Embed row */}
-          <div className="flex items-center gap-2 px-3 pb-2.5">
-            <Button
-              size="sm"
-              className="gap-1.5 text-xs rounded-lg h-8 flex-1 bg-[#060541] hover:bg-[#060541]/90 text-white dark:bg-[#f2f2f2] dark:hover:bg-[#f2f2f2]/90 dark:text-[#0c0f14]"
-              onClick={handleSaveFlow}
-              disabled={saving}
-            >
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-              {isRTL ? 'حفظ' : 'Save'}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5 text-xs rounded-lg h-8 flex-1"
-              onClick={() => copyEmbedCode(activeBot.embed_token)}
-            >
-              {copiedEmbed ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
-              {isRTL ? 'كود التضمين' : 'Embed'}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5 text-xs rounded-lg h-8 flex-1 border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
-              onClick={() => setShowPreview(true)}
-            >
-              <Eye className="h-3.5 w-3.5" />
-              {isRTL ? 'معاينة' : 'Preview'}
-            </Button>
+          {/* ── Mode switcher bar ── prominent tabs */}
+          <div className="px-3 pb-3 pt-1 bg-white dark:bg-[#0c0f14] border-b border-border/40">
+            <div className="flex rounded-xl border border-border/50 bg-muted/60 dark:bg-white/5 p-1 gap-1 shadow-sm">
+              <button
+                onClick={() => setBuilderMode('canvas')}
+                title="Canvas Builder"
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all active:scale-[0.98]",
+                  builderMode === 'canvas'
+                    ? "bg-[#060541] text-white dark:bg-white dark:text-[#060541] shadow-md"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                )}
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M17 14v6m-3-3h6" /></svg>
+                {isRTL ? 'رسم بياني' : 'Canvas'}
+              </button>
+              <button
+                onClick={() => setBuilderMode('classic')}
+                title="Classic Builder"
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all active:scale-[0.98]",
+                  builderMode === 'classic'
+                    ? "bg-[#060541] text-white dark:bg-white dark:text-[#060541] shadow-md"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                )}
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+                {isRTL ? 'كلاسيك' : 'Classic'}
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* ── Flow Preview Modal ── */}
-        {showPreview && (
-          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="relative w-[390px] max-w-full h-[700px] max-h-[90vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
-              {/* Phone chrome */}
-              <div className="bg-zinc-900 h-8 flex items-center justify-center shrink-0 rounded-t-2xl">
-                <div className="w-16 h-1 rounded-full bg-zinc-700" />
-              </div>
-              <div className="flex-1 min-h-0">
-                <Suspense fallback={<div className="flex items-center justify-center h-full bg-white"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>}>
-                  <ChatbotWidget
-                    token=""
-                    isPreview
-                    previewBot={activeBot}
-                    previewNodes={nodes.map((n: any) => ({ node_id: n.id, type: n.data.flowType, label: n.data.label, data: n.data }))}
-                    previewEdges={edges.map((e: any) => ({ edge_id: e.id, source_node_id: e.source, target_node_id: e.target, source_handle: e.sourceHandle || null, label: e.label || null }))}
-                  />
-                </Suspense>
-              </div>
-              <div className="bg-zinc-900 h-6 flex items-center justify-center rounded-b-2xl shrink-0">
-                <div className="w-10 h-1 rounded-full bg-zinc-700" />
-              </div>
-              {/* Close button */}
-              <button
-                onClick={() => setShowPreview(false)}
-                title="Close preview"
-                className="absolute top-10 right-3 w-9 h-9 rounded-full bg-red-500 hover:bg-red-600 shadow-lg flex items-center justify-center transition-colors z-20"
-              >
-                <X className="h-4 w-4 text-white" />
-              </button>
-              {/* Label */}
-              <div className="absolute -bottom-8 left-0 right-0 text-center">
-                <p className="text-white/60 text-xs">Live Preview — reflects your saved flow</p>
+
+        {/* ── CLASSIC BUILDER ── */}
+        {builderMode === 'classic' && (() => {
+          // Build ordered node list following edge chain from start
+          const getOrderedNodes = () => {
+            const startNode = nodes.find((n: any) => n.data.flowType === 'start');
+            if (!startNode) return nodes.filter((n: any) => n.data.flowType !== 'start');
+            const ordered: any[] = [];
+            const visited = new Set<string>();
+            let current = startNode.id;
+            while (current && !visited.has(current)) {
+              visited.add(current);
+              const node = nodes.find((n: any) => n.id === current);
+              if (node && node.data.flowType !== 'start') ordered.push(node);
+              const nextEdge = edges.find((e: any) => e.source === current);
+              current = nextEdge?.target || '';
+            }
+            nodes.forEach((n: any) => { if (!visited.has(n.id) && n.data.flowType !== 'start') ordered.push(n); });
+            return ordered;
+          };
+
+          // Rewire all edges for a given ordered list of nodes
+          const rewireEdges = (orderedList: any[]) => {
+            const startNode = nodes.find((n: any) => n.data.flowType === 'start');
+            const nonChainEdges = (edges as any[]).filter((e: any) => {
+              const srcInChain = orderedList.some((n: any) => n.id === e.source);
+              const startSrc = startNode && e.source === startNode.id;
+              return !srcInChain && !startSrc;
+            });
+            const newChainEdges: any[] = [];
+            const allNodes = startNode ? [startNode, ...orderedList] : orderedList;
+            for (let i = 0; i < allNodes.length - 1; i++) {
+              newChainEdges.push({
+                id: `e-${allNodes[i].id}-${allNodes[i + 1].id}`,
+                source: allNodes[i].id,
+                target: allNodes[i + 1].id,
+                markerEnd: { type: MarkerType.ArrowClosed },
+                style: { strokeWidth: 2 },
+              });
+            }
+            setEdges([...nonChainEdges, ...newChainEdges]);
+          };
+
+          const orderedNodes = getOrderedNodes();
+          const selectedNode = classicSelectedId ? nodes.find((n: any) => n.id === classicSelectedId) : null;
+          const selData = selectedNode?.data;
+          const selMeta = selData ? NODE_TYPE_META[selData.flowType as FlowNodeType] : null;
+          const selIsChoice = selData?.flowType === 'single_choice' || selData?.flowType === 'multiple_choice';
+
+          // Drag handlers for reorder
+          const handleDragStart = (idx: number) => { setClassicDragIdx(idx); };
+          const handleDragOver = (e: React.DragEvent, idx: number) => {
+            e.preventDefault();
+            if (classicDragIdx === null || classicDragIdx === idx) return;
+          };
+          const handleDrop = (e: React.DragEvent, dropIdx: number) => {
+            e.preventDefault();
+            if (classicDragIdx === null || classicDragIdx === dropIdx) { setClassicDragIdx(null); return; }
+            const newOrder = [...orderedNodes];
+            const [moved] = newOrder.splice(classicDragIdx, 1);
+            newOrder.splice(dropIdx, 0, moved);
+            setClassicDragIdx(null);
+            rewireEdges(newOrder);
+            // Update node positions
+            setNodes((nds: any[]) => {
+              const startNode = nds.find((n: any) => n.data.flowType === 'start');
+              const baseX = startNode?.position?.x ?? 300;
+              const baseY = (startNode?.position?.y ?? 0) + 160;
+              return nds.map((n: any) => {
+                const newIdx = newOrder.findIndex((o: any) => o.id === n.id);
+                if (newIdx === -1) return n;
+                return { ...n, position: { x: baseX, y: baseY + newIdx * 160 } };
+              });
+            });
+          };
+
+          // Insert at specific position
+          const insertAtIdx = (type: FlowNodeType, afterIdx: number) => {
+            const meta = NODE_TYPE_META[type];
+            const id = `${type}-${Date.now()}`;
+            const insertPos = afterIdx + 1;
+            const refNode = orderedNodes[afterIdx];
+            const newPos = refNode
+              ? { x: refNode.position.x, y: refNode.position.y + 80 }
+              : { x: 300, y: 160 };
+            const newNode = {
+              id,
+              type: 'chatFlowNode',
+              position: newPos,
+              data: {
+                flowType: type, label: meta.label, text: '', prompt: '',
+                nodeId: id, onDelete: deleteNode, onEdit: editNode,
+                options: type === 'single_choice' || type === 'multiple_choice'
+                  ? [{ en: 'Option 1', ar: 'خيار 1' }, { en: 'Option 2', ar: 'خيار 2' }]
+                  : undefined,
+              },
+            };
+            const newOrder = [...orderedNodes];
+            newOrder.splice(insertPos, 0, newNode);
+            setNodes((nds: any[]) => [...nds, newNode]);
+            setTimeout(() => {
+              rewireEdges(newOrder);
+              setClassicInsertAfterIdx(null);
+              setClassicSelectedId(id);
+              setEditText('');
+              setEditOptions(type === 'single_choice' || type === 'multiple_choice' ? ['Option 1', 'Option 2'] : []);
+            }, 0);
+          };
+
+          const COMP_SECTIONS = [
+            { label: isRTL ? 'الأكثر استخداماً' : 'Frequently used', types: ['message', 'name', 'phone', 'email', 'single_choice', 'ai_response'] as FlowNodeType[] },
+            { label: isRTL ? 'جمع المعلومات' : 'Collect Info', types: ['name', 'email', 'phone', 'single_choice', 'multiple_choice'] as FlowNodeType[] },
+            { label: isRTL ? 'ذكاء اصطناعي' : 'AI', types: ['ai_response'] as FlowNodeType[] },
+            { label: isRTL ? 'إجراءات' : 'Actions', types: ['appointment', 'rating', 'live_chat', 'end'] as FlowNodeType[] },
+          ];
+
+          // Shared customize panel content (reused in desktop right panel + mobile bottom sheet)
+          const CustomizePanel = () => !selectedNode ? (
+            <div className="flex-1 flex items-center justify-center text-center px-6">
+              <div className="opacity-40">
+                <p className="text-3xl mb-2">✏️</p>
+                <p className="text-sm text-muted-foreground">{isRTL ? 'اختر مكوّناً للتعديل' : 'Select a component to customize it'}</p>
               </div>
             </div>
-          </div>
-        )}
+          ) : (
+            <>
+              <div className="flex-1 overflow-y-auto px-4 py-4 min-h-0 space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="w-7 h-7 rounded-lg flex items-center justify-center text-sm text-white shrink-0" style={{ background: selMeta?.color }}>{selMeta?.icon}</span>
+                  <p className="text-sm font-bold text-foreground">{isRTL ? selMeta?.labelAr : selMeta?.label}</p>
+                </div>
+                {!selIsChoice && (
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">{isRTL ? 'الرسالة' : 'Message'}</label>
+                    <div className="relative">
+                      <textarea
+                        ref={editTextareaRef}
+                        value={editText}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditText(val);
+                          if (val[e.target.selectionStart - 1] === '/') setShowVarMenu(true);
+                          else if (showVarMenu) setShowVarMenu(false);
+                        }}
+                        onKeyDown={(e) => { if (e.key === 'Escape') setShowVarMenu(false); }}
+                        rows={4}
+                        className="w-full border border-border/60 rounded-lg px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-[#060541]/20 dark:focus:ring-white/20 resize-none transition-all"
+                        placeholder={isRTL ? 'اكتب الرسالة... اكتب / للمتغيرات' : 'Message... type / for variables'}
+                      />
+                      {showVarMenu && (
+                        <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-card border border-border/60 rounded-xl shadow-xl overflow-hidden">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-3 pt-2 pb-1">{isRTL ? 'المتغيرات' : 'Default Attributes'}</p>
+                          {[{ label: isRTL ? 'الاسم' : 'Name', var: '{{name}}' }, { label: isRTL ? 'البريد الإلكتروني' : 'Email', var: '{{email}}' }, { label: isRTL ? 'رقم الهاتف' : 'Phone Number', var: '{{phone}}' }].map(v => (
+                            <button key={v.var} className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-muted/80 text-left transition-colors"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                const ta = editTextareaRef.current;
+                                if (!ta) return;
+                                const pos = ta.selectionStart;
+                                const before = editText.slice(0, pos).replace(/\/$/, '');
+                                const after = editText.slice(pos);
+                                setEditText(before + v.var + after);
+                                setShowVarMenu(false);
+                                setTimeout(() => { ta.focus(); const np = before.length + v.var.length; ta.setSelectionRange(np, np); }, 10);
+                              }}>
+                              <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-[#060541] dark:text-blue-400">{v.var}</span>
+                              <span className="text-sm text-foreground">{v.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1">{isRTL ? "اكتب '/' للمتغيرات" : "Type '/' for variables"}</p>
+                  </div>
+                )}
+                {selIsChoice && (
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">{isRTL ? 'الخيارات' : 'Options'}</label>
+                    <div className="space-y-2">
+                      {editOptions.map((opt, i) => (
+                        <div key={i} className="flex gap-1.5">
+                          <input value={opt} onChange={(e) => { const n = [...editOptions]; n[i] = e.target.value; setEditOptions(n); }}
+                            className="flex-1 border border-border/60 rounded-lg px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-[#060541]/20 dark:focus:ring-white/20 transition-all"
+                            placeholder={`${isRTL ? 'خيار' : 'Option'} ${i + 1}`} />
+                          <button onClick={() => setEditOptions(editOptions.filter((_, j) => j !== i))} title="Remove"
+                            className="w-9 h-9 rounded-lg text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center shrink-0 active:scale-95 transition-all">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      <button onClick={() => setEditOptions([...editOptions, ''])}
+                        className="w-full py-2.5 rounded-lg border border-dashed border-border/50 text-xs font-semibold text-muted-foreground hover:border-[#060541]/30 hover:text-foreground transition-colors">
+                        + {isRTL ? 'إضافة خيار' : 'Add option'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="px-4 py-3 border-t border-border/40 shrink-0">
+                <Button
+                  className="w-full bg-[#060541] hover:bg-[#060541]/90 text-white dark:bg-white dark:text-[#060541] rounded-lg h-11 text-sm font-bold active:scale-[0.98] transition-all"
+                  onClick={() => {
+                    const updates: Record<string, any> = {};
+                    if (selIsChoice) { updates.options = editOptions.filter(Boolean).map(o => ({ en: o, ar: o })); }
+                    else { if (selData.flowType === 'ai_response') updates.prompt = editText; else updates.text = editText; }
+                    setNodes((nds: any[]) => nds.map((n: any) => n.id === selectedNode.id ? { ...n, data: { ...n.data, ...updates } } : n));
+                    if (classicShowMobilePanel) setClassicShowMobilePanel(false);
+                  }}
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {isRTL ? 'حفظ التغييرات' : 'Save Changes'}
+                </Button>
+              </div>
+            </>
+          );
+
+          return (
+            <div className="flex flex-col flex-1 overflow-hidden min-h-0">
+
+              {/* ── Desktop: 3-col. Mobile: full flow ── */}
+              <div className="flex flex-1 overflow-hidden min-h-0">
+
+                {/* ── LEFT: Component List (hidden on mobile) ── */}
+                <div className="hidden sm:flex w-52 lg:w-56 shrink-0 border-r border-border/50 bg-background flex-col overflow-hidden">
+                  <div className="px-3 py-2.5 border-b border-border/40 shrink-0">
+                    <p className="text-xs font-bold text-foreground">{isRTL ? 'إضافة مكوّن' : 'Add Chat Component'}</p>
+                  </div>
+                  <div className="flex-1 overflow-y-auto px-2 py-2 min-h-0">
+                    {COMP_SECTIONS.map((sec, si) => (
+                      <div key={si} className="mb-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1 py-1.5">{sec.label}</p>
+                        {sec.types.map(type => {
+                          const m = NODE_TYPE_META[type];
+                          return (
+                            <button key={type}
+                              onClick={() => {
+                                if (classicInsertAfterIdx !== null) {
+                                  insertAtIdx(type, classicInsertAfterIdx);
+                                } else {
+                                  addNode(type);
+                                }
+                              }}
+                              className={cn(
+                                "w-full flex items-center gap-2.5 px-2 py-2 rounded-xl transition-colors text-left mb-0.5 group",
+                                classicInsertAfterIdx !== null
+                                  ? "bg-[#060541]/5 dark:bg-white/5 hover:bg-[#060541]/10 dark:hover:bg-white/10 ring-1 ring-[#060541]/20"
+                                  : "hover:bg-muted/70 active:bg-muted"
+                              )}
+                            >
+                              <span className="w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0" style={{ background: m.color + '18' }}>{m.icon}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-foreground leading-tight truncate">{isRTL ? m.labelAr : m.label}</p>
+                                <p className="text-[10px] text-muted-foreground leading-tight truncate">{isRTL ? m.descriptionAr : m.description}</p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                  {classicInsertAfterIdx !== null && (
+                    <div className="px-3 py-2 border-t border-border/40 bg-[#060541]/5 dark:bg-white/5 shrink-0">
+                      <p className="text-[10px] text-[#060541] dark:text-blue-300 font-semibold text-center">
+                        {isRTL ? '↑ اختر نوع المكوّن للإدراج' : '↑ Pick a type to insert here'}
+                      </p>
+                      <button onClick={() => setClassicInsertAfterIdx(null)} className="mt-1 w-full text-[10px] text-muted-foreground hover:text-foreground text-center">
+                        {isRTL ? 'إلغاء' : 'Cancel'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── CENTER: Stacked Chat Flow ── */}
+                <div className="flex-1 flex flex-col overflow-hidden bg-muted/20">
+                  <div className="px-4 py-2 border-b border-border/40 shrink-0 flex items-center justify-between gap-2">
+                    <p className="text-xs font-bold text-foreground">{isRTL ? 'تدفق المحادثة' : 'Create / Reorder Chat Flow'}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[10px] text-muted-foreground">{orderedNodes.length} {isRTL ? 'مكوّن' : 'components'}</p>
+                      {/* Mobile: Add button */}
+                      <button
+                        onClick={() => { setClassicInsertAfterIdx(null); setClassicShowMobilePanel(prev => !prev); addNode(('message') as FlowNodeType); }}
+                        className="sm:hidden flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#060541] text-white text-xs font-bold active:scale-95 transition-all"
+                        title="Add component"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        {isRTL ? 'إضافة' : 'Add'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 min-h-0">
+                    {orderedNodes.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full text-center gap-3 opacity-50">
+                        <span className="text-4xl">💬</span>
+                        <p className="text-sm font-semibold text-muted-foreground">{isRTL ? 'أضف مكوّنات من القائمة' : 'Add components from the left panel'}</p>
+                        {/* Mobile add button when empty */}
+                        <button
+                          onClick={() => setClassicShowMobilePanel(true)}
+                          className="sm:hidden mt-2 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#060541] text-white text-sm font-bold shadow-lg active:scale-95 transition-all"
+                        >
+                          <Plus className="h-4 w-4" />
+                          {isRTL ? 'إضافة مكوّن' : 'Add Component'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-0 max-w-xl mx-auto">
+                        {orderedNodes.map((node: any, idx: number) => {
+                          const m = NODE_TYPE_META[node.data.flowType as FlowNodeType];
+                          if (!m) return null;
+                          const isSelected = classicSelectedId === node.id;
+                          const isChoice = node.data.flowType === 'single_choice' || node.data.flowType === 'multiple_choice';
+                          const isDragging = classicDragIdx === idx;
+
+                          return (
+                            <div key={node.id} className="flex flex-col">
+                              {/* ── Mini + insert button ABOVE first card ── */}
+                              {idx === 0 && (
+                                <div className="flex items-center gap-2 py-1 group/ins">
+                                  <div className="flex-1 h-px bg-border/30" />
+                                  <button
+                                    onClick={() => { setClassicInsertAfterIdx(-1); setClassicShowMobilePanel(true); }}
+                                    title="Insert before"
+                                    className="w-6 h-6 rounded-full border-2 border-dashed border-border/50 hover:border-[#060541] dark:hover:border-white bg-background flex items-center justify-center opacity-0 group-hover/ins:opacity-100 hover:!opacity-100 transition-all hover:scale-110 active:scale-95"
+                                  >
+                                    <Plus className="w-3 h-3 text-muted-foreground hover:text-[#060541] dark:hover:text-white" />
+                                  </button>
+                                  <div className="flex-1 h-px bg-border/30" />
+                                </div>
+                              )}
+
+                              {/* ── Node card ── */}
+                              <div
+                                draggable
+                                onDragStart={() => handleDragStart(idx)}
+                                onDragOver={(e) => handleDragOver(e, idx)}
+                                onDrop={(e) => handleDrop(e, idx)}
+                                onDragEnd={() => setClassicDragIdx(null)}
+                                onClick={() => {
+                                  setClassicSelectedId(node.id);
+                                  setEditText(node.data.text || node.data.prompt || '');
+                                  const opts = (node.data.options || []).map((o: any) => typeof o === 'string' ? o : o.en || '');
+                                  setEditOptions(opts);
+                                  setClassicShowMobilePanel(true);
+                                }}
+                                className={cn(
+                                  "relative rounded-2xl border-2 transition-all cursor-pointer overflow-hidden bg-white dark:bg-zinc-900 shadow-sm hover:shadow-md select-none",
+                                  isSelected ? "border-[#060541] dark:border-white/70 shadow-md" : "border-border/30 hover:border-border/70",
+                                  isDragging ? "opacity-40 scale-[0.98]" : ""
+                                )}
+                              >
+                                {/* Drag handle */}
+                                <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-20 hover:opacity-60 cursor-grab active:cursor-grabbing z-10 py-2 px-1">
+                                  <div className="w-1 h-1 rounded-full bg-current" />
+                                  <div className="w-1 h-1 rounded-full bg-current" />
+                                  <div className="w-1 h-1 rounded-full bg-current" />
+                                  <div className="w-1 h-1 rounded-full bg-current" />
+                                  <div className="w-1 h-1 rounded-full bg-current" />
+                                  <div className="w-1 h-1 rounded-full bg-current" />
+                                </div>
+                                {/* Header */}
+                                <div className="flex items-center gap-2 px-4 pl-7 py-2.5 pr-10" style={{ background: m.color }}>
+                                  <span className="text-white text-sm">{m.icon}</span>
+                                  <span className="text-white text-xs font-bold truncate">{isRTL ? m.labelAr : m.label}</span>
+                                </div>
+                                {/* Body */}
+                                <div className="px-4 pl-7 py-2.5">
+                                  {isChoice ? (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {(node.data.options || []).slice(0, 4).map((opt: any, i: number) => (
+                                        <span key={i} className="text-xs px-2.5 py-1 rounded-full border border-border/50 bg-muted/50 text-muted-foreground">
+                                          {typeof opt === 'string' ? opt : opt.en || opt.ar}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
+                                      {node.data.text || node.data.prompt || <span className="italic opacity-40">{isRTL ? 'انقر للتعديل...' : 'Tap to edit...'}</span>}
+                                    </p>
+                                  )}
+                                </div>
+                                {/* Delete btn */}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); deleteNode(node.id); if (classicSelectedId === node.id) { setClassicSelectedId(null); setClassicShowMobilePanel(false); } }}
+                                  title="Delete"
+                                  className="absolute top-2 right-2 w-6 h-6 rounded-full bg-red-500/80 hover:bg-red-500 flex items-center justify-center transition-colors z-10"
+                                >
+                                  <X className="w-3 h-3 text-white" />
+                                </button>
+                              </div>
+
+                              {/* ── Mini + insert button BELOW each card ── */}
+                              <div className="flex items-center gap-2 py-1 group/ins">
+                                <div className="flex-1 h-px bg-border/30" />
+                                <button
+                                  onClick={() => { setClassicInsertAfterIdx(idx); setClassicShowMobilePanel(true); }}
+                                  title={isRTL ? 'إضافة مكوّن هنا' : 'Insert component here'}
+                                  className={cn(
+                                    "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all hover:scale-125 active:scale-95",
+                                    classicInsertAfterIdx === idx
+                                      ? "border-blue-500 bg-blue-500 shadow-md shadow-blue-500/40 scale-110"
+                                      : "border-blue-400 bg-blue-500/10 hover:bg-blue-500 hover:border-blue-500"
+                                  )}
+                                >
+                                  <Plus className={cn("w-3 h-3", classicInsertAfterIdx === idx ? "text-white" : "text-blue-500 group-hover:text-white")} />
+                                </button>
+                                <div className="flex-1 h-px bg-border/30" />
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Add at end button */}
+                        <button
+                          onClick={() => { setClassicInsertAfterIdx(null); setClassicShowMobilePanel(true); }}
+                          className="sm:hidden w-full mt-2 py-3 rounded-xl border-2 border-dashed border-border/40 hover:border-[#060541]/40 text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
+                        >
+                          <Plus className="h-4 w-4" />
+                          {isRTL ? 'إضافة مكوّن' : 'Add Component'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── RIGHT: Customize Panel (desktop only) ── */}
+                <div className="hidden sm:flex w-64 lg:w-72 shrink-0 border-l border-border/50 bg-background flex-col overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-border/40 shrink-0">
+                    <p className="text-xs font-bold text-foreground border-b-2 border-[#060541] dark:border-white pb-0.5 inline-block">{isRTL ? 'تخصيص' : 'Customize'}</p>
+                  </div>
+                  <CustomizePanel />
+                </div>
+              </div>
+
+              {/* ── MOBILE: Bottom sheet for Add Component + Customize ── */}
+              {classicShowMobilePanel && (
+                <div className="sm:hidden fixed inset-0 z-[500] flex flex-col justify-end">
+                  <div className="absolute inset-0 bg-black/40" onClick={() => { setClassicShowMobilePanel(false); setClassicInsertAfterIdx(null); }} />
+                  <div className="relative bg-card rounded-t-2xl shadow-2xl flex flex-col max-h-[80vh]">
+                    {/* Handle */}
+                    <div className="flex justify-center pt-3 pb-1 shrink-0">
+                      <div className="w-10 h-1 rounded-full bg-border/70" />
+                    </div>
+
+                    {/* If insert mode: show component list; else show customize */}
+                    {classicInsertAfterIdx !== null ? (
+                      <>
+                        <div className="px-4 py-2 border-b border-border/40 shrink-0 flex items-center justify-between">
+                          <p className="text-sm font-bold text-foreground">
+                            {isRTL ? 'إضافة مكوّن' : 'Add Chat Component'}
+                          </p>
+                          <button onClick={() => { setClassicShowMobilePanel(false); setClassicInsertAfterIdx(null); }} title="Close" className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-3 py-3 min-h-0">
+                          {COMP_SECTIONS.map((sec, si) => (
+                            <div key={si} className="mb-1">
+                              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1 py-1.5">{sec.label}</p>
+                              {sec.types.map(type => {
+                                const m = NODE_TYPE_META[type];
+                                return (
+                                  <button key={type}
+                                    onClick={() => {
+                                      if (classicInsertAfterIdx !== null && classicInsertAfterIdx >= 0) {
+                                        insertAtIdx(type, classicInsertAfterIdx);
+                                      } else {
+                                        addNode(type);
+                                        setClassicShowMobilePanel(false);
+                                        setClassicInsertAfterIdx(null);
+                                      }
+                                    }}
+                                    className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-muted/70 active:bg-muted transition-colors text-left mb-0.5"
+                                  >
+                                    <span className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0" style={{ background: m.color + '18' }}>{m.icon}</span>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-semibold text-foreground">{isRTL ? m.labelAr : m.label}</p>
+                                      <p className="text-xs text-muted-foreground">{isRTL ? m.descriptionAr : m.description}</p>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="px-4 py-2 border-b border-border/40 shrink-0 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {selMeta && <span className="w-6 h-6 rounded-md flex items-center justify-center text-sm text-white" style={{ background: selMeta.color }}>{selMeta.icon}</span>}
+                            <p className="text-sm font-bold text-foreground">{selMeta ? (isRTL ? selMeta.labelAr : selMeta.label) : (isRTL ? 'تخصيص' : 'Customize')}</p>
+                          </div>
+                          <button onClick={() => setClassicShowMobilePanel(false)} title="Close" className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <CustomizePanel />
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* React Flow Canvas */}
-        <div className="builder-canvas">
+        <div className={cn("flex-1 min-h-0 relative overflow-hidden", builderMode === 'classic' && "hidden")}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -1141,99 +1735,113 @@ export default function WaktiAssistant() {
             />
           </ReactFlow>
 
-          {/* Floating Add FAB — always visible on canvas */}
+          {/* Floating Add FAB */}
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30">
-            <div className="relative">
-              <button
-                onClick={() => setShowAddMenu(!showAddMenu)}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold text-white shadow-xl active:scale-95 transition-all duration-200"
-                style={{ background: '#060541', boxShadow: '0 4px 20px rgba(6,5,65,0.4)' }}
-              >
-                <Plus className="h-4 w-4" />
-                {isRTL ? 'إضافة مكوّن' : 'Add Component'}
-              </button>
+            <button
+              onClick={() => { setShowAddMenu(true); setAddComponentSearch(''); }}
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold text-white shadow-xl active:scale-95 transition-all duration-200"
+              style={{ background: '#060541', boxShadow: '0 4px 20px rgba(6,5,65,0.4)' }}
+            >
+              <Plus className="h-4 w-4" />
+              {isRTL ? 'إضافة مكوّن' : 'Add Component'}
+            </button>
+          </div>
 
-              {/* Add Component Bottom Sheet — mobile-friendly */}
-              {showAddMenu && (
-                <>
-                  <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={() => setShowAddMenu(false)} />
-                  <div className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-3xl shadow-2xl border-t border-border/50 flex flex-col" style={{ maxHeight: '70vh' }}>
-                    {/* Handle */}
-                    <div className="flex justify-center pt-3 pb-1 shrink-0">
-                      <div className="w-12 h-1.5 rounded-full bg-border/80" />
-                    </div>
-                    {/* Header */}
-                    <div className="px-5 pb-3 pt-1 flex items-center justify-between shrink-0">
-                      <div>
-                        <p className="text-base font-bold text-foreground">
-                          {isRTL ? 'إضافة مكوّن' : 'Add Component'}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{isRTL ? 'اختر مكوّن لإضافته' : 'Choose a component to add to your flow'}</p>
-                      </div>
-                      <button onClick={() => setShowAddMenu(false)} title="Close" className="w-9 h-9 rounded-xl bg-muted/80 hover:bg-muted flex items-center justify-center active:scale-95 transition-all">
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <div className="h-px bg-border/40 mx-5" />
-                    {/* Scrollable list */}
-                    <div className="flex-1 overflow-y-auto px-4 py-3 min-h-0" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
-                      {/* AI */}
-                      <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-1 py-2">
-                        {isRTL ? 'ذكاء اصطناعي' : 'AI'}
-                      </p>
-                      {(['ai_response'] as FlowNodeType[]).map(type => {
-                        const meta = NODE_TYPE_META[type];
-                        return (
-                          <button key={type} onClick={() => addNode(type)}
-                            className="w-full flex items-center gap-3.5 px-3 py-3.5 rounded-xl hover:bg-muted/80 active:bg-muted transition-colors text-left mb-1">
-                            <span className="text-xl w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: meta.color + '20' }}>{meta.icon}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-bold text-foreground">{isRTL ? meta.labelAr : meta.label}</p>
-                              <p className="text-xs text-muted-foreground leading-relaxed">{isRTL ? meta.descriptionAr : meta.description}</p>
-                            </div>
-                          </button>
-                        );
-                      })}
-                      {/* Collect Info */}
-                      <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-1 py-2 mt-1">
-                        {isRTL ? 'جمع المعلومات' : 'Collect Info'}
-                      </p>
-                      {(['name', 'email', 'phone', 'single_choice', 'multiple_choice'] as FlowNodeType[]).map(type => {
-                        const meta = NODE_TYPE_META[type];
-                        return (
-                          <button key={type} onClick={() => addNode(type)}
-                            className="w-full flex items-center gap-3.5 px-3 py-3.5 rounded-xl hover:bg-muted/80 active:bg-muted transition-colors text-left mb-1">
-                            <span className="text-xl w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: meta.color + '20' }}>{meta.icon}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-bold text-foreground">{isRTL ? meta.labelAr : meta.label}</p>
-                              <p className="text-xs text-muted-foreground leading-relaxed">{isRTL ? meta.descriptionAr : meta.description}</p>
-                            </div>
-                          </button>
-                        );
-                      })}
-                      {/* Actions */}
-                      <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-1 py-2 mt-1">
-                        {isRTL ? 'إجراءات' : 'Actions'}
-                      </p>
-                      {(['appointment', 'rating', 'live_chat', 'message', 'end'] as FlowNodeType[]).map(type => {
-                        const meta = NODE_TYPE_META[type];
-                        return (
-                          <button key={type} onClick={() => addNode(type)}
-                            className="w-full flex items-center gap-3.5 px-3 py-3.5 rounded-xl hover:bg-muted/80 active:bg-muted transition-colors text-left mb-1">
-                            <span className="text-xl w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: meta.color + '20' }}>{meta.icon}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-bold text-foreground">{isRTL ? meta.labelAr : meta.label}</p>
-                              <p className="text-xs text-muted-foreground leading-relaxed">{isRTL ? meta.descriptionAr : meta.description}</p>
-                            </div>
-                          </button>
-                        );
-                      })}
+          {/* Add Component — Centered Modal */}
+          {showAddMenu && (() => {
+            const FREQ: FlowNodeType[] = ['message', 'name', 'phone', 'email', 'single_choice', 'ai_response'];
+            const SECTIONS: { label: string; labelAr: string; types: FlowNodeType[] }[] = [
+              { label: 'Messages', labelAr: 'الرسائل', types: ['message'] },
+              { label: 'Collect Info', labelAr: 'جمع المعلومات', types: ['name', 'email', 'phone', 'single_choice', 'multiple_choice'] },
+              { label: 'AI', labelAr: 'ذكاء اصطناعي', types: ['ai_response'] },
+              { label: 'Actions', labelAr: 'إجراءات', types: ['appointment', 'rating', 'live_chat', 'end'] },
+            ];
+            const q = addComponentSearch.toLowerCase();
+            const allTypes: FlowNodeType[] = ['message', 'name', 'email', 'phone', 'single_choice', 'multiple_choice', 'ai_response', 'appointment', 'rating', 'live_chat', 'end'];
+            const filtered = q ? allTypes.filter(t => {
+              const m = NODE_TYPE_META[t];
+              return m.label.toLowerCase().includes(q) || m.description.toLowerCase().includes(q);
+            }) : null;
+
+            const NodeRow = ({ type, autoClose = true }: { type: FlowNodeType; autoClose?: boolean }) => {
+              const m = NODE_TYPE_META[type];
+              return (
+                <button
+                  key={type}
+                  onClick={() => { addNode(type); if (autoClose) { setShowAddMenu(false); setAddComponentSearch(''); } }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/70 active:bg-muted transition-colors text-left group"
+                >
+                  <span className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0" style={{ background: m.color + '18' }}>{m.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground group-hover:text-[#060541] dark:group-hover:text-white transition-colors">{isRTL ? m.labelAr : m.label}</p>
+                    <p className="text-xs text-muted-foreground leading-tight">{isRTL ? m.descriptionAr : m.description}</p>
+                  </div>
+                </button>
+              );
+            };
+
+            return (
+              <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => { setShowAddMenu(false); setAddComponentSearch(''); }}>
+                <div className="bg-card rounded-2xl shadow-2xl border border-border/50 w-full max-w-md flex flex-col" style={{ maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-4 pt-4 pb-3 shrink-0">
+                    <p className="font-bold text-base text-foreground">{isRTL ? 'إضافة مكوّن' : 'Add Component'}</p>
+                    <button onClick={() => { setShowAddMenu(false); setAddComponentSearch(''); }} title="Close"
+                      className="w-8 h-8 rounded-full bg-muted/80 hover:bg-muted flex items-center justify-center active:scale-95 transition-all">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* Search */}
+                  <div className="px-4 pb-3 shrink-0">
+                    <div className="flex items-center gap-2 bg-muted/60 rounded-xl px-3 py-2 border border-border/40">
+                      <svg className="h-4 w-4 text-muted-foreground shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                      <input
+                        autoFocus
+                        value={addComponentSearch}
+                        onChange={e => setAddComponentSearch(e.target.value)}
+                        placeholder={isRTL ? 'ابحث هنا...' : 'Search here...'}
+                        className="flex-1 bg-transparent text-sm outline-none text-foreground placeholder:text-muted-foreground"
+                      />
+                      {addComponentSearch && (
+                        <button onClick={() => setAddComponentSearch('')} title="Clear search" className="text-muted-foreground hover:text-foreground">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
-                </>
-              )}
-            </div>
-          </div>
+
+                  {/* List */}
+                  <div className="flex-1 overflow-y-auto px-3 pb-4 min-h-0">
+                    {filtered ? (
+                      filtered.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-8">{isRTL ? 'لا توجد نتائج' : 'No results found'}</p>
+                      ) : (
+                        filtered.map(t => <NodeRow key={t} type={t} />)
+                      )
+                    ) : (
+                      <>
+                        {/* Frequently used */}
+                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-1 pt-1 pb-2">
+                          {isRTL ? 'الأكثر استخداماً' : 'Frequently used'}
+                        </p>
+                        {FREQ.map(t => <NodeRow key={t} type={t} />)}
+                        {/* Sections */}
+                        {SECTIONS.map(sec => (
+                          <React.Fragment key={sec.label}>
+                            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-1 pt-3 pb-2">
+                              {isRTL ? sec.labelAr : sec.label}
+                            </p>
+                            {sec.types.map(t => <NodeRow key={t} type={t} />)}
+                          </React.Fragment>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* ── Node Editor — Right Side Panel (desktop) / Bottom Sheet (mobile) ── */}
@@ -1309,15 +1917,59 @@ export default function WaktiAssistant() {
                           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
                             {isRTL ? 'الرسالة' : 'Message'}
                           </label>
-                          <textarea
-                            value={editText}
-                            onChange={(e) => setEditText(e.target.value)}
-                            rows={3}
-                            className="w-full border border-border/60 rounded-lg px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-[#060541]/20 dark:focus:ring-white/20 focus:border-[#060541]/50 dark:focus:border-white/40 resize-none transition-all"
-                            placeholder={isRTL ? 'اكتب الرسالة...' : 'What should the bot say...'}
-                          />
+                          <div className="relative">
+                            <textarea
+                              ref={editTextareaRef}
+                              value={editText}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditText(val);
+                                const last = val[e.target.selectionStart - 1];
+                                if (last === '/') setShowVarMenu(true);
+                                else if (showVarMenu && !val.endsWith('/')) setShowVarMenu(false);
+                              }}
+                              onKeyDown={(e) => { if (e.key === 'Escape') setShowVarMenu(false); }}
+                              rows={3}
+                              className="w-full border border-border/60 rounded-lg px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-[#060541]/20 dark:focus:ring-white/20 focus:border-[#060541]/50 dark:focus:border-white/40 resize-none transition-all"
+                              placeholder={isRTL ? 'اكتب الرسالة... اكتب / للمتغيرات' : 'What should the bot say... type / for variables'}
+                            />
+                            {/* Variable picker */}
+                            {showVarMenu && (
+                              <div className="absolute left-0 right-0 top-full mt-1 z-10 bg-card border border-border/60 rounded-xl shadow-lg overflow-hidden">
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-3 pt-2 pb-1">{isRTL ? 'المتغيرات' : 'Default Attributes'}</p>
+                                {[
+                                  { label: isRTL ? 'الاسم' : 'Name', var: '{{name}}' },
+                                  { label: isRTL ? 'البريد الإلكتروني' : 'Email', var: '{{email}}' },
+                                  { label: isRTL ? 'رقم الهاتف' : 'Phone Number', var: '{{phone}}' },
+                                ].map(v => (
+                                  <button
+                                    key={v.var}
+                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/80 text-left transition-colors"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      const ta = editTextareaRef.current;
+                                      if (!ta) return;
+                                      const pos = ta.selectionStart;
+                                      const before = editText.slice(0, pos).replace(/\/$/, '');
+                                      const after = editText.slice(pos);
+                                      setEditText(before + v.var + after);
+                                      setShowVarMenu(false);
+                                      setTimeout(() => {
+                                        ta.focus();
+                                        const newPos = before.length + v.var.length;
+                                        ta.setSelectionRange(newPos, newPos);
+                                      }, 10);
+                                    }}
+                                  >
+                                    <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-[#060541] dark:text-blue-400">{v.var}</span>
+                                    <span className="text-sm text-foreground">{v.label}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                           <p className="text-[10px] text-muted-foreground mt-1">
-                            {isRTL ? "استخدم '/' لإدراج متغيرات مخصصة" : "Use '/' to insert custom variables or dynamic values"}
+                            {isRTL ? "اكتب '/' لإدراج اسم أو إيميل الزائر" : "Type '/' to insert visitor's name, email or phone"}
                           </p>
                         </div>
                       )}
@@ -1411,26 +2063,19 @@ export default function WaktiAssistant() {
     const meta = NODE_TYPE_META[n.data?.flowType as FlowNodeType];
     if (!meta) return null;
     const isLast = i === total - 1;
-    const text = n.data?.text || n.data?.prompt || meta.description;
-    const shortText = text && text.length > 28 ? text.slice(0, 26) + '…' : text;
     return (
       <React.Fragment key={n.id}>
-        <div className="flex flex-col items-center gap-1 min-w-[90px] max-w-[100px]">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shadow-sm shrink-0"
-            style={{ background: meta.color + '20' }}
-          >
-            <span style={{ fontSize: '18px' }}>{meta.icon}</span>
-          </div>
-          <p className="text-[10px] font-bold text-center text-foreground leading-tight">{n.data?.label || meta.label}</p>
-          {shortText && n.data?.flowType !== 'start' && (
-            <p className="text-[9px] text-muted-foreground text-center leading-tight px-1">{shortText}</p>
-          )}
+        <div
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold shrink-0 border"
+          style={{ background: meta.color + '15', borderColor: meta.color + '40', color: meta.color }}
+        >
+          <span style={{ fontSize: '12px', lineHeight: 1 }}>{meta.icon}</span>
+          <span className="whitespace-nowrap" style={{ color: 'inherit' }}>{n.data?.label || meta.label}</span>
         </div>
         {!isLast && (
-          <div className="flex items-center shrink-0 px-1 pb-4">
-            <div className="w-6 h-px bg-border/60" />
-            <div className="w-0 h-0 border-t-[4px] border-t-transparent border-b-[4px] border-b-transparent border-l-[6px]" style={{ borderLeftColor: 'hsl(var(--border))' }} />
+          <div className="flex items-center shrink-0">
+            <div className="w-4 h-px bg-border/50" />
+            <div className="w-0 h-0 border-t-[3px] border-t-transparent border-b-[3px] border-b-transparent border-l-[5px]" style={{ borderLeftColor: 'hsl(var(--border))' }} />
           </div>
         )}
       </React.Fragment>
@@ -1614,8 +2259,8 @@ export default function WaktiAssistant() {
               </div>
             </div>
             {/* Scrollable node strip */}
-            <div className="rounded-2xl border border-border/50 bg-white dark:bg-card p-3 overflow-x-auto">
-              <div className="flex items-center gap-0 min-w-max">
+            <div className="rounded-xl border border-border/40 bg-muted/30 dark:bg-muted/20 px-3 py-2.5 overflow-x-auto scrollbar-none">
+              <div className="flex items-center gap-1.5 min-w-max">
                 {(() => {
                   // Build ordered node list by following edges from start
                   const nodeMap: Record<string, any> = {};
@@ -1728,6 +2373,48 @@ export default function WaktiAssistant() {
 
   return (
     <div className={cn("relative h-full min-h-[calc(100vh-64px)]", isRTL && "rtl")}>
+
+      {/* ── Global Flow Preview Modal ── works from any step */}
+      {showPreview && activeBot && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => setShowPreview(false)}
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowPreview(false); }}
+            title="Close preview"
+            style={{ position: 'fixed', top: 16, right: 16, zIndex: 10000 }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-red-500 hover:bg-red-600 text-white text-sm font-bold shadow-2xl active:scale-95 transition-all"
+          >
+            <X className="h-4 w-4" />
+            {isRTL ? 'إغلاق' : 'Close'}
+          </button>
+          <div
+            className="relative w-[390px] max-w-[calc(100vw-32px)] rounded-2xl overflow-hidden shadow-2xl flex flex-col"
+            style={{ height: 'min(660px, calc(100vh - 96px))', marginTop: 56 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-zinc-900 h-8 flex items-center justify-center shrink-0 rounded-t-2xl">
+              <div className="w-16 h-1 rounded-full bg-zinc-700" />
+            </div>
+            <div className="flex-1 min-h-0">
+              <Suspense fallback={<div className="flex items-center justify-center h-full bg-white"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>}>
+                <ChatbotWidget
+                  token=""
+                  isPreview
+                  previewBot={activeBot}
+                  previewNodes={nodes.map((n: any) => ({ node_id: n.id, type: n.data.flowType, label: n.data.label, data: n.data }))}
+                  previewEdges={edges.map((e: any) => ({ edge_id: e.id, source_node_id: e.source, target_node_id: e.target, source_handle: e.sourceHandle || null, label: e.label || null }))}
+                />
+              </Suspense>
+            </div>
+            <div className="bg-zinc-900 h-6 flex items-center justify-center rounded-b-2xl shrink-0">
+              <div className="w-10 h-1 rounded-full bg-zinc-700" />
+            </div>
+          </div>
+        </div>
+      )}
+
       {step === 'list' && renderBotList()}
       {step === 'platform' && renderPlatformSelect()}
       {step === 'instagram-connect' && renderInstagramConnect()}

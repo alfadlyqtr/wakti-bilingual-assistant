@@ -1375,6 +1375,10 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
           calendarEntries={calendarEntries}
           view={view}
           onDayClick={handleDayClick}
+          onMonthClick={(date) => {
+            setCurrentDate(date);
+            setView('month');
+          }}
           language={language}
           locale={locale}
         />

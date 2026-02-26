@@ -28,8 +28,10 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   const [showPaywall, setShowPaywall] = useState(false);
 
   const [hasAnySession, setHasAnySession] = useState<boolean>(!!session);
-  const sessionPollRef = useRef<number | null>(null);
-  const sessionPollDeadlineRef = useRef<number>(0);
+
+  // --- Fix #2: hooks moved here (top of component) to satisfy Rules of Hooks ---
+  const { isSubscribed, isAccessExpired, profile } = useUserProfile();
+  const [accessCheckTick, setAccessCheckTick] = useState(0);
 
   // Enable subscription/IAP enforcement
   const TEMP_DISABLE_SUBSCRIPTION_CHECKS = false;
@@ -59,44 +61,8 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     return () => { mounted = false; };
   }, [session, user]);
 
-  useEffect(() => {
-    if (hasAnySession) {
-      if (sessionPollRef.current) {
-        window.clearInterval(sessionPollRef.current);
-        sessionPollRef.current = null;
-      }
-      return;
-    }
-    sessionPollDeadlineRef.current = Date.now() + 8000;
-    if (sessionPollRef.current) return;
-    sessionPollRef.current = window.setInterval(async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (data?.session) {
-          setHasAnySession(true);
-          if (sessionPollRef.current) {
-            window.clearInterval(sessionPollRef.current);
-            sessionPollRef.current = null;
-          }
-          return;
-        }
-      } catch {}
-      if (Date.now() > sessionPollDeadlineRef.current) {
-        if (sessionPollRef.current) {
-          window.clearInterval(sessionPollRef.current);
-          sessionPollRef.current = null;
-        }
-      }
-    }, 250);
-    return () => {
-      if (sessionPollRef.current) {
-        window.clearInterval(sessionPollRef.current);
-        sessionPollRef.current = null;
-      }
-    };
-  }, [hasAnySession]);
-
   const lastAuthStateRef = useRef<string>("");
+  const loggedStillLoadingRef = useRef<string>("");
   useEffect(() => {
     if (!DEV) return;
     const snapshot = JSON.stringify({
@@ -363,6 +329,26 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     };
   }, [user?.id, isLoading]);
 
+  // Force re-evaluation of isAccessExpired every 10 seconds
+  useEffect(() => {
+    if (isSubscribed || !profile?.free_access_start_at) return;
+    const interval = setInterval(() => {
+      setAccessCheckTick(t => t + 1);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [isSubscribed, profile?.free_access_start_at]);
+
+  useEffect(() => {
+    if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) return;
+    if (!user?.id) return;
+    if (isSubscribed) { setShowPaywall(false); return; }
+    const isAccount = location.pathname.startsWith('/account');
+    if (isAccount) { setShowPaywall(false); return; }
+    if (!isAccessExpired) { setShowPaywall(false); return; }
+    if (DEV) console.log("ProtectedRoute: Triggering paywall - access expired (route:", location.pathname, location.search, ")");
+    setShowPaywall(true);
+  }, [user?.id, isSubscribed, isAccessExpired, location.pathname, location.search, TEMP_DISABLE_SUBSCRIPTION_CHECKS, DEV, accessCheckTick]);
+
   let effectiveHasSession = hasAnySession;
   
   // Check multiple sources for recent login (in order of reliability)
@@ -391,7 +377,6 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     } catch {}
   }
 
-  const loggedStillLoadingRef = useRef<string>("");
   if (!effectiveHasSession && isLoading) {
     if (DEV) {
       const key = location.pathname;
@@ -435,54 +420,6 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Check access and trigger paywall if needed
-  const { isSubscribed, isAccessExpired, profile } = useUserProfile();
-  
-  // Force re-evaluation of isAccessExpired every 10 seconds
-  // This is needed because isAccessExpired is a getter that recalculates based on Date.now()
-  // React's useEffect can't detect when a getter's return value changes
-  const [accessCheckTick, setAccessCheckTick] = useState(0);
-  
-  useEffect(() => {
-    // Only run the timer if user is not subscribed and has a trial start time
-    if (isSubscribed || !profile?.free_access_start_at) return;
-    
-    const interval = setInterval(() => {
-      setAccessCheckTick(t => t + 1);
-    }, 10000); // Check every 10 seconds
-    
-    return () => clearInterval(interval);
-  }, [isSubscribed, profile?.free_access_start_at]);
-  
-  useEffect(() => {
-    if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) return;
-    if (!user?.id) return;
-
-    // If user is subscribed, never show paywall
-    if (isSubscribed) {
-      setShowPaywall(false);
-      return;
-    }
-
-    // If on account page, always allow access (for billing management AND account deletion)
-    // This is required by Apple Guideline 5.1.1(v) - users must be able to delete their account
-    const isAccount = location.pathname.startsWith('/account');
-    if (isAccount) {
-      setShowPaywall(false);
-      return;
-    }
-
-    // If access not expired yet, keep paywall hidden
-    if (!isAccessExpired) {
-      setShowPaywall(false);
-      return;
-    }
-
-    // Else: user's free period has expired and they're not subscribed
-    if (DEV) console.log("ProtectedRoute: Triggering paywall - access expired (route:", location.pathname, location.search, ")");
-    setShowPaywall(true);
-  }, [user?.id, isSubscribed, isAccessExpired, location.pathname, location.search, TEMP_DISABLE_SUBSCRIPTION_CHECKS, DEV, accessCheckTick]);
-  
   if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) {
     if (DEV) console.log("ProtectedRoute: TEMP DISABLE - allowing access after auth");
     return <>{children}</>;

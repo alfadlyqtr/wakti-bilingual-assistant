@@ -31,6 +31,7 @@ interface CalendarGridProps {
   calendarEntries: CalendarEntry[];
   view: CalendarView;
   onDayClick: (date: Date) => void;
+  onMonthClick?: (date: Date) => void;
   language: 'en' | 'ar';
   locale: Locale;
 }
@@ -41,6 +42,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   calendarEntries,
   view,
   onDayClick,
+  onMonthClick,
   language,
   locale
 }) => {
@@ -130,7 +132,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
 
     return (
       <div className="overflow-y-auto flex-1 pb-20 p-2">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {days.map((monthDate) => {
             const isCurrentMonth = isSameMonth(monthDate, today);
             const mStart = startOfMonth(monthDate);
@@ -146,7 +148,8 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                 onClick={() => {
                   const newDate = new Date(currentDate);
                   newDate.setMonth(monthDate.getMonth());
-                  onDayClick(newDate);
+                  if (onMonthClick) onMonthClick(newDate);
+                  else onDayClick(newDate);
                 }}
                 className={cn(
                   "rounded-xl border p-2 cursor-pointer",
@@ -159,13 +162,13 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                   "text-xs font-semibold text-center mb-1.5",
                   isCurrentMonth ? "text-primary" : "text-foreground"
                 )}>
-                  {format(monthDate, 'MMMM', { locale })}
+                  {format(monthDate, 'MMM', { locale })}
                 </div>
 
                 {/* Day-of-week headers */}
                 <div className="grid grid-cols-7 mb-0.5">
                   {miniDayNames.map((d, i) => (
-                    <div key={i} className="text-center text-[8px] text-muted-foreground font-medium">
+                    <div key={i} className="text-center text-[9px] text-muted-foreground font-medium">
                       {d}
                     </div>
                   ))}
@@ -202,7 +205,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                         )}
                       >
                         <span className={cn(
-                          "text-[9px] leading-tight w-4 h-4 flex items-center justify-center rounded-full",
+                          "text-[10px] leading-tight w-5 h-5 flex items-center justify-center rounded-full",
                           isToday && "bg-primary text-primary-foreground font-bold",
                           !isToday && inMonth && "text-foreground",
                         )}>

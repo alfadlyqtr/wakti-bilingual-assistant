@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ArrowLeft, Save, Send, Smile, X, Check, Loader2, Monitor, Smartphone } from 'lucide-react';
+import { ArrowLeft, Save, Send, Smile, X, Check, Loader2, Monitor, Smartphone, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ChatbotBot, ChatbotService } from '@/services/chatbotService';
@@ -223,10 +223,12 @@ export default function ChatbotDesigner({ bot, onBack, onSave, isRTL }: Props) {
     { id: 'layout', label: 'Layout', labelAr: 'التخطيط' },
   ];
 
+  const [showMobilePreview, setShowMobilePreview] = useState(false);
+
   return (
     <div className="flex h-full bg-background overflow-hidden">
       {/* ── LEFT PANEL ── */}
-      <div className="w-[340px] shrink-0 flex flex-col border-r border-border/50 bg-background overflow-hidden">
+      <div className="w-full md:w-[340px] shrink-0 flex flex-col border-r border-border/50 bg-background overflow-hidden">
         {/* Header */}
         <div className="px-5 pt-5 pb-4 shrink-0">
           <button
@@ -481,6 +483,13 @@ export default function ChatbotDesigner({ bot, onBack, onSave, isRTL }: Props) {
           >
             {isRTL ? 'إلغاء' : 'Discard'}
           </Button>
+          <button
+            onClick={() => setShowMobilePreview(true)}
+            className="md:hidden flex items-center gap-1.5 px-4 h-10 rounded-xl border border-border/60 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors shrink-0"
+          >
+            <Eye className="h-4 w-4" />
+            {isRTL ? 'معاينة' : 'Preview'}
+          </button>
           <Button
             className="flex-1 rounded-xl h-10 text-sm bg-[#060541] hover:bg-[#060541]/90 text-white dark:bg-white dark:text-[#060541] gap-2"
             onClick={handleSave}
@@ -492,8 +501,53 @@ export default function ChatbotDesigner({ bot, onBack, onSave, isRTL }: Props) {
         </div>
       </div>
 
-      {/* ── RIGHT PANEL: LIVE PREVIEW ── */}
-      <div className="flex-1 flex flex-col min-w-0 bg-zinc-50 dark:bg-zinc-900/50">
+      {/* ── MOBILE PREVIEW OVERLAY ── */}
+      {showMobilePreview && (
+        <div className="fixed inset-0 z-[9999] bg-background flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border/30 shrink-0 bg-background">
+            <div className="flex items-center gap-1 p-1 bg-muted/60 rounded-lg">
+              <button
+                title="Web"
+                onClick={() => setPreviewDevice('desktop')}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all",
+                  previewDevice === 'desktop' ? "bg-[#060541] text-white dark:bg-white dark:text-[#060541] shadow-sm" : "text-muted-foreground"
+                )}
+              >
+                <Monitor className="h-3.5 w-3.5" />
+                {isRTL ? 'ويب' : 'Web'}
+              </button>
+              <button
+                title="Mobile"
+                onClick={() => setPreviewDevice('mobile')}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all",
+                  previewDevice === 'mobile' ? "bg-[#060541] text-white dark:bg-white dark:text-[#060541] shadow-sm" : "text-muted-foreground"
+                )}
+              >
+                <Smartphone className="h-3.5 w-3.5" />
+                {isRTL ? 'موبايل' : 'Mobile'}
+              </button>
+            </div>
+            <button
+              onClick={() => setShowMobilePreview(false)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold transition-colors active:scale-95 shadow-md"
+            >
+              <X className="h-4 w-4" />
+              {isRTL ? 'إغلاق المعاينة' : 'Close Preview'}
+            </button>
+          </div>
+          <div className="flex-1 flex items-center justify-center p-4 min-h-0 bg-zinc-50 dark:bg-zinc-900/50">
+            <div className={cn("transition-all duration-500", previewDevice === 'desktop' ? "w-full h-full max-h-[600px]" : "h-full flex items-center")}>
+              <ChatPreview bot={bot} design={design} device={previewDevice} />
+            </div>
+          </div>
+          <div className="h-1 shrink-0" style={{ background: design.primaryColor }} />
+        </div>
+      )}
+
+      {/* ── RIGHT PANEL: LIVE PREVIEW (desktop only) ── */}
+      <div className="hidden md:flex flex-1 flex-col min-w-0 bg-zinc-50 dark:bg-zinc-900/50">
         {/* Preview header */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-border/30 bg-background shrink-0">
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">

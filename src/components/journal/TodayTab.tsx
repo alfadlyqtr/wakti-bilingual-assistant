@@ -407,10 +407,10 @@ export const TodayTab: React.FC = () => {
       const placeholder = language === 'ar' ? 'اكتب هنا...' : 'Type here...';
       const hasChips = tokens.length > 0;
       const free = noteFreeText
-        ? `<span class="sr-only"> | </span><span data-free-pill="1" contenteditable="true" class="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 text-slate-800 px-3 py-1 shadow-sm ring-1 ring-primary/20">${esc(noteFreeText)}</span> `
+        ? `<span class="sr-only"> | </span><span data-free-pill="1" contenteditable="true" class="inline-flex items-center gap-1 rounded-full border-2 border-blue-400 bg-blue-50 dark:bg-blue-900/40 text-slate-900 dark:text-slate-100 px-3 py-1 shadow-md ring-2 ring-blue-300 dark:ring-blue-500 font-medium">${esc(noteFreeText)}</span> `
         : (hasChips 
             ? `<span class="sr-only"> | </span><span data-free-pill="1" contenteditable="true" class="inline-flex items-center gap-1 rounded-full border border-dashed border-primary/40 bg-primary/5 text-primary/60 px-3 py-1 shadow-sm opacity-50"></span> `
-            : `<span class="sr-only"> | </span><span data-free-pill="1" contenteditable="true" class="inline-flex items-center gap-1 rounded-full border border-dashed border-primary/40 bg-primary/5 text-primary/60 px-3 py-1 shadow-sm italic">${placeholder}</span> `
+            : `<span class="sr-only"> | </span><span data-free-pill="1" contenteditable="true" class="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-400 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-3 py-1 shadow-sm italic">${placeholder}</span> `
           );
       const innerContent = `${before}${chips}${free}`;
       // ALWAYS wrap timestamp lines in outer pill (whether saved or unsaved)
@@ -437,7 +437,7 @@ export const TodayTab: React.FC = () => {
           try {
             const range = document.createRange();
             const sel = window.getSelection();
-            const pills = el.querySelectorAll('span[data-free-pill="1"]');
+            const pills = el.querySelectorAll('[data-free-pill="1"]');
             const target = pills.length ? pills[pills.length - 1] : null;
             if (target) {
               range.selectNodeContents(target);

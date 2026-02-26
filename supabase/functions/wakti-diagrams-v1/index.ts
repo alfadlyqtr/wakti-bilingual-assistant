@@ -14,6 +14,27 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const KROKI_BASE_URL = "https://kroki.io";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Arabic SVG Font Injection
+// Kroki renders SVGs without Arabic font support — letters appear disconnected.
+// This injects Noto Sans Arabic into the SVG so text renders correctly.
+// ─────────────────────────────────────────────────────────────────────────────
+function injectArabicFontIntoSvg(svgText: string): string {
+  const arabicFontStyle = `<style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;700&display=swap');
+    text, tspan, .label, .nodeLabel, .edgeLabel, foreignObject div {
+      font-family: 'Noto Sans Arabic', 'Arial Unicode MS', Arial, sans-serif !important;
+    }
+  </style>`;
+
+  // Find the end of the opening <svg ...> tag and inject font style right after it
+  const svgOpenEnd = svgText.indexOf('>');
+  if (svgOpenEnd !== -1) {
+    return svgText.slice(0, svgOpenEnd + 1) + arabicFontStyle + svgText.slice(svgOpenEnd + 1);
+  }
+  return svgText;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -192,8 +213,13 @@ serve(async (req) => {
         console.log(`🔧 Rendering diagram: ${spec.title} (engine: ${spec.engine})`);
         console.log(`📝 Diagram source (first 200 chars): ${spec.diagramSource.substring(0, 200)}`);
         
-        const svgText = await renderWithKroki(spec.engine, spec.diagramSource);
+        let svgText = await renderWithKroki(spec.engine, spec.diagramSource);
         console.log(`✅ Kroki rendered SVG (${svgText.length} characters)`);
+
+        // Inject Arabic font if the diagram uses Arabic text
+        if (language === "ar") {
+          svgText = injectArabicFontIntoSvg(svgText);
+        }
 
         const diagramId = crypto.randomUUID();
         const fileName = `${diagramId}.svg`;
@@ -235,7 +261,8 @@ serve(async (req) => {
           try {
             console.log("🛟 Auto fallback: rendering safe Mermaid flowchart...");
             const fallbackSpec = buildAutoFallbackFlowchart(language);
-            const svgText = await renderWithKroki("mermaid", fallbackSpec.diagramSource);
+            let svgText = await renderWithKroki("mermaid", fallbackSpec.diagramSource);
+            if (language === "ar") svgText = injectArabicFontIntoSvg(svgText);
 
             const diagramId = crypto.randomUUID();
             const fileName = `${diagramId}.svg`;

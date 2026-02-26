@@ -212,14 +212,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [user?.id]);
 
   // === SINGLE-DEVICE LOGIN: Realtime Session Monitoring ===
-  // Uses Supabase Realtime to instantly detect when user logs in on another device
-  // No polling required - server pushes changes to client via WebSocket
+  // Uses Supabase Realtime to instantly detect when user logs in on another device.
+  // Compares via a stable login_id (UUID set once at login) instead of the access_token
+  // which rotates every ~60 min and would cause false "other device" logouts.
   useEffect(() => {
-    if (!user?.id || !session?.access_token) return;
-    
-    console.log('[AuthContext] Setting up realtime single-device session monitoring');
-    
-    // Subscribe to changes on this user's session record
+    if (!user?.id) return;
+
+    // Grab the stable login_id written by LoginForm at login time
+    let myLoginId: string | null = null;
+    try { myLoginId = sessionStorage.getItem('wakti_login_id'); } catch {}
+    if (!myLoginId) {
+      console.log('[AuthContext] No login_id in sessionStorage — skipping session monitor');
+      return;
+    }
+
+    console.log('[AuthContext] Setting up realtime single-device session monitoring (login_id)');
+
     const channel = supabase
       .channel(`user-session-${user.id}`)
       .on(
@@ -231,40 +239,44 @@ export function AuthProvider({ children }: AuthProviderProps) {
           filter: `user_id=eq.${user.id}`
         },
         (payload) => {
-          // Check if the session ID changed (someone logged in elsewhere)
-          const newSessionId = (payload.new as any)?.session_id;
-          
-          if (newSessionId && newSessionId !== session.access_token) {
-            console.log('[AuthContext] Session replaced by another device (realtime)');
+          const newLoginId = (payload.new as any)?.login_id;
+
+          // Only act when login_id is present AND differs from ours
+          if (newLoginId && newLoginId !== myLoginId) {
+            console.log('[AuthContext] Session replaced by another device (realtime, login_id mismatch)');
             toast.info('You have been signed out because you logged in on another device');
-            
+
             // Unsubscribe first to prevent any further events
             supabase.removeChannel(channel);
-            
-            // Clear session and redirect to login
+
+            // Clear session state
             supabase.auth.signOut({ scope: 'local' as any }).catch(() => {});
             setUser(null);
             setSession(null);
-            
-            // Redirect to login
+
+            // Soft redirect — avoids Natively WebView "Ops! Error loading" crash
+            try { sessionStorage.removeItem('wakti_login_id'); } catch {}
             try {
+              window.history.replaceState(null, '', '/login');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            } catch {
+              // Last-resort fallback
               window.location.replace('/login');
-            } catch {}
+            }
           }
         }
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log('[AuthContext] Realtime session monitoring active');
+          console.log('[AuthContext] Realtime session monitoring active (login_id)');
         }
       });
-    
-    // Cleanup subscription on unmount or dependency change
+
     return () => {
       console.log('[AuthContext] Cleaning up realtime session monitoring');
       supabase.removeChannel(channel);
     };
-  }, [user?.id, session?.access_token]);
+  }, [user?.id]);
 
   // Identify logged-in user in RevenueCat (via Natively SDK). No-op on web.
   // Also check subscription status via RevenueCat REST API
@@ -362,6 +374,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Best-effort cleanup of any legacy flags your app may set
       localStorage.removeItem('wakti_session_kicked');
       localStorage.removeItem('wakti_session_blocked');
+      sessionStorage.removeItem('wakti_login_id');
       // Remove Supabase auth caches so SDK cannot auto-restore
       for (const store of [localStorage, sessionStorage]) {
         try {

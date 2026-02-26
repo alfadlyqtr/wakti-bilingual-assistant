@@ -10,7 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { 
-  ArrowLeft, 
+  ArrowLeft,
+  ArrowRight, 
   Download, 
   ExternalLink, 
   Loader2, 
@@ -853,12 +854,6 @@ export default function ProjectDetail() {
   // Force Sandpack re-render key (incremented on revert, starts with timestamp to force fresh mount)
   const [sandpackKey, setSandpackKey] = useState(() => Date.now());
 
-  // AUTO-ENABLE visual edit on mobile when project is ready (not generating)
-  useEffect(() => {
-    if (isMobileDevice && !isGenerating && Object.keys(generatedFiles).length > 0 && !elementSelectMode) {
-      setElementSelectMode(true);
-    }
-  }, [isMobileDevice, isGenerating, generatedFiles]);
 
   // Visual Edit Mode keyboard shortcuts (Ctrl+Z undo, Ctrl+Shift+Z redo)
   useEffect(() => {
@@ -5826,6 +5821,11 @@ ${fixInstructions}
       setThinkingStartTime(null);
       releaseAgentLock('user-chat'); // 🔒 Release lock when chat completes
       releaseAgentLock('auto-fix'); // 🔒 Also release auto-fix lock (in case this was triggered by auto-fix)
+      // On mobile: auto-switch to preview and force refresh so changes show immediately
+      if (window.innerWidth < 768) {
+        setSandpackKey(prev => prev + 1);
+        setMobileTab('preview');
+      }
     }
   };
 
@@ -5933,39 +5933,72 @@ ${fixInstructions}
       {/* Builder Tab Content - Mobile Chat/Preview Toggle */}
       <div className="md:hidden px-4 py-2 bg-background/95 dark:bg-[#0c0f14]/95 backdrop-blur-sm border-b border-border/40 shrink-0 z-20">
         <div className="relative flex p-1 bg-muted/30 dark:bg-white/5 rounded-2xl border border-border/50">
-          {/* Animated sliding background pill */}
+          {/* Animated sliding background pill — RTL-aware */}
           <div 
             className={cn(
               "absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-zinc-800 rounded-xl shadow-lg transition-all duration-300 ease-out z-0",
-              mobileTab === 'chat' ? "left-1" : "left-[calc(50%+1px)]"
+              isRTL
+                ? (mobileTab === 'chat' ? "right-1" : "right-[calc(50%+1px)]")
+                : (mobileTab === 'chat' ? "left-1" : "left-[calc(50%+1px)]")
             )}
           />
           
-          <button
-            onClick={() => setMobileTab('chat')}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold transition-all relative z-10",
-              mobileTab === 'chat' 
-                ? "text-indigo-600 dark:text-indigo-400" 
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <MessageSquare className={cn("h-4 w-4 transition-transform duration-300", mobileTab === 'chat' && "scale-110")} />
-            {isRTL ? 'دردشة' : 'Chat'}
-          </button>
-          
-          <button
-            onClick={() => setMobileTab('preview')}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold transition-all relative z-10",
-              mobileTab === 'preview' 
-                ? "text-indigo-600 dark:text-indigo-400" 
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Monitor className={cn("h-4 w-4 transition-transform duration-300", mobileTab === 'preview' && "scale-110")} />
-            {isRTL ? 'معاينة' : 'Preview'}
-          </button>
+          {/* In RTL: دردشة on right, معاينة on left — reverse button order */}
+          {isRTL ? (
+            <>
+              <button
+                onClick={() => setMobileTab('preview')}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold transition-all relative z-10",
+                  mobileTab === 'preview' 
+                    ? "text-indigo-600 dark:text-indigo-400" 
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Monitor className={cn("h-4 w-4 transition-transform duration-300", mobileTab === 'preview' && "scale-110")} />
+                معاينة
+              </button>
+              <button
+                onClick={() => setMobileTab('chat')}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold transition-all relative z-10",
+                  mobileTab === 'chat' 
+                    ? "text-indigo-600 dark:text-indigo-400" 
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <MessageSquare className={cn("h-4 w-4 transition-transform duration-300", mobileTab === 'chat' && "scale-110")} />
+                دردشة
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setMobileTab('chat')}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold transition-all relative z-10",
+                  mobileTab === 'chat' 
+                    ? "text-indigo-600 dark:text-indigo-400" 
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <MessageSquare className={cn("h-4 w-4 transition-transform duration-300", mobileTab === 'chat' && "scale-110")} />
+                Chat
+              </button>
+              <button
+                onClick={() => setMobileTab('preview')}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold transition-all relative z-10",
+                  mobileTab === 'preview' 
+                    ? "text-indigo-600 dark:text-indigo-400" 
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Monitor className={cn("h-4 w-4 transition-transform duration-300", mobileTab === 'preview' && "scale-110")} />
+                Preview
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -5984,15 +6017,18 @@ ${fixInstructions}
         }}
         >
           {/* Mode Toggle: Chat / Code / Server - FIXED at top */}
-          <div className="flex items-center justify-between border-b border-border/50 dark:border-white/10 px-3 py-0 h-[56px] shrink-0 absolute top-0 left-0 right-0 z-[100] bg-background dark:bg-[#0c0f14]">
-            <div className="flex items-center gap-2">
-              {/* Back Button */}
+          <div className={cn("flex items-center justify-between border-b border-border/50 dark:border-white/10 px-3 py-0 h-[56px] shrink-0 absolute top-0 left-0 right-0 z-[100] bg-background dark:bg-[#0c0f14]", isRTL && "flex-row-reverse")}>
+            <div className={cn("flex items-center gap-2", isRTL && "flex-row-reverse")}>
+              {/* Back Button — arrow flips for RTL */}
               <button
                 onClick={() => navigate('/projects')}
                 className="p-1.5 rounded-lg bg-gradient-to-br from-blue-500/20 via-blue-400/20 to-blue-300/20 border border-blue-500/30 hover:border-blue-500/50 hover:from-blue-500/30 hover:via-blue-400/30 hover:to-blue-300/30 transition-all active:scale-95 group"
                 title={isRTL ? 'رجوع' : 'Back'}
               >
-                <ArrowLeft className="h-4 w-4 text-blue-500 group-hover:text-blue-400 transition-colors" />
+                {isRTL 
+                  ? <ArrowRight className="h-4 w-4 text-blue-500 group-hover:text-blue-400 transition-colors" />
+                  : <ArrowLeft className="h-4 w-4 text-blue-500 group-hover:text-blue-400 transition-colors" />
+                }
               </button>
               
               {/* Brain Icon - Opens Instructions Drawer */}

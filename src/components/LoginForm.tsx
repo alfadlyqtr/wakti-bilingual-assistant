@@ -80,18 +80,21 @@ export function LoginForm({
             try { setLastLoginTimestamp(loginTimestamp); } catch {}
             
             // === REGISTER ACTIVE SESSION FOR SINGLE-DEVICE LOGIN ===
-            // This ensures only one device can be logged in at a time
+            // Uses a stable login_id (UUID) that never rotates, unlike the access_token
             try {
-              const sessionId = at; // Use access token as unique session identifier
+              const loginId = crypto.randomUUID();
+              // Persist in sessionStorage so the Realtime listener can compare
+              try { sessionStorage.setItem('wakti_login_id', loginId); } catch {}
               await supabase
                 .from('user_active_sessions')
                 .upsert({ 
                   user_id: data.user.id,
-                  session_id: sessionId,
+                  session_id: at, // keep for backwards compat
+                  login_id: loginId,
                   last_login: new Date().toISOString(),
                   device_info: navigator.userAgent || 'Unknown Device'
                 });
-              console.log("LoginForm: Session registered as active device");
+              console.log("LoginForm: Session registered with stable login_id");
             } catch (sessionErr) {
               console.error("LoginForm: Failed to register active session (non-blocking):", sessionErr);
               // Don't block login on session registration error
