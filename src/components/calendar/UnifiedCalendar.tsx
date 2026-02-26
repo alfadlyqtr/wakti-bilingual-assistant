@@ -976,22 +976,34 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
       if (direction === 'both' || direction === 'from_phone') {
         console.log('[CalendarSync] Syncing FROM phone...');
         try {
-          // Verify calendar access is still valid before claiming success
-          const calAccessOk = await new Promise<boolean>((resolve) => {
-            retrieveCalendars((result) => {
-              resolve(result.status === 'SUCCESS');
-            });
-            // Timeout after 8 seconds
-            setTimeout(() => resolve(false), 8000);
-          });
+          // iOS fix: skip retrieveCalendars verification — iOS SDK callback never fires reliably.
+          // We already confirmed the SDK is available via nativeCalendarAvailable check above.
+          const isIOS = natively?.isIOSApp === true;
           
-          if (calAccessOk) {
+          if (isIOS) {
+            // On iOS just refresh directly — no verification needed since nativeCalendarAvailable is true
+            console.log('[CalendarSync] iOS detected - skipping retrieveCalendars verification, refreshing directly');
             await refreshCalendarData();
             fromPhoneSuccess = true;
-            console.log('[CalendarSync] Sync FROM phone completed');
+            console.log('[CalendarSync] Sync FROM phone completed (iOS)');
           } else {
-            console.error('[CalendarSync] Calendar access denied when syncing FROM phone');
-            if (!errorMessage) errorMessage = 'Calendar access denied';
+            // Android/other: verify calendar access is still valid before claiming success
+            const calAccessOk = await new Promise<boolean>((resolve) => {
+              retrieveCalendars((result) => {
+                resolve(result.status === 'SUCCESS');
+              });
+              // Timeout after 8 seconds
+              setTimeout(() => resolve(false), 8000);
+            });
+            
+            if (calAccessOk) {
+              await refreshCalendarData();
+              fromPhoneSuccess = true;
+              console.log('[CalendarSync] Sync FROM phone completed');
+            } else {
+              console.error('[CalendarSync] Calendar access denied when syncing FROM phone');
+              if (!errorMessage) errorMessage = 'Calendar access denied';
+            }
           }
         } catch (fromPhoneError) {
           console.error('[CalendarSync] Error syncing FROM phone:', fromPhoneError);
