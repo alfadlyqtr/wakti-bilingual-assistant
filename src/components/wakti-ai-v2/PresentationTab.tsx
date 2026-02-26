@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { callEdgeFunctionWithRetry, supabase } from '@/integrations/supabase/client';
@@ -23,6 +23,7 @@ import {
   Layout,
   Palette,
   Edit2,
+  Pencil,
   Plus,
   Trash2,
   FileText,
@@ -1158,12 +1159,88 @@ const PresentationTab: React.FC = () => {
   const [applyBackgroundToAllSlides, setApplyBackgroundToAllSlides] = useState(false);
   const [applyVoiceToAllSlides, setApplyVoiceToAllSlides] = useState(true);
 
+  // Editable presentation name
+  const [presentationName, setPresentationName] = useState<string>('');
+  const [isEditingName, setIsEditingName] = useState(false);
+
   // Enhanced (AI Premium Render) state
   const [enhancedHtmlMap, setEnhancedHtmlMap] = useState<Record<number, string>>({});
+  const [enhancedTemplateMap, setEnhancedTemplateMap] = useState<Record<number, number>>({}); // stores which template index was used per slide
+  // Unique key per presentation: fingerprint of slide titles + count
+  const enhancedStorageKey = useMemo(() => {
+    if (slides.length === 0) return `wakti-enhanced-empty`;
+    const fingerprint = slides.map(s => (s.title || '').slice(0, 20)).join('|') + `|${slides.length}`;
+    let hash = 0;
+    for (let i = 0; i < fingerprint.length; i++) { hash = ((hash << 5) - hash + fingerprint.charCodeAt(i)) | 0; }
+    return `wakti-enhanced-${Math.abs(hash).toString(36)}`;
+  }, [slides]);
   const [savedEnhancedMap, setSavedEnhancedMap] = useState<Record<number, string>>({});
   const [isEnhancing, setIsEnhancing] = useState(false);
+  const [isUpdatingEnhancement, setIsUpdatingEnhancement] = useState(false); // separate from isEnhancing to avoid overlay
   const [showEnhanced, setShowEnhanced] = useState(false);
   const [enhanceScale, setEnhanceScale] = useState(0.25);
+
+  // One-time cleanup: remove old topic-text-based keys (format: wakti-enhanced-word_word_...)
+  useEffect(() => {
+    try {
+      const toDelete: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('wakti-enhanced-') && /[a-zA-Z_]{5,}/.test(k.replace('wakti-enhanced-', ''))) {
+          toDelete.push(k);
+        }
+      }
+      toDelete.forEach(k => localStorage.removeItem(k));
+    } catch {}
+  }, []);
+
+  // Reload savedEnhancedMap and enhancedTemplateMap when the presentation changes (key changes)
+  useEffect(() => {
+    if (enhancedStorageKey === 'wakti-enhanced-empty') return;
+    try {
+      const stored = localStorage.getItem(enhancedStorageKey);
+      setSavedEnhancedMap(stored ? JSON.parse(stored) : {});
+      const storedTemplates = localStorage.getItem(`${enhancedStorageKey}-templates`);
+      setEnhancedTemplateMap(storedTemplates ? JSON.parse(storedTemplates) : {});
+    } catch { setSavedEnhancedMap({}); setEnhancedTemplateMap({}); }
+  }, [enhancedStorageKey]);
+
+  // Persist savedEnhancedMap to localStorage
+  useEffect(() => {
+    if (enhancedStorageKey === 'wakti-enhanced-empty') return;
+    if (Object.keys(savedEnhancedMap).length > 0) {
+      try { localStorage.setItem(enhancedStorageKey, JSON.stringify(savedEnhancedMap)); } catch {}
+    }
+  }, [savedEnhancedMap, enhancedStorageKey]);
+
+  // Persist enhancedTemplateMap to localStorage
+  useEffect(() => {
+    if (enhancedStorageKey === 'wakti-enhanced-empty') return;
+    if (Object.keys(enhancedTemplateMap).length > 0) {
+      try { localStorage.setItem(`${enhancedStorageKey}-templates`, JSON.stringify(enhancedTemplateMap)); } catch {}
+    }
+  }, [enhancedTemplateMap, enhancedStorageKey]);
+
+  // Load/save presentationName per presentation (keyed by storage key)
+  useEffect(() => {
+    if (enhancedStorageKey === 'wakti-enhanced-empty') return;
+    const nameKey = `${enhancedStorageKey}-name`;
+    const stored = localStorage.getItem(nameKey);
+    if (stored) {
+      setPresentationName(stored);
+    } else {
+      // Auto-populate from brief/topic
+      const defaultName = brief?.subject || topic || '';
+      setPresentationName(defaultName);
+    }
+  }, [enhancedStorageKey]);
+
+  useEffect(() => {
+    if (enhancedStorageKey === 'wakti-enhanced-empty') return;
+    if (presentationName) {
+      try { localStorage.setItem(`${enhancedStorageKey}-name`, presentationName); } catch {}
+    }
+  }, [presentationName, enhancedStorageKey]);
 
   // Export state
   const [isExporting, setIsExporting] = useState(false);
@@ -1632,9 +1709,12 @@ const PresentationTab: React.FC = () => {
       }
 
       // Update the slide with the new image
-      setSlides(prev => prev.map((s, i) =>
-        i === selectedSlideIndex ? { ...s, imageUrl: response.imageUrl, imageFit: (s.imageFit || 'crop'), imageTransform: getDefaultImageTransform(), imageFocusX: 'center', imageFocusY: 'center' } : s
-      ));
+      setSlides(prev => {
+        const updated = prev.map((s, i) =>
+          i === selectedSlideIndex ? { ...s, imageUrl: response.imageUrl, imageFit: (s.imageFit || 'crop'), imageTransform: getDefaultImageTransform(), imageFocusX: 'center' as ImageFocusX, imageFocusY: 'center' as ImageFocusY } : s
+        );
+        return updated;
+      });
 
       setImagePromptText('');
 
@@ -1663,7 +1743,9 @@ const PresentationTab: React.FC = () => {
         slides,
         brief?.subject || topic,
         selectedTheme,
-        language
+        language,
+        undefined,
+        savedEnhancedMap
       );
 
       const filename = generateFilename(brief?.subject || topic, 'pdf');
@@ -1678,7 +1760,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsExporting(false);
     }
-  }, [slides, brief, topic, selectedTheme, language]);
+  }, [slides, brief, topic, selectedTheme, language, savedEnhancedMap]);
 
   // Export as PPTX (PowerPoint)
   const handleExportPPTX = useCallback(async () => {
@@ -1696,7 +1778,9 @@ const PresentationTab: React.FC = () => {
         slides,
         brief?.subject || topic,
         selectedTheme,
-        language
+        language,
+        undefined,
+        savedEnhancedMap
       );
 
       const filename = generateFilename(brief?.subject || topic, 'pptx');
@@ -1720,7 +1804,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsExporting(false);
     }
-  }, [slides, brief, topic, selectedTheme, language]);
+  }, [slides, brief, topic, selectedTheme, language, savedEnhancedMap]);
 
   // Cache for generated slide audio (persists during session)
   const slideAudioCache = React.useRef<Map<string, { blob: Blob; durationMs: number }>>(new Map());
@@ -2236,7 +2320,8 @@ const PresentationTab: React.FC = () => {
     const silent = !!opts?.silent;
     if (!silent) setIsSavingPresentation(true);
 
-    const title = brief?.subject || topic || (language === 'ar' ? 'عرض تقديمي' : 'Presentation');
+    // Use the editable presentationName if available, fall back to brief/topic
+    const title = presentationName || brief?.subject || topic || (language === 'ar' ? 'عرض تقديمي' : 'Presentation');
 
     try {
       const slidesData = slides.map(s => ({
@@ -2319,7 +2404,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       if (!silent) setIsSavingPresentation(false);
     }
-  }, [user?.id, slides, brief, topic, language, selectedTheme, currentPresentationId, generatedShareUrl, generatedThumbnailUrl, loadSavedPresentations]);
+  }, [user?.id, slides, brief, topic, language, selectedTheme, currentPresentationId, generatedShareUrl, generatedThumbnailUrl, loadSavedPresentations, presentationName]);
 
   // Save current presentation (manual, with toasts)
   const savePresentation = useCallback(async () => {
@@ -2574,32 +2659,66 @@ const PresentationTab: React.FC = () => {
     setSelectedSlideIndex(nextIndex);
   }, [isLockedSlide, language, renumberSlides, selectedSlideIndex, slides]);
 
+  // Track used templates to avoid repetition (per slide)
+  const [usedTemplatesMap, setUsedTemplatesMap] = useState<Record<number, Set<number>>>({});
+
   // Enhance current slide with AI-generated HTML
-  const handleEnhanceSlide = useCallback(async () => {
+  const handleEnhanceSlide = useCallback(async (variation?: number) => {
     if (!slides[selectedSlideIndex]) return;
     const slide = slides[selectedSlideIndex];
     setIsEnhancing(true);
     try {
-      const response = await callEdgeFunctionWithRetry<{ success: boolean; html?: string; error?: string }>('wakti-slide-enhance', {
+      // Get used templates for this slide
+      const usedTemplates = usedTemplatesMap[selectedSlideIndex] || new Set();
+      
+      // Generate a random template index (0-5) that's different from recent ones
+      let randomVariation: number;
+      if (usedTemplates.size >= 5) {
+        // All templates used, reset and pick random
+        randomVariation = Math.floor(Math.random() * 6);
+      } else {
+        // Pick a template not recently used
+        do {
+          randomVariation = Math.floor(Math.random() * 6);
+        } while (usedTemplates.has(randomVariation));
+      }
+      
+      const variationToUse = variation !== undefined ? variation : randomVariation;
+      
+      const response = await callEdgeFunctionWithRetry<{ success: boolean; html?: string; error?: string; template?: number }>('wakti-slide-enhance', {
         body: {
           slide: {
             slideNumber: slide.slideNumber,
             title: slide.title,
             subtitle: slide.subtitle,
-            role: slide.role,
             bullets: slide.bullets,
-            highlightedStats: slide.highlightedStats,
             imageUrl: slide.imageUrl,
+            role: slide.role,
           },
           theme: selectedTheme,
           language,
+          variation: variationToUse,
         },
+        maxRetries: 2,
+        retryDelay: 1000,
       });
+
       if (!response?.success || !response?.html) {
         throw new Error(response?.error || 'Enhancement failed');
       }
       setEnhancedHtmlMap(prev => ({ ...prev, [selectedSlideIndex]: response.html! }));
+      setEnhancedTemplateMap(prev => ({ ...prev, [selectedSlideIndex]: response.template ?? variationToUse }));
       setShowEnhanced(true);
+      // Mark this template as used
+      setUsedTemplatesMap(prev => {
+        const newSet = new Set(prev[selectedSlideIndex] || []);
+        newSet.add(variationToUse);
+        // If all 6 templates used, clear the set
+        if (newSet.size >= 6) {
+          newSet.clear();
+        }
+        return { ...prev, [selectedSlideIndex]: newSet };
+      });
       toast.success(language === 'ar' ? '✨ تم تحسين الشريحة' : '✨ Slide enhanced!');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Enhancement failed';
@@ -2607,7 +2726,55 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsEnhancing(false);
     }
-  }, [slides, selectedSlideIndex, selectedTheme, language]);
+  }, [slides, selectedSlideIndex, selectedTheme, language, usedTemplatesMap]);
+
+  // Manual update: re-render the enhanced HTML using the same template but with current slide data
+  // Uses isUpdatingEnhancement instead of isEnhancing to avoid the big overlay on the slide
+  const handleUpdateEnhancement = useCallback(async () => {
+    const slide = slides[selectedSlideIndex];
+    if (!slide) return;
+    const templateIdx = enhancedTemplateMap[selectedSlideIndex];
+
+    setIsUpdatingEnhancement(true);
+    try {
+      // Use stored template or fallback to 0 for slides enhanced before template tracking
+      const variationToUse = templateIdx !== undefined ? templateIdx : 0;
+      const response = await callEdgeFunctionWithRetry<{ success: boolean; html?: string; error?: string; template?: number }>('wakti-slide-enhance', {
+        body: {
+          slide: {
+            slideNumber: slide.slideNumber,
+            title: slide.title,
+            subtitle: slide.subtitle,
+            bullets: slide.bullets,
+            imageUrl: slide.imageUrl,
+            role: slide.role,
+          },
+          theme: selectedTheme,
+          language,
+          variation: variationToUse,
+        },
+        maxRetries: 2,
+        retryDelay: 1000,
+      });
+      if (response?.success && response?.html) {
+        setEnhancedHtmlMap(prev => ({ ...prev, [selectedSlideIndex]: response.html! }));
+        if (savedEnhancedMap[selectedSlideIndex]) {
+          setSavedEnhancedMap(prev => ({ ...prev, [selectedSlideIndex]: response.html! }));
+        }
+        // Store/update the template index so future updates keep the same style
+        const usedTemplate = response.template ?? variationToUse;
+        setEnhancedTemplateMap(prev => ({ ...prev, [selectedSlideIndex]: usedTemplate }));
+        toast.success(language === 'ar' ? '✅ تم تحديث التحسين' : '✅ Enhancement updated!');
+      } else {
+        throw new Error(response?.error || 'Update failed');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Update failed';
+      toast.error(msg);
+    } finally {
+      setIsUpdatingEnhancement(false);
+    }
+  }, [slides, selectedSlideIndex, enhancedTemplateMap, selectedTheme, language, savedEnhancedMap]);
 
   // Update text styling
   const applySlideUpdate = useCallback(
@@ -2854,6 +3021,20 @@ const PresentationTab: React.FC = () => {
       </div>
 
       <div className="space-y-4 mt-2">
+        {/* Presentation Name */}
+        <div>
+          <label className="text-sm font-medium mb-2 block">
+            {language === 'ar' ? 'اسم العرض التقديمي' : 'Presentation Name'}
+          </label>
+          <input
+            type="text"
+            className="w-full border rounded-xl p-3 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            placeholder={language === 'ar' ? 'مثال: عرض تطبيق الإنتاجية' : 'e.g., Productivity App Pitch'}
+            value={presentationName}
+            onChange={(e) => setPresentationName(e.target.value)}
+          />
+        </div>
+
         <div>
           <label className="text-sm font-medium mb-2 block">
             {language === 'ar' ? 'موضوع العرض التقديمي' : 'Presentation Topic'}
@@ -3416,9 +3597,26 @@ const PresentationTab: React.FC = () => {
             <ChevronLeft className="w-4 h-4" />
             {language === 'ar' ? 'رجوع' : 'Back'}
           </button>
-          <h2 className="text-lg font-semibold">
-            {language === 'ar' ? 'عرض الشرائح' : 'Slide Preview'}
-          </h2>
+          {isEditingName ? (
+            <input
+              autoFocus
+              value={presentationName}
+              onChange={e => setPresentationName(e.target.value)}
+              onBlur={() => setIsEditingName(false)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setIsEditingName(false); }}
+              aria-label={language === 'ar' ? 'اسم العرض التقديمي' : 'Presentation name'}
+              placeholder={language === 'ar' ? 'اسم العرض...' : 'Presentation name...'}
+              className="text-base font-semibold bg-transparent border-b border-amber-400 outline-none text-center w-48 max-w-[200px]"
+            />
+          ) : (
+            <button
+              onClick={() => setIsEditingName(true)}
+              className="flex items-center gap-1.5 text-base font-semibold hover:text-amber-400 transition-colors max-w-[200px] truncate"
+            >
+              <span className="truncate">{presentationName || (language === 'ar' ? 'عرض الشرائح' : 'Slide Preview')}</span>
+              <Pencil className="w-3 h-3 opacity-60 flex-shrink-0" />
+            </button>
+          )}
           <div className="flex items-center gap-2">
             {/* Start New button */}
             <button
@@ -3459,7 +3657,13 @@ const PresentationTab: React.FC = () => {
               <Palette className="w-4 h-4" />
             </button>
             <button
-              onClick={showEnhanced ? () => setShowEnhanced(false) : handleEnhanceSlide}
+              onClick={() => {
+                if (showEnhanced) {
+                  setShowEnhanced(false);
+                } else {
+                  handleEnhanceSlide();
+                }
+              }}
               disabled={isEnhancing || slides.length === 0}
               className={`p-2 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${showEnhanced ? 'bg-amber-500 text-white border-amber-500' : 'hover:bg-muted'}`}
               title={showEnhanced ? (language === 'ar' ? 'العرض العادي' : 'Normal View') : (language === 'ar' ? '✨ تحسين بالذكاء الاصطناعي' : '✨ AI Enhance')}
@@ -3593,10 +3797,6 @@ const PresentationTab: React.FC = () => {
                     }}
                     dangerouslySetInnerHTML={{ __html: displayHtml }}
                   />
-                  {/* Badge */}
-                  <div className="absolute top-2 right-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] px-3 py-1 rounded-full font-bold z-20 shadow-lg shadow-amber-500/30">
-                    ✨ AI Enhanced
-                  </div>
                 </div>
               );
             })()}
@@ -4118,18 +4318,39 @@ const PresentationTab: React.FC = () => {
           </div>
         </div>
 
+        {/* AI Enhanced badge - shown below slide when enhanced view is active */}
+        {!isEnhancing && (savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+          <div className="flex justify-center mt-2">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[11px] font-bold shadow-lg shadow-amber-500/30">
+              ✨ {language === 'ar' ? 'محسّن بالذكاء الاصطناعي' : 'AI Enhanced'}
+            </div>
+          </div>
+        )}
+
         {/* Save Enhanced Slide button - only shown when enhanced view is active and not yet saved */}
         {showEnhanced && enhancedHtmlMap[selectedSlideIndex] && !isEnhancing && !savedEnhancedMap[selectedSlideIndex] && (
-          <div className="flex justify-center mt-3">
+          <div className="flex justify-center mt-3 gap-3">
             <button
               onClick={() => {
                 setSavedEnhancedMap(prev => ({ ...prev, [selectedSlideIndex]: enhancedHtmlMap[selectedSlideIndex] }));
+                // Also persist the template index so auto-refresh works for saved enhancements
+                if (enhancedTemplateMap[selectedSlideIndex] !== undefined) {
+                  setEnhancedTemplateMap(prev => ({ ...prev, [selectedSlideIndex]: enhancedTemplateMap[selectedSlideIndex] }));
+                }
                 toast.success(language === 'ar' ? '✅ تم حفظ التحسين' : '✅ Enhancement saved!');
               }}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold shadow-lg shadow-amber-500/30 hover:from-amber-400 hover:to-orange-400 transition-all active:scale-95"
             >
               <Check className="w-4 h-4" />
               {language === 'ar' ? 'حفظ التحسين' : 'Save Enhancement'}
+            </button>
+            <button
+              onClick={() => handleEnhanceSlide()}
+              disabled={isEnhancing}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-700 text-white text-sm font-semibold shadow-lg hover:bg-slate-600 transition-all active:scale-95 disabled:opacity-50"
+            >
+              <RefreshCw className="w-4 h-4" />
+              {language === 'ar' ? 'إعادة التحسين' : 'Re-enhance'}
             </button>
           </div>
         )}
@@ -4985,6 +5206,34 @@ const PresentationTab: React.FC = () => {
                   : 'Voice is used for video (MP4) export only. PDF & PowerPoint have no audio.'}
               </p>
             </div>
+
+            {/* Update Enhancement button - shown when slide has an enhanced/saved view */}
+            {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+              <div className="mt-4 pt-4 border-t border-slate-300 dark:border-slate-600">
+                <button
+                  onClick={handleUpdateEnhancement}
+                  disabled={isUpdatingEnhancement}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold shadow-lg shadow-amber-500/30 hover:from-amber-400 hover:to-orange-400 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isUpdatingEnhancement ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {language === 'ar' ? 'جارٍ التحديث...' : 'Updating...'}
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4" />
+                      {language === 'ar' ? '🔄 تحديث التحسين بالتعديلات' : '🔄 Update Enhancement with Edits'}
+                    </>
+                  )}
+                </button>
+                <p className="text-[10px] text-slate-400 mt-1.5 text-center">
+                  {language === 'ar'
+                    ? 'اضغط هنا بعد تعديل النصوص أو الصور لتحديث العرض المحسّن'
+                    : 'Press after editing text/images to refresh the enhanced view'}
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -5154,7 +5403,7 @@ const PresentationTab: React.FC = () => {
                   e.stopPropagation();
                   setDeletePresentationId(pres.id);
                 }}
-                className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
+                className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
                 title={language === 'ar' ? 'حذف' : 'Delete'}
               >
                 <Trash2 className="w-3.5 h-3.5" />

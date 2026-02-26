@@ -341,7 +341,8 @@ export async function exportSlidesToPDFClean(
   topic: string,
   theme: string,
   language: 'en' | 'ar',
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  enhancedHtmlMap?: Record<number, string>
 ): Promise<Blob> {
   const doc = new jsPDF({
     orientation: 'landscape',
@@ -368,8 +369,12 @@ export async function exportSlidesToPDFClean(
       onProgress?.(i + 1, slides.length);
       const slide = slides[i];
       
-      // Create slide HTML - render with actual images
-      container.innerHTML = renderSlideToHTML(slide, colors, isRtl, language, false);
+      // Use saved enhanced HTML if available, otherwise render normally
+      if (enhancedHtmlMap && enhancedHtmlMap[i]) {
+        container.innerHTML = enhancedHtmlMap[i];
+      } else {
+        container.innerHTML = renderSlideToHTML(slide, colors, isRtl, language, false);
+      }
       
       // Wait for fonts to load
       await document.fonts.ready;
@@ -994,7 +999,8 @@ export async function exportSlidesToPPTX(
   topic: string,
   theme: string,
   language: 'en' | 'ar',
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  enhancedHtmlMap?: Record<number, string>
 ): Promise<Blob> {
   // Dynamically import pptxgenjs and html2canvas
   const PptxGenJS = (await import('pptxgenjs')).default;
@@ -1018,10 +1024,13 @@ export async function exportSlidesToPPTX(
       onProgress?.(i + 1, slides.length);
       const slide = slides[i];
       
-      // Generate HTML for this slide (reuse the same function as PDF)
+      // Use saved enhanced HTML if available, otherwise render normally
       const isRtl = language === 'ar';
-      const slideHtml = renderSlideToHTML(slide, colors, isRtl, language);
-      container.innerHTML = slideHtml;
+      if (enhancedHtmlMap && enhancedHtmlMap[i]) {
+        container.innerHTML = enhancedHtmlMap[i];
+      } else {
+        container.innerHTML = renderSlideToHTML(slide, colors, isRtl, language);
+      }
 
       // Wait for images to load
       const images = container.querySelectorAll('img');
