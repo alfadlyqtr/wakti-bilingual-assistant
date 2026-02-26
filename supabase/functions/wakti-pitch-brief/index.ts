@@ -90,28 +90,28 @@ interface BriefResponse {
 
 async function callGeminiGrounded(systemPrompt: string, userPrompt: string): Promise<string | null> {
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
-  if (!geminiKey) return null;
+  if (!geminiKey) { console.error("Gemini grounded: GEMINI_API_KEY missing"); return null; }
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
-          tools: [{ google_search_retrieval: {} }],
+          tools: [{ google_search: {} }],
           generationConfig: {
             temperature: 0.5,
             maxOutputTokens: 2048,
-            responseMimeType: "application/json",
           },
         }),
       }
     );
 
     if (!response.ok) {
-      console.error("Gemini grounded error:", response.status);
+      const errBody = await response.text();
+      console.error("Gemini grounded error:", response.status, errBody);
       return null;
     }
 
@@ -126,7 +126,7 @@ async function callGeminiGrounded(systemPrompt: string, userPrompt: string): Pro
 // Call OpenAI API (primary)
 async function callOpenAI(systemPrompt: string, userPrompt: string): Promise<string | null> {
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!openaiKey) return null;
+  if (!openaiKey) { console.error("OpenAI: OPENAI_API_KEY missing"); return null; }
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -148,7 +148,8 @@ async function callOpenAI(systemPrompt: string, userPrompt: string): Promise<str
     });
 
     if (!response.ok) {
-      console.error("OpenAI error:", response.status);
+      const errBody = await response.text();
+      console.error("OpenAI error:", response.status, errBody);
       return null;
     }
 
@@ -160,6 +161,44 @@ async function callOpenAI(systemPrompt: string, userPrompt: string): Promise<str
   }
 }
 
+// Call DeepSeek API (second fallback)
+async function callDeepSeek(systemPrompt: string, userPrompt: string): Promise<string | null> {
+  const deepseekKey = Deno.env.get("DEEPSEEK_API_KEY");
+  if (!deepseekKey) { console.error("DeepSeek: DEEPSEEK_API_KEY missing"); return null; }
+
+  try {
+    const response = await fetch("https://api.deepseek.com/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${deepseekKey}`
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.5,
+        max_tokens: 1024,
+        response_format: { type: "json_object" }
+      })
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      console.error("DeepSeek error:", response.status, errBody);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || null;
+  } catch (err) {
+    console.error("DeepSeek call failed:", err);
+    return null;
+  }
+}
+
 // Call Gemini API (fallback)
 async function callGemini(systemPrompt: string, userPrompt: string): Promise<{ text: string; model: string } | null> {
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
@@ -167,7 +206,7 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<{ t
 
   try {
     // Try correct Gemini model names
-    const models = ["gemini-2.5-flash-lite", "gemini-2.0-flash-001", "gemini-1.5-flash", "gemini-pro"];
+    const models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite", "gemini-pro"];
     
     for (const model of models) {
       try {
@@ -193,10 +232,12 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<{ t
             console.log(`✅ Gemini ${model} succeeded`);
             return { text, model };
           }
+        } else {
+          const errBody = await response.text();
+          console.log(`⚠️ Gemini ${model} failed (${response.status}): ${errBody.substring(0, 200)}`);
         }
-        console.log(`⚠️ Gemini ${model} failed, trying next...`);
       } catch (e) {
-        console.log(`⚠️ Gemini ${model} error:`, e);
+        console.log(`⚠️ Gemini ${model} exception:`, e);
       }
     }
     return null;
@@ -304,6 +345,13 @@ Respond with JSON only:
           if (responseText) {
             usedProvider = "openai";
             usedModel = "gpt-4o-mini";
+          } else {
+            console.log("🤖 OpenAI failed, trying DeepSeek...");
+            responseText = await callDeepSeek(systemPrompt, userPrompt);
+            if (responseText) {
+              usedProvider = "openai";
+              usedModel = "deepseek-chat";
+            }
           }
         }
       } else {
@@ -319,6 +367,13 @@ Respond with JSON only:
             responseText = gemini.text;
             usedProvider = "gemini";
             usedModel = gemini.model;
+          } else {
+            console.log("🤖 Gemini failed, trying DeepSeek...");
+            responseText = await callDeepSeek(systemPrompt, userPrompt);
+            if (responseText) {
+              usedProvider = "openai";
+              usedModel = "deepseek-chat";
+            }
           }
         }
       }

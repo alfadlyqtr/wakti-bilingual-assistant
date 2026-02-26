@@ -19,6 +19,8 @@ import {
   Handle,
   Position,
   MarkerType,
+  useReactFlow,
+  Panel,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
@@ -51,6 +53,10 @@ import {
   ChevronRight,
   Filter,
   RefreshCw,
+  LayoutGrid,
+  Eraser,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -65,22 +71,35 @@ import {
 } from '@/services/chatbotService';
 
 // ============================================
+// RATING OPTIONS (fixed, not editable)
+// ============================================
+const RATING_OPTIONS = [
+  { label: 'Terrible', labelAr: 'سيء جداً', emoji: '😡' },
+  { label: 'Bad',      labelAr: 'سيء',      emoji: '😞' },
+  { label: 'OK OK',    labelAr: 'مقبول',    emoji: '😐' },
+  { label: 'Good',     labelAr: 'جيد',      emoji: '😊' },
+  { label: 'Awesome',  labelAr: 'رائع',     emoji: '😄' },
+];
+
+// ============================================
 // CUSTOM FLOW NODE COMPONENT
 // ============================================
-function ChatFlowNode({ data, type: nodeType }: any) {
+function ChatFlowNode({ data }: any) {
   const meta = NODE_TYPE_META[data.flowType as FlowNodeType];
   if (!meta) return null;
 
   const isStart = data.flowType === 'start';
   const isEnd = data.flowType === 'end';
-  const isChoice = data.flowType === 'single_choice';
+  const isChoice = data.flowType === 'single_choice' || data.flowType === 'multiple_choice';
+  const isRating = data.flowType === 'rating';
+  const options: any[] = isChoice && data.options ? data.options : [];
 
   return (
     <div
-      className="relative rounded-2xl border-2 shadow-lg min-w-[200px] max-w-[240px] bg-white dark:bg-zinc-900 overflow-hidden"
+      className="relative rounded-2xl border-2 shadow-lg min-w-[220px] max-w-[260px] bg-white dark:bg-zinc-900"
       style={{ borderColor: meta.color + '60' }}
     >
-      {/* Delete button — hidden for start node */}
+      {/* Delete button */}
       {!isStart && data.onDelete && (
         <button
           onClick={(e) => { e.stopPropagation(); data.onDelete(data.nodeId); }}
@@ -90,9 +109,10 @@ function ChatFlowNode({ data, type: nodeType }: any) {
           <X className="w-3.5 h-3.5 text-white" />
         </button>
       )}
+
       {/* Header */}
       <div
-        className="flex items-center gap-2.5 px-4 py-2.5 text-white font-bold pr-10"
+        className="flex items-center gap-2.5 px-4 py-2.5 text-white font-bold pr-10 rounded-t-2xl"
         style={{ background: meta.color }}
       >
         <span className="text-base">{meta.icon}</span>
@@ -101,46 +121,120 @@ function ChatFlowNode({ data, type: nodeType }: any) {
 
       {/* Body — tap to edit */}
       <div
-        className="px-4 py-3 text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors active:bg-zinc-100 dark:active:bg-zinc-800 min-h-[40px]"
+        className="px-4 py-3 text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors active:bg-zinc-100 dark:active:bg-zinc-800 min-h-[36px]"
         onClick={() => data.onEdit && data.onEdit(data)}
       >
         <span>{data.text || data.prompt || meta.description}</span>
       </div>
 
-      {/* Choice options preview */}
-      {isChoice && data.options && (
-        <div className="px-4 pb-3 flex flex-wrap gap-1.5">
-          {(data.options as any[]).slice(0, 3).map((opt: any, i: number) => (
-            <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-medium">
-              {typeof opt === 'string' ? opt : opt.en || opt.ar}
-            </span>
+      {/* Choice options — each row has its own source handle */}
+      {isChoice && options.length > 0 && (
+        <div className="border-t border-zinc-100 dark:border-zinc-800">
+          {options.map((opt: any, i: number) => {
+            const label = typeof opt === 'string' ? opt : opt.en || opt.ar || `Option ${i + 1}`;
+            return (
+              <div
+                key={i}
+                className="relative flex items-center px-4 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 border-b border-zinc-100 dark:border-zinc-800 last:border-b-0 last:rounded-b-2xl hover:bg-zinc-50 dark:hover:bg-zinc-800/40 pr-6"
+              >
+                <span className="w-1.5 h-1.5 rounded-full shrink-0 mr-2" style={{ background: meta.color }} />
+                <span className="truncate">{label}</span>
+                {/* Per-option source handle */}
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={`option-${i}`}
+                  className="!w-3 !h-3 !border-2 !border-white dark:!border-zinc-900 !right-[-6px]"
+                  style={{ background: meta.color, position: 'absolute', top: '50%', transform: 'translateY(-50%)' }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Rating options — fixed 5 rows */}
+      {isRating && (
+        <div className="border-t border-zinc-100 dark:border-zinc-800">
+          {RATING_OPTIONS.map((r, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between px-4 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 border-b border-zinc-100 dark:border-zinc-800 last:border-b-0 last:rounded-b-2xl"
+            >
+              <span className="font-medium">{r.label}</span>
+              <span className="text-base leading-none">{r.emoji}</span>
+            </div>
           ))}
         </div>
       )}
 
-      {/* Handles */}
+      {/* Target handle (left) */}
       {!isStart && (
         <Handle type="target" position={Position.Left} className="!w-3.5 !h-3.5 !bg-zinc-400 !border-2 !border-white dark:!border-zinc-900" />
       )}
-      {!isEnd && (
+
+      {/* Source handle (right) — for all non-choice, non-end nodes (including rating) */}
+      {!isEnd && !isChoice && (
         <Handle type="source" position={Position.Right} className="!w-3.5 !h-3.5 !border-2 !border-white dark:!border-zinc-900" style={{ background: meta.color }} />
       )}
-      {/* Extra handles for choice nodes */}
-      {isChoice && data.options && (data.options as any[]).map((_: any, i: number) => (
-        <Handle
-          key={`option-${i}`}
-          type="source"
-          position={Position.Right}
-          id={`option-${i}`}
-          className="!w-3 !h-3 !border-2 !border-white dark:!border-zinc-900"
-          style={{ background: meta.color, top: `${40 + (i + 1) * 22}%` }}
-        />
-      ))}
+
+      {/* Quick-add + button — for all non-choice, non-end tail nodes (including rating) */}
+      {!isEnd && !isChoice && data.onQuickAdd && (
+        <button
+          onClick={(e) => { e.stopPropagation(); data.onQuickAdd(data.nodeId); }}
+          title="Add component after"
+          className="absolute -right-8 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-white shadow-md transition-all hover:scale-110 active:scale-95 z-20"
+          style={{ background: meta.color }}
+        >
+          <Plus className="w-3 h-3" />
+        </button>
+      )}
     </div>
   );
 }
 
 const nodeTypes = { chatFlowNode: ChatFlowNode };
+
+// Inner toolbar — must live inside ReactFlow context to use useReactFlow
+function CanvasToolbar({ onAutoArrange, onClearFlow, isRTL }: { onAutoArrange: () => void; onClearFlow: () => void; isRTL: boolean }) {
+  const { zoomIn, zoomOut, zoomTo, getZoom } = useReactFlow();
+  const [zoom, setZoom] = React.useState(1);
+  React.useEffect(() => { setZoom(getZoom()); }, [getZoom]);
+  const handleZoom = (val: number) => { zoomTo(val); setZoom(val); };
+  return (
+    <Panel position="top-center">
+      <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border/50 bg-white/95 dark:bg-zinc-900/95 shadow-lg backdrop-blur-sm">
+        {/* Zoom out */}
+        <button onClick={() => { zoomOut(); setZoom(Math.max(0.2, zoom - 0.2)); }} title="Zoom out" className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+          <ZoomOut className="w-3.5 h-3.5" />
+        </button>
+        {/* Zoom slider */}
+        <input
+          type="range" min={0.2} max={2} step={0.05}
+          value={zoom}
+          onChange={(e) => handleZoom(Number(e.target.value))}
+          title={`Zoom: ${Math.round(zoom * 100)}%`}
+          className="w-24 h-1.5 accent-[#060541] dark:accent-white cursor-pointer"
+        />
+        {/* Zoom in */}
+        <button onClick={() => { zoomIn(); setZoom(Math.min(2, zoom + 0.2)); }} title="Zoom in" className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+          <ZoomIn className="w-3.5 h-3.5" />
+        </button>
+        <div className="w-px h-4 bg-border/60 mx-0.5" />
+        {/* Auto-arrange */}
+        <button onClick={onAutoArrange} title={isRTL ? 'ترتيب تلقائي' : 'Auto Layout'} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+          <LayoutGrid className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">{isRTL ? 'ترتيب' : 'Auto Layout'}</span>
+        </button>
+        {/* Clear flow */}
+        <button onClick={onClearFlow} title={isRTL ? 'مسح التدفق' : 'Clear Bot Flow'} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+          <Eraser className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">{isRTL ? 'مسح' : 'Clear Flow'}</span>
+        </button>
+      </div>
+    </Panel>
+  );
+}
 
 // ============================================
 // PURPOSE CARDS DATA
@@ -279,6 +373,21 @@ export default function WaktiAssistant() {
     setEdges((eds) => addEdge({ ...params, markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 } }, eds));
   }, [setEdges]);
 
+  // Track showAddMenu in a ref so the effect doesn't re-run when menu opens/closes
+  const showAddMenuRef = useRef(false);
+  showAddMenuRef.current = showAddMenu;
+
+  // Reactively update onQuickAdd: only on nodes that have no outgoing edge and are not 'end'
+  // Skip while add menu is open to prevent flicker
+  useEffect(() => {
+    if (showAddMenuRef.current) return;
+    setNodes((nds: any[]) => nds.map((n: any) => {
+      const isTail = n.data.flowType !== 'end' && !(edges as any[]).some((e: any) => e.source === n.id);
+      return { ...n, data: { ...n.data, onQuickAdd: isTail ? quickAddAfter : undefined } };
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edges]);
+
   // ============================================
   // DATA FETCHING
   // ============================================
@@ -345,7 +454,7 @@ export default function WaktiAssistant() {
         id: n.node_id,
         type: 'chatFlowNode',
         position: { x: n.position_x, y: n.position_y },
-        data: { ...n.data, flowType: n.type, label: n.label, nodeId: n.node_id, onDelete: deleteNode, onEdit: editNode },
+        data: { ...n.data, flowType: n.type, label: n.label, nodeId: n.node_id, onDelete: deleteNode, onEdit: editNode, onQuickAdd: quickAddAfter },
       }));
       const rfEdges = flow.edges.map(e => ({
         id: e.edge_id,
@@ -412,6 +521,36 @@ export default function WaktiAssistant() {
     setEditOptions(opts);
   }, []);
 
+  const [quickAddAfterId, setQuickAddAfterId] = useState<string | null>(null);
+  const [canvasZoom, setCanvasZoom] = useState(1);
+
+  const quickAddAfter = useCallback((nodeId: string) => {
+    setQuickAddAfterId(nodeId);
+    setShowAddMenu(true);
+    setAddComponentSearch('');
+  }, []);
+
+  const autoArrangeNodes = useCallback(() => {
+    setNodes((nds: any[]) => {
+      const startNode = nds.find((n: any) => n.data.flowType === 'start');
+      if (!startNode) return nds;
+      const positioned = new Map<string, { x: number; y: number }>();
+      const visit = (id: string, x: number, y: number) => {
+        if (positioned.has(id)) return;
+        positioned.set(id, { x, y });
+        const outEdges = (edges as any[]).filter((e: any) => e.source === id);
+        outEdges.forEach((e: any, i: number) => visit(e.target, x + 320, y + i * 160));
+      };
+      visit(startNode.id, 80, 200);
+      return nds.map((n: any) => positioned.has(n.id) ? { ...n, position: positioned.get(n.id) } : n);
+    });
+  }, [edges, setNodes]);
+
+  const clearFlow = useCallback(() => {
+    setNodes((nds: any[]) => nds.filter((n: any) => n.data.flowType === 'start'));
+    setEdges([]);
+  }, [setNodes, setEdges]);
+
   const saveNodeEdit = (nodeId: string, updates: Record<string, any>) => {
     setNodes((nds) => nds.map((n: any) =>
       n.id === nodeId ? { ...n, data: { ...n.data, ...updates } } : n
@@ -462,6 +601,7 @@ export default function WaktiAssistant() {
           nodeId: id,
           onDelete: deleteNode,
           onEdit: editNode,
+          onQuickAdd: quickAddAfter,
           options: type === 'single_choice' || type === 'multiple_choice'
             ? [{ en: 'Option 1', ar: 'خيار 1' }, { en: 'Option 2', ar: 'خيار 2' }]
             : undefined,
@@ -496,11 +636,37 @@ export default function WaktiAssistant() {
       return;
     }
 
-    // Canvas mode: original random position
+    // Close menu FIRST to avoid flicker from subsequent setNodes calls
+    setShowAddMenu(false);
+
+    // Canvas mode: place after source node if quickAddAfterId set,
+    // otherwise find the rightmost tail node automatically
+    const currentNodes = nodes as any[];
+    const currentEdges = edges as any[];
+
+    let anchorId = quickAddAfterId;
+    if (!anchorId) {
+      // Find tail node: non-end node with no outgoing edge, pick the rightmost one
+      const tailNodes = currentNodes.filter((n: any) =>
+        n.data.flowType !== 'end' && !currentEdges.some((e: any) => e.source === n.id)
+      );
+      if (tailNodes.length > 0) {
+        const rightmost = tailNodes.reduce((a: any, b: any) =>
+          (b.position?.x ?? 0) > (a.position?.x ?? 0) ? b : a
+        );
+        anchorId = rightmost.id;
+      }
+    }
+
+    const sourceNode = anchorId ? currentNodes.find((n: any) => n.id === anchorId) : null;
+    const canvasPos = sourceNode
+      ? { x: sourceNode.position.x + 320, y: sourceNode.position.y }
+      : { x: 300, y: 200 };
+
     const newNode = {
       id,
       type: 'chatFlowNode',
-      position: { x: Math.random() * 400 + 200, y: Math.random() * 300 },
+      position: canvasPos,
       data: {
         flowType: type,
         label: meta.label,
@@ -509,13 +675,21 @@ export default function WaktiAssistant() {
         nodeId: id,
         onDelete: deleteNode,
         onEdit: editNode,
+        onQuickAdd: quickAddAfter,
         options: type === 'single_choice' || type === 'multiple_choice'
           ? [{ en: 'Option 1', ar: 'خيار 1' }, { en: 'Option 2', ar: 'خيار 2' }]
           : undefined,
       },
     };
     setNodes((nds) => [...nds, newNode]);
-    setShowAddMenu(false);
+    // Auto-connect only when triggered from the node's quick-add + button
+    if (quickAddAfterId) {
+      setEdges((eds: any[]) => {
+        if (eds.some((e: any) => e.source === quickAddAfterId && e.target === id)) return eds;
+        return [...eds, { id: `e-${quickAddAfterId}-${id}`, source: quickAddAfterId, target: id, markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 } }];
+      });
+    }
+    setQuickAddAfterId(null);
   };
 
   // ============================================
@@ -1090,7 +1264,7 @@ export default function WaktiAssistant() {
             <button
               title="Back to dashboard"
               onClick={() => setStep('dashboard')}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#060541] dark:text-white/80 bg-white dark:bg-white/8 hover:bg-[#060541]/5 border border-[#060541]/20 dark:border-white/15 px-3 py-1.5 rounded-xl shadow-sm active:scale-95 transition-all duration-200 shrink-0"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#060541] dark:text-white bg-white dark:bg-white/15 hover:bg-[#060541]/5 dark:hover:bg-white/25 border border-[#060541]/20 dark:border-white/30 px-3 py-1.5 rounded-xl shadow-sm active:scale-95 transition-all duration-200 shrink-0"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               {isRTL ? 'رجوع' : 'Back'}
@@ -1162,9 +1336,20 @@ export default function WaktiAssistant() {
             </div>
           </div>
 
-          {/* ── Mode switcher bar ── prominent tabs */}
-          <div className="px-3 pb-3 pt-1 bg-white dark:bg-[#0c0f14] border-b border-border/40">
-            <div className="flex rounded-xl border border-border/50 bg-muted/60 dark:bg-white/5 p-1 gap-1 shadow-sm">
+          {/* ── Mode switcher bar + Add Component ── */}
+          <div className="flex items-center gap-2 px-3 pb-3 pt-1 bg-white dark:bg-[#0c0f14] border-b border-border/40">
+            {/* Add Component — only visible in canvas mode */}
+            {builderMode === 'canvas' && (
+              <button
+                onClick={() => { setShowAddMenu(true); setAddComponentSearch(''); }}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold border-2 border-[#060541] dark:border-white text-[#060541] dark:text-white bg-white dark:bg-transparent hover:bg-[#060541]/5 dark:hover:bg-white/10 transition-all active:scale-95 shrink-0 whitespace-nowrap"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {isRTL ? 'إضافة مكوّن' : 'Add Component'}
+              </button>
+            )}
+            {/* Mode tabs */}
+            <div className="flex flex-1 rounded-xl border border-border/50 bg-muted/60 dark:bg-white/5 p-1 gap-1 shadow-sm">
               <button
                 onClick={() => setBuilderMode('canvas')}
                 title="Canvas Builder"
@@ -1398,7 +1583,7 @@ export default function WaktiAssistant() {
                   className="w-full bg-[#060541] hover:bg-[#060541]/90 text-white dark:bg-white dark:text-[#060541] rounded-lg h-11 text-sm font-bold active:scale-[0.98] transition-all"
                   onClick={() => {
                     const updates: Record<string, any> = {};
-                    if (selIsChoice) { updates.options = editOptions.filter(Boolean).map(o => ({ en: o, ar: o })); }
+                    if (selIsChoice) { updates.options = editOptions.filter(Boolean).map(o => ({ en: o, ar: o })); updates.text = editText; }
                     else { if (selData.flowType === 'ai_response') updates.prompt = editText; else updates.text = editText; }
                     setNodes((nds: any[]) => nds.map((n: any) => n.id === selectedNode.id ? { ...n, data: { ...n.data, ...updates } } : n));
                     if (classicShowMobilePanel) setClassicShowMobilePanel(false);
@@ -1709,12 +1894,13 @@ export default function WaktiAssistant() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onEdgeClick={(_evt, edge) => setEdges((eds: any[]) => eds.filter((e: any) => e.id !== edge.id))}
             nodeTypes={nodeTypes}
             fitView
             fitViewOptions={{ padding: 0.3 }}
             defaultEdgeOptions={{
               markerEnd: { type: MarkerType.ArrowClosed },
-              style: { strokeWidth: 2 },
+              style: { strokeWidth: 2, cursor: 'pointer' },
             }}
             panOnScroll
             zoomOnPinch
@@ -1725,6 +1911,7 @@ export default function WaktiAssistant() {
           >
             <Background gap={20} size={1} color={isDark ? '#ffffff10' : '#00000010'} />
             <Controls className="!rounded-xl !border-border/50 !shadow-lg" />
+            <CanvasToolbar onAutoArrange={autoArrangeNodes} onClearFlow={clearFlow} isRTL={isRTL} />
             <MiniMap
               className="!rounded-xl !border-border/50 !shadow-lg hidden sm:block"
               nodeColor={(n: any) => {
@@ -1735,17 +1922,6 @@ export default function WaktiAssistant() {
             />
           </ReactFlow>
 
-          {/* Floating Add FAB */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30">
-            <button
-              onClick={() => { setShowAddMenu(true); setAddComponentSearch(''); }}
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold text-white shadow-xl active:scale-95 transition-all duration-200"
-              style={{ background: '#060541', boxShadow: '0 4px 20px rgba(6,5,65,0.4)' }}
-            >
-              <Plus className="h-4 w-4" />
-              {isRTL ? 'إضافة مكوّن' : 'Add Component'}
-            </button>
-          </div>
 
           {/* Add Component — Centered Modal */}
           {showAddMenu && (() => {
@@ -1763,12 +1939,12 @@ export default function WaktiAssistant() {
               return m.label.toLowerCase().includes(q) || m.description.toLowerCase().includes(q);
             }) : null;
 
-            const NodeRow = ({ type, autoClose = true }: { type: FlowNodeType; autoClose?: boolean }) => {
+            const NodeRow = ({ type }: { type: FlowNodeType }) => {
               const m = NODE_TYPE_META[type];
               return (
                 <button
                   key={type}
-                  onClick={() => { addNode(type); if (autoClose) { setShowAddMenu(false); setAddComponentSearch(''); } }}
+                  onClick={() => { addNode(type); setAddComponentSearch(''); }}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/70 active:bg-muted transition-colors text-left group"
                 >
                   <span className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0" style={{ background: m.color + '18' }}>{m.icon}</span>
@@ -1848,28 +2024,35 @@ export default function WaktiAssistant() {
         {editingNode && (() => {
           const meta = NODE_TYPE_META[editingNode.flowType as FlowNodeType];
           const isChoice = editingNode.flowType === 'single_choice' || editingNode.flowType === 'multiple_choice';
+          const isRating = editingNode.flowType === 'rating';
           const isStart = editingNode.flowType === 'start';
+          const isAppointment = editingNode.flowType === 'appointment';
 
           const handleSave = () => {
             const updates: Record<string, any> = {};
             if (isChoice) {
               updates.options = editOptions.filter(Boolean).map(o => ({ en: o, ar: o }));
+              updates.text = editText;
             } else {
-              if (editingNode.flowType === 'ai_response') updates.prompt = editText;
-              else updates.text = editText;
+              if (editingNode.flowType === 'ai_response') {
+                updates.prompt = editText;
+                updates.aiMaxQueries = editingNode.aiMaxQueries ?? 10;
+              } else {
+                updates.text = editText;
+              }
             }
             saveNodeEdit(editingNode.nodeId, updates);
           };
 
           return (
             <>
-              {/* Backdrop — only on mobile */}
-              <div className="fixed inset-0 z-40 bg-black/30 sm:hidden" onClick={() => setEditingNode(null)} />
+              {/* Backdrop */}
+              <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={() => setEditingNode(null)} />
 
-              {/* Panel: right side on desktop, bottom sheet on mobile */}
-              <div className="fixed z-50 bg-card border-l border-border/50 shadow-2xl flex flex-col
-                bottom-0 left-0 right-0 rounded-t-2xl max-h-[70vh]
-                sm:top-0 sm:bottom-0 sm:left-auto sm:right-0 sm:rounded-none sm:max-h-none sm:w-[340px]">
+              {/* Panel: centered modal on desktop, bottom sheet on mobile */}
+              <div className="fixed z-50 bg-card border border-border/50 shadow-2xl flex flex-col
+                bottom-0 left-0 right-0 rounded-t-2xl max-h-[75vh]
+                sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:max-h-[80vh] sm:w-[400px]">
 
                 {/* Mobile drag handle */}
                 <div className="flex justify-center pt-2.5 pb-0.5 sm:hidden shrink-0">
@@ -1912,10 +2095,12 @@ export default function WaktiAssistant() {
                   ) : (
                     <>
                       {/* Message text */}
-                      {!isChoice && (
+                      {(true) && (
                         <div>
                           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
-                            {isRTL ? 'الرسالة' : 'Message'}
+                            {isChoice
+                              ? (isRTL ? 'رسالة البوت قبل الخيارات' : 'Bot message before choices')
+                              : (isRTL ? 'الرسالة' : 'Message')}
                           </label>
                           <div className="relative">
                             <textarea
@@ -1974,6 +2159,147 @@ export default function WaktiAssistant() {
                         </div>
                       )}
 
+                      {/* Appointment — Bookings system link */}
+                      {isAppointment && (
+                        <div>
+                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+                            {isRTL ? 'نظام الحجز' : 'Bookings System'}
+                          </label>
+                          <div className="flex items-start gap-2 border border-blue-500/40 rounded-lg px-3 py-2.5 bg-blue-500/10">
+                            <span className="text-blue-500 text-base leading-none mt-0.5">📅</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                                {isRTL ? 'متصل بنظام الحجوزات' : 'Connected to Bookings'}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                {isRTL
+                                  ? 'المواعيد التي يحجزها الزوار ستظهر في تبويب الحجوزات'
+                                  : 'Appointments booked by visitors will appear in the Bookings tab'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* AI Response — knowledge base + max queries + attributes */}
+                      {editingNode.flowType === 'ai_response' && (() => {
+                        // Count real KB entries by parsing the serialized string
+                        // knowledgeBase state is always synced to THIS bot's KB
+                        const kbRaw = knowledgeBase || activeBot?.knowledge_base || '';
+                        const kbEntryCount = (() => {
+                          if (!kbRaw.trim()) return 0;
+                          const blocks = kbRaw.split(/\n---\n/);
+                          let count = 0;
+                          blocks.forEach(block => {
+                            const body = block.replace(/^##[^\n]*\n?/, '');
+                            const pairs = body.split(/\n\nQ:|\nQ:/).filter(Boolean);
+                            pairs.forEach(p => {
+                              const q = p.replace(/^:?\s*/, '').split('\nA:')[0].trim();
+                              const aMatch = p.match(/\nA:\s*([\s\S]*)/);
+                              const a = aMatch ? aMatch[1].trim() : '';
+                              if (q || a) count++;
+                            });
+                          });
+                          return count;
+                        })();
+                        const hasSystemPrompt = !!(activeBot?.system_prompt?.trim());
+                        const hasRealKB = kbEntryCount > 0 || hasSystemPrompt;
+
+                        return (
+                        <div className="space-y-3">
+                          {/* Knowledge base status */}
+                          <div>
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+                              {isRTL ? 'مصدر المعرفة' : 'Knowledge Base'}
+                            </label>
+                            {hasRealKB ? (
+                              <div className="flex items-start gap-2 border border-green-500/40 rounded-lg px-3 py-2.5 bg-green-500/10">
+                                <span className="text-green-500 text-base leading-none mt-0.5">✅</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-green-600 dark:text-green-400">{isRTL ? 'متصل بقاعدة المعرفة' : 'Connected to knowledge base'}</p>
+                                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                                    {kbEntryCount > 0
+                                      ? `${kbEntryCount} ${isRTL ? 'إدخال' : kbEntryCount === 1 ? 'entry' : 'entries'}`
+                                      : (isRTL ? 'تعليمات النظام مضبوطة' : 'System instructions configured')}
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-start gap-2 border border-amber-500/40 rounded-lg px-3 py-2.5 bg-amber-500/10">
+                                <span className="text-amber-500 text-base leading-none mt-0.5">⚠️</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">{isRTL ? 'لا توجد قاعدة معرفة' : 'No knowledge base set'}</p>
+                                  <p className="text-[10px] text-muted-foreground mt-0.5">{isRTL ? 'اذهب إلى إعدادات الذكاء الاصطناعي لإضافة محتوى' : 'Go to AI Settings to add content'}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Max AI queries before human handoff */}
+                          <div>
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+                              {isRTL ? 'عدد ردود الذكاء الاصطناعي قبل التحويل للإنسان' : 'AI replies before human handoff'}
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min={1}
+                                max={50}
+                                title={isRTL ? 'عدد الردود قبل التحويل' : 'Replies before handoff'}
+                                placeholder="10"
+                                value={editingNode.aiMaxQueries ?? 10}
+                                onChange={(e) => {
+                                  const val = Math.max(1, Math.min(50, Number(e.target.value)));
+                                  setEditingNode((prev: any) => ({ ...prev, aiMaxQueries: val }));
+                                }}
+                                className="w-20 border border-border/60 rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-[#060541]/20 dark:focus:ring-white/20 transition-all"
+                              />
+                              <p className="text-xs text-muted-foreground">{isRTL ? 'رسالة، ثم يتم التحويل لموظف بشري' : 'messages, then transfer to human agent'}</p>
+                            </div>
+                          </div>
+
+                          {/* Default attributes */}
+                          <div>
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+                              {isRTL ? 'المتغيرات المتاحة' : 'Default Attributes'}
+                            </label>
+                            <div className="rounded-xl border border-border/60 overflow-hidden divide-y divide-border/40">
+                              {[
+                                { var: '{{name}}', label: isRTL ? 'الاسم' : 'Name' },
+                                { var: '{{email}}', label: isRTL ? 'البريد الإلكتروني' : 'Email' },
+                                { var: '{{phone}}', label: isRTL ? 'رقم الهاتف' : 'Phone Number' },
+                              ].map(a => (
+                                <div key={a.var} className="flex items-center gap-3 px-3 py-2 bg-muted/20">
+                                  <span className="text-xs font-mono bg-muted px-2 py-0.5 rounded text-[#060541] dark:text-blue-400 shrink-0">{a.var}</span>
+                                  <span className="text-sm text-foreground">{a.label}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        );
+                      })()}
+
+                      {/* Rating options — read-only */}
+                      {isRating && (
+                        <div>
+                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+                            {isRTL ? 'خيارات التقييم' : 'Rating Options'}
+                          </label>
+                          <div className="rounded-xl border border-border/60 overflow-hidden">
+                            {RATING_OPTIONS.map((r, i) => (
+                              <div
+                                key={i}
+                                className="flex items-center justify-between px-3 py-2.5 border-b border-border/40 last:border-b-0 bg-muted/20"
+                              >
+                                <span className="text-sm text-foreground font-medium">{isRTL ? r.labelAr : r.label}</span>
+                                <span className="text-lg leading-none">{r.emoji}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Choice options */}
                       {isChoice && (
                         <div>
@@ -2012,25 +2338,160 @@ export default function WaktiAssistant() {
                         </div>
                       )}
 
-                      {/* Go to next message — show connected node */}
+                      {/* Go to next message */}
                       <div>
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
                           {isRTL ? 'الانتقال للرسالة التالية' : 'Go to next message'}
                         </label>
-                        <div className="border border-border/60 rounded-lg px-3 py-2.5 text-sm text-muted-foreground bg-muted/30">
-                          {(() => {
-                            const outEdges = edges.filter((e: any) => e.source === editingNode.nodeId);
-                            if (outEdges.length === 0) return isRTL ? 'نهاية المحادثة' : 'End chat';
-                            return outEdges.map((e: any) => {
-                              const target = nodes.find((n: any) => n.id === e.target);
-                              const tMeta = target ? NODE_TYPE_META[target.data?.flowType as FlowNodeType] : null;
-                              return tMeta ? `${tMeta.icon} ${target.data?.label || tMeta.label}` : e.target;
-                            }).join(', ');
-                          })()}
-                        </div>
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          {isRTL ? 'اربط العقد في المحرر لتغيير المسار' : 'Connect nodes in the editor to change the path'}
-                        </p>
+                        {isChoice ? (
+                          /* Per-option routing for choice nodes */
+                          <div className="space-y-3">
+                            {editOptions.map((opt, i) => {
+                              const edge = (edges as any[]).find((e: any) => e.source === editingNode.nodeId && e.sourceHandle === `option-${i}`);
+                              const connectedNode = edge ? (nodes as any[]).find((n: any) => n.id === edge.target) : null;
+                              const connectedMeta = connectedNode ? NODE_TYPE_META[connectedNode.data?.flowType as FlowNodeType] : null;
+                              const nodesWithIncoming = new Set((edges as any[]).map((e: any) => e.target));
+                              const freeNodes = (nodes as any[]).filter((n: any) =>
+                                n.id !== editingNode.nodeId &&
+                                n.data?.flowType !== 'start' &&
+                                !nodesWithIncoming.has(n.id)
+                              );
+                              return (
+                                <div key={i} className="border border-border/60 rounded-lg p-2.5 bg-muted/20 space-y-2">
+                                  <p className="text-xs font-semibold text-foreground truncate">{opt || `Option ${i + 1}`}</p>
+                                  {/* Currently connected */}
+                                  <div className="flex items-center gap-2 bg-muted/40 rounded-md px-2 py-1.5">
+                                    <span className="text-xs flex-1 truncate text-muted-foreground">
+                                      {connectedNode && connectedMeta
+                                        ? `${connectedMeta.icon} ${connectedNode.data?.label || (isRTL ? connectedMeta.labelAr : connectedMeta.label)}`
+                                        : (isRTL ? '🔚 نهاية المحادثة' : '🔚 End chat')}
+                                    </span>
+                                    {edge && (
+                                      <button
+                                        title={isRTL ? 'قطع الاتصال' : 'Disconnect'}
+                                        onClick={() => setEdges((eds: any[]) => eds.filter((ed: any) => ed.id !== edge.id))}
+                                        className="text-red-400 hover:text-red-500 text-[10px] px-1 py-0.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0"
+                                      >
+                                        ✕
+                                      </button>
+                                    )}
+                                  </div>
+                                  {/* Connect to free */}
+                                  {freeNodes.length > 0 && (
+                                    <select
+                                      title={isRTL ? 'توصيل بمكوّن حر' : 'Connect to free component'}
+                                      defaultValue=""
+                                      onChange={(e) => {
+                                        const chosen = e.target.value;
+                                        if (!chosen) return;
+                                        setEdges((eds: any[]) => {
+                                          const filtered = eds.filter((ed: any) => !(ed.source === editingNode.nodeId && ed.sourceHandle === `option-${i}`));
+                                          return [...filtered, {
+                                            id: `e-${editingNode.nodeId}-opt${i}-${chosen}`,
+                                            source: editingNode.nodeId,
+                                            sourceHandle: `option-${i}`,
+                                            target: chosen,
+                                            markerEnd: { type: MarkerType.ArrowClosed },
+                                            style: { strokeWidth: 2, cursor: 'pointer' },
+                                          }];
+                                        });
+                                        e.target.value = '';
+                                      }}
+                                      className="w-full text-xs rounded-md border border-border/60 bg-background px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                                    >
+                                      <option value="">{isRTL ? '— توصيل بمكوّن حر —' : '— Connect to free component —'}</option>
+                                      {freeNodes.map((n: any) => {
+                                        const nm = NODE_TYPE_META[n.data?.flowType as FlowNodeType];
+                                        return (
+                                          <option key={n.id} value={n.id}>
+                                            {nm?.icon} {n.data?.label || (isRTL ? nm?.labelAr : nm?.label) || n.id}
+                                          </option>
+                                        );
+                                      })}
+                                    </select>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <>
+                            {(() => {
+                              const outEdge = (edges as any[]).find((e: any) => e.source === editingNode.nodeId);
+                              const connectedNode = outEdge ? (nodes as any[]).find((n: any) => n.id === outEdge.target) : null;
+                              const connectedMeta = connectedNode ? NODE_TYPE_META[connectedNode.data?.flowType as FlowNodeType] : null;
+                              const nodesWithIncoming = new Set((edges as any[]).map((e: any) => e.target));
+                              const freeNodes = (nodes as any[]).filter((n: any) =>
+                                n.id !== editingNode.nodeId &&
+                                n.data?.flowType !== 'start' &&
+                                !nodesWithIncoming.has(n.id)
+                              );
+                              return (
+                                <div className="space-y-3">
+                                  {/* Currently connected */}
+                                  <div>
+                                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">{isRTL ? 'متصل حالياً بـ' : 'Currently connected to'}</p>
+                                    <div className="flex items-center gap-2 border border-border/60 rounded-lg px-3 py-2 bg-muted/30">
+                                      <span className="text-sm flex-1 truncate">
+                                        {connectedNode && connectedMeta
+                                          ? `${connectedMeta.icon} ${connectedNode.data?.label || (isRTL ? connectedMeta.labelAr : connectedMeta.label)}`
+                                          : <span className="text-muted-foreground text-xs">{isRTL ? '🔚 نهاية المحادثة' : '🔚 End chat'}</span>
+                                        }
+                                      </span>
+                                      {outEdge && (
+                                        <button
+                                          title={isRTL ? 'قطع الاتصال' : 'Disconnect'}
+                                          onClick={() => setEdges((eds: any[]) => eds.filter((ed: any) => ed.id !== outEdge.id))}
+                                          className="text-red-400 hover:text-red-500 text-xs px-1.5 py-0.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0"
+                                        >
+                                          ✕ {isRTL ? 'قطع' : 'Disconnect'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {/* Connect to a free node */}
+                                  <div>
+                                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">{isRTL ? 'توصيل بمكوّن حر' : 'Connect to free component'}</p>
+                                    {freeNodes.length === 0 ? (
+                                      <p className="text-xs text-muted-foreground italic px-1">{isRTL ? 'لا توجد مكوّنات حرة' : 'No free components available'}</p>
+                                    ) : (
+                                      <select
+                                        title={isRTL ? 'توصيل بمكوّن حر' : 'Connect to free component'}
+                                        defaultValue=""
+                                        onChange={(e) => {
+                                          const chosen = e.target.value;
+                                          if (!chosen) return;
+                                          setEdges((eds: any[]) => {
+                                            const filtered = eds.filter((ed: any) => ed.source !== editingNode.nodeId);
+                                            return [...filtered, {
+                                              id: `e-${editingNode.nodeId}-${chosen}`,
+                                              source: editingNode.nodeId,
+                                              target: chosen,
+                                              markerEnd: { type: MarkerType.ArrowClosed },
+                                              style: { strokeWidth: 2, cursor: 'pointer' },
+                                            }];
+                                          });
+                                          e.target.value = '';
+                                        }}
+                                        className="w-full border border-border/60 rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-[#060541]/20 dark:focus:ring-white/20 transition-all"
+                                      >
+                                        <option value="">{isRTL ? '— اختر مكوّناً —' : '— Pick a component —'}</option>
+                                        {freeNodes.map((n: any) => {
+                                          const nm = NODE_TYPE_META[n.data?.flowType as FlowNodeType];
+                                          return (
+                                            <option key={n.id} value={n.id}>
+                                              {nm ? `${nm.icon} ${n.data?.label || (isRTL ? nm.labelAr : nm.label)}` : n.id}
+                                            </option>
+                                          );
+                                        })}
+                                      </select>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </>
+                        )}
                       </div>
                     </>
                   )}

@@ -513,6 +513,70 @@ function renderSlideToHTML(
   // Get layout variant (default to text_left)
   const layout = slide.layoutVariant || 'text_left';
 
+  // Stat Highlight slide - big numbers grid (with optional image on right)
+  if (slide.role === 'stat_highlight') {
+    const stats = slide.highlightedStats || [];
+    const hasImage = !!slide.imageUrl;
+    const statsAreaW = hasImage ? 1080 : (EXPORT_CANVAS_W - 120);
+    const cols = stats.length <= 2 ? 2 : 3;
+    const colWidth = Math.floor((statsAreaW - (cols - 1) * 30) / cols);
+    const statCardsHtml = stats.map(stat => {
+      const parts = stat.replace(/\\n/g, '\n').split('\n');
+      const bigNum = highlightKeywords(parts[0] || stat, accentColor, 'bold', 'normal');
+      const label = parts[1] || '';
+      return `
+        <div style="width: ${colWidth}px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); border-radius: 20px; padding: 40px 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+          <div style="font-size: ${hasImage ? 60 : 80}px; font-weight: bold; color: ${accentColor}; line-height: 1;">${bigNum}</div>
+          ${label ? `<div style="font-size: ${hasImage ? 24 : 32}px; color: #94a3b8; margin-top: 12px;">${label}</div>` : ''}
+        </div>`;
+    }).join('');
+    const bulletOnlyHtml = processedBullets.map((b, index) => `
+      <div style="display: flex; align-items: flex-start; gap: 20px; margin-bottom: 24px; ${isRtl ? 'flex-direction: row-reverse; text-align: right;' : ''}">
+        ${getBulletShapeHtml(bulletDotShape, index, bulletDotColor, bulletDotSize)}
+        <div style="font-size: 36px; line-height: 1.4; color: ${bulletColor}; flex: 1;">${b}</div>
+      </div>`).join('');
+    const contentHtml = stats.length > 0
+      ? `<div style="flex: 1; display: flex; gap: 30px; align-items: center; ${hasImage ? '' : 'justify-content: center;'} flex-wrap: wrap;">${statCardsHtml}</div>`
+      : `<div style="flex: 1;">${bulletOnlyHtml}</div>`;
+    const imageHtml = hasImage
+      ? `<div style="width: 680px; flex-shrink: 0; border-radius: 16px; overflow: hidden; aspect-ratio: 16/9;"><img src="${slide.imageUrl}" style="width: 100%; height: 100%; object-fit: cover;" /></div>`
+      : '';
+    return `
+      <div style="width: 1920px; height: 1080px; background: ${bgColor}; font-family: 'Noto Sans Arabic', 'Segoe UI', sans-serif; direction: ${isRtl ? 'rtl' : 'ltr'}; display: flex; flex-direction: column; padding: 60px; box-sizing: border-box; position: relative;">
+        <h1 style="font-size: ${titleFontSize}; font-weight: bold; color: ${titleColor}; margin: 0 0 16px 0; line-height: 1.2;">${processedTitle}</h1>
+        <div style="display: flex; gap: 10px; margin-bottom: 40px; ${isRtl ? 'flex-direction: row-reverse;' : ''}">
+          <div style="width: 12px; height: 12px; border-radius: 50%; background: ${accentColor};"></div>
+          <div style="width: 12px; height: 12px; border-radius: 50%; background: ${accentColor};"></div>
+          <div style="width: 12px; height: 12px; border-radius: 50%; background: ${accentColor};"></div>
+        </div>
+        <div style="flex: 1; display: flex; gap: 40px; align-items: center;">
+          ${contentHtml}
+          ${imageHtml}
+        </div>
+        <div style="position: absolute; bottom: 30px; left: 60px; right: 60px; display: flex; justify-content: space-between; color: #64748b; font-size: 16px;">
+          <span>${language === 'ar' ? 'Wakti AI وقتي' : 'Wakti AI'}</span>
+          <span>${slide.slideNumber}</span>
+        </div>
+      </div>`;
+  }
+
+  // Big Quote slide - centered quote layout
+  if (slide.role === 'big_quote') {
+    const quoteText = slide.subtitle || slide.title;
+    const quoteSource = slide.subtitle ? slide.title : '';
+    return `
+      <div style="width: 1920px; height: 1080px; background: ${bgColor}; font-family: 'Noto Sans Arabic', 'Segoe UI', sans-serif; direction: ${isRtl ? 'rtl' : 'ltr'}; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 100px; box-sizing: border-box; position: relative;">
+        <div style="font-size: 160px; font-weight: bold; color: ${accentColor}; opacity: 0.3; line-height: 0.6; margin-bottom: 40px;">"</div>
+        <p style="font-size: 56px; font-weight: 500; color: ${titleColor}; line-height: 1.5; max-width: 1400px; margin: 0 0 48px 0;">${quoteText}</p>
+        <div style="width: 80px; height: 6px; border-radius: 3px; background: ${accentColor}; margin-bottom: 32px;"></div>
+        ${quoteSource ? `<p style="font-size: 28px; color: #64748b; letter-spacing: 3px; text-transform: uppercase;">${quoteSource}</p>` : ''}
+        <div style="position: absolute; bottom: 30px; left: 60px; right: 60px; display: flex; justify-content: space-between; color: #64748b; font-size: 16px;">
+          <span>${language === 'ar' ? 'Wakti AI وقتي' : 'Wakti AI'}</span>
+          <span>${slide.slideNumber}</span>
+        </div>
+      </div>`;
+  }
+
   // Cover/Thank You slide - centered layout (no image) or with layout variants if image added
   if (isCoverOrThankYou) {
     const hasSlideImage = slide.imageUrl;

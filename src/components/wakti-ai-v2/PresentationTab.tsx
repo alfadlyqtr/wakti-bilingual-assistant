@@ -1158,6 +1158,13 @@ const PresentationTab: React.FC = () => {
   const [applyBackgroundToAllSlides, setApplyBackgroundToAllSlides] = useState(false);
   const [applyVoiceToAllSlides, setApplyVoiceToAllSlides] = useState(true);
 
+  // Enhanced (AI Premium Render) state
+  const [enhancedHtmlMap, setEnhancedHtmlMap] = useState<Record<number, string>>({});
+  const [savedEnhancedMap, setSavedEnhancedMap] = useState<Record<number, string>>({});
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [showEnhanced, setShowEnhanced] = useState(false);
+  const [enhanceScale, setEnhanceScale] = useState(0.25);
+
   // Export state
   const [isExporting, setIsExporting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -1720,6 +1727,20 @@ const PresentationTab: React.FC = () => {
   
   // Ref for the slide preview element (used for html2canvas capture)
   const slidePreviewRef = useRef<HTMLDivElement>(null);
+
+  // Keep enhanceScale in sync with actual container width
+  useEffect(() => {
+    const el = slidePreviewRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.getBoundingClientRect().width;
+      if (w > 0) setEnhanceScale(w / 1920);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [slidePreviewRef.current]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const waitForNextPaint = useCallback(async (): Promise<void> => {
     await new Promise<void>((resolve) => {
@@ -2552,6 +2573,41 @@ const PresentationTab: React.FC = () => {
     setSlides(renumbered);
     setSelectedSlideIndex(nextIndex);
   }, [isLockedSlide, language, renumberSlides, selectedSlideIndex, slides]);
+
+  // Enhance current slide with AI-generated HTML
+  const handleEnhanceSlide = useCallback(async () => {
+    if (!slides[selectedSlideIndex]) return;
+    const slide = slides[selectedSlideIndex];
+    setIsEnhancing(true);
+    try {
+      const response = await callEdgeFunctionWithRetry<{ success: boolean; html?: string; error?: string }>('wakti-slide-enhance', {
+        body: {
+          slide: {
+            slideNumber: slide.slideNumber,
+            title: slide.title,
+            subtitle: slide.subtitle,
+            role: slide.role,
+            bullets: slide.bullets,
+            highlightedStats: slide.highlightedStats,
+            imageUrl: slide.imageUrl,
+          },
+          theme: selectedTheme,
+          language,
+        },
+      });
+      if (!response?.success || !response?.html) {
+        throw new Error(response?.error || 'Enhancement failed');
+      }
+      setEnhancedHtmlMap(prev => ({ ...prev, [selectedSlideIndex]: response.html! }));
+      setShowEnhanced(true);
+      toast.success(language === 'ar' ? '✨ تم تحسين الشريحة' : '✨ Slide enhanced!');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Enhancement failed';
+      toast.error(msg);
+    } finally {
+      setIsEnhancing(false);
+    }
+  }, [slides, selectedSlideIndex, selectedTheme, language]);
 
   // Update text styling
   const applySlideUpdate = useCallback(
@@ -3402,6 +3458,14 @@ const PresentationTab: React.FC = () => {
             >
               <Palette className="w-4 h-4" />
             </button>
+            <button
+              onClick={showEnhanced ? () => setShowEnhanced(false) : handleEnhanceSlide}
+              disabled={isEnhancing || slides.length === 0}
+              className={`p-2 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${showEnhanced ? 'bg-amber-500 text-white border-amber-500' : 'hover:bg-muted'}`}
+              title={showEnhanced ? (language === 'ar' ? 'العرض العادي' : 'Normal View') : (language === 'ar' ? '✨ تحسين بالذكاء الاصطناعي' : '✨ AI Enhance')}
+            >
+              {isEnhancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+            </button>
             {/* Export dropdown */}
             <div className="relative">
               <button
@@ -3488,10 +3552,132 @@ const PresentationTab: React.FC = () => {
               'bg-gradient-to-br from-blue-900/20 to-purple-900/10'
             }`} />
             
+            {/* Loading shimmer while AI is generating */}
+            {isEnhancing && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center" style={{ background: 'rgba(10,15,25,0.85)' }}>
+                {/* Animated gradient sweep */}
+                <div className="absolute inset-0 overflow-hidden rounded-2xl">
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/20 to-transparent animate-[shimmer_1.5s_infinite]" style={{ backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite linear' }} />
+                </div>
+                {/* Pulsing orbs */}
+                <div className="absolute top-1/4 left-1/4 w-32 h-32 rounded-full bg-amber-500/10 animate-ping" style={{ animationDuration: '2s' }} />
+                <div className="absolute bottom-1/4 right-1/4 w-24 h-24 rounded-full bg-purple-500/10 animate-ping" style={{ animationDuration: '2.5s' }} />
+                {/* Center spinner + text */}
+                <div className="relative z-10 flex flex-col items-center gap-3">
+                  <div className="w-12 h-12 rounded-full border-2 border-amber-500/30 border-t-amber-400 animate-spin" />
+                  <div className="text-amber-300 text-sm font-semibold tracking-wide animate-pulse">
+                    {language === 'ar' ? '✨ جارٍ التحسين...' : '✨ AI is designing...'}
+                  </div>
+                  <div className="text-slate-500 text-xs">
+                    {language === 'ar' ? 'يتم إنشاء تصميم احترافي' : 'Creating premium layout'}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Enhanced AI overlay - shows when enhanced is active OR when slide has been saved */}
+            {(() => {
+              const displayHtml = savedEnhancedMap[selectedSlideIndex] || (showEnhanced ? enhancedHtmlMap[selectedSlideIndex] : null);
+              if (!displayHtml || isEnhancing) return null;
+              return (
+                <div className="absolute inset-0 z-10 overflow-hidden animate-in fade-in duration-700">
+                  <div
+                    style={{
+                      width: '1920px',
+                      height: '1080px',
+                      transform: `scale(${enhanceScale})`,
+                      transformOrigin: 'top left',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                    }}
+                    dangerouslySetInnerHTML={{ __html: displayHtml }}
+                  />
+                  {/* Badge */}
+                  <div className="absolute top-2 right-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] px-3 py-1 rounded-full font-bold z-20 shadow-lg shadow-amber-500/30">
+                    ✨ AI Enhanced
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Content area - better mobile padding */}
-            <div className="relative h-full p-4 sm:p-6 md:p-8 lg:p-10 flex flex-col overflow-hidden">
+            <div className={`relative h-full p-4 sm:p-6 md:p-8 lg:p-10 flex flex-col overflow-hidden ${(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && !isEnhancing ? 'invisible' : ''}`}>
               {currentSlide && (
                 <>
+                  {/* Stat Highlight slide - big numbers layout */}
+                  {currentSlide.role === 'stat_highlight' && (
+                    <div className="flex-1 flex flex-col min-h-0">
+                      <div className="mb-3 flex-shrink-0">
+                        <h2
+                          className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} font-bold mb-1`}
+                          style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}
+                        >
+                          {currentSlide.title}
+                        </h2>
+                        <div className="flex items-center gap-1">
+                          <div className={`w-2 h-2 rounded-full ${getThemeAccent(selectedTheme).bg}`} />
+                          <div className={`w-2 h-2 rounded-full ${getThemeAccent(selectedTheme).bg}`} />
+                          <div className={`w-2 h-2 rounded-full ${getThemeAccent(selectedTheme).bg}`} />
+                        </div>
+                      </div>
+                      <div className={`flex-1 flex ${currentSlide.imageUrl ? 'gap-4 items-center' : ''} min-h-0`}>
+                        <div className={currentSlide.imageUrl ? 'flex-1' : 'flex-1'}>
+                          {currentSlide.highlightedStats && currentSlide.highlightedStats.length > 0 ? (
+                            <div className={`grid gap-3 items-center ${currentSlide.highlightedStats.length <= 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                              {currentSlide.highlightedStats.map((stat, i) => {
+                                const parts = stat.split(/\\n|\n/);
+                                const bigNum = parts[0] || stat;
+                                const label = parts[1] || '';
+                                return (
+                                  <div key={i} className="rounded-xl p-3 flex flex-col items-center justify-center text-center border border-white/10" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                                    <span className="text-2xl sm:text-3xl font-bold leading-tight" style={{ color: getThemeAccent(selectedTheme).hex }}>
+                                      {renderBoldText(bigNum, selectedTheme)}
+                                    </span>
+                                    {label && <span className="text-xs mt-1 opacity-70 text-white">{label}</span>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <ul className="space-y-2">
+                              {currentSlide.bullets?.slice(0, 4).map((b, i) => (
+                                <li key={i} className="flex items-start gap-2">
+                                  <span className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${getThemeAccent(selectedTheme).bg}`} />
+                                  <span className="text-sm leading-snug text-slate-200">{renderBoldText(b, selectedTheme)}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                        {currentSlide.imageUrl && (
+                          <div className="w-2/5 aspect-[16/9] flex-shrink-0">
+                            {renderSlideImage(currentSlide, { className: 'w-full h-full', enableDrag: true, onPointerDown: onImagePointerDown, onPointerMove: onImagePointerMove, onPointerUp: onImagePointerCancelOrUp, onPointerCancel: onImagePointerCancelOrUp })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Big Quote slide - centered quote layout */}
+                  {currentSlide.role === 'big_quote' && (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
+                      <div className={`text-5xl sm:text-6xl font-bold mb-3 opacity-40 leading-none ${getThemeAccent(selectedTheme).text}`}>"</div>
+                      <p
+                        className="text-lg sm:text-xl font-medium leading-relaxed max-w-[85%] mb-4"
+                        style={{ color: currentSlide.subtitleStyle?.color || '#f1f5f9' }}
+                      >
+                        {currentSlide.subtitle || currentSlide.title}
+                      </p>
+                      <div className={`w-16 h-1 rounded-full mb-3 ${getThemeAccent(selectedTheme).bg}`} />
+                      {currentSlide.subtitle && (
+                        <p className="text-xs sm:text-sm font-semibold tracking-widest uppercase opacity-60 text-white">
+                          {currentSlide.title}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Cover slide - no image */}
                   {currentSlide.role === 'cover' && !currentSlide.imageUrl && (
                     <div className="flex-1 flex flex-col items-center justify-center text-center">
@@ -3679,10 +3865,10 @@ const PresentationTab: React.FC = () => {
                   )}
 
                   {/* Content slides with dynamic layout based on layoutVariant - handles all image layouts */}
-                  {currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && (currentSlide.imageUrl || currentSlide.layoutVariant) && (
-                    <div className="flex-1 flex flex-col">
+                  {currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && currentSlide.role !== 'stat_highlight' && currentSlide.role !== 'big_quote' && (currentSlide.imageUrl || currentSlide.layoutVariant) && (
+                    <div className="flex-1 flex flex-col min-h-0">
                       {/* Title - with custom styling */}
-                      <div className="mb-4">
+                      <div className="mb-2 flex-shrink-0">
                         <h2 
                           className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''}`}
                           style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}
@@ -3828,14 +4014,14 @@ const PresentationTab: React.FC = () => {
 
                       {/* Layout: Text Left (default) - responsive */}
                       {(!currentSlide.layoutVariant || currentSlide.layoutVariant === 'text_left') && currentSlide.imageUrl && (
-                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 items-start">
-                          <div className="flex flex-col pr-2">
-                            <ul className="space-y-1">
-                              {currentSlide.bullets?.slice(0, 4).map((b, i) => (
+                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 items-center min-h-0">
+                          <div className="flex flex-col pr-2 min-h-0">
+                            <ul className="space-y-1.5">
+                              {currentSlide.bullets?.slice(0, 5).map((b, i) => (
                                 <li key={i} className="flex items-start gap-1.5">
                                   {renderBulletShape(currentSlide.bulletDotShape, i, currentSlide.bulletDotSize, currentSlide.bulletDotColor || currentSlide.accentColor || getThemeAccent(selectedTheme).hex)}
                                   <span 
-                                    className={`${getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-tight ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''} ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'italic' : ''}`} 
+                                    className={`${(currentSlide.bullets?.length || 0) > 3 ? 'text-sm' : getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-snug ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''} ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'italic' : ''}`} 
                                     style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}
                                   >
                                     {renderBoldText(b, selectedTheme)}
@@ -3853,7 +4039,7 @@ const PresentationTab: React.FC = () => {
                   )}
 
                   {/* Empty content slide (no image, no columns, no bullets) - still render title/subtitle so edits are visible */}
-                  {currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && !currentSlide.imageUrl && (!currentSlide.columns || currentSlide.columns.length === 0) && (!currentSlide.bullets || currentSlide.bullets.length === 0) && !currentSlide.layoutVariant && (
+                  {currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && currentSlide.role !== 'stat_highlight' && currentSlide.role !== 'big_quote' && !currentSlide.imageUrl && (!currentSlide.columns || currentSlide.columns.length === 0) && (!currentSlide.bullets || currentSlide.bullets.length === 0) && !currentSlide.layoutVariant && (
                     <div className="flex-1 flex flex-col items-center justify-center text-center">
                       <h2
                         className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''} mb-2 leading-tight`}
@@ -3875,35 +4061,35 @@ const PresentationTab: React.FC = () => {
                   )}
 
                   {/* Content slides with bullets only (no image, no columns, not using dynamic layout) - fallback */}
-                  {currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && !currentSlide.imageUrl && (!currentSlide.columns || currentSlide.columns.length === 0) && currentSlide.bullets && currentSlide.bullets.length > 0 && !currentSlide.layoutVariant && (
-                    <div className="flex-1 flex flex-col">
+                  {currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && currentSlide.role !== 'stat_highlight' && currentSlide.role !== 'big_quote' && !currentSlide.imageUrl && (!currentSlide.columns || currentSlide.columns.length === 0) && currentSlide.bullets && currentSlide.bullets.length > 0 && !currentSlide.layoutVariant && (
+                    <div className="flex-1 flex flex-col min-h-0">
                       {/* Title - with full edit support */}
-                      <div className="mb-6">
+                      <div className="mb-3 flex-shrink-0">
                         <h2 
-                          className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''} mb-2`}
+                          className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''} mb-1`}
                           style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}
                         >
                           {currentSlide.title}
                         </h2>
                         {currentSlide.subtitle && (
-                          <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)} mb-3`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>
+                          <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)} mb-1`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>
                             {currentSlide.subtitle}
                           </p>
                         )}
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 mt-1">
                           <div className={`w-2 h-2 rounded-full ${getThemeAccent(selectedTheme).bg}`} />
                           <div className={`w-2 h-2 rounded-full ${getThemeAccent(selectedTheme).bg}`} />
                           <div className={`w-2 h-2 rounded-full ${getThemeAccent(selectedTheme).bg}`} />
                         </div>
                       </div>
                       
-                      {/* Bullets - with full edit support */}
-                      <ul className="space-y-4 flex-1">
+                      {/* Bullets - auto-scaling spacing based on count */}
+                      <ul className={`${currentSlide.bullets.length > 5 ? 'space-y-1' : currentSlide.bullets.length > 3 ? 'space-y-1.5' : 'space-y-2'} flex-1 min-h-0 overflow-hidden`}>
                         {currentSlide.bullets.map((b, i) => (
-                          <li key={i} className="flex items-start gap-3">
-                            <span className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${getThemeAccent(selectedTheme).bg}`} />
+                          <li key={i} className="flex items-start gap-2">
+                            <span className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${getThemeAccent(selectedTheme).bg}`} />
                             <span 
-                              className={`${getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-relaxed`}
+                              className={`${currentSlide.bullets.length > 4 ? 'text-sm' : getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-snug ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''} ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'italic' : ''}`}
                               style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}
                             >
                               {renderBoldText(b, selectedTheme)}
@@ -3931,6 +4117,30 @@ const PresentationTab: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Save Enhanced Slide button - only shown when enhanced view is active and not yet saved */}
+        {showEnhanced && enhancedHtmlMap[selectedSlideIndex] && !isEnhancing && !savedEnhancedMap[selectedSlideIndex] && (
+          <div className="flex justify-center mt-3">
+            <button
+              onClick={() => {
+                setSavedEnhancedMap(prev => ({ ...prev, [selectedSlideIndex]: enhancedHtmlMap[selectedSlideIndex] }));
+                toast.success(language === 'ar' ? '✅ تم حفظ التحسين' : '✅ Enhancement saved!');
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold shadow-lg shadow-amber-500/30 hover:from-amber-400 hover:to-orange-400 transition-all active:scale-95"
+            >
+              <Check className="w-4 h-4" />
+              {language === 'ar' ? 'حفظ التحسين' : 'Save Enhancement'}
+            </button>
+          </div>
+        )}
+        {showEnhanced && savedEnhancedMap[selectedSlideIndex] && !isEnhancing && (
+          <div className="flex justify-center mt-3">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm font-medium">
+              <Check className="w-4 h-4" />
+              {language === 'ar' ? 'تم الحفظ' : 'Saved'}
+            </div>
+          </div>
+        )}
 
         {/* Edit Panel - appears when edit mode is active */}
         {isEditMode && currentSlide && (
@@ -4010,7 +4220,7 @@ const PresentationTab: React.FC = () => {
                     <button
                       key={size}
                       onClick={() => updateTitleStyle({ fontSize: size })}
-                      className={`px-2 py-1 text-xs rounded ${(currentSlide.titleStyle?.fontSize || 'medium') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                      className={`px-2 py-1 text-xs rounded ${(currentSlide.titleStyle?.fontSize || 'medium') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                     >
                       {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
                     </button>
@@ -4020,25 +4230,25 @@ const PresentationTab: React.FC = () => {
                   <span className="text-xs text-slate-400">{language === 'ar' ? 'الخط:' : 'Style:'}</span>
                   <button
                     onClick={() => updateTitleStyle({ fontWeight: 'normal' })}
-                    className={`px-2 py-1 text-xs rounded ${(currentSlide.titleStyle?.fontWeight || 'bold') === 'normal' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                    className={`px-2 py-1 text-xs rounded ${(currentSlide.titleStyle?.fontWeight || 'bold') === 'normal' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                   >
                     Normal
                   </button>
                   <button
                     onClick={() => updateTitleStyle({ fontWeight: 'bold' })}
-                    className={`px-2 py-1 text-xs rounded font-bold ${(currentSlide.titleStyle?.fontWeight || 'bold') === 'bold' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                    className={`px-2 py-1 text-xs rounded font-bold ${(currentSlide.titleStyle?.fontWeight || 'bold') === 'bold' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                   >
                     Bold
                   </button>
                   <button
                     onClick={() => updateTitleStyle({ fontStyle: currentSlide.titleStyle?.fontStyle === 'italic' ? 'normal' : 'italic' })}
-                    className={`px-2 py-1 text-xs rounded italic ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                    className={`px-2 py-1 text-xs rounded italic ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                   >
                     Italic
                   </button>
                   <button
                     onClick={() => updateTitleStyle({ textDecoration: currentSlide.titleStyle?.textDecoration === 'underline' ? 'none' : 'underline' })}
-                    className={`px-2 py-1 text-xs rounded underline ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                    className={`px-2 py-1 text-xs rounded underline ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                   >
                     U
                   </button>
@@ -4089,7 +4299,7 @@ const PresentationTab: React.FC = () => {
                     <button
                       key={size}
                       onClick={() => updateSubtitleStyle({ fontSize: size })}
-                      className={`px-2 py-1 text-xs rounded ${(currentSlide.subtitleStyle?.fontSize || 'medium') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                      className={`px-2 py-1 text-xs rounded ${(currentSlide.subtitleStyle?.fontSize || 'medium') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                     >
                       {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
                     </button>
@@ -4099,25 +4309,25 @@ const PresentationTab: React.FC = () => {
                   <span className="text-xs text-slate-400">{language === 'ar' ? 'الخط:' : 'Style:'}</span>
                   <button
                     onClick={() => updateSubtitleStyle({ fontWeight: 'normal' })}
-                    className={`px-2 py-1 text-xs rounded ${(currentSlide.subtitleStyle?.fontWeight || 'normal') === 'normal' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                    className={`px-2 py-1 text-xs rounded ${(currentSlide.subtitleStyle?.fontWeight || 'normal') === 'normal' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                   >
                     Normal
                   </button>
                   <button
                     onClick={() => updateSubtitleStyle({ fontWeight: 'bold' })}
-                    className={`px-2 py-1 text-xs rounded font-bold ${currentSlide.subtitleStyle?.fontWeight === 'bold' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                    className={`px-2 py-1 text-xs rounded font-bold ${currentSlide.subtitleStyle?.fontWeight === 'bold' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                   >
                     Bold
                   </button>
                   <button
                     onClick={() => updateSubtitleStyle({ fontStyle: currentSlide.subtitleStyle?.fontStyle === 'italic' ? 'normal' : 'italic' })}
-                    className={`px-2 py-1 text-xs rounded italic ${currentSlide.subtitleStyle?.fontStyle === 'italic' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                    className={`px-2 py-1 text-xs rounded italic ${currentSlide.subtitleStyle?.fontStyle === 'italic' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                   >
                     Italic
                   </button>
                   <button
                     onClick={() => updateSubtitleStyle({ textDecoration: currentSlide.subtitleStyle?.textDecoration === 'underline' ? 'none' : 'underline' })}
-                    className={`px-2 py-1 text-xs rounded underline ${currentSlide.subtitleStyle?.textDecoration === 'underline' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                    className={`px-2 py-1 text-xs rounded underline ${currentSlide.subtitleStyle?.textDecoration === 'underline' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                   >
                     U
                   </button>
@@ -4145,7 +4355,7 @@ const PresentationTab: React.FC = () => {
                       <button
                         key={size}
                         onClick={() => updateBulletStyle({ fontSize: size })}
-                        className={`px-2 py-1 text-xs rounded ${(currentSlide.bulletStyle?.fontSize || 'medium') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                        className={`px-2 py-1 text-xs rounded ${(currentSlide.bulletStyle?.fontSize || 'medium') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                       >
                         {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
                       </button>
@@ -4155,19 +4365,19 @@ const PresentationTab: React.FC = () => {
                     <span className="text-xs text-slate-400 font-medium">{language === 'ar' ? 'الخط:' : 'Style:'}</span>
                     <button
                       onClick={() => updateBulletStyle({ fontWeight: 'normal' })}
-                      className={`px-2 py-1 text-xs rounded ${(currentSlide.bulletStyle?.fontWeight || 'normal') === 'normal' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                      className={`px-2 py-1 text-xs rounded ${(currentSlide.bulletStyle?.fontWeight || 'normal') === 'normal' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                     >
                       Normal
                     </button>
                     <button
                       onClick={() => updateBulletStyle({ fontWeight: 'bold' })}
-                      className={`px-2 py-1 text-xs rounded font-bold ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                      className={`px-2 py-1 text-xs rounded font-bold ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                     >
                       Bold
                     </button>
                     <button
                       onClick={() => updateBulletStyle({ fontStyle: currentSlide.bulletStyle?.fontStyle === 'italic' ? 'normal' : 'italic' })}
-                      className={`px-2 py-1 text-xs rounded italic ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                      className={`px-2 py-1 text-xs rounded italic ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                     >
                       Italic
                     </button>
@@ -4345,7 +4555,7 @@ const PresentationTab: React.FC = () => {
                         onClick={() => setSlides(prev => prev.map((s, i) => 
                           i === selectedSlideIndex ? { ...s, imageSize: size } : s
                         ))}
-                        className={`px-2 py-1 text-[10px] rounded transition-colors ${(currentSlide.imageSize || 'medium') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500'}`}
+                        className={`px-2 py-1 text-[10px] rounded transition-colors ${(currentSlide.imageSize || 'medium') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-500'}`}
                       >
                         {size === 'small' ? 'S' : size === 'medium' ? 'M' : size === 'large' ? 'L' : 'Full'}
                       </button>
@@ -4362,7 +4572,7 @@ const PresentationTab: React.FC = () => {
                         onClick={() => setSlides(prev => prev.map((s, i) => 
                           i === selectedSlideIndex ? { ...s, imageFit: mode } : s
                         ))}
-                        className={`px-2 py-1 text-[10px] rounded transition-colors ${(currentSlide.imageFit || 'crop') === mode ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500'}`}
+                        className={`px-2 py-1 text-[10px] rounded transition-colors ${(currentSlide.imageFit || 'crop') === mode ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-500'}`}
                       >
                         {mode === 'crop' ? 'Crop' : mode === 'fit' ? 'Fit' : 'Fill'}
                       </button>
@@ -4398,7 +4608,7 @@ const PresentationTab: React.FC = () => {
                       <div className={`flex items-center gap-2 ${language === 'ar' ? 'flex-row-reverse' : ''}`}>
                         <button
                           type="button"
-                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600"
+                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100"
                           disabled={(currentSlide.imageFit || 'crop') !== 'crop'}
                           onClick={() => {
                             const t = getCurrentSlideTransform();
@@ -4421,7 +4631,7 @@ const PresentationTab: React.FC = () => {
                         />
                         <button
                           type="button"
-                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600"
+                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100"
                           disabled={(currentSlide.imageFit || 'crop') !== 'crop'}
                           onClick={() => {
                             const t = getCurrentSlideTransform();
@@ -4450,7 +4660,7 @@ const PresentationTab: React.FC = () => {
                       <div className={`flex items-center gap-2 ${language === 'ar' ? 'flex-row-reverse' : ''}`}>
                         <button
                           type="button"
-                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600"
+                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100"
                           disabled={(currentSlide.imageFit || 'crop') !== 'crop'}
                           onClick={() => {
                             const t = getCurrentSlideTransform();
@@ -4473,7 +4683,7 @@ const PresentationTab: React.FC = () => {
                         />
                         <button
                           type="button"
-                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600"
+                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100"
                           disabled={(currentSlide.imageFit || 'crop') !== 'crop'}
                           onClick={() => {
                             const t = getCurrentSlideTransform();
@@ -4497,7 +4707,7 @@ const PresentationTab: React.FC = () => {
                       <div className={`flex items-center gap-2 ${language === 'ar' ? 'flex-row-reverse' : ''}`}>
                         <button
                           type="button"
-                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600"
+                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100"
                           disabled={(currentSlide.imageFit || 'crop') !== 'crop'}
                           onClick={() => {
                             const t = getCurrentSlideTransform();
@@ -4520,7 +4730,7 @@ const PresentationTab: React.FC = () => {
                         />
                         <button
                           type="button"
-                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600"
+                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100"
                           disabled={(currentSlide.imageFit || 'crop') !== 'crop'}
                           onClick={() => {
                             const t = getCurrentSlideTransform();
@@ -4542,7 +4752,7 @@ const PresentationTab: React.FC = () => {
                               type="button"
                               onClick={() => setCurrentSlideFocus(fx, currentSlide.imageFocusY || 'center')}
                               className={`px-2 py-1 text-[10px] rounded transition-colors ${
-                                (currentSlide.imageFocusX || 'center') === fx ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'
+                                (currentSlide.imageFocusX || 'center') === fx ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'
                               }`}
                             >
                               {fx === 'left' ? 'L' : fx === 'center' ? 'C' : 'R'}
@@ -4560,7 +4770,7 @@ const PresentationTab: React.FC = () => {
                               type="button"
                               onClick={() => setCurrentSlideFocus(currentSlide.imageFocusX || 'center', fy)}
                               className={`px-2 py-1 text-[10px] rounded transition-colors ${
-                                (currentSlide.imageFocusY || 'center') === fy ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'
+                                (currentSlide.imageFocusY || 'center') === fy ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'
                               }`}
                             >
                               {fy === 'top' ? 'T' : fy === 'center' ? 'C' : 'B'}
@@ -4593,7 +4803,7 @@ const PresentationTab: React.FC = () => {
                     <button
                       key={size}
                       onClick={() => applySlideUpdate((s) => ({ ...s, accentFontSize: size }))}
-                      className={`px-2 py-1 text-xs rounded ${(currentSlide.accentFontSize || 'medium') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                      className={`px-2 py-1 text-xs rounded ${(currentSlide.accentFontSize || 'medium') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                     >
                       {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
                     </button>
@@ -4603,19 +4813,19 @@ const PresentationTab: React.FC = () => {
                   <span className="text-xs text-slate-400 font-medium">{language === 'ar' ? 'الخط:' : 'Style:'}</span>
                   <button
                     onClick={() => applySlideUpdate((s) => ({ ...s, accentFontWeight: 'normal' }))}
-                    className={`px-2 py-1 text-xs rounded ${(currentSlide.accentFontWeight || 'bold') === 'normal' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                    className={`px-2 py-1 text-xs rounded ${(currentSlide.accentFontWeight || 'bold') === 'normal' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                   >
                     Normal
                   </button>
                   <button
                     onClick={() => applySlideUpdate((s) => ({ ...s, accentFontWeight: 'bold' }))}
-                    className={`px-2 py-1 text-xs rounded font-bold ${(currentSlide.accentFontWeight || 'bold') === 'bold' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                    className={`px-2 py-1 text-xs rounded font-bold ${(currentSlide.accentFontWeight || 'bold') === 'bold' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                   >
                     Bold
                   </button>
                   <button
                     onClick={() => applySlideUpdate((s) => ({ ...s, accentFontStyle: currentSlide.accentFontStyle === 'italic' ? 'normal' : 'italic' }))}
-                    className={`px-2 py-1 text-xs rounded italic ${currentSlide.accentFontStyle === 'italic' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                    className={`px-2 py-1 text-xs rounded italic ${currentSlide.accentFontStyle === 'italic' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                   >
                     Italic
                   </button>
@@ -4651,7 +4861,7 @@ const PresentationTab: React.FC = () => {
                   <button
                     key={shape.key}
                     onClick={() => applySlideUpdate((s) => ({ ...s, bulletDotShape: shape.key }))}
-                    className={`px-2 py-1 text-sm rounded ${(currentSlide.bulletDotShape || 'dot') === shape.key ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                    className={`px-2 py-1 text-sm rounded ${(currentSlide.bulletDotShape || 'dot') === shape.key ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                     title={shape.title}
                   >
                     {shape.label}
@@ -4666,7 +4876,7 @@ const PresentationTab: React.FC = () => {
                     <button
                       key={size}
                       onClick={() => applySlideUpdate((s) => ({ ...s, bulletDotSize: size }))}
-                      className={`px-2 py-1 text-xs rounded ${(currentSlide.bulletDotSize || 'small') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
+                      className={`px-2 py-1 text-xs rounded ${(currentSlide.bulletDotSize || 'small') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
                     >
                       {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
                     </button>

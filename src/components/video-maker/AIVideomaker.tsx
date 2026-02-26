@@ -990,22 +990,31 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   <button
                     onClick={handleAmp}
                     disabled={isAmping || isGenerating || !(generationMode === 'image_to_video' ? imagePreview : prompt.trim())}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold rounded-full border transition-all ${
+                    style={(!isAmping && !isGenerating && (generationMode === 'image_to_video' ? !!imagePreview : !!prompt.trim())) ? {
+                      animation: 'amp-alive 1.4s ease-in-out infinite',
+                    } : undefined}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[11px] font-bold rounded-full transition-colors duration-200 active:scale-95 disabled:opacity-30 disabled:pointer-events-none border ${
                       isAmping
-                        ? 'text-primary border-primary/40 bg-primary/10'
+                        ? 'bg-gradient-to-r from-violet-500/50 to-fuchsia-500/50 text-white dark:text-white border-violet-400/60'
                         : needsArabicTranslation
-                          ? 'text-[#060541] border-[rgba(6,5,65,0.35)] bg-[rgba(6,5,65,0.08)] shadow-[0_0_20px_rgba(33,150,243,0.25)]'
-                          : 'text-muted-foreground border-primary/20 hover:text-primary hover:border-primary/50 hover:bg-primary/10'
+                          ? 'bg-gradient-to-r from-amber-500/30 to-orange-500/30 text-amber-900 dark:text-amber-200 border-amber-400/50'
+                          : 'bg-gradient-to-r from-violet-600/30 to-fuchsia-600/30 text-violet-900 dark:text-violet-200 border-violet-500/40'
                     }`}
                     title={
                       needsArabicTranslation
                         ? (language === 'ar' ? 'اضغط لترجمة العربية' : 'Click to translate Arabic')
-                        : (language === 'ar' ? 'تعزيز الوصف بالذكاء الاصطناعي' : 'Amp: enhance prompt')
+                        : (language === 'ar' ? 'تعزيز الوصف بالذكاء الاصطناعي' : 'Amp: enhance prompt with AI')
                     }
                   >
                     <Wand2 className={`h-3.5 w-3.5 ${isAmping ? 'animate-spin' : ''}`} />
-                    <span>{language === 'ar' ? 'تعزيز' : 'Amp'}</span>
+                    <span>{isAmping ? (language === 'ar' ? 'جاري التعزيز...' : 'Amping...') : (language === 'ar' ? '✦ تعزيز' : '✦ Amp')}</span>
                   </button>
+                  {/* Small tag appears when button is active */}
+                  {!isAmping && !isGenerating && (generationMode === 'image_to_video' ? !!imagePreview : !!prompt.trim()) && (
+                    <span className="text-[9px] text-muted-foreground/60 px-1">
+                      {language === 'ar' ? 'اضغط لتحسين الوصف' : 'press to improve prompt'}
+                    </span>
+                  )}
                 </div>
                 <span className="text-[10px] text-muted-foreground/50 sm:self-auto">{prompt.length}/2500</span>
               </div>

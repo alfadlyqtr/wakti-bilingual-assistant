@@ -311,6 +311,12 @@ textarea::placeholder {
   }
 }
 
+/* Amp button alive glow - steady/static glow, no animation */
+.amp-alive {
+  box-shadow: 0 0 12px hsla(280,70%,65%,0.6), 0 0 24px hsla(210,100%,65%,0.4), 0 0 36px hsla(280,70%,65%,0.2);
+  border-color: hsla(280,70%,65%,0.7);
+}
+
 /* Chat mode loading: Wakti logo glow breathe animation */
 @keyframes glow-breathe {
   0%, 100% {
@@ -2586,15 +2592,19 @@ body.landing-page #root {
 }
 
 /* ── Flow Builder ── */
-/* Lock the main container when builder is open so it doesn't scroll */
-body.chatbot-builder-page main {
+/* Lock the main container when builder is open — mirrors project-detail-page pattern */
+body.chatbot-builder-page .app-main {
   overflow: hidden !important;
+  height: calc(100vh - 84px) !important;
+  height: calc(100dvh - 84px) !important;
+  flex: none !important;
   padding: 0 !important;
-  margin-top: 0 !important;
+  margin-top: 84px !important;
 }
-body.chatbot-builder-page main > * {
+body.chatbot-builder-page .app-main > div {
   height: 100% !important;
   max-height: 100% !important;
+  overflow: hidden !important;
 }
 .builder-fill {
   position: relative;

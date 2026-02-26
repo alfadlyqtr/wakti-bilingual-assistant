@@ -22,42 +22,41 @@ interface SlideOutline {
   footer?: string;
 }
 
-async function callGeminiGrounded(prompt: string): Promise<SlideOutline[]> {
+async function callGeminiGrounded(prompt: string): Promise<SlideOutline[] | null> {
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
   if (!geminiKey) throw new Error("GEMINI_API_KEY not configured");
 
-  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" + geminiKey;
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + geminiKey;
 
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      tools: [{ google_search_retrieval: {} }],
+      tools: [{ google_search: {} }],
       generationConfig: {
         temperature: 0.5,
         maxOutputTokens: 8000,
-        responseMimeType: "application/json",
       },
     }),
   });
 
   if (!res.ok) {
     const text = await res.text();
-    console.error("Gemini grounded error:", text);
-    throw new Error("Gemini grounded API error: " + res.status);
+    console.error("Gemini grounded error:", res.status, text);
+    return null;
   }
 
   const data = await res.json();
   const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!responseText) throw new Error("No response from Gemini grounded");
+  if (!responseText) return null;
 
   try {
     const parsed = JSON.parse(responseText);
     return parsed.slides || parsed;
   } catch {
     const match = responseText.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("Failed to parse grounded response");
+    if (!match) return null;
     const p = JSON.parse(match[0]);
     return p.slides || p;
   }
@@ -85,7 +84,7 @@ async function _callGemini(prompt: string): Promise<SlideOutline[]> {
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
   if (!geminiKey) throw new Error("GEMINI_API_KEY not configured");
 
-  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" + geminiKey;
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + geminiKey;
   
   const res = await fetch(url, {
     method: "POST",
@@ -169,7 +168,7 @@ async function callGemini(prompt: string): Promise<SlideOutline[]> {
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
   if (!geminiKey) throw new Error("GEMINI_API_KEY not configured");
 
-  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" + geminiKey;
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + geminiKey;
 
   const res = await fetch(url, {
     method: "POST",
@@ -318,52 +317,43 @@ Deno.serve(async (req) => {
     let usedModel = "gpt-4o-mini";
 
     if (researchMode) {
+      console.log("Using Gemini grounded (research mode)");
       slides = await callGeminiGrounded(prompt);
-      usedProvider = "gemini";
-      usedModel = "gemini-2.5-flash-lite";
-      console.log("Using Gemini grounded");
+      if (slides) {
+        usedProvider = "gemini";
+        usedModel = "gemini-2.0-flash";
+      } else {
+        console.log("Gemini grounded failed, falling back to OpenAI");
+        slides = await callOpenAI(prompt);
+        usedProvider = "openai";
+        usedModel = "gpt-4o-mini";
+      }
     } else if (inputMode === 'topic_only') {
+      console.log("Using Gemini (topic only)");
       slides = await callGemini(prompt);
       usedProvider = "gemini";
-      usedModel = "gemini-2.5-flash-lite";
-      console.log("Using Gemini");
+      usedModel = "gemini-2.0-flash";
     } else {
+      console.log("Using OpenAI");
       slides = await callOpenAI(prompt);
       usedProvider = "openai";
       usedModel = "gpt-4o-mini";
-      console.log("Using OpenAI");
     }
 
     // Post-process: ensure proper layouts, structure, and bullet quality
     const validatedSlides = slides.map(function(s, i) {
       const role = s.role || "content";
-      
-      // Validate and enhance bullets - flag short ones for quality
-      let bullets = Array.isArray(s.bullets) ? s.bullets : [];
-      let shortBulletCount = 0;
-      
-      bullets = bullets.map((bullet: string) => {
-        if (typeof bullet !== 'string') return String(bullet);
-        const wordCount = bullet.trim().split(/\s+/).length;
-        if (wordCount < 10 && role !== 'cover' && role !== 'thank_you') {
-          shortBulletCount++;
-          // Log warning but don't modify - the few-shot examples should help
-          console.log(`⚠️ Short bullet (${wordCount} words) on slide ${i + 1}: "${bullet.substring(0, 50)}..."`);
-        }
-        return bullet;
-      });
-      
-      if (shortBulletCount > 0) {
-        console.log(`📊 Slide ${i + 1} has ${shortBulletCount}/${bullets.length} short bullets`);
-      }
-      
+      const bullets = Array.isArray(s.bullets) ? s.bullets.map((b: unknown) => typeof b === 'string' ? b : String(b)) : [];
+      // Cap bullets to 4 max for layout safety
+      const cappedBullets = bullets.slice(0, 4);
+
       return {
         slideNumber: s.slideNumber || i + 1,
         role: role,
         title: s.title || "Slide " + (i + 1),
         subtitle: s.subtitle || null,
-        bullets: bullets,
-        highlightedStats: s.highlightedStats || [],
+        bullets: cappedBullets,
+        highlightedStats: Array.isArray(s.highlightedStats) ? s.highlightedStats : [],
         columns: s.columns || null,
         imageHint: s.imageHint || getImageHint(role, brief.subject, brief),
         layoutHint: LAYOUT_MAP[role] || s.layoutHint || "title_and_bullets",
@@ -710,21 +700,41 @@ IMAGE HINT RULES (VERY IMPORTANT):
 
 CRITICAL RULES:
 1. Generate EXACTLY ${slideCount} slides - first is cover, last is thank_you
-2. Each bullet point must be DETAILED (15-25 words minimum)
-3. Include SPECIFIC statistics, dates, names, and facts
-4. Use **bold** for key terms and statistics
-5. ALL slides except cover/thank_you MUST have 4-6 bullet points (NOT columns)
-6. Make content educational and informative, not generic
+2. Each bullet point must be SHORT and PUNCHY: 6-10 words maximum. No long sentences.
+3. Use **bold** for key terms and statistics
+4. ALL slides except cover/thank_you MUST have 3-4 bullet points ONLY (NOT 5-6)
+5. Make content impactful, not generic. Use real stats and facts.
+6. Use varied slide roles: "stat_highlight" for data-heavy slides, "big_quote" for a key insight
 
-EXAMPLE OF HIGH-QUALITY BULLET POINTS (follow this style):
-❌ BAD: "Climate change is a problem" (too short, no specifics)
-✅ GOOD: "**Global temperatures** have risen by **1.1°C** since pre-industrial times, with **2023** being the hottest year on record according to NASA"
+BULLET STYLE RULES (slide canvas is fixed 16:9 - bullets MUST be short):
+❌ BAD: "Global temperatures have risen by 1.1 degrees Celsius since pre-industrial times according to NASA 2023 report"
+✅ GOOD: "**+1.1°C** global temperature rise since 1850"
 
-❌ BAD: "Many companies use AI" (vague, no data)
-✅ GOOD: "**Over 77%** of Fortune 500 companies now use AI in their operations, with **$150 billion** invested globally in AI startups during 2023"
+❌ BAD: "Over 77 percent of Fortune 500 companies now use artificial intelligence in their day-to-day operations"
+✅ GOOD: "**77%** of Fortune 500 companies use AI"
 
-❌ BAD: "The market is growing" (generic)
-✅ GOOD: "The global market reached **$4.2 trillion** in 2023, growing at a **CAGR of 12.5%**, with Asia-Pacific leading at **38%** market share"`;
+❌ BAD: "The global AI market is growing rapidly at a compound annual growth rate"
+✅ GOOD: "AI market: **$150B** invested in 2023 alone"
+
+FOR stat_highlight SLIDES — add a "highlightedStats" array:
+{
+  "slideNumber": 4,
+  "role": "stat_highlight",
+  "title": "BY THE NUMBERS",
+  "bullets": ["Short fact one", "Short fact two", "Short fact three"],
+  "highlightedStats": ["**77%**\\nFortune 500 adoption", "**$150B**\\nInvested in 2023", "**12.5%**\\nAnnual growth"],
+  "imageHint": "data statistics chart"
+}
+
+FOR big_quote SLIDES — put the quote in subtitle:
+{
+  "slideNumber": 5,
+  "role": "big_quote",
+  "title": "INDUSTRY INSIGHT",
+  "subtitle": "AI is the new electricity — Andrew Ng",
+  "bullets": [],
+  "imageHint": "futuristic technology abstract"
+}`;
 }
 
 function buildArabicPrompt(brief, slideCount, inputMode: InputMode, originalText: string) {
@@ -879,19 +889,45 @@ ${originalText}
 
 القواعد الحاسمة:
 1. أنشئ بالضبط ${slideCount} شريحة - الأولى غلاف والأخيرة شكر
-2. كل نقطة يجب أن تكون مفصلة (15-25 كلمة على الأقل)
-3. أضف إحصائيات وتواريخ وأسماء وحقائق محددة
-4. استخدم **نص عريض** للمصطلحات والإحصائيات الرئيسية
-5. جميع الشرائح (ما عدا الغلاف والشكر) يجب أن تحتوي على 4-6 نقاط مفصلة
-6. اجعل المحتوى تعليمياً ومعلوماتياً وليس عاماً
+2. كل نقطة يجب أن تكون قصيرة ومركّزة: 5-8 كلمات فقط. لا جمل طويلة.
+3. استخدم **نص عريض** للمصطلحات والإحصائيات الرئيسية
+4. جميع الشرائح (ما عدا الغلاف والشكر) يجب أن تحتوي على 3-4 نقاط فقط
+5. استخدم أدوار متنوعة: "stat_highlight" للشرائح الإحصائية، "big_quote" للاقتباسات المهمة
+
+قواعد أسلوب النقاط (الشريحة ثابتة 16:9 - النقاط يجب أن تكون قصيرة):
+❌ سيء: "ارتفعت درجات الحرارة العالمية بمقدار 1.1 درجة مئوية منذ العصر الصناعي وفقاً لتقرير ناسا 2023"
+✅ جيد: "**+1.1°م** ارتفاع في درجة الحرارة منذ 1850"
+
+❌ سيء: "تستخدم أكثر من 77 بالمئة من شركات فورتشن 500 الذكاء الاصطناعي في عملياتها اليومية"
+✅ جيد: "**77%** من شركات فورتشن 500 تستخدم الذكاء الاصطناعي"
+
+لشرائح stat_highlight — أضف مصفوفة "highlightedStats":
+{
+  "slideNumber": 4,
+  "role": "stat_highlight",
+  "title": "بالأرقام",
+  "bullets": ["حقيقة أولى مختصرة", "حقيقة ثانية مختصرة"],
+  "highlightedStats": ["**77%**\\nتبنّت الشركات الكبرى", "**150B$**\\nاستثمار في 2023", "**12.5%**\\nنمو سنوي"],
+  "imageHint": "data statistics chart"
+}
+
+لشرائح big_quote — ضع الاقتباس في subtitle:
+{
+  "slideNumber": 5,
+  "role": "big_quote",
+  "title": "رؤية مستقبلية",
+  "subtitle": "الذكاء الاصطناعي هو الكهرباء الجديدة — أندرو نغ",
+  "bullets": [],
+  "imageHint": "futuristic technology abstract"
+}
 
 أمثلة على نقاط عالية الجودة (اتبع هذا الأسلوب):
-❌ سيء: "تغير المناخ مشكلة" (قصير جداً، بدون تفاصيل)
-✅ جيد: "ارتفعت **درجات الحرارة العالمية** بمقدار **1.1 درجة مئوية** منذ عصر ما قبل الصناعة، وكان **2023** أكثر الأعوام حرارة على الإطلاق وفقاً لناسا"
+❌ سيء: "ارتفعت درجات الحرارة العالمية بمقدار 1.1 درجة مئوية منذ العصر الصناعي" (طويل جداً)
+✅ جيد: "**+1.1°م** ارتفاع منذ العصر الصناعي"
 
-❌ سيء: "شركات كثيرة تستخدم الذكاء الاصطناعي" (غامض، بدون بيانات)
-✅ جيد: "**أكثر من 77%** من شركات فورتشن 500 تستخدم الآن الذكاء الاصطناعي في عملياتها، مع استثمار **150 مليار دولار** عالمياً في الشركات الناشئة للذكاء الاصطناعي خلال 2023"
+❌ سيء: "تستخدم الكثير من الشركات الكبرى حول العالم الذكاء الاصطناعي في عملياتها"
+✅ جيد: "**77%** من فورتشن 500 تستخدم الذكاء الاصطناعي"
 
-❌ سيء: "السوق ينمو" (عام)
-✅ جيد: "وصل السوق العالمي إلى **4.2 تريليون دولار** في 2023، بنمو **12.5%** سنوياً، مع قيادة آسيا والمحيط الهادئ بحصة **38%** من السوق"`;
+❌ سيء: "السوق العالمي ينمو بسرعة كبيرة ومستمرة"
+✅ جيد: "السوق: **4.2 تريليون$** بنمو **12.5%** سنوياً"`;
 }
