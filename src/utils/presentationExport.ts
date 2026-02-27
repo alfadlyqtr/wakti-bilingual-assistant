@@ -406,9 +406,9 @@ ${slidePages.join('\n')}
 </body>
 </html>`;
 
-    const apiBase = (import.meta as any)?.env?.VITE_API_URL as string | undefined;
-    const normalizedBase = (apiBase || '').replace(/\/+$/, '');
-    const endpoint = `${normalizedBase}/api/presentations/pdf`;
+    const supabaseUrl = ((import.meta as any)?.env?.VITE_SUPABASE_URL as string | undefined)
+      || 'https://hxauxozopvpzpdygoqwf.supabase.co';
+    const endpoint = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/wakti-slide-pdf`;
 
     onProgress?.(slides.length, slides.length);
 
@@ -420,11 +420,6 @@ ${slidePages.join('\n')}
 
     if (!resp.ok) {
       const txt = await resp.text().catch(() => '');
-      if (resp.status === 404 && !normalizedBase) {
-        throw new Error(
-          'PDF export: endpoint not found (404). In local dev run `vercel dev` alongside Vite.'
-        );
-      }
       throw new Error(`PDF export failed (${resp.status}): ${txt.slice(0, 400)}`);
     }
 
