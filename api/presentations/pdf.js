@@ -55,27 +55,30 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    // Screenshot the slide at exactly 1920x1080, return JPEG bytes.
-    // Frontend receives one image per call and stitches them into a PDF with jsPDF.
-    const endpoint = `https://chrome.browserless.io/screenshot?token=${encodeURIComponent(apiKey)}`;
+    // Use Browserless /pdf endpoint (production-sfo host, correct per v2 docs).
+    // Send html + options. Viewport set to 1920x1080 so the slide renders at design size.
+    // Each call returns a single-page PDF; frontend stitches them into one file.
+    const endpoint = `https://production-sfo.browserless.io/pdf?token=${encodeURIComponent(apiKey)}`;
 
     const browserlessResp = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         html,
-        options: {
-          type: 'jpeg',
-          quality: 95,
-          fullPage: false,
-          clip: { x: 0, y: 0, width: 1920, height: 1080 },
-        },
         viewport: {
           width: 1920,
           height: 1080,
           deviceScaleFactor: 1,
         },
-        waitFor: 1500,
+        gotoOptions: {
+          waitUntil: 'networkidle2',
+        },
+        options: {
+          printBackground: true,
+          width: '1920px',
+          height: '1080px',
+          margin: { top: '0', right: '0', bottom: '0', left: '0' },
+        },
       }),
     });
 
@@ -85,7 +88,7 @@ module.exports = async function handler(req, res) {
       res.setHeader('Content-Type', 'application/json');
       res.end(
         JSON.stringify({
-          error: 'Browserless screenshot failed',
+          error: 'Browserless PDF failed',
           status: browserlessResp.status,
           details: (errText || '').slice(0, 2000),
         })
@@ -95,7 +98,7 @@ module.exports = async function handler(req, res) {
 
     const buf = Buffer.from(await browserlessResp.arrayBuffer());
     res.statusCode = 200;
-    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.end(buf);
