@@ -345,88 +345,60 @@ export async function exportSlidesToPDFClean(
   onProgress?: (current: number, total: number) => void,
   enhancedHtmlMap?: Record<number, string>
 ): Promise<Blob> {
-  // If we have any enhanced HTML, use the server-side Browserless pipeline.
-  // This avoids all in-browser CORS/cssRules issues with html2canvas/html-to-image.
+  // If we have any enhanced HTML, use the server-side Browserless screenshot pipeline.
+  // Each slide HTML is sent to /api/presentations/pdf which returns a 1920x1080 JPEG.
+  // We then stitch all JPEGs into a single PDF with jsPDF — pixel-perfect match to the preview.
   if (enhancedHtmlMap && Object.keys(enhancedHtmlMap).length > 0) {
-    onProgress?.(1, 1);
-
-    const parser = new DOMParser();
-    const pages: string[] = [];
-
-    for (let i = 0; i < slides.length; i++) {
-      const enhanced = enhancedHtmlMap[i];
-      const fallback = renderSlideToHTML(
-        slides[i],
-        THEME_COLORS[theme] || THEME_COLORS.starter,
-        language === 'ar',
-        language,
-        false
-      );
-
-      const html = enhanced || fallback;
-      const doc = parser.parseFromString(html, 'text/html');
-
-      const styleTags = Array.from(doc.querySelectorAll('style'))
-        .map((s) => s.outerHTML)
-        .join('\n');
-      const linkTags = Array.from(doc.querySelectorAll('link[rel="stylesheet"], link[href*="fonts"], link[href*="googleapis"], link[href*="gstatic"]'))
-        .map((l) => l.outerHTML)
-        .join('\n');
-      const bodyContent = doc.body?.innerHTML || html;
-
-      pages.push(`\n<div class="page">\n  <div class="frame">\n    ${linkTags}\n    ${styleTags}\n    ${bodyContent}\n  </div>\n</div>`);
-    }
-
-    // 1920x1080 slide content scaled to 297mm x 167mm page.
-    // 297mm @ 96dpi ~= 1122px. scale = 1122 / 1920.
-    const scale = 1122 / 1920;
-
-    const printableHtml = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <style>
-    @page { size: 297mm 167mm; margin: 0; }
-    html, body { margin: 0; padding: 0; }
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page { width: 297mm; height: 167mm; overflow: hidden; page-break-after: always; position: relative; }
-    .frame { width: 1920px; height: 1080px; transform: scale(${scale}); transform-origin: top left; }
-  </style>
-</head>
-<body>
-${pages.join('\n')}
-</body>
-</html>`;
-
     const apiBase = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
     const normalizedBase = (apiBase || '').replace(/\/+$/, '');
-    const endpoint = `${normalizedBase}/api/presentations/pdf`;
+    const screenshotEndpoint = `${normalizedBase}/api/presentations/pdf`;
 
-    const resp = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        html: printableHtml,
-        pdfOptions: {
-          landscape: true,
-          printBackground: true,
-          preferCSSPageSize: true,
-          margin: { top: '0', right: '0', bottom: '0', left: '0' },
-        },
-      }),
+    const pdfDoc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: [297, 167],
     });
+    const pageWidth = pdfDoc.internal.pageSize.getWidth();
+    const pageHeight = pdfDoc.internal.pageSize.getHeight();
 
-    if (!resp.ok) {
-      const txt = await resp.text().catch(() => '');
-      if (resp.status === 404 && !normalizedBase) {
-        throw new Error(
-          'Server PDF export endpoint not found (404). In local dev, Vite does not serve Vercel /api routes. Run `vercel dev` or set VITE_API_BASE_URL to your deployed Vercel site URL.'
-        );
+    for (let i = 0; i < slides.length; i++) {
+      onProgress?.(i + 1, slides.length);
+
+      if (i > 0) pdfDoc.addPage([297, 167], 'landscape');
+
+      const enhanced = enhancedHtmlMap[i];
+      const colors = THEME_COLORS[theme] || THEME_COLORS.starter;
+      const isRtl = language === 'ar';
+      const slideHtml = enhanced || renderSlideToHTML(slides[i], colors, isRtl, language, false);
+
+      const resp = await fetch(screenshotEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html: slideHtml }),
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => '');
+        if (resp.status === 404 && !normalizedBase) {
+          throw new Error(
+            'PDF export: server endpoint not found (404). In local dev run `vercel dev` alongside Vite, or set VITE_API_BASE_URL to your deployed Vercel URL.'
+          );
+        }
+        throw new Error(`Slide ${i + 1} screenshot failed (${resp.status}): ${txt.slice(0, 400)}`);
       }
-      throw new Error(`Server PDF export failed (${resp.status}): ${txt.slice(0, 500)}`);
+
+      const jpegBlob = await resp.blob();
+      const jpegDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(jpegBlob);
+      });
+
+      pdfDoc.addImage(jpegDataUrl, 'JPEG', 0, 0, pageWidth, pageHeight);
     }
 
-    return await resp.blob();
+    return pdfDoc.output('blob');
   }
 
   const doc = new jsPDF({

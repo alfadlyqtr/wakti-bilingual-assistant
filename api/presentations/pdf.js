@@ -47,7 +47,7 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    const { html, pdfOptions } = parsed || {};
+    const { html } = parsed || {};
     if (!html || typeof html !== 'string') {
       res.statusCode = 400;
       res.setHeader('Content-Type', 'application/json');
@@ -55,7 +55,9 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    const endpoint = `https://chrome.browserless.io/pdf?token=${encodeURIComponent(apiKey)}`;
+    // Screenshot the slide at exactly 1920x1080, return JPEG bytes.
+    // Frontend receives one image per call and stitches them into a PDF with jsPDF.
+    const endpoint = `https://chrome.browserless.io/screenshot?token=${encodeURIComponent(apiKey)}`;
 
     const browserlessResp = await fetch(endpoint, {
       method: 'POST',
@@ -63,10 +65,17 @@ module.exports = async function handler(req, res) {
       body: JSON.stringify({
         html,
         options: {
-          printBackground: true,
-          preferCSSPageSize: true,
-          ...(pdfOptions || {}),
+          type: 'jpeg',
+          quality: 95,
+          fullPage: false,
+          clip: { x: 0, y: 0, width: 1920, height: 1080 },
         },
+        viewport: {
+          width: 1920,
+          height: 1080,
+          deviceScaleFactor: 1,
+        },
+        waitFor: 1500,
       }),
     });
 
@@ -76,7 +85,7 @@ module.exports = async function handler(req, res) {
       res.setHeader('Content-Type', 'application/json');
       res.end(
         JSON.stringify({
-          error: 'Browserless PDF failed',
+          error: 'Browserless screenshot failed',
           status: browserlessResp.status,
           details: (errText || '').slice(0, 2000),
         })
@@ -86,13 +95,13 @@ module.exports = async function handler(req, res) {
 
     const buf = Buffer.from(await browserlessResp.arrayBuffer());
     res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Type', 'image/jpeg');
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.end(buf);
   } catch (err) {
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ error: (err && err.message) ? err.message : 'pdf_error' }));
+    res.end(JSON.stringify({ error: (err && err.message) ? err.message : 'screenshot_error' }));
   }
 };
