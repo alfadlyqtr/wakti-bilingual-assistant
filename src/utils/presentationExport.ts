@@ -398,7 +398,11 @@ ${pages.join('\n')}
 </body>
 </html>`;
 
-    const resp = await fetch('/api/presentations/pdf', {
+    const apiBase = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
+    const normalizedBase = (apiBase || '').replace(/\/+$/, '');
+    const endpoint = `${normalizedBase}/api/presentations/pdf`;
+
+    const resp = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -414,6 +418,11 @@ ${pages.join('\n')}
 
     if (!resp.ok) {
       const txt = await resp.text().catch(() => '');
+      if (resp.status === 404 && !normalizedBase) {
+        throw new Error(
+          'Server PDF export endpoint not found (404). In local dev, Vite does not serve Vercel /api routes. Run `vercel dev` or set VITE_API_BASE_URL to your deployed Vercel site URL.'
+        );
+      }
       throw new Error(`Server PDF export failed (${resp.status}): ${txt.slice(0, 500)}`);
     }
 

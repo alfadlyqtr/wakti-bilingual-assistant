@@ -9,6 +9,13 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     strictPort: true, // Always use 8080, fail if busy
     open: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
     // NOTE: COOP/COEP headers removed - they break Sandpack's bundler
     // FFmpeg.wasm may not work without these, but Sandpack requires their removal
     // headers: {
