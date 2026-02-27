@@ -122,6 +122,8 @@ interface Slide {
   titleStyle?: TextStyle;
   subtitleStyle?: TextStyle;
   bulletStyle?: TextStyle;
+  backgroundColor?: string;
+  backgroundGradient?: string;
   // Accent styling (keywords, dots)
   accentColor?: string;  // For keyword highlights and accent dots
   accentFontWeight?: 'normal' | 'bold';
@@ -1739,13 +1741,17 @@ const PresentationTab: React.FC = () => {
     const toastId = toast.loading(language === 'ar' ? 'جارٍ إنشاء PDF...' : 'Creating PDF...');
     
     try {
+      // Merge savedEnhancedMap and enhancedHtmlMap — savedEnhanced takes priority
+      const mergedEnhancedMap: Record<number, string> = { ...enhancedHtmlMap };
+      Object.entries(savedEnhancedMap).forEach(([k, v]) => { if (v) mergedEnhancedMap[Number(k)] = v; });
+
       const pdfBlob = await exportSlidesToPDFClean(
         slides,
         brief?.subject || topic,
         selectedTheme,
         language,
         undefined,
-        savedEnhancedMap
+        mergedEnhancedMap
       );
 
       const filename = generateFilename(brief?.subject || topic, 'pdf');
@@ -1760,7 +1766,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsExporting(false);
     }
-  }, [slides, brief, topic, selectedTheme, language, savedEnhancedMap]);
+  }, [slides, brief, topic, selectedTheme, language, savedEnhancedMap, enhancedHtmlMap]);
 
   // Export as PPTX (PowerPoint)
   const handleExportPPTX = useCallback(async () => {
@@ -2671,15 +2677,16 @@ const PresentationTab: React.FC = () => {
       // Get used templates for this slide
       const usedTemplates = usedTemplatesMap[selectedSlideIndex] || new Set();
       
-      // Generate a random template index (0-5) that's different from recent ones
+      // Generate a random template index (0-11) that's different from recent ones
+      const TOTAL_TEMPLATES = 12;
       let randomVariation: number;
-      if (usedTemplates.size >= 5) {
+      if (usedTemplates.size >= TOTAL_TEMPLATES - 1) {
         // All templates used, reset and pick random
-        randomVariation = Math.floor(Math.random() * 6);
+        randomVariation = Math.floor(Math.random() * TOTAL_TEMPLATES);
       } else {
         // Pick a template not recently used
         do {
-          randomVariation = Math.floor(Math.random() * 6);
+          randomVariation = Math.floor(Math.random() * TOTAL_TEMPLATES);
         } while (usedTemplates.has(randomVariation));
       }
       
@@ -2694,6 +2701,11 @@ const PresentationTab: React.FC = () => {
             bullets: slide.bullets,
             imageUrl: slide.imageUrl,
             role: slide.role,
+            titleStyle: slide.titleStyle,
+            subtitleStyle: slide.subtitleStyle,
+            bulletStyle: slide.bulletStyle,
+            backgroundColor: slide.backgroundColor,
+            backgroundGradient: slide.backgroundGradient,
           },
           theme: selectedTheme,
           language,
@@ -2713,13 +2725,13 @@ const PresentationTab: React.FC = () => {
       setUsedTemplatesMap(prev => {
         const newSet = new Set(prev[selectedSlideIndex] || []);
         newSet.add(variationToUse);
-        // If all 6 templates used, clear the set
-        if (newSet.size >= 6) {
+        // If all 12 templates used, clear the set
+        if (newSet.size >= 12) {
           newSet.clear();
         }
         return { ...prev, [selectedSlideIndex]: newSet };
       });
-      toast.success(language === 'ar' ? '✨ تم تحسين الشريحة' : '✨ Slide enhanced!');
+      toast.success(language === 'ar' ? '✨ تم تحسين الشريحة' : '✨ Slide enhanced!', { id: 'slide-enhance', duration: 2000 });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Enhancement failed';
       toast.error(msg);
@@ -2748,6 +2760,11 @@ const PresentationTab: React.FC = () => {
             bullets: slide.bullets,
             imageUrl: slide.imageUrl,
             role: slide.role,
+            titleStyle: slide.titleStyle,
+            subtitleStyle: slide.subtitleStyle,
+            bulletStyle: slide.bulletStyle,
+            backgroundColor: slide.backgroundColor,
+            backgroundGradient: slide.backgroundGradient,
           },
           theme: selectedTheme,
           language,
@@ -2764,7 +2781,7 @@ const PresentationTab: React.FC = () => {
         // Store/update the template index so future updates keep the same style
         const usedTemplate = response.template ?? variationToUse;
         setEnhancedTemplateMap(prev => ({ ...prev, [selectedSlideIndex]: usedTemplate }));
-        toast.success(language === 'ar' ? '✅ تم تحديث التحسين' : '✅ Enhancement updated!');
+        toast.success(language === 'ar' ? '✅ تم تحديث التحسين' : '✅ Enhancement updated!', { id: 'slide-enhance', duration: 2000 });
       } else {
         throw new Error(response?.error || 'Update failed');
       }
@@ -2775,6 +2792,71 @@ const PresentationTab: React.FC = () => {
       setIsUpdatingEnhancement(false);
     }
   }, [slides, selectedSlideIndex, enhancedTemplateMap, selectedTheme, language, savedEnhancedMap]);
+
+  // Instantly patch color AND text content into the enhanced HTML — no AI call
+  // Uses direct string replacement on inline style attributes (works with dangerouslySetInnerHTML)
+  const handleApplyColorToEnhancement = useCallback((target: 'title' | 'subtitle' | 'bullets', color: string) => {
+    const slide = slides[selectedSlideIndex];
+    const currentHtml = enhancedHtmlMap[selectedSlideIndex] || savedEnhancedMap[selectedSlideIndex];
+    if (!currentHtml || !slide) return;
+
+    let patched = currentHtml;
+
+    // Helper: rewrite/add color in a tag's style attribute
+    const injectColorIntoTag = (tagHtml: string, newColor: string): string => {
+      if (/style=["'][^"']*color\s*:/i.test(tagHtml)) {
+        // Replace existing color value
+        return tagHtml.replace(/(style=["'][^"']*)color\s*:[^;'"]+/i, `$1color:${newColor}`);
+      } else if (/style=["']/i.test(tagHtml)) {
+        // Append color to existing style
+        return tagHtml.replace(/(style=["'])/, `$1color:${newColor};`);
+      } else {
+        // Add style attribute before closing >
+        return tagHtml.replace(/>$/, ` style="color:${newColor}">`);
+      }
+    };
+
+    // Helper: replace color on all matched tags in the HTML
+    const patchTagsColor = (html: string, tagPattern: RegExp, newColor: string): string => {
+      return html.replace(tagPattern, (match) => injectColorIntoTag(match, newColor));
+    };
+
+    if (target === 'title' && color) {
+      // Patch h1, h2, and elements with data-field="title"
+      patched = patchTagsColor(patched, /<h1(?:\s[^>]*)?>|<h2(?:\s[^>]*)?>/gi, color);
+      patched = patchTagsColor(patched, /<[a-z][^>]*data-field=["']title["'][^>]*>/gi, color);
+      // Also update text content
+      if (slide.title) {
+        patched = patched
+          .replace(/(<[^>]*data-field=["']title["'][^>]*>)[^<]*/i, `$1${slide.title}`)
+          .replace(/(<h1(?:\s[^>]*)?>)[^<]*/i, `$1${slide.title}`)
+          .replace(/(<h2(?:\s[^>]*)?>)[^<]*/i, `$1${slide.title}`);
+      }
+    }
+
+    if (target === 'subtitle' && color) {
+      patched = patchTagsColor(patched, /<h3(?:\s[^>]*)?>|<h4(?:\s[^>]*)?>/gi, color);
+      patched = patchTagsColor(patched, /<[a-z][^>]*data-field=["']subtitle["'][^>]*>/gi, color);
+      if (slide.subtitle) {
+        patched = patched
+          .replace(/(<[^>]*data-field=["']subtitle["'][^>]*>)[^<]*/i, `$1${slide.subtitle}`)
+          .replace(/(<h3(?:\s[^>]*)?>)[^<]*/i, `$1${slide.subtitle}`)
+          .replace(/(<h4(?:\s[^>]*)?>)[^<]*/i, `$1${slide.subtitle}`);
+      }
+    }
+
+    if (target === 'bullets' && color) {
+      // Patch all <li> tags
+      patched = patchTagsColor(patched, /<li(?:\s[^>]*)?>/gi, color);
+      patched = patchTagsColor(patched, /<[a-z][^>]*data-field=["']bullet[s]?["'][^>]*>/gi, color);
+    }
+
+    setEnhancedHtmlMap(prev => ({ ...prev, [selectedSlideIndex]: patched }));
+    if (savedEnhancedMap[selectedSlideIndex]) {
+      setSavedEnhancedMap(prev => ({ ...prev, [selectedSlideIndex]: patched }));
+    }
+    toast.success(language === 'ar' ? '🎨 تم تطبيق التغييرات' : '🎨 Applied!', { id: `color-apply-${target}`, duration: 1500 });
+  }, [slides, enhancedHtmlMap, savedEnhancedMap, selectedSlideIndex, language]);
 
   // Update text styling
   const applySlideUpdate = useCallback(
@@ -2887,7 +2969,6 @@ const PresentationTab: React.FC = () => {
   }, [brief, language, effectiveResearchMode, researchModeType, selectedSlideIndex, slideCount, slideResearchQuery, slides, topic]);
 
   const handleRegenerateField = useCallback(async (params: { field: 'title' | 'subtitle' | 'bullet'; bulletIndex?: number }) => {
-    if (!brief) return;
     if (slides.length === 0) return;
     const currentSlide = slides[selectedSlideIndex];
     if (!currentSlide) return;
@@ -2913,14 +2994,14 @@ const PresentationTab: React.FC = () => {
     try {
       const response = await callEdgeFunctionWithRetry<{ success: boolean; text?: string; error?: string }>('wakti-presentation-regenerate-field', {
         body: {
-          topic: topic.trim(),
+          topic: topic.trim() || 'Presentation',
           slideNumber: currentSlide.slideNumber,
           slideCount,
           language,
-          objective: brief.objective,
-          audience: brief.audience,
-          scenario: brief.scenario,
-          tone: brief.tone,
+          objective: brief?.objective || 'General presentation',
+          audience: brief?.audience || 'General audience',
+          scenario: brief?.scenario || 'Standard context',
+          tone: brief?.tone || 'Professional',
           field: params.field,
           currentText,
           currentTitle: currentSlide.title,
@@ -3779,13 +3860,16 @@ const PresentationTab: React.FC = () => {
               </div>
             )}
 
-            {/* Enhanced AI overlay - shows when enhanced is active OR when slide has been saved */}
+            {/* Enhanced AI overlay - rendered in sandboxed iframe so AI styles don't leak into the app */}
             {(() => {
               const displayHtml = savedEnhancedMap[selectedSlideIndex] || (showEnhanced ? enhancedHtmlMap[selectedSlideIndex] : null);
               if (!displayHtml || isEnhancing) return null;
               return (
                 <div className="absolute inset-0 z-10 overflow-hidden animate-in fade-in duration-700">
-                  <div
+                  <iframe
+                    title="Enhanced slide preview"
+                    sandbox="allow-same-origin"
+                    srcDoc={displayHtml}
                     style={{
                       width: '1920px',
                       height: '1080px',
@@ -3794,8 +3878,9 @@ const PresentationTab: React.FC = () => {
                       position: 'absolute',
                       top: 0,
                       left: 0,
+                      border: 'none',
+                      overflow: 'hidden',
                     }}
-                    dangerouslySetInnerHTML={{ __html: displayHtml }}
                   />
                 </div>
               );
@@ -4337,7 +4422,7 @@ const PresentationTab: React.FC = () => {
                 if (enhancedTemplateMap[selectedSlideIndex] !== undefined) {
                   setEnhancedTemplateMap(prev => ({ ...prev, [selectedSlideIndex]: enhancedTemplateMap[selectedSlideIndex] }));
                 }
-                toast.success(language === 'ar' ? '✅ تم حفظ التحسين' : '✅ Enhancement saved!');
+                toast.success(language === 'ar' ? '✅ تم حفظ التحسين' : '✅ Enhancement saved!', { id: 'slide-enhance', duration: 2000 });
               }}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold shadow-lg shadow-amber-500/30 hover:from-amber-400 hover:to-orange-400 transition-all active:scale-95"
             >
@@ -4476,11 +4561,23 @@ const PresentationTab: React.FC = () => {
                 </div>
                 <div className="mt-2">
                   <span className="text-xs text-slate-400 block mb-1">{language === 'ar' ? 'اللون:' : 'Color:'}</span>
-                  <ColorPickerWithGradient
-                    value={currentSlide.titleStyle?.color || '#ffffff'}
-                    onChange={(color) => updateTitleStyle({ color })}
-                    label="title"
-                  />
+                  <div className="flex items-center gap-2">
+                    <ColorPickerWithGradient
+                      value={currentSlide.titleStyle?.color || '#ffffff'}
+                      onChange={(color) => updateTitleStyle({ color })}
+                      label="title"
+                    />
+                    {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+                      <button
+                        type="button"
+                        onClick={() => handleApplyColorToEnhancement('title', currentSlide.titleStyle?.color || '#ffffff')}
+                        className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md bg-amber-500 hover:bg-amber-400 text-white font-medium transition-all active:scale-95 whitespace-nowrap"
+                        title={language === 'ar' ? 'تطبيق اللون على الشريحة المحسّنة' : 'Apply color to AI slide'}
+                      >
+                        🎨 {language === 'ar' ? 'تطبيق' : 'Apply'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -4555,11 +4652,23 @@ const PresentationTab: React.FC = () => {
                 </div>
                 <div className="mt-2">
                   <span className="text-xs text-slate-400 block mb-1">{language === 'ar' ? 'اللون:' : 'Color:'}</span>
-                  <ColorPickerWithGradient
-                    value={currentSlide.subtitleStyle?.color || '#94a3b8'}
-                    onChange={(color) => updateSubtitleStyle({ color })}
-                    label="subtitle"
-                  />
+                  <div className="flex items-center gap-2">
+                    <ColorPickerWithGradient
+                      value={currentSlide.subtitleStyle?.color || '#94a3b8'}
+                      onChange={(color) => updateSubtitleStyle({ color })}
+                      label="subtitle"
+                    />
+                    {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+                      <button
+                        type="button"
+                        onClick={() => handleApplyColorToEnhancement('subtitle', currentSlide.subtitleStyle?.color || '#94a3b8')}
+                        className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md bg-amber-500 hover:bg-amber-400 text-white font-medium transition-all active:scale-95 whitespace-nowrap"
+                        title={language === 'ar' ? 'تطبيق اللون على الشريحة المحسّنة' : 'Apply color to AI slide'}
+                      >
+                        🎨 {language === 'ar' ? 'تطبيق' : 'Apply'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -4607,11 +4716,23 @@ const PresentationTab: React.FC = () => {
                 {/* Bullet Style Controls - Row 2: Color */}
                 <div className="mb-3">
                   <span className="text-xs text-slate-400 font-medium block mb-1">{language === 'ar' ? 'اللون:' : 'Color:'}</span>
-                  <ColorPickerWithGradient
-                    value={currentSlide.bulletStyle?.color || '#e2e8f0'}
-                    onChange={(color) => updateBulletStyle({ color })}
-                    label="bullets"
-                  />
+                  <div className="flex items-center gap-2">
+                    <ColorPickerWithGradient
+                      value={currentSlide.bulletStyle?.color || '#e2e8f0'}
+                      onChange={(color) => updateBulletStyle({ color })}
+                      label="bullets"
+                    />
+                    {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+                      <button
+                        type="button"
+                        onClick={() => handleApplyColorToEnhancement('bullets', currentSlide.bulletStyle?.color || '#e2e8f0')}
+                        className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md bg-amber-500 hover:bg-amber-400 text-white font-medium transition-all active:scale-95 whitespace-nowrap"
+                        title={language === 'ar' ? 'تطبيق اللون على الشريحة المحسّنة' : 'Apply color to AI slide'}
+                      >
+                        🎨 {language === 'ar' ? 'تطبيق' : 'Apply'}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   {(currentSlide.bullets && currentSlide.bullets.length > 0 ? currentSlide.bullets : ['']).map((bullet, i) => (

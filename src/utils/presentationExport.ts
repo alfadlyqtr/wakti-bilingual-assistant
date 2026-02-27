@@ -5,6 +5,7 @@
 
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import * as htmlToImage from 'html-to-image';
 
 // Text style interface
 interface TextStyle {
@@ -344,6 +345,81 @@ export async function exportSlidesToPDFClean(
   onProgress?: (current: number, total: number) => void,
   enhancedHtmlMap?: Record<number, string>
 ): Promise<Blob> {
+  // If we have any enhanced HTML, use the server-side Browserless pipeline.
+  // This avoids all in-browser CORS/cssRules issues with html2canvas/html-to-image.
+  if (enhancedHtmlMap && Object.keys(enhancedHtmlMap).length > 0) {
+    onProgress?.(1, 1);
+
+    const parser = new DOMParser();
+    const pages: string[] = [];
+
+    for (let i = 0; i < slides.length; i++) {
+      const enhanced = enhancedHtmlMap[i];
+      const fallback = renderSlideToHTML(
+        slides[i],
+        THEME_COLORS[theme] || THEME_COLORS.starter,
+        language === 'ar',
+        language,
+        false
+      );
+
+      const html = enhanced || fallback;
+      const doc = parser.parseFromString(html, 'text/html');
+
+      const styleTags = Array.from(doc.querySelectorAll('style'))
+        .map((s) => s.outerHTML)
+        .join('\n');
+      const linkTags = Array.from(doc.querySelectorAll('link[rel="stylesheet"], link[href*="fonts"], link[href*="googleapis"], link[href*="gstatic"]'))
+        .map((l) => l.outerHTML)
+        .join('\n');
+      const bodyContent = doc.body?.innerHTML || html;
+
+      pages.push(`\n<div class="page">\n  <div class="frame">\n    ${linkTags}\n    ${styleTags}\n    ${bodyContent}\n  </div>\n</div>`);
+    }
+
+    // 1920x1080 slide content scaled to 297mm x 167mm page.
+    // 297mm @ 96dpi ~= 1122px. scale = 1122 / 1920.
+    const scale = 1122 / 1920;
+
+    const printableHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    @page { size: 297mm 167mm; margin: 0; }
+    html, body { margin: 0; padding: 0; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .page { width: 297mm; height: 167mm; overflow: hidden; page-break-after: always; position: relative; }
+    .frame { width: 1920px; height: 1080px; transform: scale(${scale}); transform-origin: top left; }
+  </style>
+</head>
+<body>
+${pages.join('\n')}
+</body>
+</html>`;
+
+    const resp = await fetch('/api/presentations/pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        html: printableHtml,
+        pdfOptions: {
+          landscape: true,
+          printBackground: true,
+          preferCSSPageSize: true,
+          margin: { top: '0', right: '0', bottom: '0', left: '0' },
+        },
+      }),
+    });
+
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      throw new Error(`Server PDF export failed (${resp.status}): ${txt.slice(0, 500)}`);
+    }
+
+    return await resp.blob();
+  }
+
   const doc = new jsPDF({
     orientation: 'landscape',
     unit: 'mm',
@@ -355,10 +431,140 @@ export async function exportSlidesToPDFClean(
   const colors = THEME_COLORS[theme] || THEME_COLORS.starter;
   const isRtl = language === 'ar';
 
-  // Create a hidden container for rendering slides
+  // Create a hidden container for rendering non-enhanced slides
   const container = document.createElement('div');
-  container.style.cssText = 'position: fixed; left: -9999px; top: 0; width: 1920px; height: 1080px;';
+  container.style.cssText = 'position: fixed; left: -9999px; top: 0; width: 1920px; height: 1080px; overflow: hidden;';
   document.body.appendChild(container);
+
+  // Fetch an external URL and return a base64 data URL, or null on failure
+  async function fetchAsDataUrl(url: string): Promise<string | null> {
+    try {
+      const res = await fetch(url, { mode: 'cors' });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  // Replace all external image URLs in an HTML string with inline base64 data URLs.
+  // If a fetch fails (CORS/network), uses a transparent 1x1 placeholder so the slide isn't black.
+  async function inlineExternalImages(html: string): Promise<string> {
+    const TRANSPARENT_PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+    const urlPattern = /(?:src=["']|url\(["']?)(https?:\/\/[^"')>\s]+)/g;
+    const urlsFound = new Set<string>();
+    let match: RegExpExecArray | null;
+    while ((match = urlPattern.exec(html)) !== null) {
+      urlsFound.add(match[1]);
+    }
+
+    if (urlsFound.size === 0) return html;
+
+    // Fetch all in parallel; fall back to placeholder on any failure
+    const replacements = new Map<string, string>();
+    await Promise.all(Array.from(urlsFound).map(async (url) => {
+      const dataUrl = await fetchAsDataUrl(url);
+      replacements.set(url, dataUrl ?? TRANSPARENT_PLACEHOLDER);
+    }));
+
+    let result = html;
+    replacements.forEach((dataUrl, originalUrl) => {
+      result = result.split(originalUrl).join(dataUrl);
+    });
+    return result;
+  }
+
+  // Helper: capture an enhanced slide HTML as a JPEG data URL.
+  // Strategy: inline all external images as base64, write to a Blob URL,
+  // load in a hidden iframe (no sandbox = fonts/scripts work), then use
+  // html-to-image inside the iframe's own document context so it never
+  // touches the main page's cross-origin stylesheets.
+  async function captureEnhancedSlide(html: string): Promise<string> {
+    // Step 1: inline all external images to avoid cross-origin taint
+    const inlinedHtml = await inlineExternalImages(html);
+
+    // Step 2: strip ALL cross-origin font references to avoid SecurityError
+    // Remove @import url(...fonts.googleapis...) from <style> tags
+    // Remove <link> tags that load Google Fonts
+    const cleanedHtml = inlinedHtml
+      .replace(/(@import\s+url\([^)]*fonts\.googleapis[^)]*\)[^;]*;?|@import\s+["'][^"']*fonts\.googleapis[^"']*["'][^;]*;?)/gi, '')
+      .replace(/<link[^>]*href=["'][^"']*fonts\.googleapis[^"']*["'][^>]*\/?>/gi, '')
+      .replace(/<link[^>]*href=["'][^"']*fonts\.gstatic[^"']*["'][^>]*\/?>/gi, '');
+
+    // Step 3: write to a Blob URL so the iframe treats it as same-origin
+    const blob = new Blob([cleanedHtml], { type: 'text/html' });
+    const blobUrl = URL.createObjectURL(blob);
+
+    return new Promise((resolve, reject) => {
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;left:0;top:0;width:1920px;height:1080px;border:none;z-index:-9999;pointer-events:none;opacity:0.01;';
+      document.body.appendChild(iframe);
+
+      const cleanup = () => {
+        URL.revokeObjectURL(blobUrl);
+        try { document.body.removeChild(iframe); } catch (_) { /* ignore */ }
+      };
+
+      iframe.onload = async () => {
+        try {
+          const iDoc = iframe.contentDocument;
+          if (!iDoc || !iDoc.body) { cleanup(); reject(new Error('iframe doc unavailable')); return; }
+
+          // Wait for fonts inside the iframe
+          if (iDoc.fonts) await iDoc.fonts.ready;
+          await new Promise(res => setTimeout(res, 400));
+
+          // Preload images
+          const imgs = Array.from(iDoc.querySelectorAll('img'));
+          if (imgs.length > 0) {
+            await Promise.all(imgs.map(img => new Promise<void>(res => {
+              if (img.complete && img.naturalWidth > 0) { res(); return; }
+              img.onload = () => res(); img.onerror = () => res();
+            })));
+            await new Promise(res => setTimeout(res, 200));
+          }
+
+          const targetEl = (iDoc.body.firstElementChild || iDoc.body) as HTMLElement;
+
+          // html2canvas with the iframe's own window — this avoids the main page
+          // stylesheet SecurityError while still rasterizing the full document correctly
+          // foreignObjectRendering: false — the foreignObject path tries to read
+          // cssRules on cross-origin sheets and crashes. The classic rasterizer
+          // renders text directly onto canvas without stylesheet access.
+          const canvas = await html2canvas(targetEl, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: null,
+            logging: false,
+            removeContainer: false,
+            foreignObjectRendering: false,
+            width: 1920,
+            height: 1080,
+            windowWidth: 1920,
+            windowHeight: 1080,
+          });
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+          cleanup();
+          resolve(dataUrl);
+        } catch (err) {
+          cleanup();
+          reject(err);
+        }
+      };
+
+      iframe.onerror = () => { cleanup(); reject(new Error('iframe load error')); };
+      iframe.src = blobUrl;
+    });
+  }
 
   try {
     for (let i = 0; i < slides.length; i++) {
@@ -368,50 +574,42 @@ export async function exportSlidesToPDFClean(
 
       onProgress?.(i + 1, slides.length);
       const slide = slides[i];
-      
-      // Use saved enhanced HTML if available, otherwise render normally
-      if (enhancedHtmlMap && enhancedHtmlMap[i]) {
-        container.innerHTML = enhancedHtmlMap[i];
-      } else {
-        container.innerHTML = renderSlideToHTML(slide, colors, isRtl, language, false);
-      }
-      
-      // Wait for fonts to load
-      await document.fonts.ready;
-      
-      // Preload all images before capture
-      const images = Array.from(container.querySelectorAll('img'));
-      if (images.length > 0) {
-        await Promise.all(images.map(img => {
-          return new Promise<void>((resolve) => {
-            if (img.complete && img.naturalWidth > 0) {
-              resolve();
-            } else {
-              img.onload = () => resolve();
-              img.onerror = () => resolve(); // Continue even if image fails
-            }
-          });
-        }));
-        // Extra wait for images to render
-        await new Promise(resolve => setTimeout(resolve, 300));
-      }
-      
-      // Capture with html2canvas - backgroundColor null to let CSS gradient show
-      const canvas = await html2canvas(container.firstElementChild as HTMLElement, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: null,
-        logging: false,
-        removeContainer: false,
-      });
 
-      // Add slide to PDF
-      const slideImgData = canvas.toDataURL('image/jpeg', 0.95);
+      let slideImgData: string;
+
+      if (enhancedHtmlMap && enhancedHtmlMap[i]) {
+        // Enhanced slide: render in hidden iframe to preserve full-document styles/fonts
+        slideImgData = await captureEnhancedSlide(enhancedHtmlMap[i]);
+      } else {
+        // Normal slide: render HTML into off-screen div and capture
+        container.innerHTML = renderSlideToHTML(slide, colors, isRtl, language, false);
+
+        await document.fonts.ready;
+
+        const images = Array.from(container.querySelectorAll('img'));
+        if (images.length > 0) {
+          await Promise.all(images.map(img => new Promise<void>((res) => {
+            if (img.complete && img.naturalWidth > 0) { res(); return; }
+            img.onload = () => res();
+            img.onerror = () => res();
+          })));
+          await new Promise(res => setTimeout(res, 300));
+        }
+
+        const canvas = await html2canvas(container.firstElementChild as HTMLElement, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: null,
+          logging: false,
+          removeContainer: false,
+        });
+        slideImgData = canvas.toDataURL('image/jpeg', 0.95);
+      }
+
       doc.addImage(slideImgData, 'JPEG', 0, 0, pageWidth, pageHeight);
     }
   } finally {
-    // Clean up
     document.body.removeChild(container);
   }
 
