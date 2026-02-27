@@ -377,17 +377,19 @@ export async function exportSlidesToPDFClean(
 </div>`);
     }
 
+    // 297mm @ 96dpi ≈ 1122px. Scale 1920px content down to fit: 1122/1920 = 0.5844
+    const scale = (1122 / 1920).toFixed(6);
     const combinedHtml = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8"/>
 <style>
-  @page { size: 1920px 1080px; margin: 0; }
+  @page { size: 297mm 167mm; margin: 0; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #000; }
+  html, body { margin: 0; padding: 0; width: 297mm; }
   .slide-page {
-    width: 1920px;
-    height: 1080px;
+    width: 297mm;
+    height: 167mm;
     overflow: hidden;
     position: relative;
     page-break-after: always;
@@ -397,7 +399,11 @@ export async function exportSlidesToPDFClean(
     width: 1920px;
     height: 1080px;
     overflow: hidden;
-    position: relative;
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform: scale(${scale});
+    transform-origin: top left;
   }
 </style>
 </head>
@@ -405,6 +411,7 @@ export async function exportSlidesToPDFClean(
 ${slidePages.join('\n')}
 </body>
 </html>`;
+
 
     const supabaseUrl = ((import.meta as any)?.env?.VITE_SUPABASE_URL as string | undefined)
       || 'https://hxauxozopvpzpdygoqwf.supabase.co';
