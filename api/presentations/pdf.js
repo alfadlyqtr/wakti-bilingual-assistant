@@ -1,3 +1,29 @@
+const https = require('https');
+
+function httpsPost(url, body) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const data = typeof body === 'string' ? body : JSON.stringify(body);
+    const options = {
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(data),
+      },
+    };
+    const reqHttp = https.request(options, (resp) => {
+      const chunks = [];
+      resp.on('data', (chunk) => chunks.push(chunk));
+      resp.on('end', () => resolve({ status: resp.statusCode, headers: resp.headers, body: Buffer.concat(chunks) }));
+    });
+    reqHttp.on('error', reject);
+    reqHttp.write(data);
+    reqHttp.end();
+  });
+}
+
 module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -55,53 +81,40 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    // Use Browserless /pdf endpoint (production-sfo host, correct per v2 docs).
-    // Send html + options. Viewport set to 1920x1080 so the slide renders at design size.
-    // Each call returns a single-page PDF; frontend stitches them into one file.
     const endpoint = `https://production-sfo.browserless.io/pdf?token=${encodeURIComponent(apiKey)}`;
 
-    const browserlessResp = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        html,
-        viewport: {
-          width: 1920,
-          height: 1080,
-          deviceScaleFactor: 1,
-        },
-        gotoOptions: {
-          waitUntil: 'networkidle2',
-        },
-        options: {
-          printBackground: true,
-          width: '1920px',
-          height: '1080px',
-          margin: { top: '0', right: '0', bottom: '0', left: '0' },
-        },
-      }),
+    const payload = JSON.stringify({
+      html,
+      viewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
+      gotoOptions: { waitUntil: 'networkidle2' },
+      options: {
+        printBackground: true,
+        width: '1920px',
+        height: '1080px',
+        margin: { top: '0', right: '0', bottom: '0', left: '0' },
+      },
     });
 
-    if (!browserlessResp.ok) {
-      const errText = await browserlessResp.text().catch(() => '');
+    const browserlessResp = await httpsPost(endpoint, payload);
+
+    if (browserlessResp.status !== 200) {
       res.statusCode = 502;
       res.setHeader('Content-Type', 'application/json');
       res.end(
         JSON.stringify({
           error: 'Browserless PDF failed',
           status: browserlessResp.status,
-          details: (errText || '').slice(0, 2000),
+          details: browserlessResp.body.toString('utf8').slice(0, 2000),
         })
       );
       return;
     }
 
-    const buf = Buffer.from(await browserlessResp.arrayBuffer());
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.end(buf);
+    res.end(browserlessResp.body);
   } catch (err) {
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json');
