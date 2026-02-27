@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import https from 'https';
 import Anthropic from '@anthropic-ai/sdk';
 
 const app = express();
@@ -30,6 +31,65 @@ function buildSystemPrompt(language, personalTouch) {
 }
 
 app.get('/healthz', (req, res) => res.status(200).json({ ok: true }));
+
+function browserlessPdf(apiKey, payload) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(payload);
+    const options = {
+      hostname: 'production-sfo.browserless.io',
+      path: `/pdf?token=${encodeURIComponent(apiKey)}`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(data),
+      },
+    };
+    const req = https.request(options, (resp) => {
+      const chunks = [];
+      resp.on('data', (chunk) => chunks.push(chunk));
+      resp.on('end', () => resolve({ status: resp.statusCode, body: Buffer.concat(chunks) }));
+    });
+    req.on('error', reject);
+    req.write(data);
+    req.end();
+  });
+}
+
+app.post('/api/presentations/pdf', async (req, res) => {
+  try {
+    const apiKey = process.env.BROWSERLESS_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'BROWSERLESS_API_KEY not configured' });
+    }
+    const { html } = req.body || {};
+    if (!html || typeof html !== 'string') {
+      return res.status(400).json({ error: 'Missing html' });
+    }
+    const result = await browserlessPdf(apiKey, {
+      html,
+      viewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
+      gotoOptions: { waitUntil: 'networkidle2' },
+      options: {
+        printBackground: true,
+        width: '1920px',
+        height: '1080px',
+        margin: { top: '0', right: '0', bottom: '0', left: '0' },
+      },
+    });
+    if (result.status !== 200) {
+      return res.status(502).json({
+        error: 'Browserless PDF failed',
+        status: result.status,
+        details: result.body.toString('utf8').slice(0, 2000),
+      });
+    }
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).end(result.body);
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'pdf_error' });
+  }
+});
 
 app.post('/api/vision-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');

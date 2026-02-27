@@ -406,7 +406,7 @@ ${slidePages.join('\n')}
 </body>
 </html>`;
 
-    const apiBase = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
+    const apiBase = (import.meta as any)?.env?.VITE_API_URL as string | undefined;
     const normalizedBase = (apiBase || '').replace(/\/+$/, '');
     const endpoint = `${normalizedBase}/api/presentations/pdf`;
 
