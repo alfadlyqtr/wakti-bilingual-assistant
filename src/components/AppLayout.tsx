@@ -319,12 +319,12 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
             {txt.features.map((feature, i) => {
               const item = typeof feature === 'string' ? { title: feature } : feature;
               return (
-                <div key={i} className="flex items-center gap-2 text-xs sm:text-sm rounded-md px-2 py-1.5 bg-[hsl(210,100%,65%,0.06)] border border-[hsl(210,100%,65%,0.15)]">
+                <div key={i} className="flex items-center gap-1.5 rounded-md px-2 py-1.5 bg-[hsl(210,100%,65%,0.06)] border border-[hsl(210,100%,65%,0.15)] min-w-0">
                   <div className="w-1.5 h-1.5 rounded-full bg-[hsl(142,76%,55%)] shadow-[0_0_6px_hsl(142,76%,55%)] flex-shrink-0" />
-                  <span className="flex items-center gap-1 leading-tight">
-                    <span className="text-foreground/90 font-medium">{item.title}</span>
+                  <span className="flex flex-col min-w-0">
+                    <span className="text-xs font-medium text-foreground/90 leading-tight truncate">{item.title}</span>
                     {item.sublabel ? (
-                      <span className="text-[8px] sm:text-[9px] text-[hsl(210,100%,65%)] whitespace-nowrap">{item.sublabel}</span>
+                      <span className="text-[9px] text-[hsl(210,100%,65%)] leading-tight">{item.sublabel}</span>
                     ) : null}
                   </span>
                 </div>
