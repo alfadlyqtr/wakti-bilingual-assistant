@@ -852,12 +852,28 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
           description: entry.description || ''
         });
         
-        // iOS fix: pass Date objects directly — iOS Natively SDK calls .toISOString() internally
-        // passing strings causes "i.toISOString is not a function" on iOS
+        // Platform-aware date passing:
+        // - iOS Natively SDK expects real Date objects (calls .toISOString() internally)
+        // - Android Natively SDK expects formatted strings (yyyy-MM-dd HH:mm:ss.SSS)
+        const nativelyCtx = (window as any).natively;
+        const isAndroidCtx = nativelyCtx?.isAndroidApp === true;
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        const fmtAndroid = (d: Date) => {
+          const yr = d.getUTCFullYear();
+          const mo = pad(d.getUTCMonth() + 1);
+          const dy = pad(d.getUTCDate());
+          const hr = pad(d.getUTCHours());
+          const mn = pad(d.getUTCMinutes());
+          const sc = pad(d.getUTCSeconds());
+          return `${yr}-${mo}-${dy} ${hr}:${mn}:${sc}.000`;
+        };
+        const sdkStart = isAndroidCtx ? fmtAndroid(startDateObj) : startDateObj;
+        const sdkEnd   = isAndroidCtx ? fmtAndroid(endDateObj)   : endDateObj;
+
         calendar.createCalendarEvent(
           entry.title,
-          endDateObj,
-          startDateObj,
+          sdkEnd,
+          sdkStart,
           timezone,
           calendarId,
           entry.description || '',
