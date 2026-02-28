@@ -346,8 +346,9 @@ export async function exportSlidesToPDFClean(
   onProgress?: (current: number, total: number) => void,
   enhancedHtmlMap?: Record<number, string>
 ): Promise<Blob> {
-  // If we have any enhanced HTML, render each slide's original AI HTML via Browserless
-  // (Supabase Edge Function), then merge per-slide PDFs into one with pdf-lib.
+  // If we have any enhanced HTML, take a screenshot of each slide via Browserless
+  // (Supabase Edge Function), then embed the PNGs into a PDF with pdf-lib.
+  // Screenshots capture exactly what the browser renders — pixel-perfect match.
   if (enhancedHtmlMap && Object.keys(enhancedHtmlMap).length > 0) {
     const colors = THEME_COLORS[theme] || THEME_COLORS.starter;
     const isRtl = language === 'ar';
@@ -355,12 +356,14 @@ export async function exportSlidesToPDFClean(
       || 'https://hxauxozopvpzpdygoqwf.supabase.co';
     const endpoint = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/wakti-slide-pdf`;
 
-    const mergedPdf = await PDFDocument.create();
+    // 1920x1080 at 72 DPI → points: 1920*(72/96)=1440, 1080*(72/96)=810
+    const pageWidth = 1440;
+    const pageHeight = 810;
+    const pdfDoc = await PDFDocument.create();
 
     for (let i = 0; i < slides.length; i++) {
       onProgress?.(i + 1, slides.length);
 
-      // Use the original AI HTML as-is — preserves all styles, fonts, images
       const slideHtml = enhancedHtmlMap[i]
         || renderSlideToHTML(slides[i], colors, isRtl, language, false);
 
@@ -372,18 +375,21 @@ export async function exportSlidesToPDFClean(
 
       if (!resp.ok) {
         const txt = await resp.text().catch(() => '');
-        throw new Error(`Slide ${i + 1} PDF failed (${resp.status}): ${txt.slice(0, 400)}`);
+        throw new Error(`Slide ${i + 1} failed (${resp.status}): ${txt.slice(0, 400)}`);
       }
 
-      const slideBytes = new Uint8Array(await resp.arrayBuffer());
-      const slidePdf = await PDFDocument.load(slideBytes);
-      const pages = await mergedPdf.copyPages(slidePdf, slidePdf.getPageIndices());
-      for (const page of pages) {
-        mergedPdf.addPage(page);
-      }
+      const pngBytes = new Uint8Array(await resp.arrayBuffer());
+      const pngImage = await pdfDoc.embedPng(pngBytes);
+      const page = pdfDoc.addPage([pageWidth, pageHeight]);
+      page.drawImage(pngImage, {
+        x: 0,
+        y: 0,
+        width: pageWidth,
+        height: pageHeight,
+      });
     }
 
-    const finalBytes = await mergedPdf.save();
+    const finalBytes = await pdfDoc.save();
     return new Blob([finalBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
   }
 
