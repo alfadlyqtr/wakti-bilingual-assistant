@@ -1246,6 +1246,7 @@ const PresentationTab: React.FC = () => {
 
   // Export state
   const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState({ current: 0, total: 0 });
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [generatedShareUrl, setGeneratedShareUrl] = useState<string | null>(null);
   const [generatedThumbnailUrl, setGeneratedThumbnailUrl] = useState<string | null>(null);
@@ -1733,15 +1734,12 @@ const PresentationTab: React.FC = () => {
   const handleExportPDF = useCallback(async () => {
     if (slides.length === 0) return;
     setIsExporting(true);
+    setExportProgress({ current: 0, total: slides.length });
     setShowExportMenu(false);
     
-    // Dismiss any existing toasts first
     toast.dismiss();
     
-    const toastId = toast.loading(language === 'ar' ? 'جارٍ إنشاء PDF...' : 'Creating PDF...');
-    
     try {
-      // Merge savedEnhancedMap and enhancedHtmlMap — savedEnhanced takes priority
       const mergedEnhancedMap: Record<number, string> = { ...enhancedHtmlMap };
       Object.entries(savedEnhancedMap).forEach(([k, v]) => { if (v) mergedEnhancedMap[Number(k)] = v; });
 
@@ -1750,21 +1748,22 @@ const PresentationTab: React.FC = () => {
         brief?.subject || topic,
         selectedTheme,
         language,
-        undefined,
+        (current, total) => {
+          setExportProgress({ current, total });
+        },
         mergedEnhancedMap
       );
 
       const filename = generateFilename(brief?.subject || topic, 'pdf');
       await downloadBlob(pdfBlob, filename);
 
-      toast.dismiss(toastId);
       toast.success(language === 'ar' ? `تم حفظ ${filename}` : `Saved ${filename}`);
     } catch (err) {
       console.error('PDF export error:', err);
-      toast.dismiss(toastId);
       toast.error(language === 'ar' ? 'فشل في تصدير PDF' : 'Failed to export PDF');
     } finally {
       setIsExporting(false);
+      setExportProgress({ current: 0, total: 0 });
     }
   }, [slides, brief, topic, selectedTheme, language, savedEnhancedMap, enhancedHtmlMap]);
 
@@ -3855,6 +3854,32 @@ const PresentationTab: React.FC = () => {
                   </div>
                   <div className="text-slate-500 text-xs">
                     {language === 'ar' ? 'يتم إنشاء تصميم احترافي' : 'Creating premium layout'}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PDF Export progress overlay */}
+            {isExporting && exportProgress.total > 0 && (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center" style={{ background: 'rgba(10,15,25,0.92)' }}>
+                <div className="absolute inset-0 overflow-hidden rounded-2xl">
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500/15 to-transparent" style={{ backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite linear' }} />
+                </div>
+                <div className="relative z-10 flex flex-col items-center gap-4 px-8">
+                  <div className="w-14 h-14 rounded-full border-3 border-blue-500/30 border-t-blue-400 animate-spin" style={{ borderWidth: '3px' }} />
+                  <div className="text-blue-300 text-base font-semibold tracking-wide">
+                    {language === 'ar' ? 'جارٍ إنشاء PDF...' : 'Creating PDF...'}
+                  </div>
+                  <div className="w-48 h-2 bg-slate-700/60 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all duration-500 ease-out"
+                      style={{ width: `${Math.round((exportProgress.current / exportProgress.total) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="text-slate-400 text-xs">
+                    {language === 'ar'
+                      ? `الشريحة ${exportProgress.current} من ${exportProgress.total}`
+                      : `Slide ${exportProgress.current} of ${exportProgress.total}`}
                   </div>
                 </div>
               </div>

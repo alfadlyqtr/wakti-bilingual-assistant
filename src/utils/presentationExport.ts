@@ -6,6 +6,7 @@
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import * as htmlToImage from 'html-to-image';
+import { PDFDocument } from 'pdf-lib';
 
 // Text style interface
 interface TextStyle {
@@ -345,92 +346,45 @@ export async function exportSlidesToPDFClean(
   onProgress?: (current: number, total: number) => void,
   enhancedHtmlMap?: Record<number, string>
 ): Promise<Blob> {
-  // If we have any enhanced HTML, send all slides in one HTML doc to Browserless /pdf.
-  // Each slide is a 1920x1080 page. Browserless renders it server-side (fonts, images, backgrounds).
-  // Returns one complete PDF blob — no client-side stitching needed.
+  // If we have any enhanced HTML, render each slide's original AI HTML via Browserless
+  // (Supabase Edge Function), then merge per-slide PDFs into one with pdf-lib.
   if (enhancedHtmlMap && Object.keys(enhancedHtmlMap).length > 0) {
-    onProgress?.(1, slides.length);
-
     const colors = THEME_COLORS[theme] || THEME_COLORS.starter;
     const isRtl = language === 'ar';
-
-    // Extract body content from each slide's full HTML document
-    const parser = new DOMParser();
-    const slidePages: string[] = [];
-
-    for (let i = 0; i < slides.length; i++) {
-      const enhanced = enhancedHtmlMap[i];
-      const slideHtml = enhanced || renderSlideToHTML(slides[i], colors, isRtl, language, false);
-
-      const parsed = parser.parseFromString(slideHtml, 'text/html');
-      const headContent = parsed.head?.innerHTML || '';
-      const bodyContent = parsed.body?.innerHTML || slideHtml;
-
-      // Each slide gets its own scoped wrapper with its own styles
-      slidePages.push(`
-<div class="slide-page">
-  <svg style="display:none"><defs><style>${
-    Array.from(parsed.querySelectorAll('style')).map(s => s.textContent).join('\n')
-  }</style></defs></svg>
-  ${headContent.replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<link[^>]*>/gi, '')}
-  <div class="slide-frame">${bodyContent}</div>
-</div>`);
-    }
-
-    // 297mm @ 96dpi ≈ 1122px. Scale 1920px content down to fit: 1122/1920 = 0.5844
-    const scale = (1122 / 1920).toFixed(6);
-    const combinedHtml = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8"/>
-<style>
-  @page { size: 297mm 167mm; margin: 0; }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; width: 297mm; }
-  .slide-page {
-    width: 297mm;
-    height: 167mm;
-    overflow: hidden;
-    position: relative;
-    page-break-after: always;
-    break-after: page;
-  }
-  .slide-frame {
-    width: 1920px;
-    height: 1080px;
-    overflow: hidden;
-    position: absolute;
-    top: 0;
-    left: 0;
-    transform: scale(${scale});
-    transform-origin: top left;
-  }
-</style>
-</head>
-<body>
-${slidePages.join('\n')}
-</body>
-</html>`;
-
-
     const supabaseUrl = ((import.meta as any)?.env?.VITE_SUPABASE_URL as string | undefined)
       || 'https://hxauxozopvpzpdygoqwf.supabase.co';
     const endpoint = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/wakti-slide-pdf`;
 
-    onProgress?.(slides.length, slides.length);
+    const mergedPdf = await PDFDocument.create();
 
-    const resp = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ html: combinedHtml }),
-    });
+    for (let i = 0; i < slides.length; i++) {
+      onProgress?.(i + 1, slides.length);
 
-    if (!resp.ok) {
-      const txt = await resp.text().catch(() => '');
-      throw new Error(`PDF export failed (${resp.status}): ${txt.slice(0, 400)}`);
+      // Use the original AI HTML as-is — preserves all styles, fonts, images
+      const slideHtml = enhancedHtmlMap[i]
+        || renderSlideToHTML(slides[i], colors, isRtl, language, false);
+
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html: slideHtml }),
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => '');
+        throw new Error(`Slide ${i + 1} PDF failed (${resp.status}): ${txt.slice(0, 400)}`);
+      }
+
+      const slideBytes = new Uint8Array(await resp.arrayBuffer());
+      const slidePdf = await PDFDocument.load(slideBytes);
+      const pages = await mergedPdf.copyPages(slidePdf, slidePdf.getPageIndices());
+      for (const page of pages) {
+        mergedPdf.addPage(page);
+      }
     }
 
-    return await resp.blob();
+    const finalBytes = await mergedPdf.save();
+    return new Blob([finalBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
   }
 
   const doc = new jsPDF({
