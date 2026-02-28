@@ -314,17 +314,17 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Features */}
-          <div className="grid grid-cols-2 gap-1.5">
+          {/* Features - Mobile optimized */}
+          <div className="grid grid-cols-2 sm:grid-cols-2 gap-1.5">
             {txt.features.map((feature, i) => {
               const item = typeof feature === 'string' ? { title: feature } : feature;
               return (
-                <div key={i} className="flex items-center gap-2 text-sm rounded-md px-2 py-1.5 bg-[hsl(210,100%,65%,0.06)] border border-[hsl(210,100%,65%,0.15)] hover:border-[hsl(210,100%,65%,0.3)] transition-colors">
+                <div key={i} className="flex items-center gap-2 text-xs sm:text-sm rounded-md px-2 py-1.5 bg-[hsl(210,100%,65%,0.06)] border border-[hsl(210,100%,65%,0.15)]">
                   <div className="w-1.5 h-1.5 rounded-full bg-[hsl(142,76%,55%)] shadow-[0_0_6px_hsl(142,76%,55%)] flex-shrink-0" />
-                  <span className="flex items-center gap-1">
+                  <span className="flex items-center gap-1 leading-tight">
                     <span className="text-foreground/90 font-medium">{item.title}</span>
                     {item.sublabel ? (
-                      <span className="text-[9px] leading-tight text-[hsl(210,100%,65%)] whitespace-nowrap">{item.sublabel}</span>
+                      <span className="text-[8px] sm:text-[9px] text-[hsl(210,100%,65%)] whitespace-nowrap">{item.sublabel}</span>
                     ) : null}
                   </span>
                 </div>
@@ -355,10 +355,10 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
                 const qar = normalize(price.qar) || 'QAR 95/month';
                 const usd = normalize(price.usd) || '$24.99/month';
                 return (
-                  <div className="flex items-center justify-center gap-3">
-                    <p className="text-2xl font-bold text-primary">{qar}</p>
-                    <span className="text-muted-foreground">•</span>
-                    <p className="text-sm text-muted-foreground">{usd} <span className="text-[10px] align-middle opacity-60">USD</span></p>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3">
+                    <p className="text-xl sm:text-2xl font-bold text-primary">{qar}</p>
+                    <span className="hidden sm:inline text-muted-foreground">•</span>
+                    <p className="text-xs sm:text-sm text-muted-foreground">{usd} <span className="text-[9px] sm:text-[10px] align-middle opacity-60">USD</span></p>
                   </div>
                 );
               }

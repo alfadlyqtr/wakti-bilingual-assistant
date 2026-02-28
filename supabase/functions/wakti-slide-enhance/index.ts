@@ -1,6 +1,40 @@
 // @ts-nocheck: Deno/Supabase edge runtime
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { logAIFromRequest } from "../_shared/aiLogger.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+
+// Inlined lightweight logger (avoids _shared import issues in MCP deployment)
+async function logSlideEnhance(req: Request, status: "success" | "error", durationMs?: number, errorMsg?: string) {
+  try {
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !key) return;
+    const sb = createClient(url, key);
+    let userId: string | null = null;
+    try {
+      const auth = req.headers.get("authorization") || "";
+      const token = auth.replace(/^Bearer\s+/i, "");
+      const parts = token.split(".");
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+        userId = payload.sub || null;
+      }
+    } catch { /* ignore */ }
+    await sb.rpc("log_ai_usage", {
+      p_user_id: userId,
+      p_function_name: "wakti-slide-enhance",
+      p_model: "gpt-4o-mini",
+      p_status: status,
+      p_error_message: errorMsg || null,
+      p_prompt: null,
+      p_response: null,
+      p_metadata: { provider: "openai" },
+      p_input_tokens: 0,
+      p_output_tokens: 0,
+      p_duration_ms: durationMs || 0,
+      p_cost_credits: 0,
+    });
+  } catch { /* never throw from logger */ }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
