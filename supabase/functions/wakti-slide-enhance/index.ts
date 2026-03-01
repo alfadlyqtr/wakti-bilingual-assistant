@@ -260,9 +260,15 @@ ${layoutHint}
 - object-fit:cover; object-position:center;
 - Never inline with text flow.
 
+[SEMANTIC TAGS — mandatory, non-negotiable]
+- Slide title MUST use an <h1> tag (with all your inline styles on it). Never use <div> or <p> for the title.
+- Subtitle MUST use an <h2> tag (with all your inline styles on it). Never use <div> or <p> for the subtitle.
+- Each bullet point MUST be wrapped in an <li> tag inside a <ul> or <ol>. The <li> tag carries all card styling (background, border, padding, etc.) as inline style. Never use <div> or <p> for bullet content.
+- You may style <h1>, <h2>, <li> freely with inline styles and CSS classes — just ALWAYS use these exact tags.
+
 [BULLETS]
 - Render EVERY bullet — never skip or truncate.
-- Each bullet: its own styled card/row. Must have either a colored left border (6-8px solid) OR a colored background.
+- Each bullet: its own styled <li> card. Must have either a colored left border (6-8px solid) OR a colored background.
 - Bullet icon: small colored square or circle before text (CSS only).
 - If PRIMARY DIRECTIVE requests glassmorphism: background:rgba(255,255,255,0.1); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.2);
 
@@ -272,6 +278,9 @@ ${layoutHint}
 
 [QUALITY CHECKLIST — verify before outputting]
 - PRIMARY DIRECTIVE is fully implemented
+- Title uses <h1> tag ✓
+- Subtitle uses <h2> tag ✓
+- All bullets use <li> tags ✓
 - Title is 64px+ and visually dominant
 - Every bullet is readable with strong contrast
 - Image (if any) is used as instructed by PRIMARY DIRECTIVE

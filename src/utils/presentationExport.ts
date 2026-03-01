@@ -1173,19 +1173,44 @@ export async function exportSlidesToPPTX(
   onProgress?: (current: number, total: number) => void,
   enhancedHtmlMap?: Record<number, string>
 ): Promise<Blob> {
-  // Dynamically import pptxgenjs and html2canvas
   const PptxGenJS = (await import('pptxgenjs')).default;
   const html2canvasModule = await import('html2canvas');
   const html2canvas = html2canvasModule.default;
-  
+
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_16x9';
   pptx.title = topic;
   pptx.author = 'Wakti AI';
-  
-  const colors = THEME_COLORS[theme] || THEME_COLORS.starter;
 
-  // Create a hidden container for rendering slides
+  const colors = THEME_COLORS[theme] || THEME_COLORS.starter;
+  const isRtl = language === 'ar';
+
+  const supabaseUrl = ((import.meta as any)?.env?.VITE_SUPABASE_URL as string | undefined)
+    || 'https://hxauxozopvpzpdygoqwf.supabase.co';
+  const screenshotEndpoint = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/wakti-slide-pdf`;
+
+  // Fetch a server-side PNG screenshot of a slide HTML (same as PDF export uses)
+  async function fetchSlideScreenshot(html: string): Promise<string> {
+    const resp = await fetch(screenshotEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ html }),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      throw new Error(`Screenshot failed (${resp.status}): ${txt.slice(0, 200)}`);
+    }
+    const pngBytes = new Uint8Array(await resp.arrayBuffer());
+    // Convert to base64 data URL for pptxgenjs (chunk to avoid call stack overflow)
+    let binary = '';
+    const chunkSize = 8192;
+    for (let j = 0; j < pngBytes.length; j += chunkSize) {
+      binary += String.fromCharCode(...pngBytes.subarray(j, j + chunkSize));
+    }
+    return 'data:image/png;base64,' + btoa(binary);
+  }
+
+  // Container for rendering non-enhanced slides (plain HTML fragments)
   const container = document.createElement('div');
   container.style.cssText = 'position: fixed; left: -9999px; top: 0; width: 1920px; height: 1080px;';
   document.body.appendChild(container);
@@ -1194,47 +1219,41 @@ export async function exportSlidesToPPTX(
     for (let i = 0; i < slides.length; i++) {
       onProgress?.(i + 1, slides.length);
       const slide = slides[i];
-      
-      // Use saved enhanced HTML if available, otherwise render normally
-      const isRtl = language === 'ar';
+
+      let imgData: string;
+
       if (enhancedHtmlMap && enhancedHtmlMap[i]) {
-        container.innerHTML = enhancedHtmlMap[i];
+        // Enhanced slide: use server-side Puppeteer screenshot — pixel perfect
+        imgData = await fetchSlideScreenshot(enhancedHtmlMap[i]);
       } else {
-        container.innerHTML = renderSlideToHTML(slide, colors, isRtl, language);
+        // Normal slide: HTML fragment — render into hidden div via html2canvas
+        const slideHtml = renderSlideToHTML(slide, colors, isRtl, language, false);
+
+        // Try server-side screenshot first (consistent quality)
+        try {
+          imgData = await fetchSlideScreenshot(slideHtml);
+        } catch {
+          // Fallback: client-side html2canvas
+          container.innerHTML = slideHtml;
+          const images = Array.from(container.querySelectorAll('img'));
+          await Promise.all(images.map(img => new Promise<void>(resolve => {
+            if (img.complete && img.naturalWidth > 0) { resolve(); return; }
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+          })));
+          await new Promise(res => setTimeout(res, 200));
+
+          const canvas = await html2canvas(container.firstElementChild as HTMLElement, {
+            backgroundColor: null,
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+          });
+          imgData = canvas.toDataURL('image/jpeg', 0.95);
+        }
       }
 
-      // Wait for images to load
-      const images = container.querySelectorAll('img');
-      await Promise.all(
-        Array.from(images).map(
-          (img) =>
-            new Promise<void>((resolve) => {
-              if (img.complete) {
-                resolve();
-              } else {
-                img.onload = () => resolve();
-                img.onerror = () => resolve();
-              }
-            })
-        )
-      );
-
-      // Small delay for rendering
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      // Render to canvas
-      const canvas = await html2canvas(container.firstElementChild as HTMLElement, {
-        backgroundColor: null,
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-      });
-
-      // Convert canvas to base64 image
-      const imgData = canvas.toDataURL('image/png');
-
-      // Add slide with the rendered image as background
       const pptSlide = pptx.addSlide();
       pptSlide.addImage({
         data: imgData,
@@ -1245,11 +1264,9 @@ export async function exportSlidesToPPTX(
       });
     }
   } finally {
-    // Clean up
     document.body.removeChild(container);
   }
 
-  // Generate blob
   const pptxBlob = await pptx.write({ outputType: 'blob' });
   return pptxBlob as Blob;
 }

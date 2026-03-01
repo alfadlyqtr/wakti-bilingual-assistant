@@ -2983,6 +2983,83 @@ const PresentationTab: React.FC = () => {
     toast.success(language === 'ar' ? '✏️ تم تطبيق النص' : '✏️ Text applied!', { id: `text-apply-${target}`, duration: 1500 });
   }, [slides, enhancedHtmlMap, savedEnhancedMap, selectedSlideIndex, language]);
 
+  // Move the entire bullet container (ul/ol) to a different position in the enhanced slide
+  const handleApplyBulletContainerPosition = useCallback((position: 'left' | 'center' | 'right' | 'full') => {
+    const currentHtml = enhancedHtmlMap[selectedSlideIndex] || savedEnhancedMap[selectedSlideIndex];
+    if (!currentHtml) return;
+
+    const posStyles: Record<string, string> = {
+      left:   'width:50%;margin-left:0;margin-right:auto;',
+      center: 'width:60%;margin-left:auto;margin-right:auto;',
+      right:  'width:50%;margin-left:auto;margin-right:0;',
+      full:   'width:100%;margin-left:0;margin-right:0;',
+    };
+    const newStyle = posStyles[position];
+
+    // Helper: inject/replace width+margin on a tag's style attribute
+    const injectPos = (tagHtml: string): string => {
+      // Remove old width/margin-left/margin-right from style
+      let result = tagHtml.replace(/(style=["'][^"']*?)(width\s*:[^;'"]+;?\s*)/gi, '$1');
+      result = result.replace(/(style=["'][^"']*?)(margin-left\s*:[^;'"]+;?\s*)/gi, '$1');
+      result = result.replace(/(style=["'][^"']*?)(margin-right\s*:[^;'"]+;?\s*)/gi, '$1');
+      if (/style=["']/i.test(result)) {
+        return result.replace(/(style=["'])/, `$1${newStyle}`);
+      }
+      return result.replace(/>$/, ` style="${newStyle}">`);
+    };
+
+    const patched = currentHtml.replace(/<(ul|ol)(\s[^>]*)?>/gi, (match) => injectPos(match));
+
+    setEnhancedHtmlMap(prev => ({ ...prev, [selectedSlideIndex]: patched }));
+    if (savedEnhancedMap[selectedSlideIndex]) {
+      setSavedEnhancedMap(prev => ({ ...prev, [selectedSlideIndex]: patched }));
+    }
+    toast.success(language === 'ar' ? '✅ تم التطبيق' : '✅ Applied!', { id: 'bullet-pos', duration: 1000 });
+  }, [enhancedHtmlMap, savedEnhancedMap, selectedSlideIndex, language]);
+
+  // Patch font-size and/or text-align directly into enhanced HTML tags
+  const handleApplyStyleToEnhancement = useCallback((
+    target: 'title' | 'subtitle' | 'bullets',
+    updates: { fontSize?: string; textAlign?: string }
+  ) => {
+    const currentHtml = enhancedHtmlMap[selectedSlideIndex] || savedEnhancedMap[selectedSlideIndex];
+    if (!currentHtml) return;
+
+    const injectStyleProp = (tagHtml: string, prop: string, value: string): string => {
+      const propRegex = new RegExp(`(style=["'][^"']*)${prop}\\s*:[^;'"]+`, 'i');
+      if (propRegex.test(tagHtml)) {
+        return tagHtml.replace(propRegex, `$1${prop}:${value}`);
+      } else if (/style=["']/i.test(tagHtml)) {
+        return tagHtml.replace(/(style=["'])/, `$1${prop}:${value};`);
+      } else {
+        return tagHtml.replace(/>$/, ` style="${prop}:${value}">`);
+      }
+    };
+
+    const patchTags = (html: string, tagPattern: RegExp, prop: string, value: string): string =>
+      html.replace(tagPattern, (match) => injectStyleProp(match, prop, value));
+
+    const titlePattern = /<h1(?:\s[^>]*)?>/gi;
+    const subtitlePattern = /<h2(?:\s[^>]*)?>/gi;
+    const bulletPattern = /<li(?:\s[^>]*)?>/gi;
+
+    let patched = currentHtml;
+    const pattern = target === 'title' ? titlePattern : target === 'subtitle' ? subtitlePattern : bulletPattern;
+
+    if (updates.fontSize) {
+      patched = patchTags(patched, pattern, 'font-size', updates.fontSize);
+    }
+    if (updates.textAlign) {
+      patched = patchTags(patched, pattern, 'text-align', updates.textAlign);
+    }
+
+    setEnhancedHtmlMap(prev => ({ ...prev, [selectedSlideIndex]: patched }));
+    if (savedEnhancedMap[selectedSlideIndex]) {
+      setSavedEnhancedMap(prev => ({ ...prev, [selectedSlideIndex]: patched }));
+    }
+    toast.success(language === 'ar' ? '✅ تم التطبيق' : '✅ Applied!', { id: `style-apply-${target}`, duration: 1000 });
+  }, [enhancedHtmlMap, savedEnhancedMap, selectedSlideIndex, language]);
+
   // Update text styling
   const applySlideUpdate = useCallback(
     (updateFn: (slide: Slide) => Slide) => {
@@ -5112,6 +5189,29 @@ const PresentationTab: React.FC = () => {
                     )}
                   </div>
                 </div>
+                {/* AI Enhanced direct controls — font size + alignment */}
+                {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+                  <div className="mt-2 flex flex-wrap gap-3 items-center">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-slate-400">{language === 'ar' ? 'حجم (px):' : 'px:'}</span>
+                      {[48, 56, 64, 72, 80, 96].map(px => (
+                        <button key={px} onClick={() => handleApplyStyleToEnhancement('title', { fontSize: px + 'px' })}
+                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 hover:bg-primary hover:text-white text-slate-800 dark:text-slate-100 transition-colors">
+                          {px}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-slate-400">{language === 'ar' ? 'موضع:' : 'Align:'}</span>
+                      {(['left', 'center', 'right'] as const).map(align => (
+                        <button key={align} onClick={() => handleApplyStyleToEnhancement('title', { textAlign: align })}
+                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 hover:bg-primary hover:text-white text-slate-800 dark:text-slate-100 transition-colors">
+                          {align === 'left' ? 'L' : align === 'center' ? 'C' : 'R'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             
@@ -5215,6 +5315,28 @@ const PresentationTab: React.FC = () => {
                     )}
                   </div>
                 </div>
+                {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+                  <div className="mt-2 flex flex-wrap gap-3 items-center">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-slate-400">{language === 'ar' ? 'حجم (px):' : 'px:'}</span>
+                      {[24, 28, 32, 36, 42].map(px => (
+                        <button key={px} onClick={() => handleApplyStyleToEnhancement('subtitle', { fontSize: px + 'px' })}
+                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 hover:bg-primary hover:text-white text-slate-800 dark:text-slate-100 transition-colors">
+                          {px}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-slate-400">{language === 'ar' ? 'موضع:' : 'Align:'}</span>
+                      {(['left', 'center', 'right'] as const).map(align => (
+                        <button key={align} onClick={() => handleApplyStyleToEnhancement('subtitle', { textAlign: align })}
+                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 hover:bg-primary hover:text-white text-slate-800 dark:text-slate-100 transition-colors">
+                          {align === 'left' ? 'L' : align === 'center' ? 'C' : 'R'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             
@@ -5278,6 +5400,28 @@ const PresentationTab: React.FC = () => {
                       </button>
                     )}
                   </div>
+                  {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+                    <div className="mt-2 flex flex-wrap gap-3 items-center">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-slate-400">{language === 'ar' ? 'حجم (px):' : 'px:'}</span>
+                        {[16, 18, 20, 22, 24, 28].map(px => (
+                          <button key={px} onClick={() => handleApplyStyleToEnhancement('bullets', { fontSize: px + 'px' })}
+                            className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 hover:bg-primary hover:text-white text-slate-800 dark:text-slate-100 transition-colors">
+                            {px}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-slate-400">{language === 'ar' ? 'موضع:' : 'Align:'}</span>
+                        {(['left', 'center', 'right'] as const).map(align => (
+                          <button key={align} onClick={() => handleApplyStyleToEnhancement('bullets', { textAlign: align })}
+                            className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 hover:bg-primary hover:text-white text-slate-800 dark:text-slate-100 transition-colors">
+                            {align === 'left' ? 'L' : align === 'center' ? 'C' : 'R'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   {(currentSlide.bullets && currentSlide.bullets.length > 0 ? currentSlide.bullets : ['']).map((bullet, i) => (
@@ -5317,18 +5461,52 @@ const PresentationTab: React.FC = () => {
                     </div>
                   ))}
                 </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    addSlideBullet();
-                  }}
-                  className="mt-2 flex items-center gap-1 text-sm text-primary hover:underline cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  {language === 'ar' ? 'إضافة نقطة' : 'Add bullet'}
-                </button>
+                <div className="mt-2 flex items-center gap-3 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      addSlideBullet();
+                    }}
+                    className="flex items-center gap-1 text-sm text-primary hover:underline cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {language === 'ar' ? 'إضافة نقطة' : 'Add bullet'}
+                  </button>
+                  {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+                    <button
+                      type="button"
+                      onClick={() => handleApplyTextToEnhancement('bullets')}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-md bg-amber-500 hover:bg-amber-400 text-white font-medium transition-all active:scale-95"
+                    >
+                      ✏️ {language === 'ar' ? 'تطبيق النقاط' : 'Apply bullets'}
+                    </button>
+                  )}
+                </div>
+                {/* Bullet container position */}
+                {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+                  <div className="mt-3 p-2 rounded-lg bg-slate-100 dark:bg-slate-700/60">
+                    <span className="text-xs text-slate-400 block mb-1.5">{language === 'ar' ? '📍 موضع قائمة النقاط:' : '📍 Bullets position:'}</span>
+                    <div className="flex gap-2 flex-wrap">
+                      {([
+                        { key: 'left',   label: language === 'ar' ? 'يسار' : 'Left' },
+                        { key: 'center', label: language === 'ar' ? 'وسط' : 'Center' },
+                        { key: 'right',  label: language === 'ar' ? 'يمين' : 'Right' },
+                        { key: 'full',   label: language === 'ar' ? 'كامل' : 'Full width' },
+                      ] as const).map(({ key, label }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => handleApplyBulletContainerPosition(key)}
+                          className="px-3 py-1 text-xs rounded-md bg-slate-200 dark:bg-slate-600 hover:bg-primary hover:text-white text-slate-700 dark:text-slate-100 font-medium transition-colors active:scale-95"
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

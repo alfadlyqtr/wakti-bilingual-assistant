@@ -74,14 +74,13 @@ import {
 // ============================================
 // INSTAGRAM OAUTH CONFIG
 // ============================================
-const META_APP_ID = '951470710859794';
+const META_APP_ID = '888322063987497';
 const IG_OAUTH_CALLBACK_URL = 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/instagram-oauth-callback';
 const IG_OAUTH_SCOPES = 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments';
 
 function buildInstagramOAuthUrl(botId: string, origin: string): string {
   const state = btoa(JSON.stringify({ bot_id: botId, origin }));
-  const authorizeUrl = `https://www.instagram.com/oauth/authorize/third_party/?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(IG_OAUTH_CALLBACK_URL)}&scope=${encodeURIComponent(IG_OAUTH_SCOPES)}&state=${encodeURIComponent(state)}&response_type=code&enable_fb_login=0&force_reauth=0`;
-  return `https://www.instagram.com/accounts/login/?force_authentication=1&platform_app_id=${META_APP_ID}&next=${encodeURIComponent(authorizeUrl)}`;
+  return `https://www.instagram.com/oauth/authorize?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(IG_OAUTH_CALLBACK_URL)}&scope=${encodeURIComponent(IG_OAUTH_SCOPES)}&state=${encodeURIComponent(state)}&response_type=code&enable_fb_login=0`;
 }
 
 // ============================================
