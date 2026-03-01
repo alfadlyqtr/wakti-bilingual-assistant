@@ -76,11 +76,11 @@ import {
 // ============================================
 const META_APP_ID = '951470710859794';
 const IG_OAUTH_CALLBACK_URL = 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/instagram-oauth-callback';
-const IG_OAUTH_SCOPES = 'instagram_basic,instagram_manage_messages,instagram_manage_comments,pages_show_list,pages_read_engagement,pages_manage_metadata';
+const IG_OAUTH_SCOPES = 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments';
 
 function buildInstagramOAuthUrl(botId: string, origin: string): string {
   const state = btoa(JSON.stringify({ bot_id: botId, origin }));
-  return `https://www.facebook.com/v21.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(IG_OAUTH_CALLBACK_URL)}&scope=${encodeURIComponent(IG_OAUTH_SCOPES)}&state=${encodeURIComponent(state)}&response_type=code`;
+  return `https://www.instagram.com/oauth/authorize?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(IG_OAUTH_CALLBACK_URL)}&scope=${encodeURIComponent(IG_OAUTH_SCOPES)}&state=${encodeURIComponent(state)}&response_type=code&enable_fb_login=0&force_reauth=0`;
 }
 
 // ============================================
@@ -453,11 +453,11 @@ export default function WaktiAssistant() {
           const data = await res.json();
           if (!res.ok || data.error) throw new Error(data.error || 'Exchange failed');
 
-          // Store pages and show selection
-          setIgPages(data.pages || []);
-          setIgLongLivedToken(data.long_lived_token || '');
-          setIgSubStep('select_page');
-          toast.success(isRTL ? 'تم التسجيل! اختر الحساب' : 'Logged in! Select your page');
+          // Instagram Business Login: no page selection needed — auto-connected
+          const displayName = data.username ? `@${data.username}` : (data.name || 'Instagram');
+          toast.success(isRTL ? `تم ربط ${displayName} بنجاح!` : `${displayName} connected!`);
+          await fetchBots();
+          setStep('platform');
         } catch (err) {
           console.error('IG OAuth exchange error:', err);
           toast.error(isRTL ? 'فشل في ربط انستقرام' : 'Failed to connect Instagram');
