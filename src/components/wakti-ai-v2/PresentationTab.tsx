@@ -5048,17 +5048,23 @@ const PresentationTab: React.FC = () => {
 
         {/* Edit Panel - appears when edit mode is active */}
         {isEditMode && currentSlide && (
-          <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-            <h3 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300">
-              {language === 'ar' ? '✏️ تعديل الشريحة' : '✏️ Edit Slide'}
-            </h3>
+          <div className="mt-4 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            {/* Panel header */}
+            <div className="px-4 py-3 bg-slate-200 dark:bg-slate-700 flex items-center gap-2">
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                {language === 'ar' ? '✏️ تعديل الشريحة' : '✏️ Edit Slide'}
+              </span>
+            </div>
 
+            <div className="divide-y divide-slate-200 dark:divide-slate-700 bg-slate-100 dark:bg-slate-800">
+
+            {/* ── Web Search (per-slide research) ── */}
             {effectiveResearchMode && researchModeType === 'per_slide' && currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && (
-              <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-                <label className="text-xs text-slate-500 mb-2 block font-medium">
-                  🔎 {language === 'ar' ? 'بحث للعرض (حسب الشريحة)' : 'Presentation Web Search (per slide)'}
+              <div className="p-4">
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">
+                  🔎 {language === 'ar' ? 'بحث ويب للشريحة' : 'Web Search (per slide)'}
                 </label>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="text"
                     value={slideResearchQuery}
@@ -5066,33 +5072,29 @@ const PresentationTab: React.FC = () => {
                     aria-label={language === 'ar' ? 'طلب البحث' : 'Research query'}
                     title={language === 'ar' ? 'طلب البحث' : 'Research query'}
                     placeholder={language === 'ar' ? 'مثال: إحصائيات حديثة، تعريف، أمثلة...' : 'e.g., latest stats, definition, examples...'}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-primary/50 outline-none"
+                    className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-primary/50 outline-none"
                   />
                   <button
                     onClick={handleResearchCurrentSlide}
                     disabled={isSlideResearching}
-                    className="px-3 py-2 rounded-lg bg-primary text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 whitespace-nowrap"
                   >
                     {isSlideResearching ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        {language === 'ar' ? 'جارٍ البحث...' : 'Searching...'}
-                      </>
+                      <><Loader2 className="w-4 h-4 animate-spin" />{language === 'ar' ? 'جارٍ البحث...' : 'Searching...'}</>
                     ) : (
-                      <>
-                        <Sparkles className="w-4 h-4" />
-                        {language === 'ar' ? 'بحث وملء الشريحة' : 'Search & fill this slide'}
-                      </>
+                      <><Sparkles className="w-4 h-4" />{language === 'ar' ? 'بحث وملء' : 'Search & fill'}</>
                     )}
                   </button>
                 </div>
               </div>
             )}
-            
-            {/* Title */}
-            <div className="mb-3">
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <label className="text-xs text-slate-500 block">{language === 'ar' ? 'العنوان' : 'Title'}</label>
+
+            {/* ── TITLE ── */}
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  {language === 'ar' ? 'العنوان' : 'Title'}
+                </span>
                 <button
                   type="button"
                   onClick={() => handleRegenerateField({ field: 'title' })}
@@ -5101,14 +5103,11 @@ const PresentationTab: React.FC = () => {
                   title={language === 'ar' ? 'إعادة الصياغة' : 'Regenerate'}
                   aria-label={language === 'ar' ? 'إعادة صياغة العنوان' : 'Regenerate title'}
                 >
-                  {isRegeneratingField.title ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-3.5 h-3.5" />
-                  )}
+                  {isRegeneratingField.title ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                 </button>
               </div>
-              <div className="flex gap-2 items-center">
+              {/* Text input + apply */}
+              <div className="flex gap-2 items-center mb-3">
                 <input
                   type="text"
                   value={currentSlide.title}
@@ -5128,97 +5127,90 @@ const PresentationTab: React.FC = () => {
                   </button>
                 )}
               </div>
-              {/* Title Style Controls */}
-              <div className="flex gap-2 mt-2 flex-wrap">
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-slate-400">{language === 'ar' ? 'الحجم:' : 'Size:'}</span>
-                  {(['small', 'medium', 'large'] as const).map(size => (
-                    <button
-                      key={size}
-                      onClick={() => updateTitleStyle({ fontSize: size })}
-                      className={`px-2 py-1 text-xs rounded ${(currentSlide.titleStyle?.fontSize || 'medium') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
-                    >
-                      {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-slate-400">{language === 'ar' ? 'الخط:' : 'Style:'}</span>
-                  <button
-                    onClick={() => updateTitleStyle({ fontWeight: 'normal' })}
-                    className={`px-2 py-1 text-xs rounded ${(currentSlide.titleStyle?.fontWeight || 'bold') === 'normal' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
-                  >
-                    Normal
-                  </button>
-                  <button
-                    onClick={() => updateTitleStyle({ fontWeight: 'bold' })}
-                    className={`px-2 py-1 text-xs rounded font-bold ${(currentSlide.titleStyle?.fontWeight || 'bold') === 'bold' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
-                  >
-                    Bold
-                  </button>
-                  <button
-                    onClick={() => updateTitleStyle({ fontStyle: currentSlide.titleStyle?.fontStyle === 'italic' ? 'normal' : 'italic' })}
-                    className={`px-2 py-1 text-xs rounded italic ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
-                  >
-                    Italic
-                  </button>
-                  <button
-                    onClick={() => updateTitleStyle({ textDecoration: currentSlide.titleStyle?.textDecoration === 'underline' ? 'none' : 'underline' })}
-                    className={`px-2 py-1 text-xs rounded underline ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
-                  >
-                    U
-                  </button>
-                </div>
-                <div className="mt-2">
-                  <span className="text-xs text-slate-400 block mb-1">{language === 'ar' ? 'اللون:' : 'Color:'}</span>
-                  <div className="flex items-center gap-2">
-                    <ColorPickerWithGradient
-                      value={currentSlide.titleStyle?.color || '#ffffff'}
-                      onChange={(color) => updateTitleStyle({ color })}
-                      label="title"
-                    />
-                    {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
-                      <button
-                        type="button"
-                        onClick={() => handleApplyColorToEnhancement('title', currentSlide.titleStyle?.color || '#ffffff')}
-                        className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md bg-amber-500 hover:bg-amber-400 text-white font-medium transition-all active:scale-95 whitespace-nowrap"
-                        title={language === 'ar' ? 'تطبيق اللون على الشريحة المحسّنة' : 'Apply color to AI slide'}
-                      >
-                        🎨 {language === 'ar' ? 'تطبيق' : 'Apply'}
+              {/* Style row: Size + Style buttons */}
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-medium block mb-1">{language === 'ar' ? 'الحجم' : 'Size'}</span>
+                  <div className="flex gap-1">
+                    {(['small', 'medium', 'large'] as const).map(size => (
+                      <button key={size} onClick={() => updateTitleStyle({ fontSize: size })}
+                        className={`flex-1 py-1 text-xs rounded ${(currentSlide.titleStyle?.fontSize || 'medium') === size ? 'bg-primary text-white' : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
+                        {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
                       </button>
-                    )}
+                    ))}
                   </div>
                 </div>
-                {/* AI Enhanced direct controls — font size + alignment */}
-                {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
-                  <div className="mt-2 flex flex-wrap gap-3 items-center">
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-slate-400">{language === 'ar' ? 'حجم (px):' : 'px:'}</span>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-medium block mb-1">{language === 'ar' ? 'الخط' : 'Style'}</span>
+                  <div className="flex gap-1">
+                    <button onClick={() => updateTitleStyle({ fontWeight: 'normal' })}
+                      className={`flex-1 py-1 text-xs rounded ${(currentSlide.titleStyle?.fontWeight || 'bold') === 'normal' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
+                      N
+                    </button>
+                    <button onClick={() => updateTitleStyle({ fontWeight: 'bold' })}
+                      className={`flex-1 py-1 text-xs rounded font-bold ${(currentSlide.titleStyle?.fontWeight || 'bold') === 'bold' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
+                      B
+                    </button>
+                    <button onClick={() => updateTitleStyle({ fontStyle: currentSlide.titleStyle?.fontStyle === 'italic' ? 'normal' : 'italic' })}
+                      className={`flex-1 py-1 text-xs rounded italic ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
+                      I
+                    </button>
+                    <button onClick={() => updateTitleStyle({ textDecoration: currentSlide.titleStyle?.textDecoration === 'underline' ? 'none' : 'underline' })}
+                      className={`flex-1 py-1 text-xs rounded underline ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
+                      U
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {/* Color row */}
+              <div className="mb-3">
+                <span className="text-[10px] text-slate-400 font-medium block mb-1">{language === 'ar' ? 'اللون' : 'Color'}</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <ColorPickerWithGradient value={currentSlide.titleStyle?.color || '#ffffff'} onChange={(color) => updateTitleStyle({ color })} label="title" />
+                  {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+                    <button type="button" onClick={() => handleApplyColorToEnhancement('title', currentSlide.titleStyle?.color || '#ffffff')}
+                      className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md bg-amber-500 hover:bg-amber-400 text-white font-medium transition-all active:scale-95 whitespace-nowrap"
+                      title={language === 'ar' ? 'تطبيق اللون على الشريحة المحسّنة' : 'Apply color to AI slide'}>
+                      🎨 {language === 'ar' ? 'تطبيق' : 'Apply'}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {/* AI Enhanced: px size + align */}
+              {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-medium block mb-1">{language === 'ar' ? 'حجم (px)' : 'Font size (px)'}</span>
+                    <div className="flex flex-wrap gap-1">
                       {[48, 56, 64, 72, 80, 96].map(px => (
                         <button key={px} onClick={() => handleApplyStyleToEnhancement('title', { fontSize: px + 'px' })}
-                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 hover:bg-primary hover:text-white text-slate-800 dark:text-slate-100 transition-colors">
+                          className="px-1.5 py-1 text-[10px] rounded bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-primary hover:text-white hover:border-primary transition-colors">
                           {px}
                         </button>
                       ))}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-slate-400">{language === 'ar' ? 'موضع:' : 'Align:'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-medium block mb-1">{language === 'ar' ? 'المحاذاة' : 'Align'}</span>
+                    <div className="flex gap-1">
                       {(['left', 'center', 'right'] as const).map(align => (
                         <button key={align} onClick={() => handleApplyStyleToEnhancement('title', { textAlign: align })}
-                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 hover:bg-primary hover:text-white text-slate-800 dark:text-slate-100 transition-colors">
+                          className="flex-1 py-1 text-[10px] rounded bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-primary hover:text-white hover:border-primary transition-colors">
                           {align === 'left' ? 'L' : align === 'center' ? 'C' : 'R'}
                         </button>
                       ))}
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-            
-            {/* Subtitle */}
-            <div className="mb-3">
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <label className="text-xs text-slate-500 block">{language === 'ar' ? 'العنوان الفرعي' : 'Subtitle'}</label>
+
+            {/* ── SUBTITLE ── */}
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  {language === 'ar' ? 'العنوان الفرعي' : 'Subtitle'}
+                </span>
                 <button
                   type="button"
                   onClick={() => handleRegenerateField({ field: 'subtitle' })}
@@ -5227,14 +5219,10 @@ const PresentationTab: React.FC = () => {
                   title={language === 'ar' ? 'إعادة الصياغة' : 'Regenerate'}
                   aria-label={language === 'ar' ? 'إعادة صياغة العنوان الفرعي' : 'Regenerate subtitle'}
                 >
-                  {isRegeneratingField.subtitle ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-3.5 h-3.5" />
-                  )}
+                  {isRegeneratingField.subtitle ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                 </button>
               </div>
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-2 items-center mb-3">
                 <input
                   type="text"
                   value={currentSlide.subtitle || ''}
@@ -5244,186 +5232,186 @@ const PresentationTab: React.FC = () => {
                   className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-primary/50 outline-none"
                 />
                 {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
-                  <button
-                    type="button"
-                    onClick={() => handleApplyTextToEnhancement('subtitle')}
+                  <button type="button" onClick={() => handleApplyTextToEnhancement('subtitle')}
                     className="flex items-center gap-1 px-2 py-1.5 text-[10px] rounded-md bg-amber-500 hover:bg-amber-400 text-white font-medium transition-all active:scale-95 whitespace-nowrap"
-                    title={language === 'ar' ? 'تطبيق النص على الشريحة المحسّنة' : 'Apply text to AI slide'}
-                  >
+                    title={language === 'ar' ? 'تطبيق النص على الشريحة المحسّنة' : 'Apply text to AI slide'}>
                     ✏️ {language === 'ar' ? 'تطبيق' : 'Apply'}
                   </button>
                 )}
               </div>
-              {/* Subtitle Style Controls */}
-              <div className="flex gap-2 mt-2 flex-wrap">
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-slate-400">{language === 'ar' ? 'الحجم:' : 'Size:'}</span>
-                  {(['small', 'medium', 'large'] as const).map(size => (
-                    <button
-                      key={size}
-                      onClick={() => updateSubtitleStyle({ fontSize: size })}
-                      className={`px-2 py-1 text-xs rounded ${(currentSlide.subtitleStyle?.fontSize || 'medium') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
-                    >
-                      {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-slate-400">{language === 'ar' ? 'الخط:' : 'Style:'}</span>
-                  <button
-                    onClick={() => updateSubtitleStyle({ fontWeight: 'normal' })}
-                    className={`px-2 py-1 text-xs rounded ${(currentSlide.subtitleStyle?.fontWeight || 'normal') === 'normal' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
-                  >
-                    Normal
-                  </button>
-                  <button
-                    onClick={() => updateSubtitleStyle({ fontWeight: 'bold' })}
-                    className={`px-2 py-1 text-xs rounded font-bold ${currentSlide.subtitleStyle?.fontWeight === 'bold' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
-                  >
-                    Bold
-                  </button>
-                  <button
-                    onClick={() => updateSubtitleStyle({ fontStyle: currentSlide.subtitleStyle?.fontStyle === 'italic' ? 'normal' : 'italic' })}
-                    className={`px-2 py-1 text-xs rounded italic ${currentSlide.subtitleStyle?.fontStyle === 'italic' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
-                  >
-                    Italic
-                  </button>
-                  <button
-                    onClick={() => updateSubtitleStyle({ textDecoration: currentSlide.subtitleStyle?.textDecoration === 'underline' ? 'none' : 'underline' })}
-                    className={`px-2 py-1 text-xs rounded underline ${currentSlide.subtitleStyle?.textDecoration === 'underline' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
-                  >
-                    U
-                  </button>
-                </div>
-                <div className="mt-2">
-                  <span className="text-xs text-slate-400 block mb-1">{language === 'ar' ? 'اللون:' : 'Color:'}</span>
-                  <div className="flex items-center gap-2">
-                    <ColorPickerWithGradient
-                      value={currentSlide.subtitleStyle?.color || '#94a3b8'}
-                      onChange={(color) => updateSubtitleStyle({ color })}
-                      label="subtitle"
-                    />
-                    {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
-                      <button
-                        type="button"
-                        onClick={() => handleApplyColorToEnhancement('subtitle', currentSlide.subtitleStyle?.color || '#94a3b8')}
-                        className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md bg-amber-500 hover:bg-amber-400 text-white font-medium transition-all active:scale-95 whitespace-nowrap"
-                        title={language === 'ar' ? 'تطبيق اللون على الشريحة المحسّنة' : 'Apply color to AI slide'}
-                      >
-                        🎨 {language === 'ar' ? 'تطبيق' : 'Apply'}
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-medium block mb-1">{language === 'ar' ? 'الحجم' : 'Size'}</span>
+                  <div className="flex gap-1">
+                    {(['small', 'medium', 'large'] as const).map(size => (
+                      <button key={size} onClick={() => updateSubtitleStyle({ fontSize: size })}
+                        className={`flex-1 py-1 text-xs rounded ${(currentSlide.subtitleStyle?.fontSize || 'medium') === size ? 'bg-primary text-white' : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
+                        {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
                       </button>
-                    )}
+                    ))}
                   </div>
                 </div>
-                {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
-                  <div className="mt-2 flex flex-wrap gap-3 items-center">
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-slate-400">{language === 'ar' ? 'حجم (px):' : 'px:'}</span>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-medium block mb-1">{language === 'ar' ? 'الخط' : 'Style'}</span>
+                  <div className="flex gap-1">
+                    <button onClick={() => updateSubtitleStyle({ fontWeight: 'normal' })}
+                      className={`flex-1 py-1 text-xs rounded ${(currentSlide.subtitleStyle?.fontWeight || 'normal') === 'normal' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
+                      N
+                    </button>
+                    <button onClick={() => updateSubtitleStyle({ fontWeight: 'bold' })}
+                      className={`flex-1 py-1 text-xs rounded font-bold ${currentSlide.subtitleStyle?.fontWeight === 'bold' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
+                      B
+                    </button>
+                    <button onClick={() => updateSubtitleStyle({ fontStyle: currentSlide.subtitleStyle?.fontStyle === 'italic' ? 'normal' : 'italic' })}
+                      className={`flex-1 py-1 text-xs rounded italic ${currentSlide.subtitleStyle?.fontStyle === 'italic' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
+                      I
+                    </button>
+                    <button onClick={() => updateSubtitleStyle({ textDecoration: currentSlide.subtitleStyle?.textDecoration === 'underline' ? 'none' : 'underline' })}
+                      className={`flex-1 py-1 text-xs rounded underline ${currentSlide.subtitleStyle?.textDecoration === 'underline' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
+                      U
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="mb-3">
+                <span className="text-[10px] text-slate-400 font-medium block mb-1">{language === 'ar' ? 'اللون' : 'Color'}</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <ColorPickerWithGradient value={currentSlide.subtitleStyle?.color || '#94a3b8'} onChange={(color) => updateSubtitleStyle({ color })} label="subtitle" />
+                  {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+                    <button type="button" onClick={() => handleApplyColorToEnhancement('subtitle', currentSlide.subtitleStyle?.color || '#94a3b8')}
+                      className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md bg-amber-500 hover:bg-amber-400 text-white font-medium transition-all active:scale-95 whitespace-nowrap"
+                      title={language === 'ar' ? 'تطبيق اللون على الشريحة المحسّنة' : 'Apply color to AI slide'}>
+                      🎨 {language === 'ar' ? 'تطبيق' : 'Apply'}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-medium block mb-1">{language === 'ar' ? 'حجم (px)' : 'Font size (px)'}</span>
+                    <div className="flex flex-wrap gap-1">
                       {[24, 28, 32, 36, 42].map(px => (
                         <button key={px} onClick={() => handleApplyStyleToEnhancement('subtitle', { fontSize: px + 'px' })}
-                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 hover:bg-primary hover:text-white text-slate-800 dark:text-slate-100 transition-colors">
+                          className="px-1.5 py-1 text-[10px] rounded bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-primary hover:text-white hover:border-primary transition-colors">
                           {px}
                         </button>
                       ))}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-slate-400">{language === 'ar' ? 'موضع:' : 'Align:'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-medium block mb-1">{language === 'ar' ? 'المحاذاة' : 'Align'}</span>
+                    <div className="flex gap-1">
                       {(['left', 'center', 'right'] as const).map(align => (
                         <button key={align} onClick={() => handleApplyStyleToEnhancement('subtitle', { textAlign: align })}
-                          className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 hover:bg-primary hover:text-white text-slate-800 dark:text-slate-100 transition-colors">
+                          className="flex-1 py-1 text-[10px] rounded bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-primary hover:text-white hover:border-primary transition-colors">
                           {align === 'left' ? 'L' : align === 'center' ? 'C' : 'R'}
                         </button>
                       ))}
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-            
-            {/* Bullets */}
+
+            {/* ── BULLET POINTS ── */}
             {currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && (
-              <div className="mb-3">
-                <label className="text-xs text-slate-500 mb-2 block font-medium">{language === 'ar' ? 'النقاط' : 'Bullet Points'}</label>
-                {/* Bullet Style Controls - Row 1: Size & Style */}
-                <div className="flex gap-4 mb-2 flex-wrap items-center">
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs text-slate-400 font-medium">{language === 'ar' ? 'الحجم:' : 'Size:'}</span>
-                    {(['small', 'medium', 'large'] as const).map(size => (
-                      <button
-                        key={size}
-                        onClick={() => updateBulletStyle({ fontSize: size })}
-                        className={`px-2 py-1 text-xs rounded ${(currentSlide.bulletStyle?.fontSize || 'medium') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
-                      >
-                        {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
-                      </button>
-                    ))}
+              <div className="p-4">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-3">
+                  {language === 'ar' ? 'النقاط' : 'Bullet Points'}
+                </span>
+                {/* Bullet style grid */}
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-medium block mb-1">{language === 'ar' ? 'الحجم' : 'Size'}</span>
+                    <div className="flex gap-1">
+                      {(['small', 'medium', 'large'] as const).map(size => (
+                        <button key={size} onClick={() => updateBulletStyle({ fontSize: size })}
+                          className={`flex-1 py-1 text-xs rounded ${(currentSlide.bulletStyle?.fontSize || 'medium') === size ? 'bg-primary text-white' : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
+                          {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs text-slate-400 font-medium">{language === 'ar' ? 'الخط:' : 'Style:'}</span>
-                    <button
-                      onClick={() => updateBulletStyle({ fontWeight: 'normal' })}
-                      className={`px-2 py-1 text-xs rounded ${(currentSlide.bulletStyle?.fontWeight || 'normal') === 'normal' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
-                    >
-                      Normal
-                    </button>
-                    <button
-                      onClick={() => updateBulletStyle({ fontWeight: 'bold' })}
-                      className={`px-2 py-1 text-xs rounded font-bold ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
-                    >
-                      Bold
-                    </button>
-                    <button
-                      onClick={() => updateBulletStyle({ fontStyle: currentSlide.bulletStyle?.fontStyle === 'italic' ? 'normal' : 'italic' })}
-                      className={`px-2 py-1 text-xs rounded italic ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100'}`}
-                    >
-                      Italic
-                    </button>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-medium block mb-1">{language === 'ar' ? 'الخط' : 'Style'}</span>
+                    <div className="flex gap-1">
+                      <button onClick={() => updateBulletStyle({ fontWeight: 'normal' })}
+                        className={`flex-1 py-1 text-xs rounded ${(currentSlide.bulletStyle?.fontWeight || 'normal') === 'normal' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
+                        N
+                      </button>
+                      <button onClick={() => updateBulletStyle({ fontWeight: 'bold' })}
+                        className={`flex-1 py-1 text-xs rounded font-bold ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
+                        B
+                      </button>
+                      <button onClick={() => updateBulletStyle({ fontStyle: currentSlide.bulletStyle?.fontStyle === 'italic' ? 'normal' : 'italic' })}
+                        className={`flex-1 py-1 text-xs rounded italic ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
+                        I
+                      </button>
+                    </div>
                   </div>
                 </div>
-                {/* Bullet Style Controls - Row 2: Color */}
+                {/* Color */}
                 <div className="mb-3">
-                  <span className="text-xs text-slate-400 font-medium block mb-1">{language === 'ar' ? 'اللون:' : 'Color:'}</span>
-                  <div className="flex items-center gap-2">
-                    <ColorPickerWithGradient
-                      value={currentSlide.bulletStyle?.color || '#e2e8f0'}
-                      onChange={(color) => updateBulletStyle({ color })}
-                      label="bullets"
-                    />
+                  <span className="text-[10px] text-slate-400 font-medium block mb-1">{language === 'ar' ? 'اللون' : 'Color'}</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <ColorPickerWithGradient value={currentSlide.bulletStyle?.color || '#e2e8f0'} onChange={(color) => updateBulletStyle({ color })} label="bullets" />
                     {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
-                      <button
-                        type="button"
-                        onClick={() => handleApplyColorToEnhancement('bullets', currentSlide.bulletStyle?.color || '#e2e8f0')}
+                      <button type="button" onClick={() => handleApplyColorToEnhancement('bullets', currentSlide.bulletStyle?.color || '#e2e8f0')}
                         className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md bg-amber-500 hover:bg-amber-400 text-white font-medium transition-all active:scale-95 whitespace-nowrap"
-                        title={language === 'ar' ? 'تطبيق اللون على الشريحة المحسّنة' : 'Apply color to AI slide'}
-                      >
+                        title={language === 'ar' ? 'تطبيق اللون على الشريحة المحسّنة' : 'Apply color to AI slide'}>
                         🎨 {language === 'ar' ? 'تطبيق' : 'Apply'}
                       </button>
                     )}
                   </div>
-                  {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
-                    <div className="mt-2 flex flex-wrap gap-3 items-center">
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs text-slate-400">{language === 'ar' ? 'حجم (px):' : 'px:'}</span>
-                        {[16, 18, 20, 22, 24, 28].map(px => (
-                          <button key={px} onClick={() => handleApplyStyleToEnhancement('bullets', { fontSize: px + 'px' })}
-                            className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 hover:bg-primary hover:text-white text-slate-800 dark:text-slate-100 transition-colors">
-                            {px}
-                          </button>
-                        ))}
+                </div>
+                {/* AI Enhanced: px + align + position */}
+                {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700 mb-3">
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-medium block mb-1">{language === 'ar' ? 'حجم (px)' : 'Font size (px)'}</span>
+                        <div className="flex flex-wrap gap-1">
+                          {[16, 18, 20, 22, 24, 28].map(px => (
+                            <button key={px} onClick={() => handleApplyStyleToEnhancement('bullets', { fontSize: px + 'px' })}
+                              className="px-1.5 py-1 text-[10px] rounded bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-primary hover:text-white hover:border-primary transition-colors">
+                              {px}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs text-slate-400">{language === 'ar' ? 'موضع:' : 'Align:'}</span>
-                        {(['left', 'center', 'right'] as const).map(align => (
-                          <button key={align} onClick={() => handleApplyStyleToEnhancement('bullets', { textAlign: align })}
-                            className="px-2 py-1 text-[10px] rounded bg-slate-200 dark:bg-slate-600 hover:bg-primary hover:text-white text-slate-800 dark:text-slate-100 transition-colors">
-                            {align === 'left' ? 'L' : align === 'center' ? 'C' : 'R'}
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-medium block mb-1">{language === 'ar' ? 'المحاذاة' : 'Align'}</span>
+                        <div className="flex gap-1">
+                          {(['left', 'center', 'right'] as const).map(align => (
+                            <button key={align} onClick={() => handleApplyStyleToEnhancement('bullets', { textAlign: align })}
+                              className="flex-1 py-1 text-[10px] rounded bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-primary hover:text-white hover:border-primary transition-colors">
+                              {align === 'left' ? 'L' : align === 'center' ? 'C' : 'R'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-medium block mb-1">📍 {language === 'ar' ? 'موضع القائمة' : 'List position'}</span>
+                      <div className="grid grid-cols-4 gap-1">
+                        {([
+                          { key: 'left',   label: language === 'ar' ? 'يسار' : 'Left' },
+                          { key: 'center', label: language === 'ar' ? 'وسط' : 'Center' },
+                          { key: 'right',  label: language === 'ar' ? 'يمين' : 'Right' },
+                          { key: 'full',   label: language === 'ar' ? 'كامل' : 'Full' },
+                        ] as const).map(({ key, label }) => (
+                          <button key={key} type="button" onClick={() => handleApplyBulletContainerPosition(key)}
+                            className="py-1 text-[10px] rounded bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-primary hover:text-white hover:border-primary font-medium transition-colors active:scale-95 text-slate-700 dark:text-slate-100">
+                            {label}
                           </button>
                         ))}
                       </div>
                     </div>
-                  )}
-                </div>
-                <div className="space-y-2">
+                  </div>
+                )}
+                {/* Bullet list items */}
+                <div className="space-y-2 mb-2">
                   {(currentSlide.bullets && currentSlide.bullets.length > 0 ? currentSlide.bullets : ['']).map((bullet, i) => (
                     <div key={i} className="flex gap-2">
                       <input
@@ -5434,87 +5422,46 @@ const PresentationTab: React.FC = () => {
                         title={language === 'ar' ? `نقطة ${i + 1}` : `Bullet ${i + 1}`}
                         className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-primary/50 outline-none"
                       />
-                      <button
-                        type="button"
-                        onClick={() => handleRegenerateField({ field: 'bullet', bulletIndex: i })}
+                      <button type="button" onClick={() => handleRegenerateField({ field: 'bullet', bulletIndex: i })}
                         disabled={!!isRegeneratingField.bullets[i]}
                         className="p-2 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         title={language === 'ar' ? 'إعادة الصياغة' : 'Regenerate'}
-                        aria-label={language === 'ar' ? `إعادة صياغة النقطة ${i + 1}` : `Regenerate bullet ${i + 1}`}
-                      >
-                        {isRegeneratingField.bullets[i] ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="w-4 h-4" />
-                        )}
+                        aria-label={language === 'ar' ? `إعادة صياغة النقطة ${i + 1}` : `Regenerate bullet ${i + 1}`}>
+                        {isRegeneratingField.bullets[i] ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                       </button>
                       {currentSlide.bullets && currentSlide.bullets.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => deleteSlideBullet(i)}
+                        <button type="button" onClick={() => deleteSlideBullet(i)}
                           className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                          title={language === 'ar' ? 'حذف' : 'Delete'}
-                        >
+                          title={language === 'ar' ? 'حذف' : 'Delete'}>
                           <Trash2 className="w-4 h-4" />
                         </button>
                       )}
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 flex items-center gap-3 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      addSlideBullet();
-                    }}
-                    className="flex items-center gap-1 text-sm text-primary hover:underline cursor-pointer"
-                  >
+                {/* Add bullet + Apply bullets */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); addSlideBullet(); }}
+                    className="flex items-center gap-1 text-sm text-primary hover:underline cursor-pointer">
                     <Plus className="w-4 h-4" />
                     {language === 'ar' ? 'إضافة نقطة' : 'Add bullet'}
                   </button>
                   {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
-                    <button
-                      type="button"
-                      onClick={() => handleApplyTextToEnhancement('bullets')}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-md bg-amber-500 hover:bg-amber-400 text-white font-medium transition-all active:scale-95"
-                    >
+                    <button type="button" onClick={() => handleApplyTextToEnhancement('bullets')}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-md bg-amber-500 hover:bg-amber-400 text-white font-medium transition-all active:scale-95">
                       ✏️ {language === 'ar' ? 'تطبيق النقاط' : 'Apply bullets'}
                     </button>
                   )}
                 </div>
-                {/* Bullet container position */}
-                {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
-                  <div className="mt-3 p-2 rounded-lg bg-slate-100 dark:bg-slate-700/60">
-                    <span className="text-xs text-slate-400 block mb-1.5">{language === 'ar' ? '📍 موضع قائمة النقاط:' : '📍 Bullets position:'}</span>
-                    <div className="flex gap-2 flex-wrap">
-                      {([
-                        { key: 'left',   label: language === 'ar' ? 'يسار' : 'Left' },
-                        { key: 'center', label: language === 'ar' ? 'وسط' : 'Center' },
-                        { key: 'right',  label: language === 'ar' ? 'يمين' : 'Right' },
-                        { key: 'full',   label: language === 'ar' ? 'كامل' : 'Full width' },
-                      ] as const).map(({ key, label }) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => handleApplyBulletContainerPosition(key)}
-                          className="px-3 py-1 text-xs rounded-md bg-slate-200 dark:bg-slate-600 hover:bg-primary hover:text-white text-slate-700 dark:text-slate-100 font-medium transition-colors active:scale-95"
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
-            {/* Layout Options */}
-            <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-              <label className="text-xs text-slate-500 mb-2 block font-medium">
+            {/* ── LAYOUT ── */}
+            <div className="p-4">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-3">
                 📐 {language === 'ar' ? 'تخطيط الشريحة' : 'Slide Layout'}
-              </label>
+              </span>
               <div className="grid grid-cols-5 gap-2">
                 {[
                   { key: 'text_left', label: language === 'ar' ? 'نص يسار' : 'Text Left', icon: '◧' },
@@ -5523,17 +5470,13 @@ const PresentationTab: React.FC = () => {
                   { key: 'image_bottom', label: language === 'ar' ? 'صورة أسفل' : 'Image Bottom', icon: '⬓' },
                   { key: 'text_only', label: language === 'ar' ? 'نص فقط' : 'Text Only', icon: '▭' },
                 ].map(layout => (
-                  <button
-                    key={layout.key}
-                    onClick={() => setSlides(prev => prev.map((s, i) => 
-                      i === selectedSlideIndex ? { ...s, layoutVariant: layout.key as LayoutVariant } : s
-                    ))}
+                  <button key={layout.key}
+                    onClick={() => setSlides(prev => prev.map((s, i) => i === selectedSlideIndex ? { ...s, layoutVariant: layout.key as LayoutVariant } : s))}
                     className={`flex flex-col items-center gap-1 p-2 rounded-lg border-2 text-xs transition-all ${
-                      (currentSlide.layoutVariant || 'text_left') === layout.key 
-                        ? 'border-primary bg-primary/10 text-primary' 
-                        : 'border-slate-300 dark:border-slate-600 hover:border-primary/50'
-                    }`}
-                  >
+                      (currentSlide.layoutVariant || 'text_left') === layout.key
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-slate-300 dark:border-slate-600 hover:border-primary/50 text-slate-700 dark:text-slate-300'
+                    }`}>
                     <span className="text-lg">{layout.icon}</span>
                     <span className="text-[10px]">{layout.label}</span>
                   </button>
@@ -5541,11 +5484,11 @@ const PresentationTab: React.FC = () => {
               </div>
             </div>
 
-            {/* Image Edit Section */}
-            <div className={`mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg ${language === 'ar' ? 'text-right' : ''}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
-              <label className="text-xs text-slate-500 mb-2 block font-medium">
+            {/* ── IMAGE ── */}
+            <div className={`p-4 ${language === 'ar' ? 'text-right' : ''}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-3">
                 🖼️ {language === 'ar' ? 'صورة الشريحة' : 'Slide Image'}
-              </label>
+              </span>
               <div className="flex flex-col gap-3">
                 <div className={`flex items-center gap-3 ${language === 'ar' ? 'flex-row-reverse' : ''}`}>
                   <div className="w-24 h-16 rounded-lg border border-dashed border-slate-300 dark:border-slate-500 overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] text-slate-400">
@@ -5870,11 +5813,11 @@ const PresentationTab: React.FC = () => {
               </div>
             </div>
 
-            {/* Keywords Styling */}
-            <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-              <label className="text-xs text-slate-500 mb-2 block font-medium">
+            {/* ── KEYWORDS ── */}
+            <div className="p-4">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-3">
                 ✨ {language === 'ar' ? 'الكلمات المميزة' : 'Keywords (Highlighted Words)'}
-              </label>
+              </span>
               {/* Keyword Size & Style */}
               <div className="flex gap-4 mb-2 flex-wrap items-center">
                 <div className="flex items-center gap-1">
@@ -5922,11 +5865,11 @@ const PresentationTab: React.FC = () => {
               </div>
             </div>
 
-            {/* Bullet Dots Styling */}
-            <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-              <label className="text-xs text-slate-500 mb-2 block font-medium">
+            {/* ── BULLET DOTS ── */}
+            <div className="p-4">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-3">
                 ● {language === 'ar' ? 'نقاط القائمة' : 'Bullet Dots'}
-              </label>
+              </span>
               {/* Bullet Dot Shape */}
               <div className="flex gap-2 mb-2 flex-wrap items-center">
                 <span className="text-xs text-slate-400 font-medium">{language === 'ar' ? 'الشكل:' : 'Shape:'}</span>
@@ -5974,12 +5917,12 @@ const PresentationTab: React.FC = () => {
               </div>
             </div>
 
-            {/* Slide Background - Color Picker */}
-            <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <label className="text-xs text-slate-500 block font-medium">
+            {/* ── SLIDE BACKGROUND ── */}
+            <div className="p-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                   🎨 {language === 'ar' ? 'خلفية الشريحة' : 'Slide Background'}
-                </label>
+                </span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-500">{language === 'ar' ? 'لكل الشرائح' : 'All slides'}</span>
                   <Switch
@@ -6002,12 +5945,12 @@ const PresentationTab: React.FC = () => {
               />
             </div>
 
-            {/* Narration Voice - for MP4 export */}
-            <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <label className="text-xs text-slate-500 block font-medium">
+            {/* ── NARRATION VOICE ── */}
+            <div className="p-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                   🎤 {language === 'ar' ? 'صوت السرد (للفيديو)' : 'Narration Voice (for Video)'}
-                </label>
+                </span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-500">{language === 'ar' ? 'لكل الشرائح' : 'All slides'}</span>
                   <Switch
@@ -6066,9 +6009,11 @@ const PresentationTab: React.FC = () => {
               </p>
             </div>
 
+            </div>{/* end divide-y wrapper */}
+
             {/* Update Enhancement button - shown when slide has an enhanced/saved view */}
             {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
-              <div className="mt-4 pt-4 border-t border-slate-300 dark:border-slate-600">
+              <div className="p-4 bg-slate-100 dark:bg-slate-800 border-t-2 border-amber-500/30">
                 <button
                   onClick={handleUpdateEnhancement}
                   disabled={isUpdatingEnhancement}
