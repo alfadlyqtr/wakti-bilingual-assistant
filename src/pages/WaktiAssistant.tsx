@@ -1239,7 +1239,7 @@ export default function WaktiAssistant() {
                   className="w-full h-12 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md transition-all gap-2"
                 >
                   <Instagram className="h-5 w-5" />
-                  {isRTL ? 'تسجيل الدخول عبر فيسبوك' : 'Login with Facebook'}
+                  {isRTL ? 'ربط حساب انستقرام' : 'Connect Instagram'}
                 </Button>
               )}
 
