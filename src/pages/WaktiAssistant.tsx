@@ -409,12 +409,13 @@ export default function WaktiAssistant() {
   // ============================================
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const igCode = params.get('ig_code');
+    const igSuccess = params.get('ig_success');
+    const igUsername = params.get('ig_username');
     const igError = params.get('ig_error');
     const botId = params.get('bot_id');
 
     // Clean URL params regardless
-    if (igCode || igError) {
+    if (igSuccess || igError) {
       const cleanUrl = window.location.pathname;
       window.history.replaceState({}, '', cleanUrl);
     }
@@ -424,46 +425,14 @@ export default function WaktiAssistant() {
       return;
     }
 
-    if (igCode && botId) {
-      // Exchange code for token via Edge Function
-      setIgConnecting(true);
-      setIgPendingBotId(botId);
-      setStep('instagram-connect');
-      setIgSubStep('login');
-
+    if (igSuccess === '1') {
+      // Token exchange already done server-side — just show success
+      const displayName = igUsername || 'Instagram';
+      toast.success(isRTL ? `تم ربط ${displayName} بنجاح! ✅` : `${displayName} connected! ✅`);
       (async () => {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session?.access_token) throw new Error('Not authenticated');
-
-          const res = await fetch(IG_OAUTH_CALLBACK_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({
-              action: 'exchange_code',
-              code: igCode,
-              redirect_uri: IG_OAUTH_CALLBACK_URL,
-              bot_id: botId,
-            }),
-          });
-
-          const data = await res.json();
-          if (!res.ok || data.error) throw new Error(data.error || 'Exchange failed');
-
-          // Instagram Business Login: no page selection needed — auto-connected
-          const displayName = data.username ? `@${data.username}` : (data.name || 'Instagram');
-          toast.success(isRTL ? `تم ربط ${displayName} بنجاح!` : `${displayName} connected!`);
-          await fetchBots();
-          setStep('platform');
-        } catch (err) {
-          console.error('IG OAuth exchange error:', err);
-          toast.error(isRTL ? 'فشل في ربط انستقرام' : 'Failed to connect Instagram');
-          setStep('platform');
-        } finally {
-          setIgConnecting(false);
+        await fetchBots();
+        if (botId) {
+          setIgPendingBotId(botId);
         }
       })();
     }
@@ -1038,7 +1007,7 @@ export default function WaktiAssistant() {
   const renderPlatformSelect = () => (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="flex mb-8">
-        <button onClick={() => setStep('list')} className="inline-flex items-center gap-2 text-sm font-semibold text-[#060541] dark:text-white/80 hover:text-[#060541] dark:hover:text-white bg-white dark:bg-white/8 hover:bg-[#060541]/5 dark:hover:bg-white/12 border border-[#060541]/20 dark:border-white/15 px-4 py-2 rounded-xl shadow-sm active:scale-95 transition-all duration-200">
+        <button onClick={() => setStep('list')} className="inline-flex items-center gap-2 text-sm font-semibold text-[#060541] dark:text-white/80 border border-[#060541]/20 dark:border-white/15 px-4 py-2 rounded-xl active:scale-95 transition-all duration-200">
           <ArrowLeft className="h-4 w-4" />
           {isRTL ? 'رجوع' : 'Back'}
         </button>
@@ -1180,7 +1149,7 @@ export default function WaktiAssistant() {
               if (igSubStep === 'select_page') setIgSubStep('login');
               else setStep('platform');
             }} 
-            className="inline-flex items-center gap-2 text-sm font-semibold text-[#060541] dark:text-white/80 hover:text-[#060541] dark:hover:text-white bg-white dark:bg-white/8 hover:bg-[#060541]/5 dark:hover:bg-white/12 border border-[#060541]/20 dark:border-white/15 px-4 py-2 rounded-xl shadow-sm active:scale-95 transition-all duration-200"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#060541] dark:text-white/80 border border-[#060541]/20 dark:border-white/15 px-4 py-2 rounded-xl active:scale-95 transition-all duration-200"
           >
             <ArrowLeft className="h-4 w-4" />
             {isRTL ? 'رجوع' : 'Back'}
@@ -1337,7 +1306,7 @@ export default function WaktiAssistant() {
   const renderPurposeSelect = () => (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="flex mb-8">
-        <button onClick={() => setStep('platform')} className="inline-flex items-center gap-2 text-sm font-semibold text-[#060541] dark:text-white/80 hover:text-[#060541] dark:hover:text-white bg-white dark:bg-white/8 hover:bg-[#060541]/5 dark:hover:bg-white/12 border border-[#060541]/20 dark:border-white/15 px-4 py-2 rounded-xl shadow-sm active:scale-95 transition-all duration-200">
+        <button onClick={() => setStep('platform')} className="inline-flex items-center gap-2 text-sm font-semibold text-[#060541] dark:text-white/80 border border-[#060541]/20 dark:border-white/15 px-4 py-2 rounded-xl active:scale-95 transition-all duration-200">
           <ArrowLeft className="h-4 w-4" />
           {isRTL ? 'رجوع' : 'Back'}
         </button>
@@ -1433,7 +1402,7 @@ export default function WaktiAssistant() {
             <button
               title="Back to dashboard"
               onClick={() => setStep('dashboard')}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#060541] dark:text-white bg-white dark:bg-white/15 hover:bg-[#060541]/5 dark:hover:bg-white/25 border border-[#060541]/20 dark:border-white/30 px-3 py-1.5 rounded-xl shadow-sm active:scale-95 transition-all duration-200 shrink-0"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#060541] dark:text-white border border-[#060541]/20 dark:border-white/30 px-3 py-1.5 rounded-xl active:scale-95 transition-all duration-200 shrink-0"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               {isRTL ? 'رجوع' : 'Back'}
@@ -2759,7 +2728,7 @@ export default function WaktiAssistant() {
         required: true,
         color: '#10b981',
       },
-      {
+      ...(activeBot?.platform !== 'instagram' ? [{
         icon: '🚀',
         label: isRTL ? 'تثبيت البوت' : 'Install Your Chatbot',
         desc: isRTL ? 'ثبّت البوت على موقعك أو تطبيقك' : 'Install your chatbot on website, mobile app or as embedded chatbot.',
@@ -2767,7 +2736,7 @@ export default function WaktiAssistant() {
         cta: isRTL ? 'نسخ كود التضمين' : 'Copy Embed Code',
         required: true,
         color: '#f59e0b',
-      },
+      }] : []),
     ];
 
     const ENHANCEMENT_ITEMS = [
@@ -2793,7 +2762,7 @@ export default function WaktiAssistant() {
         <div className="flex mb-6">
           <button
             onClick={() => { setActiveBot(null); setStep('list'); }}
-            className="inline-flex items-center gap-2 text-sm font-semibold text-[#060541] dark:text-white/80 hover:text-[#060541] dark:hover:text-white bg-white dark:bg-white/8 hover:bg-[#060541]/5 border border-[#060541]/20 dark:border-white/15 px-4 py-2 rounded-xl shadow-sm active:scale-95 transition-all duration-200"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#060541] dark:text-white/80 border border-[#060541]/20 dark:border-white/15 px-4 py-2 rounded-xl active:scale-95 transition-all duration-200"
           >
             <ArrowLeft className="h-4 w-4" />
             {isRTL ? 'رجوع' : 'Back'}
