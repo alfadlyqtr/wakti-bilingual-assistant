@@ -2699,7 +2699,25 @@ export default function WaktiAssistant() {
       finally { setSavingKB(false); }
     };
 
+    const isIgConnected = !!(activeBot?.instagram_business_account_id);
+    const igHandle = activeBot?.instagram_page_name ? `@${activeBot.instagram_page_name}` : null;
+
     const SETUP_ITEMS = [
+      ...(activeBot?.platform === 'instagram' ? [{
+        icon: '📸',
+        label: isRTL ? 'ربط حساب انستقرام' : 'Connect Instagram Account',
+        desc: isIgConnected
+          ? (isRTL ? `متصل: ${igHandle || activeBot.instagram_business_account_id}` : `Connected: ${igHandle || activeBot.instagram_business_account_id}`)
+          : (isRTL ? 'اربط حساب انستقرام البروفيشنال الخاص بك حتى يستقبل البوت الرسائل' : 'Connect your Instagram Professional account so the bot can receive DMs.'),
+        action: isIgConnected ? null : () => {
+          const origin = window.location.hostname === 'localhost' ? 'https://wakti.qa' : window.location.origin;
+          window.location.href = buildInstagramOAuthUrl(activeBot.id, origin);
+        },
+        cta: isIgConnected ? (isRTL ? '✅ متصل' : '✅ Connected') : (isRTL ? 'ربط انستقرام' : 'Connect Instagram'),
+        required: true,
+        color: isIgConnected ? '#10b981' : '#e1306c',
+        connected: isIgConnected,
+      }] : []),
       {
         icon: '🔀',
         label: isRTL ? 'تعديل تدفق المحادثة' : 'Edit Your Chat Flow',
