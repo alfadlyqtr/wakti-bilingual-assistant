@@ -2808,6 +2808,8 @@ const PresentationTab: React.FC = () => {
     try {
       // Use stored template or fallback to 0 for slides enhanced before template tracking
       const variationToUse = templateIdx !== undefined ? templateIdx : 0;
+      // Preserve last used prompt + chips so manual edit refresh keeps the same style
+      const lastPrompt = lastPromptMap[selectedSlideIndex];
       const response = await callEdgeFunctionWithRetry<{ success: boolean; html?: string; error?: string; template?: number }>('wakti-slide-enhance', {
         body: {
           slide: {
@@ -2826,6 +2828,8 @@ const PresentationTab: React.FC = () => {
           theme: selectedTheme,
           language,
           variation: variationToUse,
+          keywords: lastPrompt?.chips?.length > 0 ? lastPrompt.chips : undefined,
+          note: lastPrompt?.note?.trim() || undefined,
         },
         maxRetries: 2,
         retryDelay: 1000,
@@ -2848,7 +2852,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsUpdatingEnhancement(false);
     }
-  }, [slides, selectedSlideIndex, enhancedTemplateMap, selectedTheme, language, savedEnhancedMap]);
+  }, [slides, selectedSlideIndex, enhancedTemplateMap, selectedTheme, language, savedEnhancedMap, lastPromptMap]);
 
   // Instantly patch color AND text content into the enhanced HTML — no AI call
   // Uses direct string replacement on inline style attributes (works with dangerouslySetInnerHTML)

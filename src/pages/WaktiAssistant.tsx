@@ -80,7 +80,8 @@ const IG_OAUTH_SCOPES = 'instagram_business_basic,instagram_business_manage_mess
 
 function buildInstagramOAuthUrl(botId: string, origin: string): string {
   const state = btoa(JSON.stringify({ bot_id: botId, origin }));
-  return `https://www.instagram.com/oauth/authorize?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(IG_OAUTH_CALLBACK_URL)}&scope=${encodeURIComponent(IG_OAUTH_SCOPES)}&state=${encodeURIComponent(state)}&response_type=code&enable_fb_login=0&force_reauth=0`;
+  const authorizeUrl = `https://www.instagram.com/oauth/authorize/third_party/?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(IG_OAUTH_CALLBACK_URL)}&scope=${encodeURIComponent(IG_OAUTH_SCOPES)}&state=${encodeURIComponent(state)}&response_type=code&enable_fb_login=0&force_reauth=0`;
+  return `https://www.instagram.com/accounts/login/?force_authentication=1&platform_app_id=${META_APP_ID}&next=${encodeURIComponent(authorizeUrl)}`;
 }
 
 // ============================================
