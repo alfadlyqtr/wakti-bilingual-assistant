@@ -62,6 +62,7 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 import {
   ChatbotBot,
   ChatbotService,
@@ -69,6 +70,18 @@ import {
   PURPOSE_TEMPLATES,
   FlowNodeType,
 } from '@/services/chatbotService';
+
+// ============================================
+// INSTAGRAM OAUTH CONFIG
+// ============================================
+const META_APP_ID = '1588786362363251';
+const IG_OAUTH_CALLBACK_URL = 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/instagram-oauth-callback';
+const IG_OAUTH_SCOPES = 'instagram_basic,pages_show_list,pages_read_engagement,instagram_manage_messages,pages_manage_metadata,business_management';
+
+function buildInstagramOAuthUrl(botId: string, origin: string): string {
+  const state = btoa(JSON.stringify({ bot_id: botId, origin }));
+  return `https://www.facebook.com/v21.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(IG_OAUTH_CALLBACK_URL)}&scope=${encodeURIComponent(IG_OAUTH_SCOPES)}&state=${encodeURIComponent(state)}&response_type=code`;
+}
 
 // ============================================
 // RATING OPTIONS (fixed, not editable)
@@ -343,6 +356,9 @@ export default function WaktiAssistant() {
   const [igConnecting, setIgConnecting] = useState(false);
   const [igSubStep, setIgSubStep] = useState<'login' | 'select_page'>('login');
   const [igSelectedPage, setIgSelectedPage] = useState<string | null>(null);
+  const [igPages, setIgPages] = useState<any[]>([]);
+  const [igLongLivedToken, setIgLongLivedToken] = useState<string>('');
+  const [igPendingBotId, setIgPendingBotId] = useState<string>('');
 
   // When builder opens: measure the scroll container and lock its scroll
   useEffect(() => {
@@ -387,6 +403,72 @@ export default function WaktiAssistant() {
     }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [edges]);
+
+  // ============================================
+  // INSTAGRAM OAUTH RETURN HANDLER
+  // ============================================
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const igCode = params.get('ig_code');
+    const igError = params.get('ig_error');
+    const botId = params.get('bot_id');
+
+    // Clean URL params regardless
+    if (igCode || igError) {
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+    }
+
+    if (igError) {
+      toast.error(isRTL ? 'فشل في ربط انستقرام' : `Instagram connect failed: ${igError}`);
+      return;
+    }
+
+    if (igCode && botId) {
+      // Exchange code for token via Edge Function
+      setIgConnecting(true);
+      setIgPendingBotId(botId);
+      setStep('instagram-connect');
+      setIgSubStep('login');
+
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) throw new Error('Not authenticated');
+
+          const res = await fetch(IG_OAUTH_CALLBACK_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              action: 'exchange_code',
+              code: igCode,
+              redirect_uri: IG_OAUTH_CALLBACK_URL,
+              bot_id: botId,
+            }),
+          });
+
+          const data = await res.json();
+          if (!res.ok || data.error) throw new Error(data.error || 'Exchange failed');
+
+          // Store pages and show selection
+          setIgPages(data.pages || []);
+          setIgLongLivedToken(data.long_lived_token || '');
+          setIgSubStep('select_page');
+          toast.success(isRTL ? 'تم التسجيل! اختر الحساب' : 'Logged in! Select your page');
+        } catch (err) {
+          console.error('IG OAuth exchange error:', err);
+          toast.error(isRTL ? 'فشل في ربط انستقرام' : 'Failed to connect Instagram');
+          setStep('platform');
+        } finally {
+          setIgConnecting(false);
+        }
+      })();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ============================================
   // DATA FETCHING
@@ -1007,14 +1089,14 @@ export default function WaktiAssistant() {
           </div>
         </button>
 
-        {/* Instagram - Coming Soon */}
-        <div
-          className="relative rounded-2xl border-2 text-left overflow-hidden bg-white dark:bg-card border-border/40 opacity-60 cursor-not-allowed"
+        {/* Instagram */}
+        <button
+          onClick={() => { setSelectedPlatform('instagram'); setStep('instagram-connect'); setIgSubStep('login'); }}
+          className={cn(
+            "relative rounded-2xl border-2 text-left overflow-hidden bg-white dark:bg-card transition-all duration-200 hover:shadow-lg active:scale-[0.98]",
+            selectedPlatform === 'instagram' ? "border-pink-500 shadow-lg" : "border-border/40 hover:border-pink-500/50"
+          )}
         >
-          {/* Coming Soon badge */}
-          <div className="absolute top-2.5 right-2.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow">
-            {isRTL ? 'قريباً' : 'Coming Soon'}
-          </div>
           {/* Preview banner */}
           <div className="h-40 bg-gradient-to-br from-pink-50 to-purple-50 dark:from-pink-900/10 dark:to-purple-900/10 relative overflow-hidden flex items-center justify-center">
             <div className="w-44 bg-white dark:bg-zinc-800 rounded-xl shadow-lg overflow-hidden border border-black/5 text-left">
@@ -1038,7 +1120,7 @@ export default function WaktiAssistant() {
               </p>
             </div>
           </div>
-        </div>
+        </button>
       </div>
     </div>
   );
@@ -1047,10 +1129,48 @@ export default function WaktiAssistant() {
   // RENDER: INSTAGRAM CONNECT
   // ============================================
   const renderInstagramConnect = () => {
-    const mockPages = [
-      { id: '1', name: 'Wakti Official', handle: '@wakti.ai', followers: '12.4k' },
-      { id: '2', name: 'My Personal Store', handle: '@mystore', followers: '840' },
-    ];
+    // Handle selecting a page and saving it to the bot
+    const handleSelectPage = async () => {
+      if (!igSelectedPage || !igPendingBotId) return;
+      const selected = igPages.find((p: any) => p.page_id === igSelectedPage);
+      if (!selected) return;
+
+      setIgConnecting(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error('Not authenticated');
+
+        const res = await fetch(IG_OAUTH_CALLBACK_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            action: 'select_page',
+            bot_id: igPendingBotId,
+            page_id: selected.page_id,
+            page_name: selected.page_name,
+            page_access_token: selected.page_access_token,
+            ig_account_id: selected.ig_account?.id || null,
+            long_lived_token: igLongLivedToken,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || 'Failed to save');
+
+        toast.success(isRTL ? 'تم ربط الحساب بنجاح!' : 'Account connected successfully!');
+        // Refresh bots and proceed to purpose selection
+        await fetchBots();
+        setStep('purpose');
+      } catch (err) {
+        console.error('IG select page error:', err);
+        toast.error(isRTL ? 'فشل في ربط الحساب' : 'Failed to connect account');
+      } finally {
+        setIgConnecting(false);
+      }
+    };
 
     return (
       <div className="max-w-2xl mx-auto px-4 py-8">
@@ -1086,20 +1206,48 @@ export default function WaktiAssistant() {
                   : 'Login to your Instagram account to enable the chatbot on your handle. Instagram bot owners are required to have at least a "manager" level of permissions or higher to access all of the features.'}
               </p>
 
-              <Button
-                onClick={() => {
-                  setIgConnecting(true);
-                  setTimeout(() => {
-                    setIgConnecting(false);
-                    setIgSubStep('select_page');
-                  }, 1500);
-                }}
-                disabled={igConnecting}
-                className="w-full h-12 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md transition-all gap-2"
-              >
-                {igConnecting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Instagram className="h-5 w-5" />}
-                {isRTL ? 'تسجيل الدخول' : 'Login'}
-              </Button>
+              {igConnecting ? (
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <Loader2 className="h-8 w-8 animate-spin text-pink-500" />
+                  <p className="text-sm text-muted-foreground">{isRTL ? 'جارٍ الربط...' : 'Connecting...'}</p>
+                </div>
+              ) : (
+                <Button
+                  onClick={async () => {
+                    // First create the bot, then redirect to Meta OAuth
+                    if (!user?.id) return;
+                    setIgConnecting(true);
+                    try {
+                      const bot = await ChatbotService.createBot({
+                        user_id: user.id,
+                        name: isRTL ? 'بوت انستقرام' : 'Instagram Bot',
+                        platform: 'instagram',
+                      });
+                      setIgPendingBotId(bot.id);
+                      setBots(prev => [bot, ...prev]);
+                      // Redirect to Meta OAuth — always use production origin so Meta doesn't reject localhost
+                      const origin = window.location.hostname === 'localhost'
+                        ? 'https://wakti.qa'
+                        : window.location.origin;
+                      window.location.href = buildInstagramOAuthUrl(bot.id, origin);
+                    } catch (err) {
+                      console.error('Failed to create IG bot:', err);
+                      toast.error(isRTL ? 'فشل في الإنشاء' : 'Failed to create bot');
+                      setIgConnecting(false);
+                    }
+                  }}
+                  className="w-full h-12 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md transition-all gap-2"
+                >
+                  <Instagram className="h-5 w-5" />
+                  {isRTL ? 'تسجيل الدخول عبر فيسبوك' : 'Login with Facebook'}
+                </Button>
+              )}
+
+              <p className="text-[11px] text-muted-foreground mt-4">
+                {isRTL
+                  ? 'ستتم إعادة توجيهك إلى فيسبوك لمنح الصلاحيات المطلوبة. يجب أن يكون حساب انستقرام الخاص بك حساب احترافي مرتبط بصفحة فيسبوك.'
+                  : 'You will be redirected to Facebook to grant permissions. Your Instagram account must be a Professional account linked to a Facebook Page.'}
+              </p>
             </>
           ) : (
             <>
@@ -1114,51 +1262,72 @@ export default function WaktiAssistant() {
                 {isRTL ? 'اختر الحساب الذي تريد ربط البوت به' : 'Choose the Instagram account you want to connect to this bot'}
               </p>
 
-              <div className="space-y-3 mb-8">
-                {mockPages.map(page => (
-                  <button
-                    key={page.id}
-                    onClick={() => setIgSelectedPage(page.id)}
-                    className={cn(
-                      "w-full flex items-center gap-4 p-4 rounded-2xl border-2 text-left transition-all duration-200",
-                      igSelectedPage === page.id
-                        ? "border-[#060541] dark:border-white bg-[#060541]/5 dark:bg-white/10"
-                        : "border-border/40 hover:border-border"
-                    )}
-                  >
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-500 p-0.5 shrink-0">
-                      <div className="w-full h-full bg-white dark:bg-zinc-800 rounded-full flex items-center justify-center text-xs font-bold text-foreground">
-                        {page.name.charAt(0)}
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-bold text-sm text-foreground truncate">{page.name}</h4>
-                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                        <span>{page.handle}</span>
-                        <span>·</span>
-                        <span>{page.followers} {isRTL ? 'متابع' : 'followers'}</span>
-                      </div>
-                    </div>
-                    <div className={cn(
-                      "w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
-                      igSelectedPage === page.id ? "border-[#060541] dark:border-white bg-[#060541] dark:bg-white" : "border-muted-foreground/30"
-                    )}>
-                      {igSelectedPage === page.id && <Check className="h-3 w-3 text-white dark:text-[#060541]" />}
-                    </div>
-                  </button>
-                ))}
-              </div>
+              {igPages.length === 0 ? (
+                <div className="py-8 text-center">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {isRTL ? 'لم يتم العثور على صفحات. تأكد من أن حسابك مرتبط بصفحة فيسبوك وحساب انستقرام احترافي.' : 'No pages found. Make sure your account is linked to a Facebook Page with a Professional Instagram account.'}
+                  </p>
+                  <Button variant="outline" onClick={() => setIgSubStep('login')}>
+                    {isRTL ? 'حاول مرة أخرى' : 'Try Again'}
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-3 mb-8">
+                    {igPages.map((page: any) => (
+                      <button
+                        key={page.page_id}
+                        onClick={() => setIgSelectedPage(page.page_id)}
+                        className={cn(
+                          "w-full flex items-center gap-4 p-4 rounded-2xl border-2 text-left transition-all duration-200",
+                          igSelectedPage === page.page_id
+                            ? "border-[#060541] dark:border-white bg-[#060541]/5 dark:bg-white/10"
+                            : "border-border/40 hover:border-border"
+                        )}
+                      >
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-500 p-0.5 shrink-0">
+                          {page.ig_account?.profile_picture_url ? (
+                            <img src={page.ig_account.profile_picture_url} alt="" className="w-full h-full rounded-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full bg-white dark:bg-zinc-800 rounded-full flex items-center justify-center text-xs font-bold text-foreground">
+                              {(page.page_name || 'P').charAt(0)}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-bold text-sm text-foreground truncate">
+                            {page.ig_account?.name || page.page_name}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                            {page.ig_account?.username && <span>@{page.ig_account.username}</span>}
+                            {page.ig_account?.followers_count != null && (
+                              <>
+                                <span>·</span>
+                                <span>{page.ig_account.followers_count.toLocaleString()} {isRTL ? 'متابع' : 'followers'}</span>
+                              </>
+                            )}
+                            {!page.ig_account && <span className="text-amber-500">{isRTL ? 'لا يوجد حساب انستقرام مرتبط' : 'No IG account linked'}</span>}
+                          </div>
+                        </div>
+                        <div className={cn(
+                          "w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
+                          igSelectedPage === page.page_id ? "border-[#060541] dark:border-white bg-[#060541] dark:bg-white" : "border-muted-foreground/30"
+                        )}>
+                          {igSelectedPage === page.page_id && <Check className="h-3 w-3 text-white dark:text-[#060541]" />}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
 
-              <Button
-                onClick={() => {
-                  toast.success(isRTL ? 'تم ربط الحساب بنجاح!' : 'Account connected successfully!');
-                  setStep('purpose');
-                }}
-                disabled={!igSelectedPage}
-                className="w-full h-12 text-base font-semibold bg-[#060541] hover:bg-[#060541]/90 text-white dark:bg-white dark:hover:bg-white/90 dark:text-[#060541] rounded-xl shadow-md transition-all"
-              >
-                {isRTL ? 'متابعة' : 'Continue'}
-              </Button>
+                  <Button
+                    onClick={handleSelectPage}
+                    disabled={!igSelectedPage || igConnecting}
+                    className="w-full h-12 text-base font-semibold bg-[#060541] hover:bg-[#060541]/90 text-white dark:bg-white dark:hover:bg-white/90 dark:text-[#060541] rounded-xl shadow-md transition-all"
+                  >
+                    {igConnecting ? <Loader2 className="h-5 w-5 animate-spin" /> : (isRTL ? 'متابعة' : 'Continue')}
+                  </Button>
+                </>
+              )}
             </>
           )}
         </div>

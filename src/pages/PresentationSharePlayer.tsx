@@ -26,6 +26,8 @@ export default function PresentationSharePlayer(): React.ReactElement {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const [isNative, setIsNative] = useState(false);
+  const [enhanceScale, setEnhanceScale] = useState(0.25);
+  const slideContainerRef = useRef<HTMLDivElement>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -81,6 +83,20 @@ export default function PresentationSharePlayer(): React.ReactElement {
   useEffect(() => {
     setIsNative(isInNativeApp());
   }, []);
+
+  // Keep enhanceScale in sync with container width (same logic as PresentationTab)
+  useEffect(() => {
+    const el = slideContainerRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.getBoundingClientRect().width;
+      if (w > 0) setEnhanceScale(w / 1920);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [state.status]);
 
   const manifest = state.status === 'ready' ? state.manifest : null;
 
@@ -208,7 +224,7 @@ export default function PresentationSharePlayer(): React.ReactElement {
       <InAppWaktiEscape language="en" variant="dark" containerClassName="max-w-4xl" />
 
       {!isNative && (
-        <header className="flex-shrink-0 border-b border-white/10 bg-black/20 backdrop-blur px-4 py-2">
+        <header className="flex-shrink-0 border-b border-white/10 bg-slate-800 px-4 py-2">
           <div className="max-w-4xl mx-auto flex items-center gap-3">
             <img
               src="/lovable-uploads/33ebdcdd-300d-42cf-be5e-f6a82ca9ef4d.png"
@@ -216,8 +232,8 @@ export default function PresentationSharePlayer(): React.ReactElement {
               className="w-7 h-7 flex-shrink-0 rounded"
             />
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold truncate">{state.manifest.title}</div>
-              <div className="text-xs opacity-60 truncate">Wakti AI Presentation</div>
+              <div className="text-sm font-semibold truncate text-[#f2f2f2]">{state.manifest.title}</div>
+              <div className="text-xs truncate text-[hsl(210_100%_65%)]">Wakti AI Presentation</div>
             </div>
           </div>
         </header>
@@ -230,13 +246,42 @@ export default function PresentationSharePlayer(): React.ReactElement {
           {/* Slide area */}
           <div className="flex-shrink-0 p-3">
             {isV2 && activeSlideDataV2 ? (
-              <PresentationSlideReadOnly
-                slide={activeSlideDataV2}
-                theme={state.manifest.theme}
-                language={state.manifest.language}
-                slideIndex={activeSlideIndex}
-                totalSlides={state.manifest.slides.length}
-              />
+              activeSlideDataV2.enhancedHtml ? (
+                <div ref={slideContainerRef} className="aspect-video rounded-xl overflow-hidden relative w-full bg-black">
+                  <iframe
+                    title={`Slide ${activeSlideIndex + 1}`}
+                    sandbox="allow-same-origin"
+                    srcDoc={activeSlideDataV2.enhancedHtml}
+                    style={{
+                      width: '1920px',
+                      height: '1080px',
+                      transform: `scale(${enhanceScale})`,
+                      transformOrigin: 'top left',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      border: 'none',
+                      overflow: 'hidden',
+                    }}
+                  />
+                </div>
+              ) : activeSlideDataV2.slideImageUrl ? (
+                <div className="aspect-video rounded-xl overflow-hidden relative w-full bg-black">
+                  <img
+                    src={activeSlideDataV2.slideImageUrl}
+                    alt={activeSlideDataV2.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <PresentationSlideReadOnly
+                  slide={activeSlideDataV2}
+                  theme={state.manifest.theme}
+                  language={state.manifest.language}
+                  slideIndex={activeSlideIndex}
+                  totalSlides={state.manifest.slides.length}
+                />
+              )
             ) : (
               <div className="aspect-video rounded-2xl overflow-hidden relative bg-black flex items-center justify-center">
                 {activeSlideImageUrl ? (

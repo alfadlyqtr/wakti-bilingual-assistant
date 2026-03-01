@@ -59,7 +59,9 @@ interface Slide {
 interface EnhanceRequest {
   slide: Slide;
   language: string;
-  variation?: number; // Used to keep the same style seed when updating
+  variation?: number;
+  keywords?: string[];
+  note?: string;
 }
 
 function escapeHtml(text: string): string {
@@ -71,89 +73,134 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#039;");
 }
 
-// Style seeds — each call picks a random one so the AI always gets a fresh creative direction
+// Style seeds — color/mood direction only. All layout/sizing/contrast rules are locked below.
 const STYLE_SEEDS = [
-  "neon cyberpunk with dark background, glowing cyan and magenta accents",
-  "warm editorial with cream background, burgundy accents, classic book feel",
-  "ocean gradient flowing teal-to-blue, frosted glass bullet cards, organic wave shapes",
-  "sunset bold with hot red-to-orange gradient, giant slide numbers in background",
-  "nature clean white background with forest green dots, minimal and airy",
-  "royal purple deep gradient with gold accents, concentric circle decorations",
-  "pastel pop with rainbow-colored bullet cards, 2-column grid layout, light gradient bg",
-  "newspaper broadsheet classic print style, double-border frame, column text layout, sepia tones",
-  "aurora borealis dark with multi-color gradient title text, color-coded side bars per bullet",
-  "monochrome brutalist stark black and white, numbered dividers, grayscale image",
-  "glass morphism with frosted glass card over blurred image background, soft glow",
-  "retro 70s groovy with warm yellows and oranges, large colored circles in bg",
-  "art deco gatsby gold lines on dark navy, geometric patterns, elegant thin borders",
-  "terminal hacker green-on-black monospace code aesthetic, blinking cursor",
-  "watercolor artistic with soft painted edges, splatter shapes, muted earth tones",
-  "memphis design with bold shapes, primary colors, playful patterns, squiggly decorations",
-  "japanese zen minimalism, lots of whitespace, single ink stroke accent, stone textures",
-  "vaporwave aesthetic with pink-purple gradients, retro grid floor, chrome text effects",
-  "blueprint technical drawing style, white lines on deep blue, grid background",
-  "luxury magazine glossy black with subtle gold typography, high contrast image treatment",
-  "comic book pop art with halftone dots, bold outlines, speech-bubble styled bullets",
-  "dark forest with deep emerald-to-black gradient, firefly particles, natural mossy textures",
-  "candy gradient with bright pink to violet to blue, pill-shaped bullet containers",
-  "corporate modern with navy sidebar accent, clean card layout, subtle grid pattern",
-  "nordic frost with icy blue-white palette, geometric snowflake decorations, frosted panels",
-  "terracotta warm with burnt orange and sand tones, arch shapes, Mediterranean feel",
-  "neon tokyo night with dark purple bg, hot pink and electric blue neon signs",
-  "chalkboard school style with dark green bg, chalk-white text, doodle elements",
-  "geometric bauhaus with primary color blocks, circles triangles squares as decorations",
-  "tropical vibrant with lush green and coral, leaf patterns, exotic gradient background",
-  "wakti light mode brand clean, #fcfefd background, #060541 dark text, #e9ceb0 warm accents, premium modern",
-  "wakti dark mode brand deep, #0c0f14 background, #f2f2f2 text, vibrant blue/purple glowing accents, sleek",
+  "dark cinematic: deep navy-to-black gradient background, electric blue accent lines on bullet cards, pure white text",
+  "luxury dark: rich near-black background, gold (#d4af37) accent borders and left-bar on bullets, warm cream (#f5f0e8) text",
+  "neon city: dark charcoal (#1a1a2e) background, neon pink (#ff2d78) and cyan (#00f5ff) glow on bullet cards, white text",
+  "deep ocean: dark teal-to-navy gradient, frosted glass bullet cards (rgba white 0.1 bg + white border), bright white text, coral accents",
+  "ember warm: dark brown-to-black gradient, burnt orange (#e85d04) and amber (#f48c06) left borders on bullets, cream text",
+  "aurora: very dark purple (#0d0221) to midnight blue gradient, multicolor gradient title (pink to purple to cyan via background-clip:text), white bullet text",
+  "slate professional: dark slate (#1e293b) background, indigo (#6366f1) 6px left sidebar stripe accent, clean white text",
+  "forest night: deep emerald (#022c22) to black gradient, bright lime-green (#4ade80) 6px left borders on bullets, white text",
+  "crimson power: near-black (#0f0f0f) background, bold crimson (#dc2626) accent bars as bullet backgrounds at low opacity, white text",
+  "chrome tech: dark metal (#111827) gradient, thin bright silver (#e5e7eb) borders on cards, cyan (#22d3ee) title accent, monospace-feel font",
+  "midnight rose: very dark (#0f0014) background, rose-gold gradient title text, dusty pink (#f9a8d4) left borders on bullets, soft white body text",
+  "volcanic: dark charcoal (#1c1917) background, hot orange-to-red gradient as 6px left border on bullet cards, white text",
+  "arctic minimal: off-white (#f8fafc) background, dark navy (#0f172a) text, bold blue (#3b82f6) title, clean white bullet cards with subtle shadow",
+  "corporate light: pure white background, dark navy (#1e3a5f) header area, accent color (#0ea5e9) 4px left borders on bullets, dark text",
+  "sunrise editorial: warm cream (#fef3c7) background, deep burgundy (#7f1d1d) title text, muted gold (#d97706) bullet card backgrounds",
+  "wakti dark brand: #0c0f14 background, #f2f2f2 text, blue hsl(210,100%,65%) and purple hsl(280,70%,65%) glowing accents on bullets",
+  "wakti light brand: #fcfefd background, #060541 dark text, #e9ceb0 warm accent highlights on bullet cards, premium clean look",
 ];
 
-// Build the AI prompt for generating a unique slide HTML
-function buildPrompt(slide: Slide, isRtl: boolean, styleSeed: string): string {
+function buildPrompt(slide: Slide, isRtl: boolean, styleSeed: string, keywords?: string[], note?: string): string {
   const dir = isRtl ? "rtl" : "ltr";
   const textAlign = isRtl ? "right" : "left";
-  const bulletsJson = JSON.stringify(slide.bullets?.map(b => escapeHtml(b)) || []);
+  const bullets = slide.bullets?.map(b => escapeHtml(b)) || [];
+  const bulletsJson = JSON.stringify(bullets);
   const titleEsc = escapeHtml(slide.title);
   const subtitleEsc = slide.subtitle ? escapeHtml(slide.subtitle) : "";
   const imgUrl = slide.imageUrl || "";
+  const hasBullets = bullets.length > 0;
+  const hasImage = !!imgUrl;
 
-  // Extract explicit color choices if provided from the edit section
-  let colorInstructions = "";
+  let colorOverrides = "";
   if (slide.titleStyle?.color || slide.subtitleStyle?.color || slide.bulletStyle?.color || slide.backgroundColor || slide.backgroundGradient) {
-    colorInstructions = `\nUSER SPECIFIC COLOR OVERRIDES (MUST OBEY THESE EXACT COLORS):`;
-    if (slide.backgroundColor) colorInstructions += `\n- Background Color: ${slide.backgroundColor}`;
-    if (slide.backgroundGradient) colorInstructions += `\n- Background Gradient: ${slide.backgroundGradient}`;
-    if (slide.titleStyle?.color) colorInstructions += `\n- Title Text Color: ${slide.titleStyle.color}`;
-    if (slide.subtitleStyle?.color) colorInstructions += `\n- Subtitle Text Color: ${slide.subtitleStyle.color}`;
-    if (slide.bulletStyle?.color) colorInstructions += `\n- Bullet Text Color: ${slide.bulletStyle.color}`;
-    colorInstructions += `\n(You MUST use these exact hex codes/gradients where specified, but ensure readability. If they conflict, prioritize the user's choice but add subtle drop shadows or borders to make text readable)`;
+    colorOverrides = `\nUSER COLOR OVERRIDES — USE THESE EXACT VALUES:`;
+    if (slide.backgroundColor) colorOverrides += `\n  background-color: ${slide.backgroundColor}`;
+    if (slide.backgroundGradient) colorOverrides += `\n  background: ${slide.backgroundGradient}`;
+    if (slide.titleStyle?.color) colorOverrides += `\n  title color: ${slide.titleStyle.color}`;
+    if (slide.subtitleStyle?.color) colorOverrides += `\n  subtitle color: ${slide.subtitleStyle.color}`;
+    if (slide.bulletStyle?.color) colorOverrides += `\n  bullet text color: ${slide.bulletStyle.color}`;
+    colorOverrides += `\n  (Add text-shadow or semi-transparent bg behind text if needed for readability)`;
   }
 
-  return `You are a world-class presentation designer. Generate a COMPLETE standalone HTML document for a 1920×1080 presentation slide.
+  const layoutHint = hasImage && hasBullets
+    ? "LAYOUT: Split — image on one side (40-45% width, full height), content on the other side. Side-by-side, never stacked."
+    : !hasImage && bullets.length >= 4
+    ? "LAYOUT: Left title column (~35% width) + right stacked bullet cards column (~60% width)."
+    : !hasImage && bullets.length > 0
+    ? "LAYOUT: Centered hero — large title top third, bullets below in clean rows, generous whitespace."
+    : "LAYOUT: Cover slide — full-bleed background, massive centered title, no bullet area.";
 
-CREATIVE DIRECTION: ${styleSeed}
+  return `You are a senior front-end engineer AND award-winning slide designer.
+Task: generate a COMPLETE standalone HTML document for a 1920x1080 presentation slide.
+Treat every rule below as a hard compiler constraint — violating any rule = broken output.
 
-SLIDE DATA:
-- Title: "${titleEsc}"
-${subtitleEsc ? `- Subtitle: "${subtitleEsc}"` : ""}
-- Bullets: ${bulletsJson}
-${imgUrl ? `- Image URL: ${imgUrl}` : "- No image"}
-- Direction: ${dir} (text-align: ${textAlign})${colorInstructions}
+--- CREATIVE DIRECTION (color and mood only) ---
+${styleSeed}
 
-STRICT DESIGN & LAYOUT RULES (CRITICAL):
-1. Output ONLY the HTML. Start with <!DOCTYPE html> and end with </html>.
-2. The slide MUST be exactly 1920px × 1080px. Body: width:1920px; height:1080px; overflow:hidden; margin:0; padding:0.
-3. Use Google Fonts via @import in a <style> tag.
-4. Use ONLY inline styles and <style> tags. No external CSS files.
-5. Include ALL provided bullets.
-6. If an image URL is provided, display it prominently (at least 30% of the slide area) using object-fit:cover and border-radius.
-7. CONTRAST IS NON-NEGOTIABLE: You MUST ensure extremely high contrast for readability. Never put dark text on a dark background, or light text on a light background. If using a colored background, use pure white (#ffffff) or pure black (#000000) for text. If placing text over an image, you MUST use a solid or heavy translucent background color behind the text.
-8. Make it visually STUNNING using gradients, shadows, borders, or glassmorphism.
-9. Support ${isRtl ? "RTL (Arabic)" : "LTR (English)"} text direction natively.
-10. Each bullet must be clearly separated and readable at 24-32px font size. Do NOT cram text. Use adequate padding (e.g., padding: 20px) around text blocks.
-11. The title should be large and impactful (60-90px).
-12. Do NOT use JavaScript. Pure HTML+CSS only.
-13. Do NOT display any slide number like "Slide 1", "Slide 2", "01", "02" etc. anywhere on the slide. No numbering.
-14. ALWAYS include a small "Wakti AI" branding text in the bottom-left corner of the slide (position:absolute; bottom:20px; left:24px; font-size:16px; opacity:0.6; z-index:99; font-weight:bold;). If RTL, place it bottom-right instead.`;
+--- SLIDE CONTENT ---
+Title: "${titleEsc}"
+${subtitleEsc ? `Subtitle: "${subtitleEsc}"` : ""}
+Bullets (render ALL of them): ${bulletsJson}
+${hasImage ? `Image URL: ${imgUrl}` : "No image."}
+Text direction: ${dir} | text-align: ${textAlign}${colorOverrides}
+
+--- LAYOUT ---
+${layoutHint}
+
+--- HARD CONSTRAINTS ---
+
+[OUTPUT]
+- Output ONLY valid HTML. First character: <. Last character: >. Zero markdown. Zero explanation.
+- Must start with <!DOCTYPE html> and end with </html>.
+
+[DIMENSIONS — non-negotiable]
+- html, body: width:1920px; height:1080px; margin:0; padding:0; overflow:hidden;
+- Everything must fit within 1920x1080. Nothing overflows.
+
+[FONTS]
+- Import 1-2 Google Fonts via @import in a <style> tag that match the style direction.
+- ONLY <style> block + inline styles. No external CSS files. No JavaScript.
+
+[SIZING — non-negotiable numbers]
+- Cover/title slide title: font-size 88px-110px
+- Content slide title: font-size 64px-80px
+- Subtitle: font-size 32px-42px
+- Bullet text: font-size 26px-34px
+- Bullet card: min-height:68px; padding:16px 28px;
+- Gap between bullets: 12px-18px
+- Title area: minimum 22% of slide height
+
+[CONTRAST — zero tolerance]
+- Light text on dark bg OR dark text on light bg. Never same-tone.
+- Text over image: mandatory semi-transparent overlay div (rgba(0,0,0,0.65) or higher) covering that region.
+- text-shadow: 0 2px 8px rgba(0,0,0,0.75) on ALL text elements.
+- Bullet card text: always #ffffff or #0a0a0a depending on card background.
+
+[IMAGE — if provided]
+- Minimum 40% of slide width as a full-height side column.
+- object-fit:cover; object-position:center;
+- Position as position:absolute column or flex column — never inline with text flow.
+
+[BULLETS]
+- Render EVERY bullet — never skip or truncate.
+- Each bullet: its own styled card/row. Must have either a colored left border (6-8px solid) OR a colored background.
+- Bullet icon: small colored square or circle before text (CSS only).
+
+[BRANDING — mandatory]
+- "Wakti AI" text: position:absolute; ${isRtl ? "right:24px" : "left:24px"}; bottom:20px; font-size:16px; opacity:0.55; font-weight:600; z-index:99;
+- NO slide numbers anywhere.
+
+[QUALITY CHECKLIST — verify before outputting]
+- Title is 64px+ and visually dominant
+- Every bullet is readable with strong contrast
+- Image (if any) takes at least 40% of slide width
+- No text directly on image without overlay
+- Slide feels full — no large unused empty areas
+- body has width:1920px; height:1080px; overflow:hidden
+- Output starts with <!DOCTYPE html>
+
+Fix any checklist failure before outputting.
+${keywords && keywords.length > 0 ? `
+[USER KEYWORDS - soft guidance, apply if they don't break constraints above]
+The user selected these design keywords: ${keywords.join(', ')}.
+Use them to shape the color, mood, and style - but NEVER at the cost of contrast, sizing, or layout rules.` : ''}
+${note ? `
+[USER NOTE - lowest priority, apply only if safe]
+"${note}"` : ''}`;
 }
 
 Deno.serve(async (req) => {
@@ -163,7 +210,7 @@ Deno.serve(async (req) => {
 
   try {
     const body: EnhanceRequest = await req.json();
-    const { slide, language, variation } = body;
+    const { slide, language, variation, keywords, note } = body;
     
     if (!slide) {
       return new Response(
@@ -189,7 +236,7 @@ Deno.serve(async (req) => {
       : Math.floor(Math.random() * STYLE_SEEDS.length);
     const styleSeed = STYLE_SEEDS[seedIndex];
 
-    const prompt = buildPrompt(slide, isRtl, styleSeed);
+    const prompt = buildPrompt(slide, isRtl, styleSeed, keywords, note);
 
     const startTime = Date.now();
 
@@ -202,11 +249,11 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: "You are a presentation HTML generator. Output ONLY valid HTML. No markdown fences, no explanations." },
+          { role: "system", content: "You are a senior front-end engineer who generates pixel-perfect HTML slides. Output ONLY valid HTML starting with <!DOCTYPE html>. No markdown fences. No explanations. Every hard constraint in the user prompt is a must-pass requirement — treat them like compiler errors." },
           { role: "user", content: prompt },
         ],
-        max_tokens: 4000,
-        temperature: 1.1, // high creativity
+        max_tokens: 4096,
+        temperature: 0.7,
       }),
     });
 
@@ -231,16 +278,7 @@ Deno.serve(async (req) => {
 
     const durationMs = Date.now() - startTime;
 
-    // Log AI usage
-    await logAIFromRequest(req, {
-      functionName: "wakti-slide-enhance",
-      provider: "openai",
-      model: "gpt-4o-mini",
-      inputText: prompt.slice(0, 500),
-      outputText: html.slice(0, 200),
-      durationMs,
-      status: "success",
-    }).catch(() => {});
+    await logSlideEnhance(req, "success", durationMs);
 
     return new Response(
       JSON.stringify({ success: true, html, template: seedIndex }),
@@ -249,14 +287,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error("Error enhancing slide:", error);
 
-    // Log failed AI usage
-    await logAIFromRequest(req, {
-      functionName: "wakti-slide-enhance",
-      provider: "openai",
-      model: "gpt-4o-mini",
-      status: "error",
-      errorMessage: (error as Error).message,
-    }).catch(() => {});
+    await logSlideEnhance(req, "error", undefined, (error as Error).message);
 
     return new Response(
       JSON.stringify({ success: false, error: (error as Error).message || "Enhancement failed" }),

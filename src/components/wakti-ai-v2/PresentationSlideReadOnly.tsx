@@ -112,7 +112,7 @@ export default function PresentationSlideReadOnly(props: {
       {!slide.slideBg && <div className={`absolute inset-0 bg-gradient-to-br ${bgGradientClass}`} />}
       <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-white/10 via-transparent to-black/25" />
 
-      <div className="relative h-full p-4 sm:p-6 md:p-8 lg:p-10 flex flex-col">
+      <div className="relative h-full p-4 sm:p-6 md:p-8 lg:p-10 pb-8 flex flex-col">
         {slide.role === 'thank_you' ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center">
             <h1
@@ -166,7 +166,7 @@ export default function PresentationSlideReadOnly(props: {
                           className={`${getFontSizeClass(slide.bulletStyle?.fontSize)} leading-tight ${slide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''} ${slide.bulletStyle?.fontStyle === 'italic' ? 'italic' : ''}`}
                           style={{ color: slide.bulletStyle?.color || '#e2e8f0' }}
                         >
-                          {b}
+                          {b.replace(/\*\*/g, '')}
                         </span>
                       </li>
                     ))}
@@ -188,7 +188,7 @@ export default function PresentationSlideReadOnly(props: {
                         className={`${getFontSizeClass(slide.bulletStyle?.fontSize)} leading-snug ${slide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''}`}
                         style={{ color: slide.bulletStyle?.color || '#e2e8f0' }}
                       >
-                        {b}
+                        {b.replace(/\*\*/g, '')}
                       </span>
                     </li>
                   ))}

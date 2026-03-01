@@ -23,6 +23,8 @@ export interface ChatbotBot {
   wakti_project_id: string | null;
   instagram_page_id: string | null;
   instagram_access_token: string | null;
+  instagram_business_account_id: string | null;
+  instagram_page_name: string | null;
   embed_token: string;
   created_at: string;
   updated_at: string;

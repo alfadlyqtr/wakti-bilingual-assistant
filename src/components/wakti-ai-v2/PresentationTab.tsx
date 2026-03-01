@@ -35,6 +35,7 @@ import {
   Lightbulb,
   FileQuestion,
   Globe,
+  X,
   Image as ImageLucide
 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -1181,6 +1182,11 @@ const PresentationTab: React.FC = () => {
   const [isUpdatingEnhancement, setIsUpdatingEnhancement] = useState(false); // separate from isEnhancing to avoid overlay
   const [showEnhanced, setShowEnhanced] = useState(false);
   const [enhanceScale, setEnhanceScale] = useState(0.25);
+  // Enhance popup state
+  const [showEnhancePopup, setShowEnhancePopup] = useState(false);
+  const [enhanceMood, setEnhanceMood] = useState<string>('dark'); // dark, light, colorful, professional
+  const [enhanceKeywordsMap, setEnhanceKeywordsMap] = useState<Record<number, string[]>>({}); // saved per slide
+  const [enhanceNote, setEnhanceNote] = useState(''); // session only, not saved
 
   // One-time cleanup: remove old topic-text-based keys (format: wakti-enhanced-word_word_...)
   useEffect(() => {
@@ -1188,7 +1194,7 @@ const PresentationTab: React.FC = () => {
       const toDelete: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && k.startsWith('wakti-enhanced-') && /[a-zA-Z_]{5,}/.test(k.replace('wakti-enhanced-', ''))) {
+        if (k && k.startsWith('wakti-enhanced-') && /[a-zA-Z].*_|_.*[a-zA-Z]/.test(k.replace('wakti-enhanced-', ''))) {
           toDelete.push(k);
         }
       }
@@ -2024,8 +2030,9 @@ const PresentationTab: React.FC = () => {
   const handleCreateShareLink = useCallback(async () => {
     if (slides.length === 0) return;
     
-    // If we already have a share link, just copy it again
-    if (generatedShareUrl) {
+    // If we already have a share link AND no slides have been AI-enhanced, just copy it again
+    const hasEnhancedSlides = Object.keys(enhancedHtmlMap).length > 0;
+    if (generatedShareUrl && !hasEnhancedSlides) {
       try {
         await navigator.clipboard.writeText(generatedShareUrl);
         toast.success(language === 'ar' ? 'تم نسخ رابط المشاركة' : 'Share link copied');
@@ -2131,7 +2138,50 @@ const PresentationTab: React.FC = () => {
       const { data: thumbUrlData } = supabase.storage.from(bucket).getPublicUrl(thumbnailPath);
       setGeneratedThumbnailUrl(thumbUrlData.publicUrl);
 
-      // Restore original slide index
+      // Restore original slide index after thumbnail
+      setSelectedSlideIndex(originalSlideIndex);
+
+      // Step 2b: Capture each slide as a screenshot image (pixel-perfect match for share player)
+      const slideImageUrls: (string | null)[] = [];
+      for (let i = 0; i < slides.length; i++) {
+        toast.loading(
+          language === 'ar' ? `جارٍ التقاط الشريحة ${i + 1}/${slides.length}...` : `Capturing slide ${i + 1}/${slides.length}...`,
+          { id: toastId }
+        );
+        setSelectedSlideIndex(i);
+        await waitForNextPaint();
+        if (slidePreviewRef.current) {
+          await waitForSlideAssetsReady(slidePreviewRef.current);
+        }
+        await new Promise(r => setTimeout(r, 150));
+
+        try {
+          const slideCanvas = await html2canvas(slidePreviewRef.current!, {
+            scale: 1.5,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: null,
+            logging: false,
+          });
+          const slideJpeg = slideCanvas.toDataURL('image/jpeg', 0.88);
+          const slideBlob = dataUrlToBlob(slideJpeg);
+          const slidePath = `${basePath}/slide-${i}.jpg`;
+          const { error: slideUploadErr } = await supabase.storage.from(bucket).upload(slidePath, slideBlob, {
+            contentType: 'image/jpeg',
+            upsert: true,
+          });
+          if (!slideUploadErr) {
+            const { data: slideUrlData } = supabase.storage.from(bucket).getPublicUrl(slidePath);
+            slideImageUrls.push(slideUrlData.publicUrl);
+          } else {
+            slideImageUrls.push(null);
+          }
+        } catch {
+          slideImageUrls.push(null);
+        }
+      }
+
+      // Restore original slide index after captures
       setSelectedSlideIndex(originalSlideIndex);
 
       // Step 3: Generate/retrieve audio for all slides (per-slide) to get exact durations
@@ -2261,6 +2311,8 @@ const PresentationTab: React.FC = () => {
             imageFocusY: s.imageFocusY,
             slideBg: s.slideBg,
             voiceGender: s.voiceGender,
+            enhancedHtml: enhancedHtmlMap[idx] || undefined,
+            slideImageUrl: slideImageUrls[idx] || undefined,
           },
         })),
       };
@@ -2296,7 +2348,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsExporting(false);
     }
-  }, [bakeImageTransform, brief, generatedShareUrl, language, selectedSlideIndex, selectedTheme, slides, topic, waitForNextPaint, waitForSlideAssetsReady]);
+  }, [bakeImageTransform, brief, enhancedHtmlMap, generatedShareUrl, language, selectedSlideIndex, selectedTheme, slides, topic, waitForNextPaint, waitForSlideAssetsReady]);
 
   // Load saved presentations
   const loadSavedPresentations = useCallback(async () => {
@@ -2668,7 +2720,7 @@ const PresentationTab: React.FC = () => {
   const [usedTemplatesMap, setUsedTemplatesMap] = useState<Record<number, Set<number>>>({});
 
   // Enhance current slide with AI-generated HTML
-  const handleEnhanceSlide = useCallback(async (variation?: number) => {
+  const handleEnhanceSlide = useCallback(async (variation?: number, keywords?: string[], note?: string) => {
     if (!slides[selectedSlideIndex]) return;
     const slide = slides[selectedSlideIndex];
     setIsEnhancing(true);
@@ -2677,19 +2729,19 @@ const PresentationTab: React.FC = () => {
       const usedTemplates = usedTemplatesMap[selectedSlideIndex] || new Set();
       
       // Generate a random template index (0-11) that's different from recent ones
-      const TOTAL_TEMPLATES = 12;
+      const TOTAL_TEMPLATES = 17;
       let randomVariation: number;
       if (usedTemplates.size >= TOTAL_TEMPLATES - 1) {
-        // All templates used, reset and pick random
         randomVariation = Math.floor(Math.random() * TOTAL_TEMPLATES);
       } else {
-        // Pick a template not recently used
         do {
           randomVariation = Math.floor(Math.random() * TOTAL_TEMPLATES);
         } while (usedTemplates.has(randomVariation));
       }
       
       const variationToUse = variation !== undefined ? variation : randomVariation;
+
+      console.log('[AI Enhance] sending keywords:', keywords, 'note:', note, 'variation:', variationToUse);
       
       const response = await callEdgeFunctionWithRetry<{ success: boolean; html?: string; error?: string; template?: number }>('wakti-slide-enhance', {
         body: {
@@ -2709,6 +2761,8 @@ const PresentationTab: React.FC = () => {
           theme: selectedTheme,
           language,
           variation: variationToUse,
+          keywords: keywords && keywords.length > 0 ? keywords : undefined,
+          note: note && note.trim().length > 0 ? note.trim().slice(0, 80) : undefined,
         },
         maxRetries: 2,
         retryDelay: 1000,
@@ -2719,6 +2773,7 @@ const PresentationTab: React.FC = () => {
       }
       setEnhancedHtmlMap(prev => ({ ...prev, [selectedSlideIndex]: response.html! }));
       setEnhancedTemplateMap(prev => ({ ...prev, [selectedSlideIndex]: response.template ?? variationToUse }));
+      setSavedEnhancedMap(prev => { const next = { ...prev }; delete next[selectedSlideIndex]; return next; });
       setShowEnhanced(true);
       // Mark this template as used
       setUsedTemplatesMap(prev => {
@@ -3738,15 +3793,16 @@ const PresentationTab: React.FC = () => {
             </button>
             <button
               onClick={() => {
-                if (showEnhanced) {
+                if (showEnhanced && (savedEnhancedMap[selectedSlideIndex] || enhancedHtmlMap[selectedSlideIndex])) {
                   setShowEnhanced(false);
                 } else {
-                  handleEnhanceSlide();
+                  setEnhanceNote('');
+                  setShowEnhancePopup(true);
                 }
               }}
               disabled={isEnhancing || slides.length === 0}
-              className={`p-2 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${showEnhanced ? 'bg-amber-500 text-white border-amber-500' : 'hover:bg-muted'}`}
-              title={showEnhanced ? (language === 'ar' ? 'العرض العادي' : 'Normal View') : (language === 'ar' ? '✨ تحسين بالذكاء الاصطناعي' : '✨ AI Enhance')}
+              className={`p-2 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${(showEnhanced && (savedEnhancedMap[selectedSlideIndex] || enhancedHtmlMap[selectedSlideIndex])) ? 'bg-amber-500 text-white border-amber-500' : 'hover:bg-muted'}`}
+              title={(showEnhanced && (savedEnhancedMap[selectedSlideIndex] || enhancedHtmlMap[selectedSlideIndex])) ? (language === 'ar' ? 'العرض العادي' : 'Normal View') : (language === 'ar' ? '✨ تحسين بالذكاء الاصطناعي' : '✨ AI Enhance')}
             >
               {isEnhancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
             </button>
@@ -3810,6 +3866,209 @@ const PresentationTab: React.FC = () => {
             </div>
           </div>
         </div>
+
+
+        {/* ─── AI Enhance Popup with Smart Chips ─── */}
+        {showEnhancePopup && (() => {
+          const slide = slides[selectedSlideIndex];
+          const text = `${slide?.title || ''} ${slide?.subtitle || ''} ${(slide?.bullets || []).join(' ')}`.toLowerCase();
+          
+          // Generate context-aware chips based on content
+          const getSmartChips = () => {
+            const chips: { id: string; label: string; labelAr: string }[] = [];
+            
+            // Content-aware chips first (most relevant at top)
+            if (/sport|football|soccer|fifa|world cup|team|match|player|championship|league/.test(text)) {
+              chips.push({ id: 'energetic', label: 'Energetic', labelAr: 'حيوي' });
+              chips.push({ id: 'dynamic', label: 'Dynamic', labelAr: 'ديناميكي' });
+              chips.push({ id: 'bold', label: 'Bold', labelAr: 'جريء' });
+            }
+            if (/tech|ai|software|digital|data|code|startup|innovation|cyber|cloud/.test(text)) {
+              chips.push({ id: 'futuristic', label: 'Futuristic', labelAr: 'مستقبلي' });
+              chips.push({ id: 'techy', label: 'Tech Style', labelAr: 'تقني' });
+              chips.push({ id: 'glassmorphism', label: 'Glassmorphism', labelAr: 'زجاجي' });
+            }
+            if (/business|finance|corporate|investment|market|strategy|revenue|profit/.test(text)) {
+              chips.push({ id: 'executive', label: 'Executive', labelAr: 'تنفيذي' });
+              chips.push({ id: 'corporate', label: 'Corporate', labelAr: 'مؤسسي' });
+            }
+            if (/education|school|university|learning|academic|research|science/.test(text)) {
+              chips.push({ id: 'scholarly', label: 'Scholarly', labelAr: 'أكاديمي' });
+              chips.push({ id: 'elegant', label: 'Elegant', labelAr: 'أنيق' });
+            }
+            if (/health|medical|wellness|fitness|nutrition|hospital/.test(text)) {
+              chips.push({ id: 'trustworthy', label: 'Trustworthy', labelAr: 'موثوق' });
+              chips.push({ id: 'calming', label: 'Calming', labelAr: 'مريح' });
+            }
+            if (/creative|design|art|brand|visual|fashion|portfolio/.test(text)) {
+              chips.push({ id: 'artistic', label: 'Artistic', labelAr: 'فني' });
+              chips.push({ id: 'bold', label: 'Bold', labelAr: 'جريء' });
+            }
+            if (/environment|nature|green|eco|sustainable|climate/.test(text)) {
+              chips.push({ id: 'organic', label: 'Organic', labelAr: 'طبيعي' });
+              chips.push({ id: 'eco', label: 'Eco', labelAr: 'بيئي' });
+            }
+            if (/food|restaurant|cuisine|recipe|chef|cooking/.test(text)) {
+              chips.push({ id: 'warm', label: 'Warm', labelAr: 'دافئ' });
+              chips.push({ id: 'vibrant', label: 'Vibrant', labelAr: 'نابض' });
+            }
+            if (/travel|tourism|adventure|explore|destination/.test(text)) {
+              chips.push({ id: 'adventurous', label: 'Adventurous', labelAr: 'مغامر' });
+              chips.push({ id: 'cinematic', label: 'Cinematic', labelAr: 'سينمائي' });
+            }
+            
+            // Always-available style chips
+            chips.push({ id: 'premium', label: 'Premium', labelAr: 'فاخر' });
+            chips.push({ id: 'minimal', label: 'Minimal', labelAr: 'بسيط' });
+            chips.push({ id: 'dark', label: 'Dark', labelAr: 'داكن' });
+            chips.push({ id: 'light', label: 'Light', labelAr: 'فاتح' });
+            chips.push({ id: 'colorful', label: 'Colorful', labelAr: 'ملون' });
+            chips.push({ id: 'neon', label: 'Neon', labelAr: 'نيون' });
+            chips.push({ id: 'cinematic', label: 'Cinematic', labelAr: 'سينمائي' });
+            chips.push({ id: 'luxury', label: 'Luxury', labelAr: 'فخامة' });
+            
+            // Deduplicate, no limit
+            const seen = new Set<string>();
+            return chips.filter(c => {
+              if (seen.has(c.id)) return false;
+              seen.add(c.id);
+              return true;
+            });
+          };
+          
+          const smartChips = getSmartChips();
+          const selectedChips = enhanceKeywordsMap[selectedSlideIndex] || [];
+          
+          const toggleChip = (chipId: string) => {
+            setEnhanceKeywordsMap(prev => {
+              const current = prev[selectedSlideIndex] || [];
+              const exists = current.includes(chipId);
+              const updated = exists ? current.filter(c => c !== chipId) : [...current, chipId];
+              return { ...prev, [selectedSlideIndex]: updated };
+            });
+          };
+
+          // Chip emoji map
+          const chipEmoji: Record<string, string> = {
+            energetic: '⚡', dynamic: '🔥', bold: '💪', futuristic: '🚀',
+            techy: '💻', glassmorphism: '🪟', executive: '👔', corporate: '🏢',
+            scholarly: '📚', elegant: '✨', trustworthy: '🛡️', calming: '🌊',
+            artistic: '🎨', organic: '🌿', eco: '♻️', warm: '🌅',
+            vibrant: '🎆', adventurous: '🌍', cinematic: '🎬', premium: '💎',
+            minimal: '◻️', dark: '🌙', light: '☀️', colorful: '🌈',
+            neon: '💡', luxury: '👑',
+          };
+
+          return (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              onClick={(e) => { if (e.target === e.currentTarget) setShowEnhancePopup(false); }}
+              style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(12px)' }}
+            >
+              <div className="w-full max-w-md rounded-3xl overflow-hidden shadow-2xl border border-white/10" style={{ background: 'linear-gradient(135deg, #0c0f14 0%, hsl(235 25% 8%) 50%, #0c0f14 100%)' }}>
+                
+                {/* Gradient header banner */}
+                <div className="relative px-6 pt-6 pb-5 text-center overflow-hidden">
+                  <div className="absolute inset-0 opacity-20" style={{ background: 'linear-gradient(135deg, hsl(210 100% 65%) 0%, hsl(280 70% 65%) 50%, hsl(25 95% 60%) 100%)' }} />
+                  <div className="relative">
+                    <div className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg, hsl(210 100% 65%) 0%, hsl(280 70% 65%) 100%)', boxShadow: '0 0 25px hsla(210, 100%, 65%, 0.5)' }}>
+                      <Wand2 className="w-7 h-7 text-white" />
+                    </div>
+                    <h2 className="text-lg font-bold text-white">
+                      {language === 'ar' ? '✨ تحسين بالذكاء الاصطناعي' : '✨ AI Enhance'}
+                    </h2>
+                    <p className="text-xs text-white/60 mt-1">
+                      {language === 'ar'
+                        ? 'الذكاء الاصطناعي يحلل محتواك — أضف توجيهك الاختياري'
+                        : 'AI analyzes your content — add optional style guidance'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div className="h-px mx-6 bg-white/10" />
+
+                {/* Context-aware chips label */}
+                {smartChips.some(c => ['energetic','dynamic','bold','futuristic','techy','glassmorphism','executive','corporate','scholarly','elegant','trustworthy','calming','artistic','organic','eco','warm','vibrant','adventurous'].includes(c.id)) && (
+                  <div className="px-5 pt-4 pb-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-white/40">
+                      {language === 'ar' ? 'مقترح لمحتواك' : 'Suggested for your content'}
+                    </span>
+                  </div>
+                )}
+
+                {/* Smart Chips */}
+                <div className="px-5 pt-2 pb-4 flex flex-wrap gap-2">
+                  {smartChips.map(chip => {
+                    const isSelected = selectedChips.includes(chip.id);
+                    const emoji = chipEmoji[chip.id] || '✦';
+                    return (
+                      <button
+                        key={chip.id}
+                        onClick={() => toggleChip(chip.id)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 ${
+                          isSelected
+                            ? 'border-transparent text-white shadow-lg'
+                            : 'border-white/15 text-white/60 hover:border-white/30 hover:text-white/90 bg-white/5 hover:bg-white/10'
+                        }`}
+                        style={isSelected ? {
+                          background: 'linear-gradient(135deg, hsl(210 100% 65%) 0%, hsl(280 70% 65%) 100%)',
+                          boxShadow: '0 0 12px hsla(210, 100%, 65%, 0.4)',
+                        } : {}}
+                      >
+                        <span>{emoji}</span>
+                        {language === 'ar' ? chip.labelAr : chip.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Status bar */}
+                <div className="mx-5 mb-4 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 flex items-center gap-2">
+                  <span className="text-base">{selectedChips.length > 0 ? '🎯' : '🤖'}</span>
+                  <p className="text-xs text-white/60 flex-1">
+                    {selectedChips.length > 0
+                      ? (language === 'ar'
+                        ? `${selectedChips.length} توجيه محدد — الذكاء الاصطناعي سيطبقها`
+                        : `${selectedChips.length} style hint${selectedChips.length > 1 ? 's' : ''} selected — AI will apply them`)
+                      : (language === 'ar'
+                        ? 'الذكاء الاصطناعي سيختار التصميم المثالي تلقائياً'
+                        : 'AI will auto-detect the perfect design for your content')}
+                  </p>
+                  {selectedChips.length > 0 && (
+                    <button
+                      onClick={() => setEnhanceKeywordsMap(prev => ({ ...prev, [selectedSlideIndex]: [] }))}
+                      className="text-[10px] text-white/30 hover:text-white/60 transition-colors"
+                    >
+                      {language === 'ar' ? 'مسح' : 'Clear'}
+                    </button>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="px-5 pb-5 flex gap-3">
+                  <button
+                    onClick={() => setShowEnhancePopup(false)}
+                    className="flex-1 py-3 rounded-2xl border border-white/15 text-white/60 text-sm font-semibold hover:bg-white/5 transition-all active:scale-[0.98]"
+                  >
+                    {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowEnhancePopup(false);
+                      handleEnhanceSlide(undefined, selectedChips.length > 0 ? selectedChips : undefined, undefined);
+                    }}
+                    className="flex-1 py-3 rounded-2xl text-white text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                    style={{ background: 'linear-gradient(135deg, hsl(210 100% 65%) 0%, hsl(280 70% 65%) 100%)', boxShadow: '0 4px 20px hsla(210, 100%, 65%, 0.4)' }}
+                  >
+                    <Wand2 className="w-4 h-4" />
+                    {language === 'ar' ? 'تحسين الآن ✨' : 'Enhance Now ✨'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Main slide canvas - Theme-aware with per-slide background */}
         <div className="relative max-w-4xl mx-auto">
@@ -4455,7 +4714,7 @@ const PresentationTab: React.FC = () => {
               {language === 'ar' ? 'حفظ التحسين' : 'Save Enhancement'}
             </button>
             <button
-              onClick={() => handleEnhanceSlide()}
+              onClick={() => { setEnhanceNote(''); setShowEnhancePopup(true); }}
               disabled={isEnhancing}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-700 text-white text-sm font-semibold shadow-lg hover:bg-slate-600 transition-all active:scale-95 disabled:opacity-50"
             >
@@ -4465,11 +4724,19 @@ const PresentationTab: React.FC = () => {
           </div>
         )}
         {showEnhanced && savedEnhancedMap[selectedSlideIndex] && !isEnhancing && (
-          <div className="flex justify-center mt-3">
+          <div className="flex justify-center mt-3 gap-3">
             <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm font-medium">
               <Check className="w-4 h-4" />
               {language === 'ar' ? 'تم الحفظ' : 'Saved'}
             </div>
+            <button
+              onClick={() => { setEnhanceNote(''); setShowEnhancePopup(true); }}
+              disabled={isEnhancing}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-700 text-white text-sm font-semibold hover:bg-slate-600 transition-all active:scale-95 disabled:opacity-50"
+            >
+              <RefreshCw className="w-4 h-4" />
+              {language === 'ar' ? 'إعادة التوليد' : 'Regenerate'}
+            </button>
           </div>
         )}
 

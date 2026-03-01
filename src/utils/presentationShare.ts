@@ -66,6 +66,8 @@ export type ShareSlideDataV2 = {
   imageFocusY?: 'top' | 'center' | 'bottom';
   slideBg?: string;
   voiceGender?: 'male' | 'female';
+  enhancedHtml?: string;
+  slideImageUrl?: string;
 };
 
 export type ShareSlideV2 = {
