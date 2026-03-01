@@ -179,19 +179,40 @@ function buildPrompt(slide: Slide, isRtl: boolean, styleSeed: string, _keywords?
     colorOverrides += `\n  (Add text-shadow or semi-transparent bg behind text if needed for readability)`;
   }
 
-  const layoutHint = hasImage && hasBullets
-    ? "LAYOUT: Split — image on one side (40-45% width, full height), content on the other side. Side-by-side, never stacked."
-    : !hasImage && bullets.length >= 4
-    ? "LAYOUT: Left title column (~35% width) + right stacked bullet cards column (~60% width)."
-    : !hasImage && bullets.length > 0
-    ? "LAYOUT: Centered hero — large title top third, bullets below in clean rows, generous whitespace."
-    : "LAYOUT: Cover slide — full-bleed background, massive centered title, no bullet area.";
+  // User note overrides layout logic too — parse image intent from it
+  const noteStr = note ? note.toLowerCase() : "";
+  const userWantsPhotoFull = noteStr.includes("full") && (noteStr.includes("photo") || noteStr.includes("image") || noteStr.includes("bg") || noteStr.includes("background"));
+  const userWantsPhotoLeft = (noteStr.includes("photo") || noteStr.includes("image")) && (noteStr.includes("left") || noteStr.includes("side"));
+  const userWantsPhotoBg = (noteStr.includes("photo as bg") || noteStr.includes("use photo") || noteStr.includes("image as bg") || noteStr.includes("background photo") || noteStr.includes("full-bleed") || noteStr.includes("full bleed") || noteStr.includes("cover"));
+
+  let layoutHint: string;
+  if (hasImage && (userWantsPhotoBg || userWantsPhotoFull)) {
+    layoutHint = "LAYOUT: Full-bleed background photo — image covers entire 1920x1080 as position:absolute top:0 left:0 width:100% height:100% object-fit:cover. Dark semi-transparent overlay (rgba(0,0,0,0.55)) over entire slide. All text centered or left-aligned on top of overlay.";
+  } else if (hasImage && userWantsPhotoLeft) {
+    layoutHint = "LAYOUT: Split — image on left (45% width, full height, object-fit:cover), content (title + bullets) on right (55% width).";
+  } else if (hasImage && hasBullets) {
+    layoutHint = "LAYOUT: Split — image on one side (40-45% width, full height), content on the other side. Side-by-side, never stacked.";
+  } else if (!hasImage && bullets.length >= 4) {
+    layoutHint = "LAYOUT: Left title column (~35% width) + right stacked bullet cards column (~60% width).";
+  } else if (!hasImage && bullets.length > 0) {
+    layoutHint = "LAYOUT: Centered hero — large title top third, bullets below in clean rows, generous whitespace.";
+  } else {
+    layoutHint = "LAYOUT: Cover slide — full-bleed background, massive centered title, no bullet area.";
+  }
+
+  // Build the user design directive section — this is THE TOP PRIORITY
+  const userDesignSection = note ? `
+⚠️ PRIMARY DESIGN DIRECTIVE — HIGHEST PRIORITY — FOLLOW EXACTLY:
+"${note}"
+This overrides any default style. Build the entire slide around this instruction first.
+Every design decision (background, layout, colors, typography, effects) must serve this directive.
+` : "";
 
   return `You are a senior front-end engineer AND award-winning slide designer.
 Task: generate a COMPLETE standalone HTML document for a 1920x1080 presentation slide.
 Treat every rule below as a hard compiler constraint — violating any rule = broken output.
-
---- CREATIVE DIRECTION (color and mood only) ---
+${userDesignSection}
+--- CREATIVE STYLE REFERENCE (secondary — overridden by PRIMARY DIRECTIVE above) ---
 ${styleSeed}
 
 --- SLIDE CONTENT ---
@@ -234,32 +255,32 @@ ${layoutHint}
 - Bullet card text: always #ffffff or #0a0a0a depending on card background.
 
 [IMAGE — if provided]
-- Minimum 40% of slide width as a full-height side column.
+- If PRIMARY DIRECTIVE says use photo as background: image is position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; z-index:0; with a dark overlay div on top.
+- Otherwise: Minimum 40% of slide width as a full-height side column.
 - object-fit:cover; object-position:center;
-- Position as position:absolute column or flex column — never inline with text flow.
+- Never inline with text flow.
 
 [BULLETS]
 - Render EVERY bullet — never skip or truncate.
 - Each bullet: its own styled card/row. Must have either a colored left border (6-8px solid) OR a colored background.
 - Bullet icon: small colored square or circle before text (CSS only).
+- If PRIMARY DIRECTIVE requests glassmorphism: background:rgba(255,255,255,0.1); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.2);
 
 [BRANDING — mandatory]
 - "Wakti AI" text: position:absolute; ${isRtl ? "right:24px" : "left:24px"}; bottom:20px; font-size:16px; opacity:0.55; font-weight:600; z-index:99;
 - NO slide numbers anywhere.
 
 [QUALITY CHECKLIST — verify before outputting]
+- PRIMARY DIRECTIVE is fully implemented
 - Title is 64px+ and visually dominant
 - Every bullet is readable with strong contrast
-- Image (if any) takes at least 40% of slide width
+- Image (if any) is used as instructed by PRIMARY DIRECTIVE
 - No text directly on image without overlay
 - Slide feels full — no large unused empty areas
 - body has width:1920px; height:1080px; overflow:hidden
 - Output starts with <!DOCTYPE html>
 
 Fix any checklist failure before outputting.
-${note ? `
-[USER NOTE - lowest priority, apply only if safe]
-"${note}"` : ''}
 `;
 
 }
@@ -328,7 +349,7 @@ Deno.serve(async (req) => {
     }
 
     const seedIndex = seedKeys.indexOf(seedKey);
-    const prompt = buildPrompt(slide, isRtl, resolvedSeed, keywords, note);
+    const prompt = buildPrompt(slide, isRtl, resolvedSeed, undefined, note);
 
     const startTime = Date.now();
 
@@ -341,11 +362,11 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: "You are a senior front-end engineer who generates pixel-perfect HTML slides. Output ONLY valid HTML starting with <!DOCTYPE html>. No markdown fences. No explanations. Every hard constraint in the user prompt is a must-pass requirement — treat them like compiler errors." },
+          { role: "system", content: "You are a senior front-end engineer who generates pixel-perfect HTML slides. Output ONLY valid HTML starting with <!DOCTYPE html>. No markdown fences. No explanations. Every hard constraint in the user prompt is a must-pass requirement. When a PRIMARY DESIGN DIRECTIVE is given, implement it EXACTLY — do not water it down, do not substitute a generic design. The user's design instruction is law." },
           { role: "user", content: prompt },
         ],
         max_tokens: 4096,
-        temperature: 0.7,
+        temperature: 0.85,
       }),
     });
 
