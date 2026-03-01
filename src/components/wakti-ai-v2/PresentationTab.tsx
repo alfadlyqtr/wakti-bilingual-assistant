@@ -1189,6 +1189,7 @@ const PresentationTab: React.FC = () => {
   const [enhanceKeywordsMap, setEnhanceKeywordsMap] = useState<Record<number, string[]>>({}); // saved per slide
   const [enhanceNote, setEnhanceNote] = useState(''); // session only, not saved
   const [isAmpingPrompt, setIsAmpingPrompt] = useState(false); // AMP button loading state
+  const [lastPromptMap, setLastPromptMap] = useState<Record<number, { note: string; chips: string[] }>>({}); // last used prompt per slide
 
   // One-time cleanup: remove old topic-text-based keys (format: wakti-enhanced-word_word_...)
   useEffect(() => {
@@ -4146,6 +4147,39 @@ const PresentationTab: React.FC = () => {
 
                 <div className="h-px mx-5 bg-white/10" />
 
+                {/* Last prompt used — shown if exists for this slide */}
+                {lastPromptMap[selectedSlideIndex] && (lastPromptMap[selectedSlideIndex].note || lastPromptMap[selectedSlideIndex].chips.length > 0) && (
+                  <div className="mx-5 mt-3 mb-1 px-3 py-2 rounded-xl bg-white/4 border border-white/8">
+                    <p className="text-[9px] font-semibold uppercase tracking-widest text-white/30 mb-1.5">
+                      {language === 'ar' ? 'آخر وصف مستخدم' : 'Last prompt used'}
+                    </p>
+                    {lastPromptMap[selectedSlideIndex].note && (
+                      <p className="text-[11px] text-white/55 leading-relaxed mb-1 truncate" title={lastPromptMap[selectedSlideIndex].note}>
+                        "{lastPromptMap[selectedSlideIndex].note}"
+                      </p>
+                    )}
+                    {lastPromptMap[selectedSlideIndex].chips.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {lastPromptMap[selectedSlideIndex].chips.map(c => (
+                          <span key={c} className="px-2 py-0.5 rounded-full text-[10px] bg-white/8 text-white/40 border border-white/10">
+                            {chipEmoji[c] || '✦'} {c}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      className="mt-1.5 text-[10px] text-blue-400/70 hover:text-blue-400 transition-colors"
+                      onClick={() => {
+                        const last = lastPromptMap[selectedSlideIndex];
+                        if (last.note) setEnhanceNote(last.note);
+                        if (last.chips.length > 0) setEnhanceKeywordsMap(prev => ({ ...prev, [selectedSlideIndex]: last.chips }));
+                      }}
+                    >
+                      {language === 'ar' ? '↩ استخدم مرة أخرى' : '↩ Re-use this prompt'}
+                    </button>
+                  </div>
+                )}
+
                 {/* Prompt input + AMP button */}
                 <div className="px-5 pt-4 pb-3">
                   <div className="relative">
@@ -4235,6 +4269,14 @@ const PresentationTab: React.FC = () => {
                     disabled={isOverLimit}
                     onClick={() => {
                       setShowEnhancePopup(false);
+                      // Save last used prompt+chips for this slide
+                      setLastPromptMap(prev => ({
+                        ...prev,
+                        [selectedSlideIndex]: {
+                          note: enhanceNote.trim(),
+                          chips: [...selectedChips],
+                        },
+                      }));
                       handleEnhanceSlide(
                         undefined,
                         selectedChips.length > 0 ? selectedChips : undefined,

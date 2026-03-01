@@ -74,7 +74,7 @@ import {
 // ============================================
 // INSTAGRAM OAUTH CONFIG
 // ============================================
-const META_APP_ID = '9514707108859794';
+const META_APP_ID = '951470710859794';
 const IG_OAUTH_CALLBACK_URL = 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/instagram-oauth-callback';
 const IG_OAUTH_SCOPES = 'instagram_basic,instagram_manage_messages,instagram_manage_comments,pages_show_list,pages_read_engagement,pages_manage_metadata';
 
