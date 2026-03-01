@@ -36,7 +36,8 @@ import {
   FileQuestion,
   Globe,
   X,
-  Image as ImageLucide
+  Image as ImageLucide,
+  Zap
 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ColorPickerWithGradient, getColorStyle, isGradientValue } from '@/components/ui/ColorPickerWithGradient';
@@ -1187,6 +1188,7 @@ const PresentationTab: React.FC = () => {
   const [enhanceMood, setEnhanceMood] = useState<string>('dark'); // dark, light, colorful, professional
   const [enhanceKeywordsMap, setEnhanceKeywordsMap] = useState<Record<number, string[]>>({}); // saved per slide
   const [enhanceNote, setEnhanceNote] = useState(''); // session only, not saved
+  const [isAmpingPrompt, setIsAmpingPrompt] = useState(false); // AMP button loading state
 
   // One-time cleanup: remove old topic-text-based keys (format: wakti-enhanced-word_word_...)
   useEffect(() => {
@@ -2762,7 +2764,7 @@ const PresentationTab: React.FC = () => {
           language,
           variation: variationToUse,
           keywords: keywords && keywords.length > 0 ? keywords : undefined,
-          note: note && note.trim().length > 0 ? note.trim().slice(0, 80) : undefined,
+          note: note && note.trim().length > 0 ? note.trim().slice(0, 500) : undefined,
         },
         maxRetries: 2,
         retryDelay: 1000,
@@ -2910,6 +2912,70 @@ const PresentationTab: React.FC = () => {
       setSavedEnhancedMap(prev => ({ ...prev, [selectedSlideIndex]: patched }));
     }
     toast.success(language === 'ar' ? '🎨 تم تطبيق التغييرات' : '🎨 Applied!', { id: `color-apply-${target}`, duration: 1500 });
+  }, [slides, enhancedHtmlMap, savedEnhancedMap, selectedSlideIndex, language]);
+
+  // Patch a new image URL into the enhanced HTML — replaces first <img> src or adds one to the background
+  const handleApplyImageToEnhancement = useCallback((imageUrl: string) => {
+    const currentHtml = enhancedHtmlMap[selectedSlideIndex] || savedEnhancedMap[selectedSlideIndex];
+    if (!currentHtml || !imageUrl) return;
+
+    let patched = currentHtml;
+
+    // Replace first <img> src in the HTML
+    if (/<img\b[^>]*>/i.test(patched)) {
+      patched = patched.replace(/(<img\b[^>]*\s)src=["'][^"']*["']/i, `$1src="${imageUrl}"`);
+      // If no src attribute yet in the img tag
+      if (patched === currentHtml) {
+        patched = patched.replace(/<img\b/i, `<img src="${imageUrl}"`);
+      }
+    } else {
+      // No img tag — inject one before closing body or at end
+      const imgTag = `<img src="${imageUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.35;z-index:0;" alt="" />`;
+      patched = patched.replace(/<\/body>/i, `${imgTag}</body>`);
+    }
+
+    setEnhancedHtmlMap(prev => ({ ...prev, [selectedSlideIndex]: patched }));
+    if (savedEnhancedMap[selectedSlideIndex]) {
+      setSavedEnhancedMap(prev => ({ ...prev, [selectedSlideIndex]: patched }));
+    }
+    toast.success(language === 'ar' ? '🖼️ تم تطبيق الصورة' : '🖼️ Image applied!', { id: 'image-apply', duration: 1500 });
+  }, [enhancedHtmlMap, savedEnhancedMap, selectedSlideIndex, language]);
+
+  // Patch updated text (title / subtitle / bullets) into the enhanced HTML
+  const handleApplyTextToEnhancement = useCallback((target: 'title' | 'subtitle' | 'bullets') => {
+    const slide = slides[selectedSlideIndex];
+    const currentHtml = enhancedHtmlMap[selectedSlideIndex] || savedEnhancedMap[selectedSlideIndex];
+    if (!currentHtml || !slide) return;
+
+    let patched = currentHtml;
+
+    if (target === 'title' && slide.title) {
+      patched = patched
+        .replace(/(<[^>]*data-field=["']title["'][^>]*>)[^<]*/i, `$1${slide.title}`)
+        .replace(/(<h1(?:\s[^>]*)?>)[^<]*/i, `$1${slide.title}`)
+        .replace(/(<h2(?:\s[^>]*)?>)[^<]*/i, `$1${slide.title}`);
+    }
+    if (target === 'subtitle' && slide.subtitle) {
+      patched = patched
+        .replace(/(<[^>]*data-field=["']subtitle["'][^>]*>)[^<]*/i, `$1${slide.subtitle}`)
+        .replace(/(<h3(?:\s[^>]*)?>)[^<]*/i, `$1${slide.subtitle}`)
+        .replace(/(<h4(?:\s[^>]*)?>)[^<]*/i, `$1${slide.subtitle}`);
+    }
+    if (target === 'bullets' && slide.bullets?.length) {
+      // Replace each <li> content in order
+      let bulletIdx = 0;
+      patched = patched.replace(/(<li(?:\s[^>]*)?>)[^<]*/gi, (match, openTag) => {
+        const newText = slide.bullets[bulletIdx] ?? '';
+        bulletIdx++;
+        return `${openTag}${newText}`;
+      });
+    }
+
+    setEnhancedHtmlMap(prev => ({ ...prev, [selectedSlideIndex]: patched }));
+    if (savedEnhancedMap[selectedSlideIndex]) {
+      setSavedEnhancedMap(prev => ({ ...prev, [selectedSlideIndex]: patched }));
+    }
+    toast.success(language === 'ar' ? '✏️ تم تطبيق النص' : '✏️ Text applied!', { id: `text-apply-${target}`, duration: 1500 });
   }, [slides, enhancedHtmlMap, savedEnhancedMap, selectedSlideIndex, language]);
 
   // Update text styling
@@ -3872,193 +3938,310 @@ const PresentationTab: React.FC = () => {
         {showEnhancePopup && (() => {
           const slide = slides[selectedSlideIndex];
           const text = `${slide?.title || ''} ${slide?.subtitle || ''} ${(slide?.bullets || []).join(' ')}`.toLowerCase();
-          
-          // Generate context-aware chips based on content
+          const role = slide?.role || '';
+          const layout = slide?.layoutType || '';
+          // Scan ALL slides for topic detection — so closing/title slides still get topic chips
+          const fullDeckText = slides.map(s => `${s.title || ''} ${s.subtitle || ''} ${(s.bullets || []).join(' ')}`).join(' ').toLowerCase();
+
+          // Detect presentation topic from full deck
+          const detectTopic = (t: string): string => {
+            if (/sport|football|soccer|fifa|world.?cup|basketball|olympic|athlete|champion|match|tournament|stadium/.test(t)) return 'sports';
+            if (/\bai\b|tech|software|digital|cloud|cyber|blockchain|startup|code|developer/.test(t)) return 'tech';
+            if (/business|finance|corporate|investment|revenue|profit|sales|kpi|roi|growth|pitch|deck/.test(t)) return 'business';
+            if (/education|school|university|learning|academic|research|student|course|lecture/.test(t)) return 'education';
+            if (/health|medical|wellness|fitness|hospital|doctor|therapy|nutrition/.test(t)) return 'health';
+            if (/travel|tourism|adventure|destination|hotel|flight|vacation/.test(t)) return 'travel';
+            if (/creative|design|art|brand|fashion|portfolio|photography/.test(t)) return 'creative';
+            if (/environment|nature|eco|sustainable|climate|planet|green/.test(t)) return 'environment';
+            if (/history|ancient|civilization|heritage|museum|tradition/.test(t)) return 'history';
+            if (/music|concert|entertainment|movie|film|festival/.test(t)) return 'entertainment';
+            if (/real.?estate|property|architecture|interior|building|home/.test(t)) return 'realestate';
+            if (/food|restaurant|cuisine|chef|cooking|recipe/.test(t)) return 'food';
+            return 'general';
+          };
+
+          // Topic detected from slide first, fall back to full deck
+          const topic = detectTopic(text) !== 'general' ? detectTopic(text) : detectTopic(fullDeckText);
+
+          // Topic-specific chip pools (used for both context chips AND biased universals)
+          type Chip = { id: string; label: string; labelAr: string };
+          const topicChipMap: Record<string, Chip[]> = {
+            sports:      [{ id: 'energetic', label: 'Energetic', labelAr: 'حيوي' }, { id: 'dynamic', label: 'Dynamic', labelAr: 'ديناميكي' }, { id: 'action', label: 'Action', labelAr: 'حركي' }, { id: 'bold', label: 'Bold', labelAr: 'جريء' }, { id: 'cinematic', label: 'Cinematic', labelAr: 'سينمائي' }],
+            tech:        [{ id: 'futuristic', label: 'Futuristic', labelAr: 'مستقبلي' }, { id: 'glassmorphism', label: 'Glassmorphism', labelAr: 'زجاجي' }, { id: 'neon', label: 'Neon', labelAr: 'نيون' }, { id: 'dark', label: 'Dark', labelAr: 'داكن' }, { id: 'minimal', label: 'Minimal', labelAr: 'بسيط' }],
+            business:    [{ id: 'executive', label: 'Executive', labelAr: 'تنفيذي' }, { id: 'trustworthy', label: 'Trustworthy', labelAr: 'موثوق' }, { id: 'premium', label: 'Premium', labelAr: 'فاخر' }, { id: 'minimal', label: 'Minimal', labelAr: 'بسيط' }, { id: 'elegant', label: 'Elegant', labelAr: 'أنيق' }],
+            education:   [{ id: 'scholarly', label: 'Scholarly', labelAr: 'أكاديمي' }, { id: 'structured', label: 'Structured', labelAr: 'منظم' }, { id: 'clean', label: 'Clean & Clear', labelAr: 'نظيف وواضح' }, { id: 'elegant', label: 'Elegant', labelAr: 'أنيق' }, { id: 'infographic', label: 'Infographic', labelAr: 'انفوغرافيك' }],
+            health:      [{ id: 'trustworthy', label: 'Trustworthy', labelAr: 'موثوق' }, { id: 'calming', label: 'Calming', labelAr: 'مريح' }, { id: 'hopeful', label: 'Hopeful', labelAr: 'متفائل' }, { id: 'light', label: 'Light', labelAr: 'فاتح' }, { id: 'minimal', label: 'Minimal', labelAr: 'بسيط' }],
+            travel:      [{ id: 'adventurous', label: 'Adventurous', labelAr: 'مغامر' }, { id: 'cinematic', label: 'Cinematic', labelAr: 'سينمائي' }, { id: 'vibrant', label: 'Vibrant', labelAr: 'نابض' }, { id: 'wanderlust', label: 'Wanderlust', labelAr: 'شغف التنقل' }, { id: 'colorful', label: 'Colorful', labelAr: 'ملون' }],
+            creative:    [{ id: 'artistic', label: 'Artistic', labelAr: 'فني' }, { id: 'colorful', label: 'Colorful', labelAr: 'ملون' }, { id: 'vibrant', label: 'Vibrant', labelAr: 'نابض' }, { id: 'bold', label: 'Bold', labelAr: 'جريء' }, { id: 'editorial', label: 'Editorial', labelAr: 'تحريري' }],
+            environment: [{ id: 'organic', label: 'Organic', labelAr: 'طبيعي' }, { id: 'earthy', label: 'Earthy', labelAr: 'ترابي' }, { id: 'hopeful', label: 'Hopeful', labelAr: 'متفائل' }, { id: 'minimal', label: 'Minimal', labelAr: 'بسيط' }, { id: 'light', label: 'Light', labelAr: 'فاتح' }],
+            history:     [{ id: 'cinematic', label: 'Cinematic', labelAr: 'سينمائي' }, { id: 'vintage', label: 'Vintage', labelAr: 'كلاسيكي' }, { id: 'dramatic', label: 'Dramatic', labelAr: 'درامي' }, { id: 'elegant', label: 'Elegant', labelAr: 'أنيق' }, { id: 'monochrome', label: 'Monochrome', labelAr: 'أحادي اللون' }],
+            entertainment:[{ id: 'vibrant', label: 'Vibrant', labelAr: 'نابض' }, { id: 'neon', label: 'Neon', labelAr: 'نيون' }, { id: 'dynamic', label: 'Dynamic', labelAr: 'ديناميكي' }, { id: 'cinematic', label: 'Cinematic', labelAr: 'سينمائي' }, { id: 'bold', label: 'Bold', labelAr: 'جريء' }],
+            realestate:  [{ id: 'luxury', label: 'Luxury', labelAr: 'فخامة' }, { id: 'elegant', label: 'Elegant', labelAr: 'أنيق' }, { id: 'premium', label: 'Premium', labelAr: 'فاخر' }, { id: 'minimal', label: 'Minimal', labelAr: 'بسيط' }, { id: 'cinematic', label: 'Cinematic', labelAr: 'سينمائي' }],
+            food:        [{ id: 'warm', label: 'Warm', labelAr: 'دافئ' }, { id: 'vibrant', label: 'Vibrant', labelAr: 'نابض' }, { id: 'appetizing', label: 'Appetizing', labelAr: 'شهي' }, { id: 'luxe', label: 'Luxe', labelAr: 'راقٍ' }, { id: 'colorful', label: 'Colorful', labelAr: 'ملون' }],
+            general:     [{ id: 'premium', label: 'Premium', labelAr: 'فاخر' }, { id: 'minimal', label: 'Minimal', labelAr: 'بسيط' }, { id: 'bold', label: 'Bold', labelAr: 'جريء' }, { id: 'elegant', label: 'Elegant', labelAr: 'أنيق' }, { id: 'cinematic', label: 'Cinematic', labelAr: 'سينمائي' }],
+          };
+
+          // Generate context-aware chips — smart, capped, topic-biased
           const getSmartChips = () => {
-            const chips: { id: string; label: string; labelAr: string }[] = [];
-            
-            // Content-aware chips first (most relevant at top)
-            if (/sport|football|soccer|fifa|world cup|team|match|player|championship|league/.test(text)) {
-              chips.push({ id: 'energetic', label: 'Energetic', labelAr: 'حيوي' });
-              chips.push({ id: 'dynamic', label: 'Dynamic', labelAr: 'ديناميكي' });
-              chips.push({ id: 'bold', label: 'Bold', labelAr: 'جريء' });
+            const contextChips: Chip[] = [];
+            const hasImage = !!slide?.imageUrl;
+
+            // ── Role/layout context (highest priority) ──
+            if (role === 'title' || role === 'cover') {
+              contextChips.push({ id: 'cinematic', label: 'Cinematic', labelAr: 'سينمائي' });
+              contextChips.push({ id: 'immersive', label: 'Immersive', labelAr: 'غامر' });
+            } else if (role === 'thank_you' || role === 'closing') {
+              contextChips.push({ id: 'warm', label: 'Warm Closing', labelAr: 'خاتمة دافئة' });
+              contextChips.push({ id: 'memorable', label: 'Memorable', labelAr: 'لا يُنسى' });
+            } else if (role === 'stat_highlight' || layout === 'stat') {
+              contextChips.push({ id: 'data-driven', label: 'Data-Driven', labelAr: 'مبني على البيانات' });
+              contextChips.push({ id: 'infographic', label: 'Infographic', labelAr: 'انفوغرافيك' });
             }
-            if (/tech|ai|software|digital|data|code|startup|innovation|cyber|cloud/.test(text)) {
-              chips.push({ id: 'futuristic', label: 'Futuristic', labelAr: 'مستقبلي' });
-              chips.push({ id: 'techy', label: 'Tech Style', labelAr: 'تقني' });
-              chips.push({ id: 'glassmorphism', label: 'Glassmorphism', labelAr: 'زجاجي' });
+
+            // ── Image-aware ──
+            if (hasImage) {
+              contextChips.push({ id: 'photo-forward', label: 'Photo Forward', labelAr: 'الصورة أولاً' });
+              contextChips.push({ id: 'cinematic', label: 'Cinematic', labelAr: 'سينمائي' });
             }
-            if (/business|finance|corporate|investment|market|strategy|revenue|profit/.test(text)) {
-              chips.push({ id: 'executive', label: 'Executive', labelAr: 'تنفيذي' });
-              chips.push({ id: 'corporate', label: 'Corporate', labelAr: 'مؤسسي' });
-            }
-            if (/education|school|university|learning|academic|research|science/.test(text)) {
-              chips.push({ id: 'scholarly', label: 'Scholarly', labelAr: 'أكاديمي' });
-              chips.push({ id: 'elegant', label: 'Elegant', labelAr: 'أنيق' });
-            }
-            if (/health|medical|wellness|fitness|nutrition|hospital/.test(text)) {
-              chips.push({ id: 'trustworthy', label: 'Trustworthy', labelAr: 'موثوق' });
-              chips.push({ id: 'calming', label: 'Calming', labelAr: 'مريح' });
-            }
-            if (/creative|design|art|brand|visual|fashion|portfolio/.test(text)) {
-              chips.push({ id: 'artistic', label: 'Artistic', labelAr: 'فني' });
-              chips.push({ id: 'bold', label: 'Bold', labelAr: 'جريء' });
-            }
-            if (/environment|nature|green|eco|sustainable|climate/.test(text)) {
-              chips.push({ id: 'organic', label: 'Organic', labelAr: 'طبيعي' });
-              chips.push({ id: 'eco', label: 'Eco', labelAr: 'بيئي' });
-            }
-            if (/food|restaurant|cuisine|recipe|chef|cooking/.test(text)) {
-              chips.push({ id: 'warm', label: 'Warm', labelAr: 'دافئ' });
-              chips.push({ id: 'vibrant', label: 'Vibrant', labelAr: 'نابض' });
-            }
-            if (/travel|tourism|adventure|explore|destination/.test(text)) {
-              chips.push({ id: 'adventurous', label: 'Adventurous', labelAr: 'مغامر' });
-              chips.push({ id: 'cinematic', label: 'Cinematic', labelAr: 'سينمائي' });
-            }
-            
-            // Always-available style chips
-            chips.push({ id: 'premium', label: 'Premium', labelAr: 'فاخر' });
-            chips.push({ id: 'minimal', label: 'Minimal', labelAr: 'بسيط' });
-            chips.push({ id: 'dark', label: 'Dark', labelAr: 'داكن' });
-            chips.push({ id: 'light', label: 'Light', labelAr: 'فاتح' });
-            chips.push({ id: 'colorful', label: 'Colorful', labelAr: 'ملون' });
-            chips.push({ id: 'neon', label: 'Neon', labelAr: 'نيون' });
-            chips.push({ id: 'cinematic', label: 'Cinematic', labelAr: 'سينمائي' });
-            chips.push({ id: 'luxury', label: 'Luxury', labelAr: 'فخامة' });
-            
-            // Deduplicate, no limit
+
+            // ── Topic chips (from current slide OR full deck) ──
+            const topicChips = topicChipMap[topic] || topicChipMap.general;
+            for (const c of topicChips) contextChips.push(c);
+
+            // ── Style variety fillers (dark/light/gradient always useful) ──
+            const styleFillers: Chip[] = [
+              { id: 'dark', label: 'Dark', labelAr: 'داكن' },
+              { id: 'light', label: 'Light', labelAr: 'فاتح' },
+              { id: 'gradient', label: 'Gradient Rich', labelAr: 'تدرج غني' },
+              { id: 'luxury', label: 'Luxury', labelAr: 'فخامة' },
+              { id: 'neon', label: 'Neon', labelAr: 'نيون' },
+              { id: 'glassmorphism', label: 'Glassmorphism', labelAr: 'زجاجي' },
+              { id: 'vibrant', label: 'Vibrant', labelAr: 'نابض' },
+            ];
+
+            // Deduplicate and cap at 12
             const seen = new Set<string>();
-            return chips.filter(c => {
-              if (seen.has(c.id)) return false;
-              seen.add(c.id);
-              return true;
-            });
+            const result: Chip[] = [];
+            for (const c of [...contextChips, ...styleFillers]) {
+              if (!seen.has(c.id) && result.length < 12) {
+                seen.add(c.id);
+                result.push(c);
+              }
+            }
+            return result;
           };
           
           const smartChips = getSmartChips();
           const selectedChips = enhanceKeywordsMap[selectedSlideIndex] || [];
           
           const toggleChip = (chipId: string) => {
+            const chip = smartChips.find(c => c.id === chipId);
+            // Read fresh from state to avoid stale closure
+            const current = enhanceKeywordsMap[selectedSlideIndex] || [];
+            const exists = current.includes(chipId);
+            
             setEnhanceKeywordsMap(prev => {
-              const current = prev[selectedSlideIndex] || [];
-              const exists = current.includes(chipId);
               const updated = exists ? current.filter(c => c !== chipId) : [...current, chipId];
               return { ...prev, [selectedSlideIndex]: updated };
             });
+            
+            // Only append to prompt if newly selecting (not deselecting)
+            if (!exists && chip) {
+              const label = language === 'ar' ? chip.labelAr : chip.label;
+              setEnhanceNote(prevNote => {
+                const separator = prevNote.trim() ? ', ' : '';
+                return (prevNote + separator + label).slice(0, 1000);
+              });
+            }
           };
 
           // Chip emoji map
           const chipEmoji: Record<string, string> = {
-            energetic: '⚡', dynamic: '🔥', bold: '💪', futuristic: '🚀',
-            techy: '💻', glassmorphism: '🪟', executive: '👔', corporate: '🏢',
-            scholarly: '📚', elegant: '✨', trustworthy: '🛡️', calming: '🌊',
-            artistic: '🎨', organic: '🌿', eco: '♻️', warm: '🌅',
-            vibrant: '🎆', adventurous: '🌍', cinematic: '🎬', premium: '💎',
-            minimal: '◻️', dark: '🌙', light: '☀️', colorful: '🌈',
-            neon: '💡', luxury: '👑',
+            // Style
+            premium: '💎', minimal: '◻️', dark: '🌙', light: '☀️',
+            colorful: '🌈', neon: '💡', cinematic: '🎬', luxury: '👑',
+            glassmorphism: '🪟', bold: '💪', elegant: '✨', vibrant: '🎆',
+            // Sports
+            energetic: '⚡', dynamic: '🔥', action: '🏃', stadium: '🏟️',
+            // Tech
+            futuristic: '🚀', techy: '💻', matrix: '🖥️',
+            // Business
+            executive: '👔', corporate: '🏢', trustworthy: '🛡️', 'data-driven': '📊',
+            // Education / Science
+            scholarly: '📚', structured: '📐', infographic: '📈', clean: '🧹',
+            // Health
+            calming: '🌊',
+            // Creative
+            artistic: '🎨', editorial: '📰',
+            // Environment
+            organic: '🌿', eco: '♻️', earthy: '🌍',
+            // Food
+            warm: '🌅', appetizing: '🍽️', luxe: '🥂',
+            // Travel
+            adventurous: '🗺️', wanderlust: '✈️',
+            // History
+            vintage: '🏛️', documentary: '🎥',
+            // Role-based
+            immersive: '🌌', memorable: '💫', split: '⬜',
+            // Mood / Emotion
+            inspiring: '🌟', serious: '🎯', playful: '🎉', urgent: '⚠️',
+            calm: '🕊️', dramatic: '🎭', empowering: '💥',
+            // Storytelling
+            'story-driven': '📖', impactful: '🎯', persuasive: '🗣️', reveal: '🎊',
+            // Audience / Purpose
+            investor: '💼', client: '🤝', team: '👥', social: '📱', classroom: '🎓', conference: '🎤',
+            // Extra visual
+            retro: '📺', sketch: '✏️', monochrome: '⬛', gradient: '🌊', typographic: '🔤',
           };
+
+          // AMP: enhance the user's prompt via prompt-amp edge function (slide-design mode)
+          const handleAmpPrompt = async () => {
+            const raw = enhanceNote.trim();
+            if (!raw) return;
+            setIsAmpingPrompt(true);
+            try {
+              const response = await callEdgeFunctionWithRetry<{ success: boolean; text?: string; error?: string }>('prompt-amp', {
+                body: { text: raw, mode: 'slide-design' },
+                maxRetries: 1,
+                retryDelay: 500,
+              });
+              if (response?.text) {
+                setEnhanceNote(response.text.slice(0, 1000));
+              }
+            } catch { /* silent */ } finally {
+              setIsAmpingPrompt(false);
+            }
+          };
+
+          // Word count helper
+          const wordCount = enhanceNote.trim() ? enhanceNote.trim().split(/\s+/).length : 0;
+          const isOverLimit = wordCount > 200;
 
           return (
             <div
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
               onClick={(e) => { if (e.target === e.currentTarget) setShowEnhancePopup(false); }}
-              style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(12px)' }}
+              style={{ background: 'rgba(0,0,0,0.80)', backdropFilter: 'blur(14px)' }}
             >
-              <div className="w-full max-w-md rounded-3xl overflow-hidden shadow-2xl border border-white/10" style={{ background: 'linear-gradient(135deg, #0c0f14 0%, hsl(235 25% 8%) 50%, #0c0f14 100%)' }}>
+              <div className="w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl border border-white/10" style={{ background: 'linear-gradient(135deg, #0c0f14 0%, hsl(235 25% 8%) 50%, #0c0f14 100%)' }}>
                 
-                {/* Gradient header banner */}
-                <div className="relative px-6 pt-6 pb-5 text-center overflow-hidden">
-                  <div className="absolute inset-0 opacity-20" style={{ background: 'linear-gradient(135deg, hsl(210 100% 65%) 0%, hsl(280 70% 65%) 50%, hsl(25 95% 60%) 100%)' }} />
-                  <div className="relative">
-                    <div className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg, hsl(210 100% 65%) 0%, hsl(280 70% 65%) 100%)', boxShadow: '0 0 25px hsla(210, 100%, 65%, 0.5)' }}>
-                      <Wand2 className="w-7 h-7 text-white" />
+                {/* Header */}
+                <div className="relative px-6 pt-5 pb-4 text-center overflow-hidden">
+                  <div className="absolute inset-0 opacity-15" style={{ background: 'linear-gradient(135deg, hsl(210 100% 65%) 0%, hsl(280 70% 65%) 50%, hsl(25 95% 60%) 100%)' }} />
+                  <div className="relative flex items-center justify-between">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(210 100% 65%) 0%, hsl(280 70% 65%) 100%)', boxShadow: '0 0 20px hsla(210, 100%, 65%, 0.5)' }}>
+                      <Wand2 className="w-5 h-5 text-white" />
                     </div>
-                    <h2 className="text-lg font-bold text-white">
-                      {language === 'ar' ? '✨ تحسين بالذكاء الاصطناعي' : '✨ AI Enhance'}
-                    </h2>
-                    <p className="text-xs text-white/60 mt-1">
-                      {language === 'ar'
-                        ? 'الذكاء الاصطناعي يحلل محتواك — أضف توجيهك الاختياري'
-                        : 'AI analyzes your content — add optional style guidance'}
-                    </p>
+                    <div className="flex-1 px-3 text-left">
+                      <h2 className="text-base font-bold text-white leading-tight">
+                        {language === 'ar' ? '✨ تحسين بالذكاء الاصطناعي' : '✨ AI Enhance'}
+                      </h2>
+                      <p className="text-[11px] text-white/50">
+                        {language === 'ar' ? 'صِف نمطك — أو اختر شريحة' : 'Describe your vision — or pick a style chip'}
+                      </p>
+                    </div>
+                    <button onClick={() => setShowEnhancePopup(false)} className="text-white/30 hover:text-white/60 transition-colors text-lg leading-none">✕</button>
                   </div>
                 </div>
 
-                {/* Divider */}
-                <div className="h-px mx-6 bg-white/10" />
+                <div className="h-px mx-5 bg-white/10" />
 
-                {/* Context-aware chips label */}
-                {smartChips.some(c => ['energetic','dynamic','bold','futuristic','techy','glassmorphism','executive','corporate','scholarly','elegant','trustworthy','calming','artistic','organic','eco','warm','vibrant','adventurous'].includes(c.id)) && (
-                  <div className="px-5 pt-4 pb-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-white/40">
-                      {language === 'ar' ? 'مقترح لمحتواك' : 'Suggested for your content'}
+                {/* Prompt input + AMP button */}
+                <div className="px-5 pt-4 pb-3">
+                  <div className="relative">
+                    <textarea
+                      value={enhanceNote}
+                      onChange={(e) => setEnhanceNote(e.target.value)}
+                      placeholder={language === 'ar'
+                        ? 'مثال: خلفية سوداء، نيون أزرق وبنفسجي، بطاقات زجاجية...'
+                        : 'e.g. black background, neon blue and purple, glassmorphism cards, bold cinematic title...'}
+                      rows={3}
+                      className="w-full px-4 py-3 pr-16 text-sm rounded-2xl bg-slate-800/80 border border-slate-600/50 text-white placeholder-slate-400 resize-none focus:outline-none focus:border-blue-500/50 focus:bg-slate-800 transition-all"
+                      style={{ fontSize: '13px', lineHeight: '1.5' }}
+                    />
+                    {/* AMP button */}
+                    <button
+                      onClick={handleAmpPrompt}
+                      disabled={isAmpingPrompt || !enhanceNote.trim()}
+                      className="absolute right-3 bottom-3 flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all active:scale-95 disabled:opacity-40"
+                      style={{ background: 'linear-gradient(135deg, hsl(45 100% 60%) 0%, hsl(25 95% 60%) 100%)', color: '#000', boxShadow: enhanceNote.trim() ? '0 0 12px hsla(45, 100%, 60%, 0.5)' : 'none' }}
+                      title={language === 'ar' ? 'تحسين الوصف بالذكاء الاصطناعي' : 'Amp up your prompt with AI'}
+                    >
+                      {isAmpingPrompt
+                        ? <Loader2 className="w-3 h-3 animate-spin" />
+                        : <Zap className="w-3 h-3" />}
+                      {language === 'ar' ? 'أمبير' : 'AMP'}
+                    </button>
+                  </div>
+                  {/* Word counter */}
+                  <div className="flex justify-between items-center mt-1.5 px-1">
+                    <p className="text-[10px] text-white/30">
+                      {language === 'ar' ? 'اختياري — اتركه فارغاً للكشف التلقائي' : 'Optional — leave empty for auto-detect'}
+                    </p>
+                    <span className={`text-[10px] font-mono ${isOverLimit ? 'text-red-400' : 'text-white/30'}`}>
+                      {wordCount}/200
                     </span>
                   </div>
-                )}
-
-                {/* Smart Chips */}
-                <div className="px-5 pt-2 pb-4 flex flex-wrap gap-2">
-                  {smartChips.map(chip => {
-                    const isSelected = selectedChips.includes(chip.id);
-                    const emoji = chipEmoji[chip.id] || '✦';
-                    return (
-                      <button
-                        key={chip.id}
-                        onClick={() => toggleChip(chip.id)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 ${
-                          isSelected
-                            ? 'border-transparent text-white shadow-lg'
-                            : 'border-white/15 text-white/60 hover:border-white/30 hover:text-white/90 bg-white/5 hover:bg-white/10'
-                        }`}
-                        style={isSelected ? {
-                          background: 'linear-gradient(135deg, hsl(210 100% 65%) 0%, hsl(280 70% 65%) 100%)',
-                          boxShadow: '0 0 12px hsla(210, 100%, 65%, 0.4)',
-                        } : {}}
-                      >
-                        <span>{emoji}</span>
-                        {language === 'ar' ? chip.labelAr : chip.label}
-                      </button>
-                    );
-                  })}
                 </div>
 
-                {/* Status bar */}
-                <div className="mx-5 mb-4 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 flex items-center gap-2">
-                  <span className="text-base">{selectedChips.length > 0 ? '🎯' : '🤖'}</span>
-                  <p className="text-xs text-white/60 flex-1">
-                    {selectedChips.length > 0
-                      ? (language === 'ar'
-                        ? `${selectedChips.length} توجيه محدد — الذكاء الاصطناعي سيطبقها`
-                        : `${selectedChips.length} style hint${selectedChips.length > 1 ? 's' : ''} selected — AI will apply them`)
-                      : (language === 'ar'
-                        ? 'الذكاء الاصطناعي سيختار التصميم المثالي تلقائياً'
-                        : 'AI will auto-detect the perfect design for your content')}
+                {/* Style chips */}
+                <div className="px-5 pb-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-white/35 mb-2">
+                    {language === 'ar' ? 'نمط سريع (اختياري)' : 'Quick style (optional)'}
                   </p>
-                  {selectedChips.length > 0 && (
-                    <button
-                      onClick={() => setEnhanceKeywordsMap(prev => ({ ...prev, [selectedSlideIndex]: [] }))}
-                      className="text-[10px] text-white/30 hover:text-white/60 transition-colors"
-                    >
-                      {language === 'ar' ? 'مسح' : 'Clear'}
-                    </button>
-                  )}
+                  <div className="flex flex-wrap gap-1.5">
+                    {smartChips.map(chip => {
+                      const isSelected = selectedChips.includes(chip.id);
+                      const emoji = chipEmoji[chip.id] || '✦';
+                      return (
+                        <button
+                          key={chip.id}
+                          onClick={() => toggleChip(chip.id)}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all active:scale-95 ${
+                            isSelected
+                              ? 'border-transparent text-white shadow-lg'
+                              : 'border-white/12 text-white/55 hover:border-white/25 hover:text-white/80 bg-white/4 hover:bg-white/8'
+                          }`}
+                          style={isSelected ? {
+                            background: 'linear-gradient(135deg, hsl(210 100% 65%) 0%, hsl(280 70% 65%) 100%)',
+                            boxShadow: '0 0 10px hsla(210, 100%, 65%, 0.35)',
+                          } : {}}
+                        >
+                          <span className="text-[10px]">{emoji}</span>
+                          {language === 'ar' ? chip.labelAr : chip.label}
+                        </button>
+                      );
+                    })}
+                    {selectedChips.length > 0 && (
+                      <button
+                        onClick={() => setEnhanceKeywordsMap(prev => ({ ...prev, [selectedSlideIndex]: [] }))}
+                        className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] border border-white/10 text-white/30 hover:text-white/60 bg-white/3 transition-colors"
+                      >
+                        {language === 'ar' ? 'مسح' : 'Clear'}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Actions */}
-                <div className="px-5 pb-5 flex gap-3">
+                <div className="px-5 pb-5 pt-1 flex gap-3">
                   <button
                     onClick={() => setShowEnhancePopup(false)}
-                    className="flex-1 py-3 rounded-2xl border border-white/15 text-white/60 text-sm font-semibold hover:bg-white/5 transition-all active:scale-[0.98]"
+                    className="px-5 py-3 rounded-2xl border border-white/15 text-white/55 text-sm font-semibold hover:bg-white/5 transition-all active:scale-[0.98]"
                   >
                     {language === 'ar' ? 'إلغاء' : 'Cancel'}
                   </button>
                   <button
+                    disabled={isOverLimit}
                     onClick={() => {
                       setShowEnhancePopup(false);
-                      handleEnhanceSlide(undefined, selectedChips.length > 0 ? selectedChips : undefined, undefined);
+                      handleEnhanceSlide(
+                        undefined,
+                        selectedChips.length > 0 ? selectedChips : undefined,
+                        enhanceNote.trim() || undefined,
+                      );
                     }}
-                    className="flex-1 py-3 rounded-2xl text-white text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                    className="flex-1 py-3 rounded-2xl text-white text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
                     style={{ background: 'linear-gradient(135deg, hsl(210 100% 65%) 0%, hsl(280 70% 65%) 100%)', boxShadow: '0 4px 20px hsla(210, 100%, 65%, 0.4)' }}
                   >
                     <Wand2 className="w-4 h-4" />
@@ -4802,14 +4985,26 @@ const PresentationTab: React.FC = () => {
                   )}
                 </button>
               </div>
-              <input
-                type="text"
-                value={currentSlide.title}
-                onChange={(e) => updateSlideField('title', e.target.value)}
-                aria-label={language === 'ar' ? 'العنوان' : 'Title'}
-                title={language === 'ar' ? 'العنوان' : 'Title'}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-primary/50 outline-none"
-              />
+              <div className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  value={currentSlide.title}
+                  onChange={(e) => updateSlideField('title', e.target.value)}
+                  aria-label={language === 'ar' ? 'العنوان' : 'Title'}
+                  title={language === 'ar' ? 'العنوان' : 'Title'}
+                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-primary/50 outline-none"
+                />
+                {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+                  <button
+                    type="button"
+                    onClick={() => handleApplyTextToEnhancement('title')}
+                    className="flex items-center gap-1 px-2 py-1.5 text-[10px] rounded-md bg-amber-500 hover:bg-amber-400 text-white font-medium transition-all active:scale-95 whitespace-nowrap"
+                    title={language === 'ar' ? 'تطبيق النص على الشريحة المحسّنة' : 'Apply text to AI slide'}
+                  >
+                    ✏️ {language === 'ar' ? 'تطبيق' : 'Apply'}
+                  </button>
+                )}
+              </div>
               {/* Title Style Controls */}
               <div className="flex gap-2 mt-2 flex-wrap">
                 <div className="flex items-center gap-1">
@@ -4893,14 +5088,26 @@ const PresentationTab: React.FC = () => {
                   )}
                 </button>
               </div>
-              <input
-                type="text"
-                value={currentSlide.subtitle || ''}
-                onChange={(e) => updateSlideField('subtitle', e.target.value)}
-                aria-label={language === 'ar' ? 'العنوان الفرعي' : 'Subtitle'}
-                title={language === 'ar' ? 'العنوان الفرعي' : 'Subtitle'}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-primary/50 outline-none"
-              />
+              <div className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  value={currentSlide.subtitle || ''}
+                  onChange={(e) => updateSlideField('subtitle', e.target.value)}
+                  aria-label={language === 'ar' ? 'العنوان الفرعي' : 'Subtitle'}
+                  title={language === 'ar' ? 'العنوان الفرعي' : 'Subtitle'}
+                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-primary/50 outline-none"
+                />
+                {(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+                  <button
+                    type="button"
+                    onClick={() => handleApplyTextToEnhancement('subtitle')}
+                    className="flex items-center gap-1 px-2 py-1.5 text-[10px] rounded-md bg-amber-500 hover:bg-amber-400 text-white font-medium transition-all active:scale-95 whitespace-nowrap"
+                    title={language === 'ar' ? 'تطبيق النص على الشريحة المحسّنة' : 'Apply text to AI slide'}
+                  >
+                    ✏️ {language === 'ar' ? 'تطبيق' : 'Apply'}
+                  </button>
+                )}
+              </div>
               {/* Subtitle Style Controls */}
               <div className="flex gap-2 mt-2 flex-wrap">
                 <div className="flex items-center gap-1">
@@ -5138,8 +5345,23 @@ const PresentationTab: React.FC = () => {
                         setSlides(prev => prev.map((s, i) =>
                           i === selectedSlideIndex ? { ...s, imageUrl: url, imageFit: (s.imageFit || 'crop'), imageTransform: getDefaultImageTransform(), imageFocusX: 'center', imageFocusY: 'center' } : s
                         ));
+                        // Auto-apply to enhanced HTML if slide is enhanced
+                        if (enhancedHtmlMap[selectedSlideIndex] || savedEnhancedMap[selectedSlideIndex]) {
+                          handleApplyImageToEnhancement(url);
+                        }
                       }}
                     />
+                    {/* Apply image to AI enhanced slide manually if already uploaded */}
+                    {currentSlide.imageUrl && (savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+                      <button
+                        type="button"
+                        onClick={() => handleApplyImageToEnhancement(currentSlide.imageUrl!)}
+                        className="flex items-center gap-1 px-2 py-1.5 text-[10px] rounded-md bg-amber-500 hover:bg-amber-400 text-white font-medium transition-all active:scale-95 whitespace-nowrap w-fit"
+                        title={language === 'ar' ? 'تطبيق الصورة على الشريحة المحسّنة' : 'Apply image to AI slide'}
+                      >
+                        🖼️ {language === 'ar' ? 'تطبيق على AI' : 'Apply to AI'}
+                      </button>
+                    )}
                     <div className={`flex items-center gap-2 ${language === 'ar' ? 'flex-row-reverse' : ''}`}>
                       {/* Regenerate Image with AI - nicer button */}
                       <input

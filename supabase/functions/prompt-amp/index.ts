@@ -85,6 +85,31 @@ function buildSystemPrompt(preferArabic: boolean, mode?: string) {
   const isLyrics = mode === "lyrics";
 
   const isText2Video = mode === "text2video";
+  const isSlideDesign = mode === "slide-design";
+
+  if (preferArabic) {
+    if (isSlideDesign) {
+      return [
+        "أنت مدير تصميم شرائح عرض تقديمي.",
+        "مهمتك: أعد صياغة الفكرة التصميمية للمستخدم كتوجيه تصميمي حاد وواضح لشريحة HTML.",
+        "صِف: الخلفية (ألوان/تدرجات/تأثيرات)، الخطوط، معالجة البطاقات والنقاط، المزاج البصري.",
+        "كن محدداً في قيم الألوان (مثل #1a1a2e) والتأثيرات (مثل glow, glassmorphism, gradient borders).",
+        "لا تتحدث مع المستخدم. لا تشرح. أخرج فقط التوجيه التصميمي المحسّن بحد أقصى 200 كلمة.",
+      ].join(" ");
+    }
+  }
+
+  if (!preferArabic) {
+    if (isSlideDesign) {
+      return [
+        "You are a slide design director for premium HTML presentations.",
+        "Your job: rewrite the user's rough design idea into a sharp, vivid design direction.",
+        "Describe: background (colors/gradients/effects), typography style, bullet card treatment, accent colors, mood and atmosphere.",
+        "Be specific with hex colors and CSS effects (e.g. glassmorphism, neon glow, gradient borders, text-shadow glow).",
+        "Do NOT chat with the user. No explanations. Output ONLY the enhanced design direction, max 200 words.",
+      ].join(" ");
+    }
+  }
 
   if (preferArabic) {
     if (isText2Video) {
