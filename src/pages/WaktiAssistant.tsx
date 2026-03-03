@@ -2816,11 +2816,12 @@ export default function WaktiAssistant() {
         desc: isIgConnected
           ? (isRTL ? `متصل: ${igHandle || activeBot.instagram_business_account_id}` : `Connected: ${igHandle || activeBot.instagram_business_account_id}`)
           : (isRTL ? 'اربط حساب انستقرام البروفيشنال الخاص بك حتى يستقبل البوت الرسائل' : 'Connect your Instagram Professional account so the bot can receive DMs.'),
-        action: isIgConnected ? null : () => {
+        action: () => {
           const origin = window.location.hostname === 'localhost' ? 'https://wakti.qa' : window.location.origin;
           window.location.href = buildInstagramOAuthUrl(activeBot.id, origin);
         },
         cta: isIgConnected ? (isRTL ? '✅ متصل' : '✅ Connected') : (isRTL ? 'ربط انستقرام' : 'Connect Instagram'),
+        reconnectCta: isIgConnected ? (isRTL ? '🔄 إعادة ربط' : '🔄 Reconnect') : null,
         required: true,
         color: isIgConnected ? '#10b981' : '#e1306c',
         connected: isIgConnected,
@@ -3058,13 +3059,20 @@ export default function WaktiAssistant() {
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{item.desc}</p>
                     {item.cta && (
-                      <span className={`inline-block mt-2 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
-                        (item as any).connected
-                          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-                          : 'border border-[#060541]/20 dark:border-white/20 text-[#060541] dark:text-white group-hover:bg-[#060541] group-hover:text-white dark:group-hover:bg-white dark:group-hover:text-[#060541]'
-                      }`}>
-                        {item.cta}
-                      </span>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <span className={`inline-block text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                          (item as any).connected
+                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                            : 'border border-[#060541]/20 dark:border-white/20 text-[#060541] dark:text-white group-hover:bg-[#060541] group-hover:text-white dark:group-hover:bg-white dark:group-hover:text-[#060541]'
+                        }`}>
+                          {item.cta}
+                        </span>
+                        {(item as any).reconnectCta && (
+                          <span className="inline-block text-xs font-semibold px-3 py-1.5 rounded-lg border border-orange-400/40 bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-colors cursor-pointer">
+                            {(item as any).reconnectCta}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </button>
