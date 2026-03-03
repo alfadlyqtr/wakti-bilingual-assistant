@@ -160,7 +160,7 @@ export default function Home() {
           <span>Made by TMW</span>
         </div>
         <div className="text-center mt-2 text-[8px] md:text-[10px] text-white/30">
-          © 2025 WAKTI All Rights Reserved
+          © 2026 WAKTI All Rights Reserved
         </div>
       </footer>
     </div>

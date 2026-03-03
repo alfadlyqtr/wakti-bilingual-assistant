@@ -101,7 +101,7 @@ export const legal = {
 
   // Footer
   footerQuote: "These terms govern your access and use of WAKTI's intelligent services, voice and image tools, and mobile application. By using WAKTI, you agree to comply with these terms, our privacy practices, and all applicable laws in the State of Qatar. WAKTI is a registered trademark platform. Unauthorized use is prohibited. Your use of WAKTI signifies acceptance of these terms.",
-  footerCopyright: "© 2025 WAKTI. All rights reserved. Qatar law compliant.",
+  footerCopyright: "© 2026 WAKTI. All rights reserved. Qatar law compliant.",
   footerWarning: "Misuse will not be tolerated. AI must be used responsibly. Your data and safety matter.",
 
   // Contact page content

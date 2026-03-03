@@ -42,7 +42,7 @@ export function Footer() {
             </a>
           </div>
           <p className="text-xs text-muted-foreground text-center">
-            © 2025 WAKTI. {t("allRightsReserved", language)}
+            © 2026 WAKTI. {t("allRightsReserved", language)}
           </p>
         </div>
       </div>
