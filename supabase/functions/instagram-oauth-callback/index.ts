@@ -198,12 +198,13 @@ Deno.serve(async (req: Request) => {
         if (bot.user_id !== userId) return jsonResponse({ error: "Forbidden: bot does not belong to you" }, 403);
 
         // Store IG connection on the bot
+        const tokenToStore = page_access_token || long_lived_token;
         const { error: updateErr } = await supabase
           .from("chatbot_bots")
           .update({
             instagram_page_id: page_id,
             instagram_page_name: page_name || null,
-            instagram_access_token: page_access_token || long_lived_token,
+            instagram_access_token: tokenToStore,
             instagram_business_account_id: ig_account_id || null,
             updated_at: new Date().toISOString(),
           })
@@ -215,7 +216,28 @@ Deno.serve(async (req: Request) => {
           return jsonResponse({ error: "Failed to save Instagram connection" }, 500);
         }
 
-        return jsonResponse({ success: true, message: "Instagram account connected to bot" });
+        // Subscribe the Facebook Page to the app's webhooks so DMs are forwarded
+        let subscribeResult: unknown = null;
+        try {
+          const subRes = await fetch(
+            `https://graph.facebook.com/v21.0/${page_id}/subscribed_apps`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                subscribed_fields: ["messages", "messaging_postbacks", "messaging_optins", "messaging_referrals"],
+                access_token: tokenToStore,
+              }),
+            }
+          );
+          subscribeResult = await subRes.json();
+          console.log("Page webhook subscription result:", JSON.stringify(subscribeResult));
+        } catch (subErr: any) {
+          console.error("Failed to subscribe page to webhooks:", subErr.message);
+          subscribeResult = { error: subErr.message };
+        }
+
+        return jsonResponse({ success: true, message: "Instagram account connected to bot", webhook_subscription: subscribeResult });
       }
 
       return jsonResponse({ error: "Unknown action" }, 400);
