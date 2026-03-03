@@ -1509,10 +1509,38 @@ export function VoiceSignup({ onSignupComplete, onError }: VoiceSignupProps) {
                     className="mt-1"
                   />
                   <label htmlFor="voice-terms" className={`text-[13px] leading-relaxed cursor-pointer ${textColor}`}>
-                    {t(
-                      'I agree to the Privacy Policy and Terms of Service, and I consent to my text, voice, and image data being shared with third-party AI services to provide WAKTI\'s features.', 
-                      'أوافق على سياسة الخصوصية وشروط الخدمة، وأوافق على مشاركة بياناتي (النص والصوت والصور) مع خدمات الذكاء الاصطناعي الخارجية لتوفير ميزات وقتي.'
-                    )}
+                    <span className="text-red-400 mr-0.5">*</span>
+                    {language === 'ar' ? 'أوافق على ' : 'I agree to the '}
+                    <button
+                      type="button"
+                      onClick={() => window.open("/privacy-terms", "_blank")}
+                      className="font-bold hover:opacity-75 transition-opacity text-[#060541] dark:text-[hsl(210,100%,65%)]"
+                    >
+                      {language === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy'}
+                    </button>
+                    {language === 'ar' ? ' و' : ' and '}
+                    <button
+                      type="button"
+                      onClick={() => window.open("/privacy-terms", "_blank")}
+                      className="font-bold hover:opacity-75 transition-opacity text-[#060541] dark:text-[hsl(210,100%,65%)]"
+                    >
+                      {language === 'ar' ? 'شروط الخدمة' : 'Terms of Service'}
+                    </button>
+                    {language === 'ar'
+                      ? '، وأسمح باستخدام بياناتي (النص والصوت والصور) مع مزودي الذكاء الاصطناعي الموثوقين '
+                      : ', and I allow my text, voice, and image data to be used with trusted third-party AI providers '}
+                    <button
+                      type="button"
+                      onClick={() => window.open("/privacy-terms#ai-providers", "_blank")}
+                      className="hover:opacity-75 transition-opacity"
+                    >
+                      <small>
+                        <i className="font-semibold text-[hsl(25,95%,55%)] dark:text-[hsl(25,95%,60%)]">
+                          {language === 'ar' ? '(انظر مزودي الذكاء الاصطناعي)' : '(see AI providers)'}
+                        </i>
+                      </small>
+                    </button>
+                    {language === 'ar' ? ' لتشغيل ميزات وقتي.' : ' to power WAKTI\'s features.'}
                   </label>
                 </div>
                 <Button onClick={handleTermsAgree} className={`w-full rounded-xl ${isDark ? 'bg-[hsl(210,100%,65%)] hover:bg-[hsl(210,100%,55%)]' : 'bg-[#060541] hover:bg-[#060541]/90 text-white'}`} disabled={!formData.agreedToTerms}>
