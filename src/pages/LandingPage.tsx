@@ -247,34 +247,37 @@ export default function LandingPage() {
 
       <div className="fixed bottom-0 left-0 right-0 z-30">
         <div className="w-full border-t border-white/10 bg-black/40 backdrop-blur-xl">
-          <div className="mx-auto max-w-4xl px-4 py-3 flex flex-col items-center gap-2">
+          <div className="mx-auto max-w-4xl px-4 py-3 flex flex-col items-center gap-2.5">
+            {/* Line 1: Sign in CTA (stretched & centered) */}
             <Link
               to="/login"
-              className="rounded-full px-8 py-1.5 bg-[#0c0f14]/60 text-white/85 border border-blue-400/25 backdrop-blur-xl shadow-[0_0_18px_hsla(210,100%,65%,0.35)] hover:text-white hover:bg-blue-500/10 hover:border-blue-300/40 hover:shadow-[0_0_26px_hsla(210,100%,65%,0.55)] transition-all text-xs tracking-wider"
+              className="rounded-full w-48 py-1.5 text-center bg-[#0c0f14]/60 text-white/90 border border-blue-400/30 backdrop-blur-xl shadow-[0_0_15px_hsla(210,100%,65%,0.3)] hover:text-white hover:bg-blue-500/15 hover:border-blue-300/50 hover:shadow-[0_0_25px_hsla(210,100%,65%,0.5)] transition-all text-[13px] font-medium tracking-wide"
             >
               {lang === "ar" ? "تسجيل الدخول" : "Sign in"}
             </Link>
             
-            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-white/60">
-              <Link to="/privacy-terms" className="hover:text-white/80 transition-colors">
+            {/* Line 2: Links */}
+            <div className="flex flex-row flex-wrap items-center justify-center gap-2 text-[10px] md:text-[11px] text-white/60">
+              <Link to="/privacy-terms" className="hover:text-white transition-colors">
                 {lang === "ar" ? "الخصوصية والشروط" : "Privacy & Terms"}
               </Link>
-              <span className="text-white/40">•</span>
-              <Link to="/contact" className="hover:text-white/80 transition-colors">
+              <span className="text-white/30">•</span>
+              <Link to="/contact" className="hover:text-white transition-colors">
                 {lang === "ar" ? "تواصل معنا" : "Contact Us"}
               </Link>
-              <span className="text-white/40">•</span>
+              <span className="text-white/30">•</span>
               <a
                 href="https://wakti.xyz"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-white/80 transition-colors"
+                className="hover:text-white transition-colors"
               >
                 {lang === "ar" ? "صنع بواسطة شركة وقتي" : "Made by WAKTI AI LLC"}
               </a>
             </div>
             
-            <div className="text-center text-[10px] text-white/40">
+            {/* Line 3: Copyright */}
+            <div className="text-center text-[9px] md:text-[10px] text-white/40">
               © 2026 WAKTI. {lang === "ar" ? "جميع الحقوق محفوظة" : "All Rights Reserved"}
             </div>
           </div>
