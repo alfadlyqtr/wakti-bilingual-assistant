@@ -196,8 +196,8 @@ export default function PrivacyTerms() {
                         color: "from-blue-500/10 to-indigo-500/10 border-blue-500/20",
                         badge: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
                         uses: language === 'ar'
-                          ? ["تحسين وتوليد النصوص"]
-                          : ["Text generation & enhancement"],
+                          ? ["تحسين النصوص (AMP)"]
+                          : ["Text enhancement (AMP)"],
                       },
                       {
                         emoji: "✨",
@@ -228,7 +228,7 @@ export default function PrivacyTerms() {
                       },
                       {
                         emoji: "🎬",
-                        name: "Grok (xAI)",
+                        name: "Grok AI",
                         color: "from-zinc-500/10 to-slate-500/10 border-zinc-500/20",
                         badge: "bg-zinc-500/15 text-zinc-700 dark:text-zinc-400",
                         uses: language === 'ar'

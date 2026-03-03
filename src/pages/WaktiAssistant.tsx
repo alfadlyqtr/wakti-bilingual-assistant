@@ -76,11 +76,11 @@ import {
 // ============================================
 const META_APP_ID = '1588786362363251';
 const IG_OAUTH_CALLBACK_URL = 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/instagram-oauth-callback';
-const IG_OAUTH_SCOPES = 'instagram_basic,pages_show_list,pages_read_engagement,instagram_manage_messages,pages_manage_metadata,business_management';
+const IG_OAUTH_SCOPES = 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish';
 
 function buildInstagramOAuthUrl(botId: string, origin: string): string {
   const state = btoa(JSON.stringify({ bot_id: botId, origin }));
-  return `https://www.facebook.com/v21.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(IG_OAUTH_CALLBACK_URL)}&scope=${encodeURIComponent(IG_OAUTH_SCOPES)}&state=${encodeURIComponent(state)}&response_type=code`;
+  return `https://www.instagram.com/oauth/authorize?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(IG_OAUTH_CALLBACK_URL)}&scope=${encodeURIComponent(IG_OAUTH_SCOPES)}&state=${encodeURIComponent(state)}&response_type=code&enable_fb_login=0&force_authentication=0`;
 }
 
 // ============================================
