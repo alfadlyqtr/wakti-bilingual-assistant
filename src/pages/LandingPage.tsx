@@ -245,7 +245,7 @@ export default function LandingPage() {
       {/* Scene 7: Invitation / Final CTA */}
       <InvitationScene language={lang} />
 
-      <div className="relative z-30 snap-end shrink-0 w-full flex-none">
+      <div className="relative z-30 w-full shrink-0 flex-none snap-center">
         <div className="w-full border-t border-white/10 bg-black/40 backdrop-blur-xl">
           <div className="mx-auto max-w-4xl px-4 py-4 md:py-3">
             <div className="flex flex-wrap items-center justify-center gap-2 md:gap-3 text-[11px] text-white/60">
