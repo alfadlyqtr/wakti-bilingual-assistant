@@ -1,17 +1,27 @@
 import { useTheme } from "@/providers/ThemeProvider";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { t } from "@/utils/translations";
 import { MobileHeader } from "@/components/MobileHeader";
 import { Footer } from "@/components/Footer";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import EnhancedAudioControls from "@/components/tasjeel/EnhancedAudioControls";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 
 export default function PrivacyTerms() {
   const { language } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
   const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (location.hash) {
+      const el = document.querySelector(location.hash);
+      if (el) {
+        setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
+      }
+    }
+  }, [location.hash]);
   
   // Audio state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -164,7 +174,7 @@ export default function PrivacyTerms() {
                   </div>
                 </div>
 
-                <div className="bg-muted/20 p-4 rounded-lg">
+                <div id="ai-providers" className="bg-muted/20 p-4 rounded-lg">
                   <h3 className="font-semibold mb-2 text-primary">{t("section2_3Title", language)}</h3>
                   <p className="text-sm text-muted-foreground mb-4">{t("section2_3Text", language)}</p>
 

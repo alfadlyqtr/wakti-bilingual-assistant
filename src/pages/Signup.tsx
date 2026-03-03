@@ -810,7 +810,7 @@ export default function Signup() {
                               : ', and I allow my text, voice, and image data to be used with trusted third-party AI providers '}
                             <button
                               type="button"
-                              onClick={() => navigate("/privacy-terms")}
+                              onClick={() => navigate("/privacy-terms#ai-providers")}
                               className="hover:opacity-75 transition-opacity"
                             >
                               <small>
