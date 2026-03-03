@@ -146,6 +146,16 @@ Deno.serve(async (req: Request) => {
         // 3. Fetch IG account info directly
         const igUser = await fetchIGUserInfo(longLivedToken);
 
+        // 4. Auto-subscribe the IG account to our App's webhooks for messages
+        try {
+          await fetch(`https://graph.instagram.com/v21.0/me/subscribed_apps?subscribed_fields=messages&access_token=${longLivedToken}`, {
+            method: "POST"
+          });
+          console.log("Successfully subscribed IG account to webhooks");
+        } catch (subErr) {
+          console.error("Failed to subscribe IG account to webhooks:", subErr);
+        }
+
         // Return as a single "page" entry so frontend page-selector still works
         const pages = [{
           page_id: igUserId || igUser?.id || "unknown",
