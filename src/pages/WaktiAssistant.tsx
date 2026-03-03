@@ -407,13 +407,20 @@ export default function WaktiAssistant() {
             setIgPendingBotId(botId);
             setIgSubStep('select_page');
             
-            // Find bot and set it active
+            // Find bot and set it active so we don't lose context
             const bot = bots.find(b => b.id === botId);
             if (bot) {
               setActiveBot(bot);
+              // Wait for React state to update before fetching flow
+              setTimeout(() => {
+                openBotBuilder(bot).then(() => {
+                  setStep('instagram-connect'); // Force back to IG connect view
+                });
+              }, 100);
+            } else {
+              setStep('instagram-connect');
             }
             
-            setStep('instagram-connect');
             toast.dismiss();
             toast.success(isRTL ? 'تم الاتصال! اختر حسابك' : 'Connected! Choose your account');
           } else {
@@ -431,6 +438,7 @@ export default function WaktiAssistant() {
       }
     };
 
+    // Make sure we have bots loaded before running the handler
     if (bots.length > 0) {
       handleIgAuthReturn();
     }

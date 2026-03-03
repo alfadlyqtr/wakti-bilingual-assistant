@@ -148,10 +148,14 @@ Deno.serve(async (req: Request) => {
 
         // 4. Auto-subscribe the IG account to our App's webhooks for messages
         try {
-          await fetch(`https://graph.instagram.com/v21.0/me/subscribed_apps?subscribed_fields=messages&access_token=${longLivedToken}`, {
+          const subRes = await fetch(`https://graph.instagram.com/v21.0/me/subscribed_apps?subscribed_fields=messages&access_token=${longLivedToken}`, {
             method: "POST"
           });
-          console.log("Successfully subscribed IG account to webhooks");
+          const subData = await subRes.json();
+          console.log("IG account webhook subscription result:", JSON.stringify(subData));
+          if (subData.error) {
+            console.error("Subscription API error:", subData.error);
+          }
         } catch (subErr) {
           console.error("Failed to subscribe IG account to webhooks:", subErr);
         }
@@ -213,24 +217,17 @@ Deno.serve(async (req: Request) => {
           return jsonResponse({ error: "Failed to save Instagram connection" }, 500);
         }
 
-        // Subscribe the Facebook Page to the app's webhooks so DMs are forwarded
+        // Subscribe the IG account to the app's webhooks so DMs are forwarded
         let subscribeResult: unknown = null;
         try {
           const subRes = await fetch(
-            `https://graph.facebook.com/v21.0/${page_id}/subscribed_apps`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                subscribed_fields: ["messages", "messaging_postbacks", "messaging_optins", "messaging_referrals"],
-                access_token: tokenToStore,
-              }),
-            }
+            `https://graph.instagram.com/v21.0/me/subscribed_apps?subscribed_fields=messages&access_token=${tokenToStore}`,
+            { method: "POST" }
           );
           subscribeResult = await subRes.json();
-          console.log("Page webhook subscription result:", JSON.stringify(subscribeResult));
+          console.log("IG webhook subscription result (select_page):", JSON.stringify(subscribeResult));
         } catch (subErr: any) {
-          console.error("Failed to subscribe page to webhooks:", subErr.message);
+          console.error("Failed to subscribe IG account to webhooks:", subErr.message);
           subscribeResult = { error: subErr.message };
         }
 
