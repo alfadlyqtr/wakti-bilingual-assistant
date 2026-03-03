@@ -787,41 +787,36 @@ export default function Signup() {
                             disabled={isLoading}
                             className="mt-0.5 rounded-md border-border/60"
                           />
-                          <div className="text-xs leading-relaxed text-muted-foreground">
-                            <label htmlFor="terms" className="cursor-pointer">
-                              <span className="text-red-400 mr-0.5">*</span>{t.agreeToTerms}{" "}
-                              <button
-                                type="button"
-                                onClick={() => navigate("/privacy-terms")}
-                                className="text-[#060541] dark:text-blue-400 hover:underline font-semibold"
-                              >
-                                {t.privacyPolicy}
-                              </button>
-                              {" "}{t.and}{" "}
-                              <button
-                                type="button"
-                                onClick={() => navigate("/privacy-terms")}
-                                className="text-[#060541] dark:text-blue-400 hover:underline font-semibold"
-                              >
-                                {t.termsOfService}
-                              </button>
-                              {t.termsOfService.endsWith(t.termsOfService) ? "" : t.termsOfService.replace(t.termsOfService, "") /* fallback if string manipulation is needed, but we included it in the translation */}
-                            </label>
-                            {/* Apple AI Consent Requirement */}
-                            <label htmlFor="terms" className="cursor-pointer inline">
-                              {language === 'ar' 
-                                ? "، وأوافق على مشاركة بياناتي (النص والصوت والصور) مع خدمات الذكاء الاصطناعي الخارجية (" 
-                                : ", and I consent to my text, voice, and image data being shared with third-party AI services ("}
-                              <button
-                                type="button"
-                                onClick={() => navigate("/privacy-terms")}
-                                className="text-[#060541] dark:text-blue-400 hover:underline font-semibold"
-                              >
-                                {t.seeAiProviders}
-                              </button>
-                              {t.toProvideFeatures}
-                            </label>
-                          </div>
+                          <label htmlFor="terms" className="cursor-pointer text-xs leading-relaxed text-muted-foreground">
+                            <span className="text-red-400 mr-0.5">*</span>
+                            {language === 'ar' ? 'أوافق على ' : 'I agree to the '}
+                            <button
+                              type="button"
+                              onClick={() => navigate("/privacy-terms")}
+                              className="text-[#060541] dark:text-blue-400 hover:underline font-semibold"
+                            >
+                              {language === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy'}
+                            </button>
+                            {language === 'ar' ? ' و' : ' and '}
+                            <button
+                              type="button"
+                              onClick={() => navigate("/privacy-terms")}
+                              className="text-[#060541] dark:text-blue-400 hover:underline font-semibold"
+                            >
+                              {language === 'ar' ? 'شروط الخدمة' : 'Terms of Service'}
+                            </button>
+                            {language === 'ar'
+                              ? '، وأوافق على مشاركة بياناتي (النص والصوت والصور) مع خدمات الذكاء الاصطناعي الخارجية ('
+                              : ', and I consent to my text, voice, and image data being shared with third-party AI services ('}
+                            <button
+                              type="button"
+                              onClick={() => navigate("/privacy-terms")}
+                              className="text-[#060541] dark:text-blue-400 hover:underline font-semibold"
+                            >
+                              {language === 'ar' ? 'انظر مزودي الذكاء الاصطناعي' : 'see AI providers'}
+                            </button>
+                            {language === 'ar' ? ') لتوفير ميزات وقتي.' : ') to provide WAKTI\'s features.'}
+                          </label>
                         </div>
 
                         {/* ── Submit Button ── */}
