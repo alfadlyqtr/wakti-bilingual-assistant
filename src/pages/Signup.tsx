@@ -793,7 +793,8 @@ export default function Signup() {
                             <button
                               type="button"
                               onClick={() => navigate("/privacy-terms")}
-                              className="text-[#060541] dark:text-blue-400 hover:underline font-semibold"
+                              className="font-bold hover:opacity-80 transition-opacity"
+                              style={{ background: 'linear-gradient(90deg, hsl(210,100%,55%), hsl(260,70%,60%))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}
                             >
                               {language === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy'}
                             </button>
@@ -801,21 +802,29 @@ export default function Signup() {
                             <button
                               type="button"
                               onClick={() => navigate("/privacy-terms")}
-                              className="text-[#060541] dark:text-blue-400 hover:underline font-semibold"
+                              className="font-bold hover:opacity-80 transition-opacity"
+                              style={{ background: 'linear-gradient(90deg, hsl(260,70%,60%), hsl(320,75%,65%))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}
                             >
                               {language === 'ar' ? 'شروط الخدمة' : 'Terms of Service'}
                             </button>
                             {language === 'ar'
-                              ? '، وأوافق على مشاركة بياناتي (النص والصوت والصور) مع خدمات الذكاء الاصطناعي الخارجية ('
-                              : ', and I consent to my text, voice, and image data being shared with third-party AI services ('}
+                              ? '، وأسمح باستخدام بياناتي (النص والصوت والصور) مع مزودي الذكاء الاصطناعي الموثوقين '
+                              : ', and I allow my text, voice, and image data to be used with trusted third-party AI providers '}
                             <button
                               type="button"
                               onClick={() => navigate("/privacy-terms")}
-                              className="text-[#060541] dark:text-blue-400 hover:underline font-semibold"
+                              className="hover:opacity-80 transition-opacity"
                             >
-                              {language === 'ar' ? 'انظر مزودي الذكاء الاصطناعي' : 'see AI providers'}
+                              <small>
+                                <i
+                                  className="font-medium"
+                                  style={{ background: 'linear-gradient(90deg, hsl(25,95%,60%), hsl(45,100%,60%))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}
+                                >
+                                  {language === 'ar' ? '(انظر مزودي الذكاء الاصطناعي)' : '(see AI providers)'}
+                                </i>
+                              </small>
                             </button>
-                            {language === 'ar' ? ') لتوفير ميزات وقتي.' : ') to provide WAKTI\'s features.'}
+                            {language === 'ar' ? ' لتشغيل ميزات وقتي.' : ' to power WAKTI\'s features.'}
                           </label>
                         </div>
 
