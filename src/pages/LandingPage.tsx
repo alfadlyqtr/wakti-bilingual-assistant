@@ -245,10 +245,10 @@ export default function LandingPage() {
       {/* Scene 7: Invitation / Final CTA */}
       <InvitationScene language={lang} />
 
-      <div className="fixed bottom-0 left-0 right-0 z-30">
+      <div className="relative z-30">
         <div className="w-full border-t border-white/10 bg-black/40 backdrop-blur-xl">
-          <div className="mx-auto max-w-4xl px-4 py-3">
-            <div className="flex items-center justify-center gap-3 text-[11px] text-white/60">
+          <div className="mx-auto max-w-4xl px-4 py-4 md:py-3">
+            <div className="flex flex-wrap items-center justify-center gap-2 md:gap-3 text-[11px] text-white/60">
               <Link to="/privacy-terms" className="hover:text-white/80 transition-colors">
                 {lang === "ar" ? "الخصوصية والشروط" : "Privacy & Terms"}
               </Link>
