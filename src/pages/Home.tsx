@@ -156,9 +156,18 @@ export default function Home() {
           <button onClick={() => navigate('/login')} className="hover:text-white/70 transition-colors">
             Sign in
           </button>
+          <span className="hidden md:inline">•</span>
+          <a 
+            href="https://wakti.xyz" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="hover:text-white/70 transition-colors"
+          >
+            Made by WAKTI AI LLC
+          </a>
         </div>
         <div className="text-center mt-2 text-[8px] md:text-[10px] text-white/30">
-          © 2026 WAKTI AI LLC. All Rights Reserved
+          © 2026 WAKTI All Rights Reserved
         </div>
       </footer>
     </div>
