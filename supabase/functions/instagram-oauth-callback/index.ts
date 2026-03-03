@@ -52,7 +52,7 @@ async function verifyUser(req: Request): Promise<string | null> {
   return user.id;
 }
 
-// Exchange authorization code for short-lived token
+// Exchange Instagram authorization code for short-lived token (Instagram-only OAuth)
 async function exchangeCodeForToken(code: string, redirectUri: string): Promise<{ access_token: string; token_type: string }> {
   const params = new URLSearchParams({
     client_id: META_APP_ID,
@@ -62,43 +62,38 @@ async function exchangeCodeForToken(code: string, redirectUri: string): Promise<
     grant_type: "authorization_code",
   });
 
-  const res = await fetch(`https://graph.facebook.com/v21.0/oauth/access_token?${params}`);
+  const res = await fetch("https://api.instagram.com/oauth/access_token", {
+    method: "POST",
+    body: params,
+  });
   const data = await res.json();
-  if (data.error) throw new Error(data.error.message || "Token exchange failed");
+  console.log("Short-lived token response:", JSON.stringify(data));
+  if (data.error_type || data.error) throw new Error(data.error_message || data.error?.message || "Token exchange failed");
   return data;
 }
 
-// Exchange short-lived token for long-lived token (60 days)
+// Exchange short-lived token for long-lived token (60 days) via Instagram Graph API
 async function getLongLivedToken(shortToken: string): Promise<string> {
   const params = new URLSearchParams({
-    grant_type: "fb_exchange_token",
-    client_id: META_APP_ID,
+    grant_type: "ig_exchange_token",
     client_secret: META_APP_SECRET,
-    fb_exchange_token: shortToken,
+    access_token: shortToken,
   });
 
-  const res = await fetch(`https://graph.facebook.com/v21.0/oauth/access_token?${params}`);
+  const res = await fetch(`https://graph.instagram.com/access_token?${params}`);
   const data = await res.json();
+  console.log("Long-lived token response:", JSON.stringify(data));
   if (data.error) throw new Error(data.error.message || "Long-lived token exchange failed");
   return data.access_token;
 }
 
-// Fetch Facebook Pages the user manages
-async function fetchPages(accessToken: string) {
+// Fetch Instagram user/account info directly
+async function fetchIGUserInfo(accessToken: string) {
   const res = await fetch(
-    `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,instagram_business_account&access_token=${accessToken}`
+    `https://graph.instagram.com/v21.0/me?fields=id,name,username,profile_picture_url,followers_count&access_token=${accessToken}`
   );
   const data = await res.json();
-  if (data.error) throw new Error(data.error.message || "Failed to fetch pages");
-  return data.data || [];
-}
-
-// Fetch Instagram Business Account details
-async function fetchIGAccount(igAccountId: string, pageAccessToken: string) {
-  const res = await fetch(
-    `https://graph.facebook.com/v21.0/${igAccountId}?fields=id,name,username,profile_picture_url,followers_count&access_token=${pageAccessToken}`
-  );
-  const data = await res.json();
+  console.log("IG user info response:", JSON.stringify(data));
   if (data.error) return null;
   return data;
 }
@@ -140,44 +135,36 @@ Deno.serve(async (req: Request) => {
         if (botErr || !bot) return jsonResponse({ error: "Bot not found" }, 404);
         if (bot.user_id !== userId) return jsonResponse({ error: "Forbidden: bot does not belong to you" }, 403);
 
-        // 1. Exchange code for short-lived token
+        // 1. Exchange code for short-lived token via Instagram API
         const tokenData = await exchangeCodeForToken(code, redirect_uri);
+        const shortToken = tokenData.access_token;
+        const igUserId = (tokenData as any).user_id;
 
-        // 2. Exchange for long-lived token
-        const longLivedToken = await getLongLivedToken(tokenData.access_token);
+        // 2. Exchange for long-lived token (60 days)
+        const longLivedToken = await getLongLivedToken(shortToken);
 
-        // 3. Fetch user's Facebook Pages (with IG business accounts)
-        const pages = await fetchPages(longLivedToken);
+        // 3. Fetch IG account info directly
+        const igUser = await fetchIGUserInfo(longLivedToken);
 
-        // 4. For each page, fetch IG account details
-        const pagesWithIG = await Promise.all(
-          pages.map(async (page: any) => {
-            let igAccount = null;
-            if (page.instagram_business_account?.id) {
-              igAccount = await fetchIGAccount(page.instagram_business_account.id, page.access_token);
-            }
-            return {
-              page_id: page.id,
-              page_name: page.name,
-              page_access_token: page.access_token,
-              ig_account: igAccount
-                ? {
-                    id: igAccount.id,
-                    username: igAccount.username || null,
-                    name: igAccount.name || page.name,
-                    profile_picture_url: igAccount.profile_picture_url || null,
-                    followers_count: igAccount.followers_count || 0,
-                  }
-                : null,
-            };
-          })
-        );
+        // Return as a single "page" entry so frontend page-selector still works
+        const pages = [{
+          page_id: igUserId || igUser?.id || "unknown",
+          page_name: igUser?.username || igUser?.name || "Instagram Account",
+          page_access_token: longLivedToken,
+          ig_account: igUser ? {
+            id: igUser.id,
+            username: igUser.username || null,
+            name: igUser.name || igUser.username || "Instagram Account",
+            profile_picture_url: igUser.profile_picture_url || null,
+            followers_count: igUser.followers_count || 0,
+          } : null,
+        }];
 
-        // Return pages to frontend — user will pick one
+        // Return to frontend — user will pick one (will only be one)
         return jsonResponse({
           success: true,
           long_lived_token: longLivedToken,
-          pages: pagesWithIG,
+          pages,
         });
       }
 
