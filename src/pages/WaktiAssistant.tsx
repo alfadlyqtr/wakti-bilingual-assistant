@@ -1745,105 +1745,224 @@ export default function WaktiAssistant() {
             { label: isRTL ? 'إجراءات' : 'Actions', types: ['appointment', 'rating', 'live_chat', 'end'] as FlowNodeType[] },
           ];
 
+          // Find next node in chain for "THEN GO TO" section
+          const getNextNode = (nodeId: string) => {
+            const nextEdge = (edges as any[]).find((e: any) => e.source === nodeId);
+            if (!nextEdge) return null;
+            return (nodes as any[]).find((n: any) => n.id === nextEdge.target) || null;
+          };
+
           // Shared customize panel content (reused in desktop right panel + mobile bottom sheet)
-          const CustomizePanel = () => !selectedNode ? (
-            <div className="flex-1 flex items-center justify-center text-center px-6">
-              <div className="opacity-40">
-                <p className="text-3xl mb-2">✏️</p>
-                <p className="text-sm text-muted-foreground">{isRTL ? 'اختر مكوّناً للتعديل' : 'Select a component to customize it'}</p>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="flex-1 overflow-y-auto px-4 py-4 min-h-0 space-y-4">
-                <div className="flex items-center gap-2">
-                  <span className="w-7 h-7 rounded-lg flex items-center justify-center text-sm text-white shrink-0" style={{ background: selMeta?.color }}>{selMeta?.icon}</span>
-                  <p className="text-sm font-bold text-foreground">{isRTL ? selMeta?.labelAr : selMeta?.label}</p>
+          const CustomizePanel = () => {
+            if (!selectedNode) return (
+              <div className="flex-1 flex items-center justify-center text-center px-6">
+                <div className="opacity-40">
+                  <p className="text-3xl mb-2">✏️</p>
+                  <p className="text-sm text-muted-foreground">{isRTL ? 'اختر مكوّناً للتعديل' : 'Select a component to customize it'}</p>
                 </div>
-                {!selIsChoice && (
-                  <div>
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">{isRTL ? 'الرسالة' : 'Message'}</label>
-                    <div className="relative">
-                      <textarea
-                        ref={editTextareaRef}
-                        value={editText}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setEditText(val);
-                          if (val[e.target.selectionStart - 1] === '/') setShowVarMenu(true);
-                          else if (showVarMenu) setShowVarMenu(false);
-                        }}
-                        onKeyDown={(e) => { if (e.key === 'Escape') setShowVarMenu(false); }}
-                        rows={4}
-                        className="w-full border border-border/60 rounded-lg px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-[#060541]/20 dark:focus:ring-white/20 resize-none transition-all"
-                        placeholder={isRTL ? 'اكتب الرسالة... اكتب / للمتغيرات' : 'Message... type / for variables'}
-                      />
-                      {showVarMenu && (
-                        <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-card border border-border/60 rounded-xl shadow-xl overflow-hidden">
-                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-3 pt-2 pb-1">{isRTL ? 'المتغيرات' : 'Default Attributes'}</p>
-                          {[{ label: isRTL ? 'الاسم' : 'Name', var: '{{name}}' }, { label: isRTL ? 'البريد الإلكتروني' : 'Email', var: '{{email}}' }, { label: isRTL ? 'رقم الهاتف' : 'Phone Number', var: '{{phone}}' }].map(v => (
-                            <button key={v.var} className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-muted/80 text-left transition-colors"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                const ta = editTextareaRef.current;
-                                if (!ta) return;
-                                const pos = ta.selectionStart;
-                                const before = editText.slice(0, pos).replace(/\/$/, '');
-                                const after = editText.slice(pos);
-                                setEditText(before + v.var + after);
-                                setShowVarMenu(false);
-                                setTimeout(() => { ta.focus(); const np = before.length + v.var.length; ta.setSelectionRange(np, np); }, 10);
-                              }}>
-                              <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-[#060541] dark:text-blue-400">{v.var}</span>
-                              <span className="text-sm text-foreground">{v.label}</span>
-                            </button>
-                          ))}
+              </div>
+            );
+
+            const nextNode = getNextNode(selectedNode.id);
+            const nextMeta = nextNode ? NODE_TYPE_META[nextNode.data.flowType as FlowNodeType] : null;
+            const currentIdx = orderedNodes.findIndex((n: any) => n.id === selectedNode.id);
+
+            return (
+              <>
+                {/* ── Header: white bg, icon+name center, X left, trash right ── */}
+                <div className="flex items-center gap-3 px-4 py-3 border-b border-border/20 shrink-0 bg-card">
+                  <button
+                    onClick={() => { setClassicShowMobilePanel(false); setClassicSelectedId(null); }}
+                    title="Close"
+                    className="w-8 h-8 rounded-full bg-muted/60 hover:bg-muted flex items-center justify-center transition-all shrink-0"
+                  >
+                    <X className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                  <span
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-xl shrink-0"
+                    style={{ background: selMeta?.color }}
+                  >
+                    {selMeta?.icon}
+                  </span>
+                  <p className="flex-1 text-base font-bold text-foreground truncate">
+                    {isRTL ? selMeta?.labelAr : selMeta?.label}
+                  </p>
+                  <button
+                    onClick={() => {
+                      deleteNode(selectedNode.id);
+                      setClassicSelectedId(null);
+                      setClassicShowMobilePanel(false);
+                    }}
+                    title="Delete"
+                    className="w-8 h-8 rounded-full flex items-center justify-center transition-all shrink-0 text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {/* ── Body ── */}
+                <div className="flex-1 overflow-y-auto min-h-0 bg-card">
+                  <div className="px-4 pt-5 pb-4 space-y-5">
+
+                    {/* MESSAGE / OPTIONS */}
+                    {!selIsChoice ? (
+                      <div>
+                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest text-center mb-3">
+                          {isRTL ? 'الرسالة' : 'Message'}
+                        </p>
+                        <div className="relative">
+                          <textarea
+                            ref={editTextareaRef}
+                            value={editText}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setEditText(val);
+                              if (val[e.target.selectionStart - 1] === '/') setShowVarMenu(true);
+                              else if (showVarMenu) setShowVarMenu(false);
+                            }}
+                            onKeyDown={(e) => { if (e.key === 'Escape') setShowVarMenu(false); }}
+                            rows={5}
+                            className="w-full border border-border/50 rounded-xl px-3 py-3 text-sm bg-background focus:outline-none focus:border-[#060541]/40 dark:focus:border-white/30 resize-none transition-all"
+                            placeholder={isRTL ? 'اكتب الرسالة...' : 'Type message here...'}
+                          />
+                          {showVarMenu && (
+                            <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-card border border-border/60 rounded-xl shadow-xl overflow-hidden">
+                              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-3 pt-2 pb-1">{isRTL ? 'المتغيرات' : 'Default Attributes'}</p>
+                              {[{ label: isRTL ? 'الاسم' : 'Name', var: '{{name}}' }, { label: isRTL ? 'البريد' : 'Email', var: '{{email}}' }, { label: isRTL ? 'الهاتف' : 'Phone', var: '{{phone}}' }].map(v => (
+                                <button key={v.var} className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-muted/80 text-left transition-colors"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    const ta = editTextareaRef.current;
+                                    if (!ta) return;
+                                    const pos = ta.selectionStart;
+                                    const before = editText.slice(0, pos).replace(/\/$/, '');
+                                    const after = editText.slice(pos);
+                                    setEditText(before + v.var + after);
+                                    setShowVarMenu(false);
+                                    setTimeout(() => { ta.focus(); const np = before.length + v.var.length; ta.setSelectionRange(np, np); }, 10);
+                                  }}>
+                                  <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-[#060541] dark:text-blue-400">{v.var}</span>
+                                  <span className="text-sm text-foreground">{v.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-muted-foreground mt-1">{isRTL ? "اكتب '/' للمتغيرات" : "Type '/' for variables"}</p>
-                  </div>
-                )}
-                {selIsChoice && (
-                  <div>
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">{isRTL ? 'الخيارات' : 'Options'}</label>
-                    <div className="space-y-2">
-                      {editOptions.map((opt, i) => (
-                        <div key={i} className="flex gap-1.5">
-                          <input value={opt} onChange={(e) => { const n = [...editOptions]; n[i] = e.target.value; setEditOptions(n); }}
-                            className="flex-1 border border-border/60 rounded-lg px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-[#060541]/20 dark:focus:ring-white/20 transition-all"
-                            placeholder={`${isRTL ? 'خيار' : 'Option'} ${i + 1}`} />
-                          <button onClick={() => setEditOptions(editOptions.filter((_, j) => j !== i))} title="Remove"
-                            className="w-9 h-9 rounded-lg text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center shrink-0 active:scale-95 transition-all">
-                            <X className="h-3.5 w-3.5" />
+                        {/* Variable hint + AMP button row */}
+                        <div className="flex items-center justify-between mt-2">
+                          <p className="text-[11px] text-muted-foreground">
+                            {isRTL ? "اكتب '/' لإدراج متغير" : "Type '/' to insert visitor's name, email or phone"}
+                          </p>
+                          <button
+                            onClick={() => setAmpLoading(v => !v)}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#060541] dark:bg-white text-white dark:text-[#060541] text-[10px] font-bold shrink-0 hover:opacity-80 transition-opacity"
+                          >
+                            <Zap className="h-3 w-3" />
+                            AMP
                           </button>
                         </div>
-                      ))}
-                      <button onClick={() => setEditOptions([...editOptions, ''])}
-                        className="w-full py-2.5 rounded-lg border border-dashed border-border/50 text-xs font-semibold text-muted-foreground hover:border-[#060541]/30 hover:text-foreground transition-colors">
-                        + {isRTL ? 'إضافة خيار' : 'Add option'}
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest text-center mb-3">
+                          {isRTL ? 'الخيارات' : 'Options'}
+                        </p>
+                        <div className="space-y-2">
+                          {editOptions.map((opt, i) => (
+                            <div key={i} className="flex gap-1.5">
+                              <input
+                                value={opt}
+                                onChange={(e) => { const n = [...editOptions]; n[i] = e.target.value; setEditOptions(n); }}
+                                className="flex-1 border border-border/50 rounded-xl px-3 py-2.5 text-sm bg-background focus:outline-none focus:border-[#060541]/40 dark:focus:border-white/30 transition-all"
+                                placeholder={`${isRTL ? 'خيار' : 'Option'} ${i + 1}`}
+                              />
+                              <button onClick={() => setEditOptions(editOptions.filter((_, j) => j !== i))} title="Remove"
+                                className="w-9 h-9 rounded-xl text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center shrink-0 active:scale-95 transition-all">
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                          <button onClick={() => setEditOptions([...editOptions, ''])}
+                            className="w-full py-2.5 rounded-xl border border-dashed border-border/50 text-xs font-semibold text-muted-foreground hover:border-[#060541]/40 hover:text-foreground transition-colors">
+                            + {isRTL ? 'إضافة خيار' : 'Add option'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── THEN GO TO ── */}
+                    <div>
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-6 h-px bg-border/60" />
+                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest whitespace-nowrap">
+                          {isRTL ? 'ثم انتقل إلى' : 'Then go to'}
+                        </p>
+                      </div>
+
+                      {nextNode && nextMeta ? (
+                        <button
+                          onClick={() => {
+                            setClassicSelectedId(nextNode.id);
+                            setEditText(nextNode.data.text || nextNode.data.prompt || '');
+                            const opts = (nextNode.data.options || []).map((o: any) => typeof o === 'string' ? o : o.en || '');
+                            setEditOptions(opts);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-muted/40 hover:bg-muted/70 border border-border/30 transition-all active:scale-[0.98] text-left"
+                        >
+                          <span
+                            className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
+                            style={{ background: nextMeta.color }}
+                          >
+                            {nextMeta.icon}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-foreground">{isRTL ? nextMeta.labelAr : nextMeta.label}</p>
+                            <p className="text-xs text-muted-foreground">{isRTL ? 'توجه إلى هنا' : 'Go to here'}</p>
+                          </div>
+                        </button>
+                      ) : (
+                        <div className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-muted/30 border border-border/30">
+                          <span className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 bg-red-500">
+                            🏁
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-foreground">{isRTL ? 'إنهاء المحادثة' : 'End Conversation'}</p>
+                            <p className="text-xs text-muted-foreground">{isRTL ? 'توقف هنا' : 'Stop here'}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Add new component */}
+                      <button
+                        onClick={() => { setClassicInsertAfterIdx(currentIdx); setShowAddMenu(true); setAddComponentSearch(''); }}
+                        className="w-full mt-2 py-3 rounded-xl border-2 border-dashed border-border/40 hover:border-[#060541]/40 dark:hover:border-white/30 text-sm font-semibold text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
+                      >
+                        <Plus className="h-4 w-4" />
+                        {isRTL ? 'إضافة مكوّن جديد' : 'Add new component'}
                       </button>
                     </div>
                   </div>
-                )}
-              </div>
-              <div className="px-4 py-3 border-t border-border/40 shrink-0">
-                <Button
-                  className="w-full bg-[#060541] hover:bg-[#060541]/90 text-white dark:bg-white dark:text-[#060541] rounded-lg h-11 text-sm font-bold active:scale-[0.98] transition-all"
-                  onClick={() => {
-                    const updates: Record<string, any> = {};
-                    if (selIsChoice) { updates.options = editOptions.filter(Boolean).map(o => ({ en: o, ar: o })); updates.text = editText; }
-                    else { if (selData.flowType === 'ai_response') updates.prompt = editText; else updates.text = editText; }
-                    setNodes((nds: any[]) => nds.map((n: any) => n.id === selectedNode.id ? { ...n, data: { ...n.data, ...updates } } : n));
-                    if (classicShowMobilePanel) setClassicShowMobilePanel(false);
-                  }}
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  {isRTL ? 'حفظ التغييرات' : 'Save Changes'}
-                </Button>
-              </div>
-            </>
-          );
+                </div>
+
+                {/* ── Save button ── */}
+                <div className="px-4 py-3 border-t border-border/20 shrink-0 bg-card">
+                  <Button
+                    className="w-full rounded-xl h-12 text-sm font-bold active:scale-[0.98] transition-all bg-[#060541] hover:bg-[#060541]/90 dark:bg-white dark:text-[#060541] dark:hover:bg-white/90 text-white"
+                    onClick={() => {
+                      const updates: Record<string, any> = {};
+                      if (selIsChoice) { updates.options = editOptions.filter(Boolean).map(o => ({ en: o, ar: o })); updates.text = editText; }
+                      else { if (selData.flowType === 'ai_response') updates.prompt = editText; else updates.text = editText; }
+                      setNodes((nds: any[]) => nds.map((n: any) => n.id === selectedNode.id ? { ...n, data: { ...n.data, ...updates } } : n));
+                      setClassicShowMobilePanel(false);
+                    }}
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {isRTL ? 'حفظ التغييرات' : 'Save Changes'}
+                  </Button>
+                </div>
+              </>
+            );
+          };
 
           return (
             <div className="flex flex-col flex-1 overflow-hidden min-h-0">
@@ -1909,7 +2028,7 @@ export default function WaktiAssistant() {
                       <p className="text-[10px] text-muted-foreground">{orderedNodes.length} {isRTL ? 'مكوّن' : 'components'}</p>
                       {/* Mobile: Add button */}
                       <button
-                        onClick={() => { setClassicInsertAfterIdx(null); setClassicShowMobilePanel(prev => !prev); addNode(('message') as FlowNodeType); }}
+                        onClick={() => { setClassicInsertAfterIdx(null); setShowAddMenu(true); setAddComponentSearch(''); }}
                         className="sm:hidden flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#060541] text-white text-xs font-bold active:scale-95 transition-all"
                         title="Add component"
                       >
@@ -1919,14 +2038,14 @@ export default function WaktiAssistant() {
                     </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 min-h-0">
+                  <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 min-h-0">
                     {orderedNodes.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-center gap-3 opacity-50">
                         <span className="text-4xl">💬</span>
                         <p className="text-sm font-semibold text-muted-foreground">{isRTL ? 'أضف مكوّنات من القائمة' : 'Add components from the left panel'}</p>
                         {/* Mobile add button when empty */}
                         <button
-                          onClick={() => setClassicShowMobilePanel(true)}
+                          onClick={() => { setShowAddMenu(true); setAddComponentSearch(''); }}
                           className="sm:hidden mt-2 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#060541] text-white text-sm font-bold shadow-lg active:scale-95 transition-all"
                         >
                           <Plus className="h-4 w-4" />
@@ -1934,7 +2053,7 @@ export default function WaktiAssistant() {
                         </button>
                       </div>
                     ) : (
-                      <div className="space-y-0 max-w-xl mx-auto">
+                      <div className="space-y-0 max-w-lg mx-auto">
                         {orderedNodes.map((node: any, idx: number) => {
                           const m = NODE_TYPE_META[node.data.flowType as FlowNodeType];
                           if (!m) return null;
@@ -1943,19 +2062,20 @@ export default function WaktiAssistant() {
                           const isDragging = classicDragIdx === idx;
 
                           return (
-                            <div key={node.id} className="flex flex-col">
-                              {/* ── Mini + insert button ABOVE first card ── */}
+                            <div key={node.id} className="flex flex-col items-center">
+
+                              {/* ── Connector line + insert ABOVE first card ── */}
                               {idx === 0 && (
-                                <div className="flex items-center gap-2 py-1 group/ins">
-                                  <div className="flex-1 h-px bg-border/30" />
+                                <div className="flex flex-col items-center gap-0 group/ins0 w-full">
+                                  <div className="w-0.5 h-4 bg-gradient-to-b from-transparent to-border/40" />
                                   <button
-                                    onClick={() => { setClassicInsertAfterIdx(-1); setClassicShowMobilePanel(true); }}
+                                    onClick={() => { setClassicInsertAfterIdx(-1); setShowAddMenu(true); setAddComponentSearch(''); }}
                                     title="Insert before"
-                                    className="w-6 h-6 rounded-full border-2 border-dashed border-border/50 hover:border-[#060541] dark:hover:border-white bg-background flex items-center justify-center opacity-0 group-hover/ins:opacity-100 hover:!opacity-100 transition-all hover:scale-110 active:scale-95"
+                                    className="w-6 h-6 rounded-full border-2 border-dashed border-border/40 hover:border-[#060541] dark:hover:border-white bg-background flex items-center justify-center opacity-0 group-hover/ins0:opacity-100 hover:!opacity-100 transition-all hover:scale-110 active:scale-95 shadow-sm"
                                   >
-                                    <Plus className="w-3 h-3 text-muted-foreground hover:text-[#060541] dark:hover:text-white" />
+                                    <Plus className="w-3 h-3 text-muted-foreground" />
                                   </button>
-                                  <div className="flex-1 h-px bg-border/30" />
+                                  <div className="w-0.5 h-3 bg-border/40" />
                                 </div>
                               )}
 
@@ -1974,67 +2094,98 @@ export default function WaktiAssistant() {
                                   setClassicShowMobilePanel(true);
                                 }}
                                 className={cn(
-                                  "relative rounded-2xl border-2 transition-all cursor-pointer overflow-hidden bg-white dark:bg-zinc-900 shadow-sm hover:shadow-md select-none",
-                                  isSelected ? "border-[#060541] dark:border-white/70 shadow-md" : "border-border/30 hover:border-border/70",
-                                  isDragging ? "opacity-40 scale-[0.98]" : ""
+                                  "relative w-full rounded-2xl transition-all cursor-pointer overflow-hidden select-none",
+                                  "bg-white dark:bg-zinc-900",
+                                  isSelected
+                                    ? "shadow-lg ring-2 scale-[1.01]"
+                                    : "shadow-sm hover:shadow-md hover:scale-[1.005]",
+                                  isDragging ? "opacity-40 scale-[0.97]" : ""
                                 )}
+                                style={isSelected ? { ringColor: m.color, boxShadow: `0 4px 20px ${m.color}30, 0 1px 6px ${m.color}20` } : {}}
                               >
+                                {/* Left color accent bar */}
+                                <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl" style={{ background: m.color }} />
+
                                 {/* Drag handle */}
-                                <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-20 hover:opacity-60 cursor-grab active:cursor-grabbing z-10 py-2 px-1">
-                                  <div className="w-1 h-1 rounded-full bg-current" />
-                                  <div className="w-1 h-1 rounded-full bg-current" />
-                                  <div className="w-1 h-1 rounded-full bg-current" />
-                                  <div className="w-1 h-1 rounded-full bg-current" />
-                                  <div className="w-1 h-1 rounded-full bg-current" />
-                                  <div className="w-1 h-1 rounded-full bg-current" />
-                                </div>
-                                {/* Header */}
-                                <div className="flex items-center gap-2 px-4 pl-7 py-2.5 pr-10" style={{ background: m.color }}>
-                                  <span className="text-white text-sm">{m.icon}</span>
-                                  <span className="text-white text-xs font-bold truncate">{isRTL ? m.labelAr : m.label}</span>
-                                </div>
-                                {/* Body */}
-                                <div className="px-4 pl-7 py-2.5">
-                                  {isChoice ? (
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {(node.data.options || []).slice(0, 4).map((opt: any, i: number) => (
-                                        <span key={i} className="text-xs px-2.5 py-1 rounded-full border border-border/50 bg-muted/50 text-muted-foreground">
-                                          {typeof opt === 'string' ? opt : opt.en || opt.ar}
-                                        </span>
-                                      ))}
+                                <div className="absolute left-3 top-1/2 -translate-y-1/2 flex flex-col gap-[3px] opacity-25 hover:opacity-60 cursor-grab active:cursor-grabbing z-10 py-2">
+                                  {[0,1,2].map(i => (
+                                    <div key={i} className="flex gap-[3px]">
+                                      <div className="w-[3px] h-[3px] rounded-full bg-current" />
+                                      <div className="w-[3px] h-[3px] rounded-full bg-current" />
                                     </div>
-                                  ) : (
-                                    <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
-                                      {node.data.text || node.data.prompt || <span className="italic opacity-40">{isRTL ? 'انقر للتعديل...' : 'Tap to edit...'}</span>}
-                                    </p>
-                                  )}
+                                  ))}
                                 </div>
+
+                                {/* Card content */}
+                                <div className="pl-8 pr-10">
+                                  {/* Header row */}
+                                  <div className="flex items-center gap-2 py-2.5 border-b border-border/20">
+                                    <span
+                                      className="w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 text-white"
+                                      style={{ background: m.color }}
+                                    >
+                                      {m.icon}
+                                    </span>
+                                    <span className="text-sm font-bold text-foreground truncate">{isRTL ? m.labelAr : m.label}</span>
+                                    {isSelected && (
+                                      <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full text-white shrink-0" style={{ background: m.color }}>
+                                        {isRTL ? 'محدد' : 'Selected'}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {/* Body */}
+                                  <div className="py-2.5">
+                                    {isChoice ? (
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {(node.data.options || []).slice(0, 4).map((opt: any, i: number) => (
+                                          <span
+                                            key={i}
+                                            className="text-xs px-2.5 py-1 rounded-full font-medium"
+                                            style={{ background: m.color + '15', color: m.color, border: `1px solid ${m.color}30` }}
+                                          >
+                                            {typeof opt === 'string' ? opt : opt.en || opt.ar}
+                                          </span>
+                                        ))}
+                                        {(node.data.options || []).length === 0 && (
+                                          <span className="text-xs italic text-muted-foreground/50">{isRTL ? 'لا توجد خيارات...' : 'No options yet...'}</span>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
+                                        {node.data.text || node.data.prompt || (
+                                          <span className="italic opacity-40">{isRTL ? 'انقر للتعديل...' : 'Tap to edit...'}</span>
+                                        )}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+
                                 {/* Delete btn */}
                                 <button
                                   onClick={(e) => { e.stopPropagation(); deleteNode(node.id); if (classicSelectedId === node.id) { setClassicSelectedId(null); setClassicShowMobilePanel(false); } }}
                                   title="Delete"
-                                  className="absolute top-2 right-2 w-6 h-6 rounded-full bg-red-500/80 hover:bg-red-500 flex items-center justify-center transition-colors z-10"
+                                  className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white flex items-center justify-center transition-all z-10 hover:scale-110 active:scale-95"
                                 >
-                                  <X className="w-3 h-3 text-white" />
+                                  <X className="w-3 h-3" />
                                 </button>
                               </div>
 
-                              {/* ── Mini + insert button BELOW each card ── */}
-                              <div className="flex items-center gap-2 py-1 group/ins">
-                                <div className="flex-1 h-px bg-border/30" />
+                              {/* ── Connector line + insert BELOW each card ── */}
+                              <div className="flex flex-col items-center gap-0 group/ins w-full">
+                                <div className="w-0.5 h-3 bg-border/40" />
                                 <button
-                                  onClick={() => { setClassicInsertAfterIdx(idx); setClassicShowMobilePanel(true); }}
+                                  onClick={() => { setClassicInsertAfterIdx(idx); setShowAddMenu(true); setAddComponentSearch(''); }}
                                   title={isRTL ? 'إضافة مكوّن هنا' : 'Insert component here'}
                                   className={cn(
-                                    "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all hover:scale-125 active:scale-95",
+                                    "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all hover:scale-125 active:scale-95 shadow-sm",
                                     classicInsertAfterIdx === idx
-                                      ? "border-blue-500 bg-blue-500 shadow-md shadow-blue-500/40 scale-110"
-                                      : "border-blue-400 bg-blue-500/10 hover:bg-blue-500 hover:border-blue-500"
+                                      ? "border-[#060541] dark:border-white bg-[#060541] dark:bg-white scale-110 shadow-md"
+                                      : "border-border/50 bg-background hover:border-[#060541] dark:hover:border-white hover:bg-[#060541]/5"
                                   )}
                                 >
-                                  <Plus className={cn("w-3 h-3", classicInsertAfterIdx === idx ? "text-white" : "text-blue-500 group-hover:text-white")} />
+                                  <Plus className={cn("w-3 h-3", classicInsertAfterIdx === idx ? "text-white dark:text-[#060541]" : "text-muted-foreground")} />
                                 </button>
-                                <div className="flex-1 h-px bg-border/30" />
+                                <div className="w-0.5 h-3 bg-border/40" />
                               </div>
                             </div>
                           );
@@ -2042,7 +2193,7 @@ export default function WaktiAssistant() {
 
                         {/* Add at end button */}
                         <button
-                          onClick={() => { setClassicInsertAfterIdx(null); setClassicShowMobilePanel(true); }}
+                          onClick={() => { setClassicInsertAfterIdx(null); setShowAddMenu(true); setAddComponentSearch(''); }}
                           className="sm:hidden w-full mt-2 py-3 rounded-xl border-2 border-dashed border-border/40 hover:border-[#060541]/40 text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
                         >
                           <Plus className="h-4 w-4" />
@@ -2115,18 +2266,7 @@ export default function WaktiAssistant() {
                         </div>
                       </>
                     ) : (
-                      <>
-                        <div className="px-4 py-2 border-b border-border/40 shrink-0 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {selMeta && <span className="w-6 h-6 rounded-md flex items-center justify-center text-sm text-white" style={{ background: selMeta.color }}>{selMeta.icon}</span>}
-                            <p className="text-sm font-bold text-foreground">{selMeta ? (isRTL ? selMeta.labelAr : selMeta.label) : (isRTL ? 'تخصيص' : 'Customize')}</p>
-                          </div>
-                          <button onClick={() => setClassicShowMobilePanel(false)} title="Close" className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <CustomizePanel />
-                      </>
+                      <CustomizePanel />
                     )}
                   </div>
                 </div>
@@ -2172,8 +2312,8 @@ export default function WaktiAssistant() {
           </ReactFlow>
 
 
-          {/* Add Component — Centered Modal */}
-          {showAddMenu && (() => {
+          {/* Add Component modal moved outside — see below */}
+          {false && (() => {
             const FREQ: FlowNodeType[] = ['message', 'name', 'phone', 'email', 'single_choice', 'ai_response'];
             const SECTIONS: { label: string; labelAr: string; types: FlowNodeType[] }[] = [
               { label: 'Messages', labelAr: 'الرسائل', types: ['message'] },
@@ -2274,6 +2414,99 @@ export default function WaktiAssistant() {
             );
           })()}
         </div>
+
+        {/* ── Add Component Modal — shared by Canvas + Classic ── */}
+        {showAddMenu && (() => {
+            const FREQ: FlowNodeType[] = ['message', 'name', 'phone', 'email', 'single_choice', 'ai_response'];
+            const SECTIONS: { label: string; labelAr: string; types: FlowNodeType[] }[] = [
+              { label: 'Messages', labelAr: 'الرسائل', types: ['message'] },
+              { label: 'Collect Info', labelAr: 'جمع المعلومات', types: ['name', 'email', 'phone', 'single_choice', 'multiple_choice'] },
+              { label: 'AI', labelAr: 'ذكاء اصطناعي', types: ['ai_response'] },
+              { label: 'Actions', labelAr: 'إجراءات', types: ['appointment', 'rating', 'live_chat', 'end'] },
+            ];
+            const q = addComponentSearch.toLowerCase();
+            const allTypes: FlowNodeType[] = ['message', 'name', 'email', 'phone', 'single_choice', 'multiple_choice', 'ai_response', 'appointment', 'rating', 'live_chat', 'end'];
+            const filtered = q ? allTypes.filter(t => {
+              const m = NODE_TYPE_META[t];
+              return m.label.toLowerCase().includes(q) || m.description.toLowerCase().includes(q);
+            }) : null;
+
+            const NodeRow = ({ type }: { type: FlowNodeType }) => {
+              const m = NODE_TYPE_META[type];
+              return (
+                <button
+                  key={type}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    setTimeout(() => addNode(type), 100);
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl active:bg-muted active:scale-[0.98] transition-transform text-left"
+                >
+                  <span className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0" style={{ background: m.color + '18' }}>{m.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground">{isRTL ? m.labelAr : m.label}</p>
+                    <p className="text-xs text-muted-foreground leading-tight">{isRTL ? m.descriptionAr : m.description}</p>
+                  </div>
+                </button>
+              );
+            };
+
+            return (
+              <div className="fixed inset-0 z-[600] flex items-center justify-center p-4" onClick={() => { setShowAddMenu(false); setAddComponentSearch(''); setClassicInsertAfterIdx(null); }}>
+                <div className="bg-card rounded-2xl shadow-2xl border border-border/50 w-full max-w-md flex flex-col" style={{ maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between px-4 pt-4 pb-3 shrink-0">
+                    <p className="font-bold text-base text-foreground">{isRTL ? 'إضافة مكوّن' : 'Add Component'}</p>
+                    <button onClick={() => { setShowAddMenu(false); setAddComponentSearch(''); setClassicInsertAfterIdx(null); }} title="Close"
+                      className="w-8 h-8 rounded-full bg-muted/80 hover:bg-muted flex items-center justify-center active:scale-95 transition-all">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="px-4 pb-3 shrink-0">
+                    <div className="flex items-center gap-2 bg-muted/60 rounded-xl px-3 py-2 border border-border/40">
+                      <svg className="h-4 w-4 text-muted-foreground shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                      <input
+                        autoFocus
+                        value={addComponentSearch}
+                        onChange={e => setAddComponentSearch(e.target.value)}
+                        placeholder={isRTL ? 'ابحث هنا...' : 'Search here...'}
+                        className="flex-1 bg-transparent text-sm outline-none text-foreground placeholder:text-muted-foreground"
+                      />
+                      {addComponentSearch && (
+                        <button onClick={() => setAddComponentSearch('')} title="Clear search" className="text-muted-foreground hover:text-foreground">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto px-3 pb-4 min-h-0">
+                    {filtered ? (
+                      filtered.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-8">{isRTL ? 'لا توجد نتائج' : 'No results found'}</p>
+                      ) : (
+                        filtered.map(t => <NodeRow key={t} type={t} />)
+                      )
+                    ) : (
+                      <>
+                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-1 pt-1 pb-2">
+                          {isRTL ? 'الأكثر استخداماً' : 'Frequently used'}
+                        </p>
+                        {FREQ.map(t => <NodeRow key={t} type={t} />)}
+                        {SECTIONS.map(sec => (
+                          <React.Fragment key={sec.label}>
+                            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-1 pt-3 pb-2">
+                              {isRTL ? sec.labelAr : sec.label}
+                            </p>
+                            {sec.types.map(t => <NodeRow key={t} type={t} />)}
+                          </React.Fragment>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
         {/* ── Node Editor — Right Side Panel (desktop) / Bottom Sheet (mobile) ── */}
         {editingNode && (() => {
