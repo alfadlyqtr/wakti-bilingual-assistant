@@ -344,6 +344,7 @@ export default function WaktiAssistant() {
   const [editingNode, setEditingNode] = useState<any | null>(null);
   const [editText, setEditText] = useState('');
   const [editOptions, setEditOptions] = useState<string[]>([]);
+  const [ampLoading, setAmpLoading] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [knowledgeBase, setKnowledgeBase] = useState('');
   const [savingKB, setSavingKB] = useState(false);
@@ -501,7 +502,25 @@ export default function WaktiAssistant() {
 
     try {
       const flow = await ChatbotService.getFlow(bot.id);
-      const rfNodes = flow.nodes.map(n => ({
+      
+      // If no nodes returned, create a default start node (like BotPenguin)
+      let nodesToRender = flow.nodes;
+      if (!nodesToRender || nodesToRender.length === 0) {
+        const startNodeId = `start-${Date.now()}`;
+        nodesToRender = [{
+          node_id: startNodeId,
+          type: 'start',
+          label: 'Start here',
+          data: { text: 'Welcome! How can I help you today?', prompt: '' },
+          position_x: 300,
+          position_y: 200,
+          bot_id: bot.id,
+        }];
+        // Auto-save this default flow
+        await ChatbotService.saveFlow(bot.id, nodesToRender, []);
+      }
+      
+      const rfNodes = nodesToRender.map(n => ({
         id: n.node_id,
         type: 'chatFlowNode',
         position: { x: n.position_x, y: n.position_y },
@@ -520,6 +539,15 @@ export default function WaktiAssistant() {
       setEdges(rfEdges);
     } catch (err) {
       console.error('Failed to load flow:', err);
+      // Even on error, create a start node so user sees something
+      const startNodeId = `start-${Date.now()}`;
+      setNodes([{
+        id: startNodeId,
+        type: 'chatFlowNode',
+        position: { x: 300, y: 200 },
+        data: { flowType: 'start', label: 'Start here', text: 'Welcome! How can I help you today?', nodeId: startNodeId, onDelete: deleteNode, onEdit: editNode, onQuickAdd: quickAddAfter },
+      }]);
+      setEdges([]);
     }
   };
 
@@ -2082,12 +2110,18 @@ export default function WaktiAssistant() {
               return (
                 <button
                   key={type}
-                  onClick={() => { addNode(type); setAddComponentSearch(''); }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/70 active:bg-muted transition-colors text-left group"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    // Let addNode handle closing - it already does setShowAddMenu(false)
+                    // Delay to let modal animation complete before canvas updates
+                    setTimeout(() => addNode(type), 100);
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl active:bg-muted active:scale-[0.98] transition-transform text-left"
                 >
                   <span className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0" style={{ background: m.color + '18' }}>{m.icon}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground group-hover:text-[#060541] dark:group-hover:text-white transition-colors">{isRTL ? m.labelAr : m.label}</p>
+                    <p className="text-sm font-semibold text-foreground">{isRTL ? m.labelAr : m.label}</p>
                     <p className="text-xs text-muted-foreground leading-tight">{isRTL ? m.descriptionAr : m.description}</p>
                   </div>
                 </button>
@@ -2187,44 +2221,44 @@ export default function WaktiAssistant() {
               {/* Backdrop */}
               <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={() => setEditingNode(null)} />
 
-              {/* Panel: centered modal on desktop, bottom sheet on mobile */}
-              <div className="fixed z-50 bg-card border border-border/50 shadow-2xl flex flex-col
-                bottom-0 left-0 right-0 rounded-t-2xl max-h-[75vh]
-                sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:max-h-[80vh] sm:w-[400px]">
+              {/* Panel: centered modal on desktop, full-screen bottom sheet on mobile */}
+              <div className="fixed z-50 bg-card border-t border-border/50 shadow-2xl flex flex-col
+                inset-x-0 bottom-0 rounded-t-3xl h-[92vh] sm:h-auto
+                sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:max-h-[80vh] sm:w-[420px] sm:border">
 
                 {/* Mobile drag handle */}
-                <div className="flex justify-center pt-2.5 pb-0.5 sm:hidden shrink-0">
-                  <div className="w-10 h-1 rounded-full bg-border/70" />
+                <div className="flex justify-center pt-3 pb-2 sm:hidden shrink-0">
+                  <div className="w-12 h-1.5 rounded-full bg-border/60" />
                 </div>
 
-                {/* Header row: close + icon + title + actions */}
-                <div className="px-4 py-3 flex items-center gap-2.5 border-b border-border/40 shrink-0">
+                {/* Header row */}
+                <div className="px-4 sm:px-5 py-3 sm:py-4 flex items-center gap-3 border-b border-border/40 shrink-0">
                   <button
                     onClick={() => setEditingNode(null)}
                     title="Close"
-                    className="w-8 h-8 rounded-lg border border-border/60 flex items-center justify-center hover:bg-muted active:scale-95 transition-all shrink-0"
+                    className="w-10 h-10 sm:w-8 sm:h-8 rounded-xl sm:rounded-lg border border-border/60 flex items-center justify-center hover:bg-muted active:scale-95 transition-all shrink-0"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-5 w-5 sm:h-4 sm:w-4" />
                   </button>
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-sm shrink-0" style={{ background: meta?.color }}>
+                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                    <div className="w-9 h-9 sm:w-7 sm:h-7 rounded-xl sm:rounded-lg flex items-center justify-center text-white text-base sm:text-sm shrink-0" style={{ background: meta?.color }}>
                       {meta?.icon}
                     </div>
-                    <p className="font-bold text-sm text-foreground truncate">{isRTL ? meta?.labelAr : meta?.label}</p>
+                    <p className="font-bold text-base sm:text-sm text-foreground truncate">{isRTL ? meta?.labelAr : meta?.label}</p>
                   </div>
                   {!isStart && (
                     <button
                       onClick={() => { deleteNode(editingNode.nodeId); setEditingNode(null); }}
                       title="Delete"
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-95 transition-all shrink-0"
+                      className="w-10 h-10 sm:w-8 sm:h-8 rounded-xl sm:rounded-lg flex items-center justify-center text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-95 transition-all shrink-0"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-5 w-5 sm:h-4 sm:w-4" />
                     </button>
                   )}
                 </div>
 
                 {/* Scrollable content */}
-                <div className="flex-1 overflow-y-auto px-4 py-4 min-h-0 space-y-4">
+                <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-5 sm:py-4 min-h-0 space-y-5 sm:space-y-4">
 
                   {isStart ? (
                     <p className="text-sm text-muted-foreground text-center py-6">
@@ -2235,7 +2269,7 @@ export default function WaktiAssistant() {
                       {/* Message text */}
                       {(true) && (
                         <div>
-                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
                             {isChoice
                               ? (isRTL ? 'رسالة البوت قبل الخيارات' : 'Bot message before choices')
                               : (isRTL ? 'الرسالة' : 'Message')}
@@ -2252,8 +2286,8 @@ export default function WaktiAssistant() {
                                 else if (showVarMenu && !val.endsWith('/')) setShowVarMenu(false);
                               }}
                               onKeyDown={(e) => { if (e.key === 'Escape') setShowVarMenu(false); }}
-                              rows={3}
-                              className="w-full border border-border/60 rounded-lg px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-[#060541]/20 dark:focus:ring-white/20 focus:border-[#060541]/50 dark:focus:border-white/40 resize-none transition-all"
+                              rows={4}
+                              className="w-full border border-border/60 rounded-xl px-4 py-3 text-base sm:text-sm bg-background focus:outline-none focus:ring-2 focus:ring-[#060541]/20 dark:focus:ring-white/20 focus:border-[#060541]/50 dark:focus:border-white/40 resize-none transition-all min-h-[100px]"
                               placeholder={isRTL ? 'اكتب الرسالة... اكتب / للمتغيرات' : 'What should the bot say... type / for variables'}
                             />
                             {/* Variable picker */}
@@ -2291,9 +2325,45 @@ export default function WaktiAssistant() {
                               </div>
                             )}
                           </div>
-                          <p className="text-[10px] text-muted-foreground mt-1">
-                            {isRTL ? "اكتب '/' لإدراج اسم أو إيميل الزائر" : "Type '/' to insert visitor's name, email or phone"}
-                          </p>
+                          {/* AMP enhance button */}
+                          <div className="flex items-center justify-between mt-2">
+                            <p className="text-xs text-muted-foreground">
+                              {isRTL ? "اكتب '/' لإدراج اسم أو إيميل الزائر" : "Type '/' to insert visitor's name, email or phone"}
+                            </p>
+                            <button
+                              disabled={ampLoading || !editText.trim()}
+                              title="Enhance with AI"
+                              onClick={async () => {
+                                if (!editText.trim()) return;
+                                setAmpLoading(true);
+                                try {
+                                  const componentName = isRTL ? meta?.labelAr : meta?.label;
+                                  const { data, error } = await supabase.functions.invoke('prompt-amp', {
+                                    body: {
+                                      text: `[Bot component: ${componentName}] ${editText}`,
+                                      mode: 'bot-component',
+                                    }
+                                  });
+                                  if (!error && data?.text) {
+                                    setEditText(data.text.trim().replace(/^["']|["']$/g, ''));
+                                  } else {
+                                    toast.error(isRTL ? 'فشل التحسين' : 'Enhancement failed');
+                                  }
+                                } catch {
+                                  toast.error(isRTL ? 'فشل التحسين' : 'Enhancement failed');
+                                } finally {
+                                  setAmpLoading(false);
+                                }
+                              }}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-[#060541] dark:bg-white text-white dark:text-[#060541] active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
+                            >
+                              {ampLoading
+                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                : <Zap className="h-3 w-3" />
+                              }
+                              AMP
+                            </button>
+                          </div>
                         </div>
                       )}
 
@@ -2476,11 +2546,15 @@ export default function WaktiAssistant() {
                         </div>
                       )}
 
-                      {/* Go to next message */}
-                      <div>
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
-                          {isRTL ? 'الانتقال للرسالة التالية' : 'Go to next message'}
-                        </label>
+                      {/* Go to next message - Mobile-optimized visual flow */}
+                      <div className="space-y-3">
+                        {/* Visual connection path */}
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-0.5 bg-gradient-to-r from-[#060541] to-transparent" />
+                          <span className="text-xs font-semibold text-[#060541] dark:text-white/80 uppercase tracking-wider">
+                            {isRTL ? 'بعد ذلك انتقل إلى' : 'Then go to'}
+                          </span>
+                        </div>
                         {isChoice ? (
                           /* Per-option routing for choice nodes */
                           <div className="space-y-3">
@@ -2566,65 +2640,98 @@ export default function WaktiAssistant() {
                               );
                               return (
                                 <div className="space-y-3">
-                                  {/* Currently connected */}
-                                  <div>
-                                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">{isRTL ? 'متصل حالياً بـ' : 'Currently connected to'}</p>
-                                    <div className="flex items-center gap-2 border border-border/60 rounded-lg px-3 py-2 bg-muted/30">
-                                      <span className="text-sm flex-1 truncate">
-                                        {connectedNode && connectedMeta
-                                          ? `${connectedMeta.icon} ${connectedNode.data?.label || (isRTL ? connectedMeta.labelAr : connectedMeta.label)}`
-                                          : <span className="text-muted-foreground text-xs">{isRTL ? '🔚 نهاية المحادثة' : '🔚 End chat'}</span>
-                                        }
-                                      </span>
+                                  {/* Connected component - Visual card with icon */}
+                                  <div className="relative">
+                                    {/* Connection line */}
+                                    <div className="absolute left-5 -top-3 w-0.5 h-3 bg-[#060541]/30" />
+                                    
+                                    <div className="flex items-center gap-3 p-3 rounded-2xl border-2 border-[#060541]/20 bg-[#060541]/5 dark:bg-white/5">
+                                      <div 
+                                        className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 shadow-sm"
+                                        style={{ background: connectedMeta?.color || '#ef4444' }}
+                                      >
+                                        <span className="text-white">{connectedMeta?.icon || '🔚'}</span>
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-bold text-foreground">
+                                          {connectedNode && connectedMeta
+                                            ? (connectedNode.data?.label || (isRTL ? connectedMeta.labelAr : connectedMeta.label))
+                                            : (isRTL ? 'نهاية المحادثة' : 'End Conversation')}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {connectedNode ? (isRTL ? 'متصل' : 'Connected') : (isRTL ? 'توقف هنا' : 'Stop here')}
+                                        </p>
+                                      </div>
                                       {outEdge && (
                                         <button
-                                          title={isRTL ? 'قطع الاتصال' : 'Disconnect'}
                                           onClick={() => setEdges((eds: any[]) => eds.filter((ed: any) => ed.id !== outEdge.id))}
-                                          className="text-red-400 hover:text-red-500 text-xs px-1.5 py-0.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0"
+                                          className="w-10 h-10 rounded-xl flex items-center justify-center text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-95 transition-all shrink-0 border border-red-200 dark:border-red-900/30"
+                                          title={isRTL ? 'فصل الاتصال' : 'Disconnect'}
                                         >
-                                          ✕ {isRTL ? 'قطع' : 'Disconnect'}
+                                          <X className="h-5 w-5" />
                                         </button>
                                       )}
                                     </div>
                                   </div>
-                                  {/* Connect to a free node */}
-                                  <div>
-                                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">{isRTL ? 'توصيل بمكوّن حر' : 'Connect to free component'}</p>
-                                    {freeNodes.length === 0 ? (
-                                      <p className="text-xs text-muted-foreground italic px-1">{isRTL ? 'لا توجد مكوّنات حرة' : 'No free components available'}</p>
-                                    ) : (
-                                      <select
-                                        title={isRTL ? 'توصيل بمكوّن حر' : 'Connect to free component'}
-                                        defaultValue=""
-                                        onChange={(e) => {
-                                          const chosen = e.target.value;
-                                          if (!chosen) return;
-                                          setEdges((eds: any[]) => {
-                                            const filtered = eds.filter((ed: any) => ed.source !== editingNode.nodeId);
-                                            return [...filtered, {
-                                              id: `e-${editingNode.nodeId}-${chosen}`,
-                                              source: editingNode.nodeId,
-                                              target: chosen,
-                                              markerEnd: { type: MarkerType.ArrowClosed },
-                                              style: { strokeWidth: 2, cursor: 'pointer' },
-                                            }];
-                                          });
-                                          e.target.value = '';
-                                        }}
-                                        className="w-full border border-border/60 rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-[#060541]/20 dark:focus:ring-white/20 transition-all"
-                                      >
-                                        <option value="">{isRTL ? '— اختر مكوّناً —' : '— Pick a component —'}</option>
-                                        {freeNodes.map((n: any) => {
+                                  {/* Available components - Horizontal scroll or grid */}
+                                  {freeNodes.length > 0 && (
+                                    <div className="space-y-2">
+                                      <p className="text-xs text-muted-foreground font-medium">
+                                        {isRTL ? 'أو اختر مكوّناً للربط:' : 'Or connect to:'}
+                                      </p>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        {freeNodes.slice(0, 4).map((n: any) => {
                                           const nm = NODE_TYPE_META[n.data?.flowType as FlowNodeType];
                                           return (
-                                            <option key={n.id} value={n.id}>
-                                              {nm ? `${nm.icon} ${n.data?.label || (isRTL ? nm.labelAr : nm.label)}` : n.id}
-                                            </option>
+                                            <button
+                                              key={n.id}
+                                              onClick={() => {
+                                                setEdges((eds: any[]) => {
+                                                  const filtered = eds.filter((ed: any) => ed.source !== editingNode.nodeId);
+                                                  return [...filtered, {
+                                                    id: `e-${editingNode.nodeId}-${n.id}`,
+                                                    source: editingNode.nodeId,
+                                                    target: n.id,
+                                                    markerEnd: { type: MarkerType.ArrowClosed },
+                                                    style: { strokeWidth: 2, cursor: 'pointer' },
+                                                  }];
+                                                });
+                                              }}
+                                              className="flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 border-border/50 bg-background hover:border-[#060541]/40 hover:bg-[#060541]/5 active:scale-[0.98] transition-all"
+                                            >
+                                              <span 
+                                                className="w-9 h-9 rounded-lg flex items-center justify-center text-base shrink-0"
+                                                style={{ background: nm?.color || '#f0f0f0' }}
+                                              >
+                                                <span className="text-white">{nm?.icon || '•'}</span>
+                                              </span>
+                                              <span className="text-xs font-medium text-foreground text-center leading-tight line-clamp-2">
+                                                {n.data?.label || (isRTL ? nm?.labelAr : nm?.label) || 'Component'}
+                                              </span>
+                                            </button>
                                           );
                                         })}
-                                      </select>
-                                    )}
-                                  </div>
+                                      </div>
+                                      {freeNodes.length > 4 && (
+                                        <p className="text-xs text-muted-foreground text-center">
+                                          +{freeNodes.length - 4} {isRTL ? 'المزيد' : 'more'}
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+                                  
+                                  {/* Empty state - Quick add button */}
+                                  {freeNodes.length === 0 && !outEdge && (
+                                    <button
+                                      onClick={() => { setShowAddMenu(true); setAddComponentSearch(''); }}
+                                      className="w-full flex items-center justify-center gap-2 p-4 rounded-2xl border-2 border-dashed border-[#060541]/30 text-[#060541] dark:text-white/80 hover:border-[#060541] hover:bg-[#060541]/5 transition-all active:scale-[0.98]"
+                                    >
+                                      <Plus className="h-5 w-5" />
+                                      <span className="text-sm font-semibold">
+                                        {isRTL ? 'إضافة مكوّن جديد' : 'Add new component'}
+                                      </span>
+                                    </button>
+                                  )}
                                 </div>
                               );
                             })()}
@@ -2635,14 +2742,14 @@ export default function WaktiAssistant() {
                   )}
                 </div>
 
-                {/* Save button — pinned bottom */}
+                {/* Save button */}
                 {!isStart && (
-                  <div className="px-4 py-3 border-t border-border/40 shrink-0" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+                  <div className="px-4 sm:px-5 py-4 sm:py-3 border-t border-border/40 shrink-0 bg-card" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
                     <Button
-                      className="w-full bg-[#060541] hover:bg-[#060541]/90 text-white dark:bg-white dark:text-[#060541] rounded-lg h-10 text-sm font-bold active:scale-[0.98] transition-all"
+                      className="w-full bg-[#060541] hover:bg-[#060541]/90 text-white dark:bg-white dark:text-[#060541] rounded-xl h-12 sm:h-10 text-base sm:text-sm font-bold active:scale-[0.98] transition-all shadow-lg"
                       onClick={handleSave}
                     >
-                      <Save className="h-4 w-4 mr-2" />
+                      <Save className="h-5 w-5 sm:h-4 sm:w-4 mr-2" />
                       {isRTL ? 'حفظ التغييرات' : 'Save Changes'}
                     </Button>
                   </div>
@@ -2704,7 +2811,7 @@ export default function WaktiAssistant() {
 
     const SETUP_ITEMS = [
       ...(activeBot?.platform === 'instagram' ? [{
-        icon: '📸',
+        icon: <Instagram className="h-5 w-5" />,
         label: isRTL ? 'ربط حساب انستقرام' : 'Connect Instagram Account',
         desc: isIgConnected
           ? (isRTL ? `متصل: ${igHandle || activeBot.instagram_business_account_id}` : `Connected: ${igHandle || activeBot.instagram_business_account_id}`)

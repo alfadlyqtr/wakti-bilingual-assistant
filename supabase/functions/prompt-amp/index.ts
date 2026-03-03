@@ -680,6 +680,62 @@ serve(async (req) => {
     }
     // ─── End Text-to-Video route ───
 
+    // ─── Bot Component Amp route ───
+    if (mode === "bot-component") {
+      if (!text || text.trim().length === 0) {
+        return new Response(
+          JSON.stringify({ error: "Missing 'text'", code: "BAD_REQUEST_MISSING_TEXT" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+      if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
+
+      // Extract component name from prefix like "[Bot component: Ask Name] actual message"
+      const componentMatch = text.match(/^\[Bot component:\s*([^\]]+)\]\s*/);
+      const componentName = componentMatch ? componentMatch[1].trim() : "message";
+      const rawMessage = componentMatch ? text.replace(componentMatch[0], "").trim() : text.trim();
+      const isArabic = hasArabic(rawMessage);
+
+      const systemPrompt = isArabic
+        ? `أنت محرر نص محترف. مهمتك: صحح الإملاء والنحو واجعل الرسالة واضحة وودية ومختصرة. هذه رسالة بوت في مكوّن "${componentName}". أعد الرسالة المحسّنة فقط بدون شرح أو تعليق.`
+        : `You are a professional text editor. Fix spelling, grammar, and make the message clear, friendly, and concise. This is a chatbot message for a "${componentName}" component. Return ONLY the improved message text, no explanation, no quotes.`;
+
+      const payload = {
+        model: "gpt-4o-mini",
+        temperature: 0.4,
+        max_tokens: 200,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: rawMessage },
+        ],
+      };
+
+      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok) throw new Error(`openai error: ${resp.status}`);
+
+      const improved = data?.choices?.[0]?.message?.content?.trim() || rawMessage;
+
+      await logAI({
+        functionName: "prompt-amp", userId, model: "gpt-4o-mini",
+        inputText: rawMessage, outputText: improved, durationMs: Date.now() - startTime,
+        status: "success", metadata: { provider: "openai", mode: "bot-component", componentName },
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, text: improved, mode: "bot-component" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    // ─── End Bot Component route ───
+
     if (!text || text.trim().length === 0) {
       return new Response(
         JSON.stringify({
