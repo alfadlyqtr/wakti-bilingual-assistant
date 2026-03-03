@@ -31,18 +31,9 @@ export function Footer() {
             >
               {language === "ar" ? "تسجيل الدخول" : "Sign in"}
             </Link>
-            <span className="text-muted-foreground">•</span>
-            <a 
-              href="https://tmw.qa" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Made by TMW
-            </a>
           </div>
           <p className="text-xs text-muted-foreground text-center">
-            © 2026 WAKTI. {t("allRightsReserved", language)}
+            © 2026 WAKTI AI LLC. {t("allRightsReserved", language)}
           </p>
         </div>
       </div>

@@ -263,18 +263,9 @@ export default function LandingPage() {
               >
                 {lang === "ar" ? "تسجيل الدخول" : "Sign in"}
               </Link>
-              <span className="text-white/40">•</span>
-              <a
-                href="https://tmw.qa"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-white/80 transition-colors"
-              >
-                {lang === "ar" ? "صنع بواسطة TMW" : "Made by TMW"}
-              </a>
             </div>
             <div className="mt-1 text-center text-[11px] text-white/40">
-              © 2026 WAKTI. {lang === "ar" ? "جميع الحقوق محفوظة" : "All Rights Reserved"}
+              © 2026 WAKTI AI LLC. {lang === "ar" ? "جميع الحقوق محفوظة" : "All Rights Reserved"}
             </div>
           </div>
         </div>

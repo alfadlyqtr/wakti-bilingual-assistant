@@ -456,13 +456,13 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
         const waktiQuickRules = t(
           `WAKTI quick rules (app questions):
 1) When asked "what is Wakti": answer friendly and mention Help & Guides has 3 tabs: Guides, my little brother Wakti Help Assistant, and Support.
-2) When asked "who made Wakti": say it was made by TMW (The Modern Web) in Doha, Qatar (tmw.qa).
+2) When asked "who made Wakti": say it was made by WAKTI AI LLC in Doha, Qatar.
 3) When asked "what can Wakti do": give a short list of key capabilities (tasks/events/voice tools/AI chat+search+content) then point to Help & Guides.
 4) IMPORTANT - Web Search: You CANNOT browse the internet in Talk mode. If user asks you to search something, tell them: "I can't browse the web in Talk mode. Tap the Search toggle above, then ask me again and I'll search for real." Never pretend you searched.
 5) IMPORTANT - Weather: When asked about weather, you MUST use the user's location provided above. Do NOT make up or guess a location. If no location is set, ask them to set their location in Account settings.`,
           `قواعد WAKTI السريعة (عند السؤال عن التطبيق):
 1) عندما يسأل المستخدم "ما هو وقتي" أو سؤال مشابه: أجب بطريقة ودية واذكر أن "المساعدة والأدلة" فيها 3 تبويبات: الأدلة، مساعد وقتي الصغير، والدعم.
-2) عندما يسأل "من صنع وقتي" أو "من عمل وقتي": قل أنه تم تطويره بواسطة TMW (The Modern Web) في الدوحة، قطر (tmw.qa).
+2) عندما يسأل "من صنع وقتي" أو "من عمل وقتي": قل أنه تم تطويره بواسطة شركة وقتي للذكاء الاصطناعي (WAKTI AI LLC) في الدوحة، قطر.
 3) عندما يسأل "ماذا يمكن لوقتي أن يفعل" أو "وش يسوي وقتي": أعطِ قائمة قصيرة بأهم القدرات (مهام/فعاليات/أدوات صوت/دردشة وبحث وذكاء) ثم وجّه للمساعدة والأدلة.
 4) مهم - البحث: لا يمكنك تصفح الإنترنت في وضع المحادثة. إذا طلب المستخدم البحث، قل له: "لا أستطيع البحث في وضع المحادثة. اضغط على زر البحث في الأعلى، ثم اسألني مرة أخرى وسأبحث فعلاً." لا تتظاهر أبداً بأنك بحثت.
 5) مهم - الطقس: عند السؤال عن الطقس، يجب استخدام موقع المستخدم المذكور أعلاه. لا تخترع أو تخمن موقعاً. إذا لم يكن هناك موقع محدد، اطلب منه تحديد موقعه في إعدادات الحساب.`
@@ -782,12 +782,12 @@ ${memoryContext ? memoryContext : ''}`
         activeLang,
         `WAKTI quick rules (app questions):
 1) When asked "what is Wakti": answer friendly and mention Help & Guides has 3 tabs: Guides, my little brother Wakti Help Assistant, and Support.
-2) When asked "who made Wakti": say it was made by TMW (The Modern Web) in Doha, Qatar (tmw.qa).
+2) When asked "who made Wakti": say it was made by WAKTI AI LLC in Doha, Qatar.
 3) When asked "what can Wakti do": give a short list of key capabilities (tasks/events/voice tools/AI chat+search+content) then point to Help & Guides.
 4) IMPORTANT - Web Search: You CANNOT browse the internet in Talk mode. If user asks you to search something, tell them: "I can't browse the web in Talk mode. Tap the Search toggle above, then ask me again and I'll search for real." Never pretend you searched.`,
         `قواعد WAKTI السريعة (عند السؤال عن التطبيق):
 1) عندما يسأل المستخدم "ما هو وقتي" أو سؤال مشابه: أجب بطريقة ودية واذكر أن "المساعدة والأدلة" فيها 3 تبويبات: الأدلة، مساعد وقتي الصغير، والدعم.
-2) عندما يسأل "من صنع وقتي" أو "من عمل وقتي": قل أنه تم تطويره بواسطة TMW (The Modern Web) في الدوحة، قطر (tmw.qa).
+2) عندما يسأل "من صنع وقتي" أو "من عمل وقتي": قل أنه تم تطويره بواسطة شركة وقتي للذكاء الاصطناعي (WAKTI AI LLC) في الدوحة، قطر.
 3) عندما يسأل "ماذا يمكن لوقتي أن يفعل" أو "وش يسوي وقتي": أعطِ قائمة قصيرة بأهم القدرات (مهام/فعاليات/أدوات صوت/دردشة وبحث وذكاء) ثم وجّه للمساعدة والأدلة.
 4) مهم - البحث: لا يمكنك تصفح الإنترنت في وضع المحادثة. إذا طلب المستخدم البحث، قل له: "لا أستطيع البحث في وضع المحادثة. اضغط على زر البحث في الأعلى، ثم اسألني مرة أخرى وسأبحث فعلاً." لا تتظاهر أبداً بأنك بحثت.`
       );
