@@ -793,8 +793,7 @@ export default function Signup() {
                             <button
                               type="button"
                               onClick={() => navigate("/privacy-terms")}
-                              className="font-bold hover:opacity-80 transition-opacity"
-                              style={{ background: 'linear-gradient(90deg, hsl(210,100%,55%), hsl(260,70%,60%))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}
+                              className="font-bold hover:opacity-75 transition-opacity text-[#060541] dark:text-[hsl(210,100%,65%)]"
                             >
                               {language === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy'}
                             </button>
@@ -802,8 +801,7 @@ export default function Signup() {
                             <button
                               type="button"
                               onClick={() => navigate("/privacy-terms")}
-                              className="font-bold hover:opacity-80 transition-opacity"
-                              style={{ background: 'linear-gradient(90deg, hsl(260,70%,60%), hsl(320,75%,65%))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}
+                              className="font-bold hover:opacity-75 transition-opacity text-[#060541] dark:text-[hsl(210,100%,65%)]"
                             >
                               {language === 'ar' ? 'شروط الخدمة' : 'Terms of Service'}
                             </button>
@@ -813,13 +811,10 @@ export default function Signup() {
                             <button
                               type="button"
                               onClick={() => navigate("/privacy-terms")}
-                              className="hover:opacity-80 transition-opacity"
+                              className="hover:opacity-75 transition-opacity"
                             >
                               <small>
-                                <i
-                                  className="font-medium"
-                                  style={{ background: 'linear-gradient(90deg, hsl(25,95%,60%), hsl(45,100%,60%))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}
-                                >
+                                <i className="font-semibold text-[hsl(25,95%,55%)] dark:text-[hsl(25,95%,60%)]">
                                   {language === 'ar' ? '(انظر مزودي الذكاء الاصطناعي)' : '(see AI providers)'}
                                 </i>
                               </small>
