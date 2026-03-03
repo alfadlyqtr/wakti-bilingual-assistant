@@ -29,7 +29,7 @@ export const legal = {
   section2_2Text: "• To operate and personalize your WAKTI experience\n• To process AI features like transcription, summarization, or image generation\n• To monitor app health, ensure legal usage, and improve service\n• For integration and service delivery via third-party providers, including but not limited to OpenAI, DeepSeek, Google Gemini, Claude (Anthropic), Runware, and Supabase",
 
   section2_3Title: "2.3 Third-Party Data Sharing",
-  section2_3Text: "To deliver WAKTI's features, we use carefully selected third-party AI providers:\n\n• OpenAI — voice transcription & text-to-speech\n• DeepSeek — AI chat & text generation\n• Google Gemini — image understanding, web search & code\n• Claude (Anthropic) — document analysis & text generation",
+  section2_3Text: "To deliver WAKTI's features, we use carefully selected third-party AI providers.",
   section2_3Text2: "WAKTI only shares data necessary to operate these features and expects all partners to comply with privacy standards equivalent to those required under Qatari law. However, users acknowledge that data processed by third parties is subject to their own terms and privacy policies.",
   section2_3Text3: "We do not sell your personal data to advertisers or unrelated third parties.",
 

@@ -166,10 +166,105 @@ export default function PrivacyTerms() {
 
                 <div className="bg-muted/20 p-4 rounded-lg">
                   <h3 className="font-semibold mb-2 text-primary">{t("section2_3Title", language)}</h3>
-                  <div className="space-y-2 text-sm leading-relaxed">
-                    <p>{t("section2_3Text", language)}</p>
-                    <p>{t("section2_3Text2", language)}</p>
-                    <p className="font-medium">{t("section2_3Text3", language)}</p>
+                  <p className="text-sm text-muted-foreground mb-4">{t("section2_3Text", language)}</p>
+
+                  {/* AI Provider Cards */}
+                  <div className="grid grid-cols-1 gap-2 mb-4">
+                    {[
+                      {
+                        emoji: "🤖",
+                        name: "OpenAI",
+                        color: "from-emerald-500/10 to-teal-500/10 border-emerald-500/20",
+                        badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+                        uses: language === 'ar'
+                          ? ["نسخ الصوت والتفريغ", "تحويل النص إلى كلام (TTS)", "توليد الملخصات"]
+                          : ["Voice transcription & summaries", "Text-to-speech (TTS)", "Summaries generation"],
+                      },
+                      {
+                        emoji: "⚡",
+                        name: "DeepSeek",
+                        color: "from-blue-500/10 to-indigo-500/10 border-blue-500/20",
+                        badge: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
+                        uses: language === 'ar'
+                          ? ["تحسين وتوليد النصوص"]
+                          : ["Text generation & enhancement"],
+                      },
+                      {
+                        emoji: "✨",
+                        name: "Google Gemini",
+                        color: "from-amber-500/10 to-orange-500/10 border-amber-500/20",
+                        badge: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+                        uses: language === 'ar'
+                          ? ["فهم الصور", "توليد الصور", "البحث على الويب", "البرمجة والكود"]
+                          : ["Image understanding", "Image generation", "Web search", "Code"],
+                      },
+                      {
+                        emoji: "📄",
+                        name: "Claude (Anthropic)",
+                        color: "from-purple-500/10 to-violet-500/10 border-purple-500/20",
+                        badge: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
+                        uses: language === 'ar'
+                          ? ["تحليل المستندات", "توليد النصوص"]
+                          : ["Document analysis", "Text generation"],
+                      },
+                      {
+                        emoji: "🎨",
+                        name: "Runware",
+                        color: "from-pink-500/10 to-rose-500/10 border-pink-500/20",
+                        badge: "bg-pink-500/15 text-pink-700 dark:text-pink-400",
+                        uses: language === 'ar'
+                          ? ["توليد الصور بالذكاء الاصطناعي"]
+                          : ["AI image generation"],
+                      },
+                      {
+                        emoji: "🎬",
+                        name: "Grok (xAI)",
+                        color: "from-zinc-500/10 to-slate-500/10 border-zinc-500/20",
+                        badge: "bg-zinc-500/15 text-zinc-700 dark:text-zinc-400",
+                        uses: language === 'ar'
+                          ? ["توليد الفيديو بالذكاء الاصطناعي"]
+                          : ["AI video generation"],
+                      },
+                      {
+                        emoji: "🎙️",
+                        name: "ElevenLabs",
+                        color: "from-cyan-500/10 to-sky-500/10 border-cyan-500/20",
+                        badge: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400",
+                        uses: language === 'ar'
+                          ? ["تحويل النص إلى كلام (TTS) عالي الجودة", "استنساخ الأصوات"]
+                          : ["High-quality text-to-speech", "Voice cloning"],
+                      },
+                    ].map((provider) => (
+                      <div
+                        key={provider.name}
+                        className={`flex items-start gap-3 p-3 rounded-xl border bg-gradient-to-r ${provider.color}`}
+                      >
+                        <div className="text-2xl shrink-0 mt-0.5">{provider.emoji}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                            <span className="font-bold text-sm text-foreground">{provider.name}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {provider.uses.map((use) => (
+                              <span
+                                key={use}
+                                className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${provider.badge}`}
+                              >
+                                {use}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-2 text-sm leading-relaxed border-t border-border/40 pt-3">
+                    <p className="text-muted-foreground">{t("section2_3Text2", language)}</p>
+                    <p className="font-semibold text-foreground flex items-center gap-1.5">
+                      <span>🔒</span>
+                      {t("section2_3Text3", language)}
+                    </p>
                   </div>
                 </div>
 
