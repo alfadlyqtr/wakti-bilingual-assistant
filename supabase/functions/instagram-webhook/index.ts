@@ -39,18 +39,36 @@ async function verifySignature(req: Request, body: string): Promise<boolean> {
 
 // Send a message back via Instagram Graph API
 async function sendIGMessage(recipientId: string, message: string, pageAccessToken: string): Promise<boolean> {
-  const res = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${pageAccessToken}`, {
+  // Try Instagram Graph API endpoint (correct for Instagram User Access Tokens)
+  const res = await fetch(`https://graph.instagram.com/v21.0/me/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       recipient: { id: recipientId },
       message: { text: message },
+      access_token: pageAccessToken,
     }),
   });
   const data = await res.json();
+  console.log("sendIGMessage response (status", res.status, "):", JSON.stringify(data));
   if (data.error) {
-    console.error("Failed to send IG message:", data.error);
-    return false;
+    console.error("Failed to send IG message via instagram.com, trying facebook.com fallback...");
+    // Fallback: try graph.facebook.com
+    const res2 = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${pageAccessToken}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipient: { id: recipientId },
+        message: { text: message },
+      }),
+    });
+    const data2 = await res2.json();
+    console.log("sendIGMessage fallback response (status", res2.status, "):", JSON.stringify(data2));
+    if (data2.error) {
+      console.error("Both endpoints failed. Error:", JSON.stringify(data2.error));
+      return false;
+    }
+    return true;
   }
   return true;
 }
