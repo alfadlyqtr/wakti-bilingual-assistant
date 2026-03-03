@@ -172,7 +172,9 @@ export default function Signup() {
       agreeToTerms: "I agree to the",
       privacyPolicy: "Privacy Policy",
       and: "and",
-      termsOfService: "Terms of Service",
+      termsOfService: "Terms of Service, and I consent to my text, voice, and image data being shared with third-party AI services (",
+      seeAiProviders: "see AI providers",
+      toProvideFeatures: ") to provide WAKTI's features.",
       passwordRequirements: "At least 6 characters",
       selectCountry: "Select your country",
       // Placeholders
@@ -201,7 +203,9 @@ export default function Signup() {
       agreeToTerms: "أوافق على",
       privacyPolicy: "سياسة الخصوصية",
       and: "و",
-      termsOfService: "شروط الخدمة",
+      termsOfService: "شروط الخدمة، وأوافق على مشاركة بياناتي (النص والصوت والصور) مع خدمات الذكاء الاصطناعي الخارجية (",
+      seeAiProviders: "انظر مزودي الذكاء الاصطناعي",
+      toProvideFeatures: ") لتوفير ميزات وقتي.",
       passwordRequirements: "على الأقل 6 أحرف",
       selectCountry: "اختر بلدك",
       // Placeholders
@@ -789,7 +793,7 @@ export default function Signup() {
                               <button
                                 type="button"
                                 onClick={() => navigate("/privacy-terms")}
-                                className="text-[#060541] hover:underline font-semibold"
+                                className="text-[#060541] dark:text-blue-400 hover:underline font-semibold"
                               >
                                 {t.privacyPolicy}
                               </button>
@@ -797,10 +801,25 @@ export default function Signup() {
                               <button
                                 type="button"
                                 onClick={() => navigate("/privacy-terms")}
-                                className="text-[#060541] hover:underline font-semibold"
+                                className="text-[#060541] dark:text-blue-400 hover:underline font-semibold"
                               >
                                 {t.termsOfService}
                               </button>
+                              {t.termsOfService.endsWith(t.termsOfService) ? "" : t.termsOfService.replace(t.termsOfService, "") /* fallback if string manipulation is needed, but we included it in the translation */}
+                            </label>
+                            {/* Apple AI Consent Requirement */}
+                            <label htmlFor="terms" className="cursor-pointer inline">
+                              {language === 'ar' 
+                                ? "، وأوافق على مشاركة بياناتي (النص والصوت والصور) مع خدمات الذكاء الاصطناعي الخارجية (" 
+                                : ", and I consent to my text, voice, and image data being shared with third-party AI services ("}
+                              <button
+                                type="button"
+                                onClick={() => navigate("/privacy-terms")}
+                                className="text-[#060541] dark:text-blue-400 hover:underline font-semibold"
+                              >
+                                {t.seeAiProviders}
+                              </button>
+                              {t.toProvideFeatures}
                             </label>
                           </div>
                         </div>

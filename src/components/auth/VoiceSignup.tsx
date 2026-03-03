@@ -1509,7 +1509,10 @@ export function VoiceSignup({ onSignupComplete, onError }: VoiceSignupProps) {
                     className="mt-1"
                   />
                   <label htmlFor="voice-terms" className={`text-[13px] leading-relaxed cursor-pointer ${textColor}`}>
-                    {t('I agree to the Privacy Policy and Terms of Service', 'أوافق على سياسة الخصوصية وشروط الخدمة')}
+                    {t(
+                      'I agree to the Privacy Policy and Terms of Service, and I consent to my text, voice, and image data being shared with third-party AI services to provide WAKTI\'s features.', 
+                      'أوافق على سياسة الخصوصية وشروط الخدمة، وأوافق على مشاركة بياناتي (النص والصوت والصور) مع خدمات الذكاء الاصطناعي الخارجية لتوفير ميزات وقتي.'
+                    )}
                   </label>
                 </div>
                 <Button onClick={handleTermsAgree} className={`w-full rounded-xl ${isDark ? 'bg-[hsl(210,100%,65%)] hover:bg-[hsl(210,100%,55%)]' : 'bg-[#060541] hover:bg-[#060541]/90 text-white'}`} disabled={!formData.agreedToTerms}>

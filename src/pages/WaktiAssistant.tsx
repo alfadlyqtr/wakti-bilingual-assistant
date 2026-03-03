@@ -361,6 +361,81 @@ export default function WaktiAssistant() {
   const [igLongLivedToken, setIgLongLivedToken] = useState<string>('');
   const [igPendingBotId, setIgPendingBotId] = useState<string>('');
 
+  // ─── IG OAUTH RETURN HANDLER ───
+  useEffect(() => {
+    const handleIgAuthReturn = async () => {
+      if (!user) return;
+      
+      const searchParams = new URLSearchParams(window.location.search);
+      const code = searchParams.get('ig_code');
+      const botId = searchParams.get('bot_id');
+      const error = searchParams.get('ig_error');
+
+      if (error) {
+        toast.error(isRTL ? `حدث خطأ: ${error}` : `Error: ${error}`);
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
+      }
+
+      if (code && botId) {
+        setIgConnecting(true);
+        toast.loading(isRTL ? 'جاري الاتصال بانستقرام...' : 'Connecting Instagram...');
+        
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/instagram-oauth-callback', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session?.access_token}`
+            },
+            body: JSON.stringify({
+              action: 'exchange_code',
+              code,
+              bot_id: botId,
+              redirect_uri: IG_OAUTH_CALLBACK_URL
+            })
+          });
+
+          const data = await response.json();
+          if (!response.ok || data.error) throw new Error(data.error || 'Failed to exchange token');
+
+          if (data.pages && data.pages.length > 0) {
+            setIgPages(data.pages);
+            setIgLongLivedToken(data.long_lived_token);
+            setIgPendingBotId(botId);
+            setIgSubStep('select_page');
+            
+            // Find bot and set it active
+            const bot = bots.find(b => b.id === botId);
+            if (bot) {
+              setActiveBot(bot);
+            }
+            
+            setStep('instagram-connect');
+            toast.dismiss();
+            toast.success(isRTL ? 'تم الاتصال! اختر حسابك' : 'Connected! Choose your account');
+          } else {
+            toast.dismiss();
+            toast.error(isRTL ? 'لم يتم العثور على صفحات' : 'No pages found');
+          }
+        } catch (err: any) {
+          console.error('IG Auth error:', err);
+          toast.dismiss();
+          toast.error(isRTL ? 'فشل الاتصال' : 'Connection failed');
+        } finally {
+          setIgConnecting(false);
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      }
+    };
+
+    if (bots.length > 0) {
+      handleIgAuthReturn();
+    }
+  }, [user, bots, isRTL]);
+
   // When builder opens: measure the scroll container and lock its scroll
   useEffect(() => {
     const el = document.getElementById('projects-scroll');
