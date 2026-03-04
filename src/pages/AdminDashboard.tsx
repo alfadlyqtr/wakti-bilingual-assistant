@@ -1,5 +1,5 @@
 
-import { Shield, RefreshCw, TrendingUp, Users, CreditCard, MessageSquare } from "lucide-react";
+import { Shield, RefreshCw, TrendingUp, Users, CreditCard, MessageSquare, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
@@ -92,9 +92,19 @@ export default function AdminDashboard() {
               </div>
               <span className="text-lg font-bold text-purple-400">{isLoading ? '...' : stats.pendingMessages.toLocaleString()}</span>
             </div>
+
+            <div 
+              className="flex items-center justify-between p-3 border border-white/10 rounded-lg bg-white/5 cursor-pointer hover:bg-white/10 transition-colors"
+              onClick={() => window.location.href = '/admin/blog'}
+            >
+              <div className="flex items-center gap-3">
+                <FileText className="h-4 w-4 text-accent-emerald" />
+                <span className="text-sm font-medium text-white/90">Manage Blog</span>
+              </div>
+              <span className="text-xs text-accent-emerald bg-accent-emerald/10 px-2 py-1 rounded-full">New</span>
+            </div>
           </div>
         </div>
-
         
       </div>
 
