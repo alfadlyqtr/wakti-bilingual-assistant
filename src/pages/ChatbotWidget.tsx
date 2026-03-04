@@ -96,6 +96,7 @@ export default function ChatbotWidget({ token, onClose, isPreview, previewNodes,
   const [rating, setRating] = useState(0);
   const [finished, setFinished] = useState(false);
   const [collectedData, setCollectedData] = useState<Record<string, string>>({});
+  const [shownAiMessages, setShownAiMessages] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const hasStartedRef = useRef(false);
@@ -251,7 +252,27 @@ export default function ChatbotWidget({ token, onClose, isPreview, previewNodes,
         setMessages(prev => prev.filter(m => m.id !== typingId));
         const lastUserMsg = [...currentMessages].reverse().find(m => m.role === 'user')?.text || '';
 
-        // If no user message yet (first time reaching this node), just wait for input
+        // Check if there's a configured message text in the node
+        const configuredMessage = node.data?.text || node.data?.prompt || '';
+        const nodeAlreadyShown = shownAiMessages.has(node.node_id);
+        
+        // If we have a configured message and haven't shown it yet, show it first
+        if (configuredMessage && !nodeAlreadyShown) {
+          const resolvedMessage = resolveVars(configuredMessage, updatedCollectedData);
+          const msg: Message = { id: uid(), role: 'bot', text: resolvedMessage };
+          setMessages(prev => [...prev, msg]);
+          setShownAiMessages(prev => new Set(prev).add(node.node_id));
+          setInputType('text');
+          setWaitingForInput(true);
+          
+          // Save message
+          if (conversationId) {
+            await (supabase.from('chatbot_messages' as any).insert({ conversation_id: conversationId, sender_type: 'ai', content: resolvedMessage }) as any);
+          }
+          break;
+        }
+
+        // If no configured message or user already responded, call AI
         if (!lastUserMsg) {
           setInputType('text');
           setWaitingForInput(true);

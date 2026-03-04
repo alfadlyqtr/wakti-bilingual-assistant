@@ -906,6 +906,18 @@ export default function Projects() {
   const [isUploading, setIsUploading] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [activeTab, setActiveTab] = useState<'coder' | 'assistant'>('coder');
+  const [isInBuilderMode, setIsInBuilderMode] = useState(false);
+
+  // Listen for builder mode from WaktiAssistant (chatbot-builder-page class on body)
+  useEffect(() => {
+    const checkBuilderMode = () => {
+      setIsInBuilderMode(document.body.classList.contains('chatbot-builder-page'));
+    };
+    checkBuilderMode();
+    const observer = new MutationObserver(checkBuilderMode);
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   const [showEmpTooltip, setShowEmpTooltip] = useState(() => {
     // Show tooltip only on first visit (check localStorage)
@@ -1773,8 +1785,8 @@ Apply these styles consistently throughout the entire design.`;
 
   return (
     <div className={cn("h-full flex flex-col overflow-hidden", isRTL && "rtl")}>
-      {/* ============ TOP TABS: PINNED ============ */}
-      <div className="w-full shrink-0 z-50 bg-background/90 supports-[backdrop-filter]:bg-background/70 backdrop-blur-3xl pt-6 pb-5 border-b border-zinc-200/50 dark:border-zinc-800/50">
+      {/* ============ TOP TABS: PINNED (hidden in builder mode) ============ */}
+      <div className={cn("w-full shrink-0 z-50 bg-background/90 supports-[backdrop-filter]:bg-background/70 backdrop-blur-3xl pt-6 pb-5 border-b border-zinc-200/50 dark:border-zinc-800/50 transition-all duration-300", isInBuilderMode && "opacity-0 pointer-events-none h-0 p-0 m-0 overflow-hidden border-none")}>
         <div className="flex justify-center px-4">
           <div className="relative inline-flex items-center p-1.5 bg-white/50 dark:bg-[#0c0f14]/50 backdrop-blur-xl rounded-[2rem] shadow-[0_8px_32px_rgba(0,0,0,0.04),inset_0_1px_1px_rgba(255,255,255,0.5)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.05)] border border-black/5 dark:border-white/10">
             
