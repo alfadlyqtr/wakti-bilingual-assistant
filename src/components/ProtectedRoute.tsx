@@ -329,6 +329,24 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     };
   }, [user?.id, isLoading]);
 
+  // Listen for subscription updates from AppLayout (after purchase/restore)
+  useEffect(() => {
+    const handleSubscriptionUpdate = () => {
+      console.log('ProtectedRoute: Received subscription update event, refreshing...');
+      if (user?.id) {
+        // Clear cache and force fresh check
+        try {
+          localStorage.removeItem(`wakti_sub_status_${user.id}`);
+        } catch {}
+        // Trigger re-check by incrementing tick
+        setAccessCheckTick(t => t + 1);
+      }
+    };
+
+    window.addEventListener('wakti-subscription-updated', handleSubscriptionUpdate);
+    return () => window.removeEventListener('wakti-subscription-updated', handleSubscriptionUpdate);
+  }, [user?.id]);
+
   // Force re-evaluation of isAccessExpired every 10 seconds
   useEffect(() => {
     if (isSubscribed || !profile?.free_access_start_at) return;

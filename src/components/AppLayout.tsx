@@ -67,6 +67,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [price, setPrice] = useState<{ qar?: string; usd?: string }>({});
+  const [purchaseInProgress, setPurchaseInProgress] = useState(false);
   const contactUrl = "https://wa.me/97433994166";
 
   useEffect(() => {
@@ -98,8 +99,59 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
     });
   }, [open]);
 
+  // Android fix: Detect app re-foreground after Google Play purchase
+  useEffect(() => {
+    if (!open || !purchaseInProgress) return;
+
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && purchaseInProgress) {
+        console.log('[Purchase] App re-foregrounded, checking subscription status...');
+        
+        // Wait 2s for RevenueCat to sync with backend
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        if (!user?.id) return;
+        
+        try {
+          const { data, error } = await supabase.functions.invoke('check-subscription', {
+            body: { userId: user.id }
+          });
+          
+          console.log('[Purchase] Post-foreground check result:', data, error);
+          
+          if (data?.isSubscribed) {
+            toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
+            setPurchaseInProgress(false);
+            setLoading(false);
+            
+            // Clear cache and force ProtectedRoute refresh
+            try {
+              localStorage.removeItem(`wakti_sub_status_${user.id}`);
+              window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
+            } catch {}
+            
+            setTimeout(() => onOpenChange(false), 1000);
+          } else {
+            // Still not subscribed - reset UI
+            setPurchaseInProgress(false);
+            setLoading(false);
+          }
+        } catch (err) {
+          console.error('[Purchase] Post-foreground check failed:', err);
+          setPurchaseInProgress(false);
+          setLoading(false);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [open, purchaseInProgress, user?.id, language, onOpenChange]);
+
   const handleSubscribe = async () => {
     setLoading(true);
+    setPurchaseInProgress(true);
+    
     purchasePackage('$rc_monthly', async (resp: any) => {
       console.log('[Purchase] Response:', resp);
       
@@ -129,13 +181,30 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
         }
         
         toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
-        // Wait 1s for Supabase realtime to push the updated profile before closing
+        setPurchaseInProgress(false);
+        
+        // Clear cache and force ProtectedRoute refresh
+        if (user?.id) {
+          try {
+            localStorage.removeItem(`wakti_sub_status_${user.id}`);
+            window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
+          } catch {}
+        }
+        
         setTimeout(() => onOpenChange(false), 1000);
       } else if (resp?.status === 'ERROR') {
         toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
+        setPurchaseInProgress(false);
       }
       setLoading(false);
     });
+    
+    // Android fallback: If callback never fires after 30s, rely on visibilitychange
+    setTimeout(() => {
+      if (purchaseInProgress) {
+        console.log('[Purchase] Callback timeout - waiting for visibilitychange');
+      }
+    }, 30000);
   };
 
   // Restore purchases handler - per RevenueCat docs, SUCCESS means restore completed,
@@ -167,7 +236,17 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
             if (data?.isSubscribed) {
               // Purchases were found and restored!
               toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
-              // Wait 1s for Supabase realtime to push the updated profile before closing
+              setRestoring(false);
+              
+              // Clear cache and force ProtectedRoute refresh
+              if (user?.id) {
+                try {
+                  localStorage.removeItem(`wakti_sub_status_${user.id}`);
+                  window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
+                } catch {}
+              }
+              
+              // Wait 1s for ProtectedRoute to refresh before closing
               setTimeout(() => onOpenChange(false), 1000);
             } else {
               // No purchases found
