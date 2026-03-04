@@ -332,14 +332,26 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   // Listen for subscription updates from AppLayout (after purchase/restore)
   useEffect(() => {
     const handleSubscriptionUpdate = () => {
-      console.log('ProtectedRoute: Received subscription update event, refreshing...');
+      console.log('ProtectedRoute: Received subscription update event, refreshing profile...');
       if (user?.id) {
-        // Clear cache and force fresh check
+        // Clear cache
         try {
           localStorage.removeItem(`wakti_sub_status_${user.id}`);
         } catch {}
-        // Trigger re-check by incrementing tick
-        setAccessCheckTick(t => t + 1);
+        // Directly fetch fresh profile data from database
+        // This bypasses slow realtime updates and ensures immediate state refresh
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single()
+          .then(({ data, error }) => {
+            if (!error && data) {
+              console.log('ProtectedRoute: Fresh profile fetched, is_subscribed:', data.is_subscribed);
+              // Force useUserProfile to see the update by dispatching a custom event it listens to
+              window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+            }
+          });
       }
     };
 
