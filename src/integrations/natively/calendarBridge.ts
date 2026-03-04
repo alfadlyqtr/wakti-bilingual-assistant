@@ -385,15 +385,17 @@ export function createCalendarEvent(
     let startDateStr: string | Date = startDate;
     let endDateStr: string | Date = endDate;
     
-    // Both iOS and Android expect date strings, not Date objects.
-    // Use ISO format for iOS, yyyy-MM-dd HH:mm:ss.SSS for Android.
+    // Both iOS and Android expect specific formats.
+    // iOS expects actual Date objects (it calls .toISOString() internally).
+    // Android expects strings: yyyy-MM-dd HH:mm:ss.SSS.
     if (isAndroid) {
       startDateStr = formatDateForNatively(startDate);
       endDateStr = formatDateForNatively(endDate);
     } else {
-      // iOS and fallback: use ISO 8601 strings
-      startDateStr = startDate.toISOString();
-      endDateStr = endDate.toISOString();
+      // iOS and fallback: pass the actual Date objects directly
+      // The Natively SDK on iOS expects Date objects, NOT strings
+      startDateStr = startDate;
+      endDateStr = endDate;
     }
     
     console.log('[NativelyCalendar] Creating event:', {
