@@ -301,8 +301,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setNotificationUser(user.id);
         }, 6000);
         
-        // Check subscription status via Edge Function (calls RevenueCat REST API)
-        // This ensures we have accurate subscription state after login
+        // CRITICAL: Always check subscription status via RevenueCat on app launch
+        // This bypasses stale localStorage cache and ensures accurate subscription state
+        console.log('[AuthContext] Checking subscription status with RevenueCat...');
         supabase.functions.invoke('check-subscription', {
           body: { userId: user.id }
         }).then(({ data, error }) => {
@@ -310,6 +311,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
             console.warn('[AuthContext] Subscription check failed:', error);
           } else {
             console.log('[AuthContext] Subscription check result:', data);
+            // Clear stale cache after successful check
+            if (data?.isSubscribed) {
+              try {
+                localStorage.removeItem(`wakti_sub_status_${user.id}`);
+                window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
+                console.log('[AuthContext] Cleared stale cache and dispatched update event');
+              } catch {}
+            }
           }
         }).catch(err => {
           console.warn('[AuthContext] Subscription check error:', err);
