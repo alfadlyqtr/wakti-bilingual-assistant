@@ -165,14 +165,14 @@ export default function AdminAnalytics() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-background flex items-center justify-center">
+      <div className="bg-gradient-background flex items-center justify-center">
         <div className="text-foreground">Loading analytics...</div>
       </div>
     );
   }
 
   return (
-    <div className="bg-gradient-background text-foreground">
+    <div className="bg-gradient-background text-foreground min-h-screen">
       <AdminHeader
         title="Analytics Dashboard"
         subtitle="Revenue tracking and user analytics"

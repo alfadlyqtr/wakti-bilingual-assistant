@@ -10,41 +10,11 @@ export const AdminMobileNav = () => {
   const isActive = (path: string) => location.pathname === path;
 
   const navItems = [
-    {
-      id: 'users',
-      path: '/admin/users',
-      icon: Users,
-      label: 'Users',
-      color: 'text-accent-green'
-    },
-    {
-      id: 'messages',
-      path: '/admin/messages',
-      icon: MessageSquare,
-      label: 'Messages',
-      color: 'text-accent-orange'
-    },
-    {
-      id: 'subscriptions',
-      path: '/admin/subscriptions',
-      icon: CreditCard,
-      label: 'Subs',
-      color: 'text-accent-blue'
-    },
-    {
-      id: 'quotas',
-      path: '/admin/quotas',
-      icon: Gift,
-      label: 'Quotas',
-      color: 'text-accent-cyan'
-    },
-    {
-      id: 'ai-usage',
-      path: '/admin/ai-usage',
-      icon: Brain,
-      label: 'AI',
-      color: 'text-accent-purple'
-    }
+    { id: 'users',    path: '/admin/users',         icon: Users,         label: 'Users',    color: 'text-accent-green' },
+    { id: 'messages', path: '/admin/messages',      icon: MessageSquare, label: 'Messages', color: 'text-accent-orange' },
+    { id: 'subs',     path: '/admin/subscriptions', icon: CreditCard,    label: 'Subs',     color: 'text-accent-blue' },
+    { id: 'quotas',   path: '/admin/quotas',        icon: Gift,          label: 'Quotas',   color: 'text-accent-cyan' },
+    { id: 'ai',       path: '/admin/ai-usage',      icon: Brain,         label: 'AI',       color: 'text-accent-purple' },
   ];
 
   return (
@@ -59,8 +29,8 @@ export const AdminMobileNav = () => {
               onClick={() => navigate(path)}
               className={`
                 flex flex-col items-center justify-center h-12 w-full rounded-lg transition-all duration-300
-                ${isActive(path) 
-                  ? 'bg-white/10 text-white border border-white/20' 
+                ${isActive(path)
+                  ? 'bg-white/10 text-white border border-white/20'
                   : 'text-white/70 hover:bg-white/5 hover:text-white/90'
                 }
               `}

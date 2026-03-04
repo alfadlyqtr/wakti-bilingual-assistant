@@ -58,14 +58,14 @@ export default function AdminSettings() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-background pb-20">
+    <div className="min-h-screen bg-gradient-background">
       <AdminHeader 
         title="Admin Settings" 
         subtitle="System configuration and testing tools"
         icon={<Settings className="h-5 w-5 text-accent-blue" />}
       />
 
-      <div className="p-3 sm:p-6 space-y-6">
+      <div className="p-3 sm:p-6 pb-24 space-y-6">
         {/* Appearance Settings */}
         <Card className="enhanced-card">
           <CardHeader>

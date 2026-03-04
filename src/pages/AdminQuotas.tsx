@@ -286,25 +286,21 @@ export default function AdminQuotas() {
 
   if (isLoading) {
     return (
-      <div className="bg-gradient-background text-foreground flex items-center justify-center min-h-screen">
+      <div className="bg-gradient-background text-foreground flex items-center justify-center">
         <div className="text-foreground">Loading quota management...</div>
       </div>
     );
   }
 
   return (
-    <div className="bg-gradient-background text-foreground min-h-screen flex flex-col">
-      {/* Fixed Header */}
-      <div className="flex-shrink-0">
+    <div className="bg-gradient-background text-foreground min-h-screen">
         <AdminHeader
           title={featureType === 'music' ? 'Music Allowance Management' : 'Voice Quota Management'}
           subtitle={featureType === 'music' ? 'Gift/Reset music minutes for users' : 'Gift voice credits to users'}
           icon={featureType === 'music' ? <Music className="h-6 w-6 sm:h-8 sm:w-8 text-accent-purple" /> : <Gift className="h-6 w-6 sm:h-8 sm:w-8 text-accent-purple" />}
         />
-      </div>
 
-      {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto px-3 sm:px-6 pb-32 pt-4">
+      <div className="px-3 sm:px-6 pb-28 pt-4">
         <div className="space-y-4 sm:space-y-6 max-w-full">
           {/* Search and Filter Controls */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4">
@@ -556,10 +552,7 @@ export default function AdminQuotas() {
         </div>
       </div>
 
-      {/* Fixed Footer/Navigation */}
-      <div className="flex-shrink-0">
-        <AdminMobileNav />
-      </div>
+      <AdminMobileNav />
     </div>
   );
 }

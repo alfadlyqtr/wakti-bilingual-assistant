@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Shield, MessageSquare, RefreshCw, Eye, CheckCircle, Clock, Trash2, Mail, Loader2 } from "lucide-react";
+import { Shield, MessageSquare, RefreshCw, Eye, CheckCircle, Clock, Trash2, Mail, Loader2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { AdminMessageModal } from "@/components/admin/AdminMessageModal";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
+import AdminBlog from "@/components/admin/AdminBlog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,6 +48,7 @@ export default function AdminMessages() {
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ContactSubmission | null>(null);
+  const [activeTab, setActiveTab] = useState<"messages" | "inquiries" | "blog">("messages");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {

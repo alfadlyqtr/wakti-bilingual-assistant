@@ -7147,9 +7147,23 @@ If this is a portfolio/CV website, use the person's REAL name, REAL experience, 
         }
 
         // Use Gemini 2.5 Pro for creation
+        const createStartTime = Date.now();
         let aiText = await callGemini25Pro(finalSystemPrompt, textPrompt, true);
+        const createDuration = Date.now() - createStartTime;
         console.log(`[Create Mode] AI Response length: ${aiText.length}`);
         console.log(`[Create Mode] AI Response (first 500 chars): ${aiText.substring(0, 500)}`);
+
+        // Log AI usage for project creation
+        await logAIFromRequest(req, {
+          functionName: "projects-generate",
+          provider: "google",
+          model: "gemini-2.5-pro",
+          inputText: textPrompt.substring(0, 1000),
+          outputText: aiText.substring(0, 500),
+          durationMs: createDuration,
+          status: "success",
+          metadata: { mode: "create", project_id: projectId, theme: theme }
+        });
 
         let content = extractJsonObject(aiText);
         content = fixUnescapedNewlines(content);
@@ -7266,8 +7280,22 @@ Return ONLY the JSON object. No explanation.`;
       
       // USE FULL REWRITE - NO PATCHES (now with image support + uploaded assets + backend context + extracted content)
       const imageArray = Array.isArray(images) ? images as unknown as string[] : undefined;
+      const editStartTime = Date.now();
       const result = await callGeminiFullRewriteEdit(userPrompt, existingFiles, userInstructions, imageArray, uploadedAssets, backendContext, documentContentStr, visionInspirationStr);
+      const editDuration = Date.now() - editStartTime;
       const changedFiles = result.files || {};
+      
+      // Log AI usage for edit mode
+      await logAIFromRequest(req, {
+        functionName: "projects-generate",
+        provider: "google",
+        model: "gemini-2.5-pro",
+        inputText: userPrompt.substring(0, 1000),
+        outputText: JSON.stringify(Object.keys(changedFiles)),
+        durationMs: editDuration,
+        status: "success",
+        metadata: { mode: "edit", project_id: projectId, files_changed: Object.keys(changedFiles).length }
+      });
       
       console.log(`[Edit Mode] Changed files returned: ${Object.keys(changedFiles).join(', ') || 'NONE'}`);
       console.log(`[Edit Mode] Summary: ${result.summary}`);

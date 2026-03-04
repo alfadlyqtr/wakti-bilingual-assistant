@@ -136,7 +136,7 @@ export default function TasksReminders() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto pb-28 scrollbar-hide">
+    <div className="flex-1 pb-28 scrollbar-hide">
       {/* ── Luxurious gradient header ── */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-[#060541] via-[#0a0960] to-[#1a1080] dark:from-[#0c0f14] dark:via-[#111528] dark:to-[#0c0f14]" />

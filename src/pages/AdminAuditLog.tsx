@@ -59,21 +59,21 @@ export default function AdminAuditLog() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-background flex items-center justify-center">
+      <div className="bg-gradient-background flex items-center justify-center">
         <div className="text-foreground">Loading audit logs...</div>
       </div>
     );
   }
 
   return (
-    <div className="bg-gradient-background min-h-screen text-foreground flex flex-col">
+    <div className="bg-gradient-background text-foreground min-h-screen">
       <AdminHeader
         title="Audit Log"
         subtitle="System-wide activity history"
         icon={<Search className="h-6 w-6 sm:h-8 sm:w-8 text-accent-purple" />}
       />
 
-      <div className="flex-1 overflow-y-auto p-4 pb-24 space-y-4 max-w-5xl mx-auto w-full">
+      <div className="p-3 sm:p-4 pb-24 space-y-4 max-w-5xl mx-auto w-full">
         <Card className="enhanced-card">
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <CardTitle className="text-enhanced-heading text-base sm:text-lg">

@@ -54,13 +54,10 @@ export const AdminHeader = ({ title, subtitle, icon, children }: AdminHeaderProp
       <div className="space-y-3">
         {/* Top Line: Title + Subtitle + Theme Toggle + Logout */}
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold leading-none text-foreground flex items-center gap-2">
-            {title}
+          <h1 className="text-base sm:text-lg font-semibold leading-none text-foreground flex items-center gap-2 min-w-0">
+            <span className="truncate">{title}</span>
             {subtitle && (
-              <>
-                <span className="text-muted-foreground">•</span>
-                <span className="text-sm text-muted-foreground font-normal">{subtitle}</span>
-              </>
+              <span className="hidden sm:inline text-sm text-muted-foreground font-normal">• {subtitle}</span>
             )}
           </h1>
           <div className="flex items-center gap-2">

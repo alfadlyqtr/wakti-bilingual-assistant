@@ -333,7 +333,7 @@ export default function AdminUsers() {
   }, [filteredUsers]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-gradient-background text-foreground min-h-screen">
       <AdminHeader 
         title="User Management"
         icon={<Users className="h-5 w-5" />}
@@ -344,7 +344,7 @@ export default function AdminUsers() {
         </Button>
       </AdminHeader>
 
-      <div className="p-4 space-y-6">
+      <div className="p-4 pb-24 space-y-6">
         {/* User Statistics */}
         <div className="space-y-3">
           <h3 className="text-lg font-semibold">📊 User Statistics</h3>

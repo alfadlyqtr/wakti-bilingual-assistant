@@ -16,6 +16,43 @@ export default function AdminRoute({ children }: AdminRouteProps) {
   const location = useLocation();
 
   useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const root = document.getElementById('root');
+
+    const prev = {
+      htmlOverflow: html.style.overflow,
+      htmlHeight: html.style.height,
+      bodyOverflow: body.style.overflow,
+      bodyHeight: body.style.height,
+      rootOverflow: root?.style.overflow ?? '',
+      rootHeight: root?.style.height ?? '',
+    };
+
+    html.style.setProperty('overflow-y', 'auto', 'important');
+    html.style.setProperty('height', 'auto', 'important');
+    body.style.setProperty('overflow-y', 'auto', 'important');
+    body.style.setProperty('height', 'auto', 'important');
+    if (root) {
+      root.style.setProperty('overflow-y', 'auto', 'important');
+      root.style.setProperty('height', 'auto', 'important');
+    }
+    body.classList.add('admin-page');
+
+    return () => {
+      html.style.overflow = prev.htmlOverflow;
+      html.style.height = prev.htmlHeight;
+      body.style.overflow = prev.bodyOverflow;
+      body.style.height = prev.bodyHeight;
+      if (root) {
+        root.style.overflow = prev.rootOverflow;
+        root.style.height = prev.rootHeight;
+      }
+      body.classList.remove('admin-page');
+    };
+  }, []);
+
+  useEffect(() => {
     let isMounted = true;
 
     const check = async () => {

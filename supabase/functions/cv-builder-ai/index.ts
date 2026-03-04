@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
 
@@ -169,6 +170,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const startTime = Date.now();
+
   try {
     console.log('CV Builder: Received request');
     
@@ -275,6 +278,18 @@ serve(async (req) => {
       const isArabic = language === 'ar';
       const summaryMessage = generateExtractionSummary(cvData, isArabic);
 
+      // Log AI usage for CV extraction
+      await logAIFromRequest(req, {
+        functionName: "cv-builder-ai",
+        provider: "google",
+        model: model,
+        inputText: "CV Extraction",
+        outputText: summaryMessage,
+        durationMs: Date.now() - startTime,
+        status: "success",
+        metadata: { action: "extract", mime_type: normalizedMimeType }
+      });
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -322,6 +337,18 @@ serve(async (req) => {
       const result = await response.json();
       const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
+      // Log AI usage for CV chat
+      await logAIFromRequest(req, {
+        functionName: "cv-builder-ai",
+        provider: "google",
+        model: "gemini-1.5-flash",
+        inputText: chatMessages.map((m: { content: string }) => m.content).join("\n"),
+        outputText: text,
+        durationMs: Date.now() - startTime,
+        status: "success",
+        metadata: { action: "chat", message_count: chatMessages.length }
+      });
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -336,6 +363,17 @@ serve(async (req) => {
   } catch (error: unknown) {
     console.error('CV Builder AI error:', error);
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
+    
+    // Log AI usage error
+    await logAIFromRequest(req, {
+      functionName: "cv-builder-ai",
+      provider: "google",
+      model: "gemini-1.5-flash",
+      status: "error",
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+      durationMs: Date.now() - startTime,
+    });
+    
     const errorMessage = error instanceof Error ? error.message : 'An error occurred';
     return new Response(
       JSON.stringify({

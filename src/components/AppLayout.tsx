@@ -103,7 +103,12 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
     purchasePackage('$rc_monthly', async (resp: any) => {
       console.log('[Purchase] Response:', resp);
       
-      if (resp?.status === 'SUCCESS' && resp?.message === 'purchased') {
+      // Treat success OR 'already subscribed' (Android) as a successful subscription
+      const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
+        resp.message.toLowerCase().includes('already subscribed');
+      const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
+
+      if (isPurchased || isAlreadySubscribed) {
         // Update Supabase directly after successful purchase
         if (user?.id) {
           try {
@@ -124,9 +129,8 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
         }
         
         toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
-        onOpenChange(false);
-        queryClient.invalidateQueries({ queryKey: ['subscription'] });
-        queryClient.invalidateQueries({ queryKey: ['profile'] });
+        // Wait 1s for Supabase realtime to push the updated profile before closing
+        setTimeout(() => onOpenChange(false), 1000);
       } else if (resp?.status === 'ERROR') {
         toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
       }
@@ -163,9 +167,8 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
             if (data?.isSubscribed) {
               // Purchases were found and restored!
               toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
-              onOpenChange(false);
-              queryClient.invalidateQueries({ queryKey: ['subscription'] });
-              queryClient.invalidateQueries({ queryKey: ['profile'] });
+              // Wait 1s for Supabase realtime to push the updated profile before closing
+              setTimeout(() => onOpenChange(false), 1000);
             } else {
               // No purchases found
               toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');

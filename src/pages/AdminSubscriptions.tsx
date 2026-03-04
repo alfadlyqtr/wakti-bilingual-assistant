@@ -557,7 +557,7 @@ export default function AdminSubscriptions() {
   }
 
   return (
-    <div className="bg-gradient-background min-h-screen text-foreground pb-20">
+    <div className="bg-gradient-background min-h-screen text-foreground">
       {/* Header */}
       <AdminHeader
         title="Subscription Management"
@@ -601,7 +601,7 @@ export default function AdminSubscriptions() {
       )}
 
       {/* Main Content */}
-      <div className="p-4 space-y-6">
+      <div className="p-4 pb-24 space-y-6">
         {/* Line Style Stats */}
         <div className="space-y-3">
           <h3 className="text-lg font-semibold text-enhanced-heading">💳 Subscription Statistics</h3>

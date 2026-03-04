@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -340,6 +341,8 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const startTime = Date.now();
+
   try {
     // Verify JWT
     const authHeader = req.headers.get("Authorization");
@@ -507,6 +510,18 @@ serve(async (req) => {
       // Don't fail the request, video was generated
     }
 
+    // Log AI usage
+    await logAIFromRequest(req, {
+      functionName: "freepik-image2video",
+      provider: "kie.ai",
+      model: generationType === "text_to_video" ? "grok-imagine/text-to-video" : "grok-imagine/image-to-video",
+      inputText: prompt || image,
+      outputText: result.videoUrl,
+      durationMs: Date.now() - startTime,
+      status: "success",
+      metadata: { generation_type: generationType, task_id: task.task_id }
+    });
+
     return new Response(
       JSON.stringify({
         ok: true,
@@ -517,6 +532,18 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("[kie-image2video] Error:", error);
+    
+    // Log AI usage for error
+    await logAIFromRequest(req, {
+      functionName: "freepik-image2video",
+      provider: "kie.ai",
+      model: "grok-imagine",
+      inputText: "",
+      status: "error",
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+      durationMs: Date.now() - startTime,
+    });
+    
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       {

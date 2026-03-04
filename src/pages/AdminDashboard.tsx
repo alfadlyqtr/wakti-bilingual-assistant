@@ -14,7 +14,7 @@ export default function AdminDashboard() {
   
 
   return (
-    <div className="min-h-screen bg-[#0c0f14] text-white/90">
+    <div className="bg-[#0c0f14] text-white/90 min-h-screen">
       <AdminHeader
         title="Admin Dashboard"
         subtitle="Enhanced System Overview"

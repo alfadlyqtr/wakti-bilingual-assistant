@@ -126,6 +126,12 @@ import "./App.css";
 
 const queryClient = new QueryClient();
 
+// Synchronously tag body for admin pages BEFORE first render so CSS works immediately
+const _adminPaths = ['/admindash', '/admin/', '/admin-setup', '/admin-settings', '/mqtr'];
+if (_adminPaths.some(p => window.location.pathname.startsWith(p))) {
+  document.body.classList.add('admin-page');
+}
+
 // Check for subdomain on app load
 const detectedSubdomain = getSubdomain();
 
@@ -151,7 +157,7 @@ function App() {
         <TooltipProvider>
           <AuthProvider>
             <BrowserRouter>
-              <div className="min-h-screen bg-background font-sans antialiased">
+              <div className="bg-background font-sans antialiased">
               <Routes>
                 {/* Admin routes */}
                 <Route path="/mqtr" element={<AdminLogin />} />

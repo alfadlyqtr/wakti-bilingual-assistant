@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,6 +28,8 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const startTime = Date.now();
 
   try {
     const authHeader = req.headers.get("authorization");
@@ -149,6 +152,19 @@ serve(async (req: Request) => {
 
     // Return the data needed for client-side video assembly
     // The client will use this to create the video with proper timing
+    
+    // Log video generation
+    await logAIFromRequest(req, {
+      functionName: "presentation-video-generate",
+      provider: "supabase",
+      model: "audio-combine",
+      inputText: `Presentation ${presentationId} with ${slides.length} slides`,
+      outputText: signedUrlData?.signedUrl || "",
+      durationMs: Date.now() - startTime,
+      status: "success",
+      metadata: { slide_count: slides.length, presentation_id: presentationId }
+    });
+    
     return new Response(
       JSON.stringify({
         success: true,
@@ -164,6 +180,17 @@ serve(async (req: Request) => {
 
   } catch (error) {
     console.error("Video generation error:", error);
+    
+    // Log error
+    await logAIFromRequest(req, {
+      functionName: "presentation-video-generate",
+      provider: "supabase",
+      model: "audio-combine",
+      status: "error",
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+      durationMs: Date.now() - startTime,
+    });
+    
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       {

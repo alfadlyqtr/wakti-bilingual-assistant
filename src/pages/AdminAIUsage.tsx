@@ -46,6 +46,17 @@ interface AIStats {
   unique_users: number;
 }
 
+interface AIModelStats {
+  model: string;
+  total_calls: number;
+  success_calls: number;
+  error_calls: number;
+  success_rate: number;
+  total_tokens: number;
+  avg_duration_ms: number;
+  total_cost: number;
+}
+
 type DateRangeType = "today" | "7days" | "30days" | "all" | "custom";
 
 export default function AdminAIUsage() {
@@ -218,6 +229,55 @@ export default function AdminAIUsage() {
     const map = new Map<string, AILog>();
     for (const l of logs) map.set(l.id, l);
     return map;
+  }, [logs]);
+
+  // Compute model-level KPIs from logs
+  const modelStats = useMemo((): AIModelStats[] => {
+    const byModel = new Map<string, {
+      total_calls: number;
+      success_calls: number;
+      error_calls: number;
+      total_tokens: number;
+      total_duration: number;
+      total_cost: number;
+    }>();
+
+    for (const log of logs) {
+      const model = log.model || 'Unknown';
+      const existing = byModel.get(model) || {
+        total_calls: 0,
+        success_calls: 0,
+        error_calls: 0,
+        total_tokens: 0,
+        total_duration: 0,
+        total_cost: 0,
+      };
+
+      existing.total_calls++;
+      if (log.status === 'success') {
+        existing.success_calls++;
+      } else {
+        existing.error_calls++;
+      }
+      existing.total_tokens += log.total_tokens || 0;
+      existing.total_duration += log.duration_ms || 0;
+      existing.total_cost += log.cost_credits || 0;
+
+      byModel.set(model, existing);
+    }
+
+    return Array.from(byModel.entries())
+      .map(([model, stats]) => ({
+        model,
+        total_calls: stats.total_calls,
+        success_calls: stats.success_calls,
+        error_calls: stats.error_calls,
+        success_rate: stats.total_calls > 0 ? Math.round((stats.success_calls / stats.total_calls) * 100) : 0,
+        total_tokens: stats.total_tokens,
+        avg_duration_ms: stats.total_calls > 0 ? Math.round(stats.total_duration / stats.total_calls) : 0,
+        total_cost: stats.total_cost,
+      }))
+      .sort((a, b) => b.total_calls - a.total_calls); // Sort by usage (most used first)
   }, [logs]);
 
   const gridColumns = useMemo(() => {
@@ -430,7 +490,7 @@ export default function AdminAIUsage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0c0f14] text-white/90">
+    <div className="bg-[#0c0f14] text-white/90 min-h-screen">
       <AdminHeader
         title="AI Usage"
         subtitle="Monitor all AI calls and usage"
@@ -625,6 +685,94 @@ export default function AdminAIUsage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Model-Level KPIs */}
+        {modelStats.length > 0 && (
+          <Card className="bg-white/5 border-white/10">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center">
+                <Brain className="h-5 w-5 mr-2 text-accent-purple" />
+                Model Performance Breakdown
+              </CardTitle>
+              <CardDescription className="text-white/50">
+                KPIs per AI model based on current filters
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {modelStats.map((model) => (
+                  <Card key={model.model} className="bg-white/5 border-white/10 hover:bg-white/10 transition-colors">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm font-medium text-white truncate" title={model.model}>
+                          {model.model.length > 25 ? model.model.substring(0, 22) + '...' : model.model}
+                        </CardTitle>
+                        <Badge 
+                          className={model.success_rate >= 95 ? 'bg-green-500/20 text-green-400' : model.success_rate >= 80 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}
+                        >
+                          {model.success_rate}%
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {/* Calls */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-white/60">Calls</span>
+                        <span className="text-sm font-semibold text-white">{model.total_calls.toLocaleString()}</span>
+                      </div>
+                      
+                      {/* Success/Error breakdown */}
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-green-400">{model.success_calls} OK</span>
+                        {model.error_calls > 0 && (
+                          <>
+                            <span className="text-white/30">•</span>
+                            <span className="text-red-400">{model.error_calls} Err</span>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Tokens */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-white/60">Tokens</span>
+                        <span className="text-sm text-white/80">{model.total_tokens.toLocaleString()}</span>
+                      </div>
+
+                      {/* Avg Duration */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-white/60">Avg Duration</span>
+                        <span className="text-sm text-white/80">{model.avg_duration_ms}ms</span>
+                      </div>
+
+                      {/* Cost */}
+                      {model.total_cost > 0 && (
+                        <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                          <span className="text-xs text-white/60">Cost</span>
+                          <span className="text-sm font-medium text-accent-green">${model.total_cost.toFixed(4)}</span>
+                        </div>
+                      )}
+
+                      {/* Progress bar for usage */}
+                      <div className="pt-1">
+                        <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-accent-purple to-accent-blue rounded-full"
+                            style={{ 
+                              width: `${stats && stats.total_calls > 0 ? (model.total_calls / stats.total_calls) * 100 : 0}%` 
+                            }}
+                          />
+                        </div>
+                        <div className="text-[10px] text-white/40 mt-1 text-right">
+                          {stats && stats.total_calls > 0 ? ((model.total_calls / stats.total_calls) * 100).toFixed(1) : 0}% of total
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Logs Table */}
         <Card className="bg-white/5 border-white/10">
