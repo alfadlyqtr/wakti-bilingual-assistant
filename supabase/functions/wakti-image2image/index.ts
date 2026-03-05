@@ -135,69 +135,32 @@ async function uploadAndSignReferenceImage(params: {
 }
 
 async function callRunwareI2I(finalPrompt: string, referenceImageUrl: string): Promise<any> {
-  // Using alibaba:wan@2.6-image model with referenceImages (signed URL)
-  const payload = {
-    taskType: "imageInference",
-    taskUUID: genUUID(),
-    model: "alibaba:wan@2.6-image",
-    positivePrompt: finalPrompt,
-    height: 1280,
-    width: 1280,
-    numberResults: 1,
-    outputType: ["dataURI", "URL"],
-    outputFormat: "JPEG",
-    includeCost: true,
-    inputs: {
+  // google:4@1 requires the WebSocket-style /v1 endpoint (same as text2image), not /v1/tasks
+  const payload = [
+    { taskType: "authentication", apiKey: RUNWARE_API_KEY },
+    {
+      taskType: "imageInference",
+      taskUUID: genUUID(),
+      model: "google:4@1",
+      positivePrompt: finalPrompt,
+      height: 1024,
+      width: 1024,
+      numberResults: 1,
+      outputType: ["dataURI", "URL"],
+      includeCost: true,
       referenceImages: [referenceImageUrl],
-    },
-    outputQuality: 85,
-  } as any;
-
-  const doCreate = async () => {
-    const r = await fetch("https://api.runware.ai/v1/tasks", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${RUNWARE_API_KEY}`,
-      },
-      body: JSON.stringify([payload]),
-    });
-    const j = await safeJson(r);
-    if (!r.ok || !j) throw new Error(JSON.stringify({ stage: "create", details: j ?? { error: "empty" } }));
-    return j;
-  };
-
-  let created: any;
-  try { created = await doCreate(); }
-  catch (_e) { await new Promise((r) => setTimeout(r, 600)); created = await doCreate(); }
-
-  const first = Array.isArray(created) ? created[0] : created;
-  if (first?.results?.length || first?.data?.length || first?.output?.length || first?.outputs?.length || first?.media?.length) {
-    return first;
-  }
-
-  const taskId = findTaskUUID(first) || payload.taskUUID;
-  const deadline = Date.now() + 90_000; // 90s
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 1200));
-    const pr = await fetch("https://api.runware.ai/v1/tasks/status", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${RUNWARE_API_KEY}`,
-      },
-      body: JSON.stringify([{ taskUUID: taskId }]),
-    });
-    const pj = await safeJson(pr);
-    if (!pr.ok || !pj) throw new Error(JSON.stringify({ stage: "poll", details: pj ?? { error: "empty" }, sent: [{ taskUUID: taskId }] }));
-    const item = Array.isArray(pj) ? pj[0] : pj;
-    const status = item?.status || item?.state || item?.taskStatus;
-    if (status === "completed" || status === "succeeded" || item?.results?.length || item?.data?.length || item?.output?.length || item?.outputs?.length || item?.media?.length) {
-      return item;
+      outputQuality: 85,
     }
-    if (status === "failed" || status === "error") throw new Error(JSON.stringify({ stage: "failed", details: item }));
-  }
-  throw new Error(JSON.stringify({ stage: "timeout" }));
+  ];
+
+  const r = await fetch("https://api.runware.ai/v1", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const j = await safeJson(r);
+  if (!r.ok || !j) throw new Error(JSON.stringify({ stage: "create", status: r.status, details: j ?? { error: "empty" } }));
+  return j;
 }
 
 serve(async (req: Request) => {
@@ -242,13 +205,13 @@ serve(async (req: Request) => {
       await logAIFromRequest(req, {
         functionName: "wakti-image2image",
         provider: "runware",
-        model: "alibaba:wan@2.6-image",
+        model: "google:4@1",
         inputText: user_prompt,
         status: "success"
       });
 
       return new Response(
-        JSON.stringify({ success: true, url: outputImageUrl, model: "alibaba:wan@2.6-image" }),
+        JSON.stringify({ success: true, url: outputImageUrl, model: "google:4@1" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -273,7 +236,7 @@ serve(async (req: Request) => {
     await logAIFromRequest(req, {
       functionName: "wakti-image2image",
       provider: "runware",
-      model: "alibaba:wan@2.6-image",
+      model: "google:4@1",
       status: "error",
       errorMessage: message
     });

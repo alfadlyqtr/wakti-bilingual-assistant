@@ -883,13 +883,26 @@ export default function MusicStudio() {
             <div />
           </div>
 
-          <nav className="flex gap-2 border-b border-border pb-2">
-            <Button variant={musicSubTab === 'compose' ? 'default' : 'outline'} size="sm" onClick={() => setMusicSubTab('compose')}>
-              {language === 'ar' ? 'إنشاء' : 'Compose'}
-            </Button>
-            <Button variant={musicSubTab === 'editor' ? 'default' : 'outline'} size="sm" onClick={() => setMusicSubTab('editor')}>
-              {language === 'ar' ? 'المحفوظات' : 'Saved'}
-            </Button>
+          <nav className="flex gap-2 p-1.5 rounded-2xl bg-gradient-to-r from-[#0c0f14]/5 via-[#606062]/10 to-[#0c0f14]/5 dark:from-[#0a0d12] dark:via-[#1a1d24] dark:to-[#0a0d12] border border-[#606062]/20 dark:border-[#606062]/30 backdrop-blur-sm shadow-inner">
+            {[
+              { key: 'compose' as const, labelEn: 'Compose', labelAr: 'إنشاء' },
+              { key: 'editor' as const, labelEn: 'Saved', labelAr: 'المحفوظات' },
+            ].map((t) => {
+              const isActive = musicSubTab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setMusicSubTab(t.key)}
+                  className={`relative flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 min-h-[44px] touch-manipulation ${
+                    isActive
+                      ? 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] text-white dark:text-[#060541] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.02]'
+                      : 'bg-transparent text-[#606062] dark:text-[#858384] hover:bg-white/40 dark:hover:bg-white/10 active:scale-95'
+                  }`}
+                >
+                  <span className="whitespace-nowrap">{isArabic ? t.labelAr : t.labelEn}</span>
+                </button>
+              );
+            })}
           </nav>
 
           {musicSubTab === 'compose' ? <ComposeTab onSaved={()=>setMusicSubTab('editor')} /> : <EditorTab />}
@@ -902,13 +915,26 @@ export default function MusicStudio() {
             <h1 className="text-xl md:text-2xl font-bold">{language === 'ar' ? 'الفيديو' : 'Video'}</h1>
             <div />
           </div>
-          <nav className="flex gap-2 border-b border-border pb-2 flex-wrap">
-            <Button variant={videoMode === 'ai' ? 'default' : 'outline'} size="sm" onClick={() => setVideoMode('ai')}>
-              {language === 'ar' ? 'صانع الفيديو بالذكاء' : 'AI Videomaker'}
-            </Button>
-            <Button variant={videoMode === 'saved' ? 'default' : 'outline'} size="sm" onClick={() => setVideoMode('saved')}>
-              {language === 'ar' ? 'المحفوظات' : 'Saved'}
-            </Button>
+          <nav className="flex gap-2 p-1.5 rounded-2xl bg-gradient-to-r from-[#0c0f14]/5 via-[#606062]/10 to-[#0c0f14]/5 dark:from-[#0a0d12] dark:via-[#1a1d24] dark:to-[#0a0d12] border border-[#606062]/20 dark:border-[#606062]/30 backdrop-blur-sm shadow-inner">
+            {[
+              { key: 'ai' as const, labelEn: 'AI Videomaker', labelAr: 'صانع الفيديو بالذكاء' },
+              { key: 'saved' as const, labelEn: 'Saved', labelAr: 'المحفوظات' },
+            ].map((t) => {
+              const isActive = videoMode === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setVideoMode(t.key)}
+                  className={`relative flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 min-h-[44px] touch-manipulation ${
+                    isActive
+                      ? 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] text-white dark:text-[#060541] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.02]'
+                      : 'bg-transparent text-[#606062] dark:text-[#858384] hover:bg-white/40 dark:hover:bg-white/10 active:scale-95'
+                  }`}
+                >
+                  <span className="whitespace-nowrap">{isArabic ? t.labelAr : t.labelEn}</span>
+                </button>
+              );
+            })}
           </nav>
 
           {videoMode === 'ai' ? (
@@ -927,13 +953,26 @@ export default function MusicStudio() {
             <h1 className="text-xl md:text-2xl font-bold">{language === 'ar' ? 'الصورة' : 'Image'}</h1>
             <div />
           </div>
-          <nav className="flex gap-2 border-b border-border pb-2 flex-wrap">
-            <Button variant={imageMode === 'create' ? 'default' : 'outline'} size="sm" onClick={() => setImageMode('create')}>
-              {language === 'ar' ? 'إنشاء' : 'Create'}
-            </Button>
-            <Button variant={imageMode === 'saved' ? 'default' : 'outline'} size="sm" onClick={() => setImageMode('saved')}>
-              {language === 'ar' ? 'المحفوظات' : 'Saved'}
-            </Button>
+          <nav className="flex gap-2 p-1.5 rounded-2xl bg-gradient-to-r from-[#0c0f14]/5 via-[#606062]/10 to-[#0c0f14]/5 dark:from-[#0a0d12] dark:via-[#1a1d24] dark:to-[#0a0d12] border border-[#606062]/20 dark:border-[#606062]/30 backdrop-blur-sm shadow-inner">
+            {[
+              { key: 'create' as const, labelEn: 'Create', labelAr: 'إنشاء' },
+              { key: 'saved' as const, labelEn: 'Saved', labelAr: 'المحفوظات' },
+            ].map((t) => {
+              const isActive = imageMode === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setImageMode(t.key)}
+                  className={`relative flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 min-h-[44px] touch-manipulation ${
+                    isActive
+                      ? 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] text-white dark:text-[#060541] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.02]'
+                      : 'bg-transparent text-[#606062] dark:text-[#858384] hover:bg-white/40 dark:hover:bg-white/10 active:scale-95'
+                  }`}
+                >
+                  <span className="whitespace-nowrap">{isArabic ? t.labelAr : t.labelEn}</span>
+                </button>
+              );
+            })}
           </nav>
 
           {imageMode === 'create' ? (

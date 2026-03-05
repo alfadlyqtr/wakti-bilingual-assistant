@@ -563,21 +563,29 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
   // ─── Shared submode tabs component ───
   const SubmodeTabs = () => (
-    <div className="flex gap-1.5 flex-wrap">
-      {submodes.map((m) => (
-        <button
-          key={m.key}
-          onClick={() => { setSubmode(m.key); resetForNewGeneration(); setUploadedFile(null); setPrompt(''); }}
-          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
-            submode === m.key
-              ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/25'
-              : 'bg-white/80 dark:bg-white/5 border border-border/50 text-muted-foreground active:scale-95'
-          }`}
-        >
-          {m.icon}
-          <span>{language === 'ar' ? m.labelAr : m.labelEn}</span>
-        </button>
-      ))}
+    <div className="flex gap-2 p-1.5 rounded-2xl bg-gradient-to-r from-[#0c0f14]/5 via-[#606062]/10 to-[#0c0f14]/5 dark:from-[#0c0f14] dark:via-[#1a1d24] dark:to-[#0c0f14] border border-[#606062]/20 dark:border-[#606062]/30 backdrop-blur-sm shadow-inner">
+      {submodes.map((m) => {
+        const isActive = submode === m.key;
+        return (
+          <button
+            key={m.key}
+            onClick={() => { setSubmode(m.key); resetForNewGeneration(); setUploadedFile(null); setPrompt(''); }}
+            className={`relative flex-1 flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-sm font-bold transition-all duration-200 min-h-[48px] touch-manipulation ${
+              isActive
+                ? 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] text-white dark:text-[#060541] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.02]'
+                : 'bg-white/30 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 text-[#606062] dark:text-[#858384] hover:bg-white/50 dark:hover:bg-white/15 active:scale-95'
+            }`}
+          >
+            <span className={`${isActive ? 'text-orange-400 dark:text-[#060541]' : 'text-[#858384] dark:text-[#606062]'}`}>
+              {m.icon}
+            </span>
+            <span className="whitespace-nowrap">{language === 'ar' ? m.labelAr : m.labelEn}</span>
+            {isActive && (
+              <span className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/20 via-amber-500/20 to-orange-500/20 dark:from-transparent dark:via-transparent dark:to-transparent pointer-events-none" />
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 

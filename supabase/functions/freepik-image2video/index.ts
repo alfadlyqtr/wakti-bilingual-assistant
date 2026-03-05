@@ -205,11 +205,13 @@ async function createVideoTask(
         generate_audio: generateAudio || false,
       }
     : {
-        // Grok Imagine API: uses image_urls, 720p hardcoded
+        // Grok Imagine API: uses image_urls
         image_urls: sanitizedImageUrls,
         duration: validDuration,
         resolution: validResolution,
         mode: "normal",
+        fixed_lens: fixedLens || false,
+        generate_audio: generateAudio || false,
       };
 
   if (isTwoImages) {
