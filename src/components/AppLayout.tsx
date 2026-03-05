@@ -24,7 +24,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Sparkles, RefreshCw, LogOut, Home, Shield, Clock, MessageCircle } from "lucide-react";
+import { Sparkles, RefreshCw, LogOut, Home, Shield, Clock, MessageCircle, X } from "lucide-react";
+import type { PaywallVariant } from "@/components/ProtectedRoute";
 import { Logo3D } from "@/components/Logo3D";
 import { toast } from "sonner";
 
@@ -57,9 +58,10 @@ export const useUnreadContext = () => useContext(UnreadContext);
 interface CustomPaywallModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  variant: PaywallVariant;
 }
 
-function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
+function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalProps) {
   const { language, setLanguage } = useTheme();
   const { signOut, user } = useAuth();
   const navigate = useNavigate();
@@ -287,96 +289,140 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
     navigate('/login');
   };
 
-  const handleHome = () => {
-    onOpenChange(false);
-    navigate('/');
+  const handleSkip = async () => {
+    if (!user?.id) return;
+    try {
+      await supabase
+        .from('profiles')
+        .update({
+          free_access_start_at: new Date().toISOString(),
+          trial_popup_shown: true
+        })
+        .eq('id', user.id);
+
+      // Schedule push notifications at 12h, 22h, and 24h
+      try {
+        const now = new Date();
+        const pushMessages = [
+          { delayHours: 12, en: '12 hours left of your Wakti trial — subscribe now and get 3 more free days', ar: 'باقي 12 ساعة على انتهاء تجربتك في وقتي — اشترك الآن واحصل على 3 أيام مجانية إضافية' },
+          { delayHours: 22, en: '2 hours left of your Wakti trial — subscribe now and get 3 more free days', ar: 'باقي ساعتين على انتهاء تجربتك في وقتي — اشترك الآن واحصل على 3 أيام مجانية إضافية' },
+          { delayHours: 24, en: 'Your Wakti trial has ended. Subscribe to continue — guess what, you still get 3 more free days!', ar: 'انتهت تجربتك في وقتي. اشترك للمتابعة — والمفاجأة، لا تزال تحصل على 3 أيام مجانية!' },
+        ];
+        for (const msg of pushMessages) {
+          const sendAt = new Date(now.getTime() + msg.delayHours * 60 * 60 * 1000);
+          supabase.functions.invoke('schedule-reminder-push', {
+            body: {
+              userId: user.id,
+              title: 'Wakti AI',
+              message: language === 'ar' ? msg.ar : msg.en,
+              scheduledFor: sendAt.toISOString(),
+              data: { type: 'trial_reminder' }
+            }
+          }).catch(() => {});
+        }
+      } catch {}
+
+      // Force profile refresh
+      window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+      onOpenChange(false);
+      toast.success(language === 'ar' ? 'مرحباً بك في وقتي!' : 'Welcome to Wakti!');
+    } catch (err) {
+      console.error('[Paywall] Skip/trial start failed:', err);
+    }
   };
 
-  const copy = {
-    en: {
-      title: 'WAKTI AI',
-      subtitle: 'Your 4-day trial has ended. Subscribe to continue.',
-      features: [
-        { title: 'WAKTI AI', sublabel: '(chat • search • study)' },
-        { title: 'Generator', sublabel: '(image • video • music)' },
-        { title: 'Maw3d Events' },
-        { title: 'Contacts & Messaging' },
-        { title: 'WAKTI Journal' },
-        { title: 'Voice Cloning' },
-        { title: 'Voice TTS' },
-        { title: 'My Documents' },
-        { title: 'Tasks & Reminders' },
-        { title: 'Tasjeel Voice Recorder' },
-        { title: 'Vitality' },
-        { title: 'Smart Text Generator' },
-        { title: 'AI Games' },
-        { title: 'Voice Translation' },
-        { title: 'Calendar' },
-        { title: 'AI Coding' },
-        { title: 'Diagrams' },
-        { title: 'PowerPoint Slides' },
-      ],
-      trial: '',
-      subscribe: 'Subscribe Now',
-      restore: 'Restore Purchases',
-      contact: 'Contact Us',
-      contactSub: 'Payment issues? We\'re here to help',
-      logout: 'Logout',
-      home: 'Back to Home',
-      terms: 'Terms & Privacy',
-      en: 'English',
-      ar: 'العربية'
+  // Variant-based subtitles
+  const subtitles = {
+    new_user: {
+      en: 'Welcome to Wakti! Subscribe now to enjoy 3 free trial days.',
+      ar: 'مرحباً بك في وقتي! اشترك الآن واستمتع بـ 3 أيام تجريبية مجانية.'
     },
-    ar: {
-      title: 'WAKTI AI',
-      subtitle: 'انتهت فترة التجربة المجانية (4 أيام). اشترك للمتابعة.',
-      features: [
-        { title: 'وقتي AI', sublabel: '(دردشة • بحث • دراسة)' },
-        { title: 'المولد', sublabel: '(صور • فيديو • موسيقى)' },
-        { title: 'مواعيد Maw3d' },
-        { title: 'جهات الاتصال والرسائل' },
-        { title: 'دفتر يوميات وقطي' },
-        { title: 'استنساخ الصوت' },
-        { title: 'تحويل النص لصوت' },
-        { title: 'مستنداتي' },
-        { title: 'المهام والتذكيرات' },
-        { title: 'تسجيل (Tasjeel) مسجل الصوت' },
-        { title: 'الحيوية' },
-        { title: 'مولد النص الذكي' },
-        { title: 'ألعاب الذكاء الاصطناعي' },
-        { title: 'ترجمة الصوت' },
-        { title: 'التقويم' },
-        { title: 'الترميز بالذكاء الاصطناعي' },
-        { title: 'الرسوم البيانية' },
-        { title: 'شرائح PowerPoint' },
-      ],
-      trial: '',
-      subscribe: 'اشترك الآن',
-      restore: 'استعادة المشتريات',
-      contact: 'تواصل معنا',
-      contactSub: 'مشكلة في الدفع؟ نحن هنا للمساعدة',
-      logout: 'تسجيل الخروج',
-      home: 'العودة للرئيسية',
-      terms: 'الشروط والخصوصية',
-      en: 'English',
-      ar: 'العربية'
+    cancelled: {
+      en: 'Welcome back to Wakti, nice to have you back!',
+      ar: 'مرحباً بعودتك إلى وقتي، سعداء بعودتك!'
     },
+    trial_expired: {
+      en: 'Hope you enjoyed Wakti! Subscribe now and you still get 3 more free days.',
+      ar: 'نتمنى أنك استمتعت بوقتي! اشترك الآن ولا تزال تحصل على 3 أيام مجانية إضافية.'
+    }
   };
 
-  const txt = copy[language as 'en' | 'ar'] || copy.en;
+  const features = {
+    en: [
+      { title: 'WAKTI AI', sublabel: '(chat • search • study)' },
+      { title: 'Generator', sublabel: '(image • video • music)' },
+      { title: 'Maw3d Events' },
+      { title: 'Contacts & Messaging' },
+      { title: 'WAKTI Journal' },
+      { title: 'Voice Cloning' },
+      { title: 'Voice TTS' },
+      { title: 'My Documents' },
+      { title: 'Tasks & Reminders' },
+      { title: 'Tasjeel Voice Recorder' },
+      { title: 'Vitality' },
+      { title: 'Smart Text Generator' },
+      { title: 'AI Games' },
+      { title: 'Voice Translation' },
+      { title: 'Calendar' },
+      { title: 'AI Coding' },
+      { title: 'Diagrams' },
+      { title: 'PowerPoint Slides' },
+    ],
+    ar: [
+      { title: 'وقتي AI', sublabel: '(دردشة • بحث • دراسة)' },
+      { title: 'المولد', sublabel: '(صور • فيديو • موسيقى)' },
+      { title: 'مواعيد Maw3d' },
+      { title: 'جهات الاتصال والرسائل' },
+      { title: 'دفتر يوميات وقطي' },
+      { title: 'استنساخ الصوت' },
+      { title: 'تحويل النص لصوت' },
+      { title: 'مستنداتي' },
+      { title: 'المهام والتذكيرات' },
+      { title: 'تسجيل (Tasjeel) مسجل الصوت' },
+      { title: 'الحيوية' },
+      { title: 'مولد النص الذكي' },
+      { title: 'ألعاب الذكاء الاصطناعي' },
+      { title: 'ترجمة الصوت' },
+      { title: 'التقويم' },
+      { title: 'الترميز بالذكاء الاصطناعي' },
+      { title: 'الرسوم البيانية' },
+      { title: 'شرائح PowerPoint' },
+    ]
+  };
+
+  const lang = (language as 'en' | 'ar') || 'en';
+  const subtitle = subtitles[variant]?.[lang] || subtitles.new_user.en;
+  const featureList = features[lang] || features.en;
+
+  const showXButton = variant === 'new_user';
+  const showSkipButton = variant === 'new_user';
+  const showAccountBilling = variant === 'cancelled' || variant === 'trial_expired';
+  const showRestorePurchases = variant === 'cancelled';
+  const canDismiss = variant === 'new_user';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={canDismiss ? onOpenChange : undefined}>
       <DialogContent
         className="w-[95vw] max-w-[95vw] sm:w-[90vw] sm:max-w-[500px] bg-gradient-to-br from-background via-background to-accent/5 border-accent/20 max-h-[90vh] overflow-y-auto rounded-xl"
         dir={language === 'ar' ? 'rtl' : 'ltr'}
         hideCloseButton
-        onEscapeKeyDown={(e) => e.preventDefault()}
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => { if (!canDismiss) e.preventDefault(); }}
+        onPointerDownOutside={(e) => { if (!canDismiss) e.preventDefault(); }}
+        onInteractOutside={(e) => { if (!canDismiss) e.preventDefault(); }}
       >
         <div className="flex items-center justify-between">
-          <Logo3D size="sm" className="w-8 h-8" />
+          <div className="flex items-center gap-2">
+            <Logo3D size="sm" className="w-8 h-8" />
+            {showXButton && (
+              <button
+                onClick={handleSkip}
+                className="w-7 h-7 rounded-full border border-foreground/20 flex items-center justify-center hover:bg-foreground/10 transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4 text-foreground/60" />
+              </button>
+            )}
+          </div>
           {(() => {
             const other = language === 'ar' ? 'en' : 'ar';
             const label = other === 'en' ? 'English' : 'العربية';
@@ -391,14 +437,14 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
         <DialogHeader>
           <DialogTitle className="sr-only">Subscribe to Wakti AI</DialogTitle>
           <DialogDescription className="text-base pt-2 font-semibold text-accent-blue">
-            {txt.subtitle}
+            {subtitle}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           {/* Features - Mobile optimized */}
           <div className="grid grid-cols-2 sm:grid-cols-2 gap-1.5">
-            {txt.features.map((feature, i) => {
+            {featureList.map((feature, i) => {
               const item = typeof feature === 'string' ? { title: feature } : feature;
               return (
                 <div key={i} className="flex items-center gap-1.5 rounded-md px-2 py-1.5 bg-[hsl(210,100%,65%,0.06)] border border-[hsl(210,100%,65%,0.15)] min-w-0">
@@ -416,15 +462,13 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
 
           {/* Price */}
           <div className="rounded-lg p-4 text-center space-y-1 border border-[hsl(210,100%,65%,0.2)] bg-[hsl(210,100%,65%,0.05)] shadow-[0_0_20px_hsl(210,100%,65%,0.08)]">
-            <p className="text-sm text-muted-foreground">{txt.trial}</p>
             {(() => {
               const normalize = (s?: string) => s || '';
               if (language === 'ar') {
-                // Arabic: show USD as '25 دولار أمريكي/شهر', QAR as 'ر.ق 95/شهر'
                 const usdRaw = normalize(price.usd).replace('/month', '/شهر').trim();
                 const qarRaw = normalize(price.qar).replace('/month', '/شهر').replace('QAR', 'ر.ق').trim();
                 const usd = usdRaw ? usdRaw.replace('$', '') + ' دولار أمريكي/شهر' : '25 دولار أمريكي/شهر';
-                const qar = qarRaw || 'ر.ق 95/شهر';
+                const qar = qarRaw || 'ر.ق 92/شهر';
                 return (
                   <div className="flex items-center justify-center gap-3">
                     <p className="text-lg text-muted-foreground">{usd}</p>
@@ -433,9 +477,8 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
                   </div>
                 );
               } else {
-                // English: keep QAR primary, add small 'USD' tag
-                const qar = normalize(price.qar) || 'QAR 95/month';
-                const usd = normalize(price.usd) || '$24.99/month';
+                const qar = normalize(price.qar) || 'QAR 92/month';
+                const usd = normalize(price.usd) || '$25/month';
                 return (
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3">
                     <p className="text-xl sm:text-2xl font-bold text-primary">{qar}</p>
@@ -449,13 +492,15 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
 
           {/* Actions */}
           <div className="space-y-2 pt-2">
-            <Button
-              onClick={() => { onOpenChange(false); navigate('/account?tab=billing'); }}
-              variant="outline"
-              className="w-full border-foreground/20 hover:border-foreground/40 hover:bg-foreground/5 text-foreground/80 font-medium transition-all"
-            >
-              {language === 'ar' ? 'الحساب / الفوترة' : 'Account / Billing'}
-            </Button>
+            {showAccountBilling && (
+              <Button
+                onClick={() => { onOpenChange(false); navigate('/account?tab=billing'); }}
+                variant="outline"
+                className="w-full border-foreground/20 hover:border-foreground/40 hover:bg-foreground/5 text-foreground/80 font-medium transition-all"
+              >
+                {language === 'ar' ? 'الحساب / الفوترة' : 'Account / Billing'}
+              </Button>
+            )}
 
             <Button
               onClick={handleSubscribe}
@@ -469,22 +514,34 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
               ) : (
                 <Sparkles className="w-5 h-5 mr-2" />
               )}
-              {txt.subscribe}
+              {language === 'ar' ? 'اشترك الآن' : 'Subscribe Now'}
             </Button>
 
-            <Button
-              onClick={handleRestore}
-              disabled={restoring}
-              variant="outline"
-              className="w-full border-foreground/20 hover:border-foreground/40 hover:bg-foreground/5 text-foreground/80 font-medium transition-all"
-            >
-              {restoring ? (
-                <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-              ) : (
-                <RefreshCw className="w-4 h-4 mr-2" />
-              )}
-              {txt.restore}
-            </Button>
+            {showRestorePurchases && (
+              <Button
+                onClick={handleRestore}
+                disabled={restoring}
+                variant="outline"
+                className="w-full border-foreground/20 hover:border-foreground/40 hover:bg-foreground/5 text-foreground/80 font-medium transition-all"
+              >
+                {restoring ? (
+                  <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
+              </Button>
+            )}
+
+            {showSkipButton && (
+              <Button
+                onClick={handleSkip}
+                variant="ghost"
+                className="w-full text-foreground/60 hover:text-foreground/80 font-medium transition-all"
+              >
+                {language === 'ar' ? 'تخطي' : 'Skip'}
+              </Button>
+            )}
 
             <button
               onClick={() => window.open(contactUrl, "_blank", "noopener,noreferrer")}
@@ -494,8 +551,8 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
                 <MessageCircle className="w-4 h-4 text-[hsl(142,76%,60%)]" />
               </div>
               <div className={`flex flex-col ${language === 'ar' ? 'items-end' : 'items-start'}`}>
-                <span className="text-sm font-semibold text-[hsl(142,76%,65%)]">{txt.contact}</span>
-                <span className="text-xs text-foreground/60">{txt.contactSub}</span>
+                <span className="text-sm font-semibold text-[hsl(142,76%,65%)]">{language === 'ar' ? 'تواصل معنا' : 'Contact Us'}</span>
+                <span className="text-xs text-foreground/60">{language === 'ar' ? 'مشكلة في الدفع؟ نحن هنا للمساعدة' : 'Payment issues? We\'re here to help'}</span>
               </div>
             </button>
 
@@ -508,20 +565,16 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
                 className="text-xs text-muted-foreground hover:text-primary inline-flex items-center gap-1"
               >
                 <Shield className="w-3 h-3" />
-                {txt.terms}
+                {language === 'ar' ? 'الشروط والخصوصية' : 'Terms & Privacy'}
               </a>
             </div>
           </div>
 
           {/* Secondary actions */}
           <div className="flex items-center gap-2 pt-2">
-            <Button onClick={handleHome} variant="ghost" size="sm" className="flex-1">
-              <Home className="w-4 h-4 mr-1" />
-              {txt.home}
-            </Button>
             <Button onClick={handleLogout} variant="ghost" size="sm" className="flex-1">
               <LogOut className="w-4 h-4 mr-1" />
-              {txt.logout}
+              {language === 'ar' ? 'تسجيل الخروج' : 'Logout'}
             </Button>
           </div>
         </div>
@@ -531,121 +584,6 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
 }
 
 export { CustomPaywallModal };
-
-// WelcomeTrialPopup - shown ONCE per user lifetime to inform them of 30-min trial
-// ✅ SOLID SOLUTION: Database is the ONLY source of truth - no localStorage
-function WelcomeTrialPopup() {
-  const { profile, loading, isSubscribed, hasSeenTrialPopup, hasTrialStarted, refetch } = useUserProfile();
-  const { user } = useAuth();
-  const location = useLocation();
-  const [isOpen, setIsOpen] = useState(false);
-  const [isStartingTrial, setIsStartingTrial] = useState(false);
-
-  const allowedRoutes = ['/', '/dashboard', '/wakti-ai'];
-  const shouldShowPopup = allowedRoutes.includes(location.pathname);
-
-  // ✅ SOLID DATABASE-ONLY LOGIC
-  // Show popup ONLY if ALL conditions are met:
-  // 1. Profile is LOADED (not loading, not null)
-  // 2. User is logged in
-  // 3. User is NOT subscribed
-  // 4. User is on allowed route
-  // 5. trial_popup_shown === false (from DATABASE)
-  // 6. free_access_start_at === null (trial NOT started - from DATABASE)
-  useEffect(() => {
-    // ✅ CRITICAL: Wait for profile to load - database is the source of truth
-    if (loading || !profile) {
-      return; // Don't evaluate until profile is fully loaded
-    }
-
-    const shouldShow = (
-      user &&
-      !isSubscribed &&
-      shouldShowPopup &&
-      !hasSeenTrialPopup &&    // DB: trial_popup_shown = false
-      !hasTrialStarted         // DB: free_access_start_at = null (double safety)
-    );
-
-    setIsOpen(shouldShow);
-  }, [loading, profile, user, isSubscribed, shouldShowPopup, hasSeenTrialPopup, hasTrialStarted]);
-
-  const handleStartTrial = async () => {
-    if (!user?.id) return;
-    
-    setIsStartingTrial(true);
-    
-    // ✅ Close popup immediately (optimistic UI)
-    setIsOpen(false);
-    
-    try {
-      // Update BOTH fields in a single atomic database update
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          free_access_start_at: new Date().toISOString(),
-          trial_popup_shown: true
-        })
-        .eq('id', user.id);
-
-      if (error) {
-        console.error('Error starting trial:', error);
-        toast.error('Failed to start trial. Please try again.');
-        // Re-open popup on error so user can retry
-        setIsOpen(true);
-        return;
-      }
-
-      // Refetch profile to get updated data from database
-      await refetch();
-      
-      toast.success('Your 4-day free trial has started!');
-    } catch (error) {
-      console.error('Error starting trial:', error);
-      toast.error('Failed to start trial. Please try again.');
-      // Re-open popup on error so user can retry
-      setIsOpen(true);
-    } finally {
-      setIsStartingTrial(false);
-    }
-  };
-
-  if (!shouldShowPopup) return null;
-
-  return (
-    <Dialog open={isOpen} onOpenChange={(open) => !isStartingTrial && setIsOpen(open)}>
-      <DialogContent 
-        className="sm:max-w-md bg-background border-border"
-        hideCloseButton
-      >
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-center">
-            Welcome to Wakti AI! 🎉
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-4">
-          <p className="text-center text-muted-foreground">
-            Enjoy <strong>4 days of full access</strong> to explore all features. After that, subscribe to continue using Wakti AI.
-          </p>
-          <div className="flex items-center justify-center gap-2 p-3 bg-primary/10 rounded-lg">
-            <Clock className="w-5 h-5 text-primary" />
-            <span className="font-semibold text-primary">
-              4-day free trial
-            </span>
-          </div>
-        </div>
-        <DialogFooter className="sm:justify-center">
-          <Button 
-            onClick={handleStartTrial}
-            disabled={isStartingTrial}
-            className="w-full sm:w-auto"
-          >
-            {isStartingTrial ? 'Starting...' : 'OK, Start Trial'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 export function AppLayout({ children }: AppLayoutProps) {
   // Single instance of useUnreadMessages hook - the only one in the entire app
@@ -740,7 +678,6 @@ export function AppLayout({ children }: AppLayoutProps) {
           `}
         </style>
         <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
-          <WelcomeTrialPopup />
           <div className="h-[100dvh] bg-background app-layout-mobile overflow-x-hidden flex flex-col">
             <AppHeader unreadTotal={unreadData.unreadTotal} />
             <main className="flex-1 overflow-y-auto overflow-x-hidden app-main-scroll">
@@ -760,7 +697,6 @@ export function AppLayout({ children }: AppLayoutProps) {
           {`body.paywall-open [data-radix-popper-content-wrapper]{z-index:1200 !important;}`}
         </style>
         <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
-          <WelcomeTrialPopup />
           <PresenceBeacon />
           <TabletLayout>{content}</TabletLayout>
         </ProtectedRoute>
@@ -777,7 +713,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         `}
       </style>
       <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
-        <WelcomeTrialPopup />
         <PresenceBeacon />
         <DesktopLayout>{content}</DesktopLayout>
       </ProtectedRoute>

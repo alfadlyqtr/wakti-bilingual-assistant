@@ -6,9 +6,11 @@ import Loading from "@/components/ui/loading";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { showPaywallIfNeeded } from "@/integrations/natively/purchasesBridge";
 
+export type PaywallVariant = 'new_user' | 'cancelled' | 'trial_expired';
+
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  CustomPaywallModal?: React.ComponentType<{ open: boolean; onOpenChange: (open: boolean) => void }>;
+  CustomPaywallModal?: React.ComponentType<{ open: boolean; onOpenChange: (open: boolean) => void; variant: PaywallVariant }>;
 }
 
 // Cache TTL: 30 minutes
@@ -30,7 +32,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   const [hasAnySession, setHasAnySession] = useState<boolean>(!!session);
 
   // --- Fix #2: hooks moved here (top of component) to satisfy Rules of Hooks ---
-  const { isSubscribed, isAccessExpired, profile } = useUserProfile();
+  const { isSubscribed, isAccessExpired, isNewUser, wasSubscribed, hasTrialStarted, profile } = useUserProfile();
   const [accessCheckTick, setAccessCheckTick] = useState(0);
 
   // Enable subscription/IAP enforcement
@@ -368,16 +370,49 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     return () => clearInterval(interval);
   }, [isSubscribed, profile?.free_access_start_at]);
 
+  // Determine paywall variant
+  const [paywallVariant, setPaywallVariant] = useState<PaywallVariant>('new_user');
+
   useEffect(() => {
     if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) return;
     if (!user?.id) return;
     if (isSubscribed) { setShowPaywall(false); return; }
     const isAccount = location.pathname.startsWith('/account');
     if (isAccount) { setShowPaywall(false); return; }
-    if (!isAccessExpired) { setShowPaywall(false); return; }
-    if (DEV) console.log("ProtectedRoute: Triggering paywall - access expired (route:", location.pathname, location.search, ")");
-    setShowPaywall(true);
-  }, [user?.id, isSubscribed, isAccessExpired, location.pathname, location.search, TEMP_DISABLE_SUBSCRIPTION_CHECKS, DEV, accessCheckTick]);
+
+    // Version 1: New user (first login, no trial started)
+    if (isNewUser) {
+      if (DEV) console.log("ProtectedRoute: New user - showing welcome paywall");
+      setPaywallVariant('new_user');
+      setShowPaywall(true);
+      return;
+    }
+
+    // Version 2: Was subscribed before but cancelled/expired
+    if (wasSubscribed && !hasTrialStarted) {
+      if (DEV) console.log("ProtectedRoute: Cancelled subscriber - showing welcome back paywall");
+      setPaywallVariant('cancelled');
+      setShowPaywall(true);
+      return;
+    }
+    if (wasSubscribed && hasTrialStarted) {
+      if (DEV) console.log("ProtectedRoute: Cancelled subscriber with trial history - showing welcome back paywall");
+      setPaywallVariant('cancelled');
+      setShowPaywall(true);
+      return;
+    }
+
+    // Version 3: Trial expired (pressed skip/X before, 24h ran out)
+    if (isAccessExpired) {
+      if (DEV) console.log("ProtectedRoute: Trial expired - showing final paywall");
+      setPaywallVariant('trial_expired');
+      setShowPaywall(true);
+      return;
+    }
+
+    // Still in grace period
+    setShowPaywall(false);
+  }, [user?.id, isSubscribed, isAccessExpired, isNewUser, wasSubscribed, hasTrialStarted, location.pathname, location.search, TEMP_DISABLE_SUBSCRIPTION_CHECKS, DEV, accessCheckTick]);
 
   let effectiveHasSession = hasAnySession;
   
@@ -493,7 +528,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   return (
     <>
       {CustomPaywallModal && (
-        <CustomPaywallModal open={showPaywall} onOpenChange={setShowPaywall} />
+        <CustomPaywallModal open={showPaywall} onOpenChange={setShowPaywall} variant={paywallVariant} />
       )}
       {children}
     </>

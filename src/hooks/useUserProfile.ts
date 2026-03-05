@@ -17,6 +17,8 @@ interface UserProfile {
   updated_at?: string;
   // Subscription/grace fields
   is_subscribed: boolean;
+  subscription_status?: string | null;
+  plan_name?: string | null;
   free_access_start_at?: string | null;
   revenuecat_id?: string | null;
   trial_popup_shown?: boolean | null;
@@ -163,6 +165,11 @@ export function useUserProfile() {
 
   useEffect(() => {
     fetchProfile();
+    
+    // Allow forcing a refetch from other components (after purchase, skip, etc.)
+    const handleProfileUpdate = () => fetchProfile();
+    window.addEventListener('wakti-profile-updated', handleProfileUpdate);
+    return () => window.removeEventListener('wakti-profile-updated', handleProfileUpdate);
   }, [user?.id]);
 
   // Set up real-time subscription for profile changes
@@ -210,7 +217,7 @@ export function useUserProfile() {
       const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;
       if (start == null) return false; // NOT STARTED = not grace, not expired
       const elapsedMin = Math.floor((Date.now() - start) / 60000);
-      return elapsedMin < 5760; // 96 hours (4 days)
+      return elapsedMin < 1440; // 24 hours
     },
     get hasTrialStarted() {
       return profile?.free_access_start_at != null;
@@ -224,7 +231,13 @@ export function useUserProfile() {
       const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;
       if (start == null) return false; // not set counts as grace, not expired
       const elapsedMin = Math.floor((Date.now() - start) / 60000);
-      return elapsedMin >= 5760; // 96 hours (4 days)
+      return elapsedMin >= 1440; // 24 hours
+    },
+    get isNewUser() {
+      return !profile?.free_access_start_at && !profile?.is_subscribed && !profile?.plan_name;
+    },
+    get wasSubscribed() {
+      return !profile?.is_subscribed && !!profile?.plan_name;
     }
   };
 }
