@@ -3,7 +3,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>WAKTI</title>
     <meta name="description" content="Wakti AI" />
     <meta name="author" content="WAKTI" />
@@ -33,7 +33,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- Prevent scaling -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     
     <!-- Mobile webapp capability -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -101,6 +100,20 @@
           document.body.appendChild(s);
         }
       })();
+    </script>
+    <!-- PWA Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/pwabuilder-sw.js')
+            .then(function(registration) {
+              console.log('PWA Service Worker registered successfully:', registration.scope);
+            })
+            .catch(function(error) {
+              console.log('PWA Service Worker registration failed:', error);
+            });
+        });
+      }
     </script>
     <script type="module" src="/src/main.tsx"></script>
     <!-- Cleanup: ensure any legacy mobile-nav-fallback element is removed if present -->

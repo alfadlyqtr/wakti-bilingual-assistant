@@ -60,6 +60,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Second reference image for I2I (optional)
+  const [uploadedFile2, setUploadedFile2] = useState<UploadedFile | null>(null);
+  const [showSecondImage, setShowSecondImage] = useState(false);
+  const fileInputRef2 = useRef<HTMLInputElement>(null);
+
   // Draw canvas ref
   const drawCanvasRef = useRef<DrawAfterBGCanvasRef>(null);
 
@@ -213,6 +218,33 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     e.target.value = '';
   };
 
+  const handleFileChange2 = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    if (!file.type.startsWith('image/') && !file.name.toLowerCase().match(/\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff)$/)) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(language === 'ar' ? 'الحد الأقصى 5 ميجابايت' : 'Max 5MB');
+      return;
+    }
+    try {
+      const base64DataUrl = await normalizeImageOrientation(file);
+      setUploadedFile2({
+        id: `${Date.now()}`,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        url: base64DataUrl,
+        preview: base64DataUrl,
+        base64: base64DataUrl,
+        imageType: { id: 'general', name: 'General' },
+      });
+    } catch (err) {
+      console.error('Second image upload failed:', err);
+    }
+    e.target.value = '';
+  };
+
   // ─── Simulated progress ───
   const progressRef = useRef<number | null>(null);
   const startProgress = () => {
@@ -258,10 +290,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error('Authentication required');
     const rawB64 = uploadedFile.base64 || uploadedFile.url || uploadedFile.preview || '';
+    const rawB64_2 = uploadedFile2 ? (uploadedFile2.base64 || uploadedFile2.url || uploadedFile2.preview || '') : undefined;
     const resp = await fetch(`${SUPABASE_URL}/functions/v1/wakti-image2image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-      body: JSON.stringify({ user_prompt: prompt, image_base64: rawB64, user_id: user?.id }),
+      body: JSON.stringify({ user_prompt: prompt, image_base64: rawB64, image_base64_2: rawB64_2, user_id: user?.id }),
     });
     const json = await resp.json().catch(() => ({} as any));
     if (!resp.ok || !json?.success || !json?.url) {
@@ -554,6 +587,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
   // Reset saved state when generating new image
   const resetForNewGeneration = () => {
+    setUploadedFile2(null);
+    setShowSecondImage(false);
     setResultImageUrl(null);
     setResultError(null);
     setIsSaved(false);
@@ -822,43 +857,106 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
         {/* Image upload area (I2I & BG Removal) */}
         {needsUpload && (
-          <div>
-            {uploadedFile ? (
-              <div className="relative inline-block">
-                <img
-                  src={uploadedFile.preview || uploadedFile.url}
-                  alt="Uploaded"
-                  className="max-h-40 rounded-xl border border-border/50 object-contain shadow-sm"
-                />
+          <div className="space-y-3">
+            {/* Main image slot — always visible */}
+            <div>
+              {uploadedFile ? (
+                <div className="relative rounded-xl border border-border/50 shadow-sm overflow-visible bg-black/5 dark:bg-white/5 max-w-xs mx-auto">
+                  <img
+                    src={uploadedFile.preview || uploadedFile.url}
+                    alt="Reference 1"
+                    className="w-full rounded-xl object-contain max-h-48"
+                  />
+                  <button
+                    onClick={() => setUploadedFile(null)}
+                    className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md active:scale-90 transition-transform z-10"
+                    aria-label={language === 'ar' ? 'إزالة الصورة' : 'Remove image'}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                  {submode === 'image2image' && (
+                    <span className="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-md z-10">
+                      {language === 'ar' ? 'صورة ١' : 'Ref 1'}
+                    </span>
+                  )}
+                </div>
+              ) : (
                 <button
-                  onClick={() => setUploadedFile(null)}
-                  className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md active:scale-90 transition-transform"
-                  aria-label={language === 'ar' ? 'إزالة الصورة' : 'Remove image'}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-8 border-2 border-dashed border-orange-300/50 dark:border-orange-700/30 rounded-xl flex flex-col items-center gap-2 text-muted-foreground active:scale-[0.98] transition-transform"
                 >
-                  <X className="h-3 w-3" />
+                  <ImagePlus className="h-7 w-7 text-orange-400" />
+                  <span className="text-sm font-medium">
+                    {submode === 'image2image'
+                      ? (language === 'ar' ? 'صورة ١' : 'Image 1')
+                      : (language === 'ar' ? 'اضغط لرفع صورة' : 'Tap to upload')}
+                  </span>
+                </button>
+              )}
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" hidden />
+            </div>
+
+            {/* Toggle for second image (I2I only) — below main image */}
+            {submode === 'image2image' && (
+              <div className="flex items-center justify-center gap-3 pt-1">
+                <span className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'إضافة صورة ثانية (اختياري)' : 'Add second image (optional)'}
+                </span>
+                <button
+                  onClick={() => {
+                    setShowSecondImage(!showSecondImage);
+                    if (showSecondImage) setUploadedFile2(null);
+                  }}
+                  className={`relative h-6 w-10 rounded-full transition-colors duration-200 ${showSecondImage ? 'bg-orange-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  aria-label={language === 'ar' ? 'تبديل الصورة الثانية' : 'Toggle second image'}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${showSecondImage ? 'translate-x-4' : ''}`}
+                  />
                 </button>
               </div>
-            ) : (
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full py-6 border-2 border-dashed border-orange-300/50 dark:border-orange-700/30 rounded-xl flex flex-col items-center gap-2 text-muted-foreground active:scale-[0.98] transition-transform"
-              >
-                <ImagePlus className="h-7 w-7 text-orange-400" />
-                <span className="text-sm font-medium">{language === 'ar' ? 'اضغط لرفع صورة' : 'Tap to upload image'}</span>
-              </button>
             )}
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
-              hidden
-            />
+
+            {/* Second image slot — appears when toggle is on, half width */}
+            {submode === 'image2image' && showSecondImage && (
+              <div className="max-w-[50%] mx-auto">
+                {uploadedFile2 ? (
+                  <div className="relative rounded-xl border border-border/50 shadow-sm overflow-visible bg-black/5 dark:bg-white/5">
+                    <img
+                      src={uploadedFile2.preview || uploadedFile2.url}
+                      alt="Reference 2"
+                      className="w-full rounded-xl object-contain max-h-32"
+                    />
+                    <button
+                      onClick={() => setUploadedFile2(null)}
+                      className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md active:scale-90 transition-transform z-10"
+                      aria-label={language === 'ar' ? 'إزالة الصورة الثانية' : 'Remove image 2'}
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                    <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] font-semibold px-1 py-0.5 rounded-md z-10">
+                      {language === 'ar' ? 'صورة ٢ (اختياري)' : 'Ref 2 (optional)'}
+                    </span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => fileInputRef2.current?.click()}
+                    className="w-full py-6 border-2 border-dashed border-[#858384]/30 dark:border-[#858384]/20 rounded-xl flex flex-col items-center gap-1.5 text-muted-foreground/70 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:scale-[0.98] transition-all"
+                  >
+                    <ImagePlus className="h-5 w-5 text-[#858384]/60" />
+                    <span className="text-xs font-medium text-[#858384]/70">
+                      {language === 'ar' ? 'اضغط لإضافة صورة' : 'Tap to add image'}
+                    </span>
+                  </button>
+                )}
+                <input type="file" ref={fileInputRef2} onChange={handleFileChange2} accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" hidden />
+              </div>
+            )}
           </div>
         )}
 
-        {/* Quick chips */}
-        {needsUpload && uploadedFile && prompt === '' && (
+        {/* Quick chips — hidden when 2 images uploaded */}
+        {needsUpload && uploadedFile && !uploadedFile2 && prompt === '' && (
           <div className="flex gap-2 flex-wrap">
             {getQuickChips().map((chip, i) => (
               <button

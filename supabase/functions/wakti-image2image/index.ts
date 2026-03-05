@@ -134,7 +134,7 @@ async function uploadAndSignReferenceImage(params: {
   return signed.data.signedUrl;
 }
 
-async function callRunwareI2I(finalPrompt: string, referenceImageUrl: string): Promise<any> {
+async function callRunwareI2I(finalPrompt: string, referenceImages: string[]): Promise<unknown> {
   // google:4@1 requires the WebSocket-style /v1 endpoint (same as text2image), not /v1/tasks
   const payload = [
     { taskType: "authentication", apiKey: RUNWARE_API_KEY },
@@ -148,7 +148,7 @@ async function callRunwareI2I(finalPrompt: string, referenceImageUrl: string): P
       numberResults: 1,
       outputType: ["dataURI", "URL"],
       includeCost: true,
-      referenceImages: [referenceImageUrl],
+      referenceImages,
       outputQuality: 85,
     }
   ];
@@ -176,6 +176,7 @@ serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}));
     const image_base64_raw = body?.image_base64 as string | undefined;
+    const image_base64_raw_2 = body?.image_base64_2 as string | undefined;
     const user_prompt = body?.user_prompt as string | undefined;
     const user_id = body?.user_id as string | undefined;
 
@@ -189,14 +190,22 @@ serve(async (req: Request) => {
     const { base64, mimeHint } = stripDataUrlPrefix(image_base64_raw);
     const inputBytes = decodeBase64ToUint8Array(base64);
     const { mime, ext } = detectMimeAndExt(inputBytes, mimeHint);
-
     const referenceUrl = await uploadAndSignReferenceImage({ base64, mime, ext, userId: user_id });
 
-    const rw = await callRunwareI2I(user_prompt, referenceUrl);
-    const node = pickFirstResultNode(rw) || rw;
+    let referenceUrl2: string | undefined;
+    if (image_base64_raw_2) {
+      const { base64: b2, mimeHint: mh2 } = stripDataUrlPrefix(image_base64_raw_2);
+      const bytes2 = decodeBase64ToUint8Array(b2);
+      const { mime: mime2, ext: ext2 } = detectMimeAndExt(bytes2, mh2);
+      referenceUrl2 = await uploadAndSignReferenceImage({ base64: b2, mime: mime2, ext: ext2, userId: user_id });
+    }
+
+    const referenceUrls = referenceUrl2 ? [referenceUrl, referenceUrl2] : [referenceUrl];
+    const rw = await callRunwareI2I(user_prompt, referenceUrls);
+    const node = (pickFirstResultNode(rw) || rw) as Record<string, unknown>;
 
     // Extract the Runware output URL
-    const outputImageUrl = node?.imageURL || node?.URL || node?.url;
+    const outputImageUrl = (node?.imageURL || node?.URL || node?.url) as string | undefined;
     
     console.log("🎨 Runware result:", { keys: Object.keys(node || {}), outputImageUrl: outputImageUrl?.slice(0, 80) });
 

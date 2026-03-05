@@ -1,11 +1,11 @@
 {
   "name": "Wakti AI",
   "short_name": "Wakti",
-  "description": "Your intelligent digital partner for modern life",
+  "description": "Smarter. Faster. Easier. Wakti AI is your All-In-One Digital Empire. Built for the visionaries of the GCC, Wakti fuses professional productivity, creative mastery, and lifestyle intelligence into a single interface. Generate cinematic media, build apps with Vibe Coding, clone your voice, and master your life with our integrated assistant, health OS, and smart calendar. Step into high-performance living with the world’s first truly integrated AI ecosystem.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0c0f14",
-  "theme_color": "#0c0f14",
+  "theme_color": "#042968",
   "orientation": "portrait",
   "icons": [
     {
@@ -14,5 +14,10 @@
       "type": "image/x-icon"
     }
   ],
-  "categories": ["productivity", "utilities", "lifestyle"]
+  "categories": [
+    "productivity",
+    "utilities",
+    "lifestyle"
+  ],
+  "id": "/"
 }
