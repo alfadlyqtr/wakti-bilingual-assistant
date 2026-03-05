@@ -127,7 +127,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [imageFile2, setImageFile2] = useState<File | null>(null);
   const [imagePreview2, setImagePreview2] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
-  const [duration, setDuration] = useState<'4' | '6' | '8' | '10' | '12'>('8');
+  const [duration, setDuration] = useState<'4' | '6' | '8' | '10' | '12' | '15'>('8');
   const [aspectRatio, setAspectRatio] = useState<string>('9:16');
   const [resolution, setResolution] = useState<'480p' | '720p'>('480p');
   const [fixedLens, setFixedLens] = useState(false);
@@ -1105,13 +1105,25 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     <button
                       onClick={() => !isGenerating && setDuration('10')}
                       disabled={isGenerating}
-                      className={`px-2.5 py-1.5 text-xs font-medium transition-all mr-0.5 ${
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
                         duration === '10'
                           ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
                           : 'text-muted-foreground hover:text-primary'
                       }`}
                     >
                       {language === 'ar' ? '10 ث' : '10s'}
+                    </button>
+                    <button
+                      onClick={() => !isGenerating && setDuration('15')}
+                      disabled={isGenerating}
+                      title={language === 'ar' ? '480p فقط' : '480p only'}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all mr-0.5 ${
+                        duration === '15'
+                          ? 'bg-gradient-to-r from-[hsl(25,95%,60%)]/30 to-[hsl(45,100%,60%)]/25 text-orange-500 font-bold'
+                          : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? '15 ث' : '15s'}
                     </button>
                   </>
                 )}

@@ -126,15 +126,14 @@ async function createTextToVideoTask(
   duration?: string,
   aspectRatio?: string,
 ): Promise<{ task_id: string; status: string }> {
-  const validDuration = ["6", "10"].includes(duration || "") ? duration! : "6";
-  const validAspectRatio = ["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"].includes(aspectRatio || "")
-    ? aspectRatio!
-    : "9:16";
+  const validDuration = ["6", "10", "15"].includes(duration || "") ? duration! : "6";
+  const validResolution = validDuration === "15" ? "480p" : "720p";
+  const validAspectRatio = ["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"].includes(aspectRatio || "") ? aspectRatio! : "9:16";
   const input: Record<string, unknown> = {
     prompt: prompt.slice(0, 2500),
     aspect_ratio: validAspectRatio,
     duration: validDuration,
-    resolution: "720p",
+    resolution: validResolution,
   };
 
   const requestBody = {
@@ -182,16 +181,16 @@ async function createVideoTask(
   const sanitizedImageUrls = imageUrls.map(url => sanitizeImageUrl(url));
   const isTwoImages = sanitizedImageUrls.length === 2;
   // Seedance (2images): 4/8/12s, user-selected resolution
-  // Grok Imagine (single image): 6/10s, always 720p
+  // Grok Imagine (single image): 6/10/15s — 15s forces 480p, others use 720p
   const validDuration = isTwoImages
     ? (["4", "8", "12"].includes(duration || "") ? duration! : "8")
-    : (["6", "10"].includes(duration || "") ? duration! : "6");
+    : (["6", "10", "15"].includes(duration || "") ? duration! : "6");
   const validAspectRatio = ["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"].includes(aspectRatio || "")
     ? aspectRatio!
     : "9:16";
   const validResolution = isTwoImages
     ? (["480p", "720p"].includes(resolution || "") ? resolution! : "480p")
-    : "720p"; // Grok Imagine always 720p
+    : (validDuration === "15" ? "480p" : "720p"); // 15s forces 480p for grok-imagine
 
   const model = isTwoImages ? KIE_2IMAGES_MODEL : KIE_IMAGE2VIDEO_MODEL;
 
