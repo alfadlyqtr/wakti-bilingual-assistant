@@ -139,22 +139,27 @@ function findFirstImage(node: unknown): { url?: string; dataURI?: string } | nul
 async function runwareGenerate(positivePrompt: string, model: string, signal?: AbortSignal) {
   const width = snap64(DEFAULT_WIDTH);
   const height = snap64(DEFAULT_HEIGHT);
+  const isGoogleModel = model.startsWith("google:");
+  const inferenceTask: Record<string, unknown> = {
+    taskType: "imageInference",
+    taskUUID: crypto.randomUUID(),
+    positivePrompt,
+    width,
+    height,
+    model,
+    numberResults: 1,
+    outputType: ["URL", "dataURI"],
+    includeCost: true,
+    outputQuality: 85,
+  };
+  if (!isGoogleModel) {
+    inferenceTask.outputFormat = "WEBP";
+    inferenceTask.CFGScale = CFG;
+    inferenceTask.steps = STEPS;
+  }
   const payload = [
     { taskType: "authentication", apiKey: RUNWARE_API_KEY },
-    {
-      taskType: "imageInference",
-      taskUUID: crypto.randomUUID(),
-      positivePrompt,
-      width,
-      height,
-      model,
-      numberResults: 1,
-      outputFormat: "WEBP",
-      outputType: ["URL","dataURI"],
-      includeCost: true,
-      CFGScale: CFG,
-      steps: STEPS
-    }
+    inferenceTask
   ];
   const controller = new AbortController();
   const tid = setTimeout(()=>controller.abort(), TIMEOUT_MS);
