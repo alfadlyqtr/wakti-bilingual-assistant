@@ -598,14 +598,15 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
   // ─── Shared submode tabs component ───
   const SubmodeTabs = () => (
-    <div className="flex gap-2 p-1.5 rounded-2xl bg-gradient-to-r from-[#0c0f14]/5 via-[#606062]/10 to-[#0c0f14]/5 dark:from-[#0c0f14] dark:via-[#1a1d24] dark:to-[#0c0f14] border border-[#606062]/20 dark:border-[#606062]/30 backdrop-blur-sm shadow-inner">
+    <div className="overflow-x-auto scrollbar-none -mx-1 px-1">
+    <div className="flex gap-2 p-1.5 rounded-2xl bg-gradient-to-r from-[#0c0f14]/5 via-[#606062]/10 to-[#0c0f14]/5 dark:from-[#0c0f14] dark:via-[#1a1d24] dark:to-[#0c0f14] border border-[#606062]/20 dark:border-[#606062]/30 backdrop-blur-sm shadow-inner min-w-max">
       {submodes.map((m) => {
         const isActive = submode === m.key;
         return (
           <button
             key={m.key}
             onClick={() => { setSubmode(m.key); resetForNewGeneration(); setUploadedFile(null); setPrompt(''); }}
-            className={`relative flex-1 flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-sm font-bold transition-all duration-200 min-h-[48px] touch-manipulation ${
+            className={`relative flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 min-h-[48px] touch-manipulation whitespace-nowrap ${
               isActive
                 ? 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] text-white dark:text-[#060541] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.02]'
                 : 'bg-white/30 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 text-[#606062] dark:text-[#858384] hover:bg-white/50 dark:hover:bg-white/15 active:scale-95'
@@ -621,6 +622,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
           </button>
         );
       })}
+    </div>
     </div>
   );
 
