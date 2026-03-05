@@ -40,6 +40,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     
     if (storedLanguage) {
       setLanguage(storedLanguage);
+    } else {
+      // Detect device language on first visit
+      const deviceLanguage = navigator.language || navigator.languages?.[0] || 'en';
+      const isArabic = deviceLanguage.toLowerCase().startsWith('ar');
+      setLanguage(isArabic ? 'ar' : 'en');
     }
   }, []);
 
