@@ -17,6 +17,8 @@ import { getCurrentUserProfile } from "@/services/contactsService";
 import { t } from "@/utils/translations";
 import { deleteUserAccount, updateUserPassword } from "@/utils/auth";
 import { CustomPaywallModal } from "@/components/AppLayout";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import type { PaywallVariant } from "@/components/ProtectedRoute";
 import { 
   Dialog,
   DialogContent,
@@ -67,7 +69,7 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
     return () => clearInterval(interval);
   }, [startAt, language]);
   
-  // When trial is expired, show friendly message with CTA (NO "Free Trial Active" header)
+  // When trial is expired, show message aligned with V3 (trial_expired) paywall
   if (isExpired) {
     return (
       <div className="text-center space-y-4 py-4">
@@ -77,41 +79,29 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
         </div>
         <p className="text-muted-foreground max-w-xs mx-auto">
           {language === 'en' 
-            ? "Wakti has so much to offer! Don't miss out on all the amazing features."
-            : "واكتي لديه الكثير ليقدمه! لا تفوت كل الميزات الرائعة."
+            ? "Hope you enjoyed Wakti! Subscribe now and you still get 3 more free days."
+            : "نتمنى أنك استمتعت بوقتي! اشترك الآن ولا تزال تحصل على 3 أيام مجانية إضافية."
           }
         </p>
-        <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-lg px-4 py-3">
-          <p className="text-sm font-medium text-purple-600 dark:text-purple-400">
-            {language === 'en'
-              ? '✨ Subscribe now to enjoy Wakti AI!'
-              : '✨ اشترك الآن للاستمتاع بـ Wakti AI!'
-            }
-          </p>
-        </div>
         <Button 
           onClick={onSubscribeClick}
-          className="w-full max-w-xs shadow-lg"
+          className="w-full max-w-xs bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:from-[hsl(210,100%,60%)] hover:via-[hsl(195,100%,55%)] hover:to-[hsl(175,100%,50%)] text-white font-bold shadow-[0_0_30px_hsl(200,100%,55%,0.4)]"
           size="lg"
-          style={{
-            background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
-            color: 'white',
-            fontWeight: 600,
-          }}
         >
+          <Sparkles className="w-4 h-4 mr-2" />
           {language === 'en' ? 'Subscribe Now' : 'اشترك الآن'}
         </Button>
       </div>
     );
   }
   
-  // When trial is active, show "Free Trial Active" header + countdown
+  // When trial is active, show "24-Hour Trial Active" header + countdown
   return (
     <div className="text-center space-y-3 py-4">
       <div className="flex items-center justify-center gap-2 text-amber-500">
         <Clock className="h-5 w-5" />
         <span className="font-medium">
-          {language === 'en' ? 'Free Trial Active' : 'الفترة التجريبية المجانية نشطة'}
+          {language === 'en' ? '24-Hour Trial Active' : 'الفترة التجريبية (24 ساعة) نشطة'}
         </span>
       </div>
       <div className="text-3xl font-bold text-center tabular-nums">
@@ -188,6 +178,10 @@ export default function Account() {
   
   // Paywall modal state (for subscribe CTA from billing tab)
   const [showPaywallModal, setShowPaywallModal] = useState(false);
+  
+  // Detect correct paywall variant using same logic as ProtectedRoute
+  const { isNewUser, wasSubscribed, isAccessExpired } = useUserProfile();
+  const paywallVariant: PaywallVariant = wasSubscribed ? 'cancelled' : isAccessExpired ? 'trial_expired' : isNewUser ? 'new_user' : 'cancelled';
   
   // Restore purchases state
   const [isRestoring, setIsRestoring] = useState(false);
@@ -925,35 +919,36 @@ export default function Account() {
                             language={language} 
                             onSubscribeClick={() => setShowPaywallModal(true)}
                           />
-                          {/* Only show these buttons during ACTIVE trial - TrialCountdown handles expired state with its own button */}
+                          {/* Active trial: Subscribe + Restore only for cancelled variant */}
                           {isTrialActive && (
                             <div className="flex flex-col items-center gap-2 pt-2">
                               <Button
                                 onClick={() => setShowPaywallModal(true)}
-                                className="w-full max-w-xs bg-gradient-to-r from-accent-purple to-accent-pink hover:opacity-90 text-white font-semibold"
+                                className="w-full max-w-xs bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:from-[hsl(210,100%,60%)] hover:via-[hsl(195,100%,55%)] hover:to-[hsl(175,100%,50%)] text-white font-bold shadow-[0_0_30px_hsl(200,100%,55%,0.4)]"
                                 size="lg"
                               >
                                 <Sparkles className="w-4 h-4 mr-2" />
                                 {language === 'ar' ? 'اشترك الآن' : 'Subscribe Now'}
                               </Button>
-                              {/* Restore Purchases button - Apple requirement */}
-                              <Button
-                                variant="outline"
-                                onClick={handleRestorePurchases}
-                                disabled={isRestoring}
-                                className="w-full max-w-xs"
-                              >
-                                {isRestoring ? (
-                                  <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                                ) : (
-                                  <RefreshCw className="w-4 h-4 mr-2" />
-                                )}
-                                {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
-                              </Button>
+                              {paywallVariant === 'cancelled' && (
+                                <Button
+                                  variant="outline"
+                                  onClick={handleRestorePurchases}
+                                  disabled={isRestoring}
+                                  className="w-full max-w-xs"
+                                >
+                                  {isRestoring ? (
+                                    <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                                  ) : (
+                                    <RefreshCw className="w-4 h-4 mr-2" />
+                                  )}
+                                  {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
+                                </Button>
+                              )}
                             </div>
                           )}
-                          {/* Restore Purchases for expired trial - separate from TrialCountdown's Subscribe button */}
-                          {!isTrialActive && (
+                          {/* Expired trial: Restore only for cancelled variant */}
+                          {!isTrialActive && paywallVariant === 'cancelled' && (
                             <div className="flex flex-col items-center gap-2 pt-2">
                               <Button
                                 variant="outline"
@@ -1007,38 +1002,38 @@ export default function Account() {
                       </div>
                     )}
                     
-                    {/* STATE 3: No Subscription, No Trial */}
+                    {/* STATE 3: No Subscription, No Trial (new_user) */}
                     {subscriptionData?.profile && !subscriptionData.profile.is_subscribed && !subscriptionData.profile.free_access_start_at && (
                       <div className="text-center space-y-4 py-4">
                         <p className="text-muted-foreground">
-                          {language === 'en' ? 'No active subscription' : 'لا يوجد اشتراك نشط'}
+                          {language === 'en' 
+                            ? 'Welcome to Wakti! Subscribe now to enjoy 3 free trial days.' 
+                            : 'مرحباً بك في وقتي! اشترك الآن واستمتع بـ 3 أيام تجريبية مجانية.'}
                         </p>
                         <Button 
                           onClick={() => setShowPaywallModal(true)}
-                          className="w-full max-w-xs shadow-lg"
+                          className="w-full max-w-xs bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:from-[hsl(210,100%,60%)] hover:via-[hsl(195,100%,55%)] hover:to-[hsl(175,100%,50%)] text-white font-bold shadow-[0_0_30px_hsl(200,100%,55%,0.4)]"
                           size="lg"
-                          style={{
-                            background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
-                            color: 'white',
-                            fontWeight: 600,
-                          }}
                         >
+                          <Sparkles className="w-4 h-4 mr-2" />
                           {language === 'en' ? 'Subscribe Now' : 'اشترك الآن'}
                         </Button>
-                        {/* Restore Purchases button - Apple requirement */}
-                        <Button
-                          variant="outline"
-                          onClick={handleRestorePurchases}
-                          disabled={isRestoring}
-                          className="w-full max-w-xs"
-                        >
-                          {isRestoring ? (
-                            <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                          ) : (
-                            <RefreshCw className="w-4 h-4 mr-2" />
-                          )}
-                          {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
-                        </Button>
+                        {/* Restore only for cancelled variant (previously subscribed) */}
+                        {paywallVariant === 'cancelled' && (
+                          <Button
+                            variant="outline"
+                            onClick={handleRestorePurchases}
+                            disabled={isRestoring}
+                            className="w-full max-w-xs"
+                          >
+                            {isRestoring ? (
+                              <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                            ) : (
+                              <RefreshCw className="w-4 h-4 mr-2" />
+                            )}
+                            {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
+                          </Button>
+                        )}
                       </div>
                     )}
                     
@@ -1270,7 +1265,7 @@ export default function Account() {
       </Dialog>
       
       {/* Paywall Modal - triggered from billing tab subscribe CTA */}
-      <CustomPaywallModal open={showPaywallModal} onOpenChange={setShowPaywallModal} variant="cancelled" />
+      <CustomPaywallModal open={showPaywallModal} onOpenChange={setShowPaywallModal} variant={paywallVariant} />
     </PageContainer>
   );
 }
