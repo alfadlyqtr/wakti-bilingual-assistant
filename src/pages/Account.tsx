@@ -233,7 +233,21 @@ export default function Account() {
       return { profile, subscriptions: subscriptions || [] };
     },
     enabled: !!user?.id,
+    staleTime: 0,
   });
+
+  // Refetch billing data when profile is updated (e.g. after Skip/X on paywall)
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: ['subscription'] });
+    };
+    window.addEventListener('wakti-profile-updated', handleProfileUpdate);
+    window.addEventListener('wakti-subscription-updated', handleProfileUpdate);
+    return () => {
+      window.removeEventListener('wakti-profile-updated', handleProfileUpdate);
+      window.removeEventListener('wakti-subscription-updated', handleProfileUpdate);
+    };
+  }, [queryClient]);
 
   // Load user data
   useEffect(() => {
