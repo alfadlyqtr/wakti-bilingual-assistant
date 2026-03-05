@@ -617,9 +617,9 @@ function buildSearchFollowupContents(
     const u = lastTurns[i];
     const a = lastTurns[i + 1];
     if (!u || u.role !== 'user') continue;
-    const uText = u.content.replace(/\s+/g, ' ').trim().slice(0, 180);
+    const uText = u.content.replace(/\s+/g, ' ').trim().slice(0, 1000);
     let aText = a && a.role === 'assistant' ? a.content.replace(/\s+/g, ' ').trim() : '';
-    aText = aText.slice(0, 220);
+    aText = aText.slice(0, 1000);
     if (aText) summaryLines.push(`- User: ${uText}\n  Assistant: ${aText}`);
     else summaryLines.push(`- User: ${uText}`);
   }
@@ -630,12 +630,12 @@ function buildSearchFollowupContents(
     const ctx =
       `CONTEXT (last turns, for continuity only):\n` +
       `${compactSummary ? compactSummary + '\n\n' : ''}` +
-      `${lastUser ? `Last user message: ${lastUser.slice(0, 500)}\n` : ''}` +
-      `${lastAssistant ? `Last assistant answer: ${lastAssistant.slice(0, 900)}\n` : ''}` +
+      `${lastUser ? `Last user message: ${lastUser.slice(0, 5000)}\n` : ''}` +
+      `${lastAssistant ? `Last assistant answer: ${lastAssistant.slice(0, 2000)}\n` : ''}` +
       `\nNow answer the user's new request using google_search.`;
     contents.push({ role: 'user', parts: [{ text: ctx }] });
     if (lastAssistant) {
-      contents.push({ role: 'model', parts: [{ text: lastAssistant.slice(0, 900) }] });
+      contents.push({ role: 'model', parts: [{ text: lastAssistant.slice(0, 2000) }] });
     }
   }
 
@@ -643,12 +643,36 @@ function buildSearchFollowupContents(
   return contents;
 }
 
+// --- Brain-First: lightweight in-memory search cache (60s TTL) ---
+const chatSearchCache = new Map<string, { result: string; ts: number }>();
+const CHAT_SEARCH_CACHE_TTL_MS = 60_000;
+
+// Brain-First hard router: returns true ONLY for explicit live-data queries.
+// Everything else (math, history, science, creative, general knowledge) → pure brain.
+function chatNeedsSearch(query: string): boolean {
+  const q = query.toLowerCase();
+  // Explicit live-data keywords that require grounding
+  const livePatterns = [
+    /\b(weather|forecast|temperature|rain|snow|humid|wind speed)\b/,
+    /\b(stock price|share price|market cap|nasdaq|nyse|crypto price|bitcoin price|eth price)\b/,
+    /\b(current score|live score|match result|final score|halftime|standings today)\b/,
+    /\b(breaking news|latest news|news today|headlines today)\b/,
+    /\b(right now|as of today|this moment|current time|what time is it)\b/,
+    /\b(today's|tonight's|this week's).{0,30}(news|price|score|weather|result)\b/,
+    /\b(exchange rate|usd to|eur to|currency today)\b/,
+    /\b(earthquake|tsunami|hurricane|cyclone|flood).{0,20}(today|now|latest|current)\b/,
+  ];
+  return livePatterns.some((p) => p.test(q));
+}
+
 // Chat mode: gemini-3-flash-preview for intelligence + grounding (Ferrari memory system)
 async function streamGemini3FlashChat(
   query: string,
   systemInstruction: string,
   recentMessages: unknown[] | undefined,
-  onToken: (token: string) => void
+  onToken: (token: string) => void,
+  language: string = 'en',
+  onSignal?: (meta: Record<string, unknown>) => void
 ): Promise<string> {
   const key = getGeminiApiKey();
   // Use gemini-3-flash-preview for superior reasoning to utilize our sophisticated memory system
@@ -663,34 +687,68 @@ async function streamGemini3FlashChat(
         .slice(-12)
         .map((m) => m as Record<string, unknown>);
 
-      for (const m of msgs) {
+      for (let i = 0; i < msgs.length; i++) {
+        const m = msgs[i];
         const r = typeof m.role === 'string' ? m.role : '';
         const c = typeof m.content === 'string' ? m.content : '';
         if (!c) continue;
         if (r !== 'user' && r !== 'assistant') continue;
         const role: 'user' | 'model' = r === 'assistant' ? 'model' : 'user';
-        contents.push({ role, parts: [{ text: c.slice(0, 1500) }] });
+        
+        // Conditional slicing: historical messages get 1500 char limit, current message gets 15000
+        const isLastMessage = i === msgs.length - 1;
+        const charLimit = isLastMessage ? 15000 : 1500;
+        contents.push({ role, parts: [{ text: c.slice(0, charLimit) }] });
       }
     }
   } catch {
     /* ignore */
   }
-  if (contents.length === 0) contents.push({ role: 'user', parts: [{ text: query }] });
-  else {
+  // If the frontend included the user's active message in the history, pop it out.
+  // We want to discard the potentially frontend-truncated version in the history 
+  // and replace it with the full, raw 'query' string.
+  if (contents.length > 0) {
     const last = contents[contents.length - 1];
-    if (last?.role !== 'user') contents.push({ role: 'user', parts: [{ text: query }] });
+    if (last?.role === 'user') {
+      contents.pop();
+    }
+  }
+  // ALWAYS push the full, untruncated query as the final user message
+  contents.push({ role: 'user', parts: [{ text: query }] });
+
+  // Brain-First hard router: 95% of chat queries go straight to the model (no search overhead).
+  // Only explicit live-data signals (weather, scores, prices, breaking news) trigger grounding.
+  const useSearch = chatNeedsSearch(query);
+  console.log(`🧠 CHAT BRAIN-FIRST: useSearch=${useSearch} for query: "${query.slice(0, 80)}"`);
+
+  // If search IS needed, check 60s in-memory cache first
+  if (useSearch) {
+    const cacheKey = query.trim().toLowerCase();
+    const cached = chatSearchCache.get(cacheKey);
+    if (cached && (Date.now() - cached.ts) < CHAT_SEARCH_CACHE_TTL_MS) {
+      console.log('⚡ CHAT SEARCH CACHE HIT — serving cached result');
+      onToken(cached.result);
+      return cached.result;
+    }
+    // Signal UI immediately so user sees "Searching..." instead of blank wait
+    try {
+      onSignal?.({ searching: true, message: language === 'ar' ? 'جارٍ البحث...' : 'Searching...' });
+    } catch { /* ignore */ }
   }
 
   const body: Record<string, unknown> = {
     contents,
-    tools: [{ google_search: {} }],
-    generationConfig: { temperature: 0.4, maxOutputTokens: 4000 },
+    // When grounding: limit to 3 snippets + 2000 tokens for a fast fact-check, not a research paper
+    generationConfig: { temperature: 0.4, maxOutputTokens: useSearch ? 2000 : 4000 },
   };
+  if (useSearch) {
+    body.tools = [{ google_search: {} }];
+  }
   if (systemInstruction) {
     body.system_instruction = { parts: [{ text: systemInstruction }] };
   }
 
-  console.log('💬 CHAT GROUNDED: Streaming with Gemini 3 Flash Preview + google_search...', {
+  console.log(`💬 CHAT ${useSearch ? 'GROUNDED' : 'FAST'}: Streaming with Gemini 3 Flash Preview ${useSearch ? '+ google_search' : '(no tools, pure reasoning)'}...`, {
     contentsCount: contents.length,
     firstRole: contents[0]?.role,
     lastRole: contents[contents.length - 1]?.role,
@@ -747,7 +805,25 @@ async function streamGemini3FlashChat(
     }
   }
 
-  console.log('✅ CHAT GROUNDED (Gemini 3 Flash): Stream complete, length:', fullText.length);
+  console.log(`✅ CHAT ${useSearch ? 'GROUNDED' : 'FAST'} (Gemini 3 Flash): Stream complete, length:`, fullText.length);
+
+  // Cache the result for 60s to avoid redundant search round-trips
+  if (useSearch && fullText) {
+    const cacheKey = query.trim().toLowerCase();
+    chatSearchCache.set(cacheKey, { result: fullText, ts: Date.now() });
+    // Prune old entries to prevent memory leak (keep max 100 entries)
+    if (chatSearchCache.size > 100) {
+      const oldest = chatSearchCache.keys().next().value;
+      if (oldest) chatSearchCache.delete(oldest);
+    }
+    // Append search-mode tip to the streamed response
+    const tip = language === 'ar'
+      ? '\n\n> 💡 *للحصول على نتائج بحث أعمق، جرب **وضع البحث**.*'
+      : '\n\n> 💡 *For deeper search results, try **Search Mode**.*';
+    onToken(tip);
+    fullText += tip;
+  }
+
   return fullText;
 }
 
@@ -2743,6 +2819,10 @@ If you are running out of space, keep this order and drop the rest:
                 (token: string) => {
                   fullResponseText += token;
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`));
+                },
+                language,
+                (meta: Record<string, unknown>) => {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: meta })}\n\n`));
                 }
               );
 
