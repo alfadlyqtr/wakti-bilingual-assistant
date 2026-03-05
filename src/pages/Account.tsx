@@ -179,9 +179,9 @@ export default function Account() {
   // Paywall modal state (for subscribe CTA from billing tab)
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   
-  // Detect correct paywall variant using same logic as ProtectedRoute
+  // Detect correct paywall variant using same logic as ProtectedRoute (priority: trial_expired > cancelled > new_user)
   const { isNewUser, wasSubscribed, isAccessExpired } = useUserProfile();
-  const paywallVariant: PaywallVariant = wasSubscribed ? 'cancelled' : isAccessExpired ? 'trial_expired' : isNewUser ? 'new_user' : 'cancelled';
+  const paywallVariant: PaywallVariant = isAccessExpired ? 'trial_expired' : wasSubscribed ? 'cancelled' : 'new_user';
   
   // Restore purchases state
   const [isRestoring, setIsRestoring] = useState(false);

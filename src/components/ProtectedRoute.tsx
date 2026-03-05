@@ -380,32 +380,28 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     const isAccount = location.pathname.startsWith('/account');
     if (isAccount) { setShowPaywall(false); return; }
 
-    // Version 1: New user (first login, no trial started)
-    if (isNewUser) {
-      if (DEV) console.log("ProtectedRoute: New user - showing welcome paywall");
-      setPaywallVariant('new_user');
+    // Priority order: trial_expired > cancelled > new_user
+    
+    // Version 3: Trial expired (pressed skip/X before, 24h ran out)
+    if (isAccessExpired) {
+      if (DEV) console.log("ProtectedRoute: Trial expired - showing final paywall");
+      setPaywallVariant('trial_expired');
       setShowPaywall(true);
       return;
     }
 
-    // Version 2: Was subscribed before but cancelled/expired
-    if (wasSubscribed && !hasTrialStarted) {
+    // Version 2: Was subscribed before but cancelled/expired (has plan_name)
+    if (wasSubscribed) {
       if (DEV) console.log("ProtectedRoute: Cancelled subscriber - showing welcome back paywall");
       setPaywallVariant('cancelled');
       setShowPaywall(true);
       return;
     }
-    if (wasSubscribed && hasTrialStarted) {
-      if (DEV) console.log("ProtectedRoute: Cancelled subscriber with trial history - showing welcome back paywall");
-      setPaywallVariant('cancelled');
-      setShowPaywall(true);
-      return;
-    }
 
-    // Version 3: Trial expired (pressed skip/X before, 24h ran out)
-    if (isAccessExpired) {
-      if (DEV) console.log("ProtectedRoute: Trial expired - showing final paywall");
-      setPaywallVariant('trial_expired');
+    // Version 1: New user (first login, no trial started, never subscribed)
+    if (isNewUser) {
+      if (DEV) console.log("ProtectedRoute: New user - showing welcome paywall");
+      setPaywallVariant('new_user');
       setShowPaywall(true);
       return;
     }
