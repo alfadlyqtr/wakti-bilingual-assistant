@@ -1305,6 +1305,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               <div className="relative grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* First Image */}
                 <div className="relative">
+                  <div className="mb-1.5 flex items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-[hsl(210,100%,65%)]/20 to-[hsl(180,85%,60%)]/20 border border-[hsl(210,100%,65%)]/30 text-[hsl(210,100%,65%)]">
+                      <span>▶</span> {language === 'ar' ? 'إطار البداية' : 'Start Frame'}
+                    </span>
+                  </div>
                   {!imagePreview ? (
                     <div className="h-full min-h-[180px] flex flex-col gap-2">
                       <div
@@ -1317,7 +1322,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           </div>
                           <div className="text-center px-2">
                             <p className="font-semibold text-xs">
-                              {language === 'ar' ? 'الصورة الأولى' : 'First Image'}
+                              {language === 'ar' ? 'صورة البداية' : 'Start Image'}
                             </p>
                             <p className="text-[10px] text-muted-foreground mt-0.5">
                               {language === 'ar' ? 'PNG, JPG' : 'PNG, JPG'}
@@ -1382,6 +1387,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                 {/* Second Image */}
                 <div className="relative">
+                  <div className="mb-1.5 flex items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-[hsl(280,70%,65%)]/20 to-[hsl(320,75%,70%)]/20 border border-[hsl(280,70%,65%)]/30 text-[hsl(280,70%,65%)]">
+                      <span>⏹</span> {language === 'ar' ? 'إطار النهاية' : 'End Frame'}
+                    </span>
+                  </div>
                   {!imagePreview2 ? (
                     <div className="h-full min-h-[180px] flex flex-col gap-2">
                       <div
@@ -1394,7 +1404,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           </div>
                           <div className="text-center px-2">
                             <p className="font-semibold text-xs">
-                              {language === 'ar' ? 'الصورة الثانية' : 'Second Image'}
+                              {language === 'ar' ? 'صورة النهاية' : 'End Image'}
                             </p>
                             <p className="text-[10px] text-muted-foreground mt-0.5">
                               {language === 'ar' ? 'PNG, JPG' : 'PNG, JPG'}

@@ -212,7 +212,15 @@ async function createVideoTask(
         mode: "normal",
       };
 
-  if (prompt) {
+  if (isTwoImages) {
+    // Explicitly tell Seedance which image is the opening frame and which is the closing frame.
+    // This is the only mechanism available (no dedicated start/end fields in the KIE API).
+    const frameDirective = "FRAME RULE: The FIRST uploaded image is the OPENING START FRAME — the video must begin looking exactly like it. The SECOND uploaded image is the CLOSING END FRAME — the video must end looking exactly like it and hold on it clearly for the final portion. Transition smoothly between them.";
+    const userPromptPart = prompt ? prompt.slice(0, 2000) : "";
+    input.prompt = userPromptPart
+      ? `${frameDirective}\n\n${userPromptPart}`
+      : frameDirective;
+  } else if (prompt) {
     input.prompt = prompt.slice(0, 2500);
   }
 
