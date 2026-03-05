@@ -9,11 +9,12 @@ const corsHeaders = {
 };
 
 // ============================================================
-// Provider: KIE.ai  |  Models: Grok Imagine (Image→Video & Text→Video)
+// Provider: KIE.ai  |  Models per generation type
 // ============================================================
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY") || "";
-const KIE_MODEL = "grok-imagine/image-to-video";
+const KIE_IMAGE2VIDEO_MODEL = "grok-imagine/image-to-video";
 const KIE_TEXT2VIDEO_MODEL = "grok-imagine/text-to-video";
+const KIE_2IMAGES_MODEL = "bytedance/seedance-1.5-pro";
 const KIE_CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_STATUS_URL = "https://api.kie.ai/api/v1/jobs/recordInfo";
 
@@ -124,19 +125,16 @@ async function createTextToVideoTask(
   prompt: string,
   duration?: string,
   aspectRatio?: string,
-  mode?: string,
 ): Promise<{ task_id: string; status: string }> {
-  const validDuration = duration === "10" ? "10" : "6";
-  const validAspectRatio = ["2:3", "3:2", "1:1", "16:9", "9:16"].includes(aspectRatio || "")
+  const validDuration = ["6", "10"].includes(duration || "") ? duration! : "6";
+  const validAspectRatio = ["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"].includes(aspectRatio || "")
     ? aspectRatio!
     : "9:16";
-  const validMode = ["fun", "normal", "spicy"].includes(mode || "") ? mode! : "normal";
-
   const input: Record<string, unknown> = {
-    prompt: prompt.slice(0, 5000),
+    prompt: prompt.slice(0, 2500),
     aspect_ratio: validAspectRatio,
-    mode: validMode,
     duration: validDuration,
+    resolution: "720p",
   };
 
   const requestBody = {
@@ -173,28 +171,58 @@ async function createTextToVideoTask(
 }
 
 async function createVideoTask(
-  imageUrl: string,
+  imageUrls: string[],
   prompt?: string,
   duration?: string,
+  aspectRatio?: string,
+  fixedLens?: boolean,
+  generateAudio?: boolean,
+  resolution?: string,
 ): Promise<{ task_id: string; status: string }> {
-  const sanitizedImageUrl = sanitizeImageUrl(imageUrl);
-  const validDuration = duration === "10" ? "10" : "6";
-  const input: Record<string, unknown> = {
-    image_urls: [sanitizedImageUrl],
-    mode: "normal",
-    duration: validDuration,
-  };
+  const sanitizedImageUrls = imageUrls.map(url => sanitizeImageUrl(url));
+  const isTwoImages = sanitizedImageUrls.length === 2;
+  // Seedance (2images): 4/8/12s, user-selected resolution
+  // Grok Imagine (single image): 6/10s, always 720p
+  const validDuration = isTwoImages
+    ? (["4", "8", "12"].includes(duration || "") ? duration! : "8")
+    : (["6", "10"].includes(duration || "") ? duration! : "6");
+  const validAspectRatio = ["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"].includes(aspectRatio || "")
+    ? aspectRatio!
+    : "9:16";
+  const validResolution = isTwoImages
+    ? (["480p", "720p"].includes(resolution || "") ? resolution! : "480p")
+    : "720p"; // Grok Imagine always 720p
+
+  const model = isTwoImages ? KIE_2IMAGES_MODEL : KIE_IMAGE2VIDEO_MODEL;
+
+  const input: Record<string, unknown> = isTwoImages
+    ? {
+        // Seedance API: uses input_urls, supports resolution/fixed_lens/generate_audio
+        input_urls: sanitizedImageUrls,
+        aspect_ratio: validAspectRatio,
+        resolution: validResolution,
+        duration: validDuration,
+        fixed_lens: fixedLens || false,
+        generate_audio: generateAudio || false,
+      }
+    : {
+        // Grok Imagine API: uses image_urls, 720p hardcoded
+        image_urls: sanitizedImageUrls,
+        duration: validDuration,
+        resolution: validResolution,
+        mode: "normal",
+      };
 
   if (prompt) {
-    input.prompt = prompt.slice(0, 5000);
+    input.prompt = prompt.slice(0, 2500);
   }
 
   const requestBody = {
-    model: KIE_MODEL,
+    model,
     input,
   };
 
-  console.log("[kie-image2video] Creating task, model:", KIE_MODEL);
+  console.log("[kie-image2video] Creating task, model:", model);
 
   const response = await fetch(KIE_CREATE_URL, {
     method: "POST",
@@ -371,7 +399,7 @@ serve(async (req) => {
 
     // Parse request body
     const body = await req.json();
-    const { image, prompt, mode, duration: reqDuration } = body;
+    const { image, image1, image2, prompt, mode, duration: reqDuration, aspect_ratio, fixed_lens, generate_audio, generation_type, resolution } = body;
 
     // Mode: 'status' to check task status
     if (mode === "status") {
@@ -405,11 +433,18 @@ serve(async (req) => {
     }
 
     // Parse generation type
-    const generationType = body.generation_type || "image_to_video";
+    const generationType = generation_type || "image_to_video";
 
-    // Default mode: create task
+    // Validation based on generation type
     if (generationType === "image_to_video" && !image) {
       return new Response(JSON.stringify({ error: "Missing image (URL or base64)" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (generationType === "2images_to_video" && (!image1 || !image2)) {
+      return new Response(JSON.stringify({ error: "Missing images for 2images_to_video (need both image1 and image2)" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -457,11 +492,43 @@ serve(async (req) => {
 
     if (generationType === "text_to_video") {
       // Text-to-Video: no image needed
-      const aspectRatio = body.aspect_ratio as string | undefined;
-      const videoMode = body.video_mode as string | undefined;
-      task = await createTextToVideoTask(prompt, reqDuration, aspectRatio, videoMode);
+      task = await createTextToVideoTask(prompt, reqDuration, aspect_ratio);
+    } else if (generationType === "2images_to_video") {
+      // 2Images-to-Video: requires both image1 and image2
+      let imageUrl1: string = image1;
+      let imageUrl2: string = image2;
+      
+      // Handle data URIs for first image
+      if (typeof image1 === "string" && image1.startsWith("data:image/")) {
+        try {
+          imageUrl1 = await uploadImageDataUriToPublicUrl(supabase, user.id, image1);
+          console.log("[kie-2images2video] Uploaded first image data URI to public URL");
+        } catch (e) {
+          console.error("[kie-2images2video] Failed to upload first image:", e);
+          return new Response(
+            JSON.stringify({ error: e instanceof Error ? e.message : "Failed to prepare first image" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+      
+      // Handle data URIs for second image
+      if (typeof image2 === "string" && image2.startsWith("data:image/")) {
+        try {
+          imageUrl2 = await uploadImageDataUriToPublicUrl(supabase, user.id, image2);
+          console.log("[kie-2images2video] Uploaded second image data URI to public URL");
+        } catch (e) {
+          console.error("[kie-2images2video] Failed to upload second image:", e);
+          return new Response(
+            JSON.stringify({ error: e instanceof Error ? e.message : "Failed to prepare second image" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+      
+      task = await createVideoTask([imageUrl1, imageUrl2], prompt, reqDuration, aspect_ratio, fixed_lens, generate_audio, resolution);
     } else {
-      // Image-to-Video: requires image URL
+      // Image-to-Video: requires single image
       let imageUrl: string = image;
       if (typeof image === "string" && image.startsWith("data:image/")) {
         try {
@@ -475,7 +542,7 @@ serve(async (req) => {
           );
         }
       }
-      task = await createVideoTask(imageUrl, prompt, reqDuration);
+      task = await createVideoTask([imageUrl], prompt, reqDuration, aspect_ratio, fixed_lens, generate_audio, resolution);
     }
 
     // If mode is 'async', return task_id immediately for frontend polling
@@ -514,7 +581,7 @@ serve(async (req) => {
     await logAIFromRequest(req, {
       functionName: "freepik-image2video",
       provider: "kie.ai",
-      model: generationType === "text_to_video" ? "grok-imagine/text-to-video" : "grok-imagine/image-to-video",
+      model: generationType === "text_to_video" ? KIE_TEXT2VIDEO_MODEL : generationType === "2images_to_video" ? KIE_2IMAGES_MODEL : KIE_IMAGE2VIDEO_MODEL,
       inputText: prompt || image,
       outputText: result.videoUrl,
       durationMs: Date.now() - startTime,
@@ -537,7 +604,7 @@ serve(async (req) => {
     await logAIFromRequest(req, {
       functionName: "freepik-image2video",
       provider: "kie.ai",
-      model: "grok-imagine",
+      model: "kie-video",
       inputText: "",
       status: "error",
       errorMessage: error instanceof Error ? error.message : "Unknown error",

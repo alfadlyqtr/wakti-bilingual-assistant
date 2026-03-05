@@ -29,6 +29,7 @@ import {
   FolderOpen,
   Type,
   GalleryHorizontalEnd,
+  Images,
 } from 'lucide-react';
 
 interface QuotaInfo {
@@ -107,16 +108,30 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const { language } = useTheme();
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef2 = useRef<HTMLInputElement>(null);
 
   const hasArabicChars = (text: string) => /[\u0600-\u06FF]/.test(text || '');
 
   // State
-  const [generationMode, setGenerationMode] = useState<'image_to_video' | 'text_to_video'>('image_to_video');
+  const [generationMode, setGenerationModeRaw] = useState<'image_to_video' | 'text_to_video' | '2images_to_video'>('image_to_video');
+  const setGenerationMode = (mode: 'image_to_video' | 'text_to_video' | '2images_to_video') => {
+    setGenerationModeRaw(mode);
+    if (mode === '2images_to_video') {
+      setDuration('8');
+    } else {
+      setDuration('6');
+    }
+  };
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFile2, setImageFile2] = useState<File | null>(null);
+  const [imagePreview2, setImagePreview2] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
-  const [duration, setDuration] = useState<'6' | '10'>('6');
+  const [duration, setDuration] = useState<'4' | '6' | '8' | '10' | '12'>('8');
   const [aspectRatio, setAspectRatio] = useState<string>('9:16');
+  const [resolution, setResolution] = useState<'480p' | '720p'>('480p');
+  const [fixedLens, setFixedLens] = useState(false);
+  const [generateAudio, setGenerateAudio] = useState(false);
   const [isAmping, setIsAmping] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState('');
@@ -133,6 +148,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [showSavedPicker, setShowSavedPicker] = useState(false);
   const [savedImages, setSavedImages] = useState<{id:string; image_url:string; submode:string; created_at:string}[]>([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
+  const [pickingForSlot, setPickingForSlot] = useState<1 | 2>(1);
   const pollInFlightRef = useRef(false);
   const usageIncrementedRef = useRef(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -173,9 +189,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   // Amp: generate/improve a cinematic prompt
   const handleAmp = useCallback(async () => {
     if (isAmping || isGenerating || !user) return;
-    // Image mode requires an image; text mode requires a prompt
+    // Image mode requires an image; text mode requires a prompt; 2images mode requires both images
     if (generationMode === 'image_to_video' && !imagePreview) return;
     if (generationMode === 'text_to_video' && !prompt.trim()) return;
+    if (generationMode === '2images_to_video' && (!imagePreview || !imagePreview2)) return;
     setIsAmping(true);
     try {
       if (generationMode === 'image_to_video') {
@@ -241,6 +258,111 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         } else {
           throw new Error(data?.error || 'No improved prompt returned');
         }
+      } else if (generationMode === '2images_to_video') {
+        // 2Images-to-Video amp: upload both images then use OpenAI vision with dual images
+        let ampImageUrl1 = '';
+        let ampImageUrl2 = '';
+        try {
+          // Upload first image
+          const randomId1 = Math.random().toString(36).substring(2, 15);
+          const storagePath1 = `${user.id}/ai-video-input/${randomId1}_amp1.jpg`;
+
+          let sourceBlob1: Blob;
+          if (imageFile) {
+            sourceBlob1 = await compressImage(imageFile, 512, 0.5);
+          } else if (imagePreview?.startsWith('data:')) {
+            const previewBlob = await dataUrlToBlob(imagePreview);
+            sourceBlob1 = await compressImage(new File([previewBlob], 'preview1.jpg', { type: 'image/jpeg' }), 512, 0.5);
+          } else if (imagePreview?.startsWith('http')) {
+            const fetchedBlob = await fetch(imagePreview).then(r => r.blob());
+            sourceBlob1 = await compressImage(new File([fetchedBlob], 'saved1.jpg', { type: fetchedBlob.type || 'image/jpeg' }), 512, 0.5);
+          } else {
+            throw new Error('Missing first image source');
+          }
+
+          console.log('[AIVideomaker] Amp: Uploading first image to message_attachments:', storagePath1);
+          const { error: uploadErr1 } = await supabase.storage
+            .from('message_attachments')
+            .upload(storagePath1, sourceBlob1, {
+              contentType: 'image/jpeg',
+              cacheControl: '3600',
+              upsert: true,
+            });
+
+          if (uploadErr1) {
+            console.error('[AIVideomaker] Amp upload error (image1):', uploadErr1);
+            throw new Error(`Upload failed (image1): ${uploadErr1.message}`);
+          }
+
+          const { data: signedData1, error: signedErr1 } = await supabase.storage
+            .from('message_attachments')
+            .createSignedUrl(storagePath1, 60 * 60 * 6);
+          if (signedErr1) throw new Error(`Signed URL failed (image1): ${signedErr1.message}`);
+          if (!signedData1?.signedUrl) throw new Error('Signed URL missing (image1)');
+          ampImageUrl1 = cleanSignedUrl(signedData1.signedUrl);
+          console.log('[AIVideomaker] Amp first image uploaded:', ampImageUrl1);
+
+          // Upload second image
+          const randomId2 = Math.random().toString(36).substring(2, 15);
+          const storagePath2 = `${user.id}/ai-video-input/${randomId2}_amp2.jpg`;
+
+          let sourceBlob2: Blob;
+          if (imageFile2) {
+            sourceBlob2 = await compressImage(imageFile2, 512, 0.5);
+          } else if (imagePreview2?.startsWith('data:')) {
+            const previewBlob = await dataUrlToBlob(imagePreview2);
+            sourceBlob2 = await compressImage(new File([previewBlob], 'preview2.jpg', { type: 'image/jpeg' }), 512, 0.5);
+          } else if (imagePreview2?.startsWith('http')) {
+            const fetchedBlob = await fetch(imagePreview2).then(r => r.blob());
+            sourceBlob2 = await compressImage(new File([fetchedBlob], 'saved2.jpg', { type: fetchedBlob.type || 'image/jpeg' }), 512, 0.5);
+          } else {
+            throw new Error('Missing second image source');
+          }
+
+          console.log('[AIVideomaker] Amp: Uploading second image to message_attachments:', storagePath2);
+          const { error: uploadErr2 } = await supabase.storage
+            .from('message_attachments')
+            .upload(storagePath2, sourceBlob2, {
+              contentType: 'image/jpeg',
+              cacheControl: '3600',
+              upsert: true,
+            });
+
+          if (uploadErr2) {
+            console.error('[AIVideomaker] Amp upload error (image2):', uploadErr2);
+            throw new Error(`Upload failed (image2): ${uploadErr2.message}`);
+          }
+
+          const { data: signedData2, error: signedErr2 } = await supabase.storage
+            .from('message_attachments')
+            .createSignedUrl(storagePath2, 60 * 60 * 6);
+          if (signedErr2) throw new Error(`Signed URL failed (image2): ${signedErr2.message}`);
+          if (!signedData2?.signedUrl) throw new Error('Signed URL missing (image2)');
+          ampImageUrl2 = cleanSignedUrl(signedData2.signedUrl);
+          console.log('[AIVideomaker] Amp second image uploaded:', ampImageUrl2);
+        } catch (prepErr: any) {
+          console.error('[AIVideomaker] Amp prepare error:', prepErr);
+          throw new Error(
+            language === 'ar'
+              ? 'فشل تجهيز الصور: ' + (prepErr?.message || '')
+              : 'Failed to prepare images: ' + (prepErr?.message || '')
+          );
+        }
+
+        const { data } = await invokePromptAmpWithBetterErrors({
+          mode: '2images2video',
+          image_url_1: ampImageUrl1,
+          image_url_2: ampImageUrl2,
+          user_text: prompt.trim() || '',
+          duration,
+          aspect_ratio: aspectRatio,
+        });
+        if (data?.success && data?.text) {
+          setPrompt(data.text);
+          toast.success(language === 'ar' ? 'تم تحسين الوصف ✨' : 'Prompt amped ✨');
+        } else {
+          throw new Error(data?.error || 'No improved prompt returned');
+        }
       } else {
         // Text-to-Video amp: enhance/translate the text prompt via DeepSeek
         const { data } = await invokePromptAmpWithBetterErrors({
@@ -260,7 +382,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       setIsAmping(false);
     }
-  }, [generationMode, imagePreview, imageFile, isAmping, isGenerating, prompt, duration, language, user, invokePromptAmpWithBetterErrors]);
+  }, [generationMode, imagePreview, imagePreview2, imageFile, imageFile2, isAmping, isGenerating, prompt, duration, aspectRatio, language, user, invokePromptAmpWithBetterErrors]);
 
   // Load quota on mount
   const loadQuota = useCallback(async () => {
@@ -350,8 +472,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   }, [user]);
 
   const handlePickSaved = (url: string) => {
-    setImageFile(null);
-    setImagePreview(url);
+    if (pickingForSlot === 1) {
+      setImageFile(null);
+      setImagePreview(url);
+    } else {
+      setImageFile2(null);
+      setImagePreview2(url);
+    }
     setGeneratedVideoUrl(null);
     setShowSavedPicker(false);
   };
@@ -380,6 +507,29 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setGeneratedVideoUrl(null);
   };
 
+  const handleImageSelect2 = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error(language === 'ar' ? 'يرجى اختيار صورة' : 'Please select an image');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error(language === 'ar' ? 'الحد الأقصى 10 ميجابايت' : 'Max file size is 10MB');
+      return;
+    }
+
+    setImageFile2(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setImagePreview2(ev.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+    setGeneratedVideoUrl(null);
+  };
+
   const clearImage = () => {
     setImageFile(null);
     setImagePreview(null);
@@ -387,6 +537,15 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setSourceImagePath(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const clearImage2 = () => {
+    setImageFile2(null);
+    setImagePreview2(null);
+    setGeneratedVideoUrl(null);
+    if (fileInputRef2.current) {
+      fileInputRef2.current.value = '';
     }
   };
 
@@ -480,6 +639,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     // Validate based on mode
     if (generationMode === 'image_to_video' && !imagePreview) return;
     if (generationMode === 'text_to_video' && !prompt.trim()) return;
+    if (generationMode === '2images_to_video' && (!imagePreview || !imagePreview2)) return;
     if (!user) return;
 
     const needsArabicTranslation =
@@ -533,10 +693,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           prompt: finalPrompt,
           duration,
           aspect_ratio: aspectRatio,
-          video_mode: 'normal',
+          fixed_lens: fixedLens,
+          generate_audio: generateAudio,
+          resolution,
           mode: 'async',
         };
-      } else {
+      } else if (generationMode === 'image_to_video') {
         // Image-to-Video: always compress + upload image to get a signed https URL
         setGenerationStatus(language === 'ar' ? 'جاري رفع الصورة...' : 'Uploading image...');
         let imageUrl = '';
@@ -592,6 +754,106 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           prompt: finalPrompt,
           duration,
           aspect_ratio: aspectRatio,
+          fixed_lens: fixedLens,
+          generate_audio: generateAudio,
+          resolution,
+          mode: 'async',
+        };
+      } else if (generationMode === '2images_to_video') {
+        // 2Images-to-Video: upload both images
+        setGenerationStatus(language === 'ar' ? 'جاري رفع الصور...' : 'Uploading images...');
+        let imageUrl1 = '';
+        let imageUrl2 = '';
+        
+        try {
+          // Upload first image
+          const randomId1 = Math.random().toString(36).substring(2, 15);
+          const storagePath1 = `${user.id}/ai-video-input/${randomId1}_1.jpg`;
+
+          let sourceBlob1: Blob;
+          if (imageFile) {
+            sourceBlob1 = await compressImage(imageFile, 1024, 0.7);
+          } else if (imagePreview?.startsWith('data:')) {
+            const previewBlob = await dataUrlToBlob(imagePreview);
+            sourceBlob1 = await compressImage(new File([previewBlob], 'preview1.jpg', { type: 'image/jpeg' }), 1024, 0.7);
+          } else if (imagePreview?.startsWith('http')) {
+            const fetchedBlob = await fetch(imagePreview).then(r => r.blob());
+            sourceBlob1 = await compressImage(new File([fetchedBlob], 'saved1.jpg', { type: fetchedBlob.type || 'image/jpeg' }), 1024, 0.7);
+          } else {
+            throw new Error('Missing first image source');
+          }
+
+          const { error: uploadErr1 } = await supabase.storage
+            .from('message_attachments')
+            .upload(storagePath1, sourceBlob1, {
+              contentType: 'image/jpeg',
+              cacheControl: '3600',
+              upsert: true,
+            });
+
+          if (uploadErr1) {
+            throw new Error(`First image upload failed: ${uploadErr1.message}`);
+          }
+
+          const { data: signedData1, error: signedErr1 } = await supabase.storage
+            .from('message_attachments')
+            .createSignedUrl(storagePath1, 60 * 60 * 6);
+          if (signedErr1) throw new Error(`First image signed URL failed: ${signedErr1.message}`);
+          if (!signedData1?.signedUrl) throw new Error('First image signed URL missing');
+          imageUrl1 = signedData1.signedUrl;
+
+          // Upload second image
+          const randomId2 = Math.random().toString(36).substring(2, 15);
+          const storagePath2 = `${user.id}/ai-video-input/${randomId2}_2.jpg`;
+
+          let sourceBlob2: Blob;
+          if (imageFile2) {
+            sourceBlob2 = await compressImage(imageFile2, 1024, 0.7);
+          } else if (imagePreview2?.startsWith('data:')) {
+            const previewBlob = await dataUrlToBlob(imagePreview2);
+            sourceBlob2 = await compressImage(new File([previewBlob], 'preview2.jpg', { type: 'image/jpeg' }), 1024, 0.7);
+          } else if (imagePreview2?.startsWith('http')) {
+            const fetchedBlob = await fetch(imagePreview2).then(r => r.blob());
+            sourceBlob2 = await compressImage(new File([fetchedBlob], 'saved2.jpg', { type: fetchedBlob.type || 'image/jpeg' }), 1024, 0.7);
+          } else {
+            throw new Error('Missing second image source');
+          }
+
+          const { error: uploadErr2 } = await supabase.storage
+            .from('message_attachments')
+            .upload(storagePath2, sourceBlob2, {
+              contentType: 'image/jpeg',
+              cacheControl: '3600',
+              upsert: true,
+            });
+
+          if (uploadErr2) {
+            throw new Error(`Second image upload failed: ${uploadErr2.message}`);
+          }
+
+          const { data: signedData2, error: signedErr2 } = await supabase.storage
+            .from('message_attachments')
+            .createSignedUrl(storagePath2, 60 * 60 * 6);
+          if (signedErr2) throw new Error(`Second image signed URL failed: ${signedErr2.message}`);
+          if (!signedData2?.signedUrl) throw new Error('Second image signed URL missing');
+          imageUrl2 = signedData2.signedUrl;
+
+          console.log('[AIVideomaker] Both images uploaded successfully:', imageUrl1, imageUrl2);
+        } catch (prepErr: any) {
+          console.error('[AIVideomaker] Prepare images error:', prepErr);
+          throw prepErr;
+        }
+
+        requestBody = {
+          generation_type: '2images_to_video',
+          image1: imageUrl1,
+          image2: imageUrl2,
+          prompt: finalPrompt,
+          duration,
+          aspect_ratio: aspectRatio,
+          fixed_lens: fixedLens,
+          generate_audio: generateAudio,
+          resolution,
           mode: 'async',
         };
       }
@@ -755,7 +1017,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
   const canGenerate = generationMode === 'text_to_video'
     ? (prompt.trim().length > 0 && !needsArabicTranslation && !limitReached && !isGenerating && !loadingQuota)
-    : (imagePreview && !needsArabicTranslation && !limitReached && !isGenerating && !loadingQuota);
+    : generationMode === 'image_to_video'
+    ? (imagePreview && !needsArabicTranslation && !limitReached && !isGenerating && !loadingQuota)
+    : generationMode === '2images_to_video'
+    ? (imagePreview && imagePreview2 && !needsArabicTranslation && !limitReached && !isGenerating && !loadingQuota)
+    : false;
   const showLatestVideo = !generatedVideoUrl && !!(latestVideo?.signedUrl || latestVideo?.video_url);
 
   return (
@@ -784,28 +1050,71 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-0.5 rounded-full border border-primary/20 overflow-hidden">
                 <Clock className="h-3.5 w-3.5 text-primary ml-2.5" />
-                <button
-                  onClick={() => !isGenerating && setDuration('6')}
-                  disabled={isGenerating}
-                  className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
-                    duration === '6'
-                      ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
-                      : 'text-muted-foreground hover:text-primary'
-                  }`}
-                >
-                  {language === 'ar' ? '6 ث' : '6s'}
-                </button>
-                <button
-                  onClick={() => !isGenerating && setDuration('10')}
-                  disabled={isGenerating}
-                  className={`px-2.5 py-1.5 text-xs font-medium transition-all mr-0.5 ${
-                    duration === '10'
-                      ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
-                      : 'text-muted-foreground hover:text-primary'
-                  }`}
-                >
-                  {language === 'ar' ? '10 ث' : '10s'}
-                </button>
+                {generationMode === '2images_to_video' ? (
+                  <>
+                    <button
+                      onClick={() => !isGenerating && setDuration('4')}
+                      disabled={isGenerating}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                        duration === '4'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                          : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? '4 ث' : '4s'}
+                    </button>
+                    <button
+                      onClick={() => !isGenerating && setDuration('8')}
+                      disabled={isGenerating}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                        duration === '8'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                          : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? '8 ث' : '8s'}
+                    </button>
+                    <button
+                      onClick={() => !isGenerating && !(resolution === '720p') && setDuration('12')}
+                      disabled={isGenerating || resolution === '720p'}
+                      title={resolution === '720p' ? (language === 'ar' ? 'غير متاح في 720p' : 'Not available at 720p') : undefined}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all mr-0.5 ${
+                        duration === '12'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                          : resolution === '720p'
+                            ? 'text-muted-foreground/30 cursor-not-allowed'
+                            : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? '12 ث' : '12s'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => !isGenerating && setDuration('6')}
+                      disabled={isGenerating}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                        duration === '6'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                          : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? '6 ث' : '6s'}
+                    </button>
+                    <button
+                      onClick={() => !isGenerating && setDuration('10')}
+                      disabled={isGenerating}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all mr-0.5 ${
+                        duration === '10'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                          : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? '10 ث' : '10s'}
+                    </button>
+                  </>
+                )}
               </div>
               <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${limitReached ? 'bg-red-500/20 border-red-500/30' : 'bg-gradient-to-r from-[hsl(142,76%,55%)]/20 to-[hsl(160,80%,55%)]/20 border-green-500/20'}`}>
                 <Sparkles className={`h-3.5 w-3.5 ${limitReached ? 'text-red-500' : 'text-green-500'}`} />
@@ -869,11 +1178,33 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               </span>
               <span>{language === 'ar' ? 'نص ← فيديو' : 'Text → Video'}</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (!isGenerating) setGenerationMode('2images_to_video');
+              }}
+              disabled={isGenerating}
+              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed ${
+                generationMode === '2images_to_video'
+                  ? 'bg-gradient-to-r from-[#060541] via-[hsl(210,100%,32%)] to-[#060541] text-white shadow-[0_6px_18px_hsla(210,100%,45%,0.25)]'
+                  : 'text-muted-foreground hover:text-primary hover:bg-primary/5'
+              }`}
+            >
+              <span
+                className={`grid place-items-center h-6 w-6 rounded-lg ${
+                  generationMode === '2images_to_video' ? 'bg-white/15' : 'bg-primary/5'
+                }`}
+              >
+                <Images className="h-3.5 w-3.5" />
+              </span>
+              <span>{language === 'ar' ? 'صورتان ← فيديو' : '2Images → Video'}</span>
+            </button>
           </div>
 
           {/* Unified content area */}
-          <div className={`grid grid-cols-1 ${generationMode === 'image_to_video' ? 'md:grid-cols-[280px_1fr]' : ''} gap-4`}>
-            {/* Image upload - only shown in image_to_video mode */}
+          <div className={`grid grid-cols-1 ${generationMode === 'image_to_video' ? 'md:grid-cols-[280px_1fr]' : generationMode === '2images_to_video' ? 'md:grid-cols-[560px_1fr]' : ''} gap-4`}>
+            {/* Single image upload - only shown in image_to_video mode */}
             {generationMode === 'image_to_video' && (
               <div className="relative">
                 {!imagePreview ? (
@@ -957,6 +1288,165 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               </div>
             )}
 
+            {/* Dual image upload - only shown in 2images_to_video mode */}
+            {generationMode === '2images_to_video' && (
+              <div className="relative grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* First Image */}
+                <div className="relative">
+                  {!imagePreview ? (
+                    <div className="h-full min-h-[180px] flex flex-col gap-2">
+                      <div
+                        onClick={() => fileInputRef.current?.click()}
+                        className="relative cursor-pointer group flex-1"
+                      >
+                        <div className="h-full rounded-2xl border-2 border-dashed border-primary/40 bg-gradient-to-br from-[hsl(210,100%,65%)]/5 via-[hsl(180,85%,60%)]/5 to-[hsl(160,80%,55%)]/5 flex flex-col items-center justify-center gap-2 transition-all hover:border-primary hover:shadow-[0_0_30px_hsla(210,100%,65%,0.3)] active:scale-[0.98]">
+                          <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#060541] to-[hsl(210,100%,35%)] shadow-lg shadow-primary/40 group-hover:shadow-xl group-hover:shadow-primary/50 transition-all group-hover:scale-105">
+                            <Upload className="h-5 w-5 text-white" />
+                          </div>
+                          <div className="text-center px-2">
+                            <p className="font-semibold text-xs">
+                              {language === 'ar' ? 'الصورة الأولى' : 'First Image'}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              {language === 'ar' ? 'PNG, JPG' : 'PNG, JPG'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div
+                        onClick={() => { setPickingForSlot(1); setShowSavedPicker(true); fetchSavedImages(); }}
+                        className="relative cursor-pointer group"
+                      >
+                        <div className="rounded-xl border-2 border-dashed border-orange-400/40 bg-gradient-to-br from-orange-500/5 via-amber-500/5 to-orange-400/5 flex items-center justify-center gap-2 py-2 px-3 transition-all hover:border-orange-500 hover:shadow-[0_0_20px_hsla(25,95%,60%,0.3)] active:scale-[0.98]">
+                          <div className="p-1.5 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 shadow-lg shadow-orange-500/30 group-hover:shadow-xl group-hover:shadow-orange-500/40 transition-all group-hover:scale-105">
+                            <GalleryHorizontalEnd className="h-3 w-3 text-white" />
+                          </div>
+                          <p className="font-semibold text-xs">
+                            {language === 'ar' ? 'من المحفوظات' : 'From Saved'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="relative h-full min-h-[180px]">
+                      <div className="h-full rounded-2xl overflow-hidden bg-black/90 shadow-2xl shadow-black/50 ring-2 ring-primary/30">
+                        <img
+                          src={imagePreview}
+                          alt="First"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        className="absolute top-2 right-2 h-7 w-7 rounded-full shadow-lg bg-red-500 hover:bg-red-600"
+                        onClick={clearImage}
+                        disabled={isGenerating}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                      <div className="absolute bottom-2 left-2 right-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="w-full h-7 text-xs bg-white/90 hover:bg-white text-black rounded-lg shadow-lg"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isGenerating}
+                        >
+                          {language === 'ar' ? 'تغيير' : 'Change'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageSelect}
+                    aria-label={language === 'ar' ? 'اختر الصورة الأولى' : 'Select first image'}
+                  />
+                </div>
+
+                {/* Second Image */}
+                <div className="relative">
+                  {!imagePreview2 ? (
+                    <div className="h-full min-h-[180px] flex flex-col gap-2">
+                      <div
+                        onClick={() => fileInputRef2.current?.click()}
+                        className="relative cursor-pointer group flex-1"
+                      >
+                        <div className="h-full rounded-2xl border-2 border-dashed border-purple-400/40 bg-gradient-to-br from-[hsl(280,70%,65%)]/5 via-[hsl(320,75%,70%)]/5 to-[hsl(280,60%,75%)]/5 flex flex-col items-center justify-center gap-2 transition-all hover:border-purple-500 hover:shadow-[0_0_30px_hsla(280,70%,65%,0.3)] active:scale-[0.98]">
+                          <div className="p-2.5 rounded-xl bg-gradient-to-br from-purple-600 to-pink-500 shadow-lg shadow-purple-500/40 group-hover:shadow-xl group-hover:shadow-purple-500/50 transition-all group-hover:scale-105">
+                            <Upload className="h-5 w-5 text-white" />
+                          </div>
+                          <div className="text-center px-2">
+                            <p className="font-semibold text-xs">
+                              {language === 'ar' ? 'الصورة الثانية' : 'Second Image'}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              {language === 'ar' ? 'PNG, JPG' : 'PNG, JPG'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div
+                        onClick={() => { setPickingForSlot(2); setShowSavedPicker(true); fetchSavedImages(); }}
+                        className="relative cursor-pointer group"
+                      >
+                        <div className="rounded-xl border-2 border-dashed border-orange-400/40 bg-gradient-to-br from-orange-500/5 via-amber-500/5 to-orange-400/5 flex items-center justify-center gap-2 py-2 px-3 transition-all hover:border-orange-500 hover:shadow-[0_0_20px_hsla(25,95%,60%,0.3)] active:scale-[0.98]">
+                          <div className="p-1.5 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 shadow-lg shadow-orange-500/30 group-hover:shadow-xl group-hover:shadow-orange-500/40 transition-all group-hover:scale-105">
+                            <GalleryHorizontalEnd className="h-3 w-3 text-white" />
+                          </div>
+                          <p className="font-semibold text-xs">
+                            {language === 'ar' ? 'من المحفوظات' : 'From Saved'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="relative h-full min-h-[180px]">
+                      <div className="h-full rounded-2xl overflow-hidden bg-black/90 shadow-2xl shadow-black/50 ring-2 ring-purple-500/30">
+                        <img
+                          src={imagePreview2}
+                          alt="Second"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        className="absolute top-2 right-2 h-7 w-7 rounded-full shadow-lg bg-red-500 hover:bg-red-600"
+                        onClick={clearImage2}
+                        disabled={isGenerating}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                      <div className="absolute bottom-2 left-2 right-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="w-full h-7 text-xs bg-white/90 hover:bg-white text-black rounded-lg shadow-lg"
+                          onClick={() => fileInputRef2.current?.click()}
+                          disabled={isGenerating}
+                        >
+                          {language === 'ar' ? 'تغيير' : 'Change'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  <input
+                    ref={fileInputRef2}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageSelect2}
+                    aria-label={language === 'ar' ? 'اختر الصورة الثانية' : 'Select second image'}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Prompt & Generate */}
             <div className="flex flex-col gap-3 relative">
               {/* Limit reached overlay */}
@@ -989,8 +1479,16 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   )}
                   <button
                     onClick={handleAmp}
-                    disabled={isAmping || isGenerating || !(generationMode === 'image_to_video' ? imagePreview : prompt.trim())}
-                    style={(!isAmping && !isGenerating && (generationMode === 'image_to_video' ? !!imagePreview : !!prompt.trim())) ? {
+                    disabled={isAmping || isGenerating || !(
+                      generationMode === 'image_to_video' ? imagePreview :
+                      generationMode === '2images_to_video' ? (imagePreview && imagePreview2) :
+                      prompt.trim()
+                    )}
+                    style={(!isAmping && !isGenerating && (
+                      generationMode === 'image_to_video' ? !!imagePreview :
+                      generationMode === '2images_to_video' ? !!(imagePreview && imagePreview2) :
+                      !!prompt.trim()
+                    )) ? {
                       animation: 'amp-alive 1.4s ease-in-out infinite',
                     } : undefined}
                     className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[11px] font-bold rounded-full transition-colors duration-200 active:scale-95 disabled:opacity-30 disabled:pointer-events-none border ${
@@ -1010,7 +1508,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     <span>{isAmping ? (language === 'ar' ? 'جاري التعزيز...' : 'Amping...') : (language === 'ar' ? '✦ تعزيز' : '✦ Amp')}</span>
                   </button>
                   {/* Small tag appears when button is active */}
-                  {!isAmping && !isGenerating && (generationMode === 'image_to_video' ? !!imagePreview : !!prompt.trim()) && (
+                  {!isAmping && !isGenerating && (
+                    generationMode === 'image_to_video' ? !!imagePreview :
+                    generationMode === '2images_to_video' ? !!(imagePreview && imagePreview2) :
+                    !!prompt.trim()
+                  ) && (
                     <span className="text-[9px] text-muted-foreground/60 px-1">
                       {language === 'ar' ? 'اضغط لتحسين الوصف' : 'press to improve prompt'}
                     </span>
@@ -1037,8 +1539,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 />
               </div>
 
-              {/* Aspect ratio picker - for both modes */}
-              <div className="flex items-center gap-2">
+              {/* Aspect ratio + Resolution pickers */}
+              <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/50">
                     <button
                       onClick={() => !isGenerating && setAspectRatio('9:16')}
@@ -1065,7 +1567,89 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       {language === 'ar' ? 'أفقي' : 'Landscape'}
                     </button>
                   </div>
+
+                {/* Resolution picker - only for 2images mode (Seedance) */}
+                {generationMode === '2images_to_video' && (
+                  <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/50">
+                    <button
+                      onClick={() => {
+                        if (!isGenerating) setResolution('480p');
+                      }}
+                      disabled={isGenerating}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                        resolution === '480p'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(260,70%,65%)] text-white shadow-md shadow-blue-500/30'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                      }`}
+                    >
+                      480p
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!isGenerating) {
+                          setResolution('720p');
+                          setGenerateAudio(false);
+                          if (duration === '12') setDuration('8');
+                        }
+                      }}
+                      disabled={isGenerating}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                        resolution === '720p'
+                          ? 'bg-gradient-to-r from-[hsl(25,95%,60%)] to-[hsl(45,100%,60%)] text-white shadow-md shadow-orange-500/30'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                      }`}
+                    >
+                      720p
+                    </button>
+                  </div>
+                )}
                 </div>
+
+              {/* KIE API Options */}
+              <div className="flex items-center gap-3 flex-wrap">
+                {/* Fixed Lens Toggle */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => !isGenerating && setFixedLens(!fixedLens)}
+                    disabled={isGenerating}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      fixedLens
+                        ? 'bg-gradient-to-r from-[hsl(142,76%,55%)]/20 to-[hsl(160,80%,55%)]/20 text-green-600 dark:text-green-400 border border-green-500/30'
+                        : 'bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted/60 border border-border/50'
+                    }`}
+                  >
+                    <div className={`w-3 h-3 rounded border-2 flex items-center justify-center ${
+                      fixedLens ? 'bg-green-500 border-green-500' : 'border-muted-foreground/40'
+                    }`}>
+                      {fixedLens && <Check className="h-2 w-2 text-white" />}
+                    </div>
+                    <span>{language === 'ar' ? 'كاميرا ثابتة' : 'Fixed Camera'}</span>
+                  </button>
+                </div>
+
+                {/* Generate Audio Toggle - disabled when 720p */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => !isGenerating && !(generationMode === '2images_to_video' && resolution === '720p') && setGenerateAudio(!generateAudio)}
+                    disabled={isGenerating || (generationMode === '2images_to_video' && resolution === '720p')}
+                    title={generationMode === '2images_to_video' && resolution === '720p' ? (language === 'ar' ? 'الصوت غير متاح في 720p' : 'Audio not available at 720p') : undefined}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      generationMode === '2images_to_video' && resolution === '720p'
+                        ? 'bg-muted/20 text-muted-foreground/30 border border-border/30 cursor-not-allowed'
+                        : generateAudio
+                          ? 'bg-gradient-to-r from-[hsl(280,70%,65%)]/20 to-[hsl(320,75%,70%)]/20 text-purple-600 dark:text-purple-400 border border-purple-500/30'
+                          : 'bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted/60 border border-border/50'
+                    }`}
+                  >
+                    <div className={`w-3 h-3 rounded border-2 flex items-center justify-center ${
+                      generateAudio && !(generationMode === '2images_to_video' && resolution === '720p') ? 'bg-purple-500 border-purple-500' : 'border-muted-foreground/40'
+                    }`}>
+                      {generateAudio && !(generationMode === '2images_to_video' && resolution === '720p') && <Check className="h-2 w-2 text-white" />}
+                    </div>
+                    <span>{language === 'ar' ? 'إنشاء صوت' : 'Generate Audio'}</span>
+                  </button>
+                </div>
+              </div>
 
 
               {/* Generate button */}

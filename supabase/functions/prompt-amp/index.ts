@@ -546,6 +546,123 @@ async function ampText2VideoWithOpenAI(userText: string): Promise<string> {
 }
 // ─── End Text-to-Video Amp ───
 
+// ─── 2Images-to-Video Amp (OpenAI gpt-4o-mini vision with dual images) ───
+const IMAGES2VIDEO_SYSTEM_PROMPT = `You are an expert cinematic video prompt engineer for dual-image-to-video AI models.
+
+Your job: Analyze TWO uploaded images and the user's text prompt, then generate a production-ready video prompt.
+
+FRAME RULE (CRITICAL):
+- Image 1 = the OPENING/START FRAME. The video begins exactly as Image 1 looks. It is shown for roughly the FIRST THIRD of the video.
+- Image 2 = the CLOSING/END FRAME. The video ends exactly as Image 2 looks. It must be PROMINENTLY shown and HELD for the FINAL THIRD of the video — not just a brief flash.
+- The middle portion is the smooth cinematic transition/morph between them.
+- Time allocation guidance: ~30% Image 1 → ~30% transition → ~40% Image 2 (end frame gets MORE screen time).
+
+CRITICAL RULES (MUST FOLLOW):
+1. **Preserve user intent**: The user's text prompt is SACRED. You must include their core idea and enhance it, NOT replace it.
+2. **Image identity lock**: Use the EXACT logo/object/subject from Image 1 and Image 2. Keep the same colors, shape, and identity. No new symbols, no extra text, no random letters invented by the AI. These constraints apply regardless of what the user's prompt says — NEVER add invented visual elements not present in the images.
+3. **Strong Image 2 presence**: Image 2 must be clearly visible and held at the end. Explicitly describe it settling into focus, glowing, or being revealed as the final hero. The viewer should clearly SEE Image 2 for a noticeable portion of the video.
+4. **Visual constraints**: Clean background, subtle glow, premium 3D lighting, minimal camera motion.
+5. **Output language**: ALWAYS output in English, even if the user's text is in Arabic or another language.
+6. **Duration & aspect ratio**: Respect the provided duration (4s, 8s, or 12s) and aspect ratio (9:16 or 16:9).
+
+Output format:
+- Start with the user's original intent (translated to English if needed)
+- Describe Image 1 as the clear opening scene (first ~30% of video)
+- Describe the transition/morph animation (middle ~30%)
+- Describe Image 2 as the strong, held closing scene (final ~40%) — use words like "settles into", "reveals", "holds on", "rests on", "the video ends with a clear view of"
+- Add technical details: camera, lighting, mood
+- Keep total output under 280 words
+- Plain text paragraph, NOT JSON
+
+Do NOT chat, explain, or add commentary. Output ONLY the enhanced video prompt.`;
+
+async function amp2Images2VideoWithOpenAI(
+  imageUrl1: string,
+  imageUrl2: string,
+  userText?: string,
+  duration?: string,
+  aspectRatio?: string,
+): Promise<string> {
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
+
+  const userParts: string[] = [];
+  
+  // Always include user text if provided
+  if (userText && userText.trim()) {
+    userParts.push(`User's intent: ${userText.trim()}`);
+  }
+  
+  if (duration) {
+    userParts.push(`Video duration: ${duration} seconds`);
+  }
+  
+  if (aspectRatio) {
+    userParts.push(`Aspect ratio: ${aspectRatio}`);
+  }
+  
+  userParts.push("Image 1 is the START FRAME (opening). Image 2 is the END FRAME (closing). Generate a video prompt that opens on Image 1 and ends on Image 2, with a smooth cinematic transition between them. HARD CONSTRAINT: Keep the same colors, shape, and identity from both images. No new symbols, no extra text, no random letters — unless explicitly mentioned in the user's prompt.");
+
+  const userPrompt = userParts.join("\n");
+
+  const payload = {
+    model: "gpt-4o-mini",
+    temperature: 0.5,
+    max_tokens: 1000,
+    messages: [
+      {
+        role: "system",
+        content: IMAGES2VIDEO_SYSTEM_PROMPT,
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "image_url",
+            image_url: { url: decodeURIComponent(imageUrl1).trim(), detail: "low" },
+          },
+          {
+            type: "image_url",
+            image_url: { url: decodeURIComponent(imageUrl2).trim(), detail: "low" },
+          },
+          {
+            type: "text",
+            text: userPrompt,
+          },
+        ],
+      },
+    ],
+  };
+
+  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await resp.json().catch(() => null);
+  if (!resp.ok) {
+    throw new Error(
+      JSON.stringify({
+        stage: "openai-2images2video",
+        status: resp.status,
+        body: data || null,
+      }),
+    );
+  }
+
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== "string" || content.trim().length === 0) {
+    throw new Error("openai_empty_response");
+  }
+
+  return content.trim();
+}
+// ─── End 2Images-to-Video Amp ───
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -679,6 +796,76 @@ serve(async (req) => {
       );
     }
     // ─── End Text-to-Video route ───
+
+    // ─── 2Images-to-Video Amp route (OpenAI gpt-4o-mini vision with dual images) ───
+    if (mode === "2images2video") {
+      const rawImageUrl1 = (body?.image_url_1 ?? "").toString();
+      const rawImageUrl2 = (body?.image_url_2 ?? "").toString();
+      const imageUrl1 = decodeURIComponent(rawImageUrl1).trim();
+      const imageUrl2 = decodeURIComponent(rawImageUrl2).trim();
+      const userText = (body?.user_text ?? "").toString();
+      const duration = (body?.duration ?? "8").toString();
+      const aspectRatio = (body?.aspect_ratio ?? "9:16").toString();
+      
+      inputText = `[2images2video] user: ${userText}, dur: ${duration}, ar: ${aspectRatio}`;
+
+      if (!imageUrl1 || imageUrl1.trim().length === 0) {
+        return new Response(
+          JSON.stringify({
+            error: "Missing 'image_url_1' for 2images2video mode",
+            code: "BAD_REQUEST_MISSING_IMAGE1",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (!imageUrl2 || imageUrl2.trim().length === 0) {
+        return new Response(
+          JSON.stringify({
+            error: "Missing 'image_url_2' for 2images2video mode",
+            code: "BAD_REQUEST_MISSING_IMAGE2",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      const improved = await amp2Images2VideoWithOpenAI(imageUrl1, imageUrl2, userText, duration, aspectRatio);
+
+      await logAI({
+        functionName: "prompt-amp",
+        userId,
+        model: "gpt-4o-mini",
+        inputText,
+        outputText: improved,
+        durationMs: Date.now() - startTime,
+        status: "success",
+        metadata: {
+          provider: "openai",
+          mode: "2images2video",
+          language: "en",
+        },
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          text: improved,
+          language: "en",
+          mode: "2images2video",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    // ─── End 2Images-to-Video route ───
 
     // ─── Bot Component Amp route ───
     if (mode === "bot-component") {
