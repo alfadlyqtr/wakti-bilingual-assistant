@@ -128,7 +128,7 @@ function buildStayHotSummary(recentMessages: unknown[]): string {
     if (!Array.isArray(recentMessages) || recentMessages.length === 0) return '';
     const msgs = recentMessages
       .filter((m) => m && typeof m === 'object')
-      .slice(-20)
+      .slice(-12)
       .map((m) => m as Record<string, unknown>);
 
     const texts: Array<{ role: string; content: string; idx: number }> = [];
@@ -346,6 +346,7 @@ function estimateTokens(text: string): number {
 // Prices per 1M tokens (as of Dec 2024)
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'gemini-2.0-flash': { input: 0.075, output: 0.30 },
+  'gemini-3-flash-preview': { input: 0.075, output: 0.30 }, // Same tier as 2.0-flash
   'gpt-4o-mini': { input: 0.15, output: 0.60 },
   'claude-3-5-sonnet-20241022': { input: 3.00, output: 15.00 },
 };
@@ -642,16 +643,16 @@ function buildSearchFollowupContents(
   return contents;
 }
 
-// Chat mode: gemini-2.5-flash-lite for speed (smooth, fast, conversational)
-async function streamGemini25FlashGrounded(
+// Chat mode: gemini-3-flash-preview for intelligence + grounding (Ferrari memory system)
+async function streamGemini3FlashChat(
   query: string,
   systemInstruction: string,
   recentMessages: unknown[] | undefined,
   onToken: (token: string) => void
 ): Promise<string> {
   const key = getGeminiApiKey();
-  // Use gemini-2.5-flash-lite for fastest chat responses while maintaining quality
-  const model = 'gemini-2.5-flash-lite';
+  // Use gemini-3-flash-preview for superior reasoning to utilize our sophisticated memory system
+  const model = 'gemini-3-flash-preview';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
   const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
@@ -659,7 +660,7 @@ async function streamGemini25FlashGrounded(
     if (Array.isArray(recentMessages) && recentMessages.length > 0) {
       const msgs = recentMessages
         .filter((m) => m && typeof m === 'object')
-        .slice(-20)
+        .slice(-12)
         .map((m) => m as Record<string, unknown>);
 
       for (const m of msgs) {
@@ -668,7 +669,7 @@ async function streamGemini25FlashGrounded(
         if (!c) continue;
         if (r !== 'user' && r !== 'assistant') continue;
         const role: 'user' | 'model' = r === 'assistant' ? 'model' : 'user';
-        contents.push({ role, parts: [{ text: c.slice(0, 900) }] });
+        contents.push({ role, parts: [{ text: c.slice(0, 1500) }] });
       }
     }
   } catch {
@@ -689,7 +690,7 @@ async function streamGemini25FlashGrounded(
     body.system_instruction = { parts: [{ text: systemInstruction }] };
   }
 
-  console.log('💬 CHAT GROUNDED: Streaming with Gemini 2.5 Flash Lite + google_search...', {
+  console.log('💬 CHAT GROUNDED: Streaming with Gemini 3 Flash Preview + google_search...', {
     contentsCount: contents.length,
     firstRole: contents[0]?.role,
     lastRole: contents[contents.length - 1]?.role,
@@ -746,7 +747,7 @@ async function streamGemini25FlashGrounded(
     }
   }
 
-  console.log('✅ CHAT GROUNDED: Stream complete, length:', fullText.length);
+  console.log('✅ CHAT GROUNDED (Gemini 3 Flash): Stream complete, length:', fullText.length);
   return fullText;
 }
 
@@ -2735,7 +2736,7 @@ If you are running out of space, keep this order and drop the rest:
 
             try {
               let fullResponseText = '';
-              await streamGemini25FlashGrounded(
+              await streamGemini3FlashChat(
                 effectiveMessage,
                 systemPrompt,
                 recentMessages,
@@ -2984,13 +2985,13 @@ If you are running out of space, keep this order and drop the rest:
           }
           
           aiProvider = 'gemini';
-          modelUsed = 'gemini-2.0-flash';
+          modelUsed = 'gemini-3-flash-preview';
           modelUsedOuter = modelUsed;
           try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'gemini' })}\n\n`)); } catch { /* ignore */ }
           
           let geminiTokenCount = 0;
           await streamGemini(
-            'gemini-2.0-flash',
+            'gemini-3-flash-preview',
             contents,
             (token) => {
               geminiTokenCount++;
@@ -3008,7 +3009,15 @@ If you are running out of space, keep this order and drop the rest:
 
         const tryOpenAI = async () => {
           if (!OPENAI_API_KEY) throw new Error('OpenAI API key not configured');
-          console.log('🤖 Trying OpenAI...');
+          console.log('🤖 Trying OpenAI (fallback from Gemini)...');
+          
+          // CRITICAL: Reformat messages from Gemini format if needed
+          // Gemini uses contents array with parts, OpenAI uses standard messages
+          let reformattedMessages = messages;
+          
+          // If messages were built for Gemini (has system in messages), keep as-is
+          // OpenAI expects standard { role, content } format
+          
           const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -3017,7 +3026,7 @@ If you are running out of space, keep this order and drop the rest:
             },
             body: JSON.stringify({
               model: 'gpt-4o-mini',
-              messages,
+              messages: reformattedMessages,
               temperature: effectiveTrigger === 'search' ? 0.3 : 0.7,
               max_tokens: effectiveTrigger === 'search' ? 6000 : 8000,
               stream: true,
@@ -3030,13 +3039,17 @@ If you are running out of space, keep this order and drop the rest:
           modelUsedOuter = modelUsed;
           streamReader = response.body?.getReader() || null;
           try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'openai' })}\n\n`)); } catch { /* ignore */ }
-          console.log('✅ OpenAI');
+          console.log('✅ OpenAI fallback active');
         };
 
         const tryClaude = async () => {
           if (!ANTHROPIC_API_KEY) throw new Error('Claude API key not configured');
-          console.log('🤖 Trying Claude...');
+          console.log('🤖 Trying Claude (fallback from Gemini/OpenAI)...');
+          
+          // CRITICAL: Reformat messages for Claude format
+          // Claude expects separate system string and messages array
           const { system, messages: claudeMessages } = convertMessagesToClaudeFormat(messages);
+          
           const response = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
@@ -3059,7 +3072,7 @@ If you are running out of space, keep this order and drop the rest:
           modelUsedOuter = modelUsed;
           streamReader = response.body?.getReader() || null;
           try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'claude' })}\n\n`)); } catch { /* ignore */ }
-          console.log('✅ Claude');
+          console.log('✅ Claude fallback active');
         };
 
         try {
