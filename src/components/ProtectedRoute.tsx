@@ -32,7 +32,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   const [hasAnySession, setHasAnySession] = useState<boolean>(!!session);
 
   // --- Fix #2: hooks moved here (top of component) to satisfy Rules of Hooks ---
-  const { isSubscribed, isAccessExpired, isNewUser, wasSubscribed, hasTrialStarted, profile } = useUserProfile();
+  const { isSubscribed, isAccessExpired, isNewUser, wasSubscribed, hasTrialStarted, profile, loading: isProfileLoading } = useUserProfile();
   const [accessCheckTick, setAccessCheckTick] = useState(0);
 
   // Enable subscription/IAP enforcement
@@ -376,6 +376,10 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   useEffect(() => {
     if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) return;
     if (!user?.id) return;
+    
+    // CRITICAL FIX: Don't show paywall while profile is loading to prevent race condition
+    if (isProfileLoading) { setShowPaywall(false); return; }
+    
     if (isSubscribed) { setShowPaywall(false); return; }
     const isAccount = location.pathname.startsWith('/account');
     if (isAccount) { setShowPaywall(false); return; }
@@ -408,7 +412,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
 
     // Still in grace period
     setShowPaywall(false);
-  }, [user?.id, isSubscribed, isAccessExpired, isNewUser, wasSubscribed, hasTrialStarted, location.pathname, location.search, TEMP_DISABLE_SUBSCRIPTION_CHECKS, DEV, accessCheckTick]);
+  }, [user?.id, isSubscribed, isAccessExpired, isNewUser, wasSubscribed, hasTrialStarted, location.pathname, location.search, TEMP_DISABLE_SUBSCRIPTION_CHECKS, DEV, accessCheckTick, isProfileLoading]);
 
   let effectiveHasSession = hasAnySession;
   

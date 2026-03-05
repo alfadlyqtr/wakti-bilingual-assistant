@@ -11,9 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertTriangle, RefreshCw, Search, Shield, Users, User, Mail, Calendar, Clock, Activity, Crown, CreditCard, CheckCircle, XCircle, Smartphone, Globe, MapPin } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
-import { Grid } from 'gridjs-react';
-import { h } from 'gridjs';
-import 'gridjs/dist/theme/mermaid.css';
 
 interface AdminUser {
   id: string;
@@ -224,113 +221,6 @@ export default function AdminUsers() {
     }
   };
 
-  const gridColumns = useMemo(() => {
-    return [
-      { name: 'Name', sort: true },
-      { name: 'Email', sort: true },
-      { name: 'Status', sort: true },
-      { name: 'Subscription', sort: true },
-      { name: 'Created', sort: true },
-      {
-        name: 'Actions',
-        sort: false,
-        formatter: (_: any, row: any) => {
-          const id = row?.cells?.[6]?.data as string | undefined;
-          const user = id ? usersById.get(id) : undefined;
-          if (!user) return '';
-          return h(
-            'div',
-            { className: 'flex gap-2 flex-wrap' },
-            h(
-              'button',
-              {
-                className: 'px-2 py-1 text-xs rounded-md border border-border bg-background/50 hover:bg-accent',
-                onClick: () => openDetailsForUser(user),
-              },
-              'Details'
-            ),
-            h(
-              'button',
-              {
-                className: 'px-2 py-1 text-xs rounded-md border border-border bg-background/50 hover:bg-accent',
-                onClick: async () => {
-                  setIsImpersonating(true);
-                  try {
-                    const reason = `Admin viewing user context from Users page`;
-                    const { data, error } = await (supabase as any).rpc('admin_start_impersonation', {
-                      p_user_id: user.id,
-                      p_reason: reason,
-                    });
-                    if (error) {
-                      console.error('[AdminUsers] Failed to start impersonation:', error);
-                      toast.error(`Failed to log impersonation: ${error.message}`);
-                    } else {
-                      const context = {
-                        userEmail: user.email,
-                        reason,
-                        eventId: data?.event_id,
-                        startedAt: data?.started_at,
-                      };
-                      try {
-                        localStorage.setItem('admin_impersonation_context', JSON.stringify(context));
-                      } catch {
-                        // ignore storage errors
-                      }
-                      toast.success(`Impersonation context started for ${user.email}`);
-                    }
-                  } catch (err) {
-                    console.error('[AdminUsers] Exception starting impersonation:', err);
-                    toast.error('Error starting impersonation context');
-                  } finally {
-                    setIsImpersonating(false);
-                  }
-                },
-              },
-              'Impersonation'
-            ),
-            h(
-              'button',
-              {
-                className: 'px-2 py-1 text-xs rounded-md border border-border bg-background/50 hover:bg-accent',
-                onClick: () => {
-                  setSelectedUser(user);
-                  setShowSuspendConfirm(true);
-                },
-              },
-              user.is_suspended ? 'Unsuspend' : 'Suspend'
-            ),
-            h(
-              'button',
-              {
-                className: 'px-2 py-1 text-xs rounded-md border border-red-500/40 text-red-500 bg-background/50 hover:bg-red-500/10',
-                onClick: () => {
-                  setSelectedUser(user);
-                  setShowDeleteConfirm(true);
-                },
-              },
-              'Delete'
-            )
-          );
-        }
-      },
-      { name: 'ID', hidden: true },
-    ];
-  }, [usersById, usageMonth, usageScope]);
-
-  const gridData = useMemo(() => {
-    return filteredUsers.map((user) => {
-      const createdAt = user.created_at ? new Date(user.created_at) : new Date();
-      return [
-        user.display_name || '',
-        user.email || '',
-        user.is_suspended ? 'Suspended' : 'Active',
-        user.subscription_status || '',
-        createdAt.toLocaleDateString(),
-        '',
-        user.id,
-      ];
-    });
-  }, [filteredUsers]);
 
   return (
     <div className="bg-gradient-background text-foreground min-h-screen">
@@ -400,24 +290,133 @@ export default function AdminUsers() {
           </div>
         </div>
 
-        {/* Users Table */}
-        <div className="grid gap-4">
+        {/* Users List - Mobile Friendly */}
+        <div className="space-y-3">
           {isLoading ? (
             <div className="text-center py-8">Loading users...</div>
           ) : filteredUsers.length === 0 ? (
             <div className="text-center py-8">No users found</div>
           ) : (
-            <Card className="p-4">
-              <div className="w-full overflow-x-auto">
-                <Grid
-                  data={gridData}
-                  columns={gridColumns as any}
-                  search={true}
-                  sort={true}
-                  pagination={{ limit: 50 }}
-                />
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">Users ({filteredUsers.length})</h3>
               </div>
-            </Card>
+              {filteredUsers.map((user) => (
+                <Card key={user.id} className="p-4">
+                  <div className="space-y-3">
+                    {/* User Header */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <h4 className="font-medium text-sm truncate">{user.display_name || 'No Name'}</h4>
+                        </div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Mail className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                          <span className="text-xs text-muted-foreground truncate">{user.email}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1 items-end">
+                        <Badge variant={user.is_suspended ? "destructive" : "default"} className="text-xs">
+                          {user.is_suspended ? "Suspended" : "Active"}
+                        </Badge>
+                        {user.subscription_status && (
+                          <Badge variant="outline" className="text-xs">
+                            {user.subscription_status}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* User Info */}
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        <span>Joined {user.created_at ? formatDistanceToNow(new Date(user.created_at), { addSuffix: true }) : 'Unknown'}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <CheckCircle className="h-3 w-3" />
+                        <span>{user.email_confirmed ? 'Verified' : 'Unverified'}</span>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex flex-wrap gap-2 pt-2 border-t">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-7"
+                        onClick={() => openDetailsForUser(user)}
+                      >
+                        Details
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-7"
+                        disabled={isImpersonating}
+                        onClick={async () => {
+                          setIsImpersonating(true);
+                          try {
+                            const reason = `Admin viewing user context from Users page`;
+                            const { data, error } = await (supabase as any).rpc('admin_start_impersonation', {
+                              p_user_id: user.id,
+                              p_reason: reason,
+                            });
+                            if (error) {
+                              console.error('[AdminUsers] Failed to start impersonation:', error);
+                              toast.error(`Failed to log impersonation: ${error.message}`);
+                            } else {
+                              const context = {
+                                userEmail: user.email,
+                                reason,
+                                eventId: data?.event_id,
+                                startedAt: data?.started_at,
+                              };
+                              try {
+                                localStorage.setItem('admin_impersonation_context', JSON.stringify(context));
+                              } catch {
+                                // ignore storage errors
+                              }
+                              toast.success(`Impersonation context started for ${user.email}`);
+                            }
+                          } catch (err) {
+                            console.error('[AdminUsers] Exception starting impersonation:', err);
+                            toast.error('Error starting impersonation context');
+                          } finally {
+                            setIsImpersonating(false);
+                          }
+                        }}
+                      >
+                        {isImpersonating ? 'Starting...' : 'Impersonate'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-7"
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setShowSuspendConfirm(true);
+                        }}
+                      >
+                        {user.is_suspended ? 'Unsuspend' : 'Suspend'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="text-xs h-7"
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setShowDeleteConfirm(true);
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </>
           )}
         </div>
       </div>
