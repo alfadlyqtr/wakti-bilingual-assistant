@@ -750,7 +750,8 @@ class WaktiAIV2ServiceClass {
         if (!userId) throw new Error('Authentication required');
       }
 
-      try { await this.maybeRefreshPersonalTouchFromServer(userId); } catch {}
+      // Fire-and-forget: personal touch refresh runs in background, never blocks the stream
+      this.maybeRefreshPersonalTouchFromServer(userId).catch(() => {});
 
       // Generate a lightweight requestId for diagnostics across iOS/Safari
       const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -828,19 +829,24 @@ class WaktiAIV2ServiceClass {
       });
       const generatedSummary = this.generateConversationSummary(enhancedMessages);
 
-      // Load stored rolling summary (Supabase by conversation UUID, else local fallback)
+      // Load stored rolling summary — NON-BLOCKING with 800ms timeout.
+      // If Supabase is slow, we skip it and use local/generated summary only.
+      // The stream must never wait for a DB round-trip.
       let storedSummary: string | null = null;
       const uuidLike = typeof conversationId === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(conversationId);
       try {
         if (uuidLike && conversationId) {
-          const { data: row } = await supabase
+          const summaryTimeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 800));
+          const summaryFetch = supabase
             .from('ai_conversation_summaries')
             .select('summary_text')
             .eq('conversation_id', conversationId)
             .order('updated_at', { ascending: false })
             .limit(1)
-            .maybeSingle();
-          storedSummary = row?.summary_text || null;
+            .maybeSingle()
+            .then(({ data: row }) => row?.summary_text || null);
+          storedSummary = await Promise.race([summaryFetch, summaryTimeout]);
+          console.log(`📋 SUMMARY: ${storedSummary ? 'loaded from DB' : 'timed-out/empty — using local'}`);
         } else if (conversationId) {
           storedSummary = localStorage.getItem(`wakti_local_summary_${conversationId}`) || null;
         }
