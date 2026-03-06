@@ -866,7 +866,7 @@ class WaktiAIV2ServiceClass {
       }
 
       // Inner attempt function: parameterize primary provider and stream
-      const attemptStream = async (primary: 'claude' | 'openai') => {
+      const attemptStream = async (primary: 'gemini-brain' | 'claude' | 'openai') => {
         // Mobile-optimized SSE request with retry logic
         const maxRetries = 2;
         let response;
@@ -1690,8 +1690,8 @@ class WaktiAIV2ServiceClass {
         }
 
         // Normal chat path (or vision fallback to brain)
-        // Backend auto-tries Gemini → OpenAI → Claude
-        const res = await attemptStream('claude');
+        // Backend uses Gemini 3 Flash (Brain-First) → auto-falls back to OpenAI → Claude
+        const res = await attemptStream('gemini-brain');
         return { response: res.response, conversationId, metadata: res.metadata };
       } catch (err: any) {
         const msg = String(err?.message || err || '').toLowerCase();

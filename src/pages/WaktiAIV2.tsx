@@ -366,6 +366,8 @@ const WaktiAIV2 = () => {
         let streamed = '';
         let streamMeta: any = {};
         let firstToken = false;
+        let rafPending = false;
+        const fetchStartTime = Date.now();
         const streamedResp = await WaktiAIV2Service.sendStreamingMessage(
           messageContent,
           userProfile.id,
@@ -378,15 +380,22 @@ const WaktiAIV2 = () => {
           '', // conversationSummary
           attachedFiles,
           (token: string) => {
-            console.log('🎯 VISION TOKEN RECEIVED:', token.substring(0, 50));
             streamed += token;
             if (!firstToken) {
               firstToken = true;
-              console.log('🎯 VISION FIRST TOKEN - clearing loading state');
+              const firstTokenMs = Date.now() - fetchStartTime;
+              console.log(`🎯 VISION FIRST TOKEN [${firstTokenMs}ms from fetch]`);
               setIsLoading(false);
               setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, metadata: { ...(m.metadata || {}), loading: false } } : m));
             }
-            setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: streamed } : m));
+            // Throttle: batch token updates via requestAnimationFrame (~16ms cadence)
+            if (!rafPending) {
+              rafPending = true;
+              requestAnimationFrame(() => {
+                rafPending = false;
+                setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: streamed } : m));
+              });
+            }
           },
           (metadata: any) => { 
             console.log('🎯 VISION METADATA:', metadata);
@@ -437,6 +446,8 @@ const WaktiAIV2 = () => {
         let streamed = '';
         let streamMeta: any = {};
         let firstToken = false;
+        let rafPending = false;
+        const fetchStartTime = Date.now();
         // If Search mode and message is a YouTube query, use the non-streaming YouTube path
         const ytPrefix = /^(?:\s*yt:\s*|\s*yt\s+)/i.test(messageContent || '');
         if (trigger === 'search' && ytPrefix) {
@@ -496,10 +507,20 @@ const WaktiAIV2 = () => {
             streamed += token;
             if (!firstToken) {
               firstToken = true;
+              const firstTokenMs = Date.now() - fetchStartTime;
+              console.log(`🎯 CLIENT: First token [${firstTokenMs}ms from fetch] trigger=${trigger}`);
               setIsLoading(false);
               setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, metadata: { ...(m.metadata || {}), loading: false } } : m));
             }
-            setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: streamed } : m));
+            // Throttle: batch token updates via requestAnimationFrame (~16ms cadence)
+            // Drops 200+ setSessionMessages calls per message down to ~20-30
+            if (!rafPending) {
+              rafPending = true;
+              requestAnimationFrame(() => {
+                rafPending = false;
+                setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: streamed } : m));
+              });
+            }
           },
           (metadata: any) => { 
             streamMeta = metadata || {};
