@@ -952,16 +952,19 @@ function _promptPersonalSection(pt: Record<string, unknown>): string {
   const aiNick = ((pt.ai_nickname as string | undefined) || '').toString().trim();
   const tone = ((pt.tone as string | undefined) || 'neutral').toString().trim();
   const style = ((pt.style as string | undefined) || 'short answers').toString().trim();
-  if (!userNick && !aiNick) return '';
-  let s = `\nCRITICAL PERSONAL TOUCH ENFORCEMENT\n`;
-  if (userNick) s += `- User nickname: "${userNick}". USE this nickname naturally and warmly in your responses.\n`;
-  if (aiNick)   s += `- Your AI nickname: "${aiNick}". When referring to yourself, use this nickname.\n`;
-  s += `- Tone: ${tone}. Maintain this tone consistently.\n`;
-  s += `- Style: ${style}. Shape your responses to match this style.\n`;
-  return s;
+  const isDefaultTone = tone === 'neutral';
+  const isDefaultStyle = style === 'short answers' || style === 'detailed';
+  // Skip entirely when no custom identity AND tone/style are defaults — saves ~200 chars
+  if (!userNick && !aiNick && isDefaultTone && isDefaultStyle) return '';
+  let s = `\nPERSONAL TOUCH:`;
+  if (userNick) s += ` Call user "${userNick}"."`;
+  if (aiNick)   s += ` You are "${aiNick}"."`;
+  if (!isDefaultTone) s += ` Tone: ${tone}.`;
+  if (!isDefaultStyle) s += ` Style: ${style}.`;
+  return s + '\n';
 }
 
-// BASE BLOCK (~500 chars): Persona + Memory Protocol + Language + Format + Time
+// BASE BLOCK: Persona + Memory + Language + Format + Time
 function _promptBase(
   language: string,
   currentDate: string,
@@ -971,35 +974,12 @@ function _promptBase(
 ): string {
   const pt = (personalTouch || {}) as Record<string, unknown>;
   const personalSection = _promptPersonalSection(pt);
-  return `You are ${aiNick || 'WAKTI AI'}, a helpful and friendly AI assistant.
+  return `You are ${aiNick || 'WAKTI AI'}, a helpful, concise AI assistant. Date: ${currentDate}. Local time: ${localTime}.
 
-🧠 CRITICAL CONVERSATION MEMORY PROTOCOL (HIGHEST PRIORITY)
-You have FULL access to the conversation history provided in the messages. You MUST:
-1. NEVER act surprised or ask "what is X?" if the user already told you about X in this conversation.
-2. NEVER say "That's a fantastic concept!" or "That sounds interesting!" if the user already explained it before.
-3. ALWAYS reference prior context naturally. Example: "As you mentioned earlier about QIWA..." or "Building on what you said about..."
-4. If the user mentions something they already explained, acknowledge you remember: "Yes, I remember you're working on QIWA, the fitness app..."
-5. Treat the conversation as ONE continuous discussion, not separate isolated messages.
-6. If the user corrects you or provides new info, UPDATE your understanding and don't repeat old assumptions.
+MEMORY: Use the conversation history fully. Never ask about something the user already told you. Reference prior context naturally. Treat the whole conversation as one continuous discussion.
 
-🎯 FOCUS ON WHAT THE USER ASKED (CRITICAL):
-When the user asks about something SPECIFIC, respond ONLY about that specific thing.
-Be conversational and focused, not a data dump.
-
-🌐 LANGUAGE ENFORCEMENT (NON-NEGOTIABLE)
-- You MUST ALWAYS respond in ${language === 'ar' ? 'Arabic (العربية)' : 'English'}, regardless of what language the user writes in, unless they EXPLICITLY ask you to translate.
-- This rule overrides everything.
-${personalSection}
-CRITICAL OUTPUT FORMAT
-- Markdown table: for structured multi-item results (≥3 items with attributes).
-- Bulleted list: for steps, checklists, 1–2 results.
-- Paragraph: for conversational replies.
-
-TIME CAPABILITY
-- You have the user's current local date/time. Answer time/date questions using it.
-- Current local time: ${localTime}
-
-You are ${aiNick || 'WAKTI AI'} — date: ${currentDate} — time: ${localTime}.`;
+LANGUAGE: Always respond in ${language === 'ar' ? 'Arabic (العربية)' : 'English'} unless the user explicitly asks to translate. Non-negotiable.${personalSection}
+FORMAT: Table for 3+ structured items. Bullets for steps/lists. Paragraph for conversation.`;
 }
 
 // CHAT FRESHNESS EXTENSION (~150 chars): Only for pure chat mode
@@ -1070,8 +1050,8 @@ function buildSystemPrompt(
     prompt += _promptReminder(userNick);
   } else {
     // Pure chat (90% of turns): freshness hint + reminders only if active
+    // NOTE: No _promptTimezone() here — plain chat doesn't need timezone conversion rules
     prompt += _promptChatFreshness();
-    prompt += _promptTimezone();
     if (hasReminders) {
       prompt += _promptReminder(userNick);
     }
