@@ -3,6 +3,34 @@ import { supabase, ensurePassport, getCurrentUserId } from '@/integrations/supab
 import { getNativeLocation, queryNeedsFreshLocation, clearLocationCache } from '@/integrations/natively/locationBridge';
 import { parseReminderFromResponse, createScheduledReminder, cancelRecentPendingReminders } from '@/services/ReminderService';
 
+// Module-level session cache — avoids a Supabase network round-trip on every message send.
+// Token validity is 1 hour; we refresh 5 minutes early to be safe.
+let _cachedSession: { access_token: string; expires_at?: number } | null = null;
+let _sessionCachedAt = 0;
+const SESSION_CACHE_TTL_MS = 55 * 60 * 1000; // 55 minutes
+
+async function getCachedSession() {
+  const now = Date.now();
+  if (_cachedSession?.access_token && (now - _sessionCachedAt) < SESSION_CACHE_TTL_MS) {
+    console.log(`🔑 AUTH: Used cached session (0ms)`);
+    return _cachedSession;
+  }
+  const t0 = Date.now();
+  const { data: { session } } = await supabase.auth.getSession();
+  const elapsed = Date.now() - t0;
+  if (session?.access_token) {
+    _cachedSession = session;
+    _sessionCachedAt = now;
+    console.log(`🔑 AUTH: Performed network validation (${elapsed}ms)`);
+  } else {
+    // Invalidate cache on failure — prevent ghost logged-out state
+    _cachedSession = null;
+    _sessionCachedAt = 0;
+    console.warn(`🔑 AUTH: getSession() returned no session after ${elapsed}ms — cache invalidated`);
+  }
+  return session;
+}
+
 export interface AIMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -856,8 +884,8 @@ class WaktiAIV2ServiceClass {
       const pieces = [conversationSummary, storedSummary, generatedSummary].filter((s) => !!(s && s.trim())) as string[];
       let finalSummary = pieces.join(' ').slice(0, 1200);
 
-      // Get auth token for streaming request
-      const { data: { session } } = await supabase.auth.getSession();
+      // Get auth token — uses module-level cache to avoid a blocking network round-trip
+      const session = await getCachedSession();
       if (!session?.access_token) {
         throw new Error('No valid session for streaming');
       }
