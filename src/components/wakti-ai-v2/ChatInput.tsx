@@ -1604,6 +1604,18 @@ export function ChatInput({
                               <SearchIcon className="h-4 w-4" />
                               <span>{language === 'ar' ? 'بحث' : 'Search'}</span>
                             </motion.button>
+                            <motion.button
+                              initial={{ opacity: 0, x: -18, scale: 0.94 }}
+                              animate={{ opacity: 1, x: 0, scale: 1 }}
+                              exit={{ opacity: 0, x: -10, scale: 0.96 }}
+                              transition={{ delay: 0.16, type: 'spring', stiffness: 420, damping: 26 }}
+                              onPointerUp={() => { onTriggerChange && onTriggerChange('chat'); onChatSubmodeChange?.('study'); setShowQuickModes(false); }}
+                              className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 bg-purple-600 text-white text-xs font-semibold shadow -ml-0.5"
+                              type="button"
+                            >
+                              <span className="text-sm leading-none">📚</span>
+                              <span>{language === 'ar' ? 'دراسة' : 'Study'}</span>
+                            </motion.button>
                           </div>
                         </motion.div>
                       )}
