@@ -1274,17 +1274,6 @@ export function ChatInput({
                                     {language === 'ar' ? 'دردشة' : 'Chat'}
                                   </button>
                                   <button 
-                                    onPointerUp={() => { 
-                                      onChatSubmodeChange?.('study'); 
-                                      setChatSubmodeMenuPos(null); 
-                                    }} 
-                                    className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2"
-                                  >
-                                    <span className="w-3 h-3 bg-purple-500 rounded-full"></span>
-                                    {language === 'ar' ? 'دراسة' : 'Study'}
-                                    <span className="text-[10px] text-purple-500 ml-1">📚</span>
-                                  </button>
-                                  <button 
                                     onPointerUp={() => {
                                       setChatSubmodeMenuPos(null);
                                       setIsTalkOpen(true);
