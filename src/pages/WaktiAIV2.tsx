@@ -6,6 +6,7 @@ import { EnhancedFrontendMemory, ConversationMetadata } from '@/services/Enhance
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { supabase } from '@/integrations/supabase/client';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
+import { StreamingBubbleHandle } from '@/components/wakti-ai-v2/StreamingBubble';
 import { ChatInput, ChatSubmode, ReplyContext } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSidebar';
@@ -33,6 +34,11 @@ const WaktiAIV2 = () => {
   const [inputReservePx, setInputReservePx] = useState<number>(120);
   const [chatSubmode, setChatSubmode] = useState<ChatSubmode>('chat');
   const [replyContext, setReplyContext] = useState<ReplyContext | null>(null);
+  // Streaming isolation: active stream ID tracked in state (one set per message, not per token).
+  // Token content goes directly to DOM via streamingBubbleRef — zero React re-renders per token.
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const streamingBubbleRef = useRef<StreamingBubbleHandle>(null);
+  const streamedContentRef = useRef<string>(''); // closure-safe accumulator for final flush
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -492,6 +498,11 @@ const WaktiAIV2 = () => {
           return; // Done (skip streaming path)
         }
 
+        // Activate streaming isolation: mount StreamingBubble, reset its DOM content
+        streamedContentRef.current = '';
+        streamingBubbleRef.current?.reset();
+        setStreamingMessageId(assistantMessageId);
+
         const streamedResp = await WaktiAIV2Service.sendStreamingMessage(
           messageContent,
           userProfile.id,
@@ -505,20 +516,21 @@ const WaktiAIV2 = () => {
           attachedFiles,
           (token: string) => {
             streamed += token;
+            streamedContentRef.current = streamed;
             if (!firstToken) {
               firstToken = true;
               const firstTokenMs = Date.now() - fetchStartTime;
               console.log(`🎯 CLIENT: First token [${firstTokenMs}ms from fetch] trigger=${trigger}`);
               setIsLoading(false);
+              // One-time metadata update: clear loading flag on the placeholder bubble
               setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, metadata: { ...(m.metadata || {}), loading: false } } : m));
             }
-            // Throttle: batch token updates via requestAnimationFrame (~16ms cadence)
-            // Drops 200+ setSessionMessages calls per message down to ~20-30
+            // ZERO React re-renders: write accumulated text directly to DOM via ref
             if (!rafPending) {
               rafPending = true;
               requestAnimationFrame(() => {
                 rafPending = false;
-                setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: streamed } : m));
+                streamingBubbleRef.current?.setContent(streamedContentRef.current);
               });
             }
           },
@@ -588,6 +600,10 @@ const WaktiAIV2 = () => {
           intent: trigger,
         };
 
+        // Flush final content into sessionMessages (one-time, not per-token)
+        // Then clear streaming overlay — ChatMessages will switch to rendering message.content
+        setStreamingMessageId(null);
+        streamingBubbleRef.current?.reset();
         setSessionMessages(prev => {
           const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
           EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId);
@@ -633,6 +649,9 @@ const WaktiAIV2 = () => {
         return finalMessages;
       });
     } finally {
+      // Always clear streaming overlay on completion or error
+      setStreamingMessageId(null);
+      streamingBubbleRef.current?.reset();
       setIsLoading(false);
       
       // Clear safety timeout since request completed
@@ -780,6 +799,8 @@ const WaktiAIV2 = () => {
             conversationId={currentConversationId}
             isNewConversation={isNewConversation}
             onReplyToMessage={handleReplyToMessage}
+            streamingMessageId={streamingMessageId}
+            streamingBubbleRef={streamingBubbleRef}
           />
       </div>
 

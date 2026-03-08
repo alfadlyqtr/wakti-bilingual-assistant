@@ -1980,25 +1980,21 @@ serve(async (req) => {
         requestSubmode = chatSubmode;
 
         let effectiveTrigger = activeTrigger;
-        // Only run search intent gate for regular chat mode (NOT study mode)
-        // Study mode should always go straight to Wolfram/AI without search interruption
-        // SIMPLIFIED: Only auto-search at very high confidence (0.95+) to keep chat as chat
+        // LAZY: classifySearchIntent only for chat mode — run async, resolved before we need effectiveTrigger
+        // for the search path. For chat path it resolves in background while we build context.
         const shouldCheckSearchIntent = activeTrigger === 'chat' && chatSubmode === 'chat' && !isWaktiInvolved(message || '');
-        if (shouldCheckSearchIntent) {
-          try {
-            const gate = await classifySearchIntent(message || '', language);
-            console.log('🔎 INTENT GATE:', gate);
-            // 95% threshold: only auto-search for obvious live-data queries (weather, prices, scores)
-            if (gate.needsSearch && gate.confidence >= 0.95) {
-              effectiveTrigger = 'search';
-              console.log('🔍 AUTO-SEARCH: High confidence live data query');
-            }
-            // Everything else stays in chat mode
-          } catch (gateErr) {
-            console.error('❌ INTENT GATE ERROR:', gateErr);
-            // On error, just continue with chat mode
+        const intentGatePromise = shouldCheckSearchIntent
+          ? classifySearchIntent(message || '', language).catch(() => null)
+          : Promise.resolve(null);
+
+        // Resolve intent gate (non-blocking for most messages — classifySearchIntent is a local regex classifier)
+        try {
+          const gate = await intentGatePromise;
+          if (gate?.needsSearch && gate.confidence >= 0.95) {
+            effectiveTrigger = 'search';
+            console.log('🔍 AUTO-SEARCH: High confidence live data query');
           }
-        }
+        } catch { /* stay in chat mode */ }
 
         requestTrigger = effectiveTrigger;
         console.log(`🎯 REQUEST: trigger=${effectiveTrigger}, submode=${chatSubmode}, lang=${language}`);
@@ -2024,11 +2020,12 @@ serve(async (req) => {
 
         const stayHotSummary = buildStayHotSummary(Array.isArray(recentMessages) ? recentMessages : []);
 
-        // IP-based geo: DEMOTED — used ONLY for timezone fallback.
+        // IP-based geo: DEMOTED — used ONLY for timezone fallback on search path.
+        // Skip entirely for chat mode — clientTimezone from the frontend is sufficient.
         // Device GPS (via Natively SDK) is the source of truth for city/coordinates.
-        // IP geo was giving wrong results (e.g., Doha instead of Al Khor) due to ISP routing.
         const clientIp = extractClientIp(req);
-        const ipGeo = (!clientTimezone || clientTimezone === 'UTC')
+        const needsIpGeo = (!clientTimezone || clientTimezone === 'UTC') && effectiveTrigger !== 'chat';
+        const ipGeo = needsIpGeo
           ? await lookupIpGeo(clientIp)
           : null;
 
@@ -2070,7 +2067,9 @@ serve(async (req) => {
           }
         };
 
-        const profileTimezone = (!clientTimezone || clientTimezone === 'UTC')
+        // Skip DB timezone lookup when frontend already sent a valid timezone.
+        // This eliminates 2 sequential Supabase queries on every chat message.
+        const profileTimezone = (!clientTimezone || clientTimezone === 'UTC') && effectiveTrigger !== 'chat'
           ? await getProfileTimezone(userId)
           : null;
 
@@ -2098,8 +2097,8 @@ serve(async (req) => {
           const userLat = location?.latitude;
           const userLng = location?.longitude;
           
-          // Reverse geocode if we have coordinates but no city
-          if (userLat && userLng && !userCity) {
+          // Reverse geocode only on search path — chat doesn't need precise city/coords
+          if (userLat && userLng && !userCity && effectiveTrigger !== 'chat') {
             try {
               const geocoded = await reverseGeocode(userLat, userLng);
               if (geocoded.city) userCity = geocoded.city;
@@ -2166,42 +2165,46 @@ serve(async (req) => {
           hour12: true
         });
 
-        // Fetch user's active reminders for awareness (just-in-time, lightweight)
+        // Active reminders: fire-and-forget fetch — never blocks the stream.
+        // Result is passed into system prompt only when it resolves before buildSystemPrompt is called.
+        // For chat mode with no reminder keywords, skip entirely.
+        const messageHasReminderKeyword = /remind|reminder|alert|notify|don.{0,5}forget|تذكير|ذكّرني|تذكرني/i.test(message || '');
         let activeRemindersContext = '';
-        if (userId) {
-          try {
-            const { data: activeReminders } = await supabaseAdmin
-              .from('notification_history')
-              .select('reminder_content, scheduled_for')
-              .eq('user_id', userId)
-              .eq('type', 'reminder')
-              .eq('push_sent', false)
-              .gt('scheduled_for', new Date().toISOString())
-              .order('scheduled_for', { ascending: true })
-              .limit(5);
-            
-            if (activeReminders && activeReminders.length > 0) {
-              const remindersList = activeReminders.map((r: { reminder_content?: string; scheduled_for?: string }) => {
-                const content = (r.reminder_content || '').slice(0, 80);
-                const time = r.scheduled_for ? new Date(r.scheduled_for).toLocaleString('en-US', {
-                  timeZone: effectiveTimezone,
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                  hour: 'numeric',
-                  minute: '2-digit',
-                  hour12: true
-                }) : 'unknown time';
-                return `- "${content}" at ${time}`;
-              }).join('\n');
-              activeRemindersContext = `\n\n📋 USER'S ACTIVE REMINDERS (DO NOT OFFER DUPLICATES):\n${remindersList}\nIf user already has a reminder for something, acknowledge it instead of offering a new one. Example: "I see you already have a reminder set for the Canadiens game - you're all set!"`;
-              console.log(`🔔 REMINDER AWARENESS: Found ${activeReminders.length} active reminders for user`);
-            }
-          } catch (err) {
-            console.warn('⚠️ Failed to fetch active reminders:', err);
-            // Continue without reminder awareness - not critical
-          }
-        }
+        const remindersPromise: Promise<string> = (userId && messageHasReminderKeyword)
+          ? (async () => {
+              try {
+                const { data: activeReminders } = await supabaseAdmin
+                  .from('notification_history')
+                  .select('reminder_content, scheduled_for')
+                  .eq('user_id', userId)
+                  .eq('type', 'reminder')
+                  .eq('push_sent', false)
+                  .gt('scheduled_for', new Date().toISOString())
+                  .order('scheduled_for', { ascending: true })
+                  .limit(5);
+                if (activeReminders && activeReminders.length > 0) {
+                  const remindersList = activeReminders.map((r: { reminder_content?: string; scheduled_for?: string }) => {
+                    const content = (r.reminder_content || '').slice(0, 80);
+                    const time = r.scheduled_for ? new Date(r.scheduled_for).toLocaleString('en-US', {
+                      timeZone: effectiveTimezone,
+                      weekday: 'short', month: 'short', day: 'numeric',
+                      hour: 'numeric', minute: '2-digit', hour12: true
+                    }) : 'unknown time';
+                    return `- "${content}" at ${time}`;
+                  }).join('\n');
+                  console.log(`🔔 REMINDER AWARENESS: Found ${activeReminders.length} active reminders`);
+                  return `\n\n📋 USER'S ACTIVE REMINDERS (DO NOT OFFER DUPLICATES):\n${remindersList}\nIf user already has a reminder for something, acknowledge it instead of offering a new one.`;
+                }
+              } catch { /* not critical */ }
+              return '';
+            })()
+          : Promise.resolve('');
+
+        // Race: use reminders context only if DB responds within 300ms — never stall the stream
+        activeRemindersContext = await Promise.race([
+          remindersPromise,
+          new Promise<string>(resolve => setTimeout(() => resolve(''), 300))
+        ]);
 
         // Lazy-load: determine useSearch now so buildSystemPrompt can conditionally include blocks
         const chatUsesSearch = (effectiveTrigger === 'chat') && chatNeedsSearch(message || '');

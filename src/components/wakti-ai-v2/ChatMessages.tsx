@@ -18,6 +18,7 @@ import { SearchResultActions } from './SearchResultActions';
 // Note: ToolUsageIndicator, ErrorExplanationCard, MessageTimestamp, EnhancedQuickActions
 // are for WAKTI AI Coder (ProjectDetail.tsx), not for the main WAKTI AI assistant
 import { supabase } from '@/integrations/supabase/client';
+import { StreamingBubble, StreamingBubbleHandle } from './StreamingBubble';
 import { getSelectedVoices } from './TalkBackSettings';
 import { safeCopyToClipboard } from '@/utils/clipboardUtils';
 import { useNavigate } from 'react-router-dom';
@@ -305,6 +306,9 @@ interface ChatMessagesProps {
   isNewConversation: boolean;
   onUpdateMessage?: (messageId: string, content: string) => void;
   onReplyToMessage?: (messageId: string, content: string) => void;
+  streamingMessageId?: string | null;
+  streamingText?: string;
+  streamingBubbleRef?: React.RefObject<StreamingBubbleHandle>;
 }
 
 export function ChatMessages({
@@ -324,7 +328,10 @@ export function ChatMessages({
   conversationId,
   isNewConversation,
   onUpdateMessage,
-  onReplyToMessage
+  onReplyToMessage,
+  streamingMessageId,
+  streamingText = '',
+  streamingBubbleRef
 }: ChatMessagesProps) {
   const { language } = useTheme();
   const navigate = useNavigate();
@@ -1967,6 +1974,27 @@ export function ChatMessages({
           {/* Chat Messages with Lovable-style UI */}
           {sessionMessages.map((message, index) => {
             const isAssistant = message.role === 'assistant';
+            const isStreaming = !!streamingMessageId && message.id === streamingMessageId;
+            // Use live streamingText for the active bubble; fall back to stored content otherwise
+            const displayContent = isStreaming ? streamingText : message.content;
+
+            // Fast path: render StreamingBubble (ref-based, zero React re-renders) for active stream
+            if (isStreaming && streamingBubbleRef) {
+              return (
+                <div key={message.id} className="flex justify-start group">
+                  <div className="flex w-full min-w-0">
+                    <div className="rounded-lg px-4 py-3 relative w-full min-h-24 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-900 text-gray-900 dark:text-gray-100 border-2 border-blue-200/50 dark:border-blue-800/50">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge variant="secondary" className="px-2 py-1 text-xs font-medium leading-none whitespace-nowrap align-middle">
+                          {getMessageBadge(message, activeTrigger)}
+                        </Badge>
+                      </div>
+                      <StreamingBubble ref={streamingBubbleRef} language={language} />
+                    </div>
+                  </div>
+                </div>
+              );
+            }
             const metadata = (message as any)?.metadata || {};
             const hasToolsUsed = metadata.toolsUsed && metadata.toolsUsed > 0;
             const thinkingDuration = metadata.thinkingDuration;
@@ -2194,7 +2222,9 @@ export function ChatMessages({
                             </div>
                           );
                         }
-                        return renderMessageContent(message);
+                        // For the active streaming bubble, pass overridden content so renderMessageContent
+                        // reads streamingText instead of the (empty) stored message.content
+                        return renderMessageContent(isStreaming ? { ...message, content: displayContent } : message);
                       })()}
                     </div>
                     

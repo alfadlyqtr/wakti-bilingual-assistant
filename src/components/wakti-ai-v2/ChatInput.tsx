@@ -318,35 +318,16 @@ export function ChatInput({
   // Auto-reset vision mode when no images are present
   // CRITICAL: Do NOT reset while a request is loading (isLoading=true)
   useEffect(() => {
-    // Only auto-reset if we previously auto-switched to vision mode
-    // AND we're not currently loading (request in-flight)
-    console.log('🔄 AUTO-RESET CHECK:', { 
-      isLoading, 
-      wasAutoSwitchedToVision, 
-      activeTrigger, 
-      uploadedFilesCount: uploadedFiles?.length 
-    });
-    
-    if (isLoading) {
-      console.log('🔄 AUTO-RESET: Skipping - request is loading');
-      return; // Don't reset during active request
-    }
-    
+    if (isLoading) return; // Don't reset during active request
+
     const hasAnyImage = Array.isArray(uploadedFiles) && uploadedFiles.some((f: any) => {
       const t = (f?.type || '') as string;
       const url = (f?.url || '') as string;
-      const isImageType = t.startsWith('image/');
-      const isImageUrl = typeof url === 'string' && (url.startsWith('http') || url.startsWith('data:'));
-      return isImageType || isImageUrl;
+      return t.startsWith('image/') || (typeof url === 'string' && (url.startsWith('http') || url.startsWith('data:')));
     });
-    
-    console.log('🔄 AUTO-RESET: hasAnyImage =', hasAnyImage);
-    
+
     if (wasAutoSwitchedToVision && activeTrigger === 'vision' && !hasAnyImage) {
-      console.log('🔄 AUTO-RESET: No images present, switching back to chat mode');
-      if (onTriggerChange) {
-        onTriggerChange('chat');
-      }
+      if (onTriggerChange) onTriggerChange('chat');
       setWasAutoSwitchedToVision(false);
     }
   }, [uploadedFiles, activeTrigger, wasAutoSwitchedToVision, onTriggerChange, isLoading]);

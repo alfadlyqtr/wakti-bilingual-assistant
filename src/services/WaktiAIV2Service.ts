@@ -577,13 +577,19 @@ class WaktiAIV2ServiceClass {
     const storedMessages = this.loadStoredMessages();
     const allMessages = [...storedMessages, ...recentMessages];
     
-    // Remove duplicates by ID
-    const uniqueMessages = allMessages.filter((msg, index, arr) => 
-      arr.findIndex(m => m.id === msg.id) === index
-    );
+    // Remove duplicates by ID — O(n) Map instead of O(n²) findIndex
+    const seen = new Map<string, AIMessage>();
+    for (const msg of allMessages) {
+      if (msg.id) seen.set(msg.id, msg);
+    }
+    const uniqueMessages = Array.from(seen.values());
     
-    // Sort by timestamp
-    uniqueMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    // Sort by timestamp — parse once per message, not twice per comparison
+    uniqueMessages.sort((a, b) => {
+      const ta = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+      const tb = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+      return ta - tb;
+    });
     
     // Apply smart filtering and return last 100 for better context retention
     return this.smartFilterMessages(uniqueMessages).slice(-100);
@@ -626,16 +632,16 @@ class WaktiAIV2ServiceClass {
     const userQuestions: string[] = [];
     const assistantActions: string[] = [];
     
-    summaryMessages.forEach(msg => {
+    // Cap at 20 messages max — topics from older history have diminishing value
+    const skipWordList = new Set(['about', 'could', 'would', 'should', 'please', 'think', 'really', 'thing', 'know']);
+    summaryMessages.slice(-20).forEach(msg => {
       if (msg.role === 'user' && msg.content.length > 30) {
-        // Extract potential topics/keywords from older messages
-        const words = msg.content.toLowerCase().split(/\s+/);
-        words.forEach(word => {
-          if (word.length > 4 && !['about', 'could', 'would', 'should', 'please', 'think', 'really', 'thing', 'know'].includes(word)) {
-            topics.add(word);
-          }
-        });
-        
+        // Only scan first 200 chars — sufficient for topic extraction, avoids huge splits
+        const words = msg.content.substring(0, 200).toLowerCase().split(/\s+/);
+        for (const word of words) {
+          if (word.length > 4 && !skipWordList.has(word)) topics.add(word);
+          if (topics.size >= 8) break; // Stop early once we have enough
+        }
         if (msg.content.includes('?')) {
           userQuestions.push(msg.content.substring(0, 100));
         }
@@ -857,6 +863,10 @@ class WaktiAIV2ServiceClass {
       });
       const generatedSummary = this.generateConversationSummary(enhancedMessages);
 
+      // Yield the main thread so the UI can paint the loading state before we start the fetch.
+      // This decouples heavy sync pre-processing from the fetch dispatch.
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+
       // Stream-First: use only in-memory + localStorage summary — zero DB wait before fetch.
       // DB summary load is fire-and-forget (not used this turn, available next turn via post-stream save).
       const localSummary = conversationId ? (localStorage.getItem(`wakti_local_summary_${conversationId}`) || null) : null;
@@ -1059,7 +1069,6 @@ class WaktiAIV2ServiceClass {
                     const line = tailLine.trim();
                     if (!line.startsWith('data: ')) continue;
                     const data = line.slice(6);
-                    console.log('🔍 SSE RAW (tail):', data);
 
                     if (data === '[DONE]') {
                       if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
@@ -1069,7 +1078,6 @@ class WaktiAIV2ServiceClass {
 
                     try {
                       const parsed = JSON.parse(data);
-                      console.log('🔍 SSE PARSED (tail):', parsed);
                       if (parsed.error) {
                         const errObj = parsed.error;
                         const errMsg = typeof errObj === 'string'
@@ -1106,7 +1114,6 @@ class WaktiAIV2ServiceClass {
             for (const line of lines) {
               if (!line.startsWith('data: ')) continue;
               const data = line.slice(6);
-              console.log('🔍 SSE RAW:', data);
 
               if (data === '[DONE]') {
                 if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
@@ -1116,7 +1123,6 @@ class WaktiAIV2ServiceClass {
 
               try {
                 const parsed = JSON.parse(data);
-                console.log('🔍 SSE PARSED:', parsed);
                 if (parsed.error) {
                   const errObj = parsed.error;
                   const errMsg = typeof errObj === 'string'
@@ -1583,15 +1589,7 @@ class WaktiAIV2ServiceClass {
 
       // Try Claude first, then auto-fallback to OpenAI on 529/overloaded errors (text/search or fallback vision)
       try {
-        // If we have images from Chat upload, attempt the new Vision endpoint first (Option A)
-        console.log('🔍 VISION CHECK:', { 
-          hasAttachedFiles: !!attachedFiles, 
-          attachedFilesLength: attachedFiles?.length,
-          activeTrigger,
-          firstFileDataLength: attachedFiles?.[0]?.data?.length,
-          firstFileContentLength: attachedFiles?.[0]?.content?.length
-        });
-        
+        // Short-circuit: no files → skip all vision processing, go straight to brain-stream
         if (attachedFiles && attachedFiles.length > 0 && activeTrigger !== 'image') {
           console.log('✅ VISION PATH: Entering vision processing with', attachedFiles.length, 'files');
           // Preflight: size-check and downscale large images client-side to avoid gateway aborts
