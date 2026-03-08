@@ -443,7 +443,7 @@ const WaktiAIV2 = () => {
 
         setSessionMessages(prev => {
           const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
-          EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId);
+          setTimeout(() => EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId), 0);
           return finalMessages;
         });
         return; // Done (skip streaming path)
@@ -492,7 +492,7 @@ const WaktiAIV2 = () => {
 
           setSessionMessages(prev => {
             const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
-            EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId);
+            setTimeout(() => EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId), 0);
             return finalMessages;
           });
           return; // Done (skip streaming path)
@@ -606,7 +606,7 @@ const WaktiAIV2 = () => {
         streamingBubbleRef.current?.reset();
         setSessionMessages(prev => {
           const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
-          EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId);
+          setTimeout(() => EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId), 0);
           return finalMessages;
         });
       }
@@ -645,7 +645,7 @@ const WaktiAIV2 = () => {
             },
           };
         });
-        EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId);
+        setTimeout(() => EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId), 0);
         return finalMessages;
       });
     } finally {
@@ -735,7 +735,7 @@ const WaktiAIV2 = () => {
     };
     setSessionMessages(prev => {
       const updated = [...prev, newMessage];
-      EnhancedFrontendMemory.saveActiveConversation(updated, currentConversationId);
+      setTimeout(() => EnhancedFrontendMemory.saveActiveConversation(updated, currentConversationId), 0);
       return updated;
     });
   }, [currentConversationId]);

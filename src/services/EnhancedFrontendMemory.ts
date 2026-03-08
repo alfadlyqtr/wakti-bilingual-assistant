@@ -72,8 +72,6 @@ class EnhancedFrontendMemoryClass {
       };
       
       localStorage.setItem('wakti_active_conversation', JSON.stringify(activeData));
-      console.log('✅ FRONTEND BOSS: Saved active conversation', actualId, 'with', normalized.length, 'messages');
-      
       return actualId;
     } catch (error) {
       console.error('❌ FRONTEND BOSS: Failed to save active conversation:', error);
@@ -85,7 +83,6 @@ class EnhancedFrontendMemoryClass {
     try {
       const stored = localStorage.getItem('wakti_active_conversation');
       if (!stored) {
-        console.log('💭 FRONTEND BOSS: No active conversation found');
         return { messages: [], conversationId: null };
       }
 
