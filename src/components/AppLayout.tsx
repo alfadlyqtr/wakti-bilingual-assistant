@@ -185,12 +185,18 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
         toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
         setPurchaseInProgress(false);
         
-        // Clear cache and force ProtectedRoute refresh
+        // IMMEDIATELY clear cache and dispatch update events — do NOT wait for check-subscription
+        // This closes the paywall right away on iOS/sandbox where RC sync can be slow
         if (user?.id) {
           try {
             localStorage.removeItem(`wakti_sub_status_${user.id}`);
             window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
+            window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
           } catch {}
+          // Fire check-subscription in background to sync RC data — non-blocking
+          supabase.functions.invoke('check-subscription', { body: { userId: user.id } })
+            .then(({ data }) => { console.log('[Purchase] Background RC sync:', data?.isSubscribed); })
+            .catch(err => { console.warn('[Purchase] Background RC sync failed:', err); });
         }
         
         setTimeout(() => onOpenChange(false), 1000);

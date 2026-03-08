@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useAudioSession } from '@/hooks/useAudioSession';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Loader2, ChevronDown, ChevronLeft, ChevronRight, Plus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Mic, X, Square } from 'lucide-react';
+import { Send, Loader2, ChevronDown, ChevronLeft, ChevronRight, Plus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Mic, X, Square, Volume2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -1157,137 +1157,47 @@ export function ChatInput({
                   {/* Mode Badge with dropdowns */}
                   <div className="flex items-center relative z-[81] pointer-events-auto">
                     {activeTrigger === 'search' ? (
-                      <div className="relative">
+                      <div className="relative flex items-center gap-1">
+                        {/* Web Button */}
                         <button
-                          ref={searchModeBtnRef}
-                          data-dropdown
-                          onPointerDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            // Hard stop native bubbling to our document click listener
-                            // @ts-ignore
-                            if (e.nativeEvent && typeof e.nativeEvent.stopImmediatePropagation === 'function') e.nativeEvent.stopImmediatePropagation();
-                            const rect = searchModeBtnRef.current?.getBoundingClientRect();
-                            if (searchMenuPos) {
-                              setSearchMenuPos(null);
-                            } else if (rect) {
-                              const margin = 8; // gap above badge
-                              const rightEdge = Math.min(window.innerWidth - 12, rect.right);
-                              setSearchMenuPos({ top: rect.top - margin, left: rightEdge - 8 });
-                            }
-                          }}
-                          className={`inline-flex items-center gap-1 px-3 py-1 h-8 rounded-full text-xs font-medium leading-none border align-middle ${
-                            searchSubmode === 'youtube'
-                              ? 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700/50'
-                              : 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/50'
+                          onPointerUp={() => setSearchSubmode('web')}
+                          className={`inline-flex items-center gap-1 px-2 py-1 h-7 rounded-full text-xs font-medium leading-none border align-middle transition-colors ${
+                            searchSubmode === 'web'
+                              ? 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-600/50'
+                              : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700/50 hover:bg-green-50 hover:text-green-600'
                           }`}
                         >
-                          <span className={`w-2 h-2 rounded-full ${searchSubmode === 'youtube' ? 'bg-red-500' : 'bg-green-500'}`}></span>
-                          <span className="text-xs">
-                            {searchSubmode === 'youtube' ? 'YouTube' : (language === 'ar' ? 'الويب' : 'Web')}
-                          </span>
-                          <ChevronDown className="h-3 w-3" />
+                          <span className={`w-1.5 h-1.5 rounded-full ${searchSubmode === 'web' ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                          <span className="text-xs">{language === 'ar' ? 'الويب' : 'Web'}</span>
                         </button>
-                        {createPortal(
-                          <AnimatePresence>
-                            {searchMenuPos && (
-                              <motion.div
-                                key="search-menu"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ type: 'spring', stiffness: 320, damping: 24 }}
-                                className="fixed z-[9999] min-w-[140px]"
-                                data-dropdown-menu
-                                style={{ top: searchMenuPos.top, left: searchMenuPos.left, transform: 'translate(-100%, -100%)', transformOrigin: 'bottom right' }}
-                                onPointerDown={(e) => e.stopPropagation()}
-                              >
-                                <div className="rounded-2xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 py-1">
-                                  <button onPointerUp={() => { setSearchSubmode('web'); setSearchMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2"><span className="w-3 h-3 bg-green-500 rounded-full"></span>{language === 'ar' ? 'الويب' : 'Web'}</button>
-                                  <button onPointerUp={() => { setSearchSubmode('youtube'); setSearchMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2"><span className="w-3 h-3 bg-red-500 rounded-full"></span>YouTube</button>
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>,
-                          document.body
-                        )}
+                        {/* YouTube Button */}
+                        <button
+                          onPointerUp={() => setSearchSubmode('youtube')}
+                          className={`inline-flex items-center gap-1 px-2 py-1 h-7 rounded-full text-xs font-medium leading-none border align-middle transition-colors ${
+                            searchSubmode === 'youtube'
+                              ? 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-600/50'
+                              : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700/50 hover:bg-red-50 hover:text-red-600'
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${searchSubmode === 'youtube' ? 'bg-red-500' : 'bg-gray-400'}`}></span>
+                          <span className="text-xs">YouTube</span>
+                        </button>
                       </div>
                     ) : (activeTrigger === 'chat' || activeTrigger === 'vision') ? (
                       <div className="relative flex items-center gap-2">
-                        {/* Chat/Study Submode Dropdown - HIDDEN when in Study mode (controlled via Modes bar) */}
+                        {/* Talk Mode Button - Direct access, no dropdown */}
                         {activeTrigger === 'chat' && chatSubmode !== 'study' && (
                         <button
-                          ref={chatSubmodeBtnRef}
-                          data-dropdown
-                          onPointerUp={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            // @ts-ignore
-                            if (e.nativeEvent && typeof e.nativeEvent.stopImmediatePropagation === 'function') e.nativeEvent.stopImmediatePropagation();
-                            const rect = chatSubmodeBtnRef.current?.getBoundingClientRect();
-                            if (chatSubmodeMenuPos) {
-                              setChatSubmodeMenuPos(null);
-                            } else if (rect) {
-                              const margin = 8;
-                              const rightEdge = Math.min(window.innerWidth - 12, rect.right);
-                              setChatSubmodeMenuPos({ top: rect.top - margin, left: rightEdge - 8 });
-                            }
-                          }}
-                          className={`inline-flex items-center gap-1 px-3 py-1 h-8 rounded-full text-xs font-medium leading-none border align-middle ${
-                            chatSubmode === 'study'
-                              ? 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-700/50'
-                              : 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700/50'
-                          }`}
+                          onPointerUp={() => setIsTalkOpen(true)}
+                          className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-full text-xs font-medium leading-none border align-middle bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-900/30 dark:text-pink-400 dark:border-pink-700/50"
                         >
-                          <span className={`w-2 h-2 rounded-full ${chatSubmode === 'study' ? 'bg-purple-500' : 'bg-blue-500'}`}></span>
-                          <span className="text-xs">
-                            {chatSubmode === 'study' 
-                              ? (language === 'ar' ? 'دراسة' : 'Study') 
-                              : (language === 'ar' ? 'دردشة' : 'Chat')}
+                          <span className="flex items-center gap-0.5 h-3">
+                            <span className="w-0.5 bg-current rounded-full animate-pulse" style={{ height: '60%', animationDelay: '0ms' }} />
+                            <span className="w-0.5 bg-current rounded-full animate-pulse" style={{ height: '100%', animationDelay: '150ms' }} />
+                            <span className="w-0.5 bg-current rounded-full animate-pulse" style={{ height: '70%', animationDelay: '300ms' }} />
                           </span>
-                          <ChevronDown className="h-3 w-3" />
+                          <span className="text-xs">{language === 'ar' ? 'تحدث' : 'Talk'}</span>
                         </button>
-                        )}
-                        {createPortal(
-                          <AnimatePresence>
-                            {chatSubmodeMenuPos && (
-                              <motion.div
-                                key="chat-submode-menu"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ type: 'spring', stiffness: 320, damping: 24 }}
-                                className="fixed z-[9999] min-w-[140px]"
-                                data-dropdown-menu
-                                style={{ top: chatSubmodeMenuPos.top, left: chatSubmodeMenuPos.left, transform: 'translate(-100%, -100%)', transformOrigin: 'bottom right' }}
-                                onPointerDown={(e) => e.stopPropagation()}
-                              >
-                                <div className="rounded-2xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 py-1">
-                                  <button 
-                                    onPointerUp={() => { 
-                                      onChatSubmodeChange?.('chat'); 
-                                      setChatSubmodeMenuPos(null); 
-                                    }} 
-                                    className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2"
-                                  >
-                                    <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
-                                    {language === 'ar' ? 'دردشة' : 'Chat'}
-                                  </button>
-                                  <button 
-                                    onPointerUp={() => {
-                                      setChatSubmodeMenuPos(null);
-                                      setIsTalkOpen(true);
-                                    }} 
-                                    className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2"
-                                  >
-                                    <Mic className="h-3 w-3 text-pink-600" />
-                                    {language === 'ar' ? 'تحدث' : 'Talk'}
-                                  </button>
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>,
-                          document.body
                         )}
                         <button
                           type="button"
@@ -1574,7 +1484,7 @@ export function ChatInput({
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: 6, scale: 0.96 }}
                               transition={{ delay: 0.00, type: 'spring', stiffness: 420, damping: 26 }}
-                              onPointerUp={() => { onTriggerChange && onTriggerChange('chat'); setShowQuickModes(false); }}
+                              onPointerUp={() => { onTriggerChange && onTriggerChange('chat'); onChatSubmodeChange?.('chat'); setShowQuickModes(false); }}
                               className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold shadow"
                               type="button"
                             >

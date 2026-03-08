@@ -380,7 +380,8 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     // CRITICAL FIX: Don't show paywall while profile is loading to prevent race condition
     if (isProfileLoading) { setShowPaywall(false); return; }
     
-    if (isSubscribed) { setShowPaywall(false); return; }
+    // Close paywall if EITHER source confirms the subscription (prevents race conditions)
+    if (isSubscribed || subscriptionStatus.isSubscribed) { setShowPaywall(false); return; }
     const isAccount = location.pathname.startsWith('/account');
     if (isAccount) { setShowPaywall(false); return; }
 
@@ -412,7 +413,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
 
     // Still in grace period
     setShowPaywall(false);
-  }, [user?.id, isSubscribed, isAccessExpired, isNewUser, wasSubscribed, hasTrialStarted, location.pathname, location.search, TEMP_DISABLE_SUBSCRIPTION_CHECKS, DEV, accessCheckTick, isProfileLoading]);
+  }, [user?.id, isSubscribed, subscriptionStatus.isSubscribed, isAccessExpired, isNewUser, wasSubscribed, hasTrialStarted, location.pathname, location.search, TEMP_DISABLE_SUBSCRIPTION_CHECKS, DEV, accessCheckTick, isProfileLoading]);
 
   let effectiveHasSession = hasAnySession;
   
