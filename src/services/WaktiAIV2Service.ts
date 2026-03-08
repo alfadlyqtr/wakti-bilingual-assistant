@@ -291,8 +291,6 @@ class WaktiAIV2ServiceClass {
         }
       } catch {}
     } else {
-      console.log('[WaktiAIV2Service] Force fresh location requested (near me / weather / traffic query)');
-      // Clear the native location cache to force fresh fetch
       clearLocationCache();
     }
 
@@ -312,9 +310,7 @@ class WaktiAIV2ServiceClass {
     // If forceFresh, request fresh location with skipCache
     let hasDeviceGPS = false;
     try {
-      console.log('[WaktiAIV2Service] Attempting to get native location, forceFresh:', forceFresh);
       const nativeLoc = await getNativeLocation({ skipCache: forceFresh });
-      console.log('[WaktiAIV2Service] Native location result:', JSON.stringify(nativeLoc));
       if (nativeLoc && typeof nativeLoc.latitude === 'number' && typeof nativeLoc.longitude === 'number') {
         hasDeviceGPS = true;
         resolved = {
@@ -326,9 +322,8 @@ class WaktiAIV2ServiceClass {
           country: nativeLoc.country || resolved.country,
           source: nativeLoc.source === 'browser' ? 'native' : 'native',
         };
-        console.log(`[WaktiAIV2Service] ✅ Device location: [${resolved.latitude}, ${resolved.longitude}] source=${nativeLoc.source} accuracy=${nativeLoc.accuracy}`);
       } else {
-        console.log('[WaktiAIV2Service] ⚠️ Native location returned null or invalid');
+        // Native location returned null or invalid — will try fallbacks
       }
     } catch (err) {
       console.warn('[WaktiAIV2Service] Native location error:', err);
@@ -356,7 +351,6 @@ class WaktiAIV2ServiceClass {
     // NEVER use IP coordinates — they give wrong results (e.g., Doha instead of Al Khor)
     // due to ISP routing all traffic through a central location.
     if (!hasDeviceGPS && (!resolved.latitude || !resolved.longitude || !resolved.city || !resolved.country)) {
-      console.log('[WaktiAIV2Service] ⚠️ No device GPS available, using IP fallback for city/country only');
       const ipLoc = await this.fetchIpLocation();
       if (ipLoc) {
         resolved = {
@@ -368,12 +362,7 @@ class WaktiAIV2ServiceClass {
           country: resolved.country || ipLoc.country || null,
           source: resolved.source || 'ip',
         };
-        if (forceFresh) {
-          console.log('[WaktiAIV2Service] 🚫 forceFresh=true, IP coordinates BLOCKED (would give wrong location)');
-        }
       }
-    } else if (hasDeviceGPS) {
-      console.log('[WaktiAIV2Service] ✅ Device GPS available, skipping IP fallback entirely');
     }
 
     resolved.timezone = timezone;
@@ -778,119 +767,89 @@ class WaktiAIV2ServiceClass {
     try {
       // Gate for emergency non-streaming fallback (disabled by default; streaming stays streaming)
       const ENABLE_CORS_FALLBACK = false;
-      if (!userId) {
-        await ensurePassport();
-        userId = await getCurrentUserId();
-        if (!userId) throw new Error('Authentication required');
-      }
 
-      // Fire-and-forget: personal touch refresh runs in background, never blocks the stream
-      this.maybeRefreshPersonalTouchFromServer(userId).catch(() => {});
+      // ═══════════════════════════════════════════════════════════════════
+      // FRONT DESK PATTERN: Parallel pipeline — fetch fires in < 50ms
+      // Auth, session, location all resolve in parallel.
+      // Message prep runs synchronously during the parallel await.
+      // ═══════════════════════════════════════════════════════════════════
 
-      // Generate a lightweight requestId for diagnostics across iOS/Safari
+      // 1) PARALLEL TRACK A: Auth (only if no userId provided)
+      const authPromise = !userId
+        ? (async () => { await ensurePassport(); return getCurrentUserId(); })()
+        : Promise.resolve(userId);
+
+      // 2) PARALLEL TRACK B: Session token (module-level cache — instant if warm)
+      const sessionPromise = getCachedSession();
+
+      // 3) PARALLEL TRACK C: Location — NEVER blocks chat.
+      //    For search: race with 500ms timeout so fetch isn't held hostage by GPS.
+      const needsLocation = activeTrigger === 'search' || queryNeedsFreshLocation(message);
+      const locationPromise: Promise<UserLocationContext | null> = needsLocation
+        ? Promise.race([
+            this.getUserLocation(userId || '', activeTrigger === 'search' || queryNeedsFreshLocation(message)),
+            new Promise<null>(r => setTimeout(() => r(null), 500))
+          ])
+        : Promise.resolve(null);
+
+      // 4) Fire-and-forget: personal touch refresh (background, never blocks)
+      if (userId) this.maybeRefreshPersonalTouchFromServer(userId).catch(() => {});
+
+      // 5) SYNC: Message prep + summary (runs while auth/session/location resolve)
       const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      console.log(`🚀 FRONTEND BOSS: Starting streaming request for ${activeTrigger} mode [${requestId}]`);
-
-      // Compute client local hour and welcome-back flag (gap >= 12h)
       const clientLocalHour = new Date().getHours();
       let isWelcomeBack = false;
       try {
         const lastSeenStr = localStorage.getItem('wakti_last_seen_at');
         if (lastSeenStr) {
-          const gapMs = Date.now() - Number(lastSeenStr);
-          isWelcomeBack = gapMs >= 12 * 60 * 60 * 1000; // 12 hours
+          isWelcomeBack = (Date.now() - Number(lastSeenStr)) >= 12 * 60 * 60 * 1000;
         }
       } catch {}
 
-      // Only request GPS location for search/near-me/weather/traffic queries.
-      // Normal chat/reminders do NOT need location (avoids unnecessary GPS calls + iOS prompts).
-      const needsLocation = activeTrigger === 'search' || queryNeedsFreshLocation(message);
-      let location: UserLocationContext | null = null;
-      if (needsLocation) {
-        const needsFreshLocation = activeTrigger === 'search' || queryNeedsFreshLocation(message);
-        console.log(`📍 LOCATION: Query needs location (fresh=${needsFreshLocation}) - "${message.substring(0, 50)}..."`);
-        location = await this.getUserLocation(userId, needsFreshLocation);
-      } else {
-        console.log(`📍 LOCATION: Skipping GPS for non-location query (trigger=${activeTrigger})`);
-      }
-      const clientTimezone = location?.timezone || this.getClientTimezone();
-      
-      // DEBUG: Log what location data we're sending to the Edge Function
-      console.log('📍 LOCATION DEBUG:', {
-        hasLocation: !!location,
-        source: location?.source,
-        latitude: location?.latitude,
-        longitude: location?.longitude,
-        city: location?.city,
-        country: location?.country,
-        timezone: clientTimezone,
-      });
-
-      // Enhanced message handling with 100-message memory window
-      // CRITICAL: Strip large data to avoid huge request bodies that crash Edge Functions
       const rawEnhanced = this.getEnhancedMessages(recentMessages);
       const enhancedMessages = rawEnhanced.map(msg => {
         const cleaned: any = { ...msg };
-        
-        // Strip base64 data from attachedFiles (vision images)
         if (cleaned.attachedFiles && Array.isArray(cleaned.attachedFiles)) {
           cleaned.attachedFiles = cleaned.attachedFiles.map((f: any) => ({
-            name: f.name,
-            type: f.type,
-            size: f.size,
-            imageType: f.imageType,
+            name: f.name, type: f.type, size: f.size, imageType: f.imageType,
           }));
         }
-        
-        // Strip search metadata (contains huge raw_content from web scraping)
         if (cleaned.metadata?.search) {
           cleaned.metadata = {
             ...cleaned.metadata,
-            search: {
-              answer: cleaned.metadata.search.answer?.substring(0, 500),
-              total: cleaned.metadata.search.total,
-              // Exclude full results array - it's massive
-            }
+            search: { answer: cleaned.metadata.search.answer?.substring(0, 500), total: cleaned.metadata.search.total }
           };
         }
-        
-        // Truncate very long content (e.g., from search results)
         if (cleaned.content && cleaned.content.length > 2000) {
           cleaned.content = cleaned.content.substring(0, 2000) + '... [truncated]';
         }
-        
         return cleaned;
       });
       const generatedSummary = this.generateConversationSummary(enhancedMessages);
-
-      // Yield the main thread so the UI can paint the loading state before we start the fetch.
-      // This decouples heavy sync pre-processing from the fetch dispatch.
-      await new Promise<void>(resolve => setTimeout(resolve, 0));
-
-      // Stream-First: use only in-memory + localStorage summary — zero DB wait before fetch.
-      // DB summary load is fire-and-forget (not used this turn, available next turn via post-stream save).
       const localSummary = conversationId ? (localStorage.getItem(`wakti_local_summary_${conversationId}`) || null) : null;
       const pieces = [conversationSummary, localSummary, generatedSummary].filter((s) => !!(s && s.trim())) as string[];
       let finalSummary = pieces.join(' ').slice(0, 1200);
 
-      // Get auth token — uses module-level cache to avoid a blocking network round-trip
-      const session = await getCachedSession();
-      if (!session?.access_token) {
-        throw new Error('No valid session for streaming');
-      }
-      
-      // Mobile-optimized anon key fallback for PWA environments
-      let maybeAnonKey;
-      try {
-        maybeAnonKey = (typeof window !== 'undefined' && (window as any).__SUPABASE_ANON_KEY)
-          || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
-      } catch (e) {
-        maybeAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
-      }
+      // 6) RESOLVE ALL PARALLEL TRACKS (auth + session + location)
+      const [resolvedUserId, session, location] = await Promise.all([
+        authPromise,
+        sessionPromise,
+        locationPromise
+      ]);
+      userId = resolvedUserId || userId;
+      if (!userId) throw new Error('Authentication required');
+      if (!session?.access_token) throw new Error('No valid session for streaming');
+
+      // Fire-and-forget: refresh PT now that we have confirmed userId
+      if (!resolvedUserId) this.maybeRefreshPersonalTouchFromServer(userId).catch(() => {});
+
+      const clientTimezone = location?.timezone || this.getClientTimezone();
+
+      const maybeAnonKey = (typeof window !== 'undefined' && (window as any).__SUPABASE_ANON_KEY)
+        || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
 
       // Inner attempt function: parameterize primary provider and stream
       const attemptStream = async (primary: 'gemini-brain' | 'claude' | 'openai') => {
-        // Mobile-optimized SSE request with retry logic
         const maxRetries = 2;
         let response;
 
@@ -900,16 +859,6 @@ class WaktiAIV2ServiceClass {
             const pt_version = pt?.pt_version ?? null;
             const pt_updated_at = pt?.pt_updated_at ?? null;
             const pt_hash = this.hashPersonalTouch(pt);
-
-            console.log('🎛️ PT_OUT:', {
-              tone: pt?.tone || null,
-              style: pt?.style || null,
-              pt_version,
-              pt_updated_at,
-              pt_hash
-            });
-
-            console.log(`📡 CHAT: Attempt ${attempt}/${maxRetries} - Calling brain-stream [${requestId}]`);
             response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain-stream`, {
               method: 'POST',
               mode: 'cors',

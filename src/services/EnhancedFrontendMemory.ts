@@ -97,11 +97,9 @@ class EnhancedFrontendMemoryClass {
         // Auto-archive expired conversation
         this.archiveConversation(data);
         localStorage.removeItem('wakti_active_conversation');
-        console.log('📦 FRONTEND BOSS: Auto-archived expired active conversation');
         return { messages: [], conversationId: null };
       }
 
-      console.log('✅ FRONTEND BOSS: Loaded active conversation', data.id, 'with', data.messages?.length || 0, 'messages');
       return {
         messages: data.messages || [],
         conversationId: data.id || null
@@ -115,7 +113,6 @@ class EnhancedFrontendMemoryClass {
   clearActiveConversation() {
     try {
       localStorage.removeItem('wakti_active_conversation');
-      console.log('🗑️ FRONTEND BOSS: Cleared active conversation');
     } catch (error) {
       console.error('❌ FRONTEND BOSS: Failed to clear active conversation:', error);
     }
@@ -124,7 +121,6 @@ class EnhancedFrontendMemoryClass {
   // Sidebar archive management
   archiveCurrentConversation(messages: any[], conversationId: string | null): boolean {
     if (!conversationId || messages.length === 0) {
-      console.log('⚠️ FRONTEND BOSS: No conversation to archive');
       return false;
     }
 
@@ -146,7 +142,6 @@ class EnhancedFrontendMemoryClass {
       };
 
       this.archiveConversation(conversation);
-      console.log('📦 FRONTEND BOSS: Archived conversation', conversationId, 'to sidebar');
       return true;
     } catch (error) {
       console.error('❌ FRONTEND BOSS: Failed to archive conversation:', error);
@@ -167,7 +162,6 @@ class EnhancedFrontendMemoryClass {
       const limitedArchived = filtered.slice(0, 5);
       
       localStorage.setItem('wakti_archived_conversations', JSON.stringify(limitedArchived));
-      console.log('📦 FRONTEND BOSS: Conversation archived, total archived:', limitedArchived.length);
     } catch (error) {
       console.error('❌ FRONTEND BOSS: Failed to save to archive:', error);
     }
@@ -198,11 +192,9 @@ class EnhancedFrontendMemoryClass {
       
       const conversation = archived.find(conv => conv.id === conversationId);
       if (!conversation) {
-        console.log('❌ FRONTEND BOSS: Archived conversation not found:', conversationId);
         return null;
       }
 
-      console.log('✅ FRONTEND BOSS: Loaded archived conversation', conversationId, 'with', conversation.messages.length, 'messages');
       return {
         messages: conversation.messages,
         conversationId: conversation.id
@@ -221,7 +213,6 @@ class EnhancedFrontendMemoryClass {
       const filtered = archived.filter(conv => conv.id !== conversationId);
       localStorage.setItem('wakti_archived_conversations', JSON.stringify(filtered));
       
-      console.log('🗑️ FRONTEND BOSS: Deleted archived conversation', conversationId);
       return true;
     } catch (error) {
       console.error('❌ FRONTEND BOSS: Failed to delete archived conversation:', error);
@@ -231,8 +222,6 @@ class EnhancedFrontendMemoryClass {
 
   // New conversation workflow
   startNewConversation(currentMessages: any[], currentConversationId: string | null): string {
-    console.log('🔄 FRONTEND BOSS: Starting new conversation workflow');
-    
     // Archive current conversation if it exists
     if (currentConversationId && currentMessages.length > 0) {
       this.archiveCurrentConversation(currentMessages, currentConversationId);
@@ -243,8 +232,6 @@ class EnhancedFrontendMemoryClass {
     
     // Generate new conversation ID
     const newConversationId = this.generateConversationId();
-    console.log('✅ FRONTEND BOSS: New conversation started:', newConversationId);
-    
     return newConversationId;
   }
 
@@ -253,7 +240,6 @@ class EnhancedFrontendMemoryClass {
     try {
       localStorage.removeItem('wakti_active_conversation');
       localStorage.removeItem('wakti_archived_conversations');
-      console.log('🗑️ FRONTEND BOSS: Cleared all memory');
     } catch (error) {
       console.error('❌ FRONTEND BOSS: Failed to clear all memory:', error);
     }
