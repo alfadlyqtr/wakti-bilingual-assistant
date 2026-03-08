@@ -1214,8 +1214,8 @@ export function ChatInput({
                       </div>
                     ) : (activeTrigger === 'chat' || activeTrigger === 'vision') ? (
                       <div className="relative flex items-center gap-2">
-                        {/* Chat/Study Submode Dropdown */}
-                        {activeTrigger === 'chat' && (
+                        {/* Chat/Study Submode Dropdown - HIDDEN when in Study mode (controlled via Modes bar) */}
+                        {activeTrigger === 'chat' && chatSubmode !== 'study' && (
                         <button
                           ref={chatSubmodeBtnRef}
                           data-dropdown
