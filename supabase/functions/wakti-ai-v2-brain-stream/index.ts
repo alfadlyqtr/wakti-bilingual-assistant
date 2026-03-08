@@ -1007,9 +1007,66 @@ function _promptTimezone(): string {
   return `\n\n⏰ CRITICAL TIMEZONE RULES (HIGHEST PRIORITY):\n1. The user's local time is shown above as "Current local time". This IS the user's timezone.\n2. When you find times in OTHER timezones (ET, PT, GMT, UTC), convert them to the user's local timezone.\n3. If a time is ALREADY in the user's local timezone, DO NOT convert it again.\n4. Format: Show local time first, then original. Example: "3:00 AM (7:00 PM ET)"\n5. NEVER double-convert.`;
 }
 
-// REMINDER EXTENSION (~800 chars): Only injected when activeReminders exist
-function _promptReminder(userNick: string): string {
-  return `\n\n🔔 SMART REMINDER DETECTION (PROACTIVE ASSISTANT)\nYou can help users set reminders. Be PROACTIVE: detect any situation with a time component, something important, and something actionable.\n\nEXPLICIT REMINDER REQUESTS (USE CONFIRM FORMAT):\n- User says "remind me", "don't let me forget", "I need to remember" → Use WAKTI_REMINDER_CONFIRM immediately.\n\nCRITICAL - RELATIVE TIME CALCULATION:\nWhen user says "in X minutes" or "in X hours": ADD X to the current time. NEVER subtract.\n\nREMINDER FORMAT (DO NOT SHOW RAW JSON TO USER):\nFOR PROACTIVE OFFERS:\n<!--WAKTI_REMINDER_OFFER:{"suggested_time":"ISO-8601","reminder_text":"Full reminder message","context":"Brief context"}-->\nFOR EXPLICIT REQUESTS or CONFIRMATIONS:\n<!--WAKTI_REMINDER_CONFIRM:{"scheduled_for":"ISO-8601","reminder_text":"Full reminder message","timezone":"user-local"}-->\n\nWHEN USER CONFIRMS A REMINDER FOR AN EVENT:\n- ASSUME they want the NEXT UPCOMING game/event.\n- ALWAYS show: "[Original Time] ([User's Local Time])"\n- Example: "7:00 PM ET (3:00 AM Friday Doha time)"\n\nBe like a smart assistant who anticipates needs. Think ${userNick ? userNick + "'s" : 'the user\'s'} personal assistant.`;
+// REMINDER INTERCEPTION: lean single-line instruction appended to base prompt
+// Full reminder logic is now handled by backend interception after stream completes.
+const REMINDER_INSTRUCTION = '\n\nIf the user explicitly asks for a reminder, append this JSON block at the very end of your response (on its own line, no markdown): {"action":"set_reminder","time":"YYYY-MM-DDTHH:MM:SS","text":"reminder description"}. Calculate relative times (e.g. "in 2 minutes") by adding to current time. If no reminder is requested, do not output any JSON.';
+
+/**
+ * Intercept reminder JSON from AI response, schedule it, and return cleaned text.
+ * Pattern: {"action":"set_reminder","time":"...","text":"..."} at end of response.
+ */
+async function interceptAndScheduleReminder(
+  responseText: string,
+  userId: string,
+  timezone: string,
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  encoder: TextEncoder
+): Promise<string> {
+  // Match the JSON block at the end of the response (with optional whitespace)
+  const reminderRegex = /\{\s*"action"\s*:\s*"set_reminder"\s*,\s*"time"\s*:\s*"([^"]+)"\s*,\s*"text"\s*:\s*"([^"]+)"\s*\}\s*$/;
+  const match = responseText.match(reminderRegex);
+  if (!match) return responseText;
+
+  const [fullMatch, timeStr, reminderText] = match;
+  console.log(`🔔 REMINDER INTERCEPT: Found reminder block — time=${timeStr}, text=${reminderText}`);
+
+  // Strip the JSON block from the response the user sees
+  const cleanedText = responseText.slice(0, responseText.length - fullMatch.length).trimEnd();
+
+  // Schedule the reminder via schedule-reminder-push edge function
+  try {
+    const scheduleUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/schedule-reminder-push`;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const schedResp = await fetch(scheduleUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        scheduled_for: timeStr,
+        reminder_text: reminderText,
+        timezone,
+      }),
+    });
+    if (schedResp.ok) {
+      console.log(`✅ REMINDER INTERCEPT: Scheduled successfully`);
+      // Notify frontend that a reminder was created
+      try {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ reminderScheduled: { time: timeStr, text: reminderText } })}
+
+`));
+      } catch { /* stream may be closing */ }
+    } else {
+      const errBody = await schedResp.text();
+      console.warn(`⚠️ REMINDER INTERCEPT: Schedule failed ${schedResp.status}`, errBody);
+    }
+  } catch (err) {
+    console.warn('⚠️ REMINDER INTERCEPT: Fetch error', err);
+  }
+
+  return cleanedText;
 }
 
 // ─── LAZY-LOAD DISPATCHER ────────────────────────────────────────────────────
@@ -1028,7 +1085,7 @@ function buildSystemPrompt(
   const userNick = ((pt.nickname as string | undefined) || '').toString().trim();
   const aiNick  = ((pt.ai_nickname as string | undefined) || '').toString().trim();
   const useSearch   = lazyOpts?.useSearch   ?? (activeTrigger === 'search');
-  const hasReminders = lazyOpts?.hasReminders ?? false;
+  const _hasReminders = lazyOpts?.hasReminders ?? false;
 
   // BASE is always included (~500 chars)
   let prompt = _promptBase(language, currentDate, localTime, pt, aiNick);
@@ -1038,7 +1095,6 @@ function buildSystemPrompt(
     // Full search mode: comprehensive research rules
     prompt += _promptSearchModeFull(userNick, aiNick, currentDate, localTime);
     prompt += _promptTimezone();
-    prompt += _promptReminder(userNick);
   } else if (chatSubmode === 'study') {
     // Study mode: tutor block only
     prompt += _promptStudy();
@@ -1047,15 +1103,14 @@ function buildSystemPrompt(
     // Chat mode triggered grounding: compact search hint
     prompt += _promptChatSearch(userNick, aiNick, currentDate);
     prompt += _promptTimezone();
-    prompt += _promptReminder(userNick);
   } else {
-    // Pure chat: freshness hint + reminders always (needed to detect new reminder requests)
-    // NOTE: No _promptTimezone() here — plain chat doesn't need timezone conversion rules
+    // Pure chat: freshness hint only — reminder interception handled at backend level
     prompt += _promptChatFreshness();
-    prompt += _promptReminder(userNick);
   }
+  // Lean reminder instruction always appended (~150 chars vs ~800 chars old approach)
+  prompt += REMINDER_INSTRUCTION;
 
-  console.log(`\ud83d\udccc SYSTEM PROMPT SIZE: ${prompt.length} chars | trigger=${activeTrigger} | submode=${chatSubmode} | useSearch=${useSearch} | hasReminders=${hasReminders}`);
+  console.log(`📌 SYSTEM PROMPT SIZE: ${prompt.length} chars | trigger=${activeTrigger} | submode=${chatSubmode} | useSearch=${useSearch}`);
   return prompt;
 }
 
@@ -2992,6 +3047,9 @@ If you are running out of space, keep this order and drop the rest:
         }
 
         if (aiProvider === 'gemini') {
+          // Backend reminder interception: parse JSON block from response, schedule, strip it
+          responseText = await interceptAndScheduleReminder(responseText, userId || '', effectiveTimezone || 'UTC', controller, encoder);
+
           // Log successful Gemini usage with token estimation
           const inputTokens = estimateTokens(requestMessage);
           const outputTokens = estimateTokens(responseText);
@@ -3003,7 +3061,7 @@ If you are running out of space, keep this order and drop the rest:
             model: modelUsed,
             status: 'success',
             prompt: requestMessage,
-            response: responseText.slice(0, 500), // First 500 chars for reference
+            response: responseText.slice(0, 500),
             metadata: { 
               trigger: requestTrigger, 
               submode: requestSubmode, 
@@ -3054,6 +3112,9 @@ If you are running out of space, keep this order and drop the rest:
           const claudeResponse = await streamClaudeResponse(streamReader, controller, encoder);
           responseText = claudeResponse; // Capture Claude response for token estimation
         }
+
+        // Backend reminder interception for OpenAI/Claude paths
+        responseText = await interceptAndScheduleReminder(responseText, userId || '', effectiveTimezone || 'UTC', controller, encoder);
 
         // Log successful OpenAI/Claude usage with token estimation
         const inputTokens = estimateTokens(requestMessage);

@@ -857,31 +857,10 @@ class WaktiAIV2ServiceClass {
       });
       const generatedSummary = this.generateConversationSummary(enhancedMessages);
 
-      // Load stored rolling summary — NON-BLOCKING with 800ms timeout.
-      // If Supabase is slow, we skip it and use local/generated summary only.
-      // The stream must never wait for a DB round-trip.
-      let storedSummary: string | null = null;
-      const uuidLike = typeof conversationId === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(conversationId);
-      try {
-        if (uuidLike && conversationId) {
-          const summaryTimeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 800));
-          const summaryFetch = supabase
-            .from('ai_conversation_summaries')
-            .select('summary_text')
-            .eq('conversation_id', conversationId)
-            .order('updated_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-            .then(({ data: row }) => row?.summary_text || null);
-          storedSummary = await Promise.race([summaryFetch, summaryTimeout]);
-          console.log(`📋 SUMMARY: ${storedSummary ? 'loaded from DB' : 'timed-out/empty — using local'}`);
-        } else if (conversationId) {
-          storedSummary = localStorage.getItem(`wakti_local_summary_${conversationId}`) || null;
-        }
-      } catch {}
-
-      // Combine provided summary (if any), stored summary, and generated summary
-      const pieces = [conversationSummary, storedSummary, generatedSummary].filter((s) => !!(s && s.trim())) as string[];
+      // Stream-First: use only in-memory + localStorage summary — zero DB wait before fetch.
+      // DB summary load is fire-and-forget (not used this turn, available next turn via post-stream save).
+      const localSummary = conversationId ? (localStorage.getItem(`wakti_local_summary_${conversationId}`) || null) : null;
+      const pieces = [conversationSummary, localSummary, generatedSummary].filter((s) => !!(s && s.trim())) as string[];
       let finalSummary = pieces.join(' ').slice(0, 1200);
 
       // Get auth token — uses module-level cache to avoid a blocking network round-trip
@@ -1163,6 +1142,13 @@ class WaktiAIV2ServiceClass {
                   continue;
                 }
 
+                // Handle reminder scheduled confirmation from backend interception
+                if (parsed.reminderScheduled) {
+                  console.log('🔔 REMINDER: Backend confirmed scheduled:', parsed.reminderScheduled);
+                  metadata = { ...metadata, reminderScheduled: parsed.reminderScheduled };
+                  continue;
+                }
+
                 if (typeof parsed.token === 'string') { 
                   if (!firstTokenReceived) {
                     firstTokenReceived = true;
@@ -1210,131 +1196,51 @@ class WaktiAIV2ServiceClass {
           try { localStorage.setItem('wakti_last_seen_at', String(Date.now())); } catch {}
         }
 
-        // Persist updated rolling summary after stream
-        try {
-          const msgsForSummary: AIMessage[] = [
-            ...enhancedMessages,
-            { id: `user-${Date.now()}`, role: 'user', content: message, timestamp: new Date() } as AIMessage,
-            { id: `assistant-${Date.now()}`, role: 'assistant', content: fullResponse, timestamp: new Date() } as AIMessage
-          ];
-          const updatedSummary = this.generateConversationSummary(msgsForSummary);
-          if (updatedSummary && updatedSummary.trim()) {
-            const uuidLike = typeof conversationId === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(conversationId);
-            if (uuidLike && conversationId) {
-              const { data: existing } = await supabase
-                .from('ai_conversation_summaries')
-                .select('id')
-                .eq('conversation_id', conversationId)
-                .limit(1)
-                .maybeSingle();
-              if (existing?.id) {
-                await supabase
-                  .from('ai_conversation_summaries')
-                  .update({ summary_text: updatedSummary, message_count: msgsForSummary.length })
-                  .eq('id', existing.id);
-              } else {
-                await supabase
-                  .from('ai_conversation_summaries')
-                  .insert({ user_id: userId, conversation_id: conversationId, summary_text: updatedSummary, message_count: msgsForSummary.length });
-              }
-            } else if (conversationId) {
-              localStorage.setItem(`wakti_local_summary_${conversationId}`, updatedSummary);
-            }
-          }
-        } catch {}
-
         if (encounteredError) throw new Error(String(encounteredError));
 
-        // Check for reminder CONFIRMATION in the response and create scheduled reminder
-        // ONLY create reminder on CONFIRM (user said yes), NOT on OFFER (AI is asking)
-        try {
-          console.log('🔔 REMINDER CHECK: Parsing response for reminder blocks...');
-          const reminderData = parseReminderFromResponse(fullResponse);
-          console.log('🔔 REMINDER CHECK: Parse result:', reminderData);
-          
-          // Only create reminder when AI CONFIRMS (user already said yes)
-          // Do NOT create on OFFER - that's just the AI asking if user wants a reminder
-          if (reminderData && reminderData.type === 'confirm') {
-            const data = reminderData.data as { scheduled_for?: string; reminder_text?: string; timezone?: string; replaces_previous?: boolean };
-            let scheduledTime = data.scheduled_for;
-            const reminderText = data.reminder_text || 'Reminder from Wakti AI';
-            const replacesPrevious = data.replaces_previous === true;
-            
-            // SAFETY NET: If AI calculated a time in the past, try to fix it
-            // This handles cases where AI miscalculates "in X minutes"
-            if (scheduledTime) {
-              const scheduledDate = new Date(scheduledTime);
-              const now = new Date();
-              const oneMinuteAgo = now.getTime() - 60000;
-              
-              if (scheduledDate.getTime() < oneMinuteAgo) {
-                console.warn('⚠️ REMINDER FIX: AI output past time, attempting to recalculate...', { 
-                  aiTime: scheduledTime, 
-                  now: now.toISOString() 
-                });
-                
-                // Use the current user message (in scope from sendStreamingMessage param)
-                const lastUserMsg = (message || '').toLowerCase();
-                
-                // Match patterns like "in 1 minute", "in 5 minutes", "in an hour"
-                const minuteMatch = lastUserMsg.match(/in\s+(\d+|a|one|an)\s*min/i);
-                const hourMatch = lastUserMsg.match(/in\s+(\d+|a|one|an)\s*hour/i);
-                
-                let fixedTime: Date | null = null;
-                
-                if (minuteMatch) {
-                  const numStr = minuteMatch[1].toLowerCase();
-                  const minutes = (numStr === 'a' || numStr === 'one' || numStr === 'an') ? 1 : parseInt(numStr, 10);
-                  if (!isNaN(minutes) && minutes > 0 && minutes <= 1440) {
-                    fixedTime = new Date(now.getTime() + minutes * 60000);
-                    console.log(`🔧 REMINDER FIX: Recalculated "in ${minutes} minute(s)" → ${fixedTime.toISOString()}`);
-                  }
-                } else if (hourMatch) {
-                  const numStr = hourMatch[1].toLowerCase();
-                  const hours = (numStr === 'a' || numStr === 'one' || numStr === 'an') ? 1 : parseInt(numStr, 10);
-                  if (!isNaN(hours) && hours > 0 && hours <= 24) {
-                    fixedTime = new Date(now.getTime() + hours * 3600000);
-                    console.log(`🔧 REMINDER FIX: Recalculated "in ${hours} hour(s)" → ${fixedTime.toISOString()}`);
-                  }
-                }
-                
-                if (fixedTime) {
-                  scheduledTime = fixedTime.toISOString();
+        // Persist updated rolling summary — fire-and-forget, never blocks the stream return.
+        // Captures fullResponse in closure at the moment stream completes.
+        const _summarySnapshot = fullResponse;
+        (async () => {
+          try {
+            const msgsForSummary: AIMessage[] = [
+              ...enhancedMessages,
+              { id: `user-${Date.now()}`, role: 'user', content: message, timestamp: new Date() } as AIMessage,
+              { id: `assistant-${Date.now()}`, role: 'assistant', content: _summarySnapshot, timestamp: new Date() } as AIMessage
+            ];
+            const updatedSummary = this.generateConversationSummary(msgsForSummary);
+            if (updatedSummary && updatedSummary.trim()) {
+              const uuidLike = typeof conversationId === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(conversationId);
+              if (uuidLike && conversationId) {
+                const { data: existing } = await supabase
+                  .from('ai_conversation_summaries')
+                  .select('id')
+                  .eq('conversation_id', conversationId)
+                  .limit(1)
+                  .maybeSingle();
+                if (existing?.id) {
+                  await supabase
+                    .from('ai_conversation_summaries')
+                    .update({ summary_text: updatedSummary, message_count: msgsForSummary.length })
+                    .eq('id', existing.id);
                 } else {
-                  console.error('❌ REMINDER FIX: Could not recalculate time, skipping reminder creation');
-                  scheduledTime = undefined;
+                  await supabase
+                    .from('ai_conversation_summaries')
+                    .insert({ user_id: userId, conversation_id: conversationId, summary_text: updatedSummary, message_count: msgsForSummary.length });
                 }
+              } else if (conversationId) {
+                localStorage.setItem(`wakti_local_summary_${conversationId}`, updatedSummary);
               }
             }
-            
-            if (scheduledTime && userId) {
-              // Only cancel previous reminders if AI explicitly says it's replacing/adjusting one
-              if (replacesPrevious) {
-                console.log('🔔 REMINDER: AI indicated this replaces a previous reminder, cancelling old one...');
-                const cancelledCount = await cancelRecentPendingReminders(userId, 30);
-                if (cancelledCount > 0) {
-                  console.log(`🔔 REMINDER: Cancelled ${cancelledCount} previous reminder(s) - replacing with corrected time`);
-                }
-              }
-              
-              console.log('🔔 REMINDER: Creating scheduled reminder (user confirmed)', { scheduledTime, reminderText, replacesPrevious });
-              const result = await createScheduledReminder(
-                userId,
-                reminderText,
-                scheduledTime,
-                `AI Chat Reminder`
-              );
-              if (result.success) {
-                console.log('✅ REMINDER: Successfully created reminder', result.id);
-              } else {
-                console.error('❌ REMINDER: Failed to create reminder', result.error);
-              }
-            }
-          } else if (reminderData && reminderData.type === 'offer') {
-            console.log('🔔 REMINDER: AI offered reminder, waiting for user confirmation...');
-          }
-        } catch (reminderErr) {
-          console.warn('⚠️ REMINDER: Error processing reminder', reminderErr);
+          } catch {}
+        })();
+
+        // Reminder scheduling is now handled entirely by the backend (edge function interception).
+        // The backend detects the JSON block, schedules via schedule-reminder-push, and strips it.
+        // Frontend receives a `reminderScheduled` event in the SSE stream when a reminder is set.
+        // No frontend parsing needed — just log if backend confirmed a reminder was scheduled.
+        if (metadata?.reminderScheduled) {
+          console.log('✅ REMINDER: Backend scheduled reminder:', metadata.reminderScheduled);
         }
 
         console.log(`✅ FRONTEND BOSS: Streaming completed successfully [${requestId}] (primary=${primary})`);
