@@ -374,6 +374,12 @@ const WaktiAIV2 = () => {
         let firstToken = false;
         let rafPending = false;
         const fetchStartTime = Date.now();
+
+        // Activate streaming isolation: mount StreamingBubble, reset its DOM content
+        streamedContentRef.current = '';
+        streamingBubbleRef.current?.reset();
+        setStreamingMessageId(assistantMessageId);
+
         const streamedResp = await WaktiAIV2Service.sendStreamingMessage(
           messageContent,
           userProfile.id,
@@ -387,19 +393,21 @@ const WaktiAIV2 = () => {
           attachedFiles,
           (token: string) => {
             streamed += token;
+            streamedContentRef.current = streamed;
             if (!firstToken) {
               firstToken = true;
               const firstTokenMs = Date.now() - fetchStartTime;
               console.log(`🎯 VISION FIRST TOKEN [${firstTokenMs}ms from fetch]`);
               setIsLoading(false);
+              // One-time metadata update: clear loading flag on the placeholder bubble
               setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, metadata: { ...(m.metadata || {}), loading: false } } : m));
             }
-            // Throttle: batch token updates via requestAnimationFrame (~16ms cadence)
+            // ZERO React re-renders: write accumulated text directly to DOM via ref
             if (!rafPending) {
               rafPending = true;
               requestAnimationFrame(() => {
                 rafPending = false;
-                setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: streamed } : m));
+                streamingBubbleRef.current?.setContent(streamedContentRef.current);
               });
             }
           },
@@ -409,7 +417,9 @@ const WaktiAIV2 = () => {
           },
           (err: string) => { 
             console.error('❌ Vision stream error:', err);
-            // CRITICAL: Clear loading state on error to prevent "I'm on it..." stuck forever
+            // CRITICAL: Clear streaming overlay + loading state on error
+            setStreamingMessageId(null);
+            streamingBubbleRef.current?.reset();
             setIsLoading(false);
             setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { 
               ...m, 
@@ -441,6 +451,10 @@ const WaktiAIV2 = () => {
           intent: trigger,
         };
 
+        // Flush final content into sessionMessages (one-time, not per-token)
+        // Then clear streaming overlay — ChatMessages will switch to rendering message.content
+        setStreamingMessageId(null);
+        streamingBubbleRef.current?.reset();
         setSessionMessages(prev => {
           const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
           setTimeout(() => EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId), 0);
