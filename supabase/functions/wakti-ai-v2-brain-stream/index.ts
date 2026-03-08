@@ -1049,12 +1049,10 @@ function buildSystemPrompt(
     prompt += _promptTimezone();
     prompt += _promptReminder(userNick);
   } else {
-    // Pure chat (90% of turns): freshness hint + reminders only if active
+    // Pure chat: freshness hint + reminders always (needed to detect new reminder requests)
     // NOTE: No _promptTimezone() here — plain chat doesn't need timezone conversion rules
     prompt += _promptChatFreshness();
-    if (hasReminders) {
-      prompt += _promptReminder(userNick);
-    }
+    prompt += _promptReminder(userNick);
   }
 
   console.log(`\ud83d\udccc SYSTEM PROMPT SIZE: ${prompt.length} chars | trigger=${activeTrigger} | submode=${chatSubmode} | useSearch=${useSearch} | hasReminders=${hasReminders}`);
