@@ -32,7 +32,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   const [hasAnySession, setHasAnySession] = useState<boolean>(!!session);
 
   // --- Fix #2: hooks moved here (top of component) to satisfy Rules of Hooks ---
-  const { isSubscribed, isAccessExpired, isNewUser, wasSubscribed, hasTrialStarted, profile, loading: isProfileLoading } = useUserProfile();
+  const { isSubscribed, isGracePeriod, isAccessExpired, isNewUser, wasSubscribed, hasTrialStarted, profile, loading: isProfileLoading } = useUserProfile();
   const [accessCheckTick, setAccessCheckTick] = useState(0);
 
   // Enable subscription/IAP enforcement
@@ -519,7 +519,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   }
 
   // Evaluate whether the user is fully blocked (no valid subscription, loading finished)
-  const isBlocked = !subscriptionStatus.isLoading && (!subscriptionStatus.isSubscribed || subscriptionStatus.needsPayment);
+  const isBlocked = !subscriptionStatus.isLoading && !isProfileLoading && !(isSubscribed || subscriptionStatus.isSubscribed || isGracePeriod);
 
   if (isBlocked && DEV) {
     console.log("ProtectedRoute: User blocked - no valid subscription:", {
