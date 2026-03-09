@@ -351,8 +351,8 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   // Variant-based subtitles
   const subtitles = {
     new_user: {
-      en: 'Welcome to Wakti! Subscribe now to enjoy 3 free trial days.',
-      ar: 'مرحباً بك في وقتي! اشترك الآن واستمتع بـ 3 أيام تجريبية مجانية.'
+      en: 'Unlock all Super AI features. Start your 3-day free trial now.',
+      ar: 'افتح جميع ميزات الذكاء الاصطناعي. ابدأ تجربتك المجانية لمدة 3 أيام الآن.'
     },
     cancelled: {
       en: 'Welcome back to Wakti, nice to have you back!',
@@ -426,10 +426,20 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
         onPointerDownOutside={(e) => { if (!canDismiss) e.preventDefault(); }}
         onInteractOutside={(e) => { if (!canDismiss) e.preventDefault(); }}
       >
-        {/* Top bar: logo + X (step 1 only) + language toggle */}
+        {/* Top bar: logo | language toggle + X (top-right, step 2 only) */}
         <div className="flex items-center justify-between">
+          <Logo3D size="sm" className="w-8 h-8" />
           <div className="flex items-center gap-2">
-            <Logo3D size="sm" className="w-8 h-8" />
+            {(() => {
+              const other = language === 'ar' ? 'en' : 'ar';
+              const label = other === 'en' ? 'English' : 'العربية';
+              return (
+                <button
+                  className="px-3 py-1 text-xs rounded-full border bg-accent/20 border-accent text-foreground"
+                  onClick={() => setLanguage?.(other as any)}
+                >{label}</button>
+              );
+            })()}
             {showXButton && (
               <button
                 onClick={handleSkip}
@@ -440,16 +450,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
               </button>
             )}
           </div>
-          {(() => {
-            const other = language === 'ar' ? 'en' : 'ar';
-            const label = other === 'en' ? 'English' : 'العربية';
-            return (
-              <button
-                className="px-3 py-1 text-xs rounded-full border bg-accent/20 border-accent text-foreground"
-                onClick={() => setLanguage?.(other as any)}
-              >{label}</button>
-            );
-          })()}
         </div>
 
         {/* ── STEP 1: Hello Wall (new_user only) ── */}
@@ -649,16 +649,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                       <RefreshCw className="w-4 h-4 mr-2" />
                     )}
                     {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
-                  </Button>
-                )}
-
-                {showSkipButton && (
-                  <Button
-                    onClick={handleSkip}
-                    variant="ghost"
-                    className="w-full text-foreground/60 hover:text-foreground/80 font-medium transition-all"
-                  >
-                    {language === 'ar' ? 'تخطي' : 'Skip'}
                   </Button>
                 )}
 
