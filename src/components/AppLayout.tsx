@@ -13,7 +13,7 @@ import { useLocation, useNavigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useTheme } from "@/providers/ThemeProvider";
-import { purchasePackage, restorePurchases, getOfferings } from "@/integrations/natively/purchasesBridge";
+import { purchasePackage, restorePurchases, getOfferings, purchasesLogin } from "@/integrations/natively/purchasesBridge";
 import { setupNotificationClickHandler } from "@/integrations/natively/notificationsBridge";
 import {
   Dialog,
@@ -64,13 +64,17 @@ interface CustomPaywallModalProps {
 function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalProps) {
   const { language, setLanguage } = useTheme();
   const { signOut, user } = useAuth();
+  const { profile } = useUserProfile();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [price, setPrice] = useState<{ qar?: string; usd?: string }>({});
   const [purchaseInProgress, setPurchaseInProgress] = useState(false);
+  const [activePackageId, setActivePackageId] = useState<string>('$rc_monthly');
+  const [step, setStep] = useState(variant === 'new_user' ? 1 : 2);
   const contactUrl = "https://wa.me/97433994166";
+  const userName = profile?.display_name || (profile as any)?.first_name || profile?.username || '';
 
   useEffect(() => {
     // When paywall is open, allow header popovers to appear above overlay
@@ -86,15 +90,21 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
 
   useEffect(() => {
     if (!open) return;
+    setStep(variant === 'new_user' ? 1 : 2);
+  }, [open, variant]);
+
+  useEffect(() => {
+    if (!open) return;
     getOfferings((resp) => {
       if (resp?.status === 'SUCCESS' && resp?.offerings?.current) {
         const pkg = resp.offerings.current.availablePackages?.find(
           (p: any) => p.identifier === '$rc_monthly'
-        );
+        ) || resp.offerings.current.availablePackages?.[0];
         if (pkg?.product) {
+          setActivePackageId(pkg.identifier);
           setPrice({
-            qar: pkg.product.priceString || 'QAR 95/month',
-            usd: pkg.product.priceUSD || '$24.99/month',
+            qar: pkg.product.priceString || 'QAR 92/month',
+            usd: pkg.product.priceUSD || '$25/month',
           });
         }
       }
@@ -154,7 +164,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     setLoading(true);
     setPurchaseInProgress(true);
     
-    purchasePackage('$rc_monthly', async (resp: any) => {
+    purchasePackage(activePackageId, async (resp: any) => {
       console.log('[Purchase] Response:', resp);
       
       // Treat success OR 'already subscribed' (Android) as a successful subscription
@@ -400,11 +410,11 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const subtitle = subtitles[variant]?.[lang] || subtitles.new_user.en;
   const featureList = features[lang] || features.en;
 
-  const showXButton = variant === 'new_user';
-  const showSkipButton = variant === 'new_user';
-  const showAccountBilling = variant === 'cancelled' || variant === 'trial_expired';
-  const showRestorePurchases = variant === 'cancelled';
-  const canDismiss = variant === 'new_user';
+  const showXButton = variant === 'new_user' && step === 1;
+  const showSkipButton = variant === 'new_user' && step === 2;
+  const showAccountBilling = (variant === 'cancelled' || variant === 'trial_expired') && step === 2;
+  const showRestorePurchases = variant === 'cancelled' && step === 2;
+  const canDismiss = variant === 'new_user' && step === 1;
 
   return (
     <Dialog open={open} onOpenChange={canDismiss ? onOpenChange : undefined}>
@@ -416,6 +426,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
         onPointerDownOutside={(e) => { if (!canDismiss) e.preventDefault(); }}
         onInteractOutside={(e) => { if (!canDismiss) e.preventDefault(); }}
       >
+        {/* Top bar: logo + X (step 1 only) + language toggle */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Logo3D size="sm" className="w-8 h-8" />
@@ -440,150 +451,205 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
             );
           })()}
         </div>
-        <DialogHeader>
-          <DialogTitle className="sr-only">Subscribe to Wakti AI</DialogTitle>
-          <DialogDescription className="text-base pt-2 font-semibold text-accent-blue">
-            {subtitle}
-          </DialogDescription>
-        </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {/* Features - Mobile optimized */}
-          <div className="grid grid-cols-2 sm:grid-cols-2 gap-1.5">
-            {featureList.map((feature, i) => {
-              const item = typeof feature === 'string' ? { title: feature } : feature;
-              return (
-                <div key={i} className="flex items-center gap-1.5 rounded-md px-2 py-1.5 bg-[hsl(210,100%,65%,0.06)] border border-[hsl(210,100%,65%,0.15)] min-w-0">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[hsl(142,76%,55%)] shadow-[0_0_6px_hsl(142,76%,55%)] flex-shrink-0" />
-                  <span className="flex flex-col min-w-0">
-                    <span className="text-xs font-medium text-foreground/90 leading-tight truncate">{item.title}</span>
-                    {item.sublabel ? (
-                      <span className="text-[9px] text-[hsl(210,100%,65%)] leading-tight">{item.sublabel}</span>
-                    ) : null}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+        {/* ── STEP 1: Hello Wall (new_user only) ── */}
+        {step === 1 && (
+          <div className="space-y-5 py-4">
+            {/* Greeting */}
+            <div className="text-center space-y-1 pt-2">
+              <h2 className="text-2xl font-bold text-foreground leading-snug">
+                {language === 'ar'
+                  ? `أهلاً ${userName ? userName + '،' : ''} مرحباً بك في وقتي!`
+                  : `Hello${userName ? ' ' + userName : ''}, welcome to Wakti!`}
+              </h2>
+            </div>
 
-          {/* Price */}
-          <div className="rounded-lg p-4 text-center space-y-1 border border-[hsl(210,100%,65%,0.2)] bg-[hsl(210,100%,65%,0.05)] shadow-[0_0_20px_hsl(210,100%,65%,0.08)]">
-            {(() => {
-              const normalize = (s?: string) => s || '';
-              if (language === 'ar') {
-                const usdRaw = normalize(price.usd).replace('/month', '/شهر').trim();
-                const qarRaw = normalize(price.qar).replace('/month', '/شهر').replace('QAR', 'ر.ق').trim();
-                const usd = usdRaw ? usdRaw.replace('$', '') + ' دولار أمريكي/شهر' : '25 دولار أمريكي/شهر';
-                const qar = qarRaw || 'ر.ق 92/شهر';
+            {/* Pitch */}
+            <div className="rounded-xl p-4 text-center bg-gradient-to-br from-[hsl(210,100%,65%,0.08)] to-[hsl(280,70%,65%,0.06)] border border-[hsl(210,100%,65%,0.2)]">
+              <p className="text-sm font-semibold text-foreground/90 leading-relaxed">
+                {language === 'ar'
+                  ? 'وقتي هو تطبيق الذكاء الاصطناعي الشامل. لن تحتاج إلى أي تطبيق آخر بعد الآن.'
+                  : 'Wakti AI is the ultimate Super AI app. You won\'t need any other AI app ever again.'}
+              </p>
+            </div>
+
+            {/* Feature grid */}
+            <div className="grid grid-cols-2 gap-1.5">
+              {featureList.map((feature, i) => {
+                const item = typeof feature === 'string' ? { title: feature } : feature;
                 return (
-                  <div className="flex items-center justify-center gap-3">
-                    <p className="text-lg text-muted-foreground">{usd}</p>
-                    <span className="text-muted-foreground">•</span>
-                    <p className="text-2xl font-bold text-primary">{qar}</p>
+                  <div key={i} className="flex items-center gap-1.5 rounded-md px-2 py-1.5 bg-[hsl(210,100%,65%,0.06)] border border-[hsl(210,100%,65%,0.15)] min-w-0">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[hsl(142,76%,55%)] shadow-[0_0_6px_hsl(142,76%,55%)] flex-shrink-0" />
+                    <span className="flex flex-col min-w-0">
+                      <span className="text-xs font-medium text-foreground/90 leading-tight truncate">{item.title}</span>
+                      {item.sublabel ? (
+                        <span className="text-[9px] text-[hsl(210,100%,65%)] leading-tight">{item.sublabel}</span>
+                      ) : null}
+                    </span>
                   </div>
                 );
-              } else {
-                const qar = normalize(price.qar) || 'QAR 92/month';
-                const usd = normalize(price.usd) || '$25/month';
-                return (
-                  <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3">
-                    <p className="text-xl sm:text-2xl font-bold text-primary">{qar}</p>
-                    <span className="hidden sm:inline text-muted-foreground">•</span>
-                    <p className="text-xs sm:text-sm text-muted-foreground">{usd} <span className="text-[9px] sm:text-[10px] align-middle opacity-60">USD</span></p>
-                  </div>
-                );
-              }
-            })()}
-          </div>
+              })}
+            </div>
 
-          {/* Actions */}
-          <div className="space-y-2 pt-2">
-            {showAccountBilling && (
-              <Button
-                onClick={() => { onOpenChange(false); navigate('/account?tab=billing'); }}
-                variant="outline"
-                className="w-full border-foreground/20 hover:border-foreground/40 hover:bg-foreground/5 text-foreground/80 font-medium transition-all"
-              >
-                {language === 'ar' ? 'الحساب / الفوترة' : 'Account / Billing'}
-              </Button>
-            )}
+            {/* Promise */}
+            <p className="text-center text-sm text-[hsl(45,100%,65%)] font-medium">
+              {language === 'ar'
+                ? '✨ نقوم دائماً بتحديث وإضافة ميزات جديدة!'
+                : '✨ We constantly update and add new features!'}
+            </p>
 
+            {/* Continue button */}
             <Button
-              onClick={handleSubscribe}
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:from-[hsl(210,100%,60%)] hover:via-[hsl(195,100%,55%)] hover:to-[hsl(175,100%,50%)] text-white font-bold text-lg tracking-wide shadow-[0_0_30px_hsl(200,100%,55%,0.6),0_0_60px_hsl(200,100%,55%,0.3),0_4px_20px_hsl(200,100%,55%,0.4)] hover:shadow-[0_0_40px_hsl(200,100%,55%,0.8),0_0_80px_hsl(200,100%,55%,0.4)] active:scale-[0.98] transition-all duration-150 ring-2 ring-purple-500 ring-offset-1 ring-offset-background"
+              onClick={() => setStep(2)}
+              className="w-full bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:opacity-90 text-white font-bold text-lg tracking-wide shadow-[0_0_30px_hsl(200,100%,55%,0.5)] active:scale-[0.98] transition-all duration-150"
               size="lg"
               style={{minHeight: '56px'}}
             >
-              {loading ? (
-                <RefreshCw className="w-5 h-5 animate-spin" />
-              ) : (
-                <Sparkles className="w-5 h-5 mr-2" />
-              )}
-              {language === 'ar' ? 'اشترك الآن' : 'Subscribe Now'}
+              <Sparkles className="w-5 h-5 mr-2" />
+              {language === 'ar' ? 'استمرار' : 'Continue'}
             </Button>
 
-            {showRestorePurchases && (
-              <Button
-                onClick={handleRestore}
-                disabled={restoring}
-                variant="outline"
-                className="w-full border-foreground/20 hover:border-foreground/40 hover:bg-foreground/5 text-foreground/80 font-medium transition-all"
-              >
-                {restoring ? (
-                  <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                ) : (
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                )}
-                {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
+            {/* Logout */}
+            <div className="flex items-center gap-2">
+              <Button onClick={handleLogout} variant="ghost" size="sm" className="flex-1 text-foreground/50">
+                <LogOut className="w-4 h-4 mr-1" />
+                {language === 'ar' ? 'تسجيل الخروج' : 'Logout'}
               </Button>
-            )}
-
-            {showSkipButton && (
-              <Button
-                onClick={handleSkip}
-                variant="ghost"
-                className="w-full text-foreground/60 hover:text-foreground/80 font-medium transition-all"
-              >
-                {language === 'ar' ? 'تخطي' : 'Skip'}
-              </Button>
-            )}
-
-            <button
-              onClick={() => window.open(contactUrl, "_blank", "noopener,noreferrer")}
-              className="w-full flex items-center justify-center gap-3 rounded-lg px-4 py-3 bg-[hsl(142,76%,55%,0.07)] border border-[hsl(142,76%,55%,0.4)] hover:bg-[hsl(142,76%,55%,0.12)] hover:border-[hsl(142,76%,55%,0.7)] hover:shadow-[0_0_16px_hsl(142,76%,55%,0.25)] active:scale-[0.98] transition-all duration-150 group"
-            >
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[hsl(142,76%,55%,0.15)] group-hover:bg-[hsl(142,76%,55%,0.25)] transition-colors">
-                <MessageCircle className="w-4 h-4 text-[hsl(142,76%,60%)]" />
-              </div>
-              <div className={`flex flex-col ${language === 'ar' ? 'items-end' : 'items-start'}`}>
-                <span className="text-sm font-semibold text-[hsl(142,76%,65%)]">{language === 'ar' ? 'تواصل معنا' : 'Contact Us'}</span>
-                <span className="text-xs text-foreground/60">{language === 'ar' ? 'مشكلة في الدفع؟ نحن هنا للمساعدة' : 'Payment issues? We\'re here to help'}</span>
-              </div>
-            </button>
-
-            {/* Terms */}
-            <div className="text-center pt-1">
-              <a
-                href="https://wakti.qa/privacy-terms"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-muted-foreground hover:text-primary inline-flex items-center gap-1"
-              >
-                <Shield className="w-3 h-3" />
-                {language === 'ar' ? 'الشروط والخصوصية' : 'Terms & Privacy'}
-              </a>
             </div>
           </div>
+        )}
 
-          {/* Secondary actions */}
-          <div className="flex items-center gap-2 pt-2">
-            <Button onClick={handleLogout} variant="ghost" size="sm" className="flex-1">
-              <LogOut className="w-4 h-4 mr-1" />
-              {language === 'ar' ? 'تسجيل الخروج' : 'Logout'}
-            </Button>
-          </div>
-        </div>
+        {/* ── STEP 2: The Ask (subscribe screen) ── */}
+        {step === 2 && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="sr-only">Subscribe to Wakti AI</DialogTitle>
+              <DialogDescription className="text-base pt-2 font-semibold text-accent-blue">
+                {subtitle}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              {/* Price */}
+              <div className="rounded-lg p-4 text-center space-y-1 border border-[hsl(210,100%,65%,0.2)] bg-[hsl(210,100%,65%,0.05)] shadow-[0_0_20px_hsl(210,100%,65%,0.08)]">
+                {(() => {
+                  const normalize = (s?: string) => s || '';
+                  if (language === 'ar') {
+                    const usdRaw = normalize(price.usd).replace('/month', '/شهر').trim();
+                    const qarRaw = normalize(price.qar).replace('/month', '/شهر').replace('QAR', 'ر.ق').trim();
+                    const usd = usdRaw ? usdRaw.replace('$', '') + ' دولار أمريكي/شهر' : '25 دولار أمريكي/شهر';
+                    const qar = qarRaw || 'ر.ق 92/شهر';
+                    return (
+                      <div className="flex items-center justify-center gap-3">
+                        <p className="text-lg text-muted-foreground">{usd}</p>
+                        <span className="text-muted-foreground">•</span>
+                        <p className="text-2xl font-bold text-primary">{qar}</p>
+                      </div>
+                    );
+                  } else {
+                    const qar = normalize(price.qar) || 'QAR 92/month';
+                    const usd = normalize(price.usd) || '$25/month';
+                    return (
+                      <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3">
+                        <p className="text-xl sm:text-2xl font-bold text-primary">{qar}</p>
+                        <span className="hidden sm:inline text-muted-foreground">•</span>
+                        <p className="text-xs sm:text-sm text-muted-foreground">{usd} <span className="text-[9px] sm:text-[10px] align-middle opacity-60">USD</span></p>
+                      </div>
+                    );
+                  }
+                })()}
+              </div>
+
+              {/* Actions */}
+              <div className="space-y-2 pt-2">
+                {showAccountBilling && (
+                  <Button
+                    onClick={() => { onOpenChange(false); navigate('/account?tab=billing'); }}
+                    variant="outline"
+                    className="w-full border-foreground/20 hover:border-foreground/40 hover:bg-foreground/5 text-foreground/80 font-medium transition-all"
+                  >
+                    {language === 'ar' ? 'الحساب / الفوترة' : 'Account / Billing'}
+                  </Button>
+                )}
+
+                <Button
+                  onClick={handleSubscribe}
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:from-[hsl(210,100%,60%)] hover:via-[hsl(195,100%,55%)] hover:to-[hsl(175,100%,50%)] text-white font-bold text-lg tracking-wide shadow-[0_0_30px_hsl(200,100%,55%,0.6),0_0_60px_hsl(200,100%,55%,0.3),0_4px_20px_hsl(200,100%,55%,0.4)] hover:shadow-[0_0_40px_hsl(200,100%,55%,0.8),0_0_80px_hsl(200,100%,55%,0.4)] active:scale-[0.98] transition-all duration-150 ring-2 ring-purple-500 ring-offset-1 ring-offset-background"
+                  size="lg"
+                  style={{minHeight: '56px'}}
+                >
+                  {loading ? (
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-5 h-5 mr-2" />
+                  )}
+                  {language === 'ar' ? 'اشترك الآن' : 'Subscribe Now'}
+                </Button>
+
+                {showRestorePurchases && (
+                  <Button
+                    onClick={handleRestore}
+                    disabled={restoring}
+                    variant="outline"
+                    className="w-full border-foreground/20 hover:border-foreground/40 hover:bg-foreground/5 text-foreground/80 font-medium transition-all"
+                  >
+                    {restoring ? (
+                      <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                    )}
+                    {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
+                  </Button>
+                )}
+
+                {showSkipButton && (
+                  <Button
+                    onClick={handleSkip}
+                    variant="ghost"
+                    className="w-full text-foreground/60 hover:text-foreground/80 font-medium transition-all"
+                  >
+                    {language === 'ar' ? 'تخطي' : 'Skip'}
+                  </Button>
+                )}
+
+                <button
+                  onClick={() => window.open(contactUrl, "_blank", "noopener,noreferrer")}
+                  className="w-full flex items-center justify-center gap-3 rounded-lg px-4 py-3 bg-[hsl(142,76%,55%,0.07)] border border-[hsl(142,76%,55%,0.4)] hover:bg-[hsl(142,76%,55%,0.12)] hover:border-[hsl(142,76%,55%,0.7)] hover:shadow-[0_0_16px_hsl(142,76%,55%,0.25)] active:scale-[0.98] transition-all duration-150 group"
+                >
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[hsl(142,76%,55%,0.15)] group-hover:bg-[hsl(142,76%,55%,0.25)] transition-colors">
+                    <MessageCircle className="w-4 h-4 text-[hsl(142,76%,60%)]" />
+                  </div>
+                  <div className={`flex flex-col ${language === 'ar' ? 'items-end' : 'items-start'}`}>
+                    <span className="text-sm font-semibold text-[hsl(142,76%,65%)]">{language === 'ar' ? 'تواصل معنا' : 'Contact Us'}</span>
+                    <span className="text-xs text-foreground/60">{language === 'ar' ? 'مشكلة في الدفع؟ نحن هنا للمساعدة' : 'Payment issues? We\'re here to help'}</span>
+                  </div>
+                </button>
+
+                {/* Terms */}
+                <div className="text-center pt-1">
+                  <a
+                    href="https://wakti.qa/privacy-terms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-muted-foreground hover:text-primary inline-flex items-center gap-1"
+                  >
+                    <Shield className="w-3 h-3" />
+                    {language === 'ar' ? 'الشروط والخصوصية' : 'Terms & Privacy'}
+                  </a>
+                </div>
+              </div>
+
+              {/* Secondary actions */}
+              <div className="flex items-center gap-2 pt-2">
+                <Button onClick={handleLogout} variant="ghost" size="sm" className="flex-1">
+                  <LogOut className="w-4 h-4 mr-1" />
+                  {language === 'ar' ? 'تسجيل الخروج' : 'Logout'}
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -594,6 +660,14 @@ export { CustomPaywallModal };
 export function AppLayout({ children }: AppLayoutProps) {
   // Single instance of useUnreadMessages hook - the only one in the entire app
   const unreadData = useUnreadMessages();
+  const { user } = useAuth();
+
+  // Task 3: Identity Mapping — lock RevenueCat receipt to the exact Supabase account
+  React.useEffect(() => {
+    if (user?.id && user?.email) {
+      purchasesLogin(user.id, user.email);
+    }
+  }, [user?.id, user?.email]);
   
   // Unified notification system - subscribes to notification_history for all notification types
   // including task_due, reminder_due, messages, contacts, RSVPs, etc.

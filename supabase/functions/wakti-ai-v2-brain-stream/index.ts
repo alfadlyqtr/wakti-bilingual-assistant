@@ -666,17 +666,17 @@ function chatNeedsSearch(query: string): boolean {
   return livePatterns.some((p) => p.test(q));
 }
 
-// Chat mode: gemini-2.5-flash for intelligence + grounding (Ferrari memory system)
+// Chat mode: model is determined by engineTier at the call site
 async function streamGemini3FlashChat(
   query: string,
   systemInstruction: string,
   recentMessages: unknown[] | undefined,
   onToken: (token: string) => void,
   language: string = 'en',
-  onSignal?: (meta: Record<string, unknown>) => void
+  onSignal?: (meta: Record<string, unknown>) => void,
+  model: string = 'gemini-2.5-flash'
 ): Promise<string> {
   const key = getGeminiApiKey();
-  const model = 'gemini-3-flash-preview';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
   const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
@@ -1984,6 +1984,10 @@ serve(async (req) => {
           attachedFiles = [] // Images for Study mode OCR→Wolfram pipeline
         } = body as { message?: string; language?: string; recentMessages?: unknown[]; personalTouch?: unknown; activeTrigger?: string; chatSubmode?: string; location?: unknown; clientTimezone?: string; attachedFiles?: unknown[] };
 
+        // Resolve engineTier from personalTouch payload ('speed' | 'intelligence', default 'speed')
+        const engineTier: 'speed' | 'intelligence' =
+          ((personalTouch as Record<string, unknown>)?.engineTier === 'intelligence') ? 'intelligence' : 'speed';
+
         // Store for logging
         requestMessage = typeof message === 'string' ? message : '';
         requestSubmode = chatSubmode;
@@ -2690,10 +2694,15 @@ If you are running out of space, keep this order and drop the rest:
                 }
               }
             } catch (err) {
-              console.warn('⚠️ Location follow-up detection error:', err);
+              console.warn(' Location follow-up detection error:', err);
             }
 
             try {
+              // Chat early-return path: respect engineTier for model selection
+              const chatModel = engineTier === 'intelligence' ? 'gemini-3-flash-preview' : 'gemini-2.5-flash';
+              const chatEngineLabel = engineTier === 'intelligence' ? 'Intelligence Engine (Flash)' : 'Speed Engine (2.5)';
+              modelUsedOuter = chatEngineLabel;
+              console.log(` ENGINE: ${chatEngineLabel} selected (tier=${engineTier}, chat path)`);
               let fullResponseText = '';
               await streamGemini3FlashChat(
                 effectiveMessage,
@@ -2706,7 +2715,8 @@ If you are running out of space, keep this order and drop the rest:
                 language,
                 (meta: Record<string, unknown>) => {
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: meta })}\n\n`));
-                }
+                },
+                chatModel
               );
 
               if (!fullResponseText) {
@@ -2951,12 +2961,20 @@ If you are running out of space, keep this order and drop the rest:
           }
           
           aiProvider = 'gemini';
-          // Dual-model routing: 3.1 Pro for study/search, 3 Flash for standard chat
-          const selectedModel = (chatSubmode === 'study' || effectiveTrigger === 'search')
-            ? 'gemini-3.1-pro-preview'
-            : 'gemini-3-flash-preview';
-          modelUsed = selectedModel;
-          modelUsedOuter = modelUsed;
+          // Tiered Engine Router — based on user's engineTier preference (speed | intelligence)
+          const isDeepWork = chatSubmode === 'study' || effectiveTrigger === 'search';
+          let selectedModel: string;
+          let engineLabel: string;
+          if (engineTier === 'intelligence') {
+            selectedModel = isDeepWork ? 'gemini-3.1-pro-preview' : 'gemini-3-flash-preview';
+            engineLabel = isDeepWork ? 'Intelligence Engine (Pro)' : 'Intelligence Engine (Flash)';
+          } else {
+            selectedModel = isDeepWork ? 'gemini-3-flash-preview' : 'gemini-2.5-flash';
+            engineLabel = isDeepWork ? 'Speed Engine (Flash)' : 'Speed Engine (2.5)';
+          }
+          modelUsed = engineLabel;
+          modelUsedOuter = engineLabel;
+          console.log(`⚙️ ENGINE: ${engineLabel} selected (tier=${engineTier}, deepWork=${isDeepWork})`);
           try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'gemini' })}\n\n`)); } catch { /* ignore */ }
           
           let geminiTokenCount = 0;

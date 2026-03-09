@@ -515,23 +515,28 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     );
   }
 
-  // STRICT ENFORCEMENT: Block access if no valid subscription
-  if (!subscriptionStatus.isLoading && (!subscriptionStatus.isSubscribed || subscriptionStatus.needsPayment)) {
-    if (DEV) console.log("ProtectedRoute: User blocked - no valid subscription:", {
-      email: user.email,
+  // Evaluate whether the user is fully blocked (no valid subscription, loading finished)
+  const isBlocked = !subscriptionStatus.isLoading && (!subscriptionStatus.isSubscribed || subscriptionStatus.needsPayment);
+
+  if (isBlocked && DEV) {
+    console.log("ProtectedRoute: User blocked - no valid subscription:", {
+      email: user?.email,
       isSubscribed: subscriptionStatus.isSubscribed,
       needsPayment: subscriptionStatus.needsPayment
     });
-    // Do not early-return. Let rendering fall through so the CustomPaywallModal can display.
   }
 
-  // User has valid subscription - render children
+  // Task 4: Soft Gate — block the DOM entirely when user is blocked
   return (
     <>
       {CustomPaywallModal && (
         <CustomPaywallModal open={showPaywall} onOpenChange={setShowPaywall} variant={paywallVariant} />
       )}
-      {children}
+      {isBlocked ? (
+        <div className="w-screen h-[100dvh] bg-background flex items-center justify-center overflow-hidden" />
+      ) : (
+        children
+      )}
     </>
   );
 }

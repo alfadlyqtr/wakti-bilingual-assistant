@@ -155,6 +155,24 @@ serve(async (req) => {
       }
     }
 
+    // Task 5: Free Ride Fix — if RC confirms no active entitlements, actively downgrade the profile
+    if (!isSubscribed) {
+      const { error: downgradeError } = await supabase
+        .from("profiles")
+        .update({
+          is_subscribed: false,
+          subscription_status: "expired",
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", userId);
+
+      if (downgradeError) {
+        console.error("[check-subscription] Downgrade update error:", downgradeError);
+      } else {
+        console.log(`[check-subscription] Downgraded profile for user ${userId.substring(0, 8)}...: is_subscribed=false, status=expired`);
+      }
+    }
+
     return new Response(JSON.stringify({ 
       isSubscribed, 
       entitlements: entitlementIds,

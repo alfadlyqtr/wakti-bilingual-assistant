@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToastHelper } from "@/hooks/use-toast-helper";
-import { Brain, Save, Bot } from 'lucide-react';
+import { Brain, Save, Bot, Zap, Cpu } from 'lucide-react';
 import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -20,6 +20,7 @@ interface PersonalTouchData {
   style: string;
   instruction: string;
   aiNickname?: string; // NEW: AI nickname feature
+  engineTier?: 'speed' | 'intelligence';
   pt_version?: number;
   pt_updated_at?: string;
 }
@@ -67,7 +68,8 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
     tone: 'neutral',
     style: 'short answers',
     instruction: '',
-    aiNickname: '' // NEW: AI nickname
+    aiNickname: '',
+    engineTier: 'speed'
   });
 
   // Load saved data on mount
@@ -76,7 +78,8 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
     if (saved) {
       setFormData({
         ...saved,
-        aiNickname: saved.aiNickname || '' // Handle existing data without aiNickname
+        aiNickname: saved.aiNickname || '',
+        engineTier: saved.engineTier || 'speed'
       });
     }
   }, []);
@@ -113,6 +116,7 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
             tone: formData.tone || 'neutral',
             style: formData.style || 'short answers',
             instruction: formData.instruction || '',
+            engine_tier: formData.engineTier || 'speed',
             pt_version: nextVersion,
             updated_at: new Date().toISOString()
           });
@@ -156,6 +160,7 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
       <CardContent className={compact ? "space-y-2.5 pt-0" : "space-y-4"}>
         {/* Core fields grid in compact mode */}
         {compact ? (
+          <>
           <div className="grid grid-cols-2 gap-3 items-end">
             {/* Nickname Field */}
             <div className="space-y-1">
@@ -218,6 +223,40 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
               </select>
             </div>
           </div>
+
+          {/* Engine Tier Toggle (compact) */}
+          <div className="space-y-1.5">
+            <Label className="text-[11px] text-slate-600 dark:text-slate-400">
+              {language === 'ar' ? 'محرك الذكاء' : 'AI Engine'}
+            </Label>
+            <div className="flex rounded-lg border border-white/20 dark:border-white/10 overflow-hidden h-8">
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, engineTier: 'speed' }))}
+                className={`flex-1 flex items-center justify-center gap-1 text-[12px] font-medium transition-all ${
+                  formData.engineTier !== 'intelligence'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-white/60 dark:bg-black/20 text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                <Zap className="h-3 w-3" />
+                {language === 'ar' ? 'سريع' : 'Speed'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, engineTier: 'intelligence' }))}
+                className={`flex-1 flex items-center justify-center gap-1 text-[12px] font-medium transition-all ${
+                  formData.engineTier === 'intelligence'
+                    ? 'bg-purple-500 text-white'
+                    : 'bg-white/60 dark:bg-black/20 text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                <Cpu className="h-3 w-3" />
+                {language === 'ar' ? 'ذكاء' : 'Intelligence'}
+              </button>
+            </div>
+          </div>
+          </>
         ) : (
           <>
             {/* Nickname Field */}
@@ -285,6 +324,45 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Engine Tier Toggle (non-compact) */}
+            <div className="space-y-2">
+              <Label className="text-xs text-slate-600 dark:text-slate-400">
+                {language === 'ar' ? 'محرك الذكاء الاصطناعي' : 'AI Engine Mode'}
+              </Label>
+              <div className="flex rounded-xl border border-white/20 dark:border-white/10 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, engineTier: 'speed' }))}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-all ${
+                    formData.engineTier !== 'intelligence'
+                      ? 'bg-blue-500 text-white shadow-inner'
+                      : 'bg-white/10 dark:bg-black/10 text-slate-600 dark:text-slate-400 hover:bg-white/20'
+                  }`}
+                >
+                  <Zap className="h-4 w-4" />
+                  <div className="text-left">
+                    <div className="text-[13px] font-semibold leading-none">{language === 'ar' ? 'سريع' : 'Speed'}</div>
+                    <div className="text-[10px] opacity-75 leading-none mt-0.5">{language === 'ar' ? 'ردود فورية' : 'Fast responses'}</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, engineTier: 'intelligence' }))}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-all ${
+                    formData.engineTier === 'intelligence'
+                      ? 'bg-purple-500 text-white shadow-inner'
+                      : 'bg-white/10 dark:bg-black/10 text-slate-600 dark:text-slate-400 hover:bg-white/20'
+                  }`}
+                >
+                  <Cpu className="h-4 w-4" />
+                  <div className="text-left">
+                    <div className="text-[13px] font-semibold leading-none">{language === 'ar' ? 'ذكاء' : 'Intelligence'}</div>
+                    <div className="text-[10px] opacity-75 leading-none mt-0.5">{language === 'ar' ? 'تفكير عميق' : 'Deep reasoning'}</div>
+                  </div>
+                </button>
+              </div>
             </div>
           </>
         )}
