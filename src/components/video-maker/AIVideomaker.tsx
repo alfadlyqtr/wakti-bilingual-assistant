@@ -591,6 +591,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
       const status = data?.data?.status?.toLowerCase();
       console.log('[AIVideomaker] Poll status:', status);
+      console.log('[AIVideomaker] Full data on poll:', JSON.stringify(data));
 
       if (status === 'completed' || status === 'succeed' || status === 'succeeded') {
         // Done!
@@ -598,6 +599,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         usageIncrementedRef.current = true;
         // Video URL is in generated array, NOT video.url!
         const videoUrl = data?.data?.generated?.[0] || data?.data?.video?.url;
+        console.log('[AIVideomaker] Extracted videoUrl:', videoUrl);
         if (videoUrl) {
           setGeneratedVideoUrl(videoUrl);
           setIsSaved(false);
@@ -1036,7 +1038,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         
         <div className="relative space-y-5">
           {/* Compact header row */}
-          <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#060541] to-[hsl(210,100%,35%)] shadow-lg shadow-primary/30">
                 <Wand2 className="h-5 w-5 text-white" />
@@ -1047,7 +1049,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 </h2>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-0.5 rounded-full border border-primary/20 overflow-hidden">
                 <Clock className="h-3.5 w-3.5 text-primary ml-2.5" />
                 {generationMode === '2images_to_video' ? (
@@ -1116,7 +1118,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     <button
                       onClick={() => !isGenerating && setDuration('15')}
                       disabled={isGenerating}
-                      title={language === 'ar' ? '480p فقط' : '480p only'}
+                      title={undefined}
                       className={`px-2.5 py-1.5 text-xs font-medium transition-all mr-0.5 ${
                         duration === '15'
                           ? 'bg-gradient-to-r from-[hsl(25,95%,60%)]/30 to-[hsl(45,100%,60%)]/25 text-orange-500 font-bold'
@@ -1590,41 +1592,39 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     </button>
                   </div>
 
-                {/* Resolution picker - only for 2images mode (Seedance) */}
-                {generationMode === '2images_to_video' && (
-                  <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/50">
-                    <button
-                      onClick={() => {
-                        if (!isGenerating) setResolution('480p');
-                      }}
-                      disabled={isGenerating}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                        resolution === '480p'
-                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(260,70%,65%)] text-white shadow-md shadow-blue-500/30'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
-                      }`}
-                    >
-                      480p
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (!isGenerating) {
-                          setResolution('720p');
-                          setGenerateAudio(false);
-                          if (duration === '12') setDuration('8');
-                        }
-                      }}
-                      disabled={isGenerating}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                        resolution === '720p'
-                          ? 'bg-gradient-to-r from-[hsl(25,95%,60%)] to-[hsl(45,100%,60%)] text-white shadow-md shadow-orange-500/30'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
-                      }`}
-                    >
-                      720p
-                    </button>
-                  </div>
-                )}
+                {/* Resolution picker - all modes */}
+                <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/50">
+                  <button
+                    onClick={() => {
+                      if (!isGenerating) setResolution('480p');
+                    }}
+                    disabled={isGenerating}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                      resolution === '480p'
+                        ? 'bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(260,70%,65%)] text-white shadow-md shadow-blue-500/30'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                    }`}
+                  >
+                    480p
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!isGenerating) {
+                        setResolution('720p');
+                        setGenerateAudio(false);
+                        if (duration === '12') setDuration('8');
+                      }
+                    }}
+                    disabled={isGenerating}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                      resolution === '720p'
+                        ? 'bg-gradient-to-r from-[hsl(25,95%,60%)] to-[hsl(45,100%,60%)] text-white shadow-md shadow-orange-500/30'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                    }`}
+                  >
+                    720p
+                  </button>
+                </div>
                 </div>
 
               {/* KIE API Options */}

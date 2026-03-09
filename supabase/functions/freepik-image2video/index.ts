@@ -125,9 +125,10 @@ async function createTextToVideoTask(
   prompt: string,
   duration?: string,
   aspectRatio?: string,
+  resolution?: string,
 ): Promise<{ task_id: string; status: string }> {
   const validDuration = ["6", "10", "15"].includes(duration || "") ? duration! : "6";
-  const validResolution = validDuration === "15" ? "480p" : "720p";
+  const validResolution = ["480p", "720p"].includes(resolution || "") ? resolution! : "720p";
   const validAspectRatio = ["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"].includes(aspectRatio || "") ? aspectRatio! : "9:16";
   const input: Record<string, unknown> = {
     prompt: prompt.slice(0, 2500),
@@ -188,9 +189,7 @@ async function createVideoTask(
   const validAspectRatio = ["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"].includes(aspectRatio || "")
     ? aspectRatio!
     : "9:16";
-  const validResolution = isTwoImages
-    ? (["480p", "720p"].includes(resolution || "") ? resolution! : "480p")
-    : (validDuration === "15" ? "480p" : "720p"); // 15s forces 480p for grok-imagine
+  const validResolution = ["480p", "720p"].includes(resolution || "") ? resolution! : (isTwoImages ? "480p" : "720p");
 
   const model = isTwoImages ? KIE_2IMAGES_MODEL : KIE_IMAGE2VIDEO_MODEL;
 
@@ -205,13 +204,11 @@ async function createVideoTask(
         generate_audio: generateAudio || false,
       }
     : {
-        // Grok Imagine API: uses image_urls
+        // Grok Imagine API: only documented fields
         image_urls: sanitizedImageUrls,
         duration: validDuration,
         resolution: validResolution,
         mode: "normal",
-        fixed_lens: fixedLens || false,
-        generate_audio: generateAudio || false,
       };
 
   if (isTwoImages) {
@@ -292,7 +289,7 @@ async function getTaskStatus(taskId: string): Promise<TaskStatusData> {
   }
 
   const statusData: KieStatusResponse = await statusRes.json();
-  console.log("[kie-image2video] Status response state:", statusData.data?.state);
+  console.log("[kie-image2video] Status response state:", statusData.data?.state, "resultJson:", statusData.data?.resultJson?.substring(0, 200));
 
   if (statusData.code !== 200 || !statusData.data) {
     throw new Error(`KIE API error: ${statusData.msg || statusData.message || "Failed to get status"}`);
@@ -501,7 +498,7 @@ serve(async (req) => {
 
     if (generationType === "text_to_video") {
       // Text-to-Video: no image needed
-      task = await createTextToVideoTask(prompt, reqDuration, aspect_ratio);
+      task = await createTextToVideoTask(prompt, reqDuration, aspect_ratio, resolution);
     } else if (generationType === "2images_to_video") {
       // 2Images-to-Video: requires both image1 and image2
       let imageUrl1: string = image1;

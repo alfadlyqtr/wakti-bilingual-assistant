@@ -11,19 +11,11 @@ const DEBUG_NOTIFICATIONS = false;
 
 function getInstance(): any | null {
   try {
-    if (typeof window === 'undefined') {
-      console.log('[NativelyNotifications] Window undefined - not in browser');
-      return null;
-    }
+    if (typeof window === 'undefined') return null;
     const Ctor = (window as any).NativelyNotifications;
-    if (!Ctor) {
-      console.log('[NativelyNotifications] NativelyNotifications class not found on window - not in Natively app');
-      return null;
-    }
-    console.log('[NativelyNotifications] SDK found, creating instance');
+    if (!Ctor) return null;
     return new Ctor();
-  } catch (err) {
-    console.error('[NativelyNotifications] Error creating instance:', err);
+  } catch {
     return null;
   }
 }
@@ -150,6 +142,9 @@ export function setupNotificationClickHandler(navigate: (path: string) => void) 
   }
 
   try {
+    if (typeof n.setNotificationOpenedHandler !== 'function') {
+      return;
+    }
     // Natively SDK: setNotificationOpenedHandler receives notification data when tapped
     n.setNotificationOpenedHandler((notification: any) => {
       console.log('[NativelyNotifications] Notification tapped:', JSON.stringify(notification));

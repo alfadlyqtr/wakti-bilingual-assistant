@@ -56,6 +56,9 @@ const LOCATION_CACHE_KEY = 'wakti_native_location_cache';
 const LOCATION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for fresh location
 const BRIDGE_READY_TIMEOUT = 5000; // max ms to wait for native iOS/Android bridge
 
+// In-flight Promise cache: prevents multiple simultaneous GPS hardware calls
+let pendingLocationPromise: Promise<NativeLocationResult | null> | null = null;
+
 /**
  * Wait for the Natively NATIVE BRIDGE to be connected (not just CDN script loaded).
  *
@@ -131,53 +134,17 @@ function waitForNativeBridge(timeoutMs: number = BRIDGE_READY_TIMEOUT): Promise<
   });
 }
 
-function logNativelyRuntimeStatus(context: string): void {
-  if (typeof window === 'undefined') return;
-  const natively = (window as any).natively;
-  const isNativeApp = natively?.isNativeApp === true || natively?.isIOSApp === true || natively?.isAndroidApp === true;
-  console.log('[NativelyLocation] Runtime status:', {
-    context,
-    nativelyInjected: natively?.injected,
-    hasAgent: !!(window as any).$agent,
-    isNativeApp,
-    hasNativelyLocation: typeof (window as any).NativelyLocation !== 'undefined',
-  });
+function logNativelyRuntimeStatus(_context: string): void {
+  // Silenced: was causing Tracking Prevention console spam on every page load
 }
 
 function getInstance(): NativelyLocationInstance | null {
   if (typeof window === 'undefined') return null;
   try {
-    // Check if Natively SDK is loaded at all
-    const natively = (window as any).natively;
-    const isNativeApp = natively?.isNativeApp === true || natively?.isIOSApp === true || natively?.isAndroidApp === true;
-    console.log('[NativelyLocation] Checking SDK availability:', {
-      hasNatively: !!natively,
-      isNativeApp,
-      hasNativelyLocation: typeof (window as any).NativelyLocation !== 'undefined',
-      nativelyReady: (window as any).__nativelyReady,
-    });
-    
     const Ctor = (window as any).NativelyLocation;
-    if (!Ctor) {
-      console.log('[NativelyLocation] NativelyLocation class not found on window');
-      // Log what IS available on window for debugging
-      const nativelyKeys = Object.keys(window).filter(k => k.toLowerCase().includes('natively') || k.toLowerCase().includes('native'));
-      if (nativelyKeys.length > 0) {
-        console.log('[NativelyLocation] Found Native-related keys on window:', nativelyKeys.slice(0, 20));
-      }
-      return null;
-    }
-    console.log('[NativelyLocation] SDK found, creating instance...');
-    const instance = new Ctor();
-    console.log('[NativelyLocation] Instance created. Methods available:', {
-      hasCurrent: typeof instance.current === 'function',
-      hasStart: typeof instance.start === 'function',
-      hasStop: typeof instance.stop === 'function',
-      hasGetCurrentPosition: typeof instance.getCurrentPosition === 'function',
-    });
-    return instance;
-  } catch (err) {
-    console.warn('[NativelyLocation] Failed to create instance:', err);
+    if (!Ctor) return null;
+    return new Ctor();
+  } catch {
     return null;
   }
 }
@@ -447,7 +414,25 @@ function getBrowserLocation(timeoutMs: number = 10000): Promise<NativeLocationRe
  * 3. ATTEMPT 2: Natively SDK (permission check → foreground tracking or current())
  * 4. If all fail: return null
  */
-export async function getNativeLocation(options?: {
+export function getNativeLocation(options?: {
+  timeoutMs?: number;
+  minAccuracy?: number;
+  accuracyType?: 'BestForNavigation' | 'Best' | 'NearestTenMeters' | 'HundredMeters' | 'Kilometer' | 'ThreeKilometers';
+  priority?: 'BALANCED' | 'HIGH';
+  fallbackToSettings?: boolean;
+  skipCache?: boolean;
+}): Promise<NativeLocationResult | null> {
+  // If a GPS request is already in-flight, return the same promise — no duplicate hardware calls
+  if (pendingLocationPromise) {
+    return pendingLocationPromise;
+  }
+  pendingLocationPromise = _doGetNativeLocation(options).finally(() => {
+    pendingLocationPromise = null;
+  });
+  return pendingLocationPromise;
+}
+
+async function _doGetNativeLocation(options?: {
   timeoutMs?: number;
   minAccuracy?: number;
   accuracyType?: 'BestForNavigation' | 'Best' | 'NearestTenMeters' | 'HundredMeters' | 'Kilometer' | 'ThreeKilometers';
