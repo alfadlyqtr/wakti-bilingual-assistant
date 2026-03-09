@@ -1,4 +1,10 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+
+declare global {
+  interface Window {
+    OneSignalDeferred: any[];
+  }
+}
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -193,6 +199,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [handleNativelyReady]);
 
+  // OneSignal Web Push: bind/unbind browser push identity to Supabase user
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    if (user?.id) {
+      window.OneSignalDeferred.push(async function(OneSignal: any) {
+        try {
+          await OneSignal.login(user.id);
+          console.log('[AuthContext] OneSignal Web Push: logged in user', user.id);
+        } catch (err) {
+          console.warn('[AuthContext] OneSignal Web Push login failed:', err);
+        }
+      });
+    } else {
+      window.OneSignalDeferred.push(async function(OneSignal: any) {
+        try {
+          await OneSignal.logout();
+          console.log('[AuthContext] OneSignal Web Push: logged out');
+        } catch (err) {
+          console.warn('[AuthContext] OneSignal Web Push logout failed:', err);
+        }
+      });
+    }
+  }, [user?.id]);
+
   // Sync timezone to profile for localized notifications (runs for ALL users, web + native)
   useEffect(() => {
     if (!user?.id) return;
@@ -377,6 +408,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Detach user identity from RevenueCat on native builds (no-op on web)
     try { purchasesLogout(); } catch {}
     try { removeNotificationUser(); } catch {}
+    // OneSignal Web Push: logout on explicit sign out
+    try {
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      window.OneSignalDeferred.push(async function(OneSignal: any) {
+        await OneSignal.logout();
+      });
+    } catch {}
     // Clear any app-level cached flags that might drive auto-login flows
     try {
       localStorage.removeItem('admin_session');

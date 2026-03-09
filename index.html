@@ -85,6 +85,17 @@
     
     <!-- Android Chrome scrolling fix - especially for Honor phones -->
     <script src="/android-scroll-fix.js"></script>
+
+    <!-- OneSignal Web Push SDK -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      window.OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: "66ae74d0-1934-4c70-9649-49f643b28ce0",
+        });
+      });
+    </script>
   </head>
 
   <body>

@@ -343,6 +343,17 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
       window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
       onOpenChange(false);
       toast.success(language === 'ar' ? 'مرحباً بك في وقتي!' : 'Welcome to Wakti!');
+
+      // OneSignal Web Push: request notification permission on trial start
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      window.OneSignalDeferred.push(async function(OneSignal: any) {
+        try {
+          await OneSignal.Notifications.requestPermission();
+          console.log('[Paywall] OneSignal Web Push permission requested');
+        } catch (err) {
+          console.warn('[Paywall] OneSignal Web Push permission request failed:', err);
+        }
+      });
     } catch (err) {
       console.error('[Paywall] Skip/trial start failed:', err);
     }
