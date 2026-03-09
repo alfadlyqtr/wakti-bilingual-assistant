@@ -676,7 +676,7 @@ async function streamGemini3FlashChat(
   onSignal?: (meta: Record<string, unknown>) => void
 ): Promise<string> {
   const key = getGeminiApiKey();
-  const model = 'gemini-2.5-flash';
+  const model = 'gemini-3-flash-preview';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
   const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
@@ -2951,10 +2951,10 @@ If you are running out of space, keep this order and drop the rest:
           }
           
           aiProvider = 'gemini';
-          // Dual-model routing: Pro Supercomputer for study/search, Speed Engine for standard chat
+          // Dual-model routing: 3.1 Pro for study/search, 3 Flash for standard chat
           const selectedModel = (chatSubmode === 'study' || effectiveTrigger === 'search')
             ? 'gemini-3.1-pro-preview'
-            : 'gemini-2.5-flash';
+            : 'gemini-3-flash-preview';
           modelUsed = selectedModel;
           modelUsedOuter = modelUsed;
           try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'gemini' })}\n\n`)); } catch { /* ignore */ }
