@@ -74,7 +74,8 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const [activePackageId, setActivePackageId] = useState<string>('$rc_monthly');
   const [step, setStep] = useState(variant === 'new_user' ? 1 : 2);
   const contactUrl = "https://wa.me/97433994166";
-  const userName = profile?.display_name || (profile as any)?.first_name || profile?.username || '';
+  const rawName = profile?.display_name || (profile as any)?.first_name || profile?.username || user?.email || '';
+  const userName = rawName.includes('@') ? rawName.split('@')[0] : rawName;
 
   useEffect(() => {
     // When paywall is open, allow header popovers to appear above overlay
@@ -410,10 +411,10 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const subtitle = subtitles[variant]?.[lang] || subtitles.new_user.en;
   const featureList = features[lang] || features.en;
 
-  const showXButton = variant === 'new_user' && step === 1;
+  const showXButton = variant === 'new_user' && step === 2;
   const showSkipButton = variant === 'new_user' && step === 2;
   const showRestorePurchases = variant === 'cancelled' && step === 2;
-  const canDismiss = variant === 'new_user' && step === 1;
+  const canDismiss = variant === 'new_user' && step === 2;
 
   return (
     <Dialog open={open} onOpenChange={canDismiss ? onOpenChange : undefined}>
@@ -453,10 +454,11 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
 
         {/* ── STEP 1: Hello Wall (new_user only) ── */}
         {step === 1 && (
-          <div className="space-y-5 py-4">
+          <div className="space-y-5 py-2">
             {/* Greeting */}
-            <div className="text-center space-y-1 pt-2">
-              <h2 className="text-2xl font-bold text-foreground leading-snug">
+            <div className="text-center space-y-2 pt-1">
+              <div className="text-4xl">👋</div>
+              <h2 className="text-2xl font-bold leading-snug" style={{background: 'linear-gradient(135deg, hsl(210,100%,75%) 0%, hsl(280,60%,75%) 50%, hsl(25,95%,70%) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'}}>
                 {language === 'ar'
                   ? `أهلاً ${userName ? userName + '،' : ''} مرحباً بك في وقتي!`
                   : `Hello${userName ? ' ' + userName : ''}, welcome to Wakti!`}
@@ -464,11 +466,11 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
             </div>
 
             {/* Pitch */}
-            <div className="rounded-xl p-4 text-center bg-gradient-to-br from-[hsl(210,100%,65%,0.08)] to-[hsl(280,70%,65%,0.06)] border border-[hsl(210,100%,65%,0.2)]">
-              <p className="text-sm font-semibold text-foreground/90 leading-relaxed">
+            <div className="rounded-xl px-4 py-3 text-center bg-gradient-to-br from-[hsl(210,100%,65%,0.1)] to-[hsl(280,70%,65%,0.08)] border border-[hsl(210,100%,65%,0.25)] shadow-[0_0_20px_hsl(210,100%,65%,0.12)]">
+              <p className="text-sm font-semibold text-foreground/95 leading-relaxed">
                 {language === 'ar'
-                  ? 'وقتي هو تطبيق الذكاء الاصطناعي الشامل. لن تحتاج إلى أي تطبيق آخر بعد الآن.'
-                  : 'Wakti AI is the ultimate Super AI app. You won\'t need any other AI app ever again.'}
+                  ? '🚀 وقتي هو تطبيق الذكاء الاصطناعي الشامل. لن تحتاج إلى أي تطبيق آخر بعد الآن.'
+                  : '🚀 Wakti AI is the ultimate Super AI app — one app for everything. You won\'t need any other AI ever again.'}
               </p>
             </div>
 
@@ -477,7 +479,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
               {featureList.map((feature, i) => {
                 const item = typeof feature === 'string' ? { title: feature } : feature;
                 return (
-                  <div key={i} className="flex items-center gap-1.5 rounded-md px-2 py-1.5 bg-[hsl(210,100%,65%,0.06)] border border-[hsl(210,100%,65%,0.15)] min-w-0">
+                  <div key={i} className="flex items-center gap-1.5 rounded-md px-2 py-1.5 bg-[hsl(210,100%,65%,0.06)] border border-[hsl(210,100%,65%,0.15)] min-w-0 hover:bg-[hsl(210,100%,65%,0.1)] transition-colors">
                     <div className="w-1.5 h-1.5 rounded-full bg-[hsl(142,76%,55%)] shadow-[0_0_6px_hsl(142,76%,55%)] flex-shrink-0" />
                     <span className="flex flex-col min-w-0">
                       <span className="text-xs font-medium text-foreground/90 leading-tight truncate">{item.title}</span>
@@ -491,30 +493,22 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
             </div>
 
             {/* Promise */}
-            <p className="text-center text-sm text-[hsl(45,100%,65%)] font-medium">
+            <p className="text-center text-sm text-[hsl(45,100%,65%)] font-semibold">
               {language === 'ar'
                 ? '✨ نقوم دائماً بتحديث وإضافة ميزات جديدة!'
                 : '✨ We constantly update and add new features!'}
             </p>
 
-            {/* Continue button */}
+            {/* Continue button — the ONLY action on this screen */}
             <Button
               onClick={() => setStep(2)}
-              className="w-full bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:opacity-90 text-white font-bold text-lg tracking-wide shadow-[0_0_30px_hsl(200,100%,55%,0.5)] active:scale-[0.98] transition-all duration-150"
+              className="w-full bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:opacity-90 text-white font-bold text-xl tracking-wide shadow-[0_0_40px_hsl(200,100%,55%,0.6),0_0_80px_hsl(200,100%,55%,0.3)] active:scale-[0.98] transition-all duration-150"
               size="lg"
-              style={{minHeight: '56px'}}
+              style={{minHeight: '60px'}}
             >
               <Sparkles className="w-5 h-5 mr-2" />
               {language === 'ar' ? 'استمرار' : 'Continue'}
             </Button>
-
-            {/* Logout */}
-            <div className="flex items-center gap-2">
-              <Button onClick={handleLogout} variant="ghost" size="sm" className="flex-1 text-foreground/50">
-                <LogOut className="w-4 h-4 mr-1" />
-                {language === 'ar' ? 'تسجيل الخروج' : 'Logout'}
-              </Button>
-            </div>
           </div>
         )}
 
