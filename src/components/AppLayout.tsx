@@ -412,7 +412,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
 
   const showXButton = variant === 'new_user' && step === 1;
   const showSkipButton = variant === 'new_user' && step === 2;
-  const showAccountBilling = (variant === 'cancelled' || variant === 'trial_expired') && step === 2;
   const showRestorePurchases = variant === 'cancelled' && step === 2;
   const canDismiss = variant === 'new_user' && step === 1;
 
@@ -562,16 +561,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
 
               {/* Actions */}
               <div className="space-y-2 pt-2">
-                {showAccountBilling && (
-                  <Button
-                    onClick={() => { onOpenChange(false); navigate('/account?tab=billing'); }}
-                    variant="outline"
-                    className="w-full border-foreground/20 hover:border-foreground/40 hover:bg-foreground/5 text-foreground/80 font-medium transition-all"
-                  >
-                    {language === 'ar' ? 'الحساب / الفوترة' : 'Account / Billing'}
-                  </Button>
-                )}
-
                 <Button
                   onClick={handleSubscribe}
                   disabled={loading}

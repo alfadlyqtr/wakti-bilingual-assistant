@@ -385,17 +385,12 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     const isAccount = location.pathname.startsWith('/account');
     if (isAccount) { setShowPaywall(false); return; }
 
-    // Priority order: trial_expired > cancelled > new_user
-    
-    // Version 3: Trial expired (pressed skip/X before, 24h ran out)
-    if (isAccessExpired) {
-      if (DEV) console.log("ProtectedRoute: Trial expired - showing final paywall");
-      setPaywallVariant('trial_expired');
-      setShowPaywall(true);
-      return;
-    }
+    // Priority order: cancelled > trial_expired > new_user
+    // cancelled must be first: past subscribers also have expired trials, so we must
+    // identify them by wasSubscribed BEFORE checking isAccessExpired, otherwise
+    // they get trial_expired and lose the 'Restore Purchases' button.
 
-    // Version 2: Was subscribed before but cancelled/expired (has plan_name)
+    // Version 1 (priority): Was subscribed before but cancelled/expired (has plan_name)
     if (wasSubscribed) {
       if (DEV) console.log("ProtectedRoute: Cancelled subscriber - showing welcome back paywall");
       setPaywallVariant('cancelled');
@@ -403,7 +398,15 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
       return;
     }
 
-    // Version 1: New user (first login, no trial started, never subscribed)
+    // Version 2: Trial expired (pressed skip/X before, 24h ran out, never paid)
+    if (isAccessExpired) {
+      if (DEV) console.log("ProtectedRoute: Trial expired - showing final paywall");
+      setPaywallVariant('trial_expired');
+      setShowPaywall(true);
+      return;
+    }
+
+    // Version 3: New user (first login, no trial started, never subscribed)
     if (isNewUser) {
       if (DEV) console.log("ProtectedRoute: New user - showing welcome paywall");
       setPaywallVariant('new_user');
