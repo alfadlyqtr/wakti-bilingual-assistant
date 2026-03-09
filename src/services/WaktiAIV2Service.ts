@@ -1199,7 +1199,9 @@ class WaktiAIV2ServiceClass {
         }
 
         console.log(`✅ FRONTEND BOSS: Streaming completed successfully [${requestId}] (primary=${primary})`);
-        return { response: fullResponse, metadata };
+        // Invisibility cloak: strip any reminder JSON before returning to the UI layer
+        const cleanResponse = fullResponse.split('{"action"')[0].trim();
+        return { response: cleanResponse, metadata };
       };
 
       // Vision-first path via Supabase Edge Function: stream SSE and honor provider

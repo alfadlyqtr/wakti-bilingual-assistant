@@ -346,7 +346,8 @@ function estimateTokens(text: string): number {
 // Prices per 1M tokens (as of Dec 2024)
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'gemini-2.0-flash': { input: 0.075, output: 0.30 },
-  'gemini-3-flash-preview': { input: 0.075, output: 0.30 }, // Same tier as 2.0-flash
+  'gemini-2.5-flash': { input: 0.075, output: 0.30 },
+  'gemini-3.1-pro-preview': { input: 2.00, output: 8.00 },
   'gpt-4o-mini': { input: 0.15, output: 0.60 },
   'claude-3-5-sonnet-20241022': { input: 3.00, output: 15.00 },
 };
@@ -665,7 +666,7 @@ function chatNeedsSearch(query: string): boolean {
   return livePatterns.some((p) => p.test(q));
 }
 
-// Chat mode: gemini-3-flash-preview for intelligence + grounding (Ferrari memory system)
+// Chat mode: gemini-2.5-flash for intelligence + grounding (Ferrari memory system)
 async function streamGemini3FlashChat(
   query: string,
   systemInstruction: string,
@@ -675,8 +676,7 @@ async function streamGemini3FlashChat(
   onSignal?: (meta: Record<string, unknown>) => void
 ): Promise<string> {
   const key = getGeminiApiKey();
-  // Use gemini-3-flash-preview for superior reasoning to utilize our sophisticated memory system
-  const model = 'gemini-3-flash-preview';
+  const model = 'gemini-2.5-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
   const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
@@ -827,7 +827,7 @@ async function streamGemini3FlashChat(
   return fullText;
 }
 
-// Search mode: gemini-3-flash-preview with grounding (power + formatting)
+// Search mode: gemini-2.5-flash with grounding (power + formatting)
 async function streamGemini3WithSearch(
   query: string,
   systemInstruction: string,
@@ -838,7 +838,7 @@ async function streamGemini3WithSearch(
   userLocation?: { latitude: number; longitude: number; city?: string; country?: string } | null
 ): Promise<string> {
   const key = getGeminiApiKey();
-  const model = 'gemini-3-flash-preview';
+  const model = 'gemini-3.1-pro-preview';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
   // Inject today's date into the query so Google Search grounding fetches current results
@@ -950,17 +950,22 @@ async function streamGemini3WithSearch(
 function _promptPersonalSection(pt: Record<string, unknown>): string {
   const userNick = ((pt.nickname as string | undefined) || '').toString().trim();
   const aiNick = ((pt.ai_nickname as string | undefined) || '').toString().trim();
-  const tone = ((pt.tone as string | undefined) || 'neutral').toString().trim();
-  const style = ((pt.style as string | undefined) || 'short answers').toString().trim();
-  const isDefaultTone = tone === 'neutral';
-  const isDefaultStyle = style === 'short answers' || style === 'detailed';
-  // Skip entirely when no custom identity AND tone/style are defaults — saves ~200 chars
-  if (!userNick && !aiNick && isDefaultTone && isDefaultStyle) return '';
+  const tone = ((pt.tone as string | undefined) || '').toString().trim();
+  let style = ((pt.style as string | undefined) || '').toString().trim();
+
+  // Make 'short answers' strictly enforced
+  if (style === 'short answers') {
+    style = 'Strictly short, concise answers. No fluff or long paragraphs.';
+  }
+
+  if (!userNick && !aiNick && !tone && !style) return '';
+
   let s = `\nPERSONAL TOUCH:`;
-  if (userNick) s += ` Call user "${userNick}"."`;
-  if (aiNick)   s += ` You are "${aiNick}"."`;
-  if (!isDefaultTone) s += ` Tone: ${tone}.`;
-  if (!isDefaultStyle) s += ` Style: ${style}.`;
+  if (userNick) s += ` Call user "${userNick}".`;
+  if (aiNick)   s += ` You are "${aiNick}".`;
+  if (tone)     s += ` Tone: ${tone}.`;
+  if (style)    s += ` Style: ${style}.`;
+  s += ` However, ALWAYS use Markdown tables for data or lists, regardless of style.`;
   return s + '\n';
 }
 
@@ -979,7 +984,7 @@ function _promptBase(
 MEMORY: Use the conversation history fully. Never ask about something the user already told you. Reference prior context naturally. Treat the whole conversation as one continuous discussion.
 
 LANGUAGE: Always respond in ${language === 'ar' ? 'Arabic (العربية)' : 'English'} unless the user explicitly asks to translate. Non-negotiable.${personalSection}
-FORMAT: Table for 3+ structured items. Bullets for steps/lists. Paragraph for conversation.`;
+CRITICAL FORMATTING: You MUST use Markdown tables whenever presenting 3 or more related items, facts, comparisons, or structured data. Always use **bold** for key terms. Bullets for steps/lists. Paragraph for conversation. Never present structured data as plain text when a table is clearer.`;
 }
 
 // CHAT FRESHNESS EXTENSION (~150 chars): Only for pure chat mode
@@ -1009,7 +1014,7 @@ function _promptTimezone(): string {
 
 // REMINDER INTERCEPTION: lean single-line instruction appended to base prompt
 // Full reminder logic is now handled by backend interception after stream completes.
-const REMINDER_INSTRUCTION = '\n\nIf the user explicitly asks for a reminder, append this JSON block at the very end of your response (on its own line, no markdown): {"action":"set_reminder","time":"YYYY-MM-DDTHH:MM:SS","text":"reminder description"}. Calculate relative times (e.g. "in 2 minutes") by adding to current time. If no reminder is requested, do not output any JSON.';
+const REMINDER_INSTRUCTION = '\n\nIf the user explicitly asks for a reminder, append this JSON block at the very end of your response (on its own line, no markdown): {"action":"set_reminder","time":"ISO-8601 with timezone offset","text":"reminder description"}. Calculate relative times by adding to the provided Current local time, and ALWAYS include the correct timezone offset (e.g., +03:00). If no reminder is requested, do not output any JSON.';
 
 /**
  * Intercept reminder JSON from AI response, schedule it, and return cleaned text.
@@ -1022,51 +1027,55 @@ async function interceptAndScheduleReminder(
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder
 ): Promise<string> {
-  // Match the JSON block at the end of the response (with optional whitespace)
-  const reminderRegex = /\{\s*"action"\s*:\s*"set_reminder"\s*,\s*"time"\s*:\s*"([^"]+)"\s*,\s*"text"\s*:\s*"([^"]+)"\s*\}\s*$/;
-  const match = responseText.match(reminderRegex);
-  if (!match) return responseText;
+  const triggerIdx = responseText.indexOf('{"action"');
+  if (triggerIdx === -1) return responseText;
 
-  const [fullMatch, timeStr, reminderText] = match;
-  console.log(`🔔 REMINDER INTERCEPT: Found reminder block — time=${timeStr}, text=${reminderText}`);
-
-  // Strip the JSON block from the response the user sees
-  const cleanedText = responseText.slice(0, responseText.length - fullMatch.length).trimEnd();
-
-  // Schedule the reminder via schedule-reminder-push edge function
   try {
-    const scheduleUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/schedule-reminder-push`;
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-    const schedResp = await fetch(scheduleUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${serviceKey}`,
-      },
-      body: JSON.stringify({
-        user_id: userId,
-        scheduled_for: timeStr,
-        reminder_text: reminderText,
-        timezone,
-      }),
-    });
-    if (schedResp.ok) {
-      console.log(`✅ REMINDER INTERCEPT: Scheduled successfully`);
-      // Notify frontend that a reminder was created
-      try {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ reminderScheduled: { time: timeStr, text: reminderText } })}
+    const jsonStr = responseText.substring(triggerIdx).trim();
+    const cleanText = responseText.substring(0, triggerIdx).trim();
 
-`));
-      } catch { /* stream may be closing */ }
-    } else {
-      const errBody = await schedResp.text();
-      console.warn(`⚠️ REMINDER INTERCEPT: Schedule failed ${schedResp.status}`, errBody);
+    const data = JSON.parse(jsonStr);
+    if (data.action === 'set_reminder') {
+      const timeStr = data.time as string;
+      const reminderText = data.text as string;
+      console.log(`🔔 REMINDER INTERCEPT: Found reminder block — time=${timeStr}, text=${reminderText}`);
+
+      try {
+        const scheduleUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/schedule-reminder-push`;
+        const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+        const schedResp = await fetch(scheduleUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            scheduled_for: timeStr,
+            reminder_text: reminderText,
+            timezone,
+          }),
+        });
+        if (schedResp.ok) {
+          console.log(`✅ REMINDER INTERCEPT: Scheduled successfully`);
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ reminderScheduled: { time: timeStr, text: reminderText } })}\n\n`));
+          } catch { /* stream may be closing */ }
+        } else {
+          const errBody = await schedResp.text();
+          console.warn(`⚠️ REMINDER INTERCEPT: Schedule failed ${schedResp.status}`, errBody);
+        }
+      } catch (err) {
+        console.warn('⚠️ REMINDER INTERCEPT: Fetch error', err);
+      }
+
+      return cleanText;
     }
-  } catch (err) {
-    console.warn('⚠️ REMINDER INTERCEPT: Fetch error', err);
+  } catch (e) {
+    console.warn('⚠️ REMINDER INTERCEPT: Failed to parse intercepted reminder JSON', e);
   }
 
-  return cleanedText;
+  return responseText;
 }
 
 // ─── LAZY-LOAD DISPATCHER ────────────────────────────────────────────────────
@@ -2586,7 +2595,7 @@ If you are running out of space, keep this order and drop the rest:
               logAIUsage({
                 userId,
                 functionName: 'brain_stream',
-                model: 'gemini-3-flash-preview',
+                model: 'gemini-2.5-flash',
                 status: 'success',
                 prompt: message,
                 response: fullResponseText.slice(0, 500),
@@ -2704,6 +2713,9 @@ If you are running out of space, keep this order and drop the rest:
                 const fallback = language === 'ar' ? 'لم أتمكن من الرد.' : 'I could not generate a response.';
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: fallback, content: fallback })}\n\n`));
               }
+
+              // Intercept + schedule any reminder JSON embedded in the response
+              await interceptAndScheduleReminder(fullResponseText, userId || '', effectiveTimezone || 'UTC', controller, encoder);
 
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
               controller.close();
@@ -2939,13 +2951,17 @@ If you are running out of space, keep this order and drop the rest:
           }
           
           aiProvider = 'gemini';
-          modelUsed = 'gemini-3-flash-preview';
+          // Dual-model routing: Pro Supercomputer for study/search, Speed Engine for standard chat
+          const selectedModel = (chatSubmode === 'study' || effectiveTrigger === 'search')
+            ? 'gemini-3.1-pro-preview'
+            : 'gemini-2.5-flash';
+          modelUsed = selectedModel;
           modelUsedOuter = modelUsed;
           try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'gemini' })}\n\n`)); } catch { /* ignore */ }
           
           let geminiTokenCount = 0;
           await streamGemini(
-            'gemini-3-flash-preview',
+            selectedModel,
             contents,
             (token) => {
               geminiTokenCount++;

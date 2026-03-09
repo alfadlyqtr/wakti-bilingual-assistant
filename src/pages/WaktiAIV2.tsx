@@ -403,11 +403,13 @@ const WaktiAIV2 = () => {
               setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, metadata: { ...(m.metadata || {}), loading: false } } : m));
             }
             // ZERO React re-renders: write accumulated text directly to DOM via ref
+            // Invisibility cloak: strip any reminder JSON before it hits the screen
+            const displayContent = streamed.split('{"action"')[0].trim();
             if (!rafPending) {
               rafPending = true;
               requestAnimationFrame(() => {
                 rafPending = false;
-                streamingBubbleRef.current?.setContent(streamedContentRef.current);
+                streamingBubbleRef.current?.setContent(displayContent);
               });
             }
           },
@@ -434,10 +436,10 @@ const WaktiAIV2 = () => {
 
         const visionEndTime = Date.now();
         const visionThinkingDuration = Math.round((visionEndTime - startTime) / 1000);
-        
+        const cleanedStreamed = streamed.split('{"action"')[0].trim();
         const finalAssistantMessage: AIMessage = {
           ...assistantPlaceholder,
-          content: streamedResp?.response ?? streamed,
+          content: streamedResp?.response ?? cleanedStreamed,
           metadata: { 
             loading: false, 
             ...streamMeta,
@@ -540,11 +542,13 @@ const WaktiAIV2 = () => {
               setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, metadata: { ...(m.metadata || {}), loading: false } } : m));
             }
             // ZERO React re-renders: write accumulated text directly to DOM via ref
+            // Invisibility cloak: strip any reminder JSON before it hits the screen
+            const displayContent = streamed.split('{"action"')[0].trim();
             if (!rafPending) {
               rafPending = true;
               requestAnimationFrame(() => {
                 rafPending = false;
-                streamingBubbleRef.current?.setContent(streamedContentRef.current);
+                streamingBubbleRef.current?.setContent(displayContent);
               });
             }
           },
@@ -601,9 +605,10 @@ const WaktiAIV2 = () => {
           }
         };
         
+        const cleanedStreamed = streamed.split('{"action"')[0].trim();
         const finalAssistantMessage: AIMessage = {
           ...assistantPlaceholder,
-          content: streamedResp?.response ?? streamed,
+          content: streamedResp?.response ?? cleanedStreamed,
           metadata: { 
             loading: false, 
             ...streamMeta,
