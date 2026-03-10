@@ -130,8 +130,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [duration, setDuration] = useState<'4' | '6' | '8' | '10' | '12' | '15'>('8');
   const [aspectRatio, setAspectRatio] = useState<string>('9:16');
   const [resolution, setResolution] = useState<'480p' | '720p'>('480p');
-  const [fixedLens, setFixedLens] = useState(false);
-  const [generateAudio, setGenerateAudio] = useState(false);
+  const [videoStyleMode, setVideoStyleMode] = useState<'normal' | 'fun'>('normal');
   const [isAmping, setIsAmping] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState('');
@@ -641,7 +640,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     // Validate based on mode
     if (generationMode === 'image_to_video' && !imagePreview) return;
     if (generationMode === 'text_to_video' && !prompt.trim()) return;
-    if (generationMode === '2images_to_video' && (!imagePreview || !imagePreview2)) return;
+    if (generationMode === '2images_to_video' && !imagePreview) return;
     if (!user) return;
 
     const needsArabicTranslation =
@@ -695,9 +694,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           prompt: finalPrompt,
           duration,
           aspect_ratio: aspectRatio,
-          fixed_lens: fixedLens,
-          generate_audio: generateAudio,
           resolution,
+          video_style_mode: videoStyleMode,
           mode: 'async',
         };
       } else if (generationMode === 'image_to_video') {
@@ -756,22 +754,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           prompt: finalPrompt,
           duration,
           aspect_ratio: aspectRatio,
-          fixed_lens: fixedLens,
-          generate_audio: generateAudio,
           resolution,
+          video_style_mode: videoStyleMode,
           mode: 'async',
         };
       } else if (generationMode === '2images_to_video') {
-        // 2Images-to-Video: upload both images
         setGenerationStatus(language === 'ar' ? 'جاري رفع الصور...' : 'Uploading images...');
         let imageUrl1 = '';
-        let imageUrl2 = '';
-        
+
         try {
-          // Upload first image
           const randomId1 = Math.random().toString(36).substring(2, 15);
           const storagePath1 = `${user.id}/ai-video-input/${randomId1}_1.jpg`;
-
           let sourceBlob1: Blob;
           if (imageFile) {
             sourceBlob1 = await compressImage(imageFile, 1024, 0.7);
@@ -784,19 +777,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           } else {
             throw new Error('Missing first image source');
           }
-
           const { error: uploadErr1 } = await supabase.storage
             .from('message_attachments')
-            .upload(storagePath1, sourceBlob1, {
-              contentType: 'image/jpeg',
-              cacheControl: '3600',
-              upsert: true,
-            });
-
-          if (uploadErr1) {
-            throw new Error(`First image upload failed: ${uploadErr1.message}`);
-          }
-
+            .upload(storagePath1, sourceBlob1, { contentType: 'image/jpeg', cacheControl: '3600', upsert: true });
+          if (uploadErr1) throw new Error(`First image upload failed: ${uploadErr1.message}`);
           const { data: signedData1, error: signedErr1 } = await supabase.storage
             .from('message_attachments')
             .createSignedUrl(storagePath1, 60 * 60 * 6);
@@ -804,60 +788,60 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           if (!signedData1?.signedUrl) throw new Error('First image signed URL missing');
           imageUrl1 = signedData1.signedUrl;
 
-          // Upload second image
-          const randomId2 = Math.random().toString(36).substring(2, 15);
-          const storagePath2 = `${user.id}/ai-video-input/${randomId2}_2.jpg`;
+          if (imagePreview2) {
+            // Both images present — use Seedance 2images model
+            const randomId2 = Math.random().toString(36).substring(2, 15);
+            const storagePath2 = `${user.id}/ai-video-input/${randomId2}_2.jpg`;
+            let sourceBlob2: Blob;
+            if (imageFile2) {
+              sourceBlob2 = await compressImage(imageFile2, 1024, 0.7);
+            } else if (imagePreview2.startsWith('data:')) {
+              const previewBlob = await dataUrlToBlob(imagePreview2);
+              sourceBlob2 = await compressImage(new File([previewBlob], 'preview2.jpg', { type: 'image/jpeg' }), 1024, 0.7);
+            } else if (imagePreview2.startsWith('http')) {
+              const fetchedBlob = await fetch(imagePreview2).then(r => r.blob());
+              sourceBlob2 = await compressImage(new File([fetchedBlob], 'saved2.jpg', { type: fetchedBlob.type || 'image/jpeg' }), 1024, 0.7);
+            } else {
+              throw new Error('Missing second image source');
+            }
+            const { error: uploadErr2 } = await supabase.storage
+              .from('message_attachments')
+              .upload(storagePath2, sourceBlob2, { contentType: 'image/jpeg', cacheControl: '3600', upsert: true });
+            if (uploadErr2) throw new Error(`Second image upload failed: ${uploadErr2.message}`);
+            const { data: signedData2, error: signedErr2 } = await supabase.storage
+              .from('message_attachments')
+              .createSignedUrl(storagePath2, 60 * 60 * 6);
+            if (signedErr2) throw new Error(`Second image signed URL failed: ${signedErr2.message}`);
+            if (!signedData2?.signedUrl) throw new Error('Second image signed URL missing');
+            const imageUrl2 = signedData2.signedUrl;
 
-          let sourceBlob2: Blob;
-          if (imageFile2) {
-            sourceBlob2 = await compressImage(imageFile2, 1024, 0.7);
-          } else if (imagePreview2?.startsWith('data:')) {
-            const previewBlob = await dataUrlToBlob(imagePreview2);
-            sourceBlob2 = await compressImage(new File([previewBlob], 'preview2.jpg', { type: 'image/jpeg' }), 1024, 0.7);
-          } else if (imagePreview2?.startsWith('http')) {
-            const fetchedBlob = await fetch(imagePreview2).then(r => r.blob());
-            sourceBlob2 = await compressImage(new File([fetchedBlob], 'saved2.jpg', { type: fetchedBlob.type || 'image/jpeg' }), 1024, 0.7);
+            requestBody = {
+              generation_type: '2images_to_video',
+              image1: imageUrl1,
+              image2: imageUrl2,
+              prompt: finalPrompt,
+              duration,
+              aspect_ratio: aspectRatio,
+              resolution,
+              mode: 'async',
+            };
           } else {
-            throw new Error('Missing second image source');
+            // Only one image — fall back to grok image_to_video
+            requestBody = {
+              generation_type: 'image_to_video',
+              image: imageUrl1,
+              prompt: finalPrompt,
+              duration,
+              aspect_ratio: aspectRatio,
+              resolution,
+              video_style_mode: videoStyleMode,
+              mode: 'async',
+            };
           }
-
-          const { error: uploadErr2 } = await supabase.storage
-            .from('message_attachments')
-            .upload(storagePath2, sourceBlob2, {
-              contentType: 'image/jpeg',
-              cacheControl: '3600',
-              upsert: true,
-            });
-
-          if (uploadErr2) {
-            throw new Error(`Second image upload failed: ${uploadErr2.message}`);
-          }
-
-          const { data: signedData2, error: signedErr2 } = await supabase.storage
-            .from('message_attachments')
-            .createSignedUrl(storagePath2, 60 * 60 * 6);
-          if (signedErr2) throw new Error(`Second image signed URL failed: ${signedErr2.message}`);
-          if (!signedData2?.signedUrl) throw new Error('Second image signed URL missing');
-          imageUrl2 = signedData2.signedUrl;
-
-          console.log('[AIVideomaker] Both images uploaded successfully:', imageUrl1, imageUrl2);
         } catch (prepErr: any) {
           console.error('[AIVideomaker] Prepare images error:', prepErr);
           throw prepErr;
         }
-
-        requestBody = {
-          generation_type: '2images_to_video',
-          image1: imageUrl1,
-          image2: imageUrl2,
-          prompt: finalPrompt,
-          duration,
-          aspect_ratio: aspectRatio,
-          fixed_lens: fixedLens,
-          generate_audio: generateAudio,
-          resolution,
-          mode: 'async',
-        };
       }
 
       setGenerationProgress(10);
@@ -1022,7 +1006,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     : generationMode === 'image_to_video'
     ? (imagePreview && !needsArabicTranslation && !limitReached && !isGenerating && !loadingQuota)
     : generationMode === '2images_to_video'
-    ? (imagePreview && imagePreview2 && !needsArabicTranslation && !limitReached && !isGenerating && !loadingQuota)
+    ? (imagePreview && !needsArabicTranslation && !limitReached && !isGenerating && !loadingQuota)
     : false;
   const showLatestVideo = !generatedVideoUrl && !!(latestVideo?.signedUrl || latestVideo?.video_url);
 
@@ -1143,7 +1127,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
           {/* Mode toggle */}
           <div
-            className={`inline-flex items-center rounded-2xl border border-primary/20 bg-background/40 backdrop-blur-sm p-1 shadow-sm shadow-primary/10 ${
+            className={`inline-flex max-w-full flex-wrap items-center rounded-2xl border border-primary/20 bg-background/40 backdrop-blur-sm p-1 shadow-sm shadow-primary/10 ${
               isGenerating ? 'opacity-80' : ''
             }`}
             role="group"
@@ -1217,7 +1201,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           </div>
 
           {/* Unified content area */}
-          <div className={`grid grid-cols-1 ${generationMode === 'image_to_video' ? 'md:grid-cols-[280px_1fr]' : generationMode === '2images_to_video' ? 'md:grid-cols-[560px_1fr]' : ''} gap-4`}>
+          <div className={`grid grid-cols-1 ${generationMode === 'image_to_video' ? 'xl:grid-cols-[280px_1fr]' : generationMode === '2images_to_video' ? 'xl:grid-cols-[560px_1fr]' : ''} gap-4 items-start`}>
             {/* Single image upload - only shown in image_to_video mode */}
             {generationMode === 'image_to_video' && (
               <div className="relative">
@@ -1304,7 +1288,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
             {/* Dual image upload - only shown in 2images_to_video mode */}
             {generationMode === '2images_to_video' && (
-              <div className="relative grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="relative grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* First Image */}
                 <div className="relative">
                   <div className="mb-1.5 flex items-center gap-1.5">
@@ -1391,7 +1375,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 <div className="relative">
                   <div className="mb-1.5 flex items-center gap-1.5">
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-[hsl(280,70%,65%)]/20 to-[hsl(320,75%,70%)]/20 border border-[hsl(280,70%,65%)]/30 text-[hsl(280,70%,65%)]">
-                      <span>⏹</span> {language === 'ar' ? 'إطار النهاية' : 'End Frame'}
+                      <span>⏹</span> {language === 'ar' ? 'إطار النهاية (اختياري)' : 'End Frame (optional)'}
                     </span>
                   </div>
                   {!imagePreview2 ? (
@@ -1611,7 +1595,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     onClick={() => {
                       if (!isGenerating) {
                         setResolution('720p');
-                        setGenerateAudio(false);
                         if (duration === '12') setDuration('8');
                       }
                     }}
@@ -1625,52 +1608,32 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     720p
                   </button>
                 </div>
-                </div>
-
-              {/* KIE API Options */}
-              <div className="flex items-center gap-3 flex-wrap">
-                {/* Fixed Lens Toggle */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => !isGenerating && setFixedLens(!fixedLens)}
-                    disabled={isGenerating}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                      fixedLens
-                        ? 'bg-gradient-to-r from-[hsl(142,76%,55%)]/20 to-[hsl(160,80%,55%)]/20 text-green-600 dark:text-green-400 border border-green-500/30'
-                        : 'bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted/60 border border-border/50'
-                    }`}
-                  >
-                    <div className={`w-3 h-3 rounded border-2 flex items-center justify-center ${
-                      fixedLens ? 'bg-green-500 border-green-500' : 'border-muted-foreground/40'
-                    }`}>
-                      {fixedLens && <Check className="h-2 w-2 text-white" />}
-                    </div>
-                    <span>{language === 'ar' ? 'كاميرا ثابتة' : 'Fixed Camera'}</span>
-                  </button>
-                </div>
-
-                {/* Generate Audio Toggle - disabled when 720p */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => !isGenerating && !(generationMode === '2images_to_video' && resolution === '720p') && setGenerateAudio(!generateAudio)}
-                    disabled={isGenerating || (generationMode === '2images_to_video' && resolution === '720p')}
-                    title={generationMode === '2images_to_video' && resolution === '720p' ? (language === 'ar' ? 'الصوت غير متاح في 720p' : 'Audio not available at 720p') : undefined}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                      generationMode === '2images_to_video' && resolution === '720p'
-                        ? 'bg-muted/20 text-muted-foreground/30 border border-border/30 cursor-not-allowed'
-                        : generateAudio
-                          ? 'bg-gradient-to-r from-[hsl(280,70%,65%)]/20 to-[hsl(320,75%,70%)]/20 text-purple-600 dark:text-purple-400 border border-purple-500/30'
-                          : 'bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted/60 border border-border/50'
-                    }`}
-                  >
-                    <div className={`w-3 h-3 rounded border-2 flex items-center justify-center ${
-                      generateAudio && !(generationMode === '2images_to_video' && resolution === '720p') ? 'bg-purple-500 border-purple-500' : 'border-muted-foreground/40'
-                    }`}>
-                      {generateAudio && !(generationMode === '2images_to_video' && resolution === '720p') && <Check className="h-2 w-2 text-white" />}
-                    </div>
-                    <span>{language === 'ar' ? 'إنشاء صوت' : 'Generate Audio'}</span>
-                  </button>
-                </div>
+                {(generationMode === 'image_to_video' || generationMode === 'text_to_video') && (
+                  <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/50">
+                    <button
+                      onClick={() => !isGenerating && setVideoStyleMode('normal')}
+                      disabled={isGenerating}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                        videoStyleMode === 'normal'
+                          ? 'bg-gradient-to-r from-[#060541] to-[hsl(210,100%,45%)] text-white shadow-md shadow-blue-500/30'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                      }`}
+                    >
+                      {language === 'ar' ? 'عادي' : 'Normal'}
+                    </button>
+                    <button
+                      onClick={() => !isGenerating && setVideoStyleMode('fun')}
+                      disabled={isGenerating}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                        videoStyleMode === 'fun'
+                          ? 'bg-gradient-to-r from-[hsl(25,95%,60%)] to-[hsl(320,75%,70%)] text-white shadow-md shadow-orange-500/30'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                      }`}
+                    >
+                      {language === 'ar' ? 'مرح' : 'Fun'}
+                    </button>
+                  </div>
+                )}
               </div>
 
 

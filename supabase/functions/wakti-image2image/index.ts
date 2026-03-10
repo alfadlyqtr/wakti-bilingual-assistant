@@ -52,7 +52,6 @@ function detectMimeAndExt(bytes: Uint8Array, mimeHint?: string): { mime: string;
   return { mime: "image/png", ext: "png" };
 }
 
-
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const STORAGE_BUCKET = "generated-files";
@@ -61,6 +60,8 @@ const SIGNED_URL_EXPIRES_SECONDS = 10 * 60;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY")!;
+const MODEL_FAST = Deno.env.get("RUNWARE_FAST_MODEL") || "google:4@1";
+const MODEL_BEST = Deno.env.get("RUNWARE_BEST_FAST_MODEL") || "google:4@3";
 
 function genUUID(): string {
   try { return crypto.randomUUID(); } catch { return `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
@@ -134,14 +135,14 @@ async function uploadAndSignReferenceImage(params: {
   return signed.data.signedUrl;
 }
 
-async function callRunwareI2I(finalPrompt: string, referenceImages: string[]): Promise<unknown> {
-  // google:4@1 requires the WebSocket-style /v1 endpoint (same as text2image), not /v1/tasks
+async function callRunwareI2I(finalPrompt: string, referenceImages: string[], model: string): Promise<unknown> {
+  // google models require the WebSocket-style /v1 endpoint (same as text2image), not /v1/tasks
   const payload = [
     { taskType: "authentication", apiKey: RUNWARE_API_KEY },
     {
       taskType: "imageInference",
       taskUUID: genUUID(),
-      model: "google:4@1",
+      model,
       positivePrompt: finalPrompt,
       height: 1024,
       width: 1024,
@@ -179,6 +180,8 @@ serve(async (req: Request) => {
     const image_base64_raw_2 = body?.image_base64_2 as string | undefined;
     const user_prompt = body?.user_prompt as string | undefined;
     const user_id = body?.user_id as string | undefined;
+    const quality = body?.quality === "best_fast" ? "best_fast" : "fast";
+    const selectedModel = quality === "best_fast" ? MODEL_BEST : MODEL_FAST;
 
     if (!image_base64_raw || !user_prompt || !user_id) {
       return new Response(
@@ -201,26 +204,65 @@ serve(async (req: Request) => {
     }
 
     const referenceUrls = referenceUrl2 ? [referenceUrl, referenceUrl2] : [referenceUrl];
-    const rw = await callRunwareI2I(user_prompt, referenceUrls);
+    const rw = await callRunwareI2I(user_prompt, referenceUrls, selectedModel);
     const node = (pickFirstResultNode(rw) || rw) as Record<string, unknown>;
 
-    // Extract the Runware output URL
+    // Extract the Runware output — prefer dataURI (stable), fallback to URL
+    const outputDataURI = (node?.imageDataURI || node?.dataURI || node?.dataUrl) as string | undefined;
     const outputImageUrl = (node?.imageURL || node?.URL || node?.url) as string | undefined;
     
-    console.log("🎨 Runware result:", { keys: Object.keys(node || {}), outputImageUrl: outputImageUrl?.slice(0, 80) });
+    console.log("🎨 Runware result:", { keys: Object.keys(node || {}), hasDataURI: !!outputDataURI, outputImageUrl: outputImageUrl?.slice(0, 80) });
 
-    if (outputImageUrl) {
+    if (outputDataURI || outputImageUrl) {
+      // Download/decode the image and re-upload to Supabase Storage for a stable URL
+      let stableUrl: string;
+      try {
+        let imageBytes: Uint8Array;
+        let imageMime = "image/png";
+
+        if (outputDataURI) {
+          const { base64: outB64, mimeHint } = stripDataUrlPrefix(outputDataURI);
+          imageBytes = decodeBase64ToUint8Array(outB64);
+          if (mimeHint) imageMime = mimeHint;
+        } else {
+          // Fetch from Runware CDN URL
+          const fetchResp = await fetch(outputImageUrl!);
+          if (!fetchResp.ok) throw new Error(`Failed to fetch output image: ${fetchResp.status}`);
+          const arrayBuf = await fetchResp.arrayBuffer();
+          imageBytes = new Uint8Array(arrayBuf);
+          const ct = fetchResp.headers.get("content-type");
+          if (ct && ct.startsWith("image/")) imageMime = ct.split(";")[0].trim();
+        }
+
+        const { mime, ext } = detectMimeAndExt(imageBytes, imageMime);
+        const outputPath = `i2i-output/${user_id}/${genUUID()}.${ext}`;
+        const upOut = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .upload(outputPath, imageBytes, { contentType: mime, upsert: true });
+        if (upOut.error) throw new Error(`Output upload failed: ${upOut.error.message}`);
+
+        const signedOut = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .createSignedUrl(outputPath, 60 * 60 * 24); // 24h
+        if (signedOut.error || !signedOut.data?.signedUrl) throw new Error("Output signed URL failed");
+        stableUrl = signedOut.data.signedUrl;
+      } catch (uploadErr: unknown) {
+        // Fallback to direct URL if re-upload fails
+        console.error("🎨 Output re-upload failed, falling back to direct URL:", (uploadErr as Error)?.message);
+        stableUrl = outputImageUrl || outputDataURI!;
+      }
+
       // Log successful AI usage
       await logAIFromRequest(req, {
         functionName: "wakti-image2image",
         provider: "runware",
-        model: "google:4@1",
+        model: selectedModel,
         inputText: user_prompt,
         status: "success"
       });
 
       return new Response(
-        JSON.stringify({ success: true, url: outputImageUrl, model: "google:4@1" }),
+        JSON.stringify({ success: true, url: stableUrl, model: selectedModel, quality }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -245,7 +287,7 @@ serve(async (req: Request) => {
     await logAIFromRequest(req, {
       functionName: "wakti-image2image",
       provider: "runware",
-      model: "google:4@1",
+      model: parsed?.model || "unknown",
       status: "error",
       errorMessage: message
     });

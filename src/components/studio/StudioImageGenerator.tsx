@@ -294,7 +294,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     const resp = await fetch(`${SUPABASE_URL}/functions/v1/wakti-image2image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-      body: JSON.stringify({ user_prompt: prompt, image_base64: rawB64, image_base64_2: rawB64_2, user_id: user?.id }),
+      body: JSON.stringify({ user_prompt: prompt, image_base64: rawB64, image_base64_2: rawB64_2, user_id: user?.id, quality }),
     });
     const json = await resp.json().catch(() => ({} as any));
     if (!resp.ok || !json?.success || !json?.url) {
@@ -396,7 +396,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                     image_url: publicUrl,
                     prompt: prompt || null,
                     submode,
-                    quality: submode === 'text2image' ? quality : null,
+                    quality: submode === 'text2image' || submode === 'image2image' ? quality : null,
                     meta: { storage_path: fn },
                   })
                   .select('id')
@@ -517,7 +517,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             image_url: bucketUrl,
             prompt: prompt || null,
             submode,
-            quality: submode === 'text2image' ? quality : null,
+            quality: submode === 'text2image' || submode === 'image2image' ? quality : null,
             meta: { storage_path: storagePath },
           })
           .select('id')
@@ -826,8 +826,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       {/* ── Generation Controls Card ── */}
       <div className="rounded-2xl border border-border/50 bg-white/60 dark:bg-white/[0.03] backdrop-blur-sm p-4 space-y-4 shadow-sm">
 
-        {/* Quality toggle (T2I only) */}
-        {submode === 'text2image' && (
+        {/* Quality toggle (T2I + I2I) */}
+        {(submode === 'text2image' || submode === 'image2image') && (
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               {language === 'ar' ? 'الجودة' : 'Quality'}

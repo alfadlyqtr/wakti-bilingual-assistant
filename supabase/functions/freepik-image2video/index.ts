@@ -126,15 +126,18 @@ async function createTextToVideoTask(
   duration?: string,
   aspectRatio?: string,
   resolution?: string,
+  videoStyleMode?: string,
 ): Promise<{ task_id: string; status: string }> {
   const validDuration = ["6", "10", "15"].includes(duration || "") ? duration! : "6";
   const validResolution = ["480p", "720p"].includes(resolution || "") ? resolution! : "720p";
   const validAspectRatio = ["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"].includes(aspectRatio || "") ? aspectRatio! : "9:16";
+  const validMode = ["normal", "fun"].includes(videoStyleMode || "") ? videoStyleMode! : "normal";
   const input: Record<string, unknown> = {
     prompt: prompt.slice(0, 2500),
     aspect_ratio: validAspectRatio,
     duration: validDuration,
     resolution: validResolution,
+    mode: validMode,
   };
 
   const requestBody = {
@@ -178,6 +181,7 @@ async function createVideoTask(
   fixedLens?: boolean,
   generateAudio?: boolean,
   resolution?: string,
+  videoStyleMode?: string,
 ): Promise<{ task_id: string; status: string }> {
   const sanitizedImageUrls = imageUrls.map(url => sanitizeImageUrl(url));
   const isTwoImages = sanitizedImageUrls.length === 2;
@@ -190,6 +194,7 @@ async function createVideoTask(
     ? aspectRatio!
     : "9:16";
   const validResolution = ["480p", "720p"].includes(resolution || "") ? resolution! : (isTwoImages ? "480p" : "720p");
+  const validMode = ["normal", "fun"].includes(videoStyleMode || "") ? videoStyleMode! : "normal";
 
   const model = isTwoImages ? KIE_2IMAGES_MODEL : KIE_IMAGE2VIDEO_MODEL;
 
@@ -208,7 +213,7 @@ async function createVideoTask(
         image_urls: sanitizedImageUrls,
         duration: validDuration,
         resolution: validResolution,
-        mode: "normal",
+        mode: validMode,
       };
 
   if (isTwoImages) {
@@ -405,7 +410,7 @@ serve(async (req) => {
 
     // Parse request body
     const body = await req.json();
-    const { image, image1, image2, prompt, mode, duration: reqDuration, aspect_ratio, fixed_lens, generate_audio, generation_type, resolution } = body;
+    const { image, image1, image2, prompt, mode, duration: reqDuration, aspect_ratio, fixed_lens, generate_audio, generation_type, resolution, video_style_mode } = body;
 
     // Mode: 'status' to check task status
     if (mode === "status") {
@@ -498,7 +503,7 @@ serve(async (req) => {
 
     if (generationType === "text_to_video") {
       // Text-to-Video: no image needed
-      task = await createTextToVideoTask(prompt, reqDuration, aspect_ratio, resolution);
+      task = await createTextToVideoTask(prompt, reqDuration, aspect_ratio, resolution, video_style_mode);
     } else if (generationType === "2images_to_video") {
       // 2Images-to-Video: requires both image1 and image2
       let imageUrl1: string = image1;
@@ -532,7 +537,7 @@ serve(async (req) => {
         }
       }
       
-      task = await createVideoTask([imageUrl1, imageUrl2], prompt, reqDuration, aspect_ratio, fixed_lens, generate_audio, resolution);
+      task = await createVideoTask([imageUrl1, imageUrl2], prompt, reqDuration, aspect_ratio, fixed_lens, generate_audio, resolution, video_style_mode);
     } else {
       // Image-to-Video: requires single image
       let imageUrl: string = image;
@@ -548,7 +553,7 @@ serve(async (req) => {
           );
         }
       }
-      task = await createVideoTask([imageUrl], prompt, reqDuration, aspect_ratio, fixed_lens, generate_audio, resolution);
+      task = await createVideoTask([imageUrl], prompt, reqDuration, aspect_ratio, fixed_lens, generate_audio, resolution, video_style_mode);
     }
 
     // If mode is 'async', return task_id immediately for frontend polling
