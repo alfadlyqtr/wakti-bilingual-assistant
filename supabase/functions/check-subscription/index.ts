@@ -157,6 +157,29 @@ serve(async (req) => {
 
     // Task 5: Free Ride Fix — if RC confirms no active entitlements, actively downgrade the profile
     if (!isSubscribed) {
+      // Admin Gift Protection: check if this user has an active manual gift before downgrading
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("payment_method, next_billing_date")
+        .eq("id", userId)
+        .single();
+
+      const isManualGift = profile?.payment_method === "manual";
+      const giftStillActive = isManualGift && profile?.next_billing_date && new Date(profile.next_billing_date) > now;
+
+      if (giftStillActive) {
+        console.log(`[check-subscription] User ${userId.substring(0, 8)}... has active admin gift until ${profile.next_billing_date} — skipping downgrade`);
+        return new Response(JSON.stringify({
+          isSubscribed: true,
+          entitlements: [],
+          subscriptions: [],
+          reason: "admin_gift"
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
       const { error: downgradeError } = await supabase
         .from("profiles")
         .update({
