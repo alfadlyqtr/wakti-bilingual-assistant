@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/integrations/supabase/client";
 import { LogOut } from "lucide-react";
+import { AICEOAssistant } from "@/components/admin/AICEOAssistant";
 
 interface AdminHeaderProps {
   title: string;
@@ -61,6 +62,7 @@ export const AdminHeader = ({ title, subtitle, icon, children }: AdminHeaderProp
             )}
           </h1>
           <div className="flex items-center gap-2">
+            <AICEOAssistant />
             <ThemeToggle />
             <Button
               variant="outline"

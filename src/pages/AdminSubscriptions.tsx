@@ -1,11 +1,11 @@
 // @ts-nocheck
 import { useEffect, useMemo, useState } from "react";
-import { Shield, Users, Search, Filter, CheckCircle, XCircle, AlertTriangle, RefreshCw, Smartphone, UserCog, UserX, CreditCard, Calendar, Gift, Clock, Plus } from "lucide-react";
+import { Shield, Users, Search, CheckCircle, XCircle, AlertTriangle, RefreshCw, UserCog, CreditCard, Gift, Clock, Plus, TrendingUp, Eye, Flame, ArrowUpRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -14,9 +14,6 @@ import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 import { getAdminSession } from "@/utils/adminAuth";
-import { Grid } from "gridjs-react";
-import { h } from "gridjs";
-import "gridjs/dist/theme/mermaid.css";
 
 interface User {
   id: string;
@@ -135,77 +132,25 @@ export default function AdminSubscriptions() {
 
   const getCurrentAdminId = async (): Promise<string | null> => {
     try {
-      // Get current Supabase session
       const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error || !session?.user?.id) {
-        console.error('[DEBUG] No Supabase session found:', error);
-        return null;
-      }
-
-      // Check localStorage for admin session
+      if (error || !session?.user?.id) return null;
       const adminSession = getAdminSession();
-      if (adminSession?.admin_id) {
-        console.log('[DEBUG] Admin ID from localStorage:', adminSession.admin_id);
-        return adminSession.admin_id;
-      }
-
-      // Fallback: get admin info from database
+      if (adminSession?.admin_id) return adminSession.admin_id;
       const { data: adminData, error: adminError } = await supabase
-        .rpc('get_admin_by_auth_id', {
-          auth_user_id: session.user.id
-        });
-
-      if (adminError || !adminData || adminData.length === 0) {
-        console.error('[DEBUG] Failed to get admin info:', adminError);
-        return null;
-      }
-
-      console.log('[DEBUG] Admin ID from database:', adminData[0].id);
+        .rpc('get_admin_by_auth_id', { auth_user_id: session.user.id });
+      if (adminError || !adminData || adminData.length === 0) return null;
       return adminData[0].id;
-    } catch (error) {
-      console.error('[DEBUG] Error getting admin ID:', error);
+    } catch {
       return null;
     }
   };
 
   const handleActivateSubscription = async () => {
-    if (!selectedUser) {
-      console.error('[DEBUG] No user selected for activation');
-      toast.error('No user selected');
-      return;
-    }
-
-    console.log('[DEBUG] Starting activation process for user:', {
-      userId: selectedUser.id,
-      email: selectedUser.email,
-      currentStatus: selectedUser.is_subscribed,
-      activationData
-    });
-
+    if (!selectedUser) { toast.error('No user selected'); return; }
     setIsActivating(true);
-    
     try {
       const adminId = await getCurrentAdminId();
-      
-      if (!adminId) {
-        console.error('[DEBUG] No admin ID available');
-        toast.error('Admin session invalid - please login again');
-        setIsActivating(false);
-        return;
-      }
-
-      console.log('[DEBUG] Calling admin_activate_subscription with params:', {
-        p_user_id: selectedUser.id,
-        p_plan_name: activationData.isGift ? `Gift ${activationData.giftDuration.replace('_', ' ')}` : activationData.planName,
-        p_billing_amount: activationData.isGift ? 0 : activationData.billingAmount,
-        p_billing_currency: 'QAR',
-        p_payment_method: activationData.isGift ? 'gift' : activationData.paymentMethod,
-        p_is_gift: activationData.isGift,
-        p_gift_duration: activationData.isGift ? activationData.giftDuration : null,
-        p_gift_given_by: activationData.isGift ? adminId : null
-      });
-
+      if (!adminId) { toast.error('Admin session invalid - please login again'); setIsActivating(false); return; }
       const { data, error } = await supabase.rpc('admin_activate_subscription', {
         p_user_id: selectedUser.id,
         p_plan_name: activationData.isGift ? `Gift ${activationData.giftDuration.replace('_', ' ')}` : activationData.planName,
@@ -216,46 +161,21 @@ export default function AdminSubscriptions() {
         p_gift_duration: activationData.isGift ? activationData.giftDuration : null,
         p_gift_given_by: activationData.isGift ? adminId : null
       });
-
-      console.log('[DEBUG] RPC Response:', { data, error });
-
       if (error) {
-        console.error('[DEBUG] Activation error:', error);
-        toast.error(`Failed to activate subscription: ${error.message}`);
-        setDebugInfo({ error: error.message, code: error.code, details: error.details });
+        toast.error(`Failed to activate: ${error.message}`);
+        setDebugInfo({ error: error.message, code: error.code });
       } else {
-        console.log('[DEBUG] Activation successful:', data);
-        const actionType = activationData.isGift ? 'Gift subscription' : 'Subscription';
-        const duration = activationData.isGift ? activationData.giftDuration.replace('_', ' ') : '';
-        const durationDays = activationData.isGift ? 
-          (activationData.giftDuration === '1_week' ? '7 days' :
-           activationData.giftDuration === '2_weeks' ? '14 days' :
-           activationData.giftDuration === '1_month' ? '30 days' : '') : '';
-        
-        toast.success(`${actionType} activated for ${selectedUser.email} ${durationDays ? `(${durationDays})` : ''}`);
-        
-        if (data?.expiry_date) {
-          const expiryDate = new Date(data.expiry_date).toLocaleDateString();
-          toast.info(`Subscription expires on: ${expiryDate}`);
-        }
-        
+        const durationDays = activationData.isGift ?
+          (activationData.giftDuration === '1_week' ? '7 days' : activationData.giftDuration === '2_weeks' ? '14 days' : '30 days') : '';
+        toast.success(`${activationData.isGift ? 'Gift subscription' : 'Subscription'} activated for ${selectedUser.email} ${durationDays ? `(${durationDays})` : ''}`);
+        if (data?.expiry_date) toast.info(`Expires: ${new Date(data.expiry_date).toLocaleDateString()}`);
         setShowActivationModal(false);
         setSelectedUser(null);
-        setActivationData({
-          planName: "Monthly Plan",
-          billingAmount: 60,
-          paymentMethod: "manual",
-          isGift: false,
-          giftDuration: "1_week"
-        });
-        
-        // Reload data to see changes
+        setActivationData({ planName: 'Monthly Plan', billingAmount: 60, paymentMethod: 'manual', isGift: false, giftDuration: '1_week' });
         await loadData();
       }
-    } catch (error) {
-      console.error('[DEBUG] Exception during activation:', error);
-      toast.error(`Activation failed: ${String(error)}`);
-      setDebugInfo({ exception: String(error) });
+    } catch (err) {
+      toast.error(`Activation failed: ${String(err)}`);
     } finally {
       setIsActivating(false);
     }
@@ -263,78 +183,27 @@ export default function AdminSubscriptions() {
 
   const handleDeactivateSubscription = async (user: User) => {
     try {
-      console.log('[DEBUG] Starting deactivation for user:', {
-        userId: user.id,
-        email: user.email,
-        currentStatus: user.is_subscribed
-      });
-
-      // Update user profile first
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          is_subscribed: false,
-          subscription_status: 'cancelled',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id);
-
-      if (profileError) {
-        console.error('[DEBUG] Profile update error:', profileError);
-        throw profileError;
-      }
-
-      // Update subscription record
-      const { error: subsError } = await supabase
-        .from('subscriptions')
-        .update({ 
-          status: 'cancelled',
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.id)
-        .eq('status', 'active');
-
-      if (subsError) {
-        console.error('[DEBUG] Subscription update error:', subsError);
-        throw subsError;
-      }
-
-      console.log('[DEBUG] Deactivation successful for:', user.email);
+      const { error: profileError } = await supabase.from('profiles').update({ is_subscribed: false, subscription_status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', user.id);
+      if (profileError) throw profileError;
+      const { error: subsError } = await supabase.from('subscriptions').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('user_id', user.id).eq('status', 'active');
+      if (subsError) throw subsError;
       toast.success(`Subscription deactivated for ${user.email}`);
       loadData();
     } catch (error) {
-      console.error('[DEBUG] Error deactivating subscription:', error);
-      toast.error(`Failed to deactivate subscription: ${error.message}`);
+      toast.error(`Failed to deactivate: ${error.message}`);
     }
   };
 
   const handleProcessExpiredSubscriptions = async () => {
     try {
-      console.log('[DEBUG] Manually processing expired subscriptions...');
       toast.info('Processing expired subscriptions...');
-      
       const { data, error } = await supabase.functions.invoke('process-expired-subscriptions');
-      
-      if (error) {
-        console.error('[DEBUG] Error processing expired subscriptions:', error);
-        toast.error(`Failed to process expired subscriptions: ${error.message}`);
-        return;
-      }
-      
-      console.log('[DEBUG] Expired subscriptions processed:', data);
+      if (error) { toast.error(`Failed: ${error.message}`); return; }
       const expiredCount = data?.result?.expired_count || 0;
-      
-      if (expiredCount > 0) {
-        toast.success(`Successfully processed ${expiredCount} expired subscription(s)`);
-      } else {
-        toast.info('No expired subscriptions found');
-      }
-      
-      // Reload data to see changes
+      expiredCount > 0 ? toast.success(`Processed ${expiredCount} expired subscription(s)`) : toast.info('No expired subscriptions found');
       loadData();
     } catch (error) {
-      console.error('[DEBUG] Exception processing expired subscriptions:', error);
-      toast.error(`Failed to process expired subscriptions: ${String(error)}`);
+      toast.error(`Failed: ${String(error)}`);
     }
   };
 
@@ -425,229 +294,232 @@ export default function AdminSubscriptions() {
     setShowActivationModal(true);
   };
 
-  const gridColumns = useMemo(() => {
-    return [
-      { name: 'Name', sort: true },
-      { name: 'Email', sort: true },
-      { name: 'Status', sort: true },
-      { name: 'Plan', sort: true },
-      { name: 'Payment', sort: true },
-      { name: 'Next', sort: true },
-      { name: 'Gift', sort: true },
-      { name: 'Trial', sort: true },
-      {
-        name: 'Actions',
-        sort: false,
-        formatter: (_: any, row: any) => {
-          const id = row?.cells?.[9]?.data as string | undefined;
-          const user = id ? usersById.get(id) : undefined;
-          if (!user) return '';
-
-          const isGift = isGiftSubscription(user);
-          const canTrial = !user.is_subscribed;
-
-          return h(
-            'div',
-            { className: 'flex gap-2 flex-wrap items-center' },
-            user.is_subscribed
-              ? h(
-                  'button',
-                  {
-                    className: 'px-2 py-1 text-xs rounded-md border border-red-500/40 text-red-500 bg-background/50 hover:bg-red-500/10',
-                    onClick: (e: any) => {
-                      e?.stopPropagation?.();
-                      handleDeactivateSubscription(user);
-                    },
-                  },
-                  'Deactivate'
-                )
-              : h(
-                  'button',
-                  {
-                    className: 'px-2 py-1 text-xs rounded-md border border-border bg-background/50 hover:bg-accent',
-                    onClick: (e: any) => {
-                      e?.stopPropagation?.();
-                      openActivationForUser(user);
-                    },
-                  },
-                  isGift ? 'Manage' : 'Activate'
-                ),
-            canTrial
-              ? h(
-                  'button',
-                  {
-                    className: 'px-2 py-1 text-xs rounded-md border border-border bg-background/50 hover:bg-accent',
-                    onClick: (e: any) => {
-                      e?.stopPropagation?.();
-                      handleAdjustTrial(user, 'reset');
-                    },
-                  },
-                  'Reset Trial'
-                )
-              : '',
-            canTrial
-              ? h('input', {
-                  className: 'h-8 w-24 rounded border px-2 text-xs bg-background',
-                  type: 'number',
-                  min: 1,
-                  value: trialMinutesInput[user.id] ?? '',
-                  placeholder: 'minutes',
-                  title: 'Extend trial (minutes)',
-                  'aria-label': 'Extend trial minutes',
-                  onClick: (e: any) => e?.stopPropagation?.(),
-                  onInput: (e: any) => {
-                    const value = e?.target?.value ?? '';
-                    setTrialMinutesInput((prev) => ({ ...prev, [user.id]: value }));
-                  },
-                })
-              : '',
-            canTrial
-              ? h(
-                  'button',
-                  {
-                    className: 'px-2 py-1 text-xs rounded-md border border-border bg-background/50 hover:bg-accent',
-                    onClick: (e: any) => {
-                      e?.stopPropagation?.();
-                      handleAdjustTrial(user, 'extend');
-                    },
-                  },
-                  'Extend'
-                )
-              : ''
-          );
-        }
-      },
-      { name: 'ID', hidden: true },
-    ];
-  }, [usersById, trialMinutesInput]);
-
-  const gridData = useMemo(() => {
-    return filteredUsers.map((user) => {
-      const isGift = isGiftSubscription(user);
-      const paymentLabel = getPaymentMethodLabel(user.payment_method, isGift);
-      const nextLabel = user.next_billing_date ? new Date(user.next_billing_date).toLocaleDateString() : '';
-      const plan = user.is_subscribed ? (user.plan_name || 'Active') : '—';
-      const status = user.is_subscribed ? (user.subscription_status || 'active') : 'unsubscribed';
-      const gift = isGift ? (getRemainingGiftTime(user) || 'Gift') : '—';
-      const trial = !user.is_subscribed ? getTrialStatus(user).label : '—';
-
-      return [
-        user.display_name || 'No name',
-        user.email || '',
-        status,
-        plan,
-        paymentLabel,
-        nextLabel,
-        gift,
-        trial,
-        '',
-        user.id,
-      ];
-    });
-  }, [filteredUsers]);
-
   const giftSubscriptionsCount = users.filter(user => isGiftSubscription(user)).length;
+
+  // ── Growth Lab derived data ──
+  const whaleWatch = useMemo(() => {
+    return users
+      .filter(u => u.is_subscribed)
+      .map(u => {
+        const sub = getUserSubscription(u.id);
+        const mrr = sub ? (sub.billing_cycle === 'yearly' ? sub.billing_amount / 12 : sub.billing_amount) : 60;
+        return { ...u, mrr, isGift: sub?.is_gift || false };
+      })
+      .sort((a, b) => b.mrr - a.mrr)
+      .slice(0, 5);
+  }, [users, subscriptions]);
+
+  const churnRisk = useMemo(() => {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    return users
+      .filter(u => {
+        if (!u.is_subscribed) return false;
+        const lastSeen = u.updated_at ? new Date(u.updated_at) : new Date(u.created_at);
+        return lastSeen < sevenDaysAgo;
+      })
+      .slice(0, 5);
+  }, [users]);
+
+  const conversionFunnel = useMemo(() => {
+    const total = users.length;
+    const paid = users.filter(u => u.is_subscribed && !isGiftSubscription(u)).length;
+    const gifts = giftSubscriptionsCount;
+    const trials = users.filter(u => !u.is_subscribed && u.free_access_start_at).length;
+    const paidPct = total > 0 ? Math.round((paid / total) * 100) : 0;
+    const trialPct = total > 0 ? Math.round((trials / total) * 100) : 0;
+    return { total, paid, gifts, trials, paidPct, trialPct };
+  }, [users, subscriptions]);
 
   if (isLoading) {
     return (
-      <div className="bg-gradient-background min-h-screen p-4 flex items-center justify-center">
-        <div className="text-foreground">Loading subscription management...</div>
+      <div className="bg-[#0c0f14] min-h-screen flex items-center justify-center">
+        <div className="flex items-center gap-2 text-white/40 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading Growth Lab…
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-gradient-background min-h-screen text-foreground">
-      {/* Header */}
+    <div className="bg-[#0c0f14] min-h-screen text-white/90">
       <AdminHeader
-        title="Subscription Management"
-        subtitle=""
-        icon={<Shield className="h-5 w-5 text-accent-blue" />}
+        title="Growth Lab"
+        subtitle="Strategic Subscriptions"
+        icon={<TrendingUp className="h-5 w-5 text-emerald-400/60" />}
       >
         <div className="flex gap-2">
-          <Button onClick={handleProcessExpiredSubscriptions} variant="outline" size="sm" className="text-xs">
-            <XCircle className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">Process Expired</span>
+          <Button onClick={handleProcessExpiredSubscriptions} variant="outline" size="sm"
+            className="h-8 text-xs bg-white/5 border-white/15 text-white/60 hover:bg-white/10 hover:text-white">
+            <XCircle className="h-3.5 w-3.5 mr-1" />
+            <span className="hidden sm:inline">Expire</span>
           </Button>
-          <Button onClick={loadData} variant="outline" size="sm" className="text-xs">
-            <RefreshCw className="h-4 w-4 mr-1" />
+          <Button onClick={loadData} variant="outline" size="sm"
+            className="h-8 text-xs bg-white/5 border-white/15 text-white/60 hover:bg-white/10 hover:text-white">
+            <RefreshCw className="h-3.5 w-3.5 mr-1" />
             <span className="hidden sm:inline">Refresh</span>
           </Button>
         </div>
       </AdminHeader>
 
-      {/* Debug Info Panel */}
-      {debugInfo && (
-        <div className="p-4">
-          <Card className="bg-red-50 border-red-200">
-            <CardHeader>
-              <CardTitle className="text-red-800">Debug Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <pre className="text-sm overflow-auto">
-                {JSON.stringify(debugInfo, null, 2)}
-              </pre>
-              <Button 
-                onClick={() => setDebugInfo(null)} 
-                variant="outline" 
-                size="sm" 
-                className="mt-2"
-              >
-                Clear Debug Info
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-6 pb-28 space-y-5">
 
-      {/* Main Content */}
-      <div className="p-4 pb-24 space-y-6">
-        {/* Line Style Stats */}
+        {/* ── BENTO GROWTH LAB ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+          {/* CARD 1: WHALE WATCH */}
+          <div className="relative rounded-2xl border border-white/10 bg-[#0e1119] p-5 flex flex-col gap-3 overflow-hidden
+                          hover:border-emerald-500/30 transition-colors duration-300
+                          shadow-[0_0_40px_rgba(52,211,153,0.04)]">
+            <div className="pointer-events-none absolute -top-8 -left-8 w-36 h-36 rounded-full bg-emerald-500/10 blur-3xl" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/15 flex items-center justify-center">
+                  <Flame className="h-4 w-4 text-emerald-400" />
+                </div>
+                <span className="text-xs font-medium text-white/50 uppercase tracking-widest">Whale Watch</span>
+              </div>
+              <span className="text-[10px] text-white/30 border border-white/10 rounded-full px-2 py-0.5">Top MRR</span>
+            </div>
+            <div className="space-y-2 mt-1">
+              {whaleWatch.length === 0 && (
+                <p className="text-white/25 text-sm py-4 text-center">No active subscribers</p>
+              )}
+              {whaleWatch.map((user, i) => (
+                <div key={user.id} className="flex items-center gap-3 group">
+                  <span className="text-[11px] text-white/25 w-4 flex-shrink-0">#{i + 1}</span>
+                  <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0 text-xs font-semibold text-white/60">
+                    {(user.display_name || user.email || '?').charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-white/80 truncate">{user.display_name || 'No name'}</p>
+                    <p className="text-[10px] text-white/35 truncate">{user.email}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-sm font-bold text-emerald-400">{user.mrr} QAR</p>
+                    {user.isGift && <span className="text-[9px] text-violet-400">Gift</span>}
+                  </div>
+                  <button
+                    onClick={() => openActivationForUser(user)}
+                    aria-label="Manage subscription"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-white/30 hover:text-white/60"
+                  >
+                    <ArrowUpRight className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* CARD 2: CHURN RISK */}
+          <div className="relative rounded-2xl border border-white/10 bg-[#0e1119] p-5 flex flex-col gap-3 overflow-hidden
+                          hover:border-amber-500/30 transition-colors duration-300
+                          shadow-[0_0_40px_rgba(245,158,11,0.04)]">
+            <div className="pointer-events-none absolute -top-8 -right-8 w-36 h-36 rounded-full bg-amber-500/8 blur-3xl" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center">
+                  <AlertTriangle className="h-4 w-4 text-amber-400" />
+                </div>
+                <span className="text-xs font-medium text-white/50 uppercase tracking-widest">Churn Risk</span>
+              </div>
+              <span className="text-[10px] text-white/30 border border-white/10 rounded-full px-2 py-0.5">Inactive 7d+</span>
+            </div>
+            {churnRisk.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 gap-2">
+                <CheckCircle className="h-8 w-8 text-emerald-400/40" />
+                <p className="text-white/30 text-xs text-center">All subscribers were active recently</p>
+              </div>
+            ) : (
+              <div className="space-y-2 mt-1">
+                {churnRisk.map((user) => (
+                  <div key={user.id} className="flex items-center gap-3 group">
+                    <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 text-xs font-semibold text-amber-300">
+                      {(user.display_name || user.email || '?').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-white/80 truncate">{user.display_name || 'No name'}</p>
+                      <p className="text-[10px] text-white/35 truncate">{user.email}</p>
+                    </div>
+                    <button
+                      onClick={() => handleDeactivateSubscription(user)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] border border-red-500/30 text-red-400 rounded-lg px-2 py-1 hover:bg-red-500/10"
+                    >
+                      Deactivate
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* CARD 3: CONVERSION FUNNEL */}
+          <div className="relative rounded-2xl border border-white/10 bg-[#0e1119] p-5 flex flex-col gap-4 overflow-hidden
+                          hover:border-sky-500/30 transition-colors duration-300
+                          shadow-[0_0_40px_rgba(14,165,233,0.04)]">
+            <div className="pointer-events-none absolute -bottom-8 -left-8 w-36 h-36 rounded-full bg-sky-500/8 blur-3xl" />
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-sky-500/15 flex items-center justify-center">
+                <TrendingUp className="h-4 w-4 text-sky-400" />
+              </div>
+              <span className="text-xs font-medium text-white/50 uppercase tracking-widest">Conversion Funnel</span>
+            </div>
+            {/* Total KPI */}
+            <div>
+              <p className="text-[11px] text-white/40 mb-0.5">Total Users</p>
+              <p className="text-4xl font-bold tracking-tight text-white">{conversionFunnel.total.toLocaleString()}</p>
+            </div>
+            {/* Funnel bars */}
+            <div className="space-y-3">
+              <div>
+                <div className="flex justify-between text-[11px] mb-1">
+                  <span className="text-white/50">Paid ({conversionFunnel.paid})</span>
+                  <span className="text-emerald-400 font-medium">{conversionFunnel.paidPct}%</span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden">
+                  <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-700"
+                    style={{ width: `${conversionFunnel.paidPct}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-[11px] mb-1">
+                  <span className="text-white/50">Gift ({conversionFunnel.gifts})</span>
+                  <span className="text-violet-400 font-medium">{conversionFunnel.total > 0 ? Math.round((conversionFunnel.gifts / conversionFunnel.total) * 100) : 0}%</span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden">
+                  <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-400 transition-all duration-700"
+                    style={{ width: `${conversionFunnel.total > 0 ? (conversionFunnel.gifts / conversionFunnel.total) * 100 : 0}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-[11px] mb-1">
+                  <span className="text-white/50">Trials Active ({conversionFunnel.trials})</span>
+                  <span className="text-sky-400 font-medium">{conversionFunnel.trialPct}%</span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden">
+                  <div className="h-full rounded-full bg-gradient-to-r from-sky-500 to-blue-400 transition-all duration-700"
+                    style={{ width: `${conversionFunnel.trialPct}%` }} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* ── USERS TABLE (clean, no Grid.js) ── */}
         <div className="space-y-3">
-          <h3 className="text-lg font-semibold text-enhanced-heading">💳 Subscription Statistics</h3>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between p-3 border border-border/30 rounded-lg hover:bg-accent/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <Users className="h-4 w-4 text-accent-blue" />
-                <span className="text-sm font-medium">Total Users</span>
-              </div>
-              <span className="text-lg font-bold text-accent-blue">{users.length}</span>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/25" />
+              <Input
+                placeholder="Search by email or name…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 h-10 rounded-xl border-white/10 bg-[#0e1119] text-white placeholder-white/25 focus:border-emerald-500/40 text-sm"
+              />
             </div>
-            
-            <div className="flex items-center justify-between p-3 border border-border/30 rounded-lg hover:bg-accent/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <CheckCircle className="h-4 w-4 text-accent-green" />
-                <span className="text-sm font-medium">Active Subscriptions</span>
-              </div>
-              <span className="text-lg font-bold text-accent-green">{users.filter(u => u.is_subscribed && u.subscription_status === 'active').length}</span>
-            </div>
-            
-            <div className="flex items-center justify-between p-3 border border-border/30 rounded-lg hover:bg-accent/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <Gift className="h-4 w-4 text-accent-purple" />
-                <span className="text-sm font-medium">Gift Subscriptions</span>
-              </div>
-              <span className="text-lg font-bold text-accent-purple">{giftSubscriptionsCount}</span>
-            </div>
-            
-            
-          </div>
-        </div>
-
-        {/* Search and Filter Controls */}
-        <div className="flex flex-col lg:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by email or name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 input-enhanced"
-            />
-          </div>
-          <div className="w-full lg:w-48">
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="bg-background/50 border-border/50">
+              <SelectTrigger className="w-full sm:w-44 h-10 rounded-xl border-white/10 bg-[#0e1119] text-white/70 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -658,34 +530,85 @@ export default function AdminSubscriptions() {
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-2">
+            {filteredUsers.length === 0 ? (
+              <div className="text-center py-12 text-white/25 text-sm">No users matched.</div>
+            ) : (
+              filteredUsers.map((user) => {
+                const isGift = isGiftSubscription(user);
+                const trial = getTrialStatus(user);
+                return (
+                  <div key={user.id}
+                    className="flex items-center gap-3 rounded-2xl border border-white/8 bg-[#0e1119] px-4 py-3 hover:border-emerald-500/20 transition-all duration-200 group"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0 text-xs font-semibold text-white/50">
+                      {(user.display_name || user.email || '?').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white/80 truncate">{user.display_name || 'No name'}</p>
+                      <p className="text-xs text-white/35 truncate">{user.email}</p>
+                    </div>
+                    <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
+                      {user.is_subscribed ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
+                          {isGift ? `Gift · ${getRemainingGiftTime(user)}` : (user.plan_name || 'Active')}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-white/10 text-white/30">
+                          {trial.label}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {user.is_subscribed ? (
+                        <button
+                          onClick={() => handleDeactivateSubscription(user)}
+                          className="text-[10px] border border-red-500/30 text-red-400 rounded-lg px-2 py-1 hover:bg-red-500/10 transition-colors"
+                        >
+                          Deactivate
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => openActivationForUser(user)}
+                          className="text-[10px] border border-emerald-500/30 text-emerald-400 rounded-lg px-2 py-1 hover:bg-emerald-500/10 transition-colors"
+                        >
+                          Activate
+                        </button>
+                      )}
+                      {!user.is_subscribed && (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={1}
+                            value={trialMinutesInput[user.id] ?? ''}
+                            placeholder="min"
+                            aria-label="Extend trial minutes"
+                            onChange={(e) => setTrialMinutesInput(prev => ({ ...prev, [user.id]: e.target.value }))}
+                            className="h-7 w-16 rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-white"
+                          />
+                          <button
+                            onClick={() => handleAdjustTrial(user, 'reset')}
+                            className="text-[10px] border border-white/10 text-white/50 rounded-lg px-2 py-1 hover:bg-white/5 transition-colors"
+                          >
+                            Reset
+                          </button>
+                          <button
+                            onClick={() => handleAdjustTrial(user, 'extend')}
+                            className="text-[10px] border border-white/10 text-white/50 rounded-lg px-2 py-1 hover:bg-white/5 transition-colors"
+                          >
+                            Extend
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
 
-        {/* Subscriptions Table */}
-        <div className="grid gap-4">
-          <Card className="enhanced-card">
-            <CardContent className="p-4">
-              <div className="w-full overflow-x-auto">
-                <Grid
-                  data={gridData}
-                  columns={gridColumns as any}
-                  search={true}
-                  sort={true}
-                  pagination={{ limit: 50 }}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {filteredUsers.length === 0 && (
-          <Card className="enhanced-card">
-            <CardContent className="p-12 text-center">
-              <CreditCard className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-enhanced-heading mb-2">No users found</h3>
-              <p className="text-muted-foreground">Try adjusting your search criteria.</p>
-            </CardContent>
-          </Card>
-        )}
       </div>
 
       {/* Enhanced Activation Modal with Debug Info */}

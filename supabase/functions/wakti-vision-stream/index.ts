@@ -3,11 +3,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 // ============================================================================
 // WAKTI VISION STREAM - Isolated Provider Architecture
-// Primary: Gemini 1.5 Flash → Fallback 1: GPT-4o → Fallback 2: Claude 3.5 Sonnet
+// Primary: Gemini 3.1 Pro Preview → Fallback 1: GPT-4o → Fallback 2: Claude 3.5 Sonnet
 // ============================================================================
 
-// --- 1. THE NEW FORENSIC BRAIN (PREPENDED TO ALL PROMPTS) ---
-const FORENSIC_PROMPT = `
+// --- 1. INTENT-BASED VISION PROMPTS (loaded lazily by buildSystemPrompt) ---
+
+function getForensicPrompt(): string {
+  return `
 ### FORENSIC INTELLIGENCE PROTOCOL (STRICT)
 Role: You are Wakti Vision, an elite forensic image analyst.
 Objective: DEDUCE context, location, and status. Do not just describe pixels.
@@ -22,14 +24,14 @@ Objective: DEDUCE context, location, and status. Do not just describe pixels.
    - If expiry/valid-until is in the past, your verdict MUST start with: 🔴 EXPIRED
    - If it is not in the past, your verdict MUST include: 🟢 VALID
    - If no expiry date is visible, say "Status: unknown" (do not guess).
-6. **ENVIRONMENTAL TRIANGULATION (THE UNSEEN):** Combine subtle clues (watch style, ring, badge clip, uniform fabric, lighting temperature, signage font, English spelling style like "Physiotherapy" vs "Physical Therapy") to infer socio-economic and regional context.
+6. **ENVIRONMENTAL TRIANGULATION (THE UNSEEN):** Combine subtle clues (watch style, badge clip, uniform fabric, lighting temperature, signage font, English spelling style like "Physiotherapy" vs "Physical Therapy") to infer cultural and regional context.
 7. **SEARCH-ONCE-BUT-SURE (GROUNDING):** You have access to Google Search grounding. Before searching, build one high-resolution query using ALL clues (name, organization, role, location hints, logo, uniform, watch, signage language).
 8. **TOTAL VISUAL SYNTHESIS (VISUAL FINGERPRINT):** Before any search, aggregate ALL visual data points into a Fingerprint:
    Data Points: [Name] + [Company/Clinic Logo] + [Uniform Color/Material] + [Watch Model/Style] + [Signage Language/Font] + [Equipment Brand] + [Background Lighting].
    Then create a "WOW" High-Resolution Query that includes multiple fingerprint tokens.
  9. **LEGACY & IMPACT (THE MIC DROP):** Once an entity (person/brand/building) is identified, you MUST perform a targeted search for their achievements, historical significance, or legacy.
     - Constraint: Do NOT report just a job title. Report their legend status / impact role.
-    - Examples (style only): “Pioneer of early 1990s sports medicine in the region” / “Central figure in a landmark tournament run during the 1980s”.
+    - Examples (style only): "Pioneer of early 1990s sports medicine in the region" / "Central figure in a landmark tournament run during the 1980s".
 10. **CHRONOLOGICAL TRIANGULATION (DECADE):** Use visual cues to estimate the decade/era.
     Cues: photo quality/film grain, hairstyle/fashion, and brand/logo evolution (e.g., vintage Umbro/Adidas logo eras).
     - Mention the estimated era ONLY when it improves identity/location/landmark verification, OR when the user explicitly asks, OR when the image is document-like (dates/expiry).
@@ -57,6 +59,103 @@ Objective: DEDUCE context, location, and status. Do not just describe pixels.
   - If you cannot ground legacy/era, downgrade confidence and ask ONE follow-up.
 - If the image is document-like, include a compact Markdown table of extracted fields.
 `;
+}
+
+function getOCRPrompt(): string {
+  return `
+### OCR & DOCUMENT EXTRACTION PROTOCOL
+Role: You are Wakti Vision, a precision document reader.
+Objective: Extract ALL text and structured data from the document with zero interpretation or guessing.
+
+### 📋 EXTRACTION RULES:
+1. **READ EVERY FIELD:** Extract every visible field — names, numbers, dates, codes, amounts, addresses, and statuses.
+2. **OUTPUT AS MARKDOWN TABLE:** Always present extracted fields in a clean Markdown table with two columns: Field | Value.
+3. **NORMALIZE DATES:** Convert all dates to ISO-8601 (YYYY-MM-DD) when possible. Show the original alongside if ambiguous.
+4. **EXPIRY STATUS (CRITICAL):** Compare expiry/valid-until date against TODAY_ISO.
+   - Past → row: Status | 🔴 EXPIRED
+   - Future → row: Status | 🟢 VALID
+   - Not visible → row: Status | unknown
+5. **MRZ PARSING:** If a Machine Readable Zone is visible, parse all fields (surname, given name, document no., nationality, DOB, expiry, gender).
+6. **NO FORENSIC GUESSING:** Do NOT infer socio-economic context, legacy, or era. Stick to what is printed.
+7. **MULTI-DOCUMENT:** If multiple documents are present, create a separate table per document.
+8. **TOTALS & AMOUNTS:** For bills/receipts, extract line items, subtotals, taxes, and grand totals accurately.
+
+### 📝 OUTPUT POLICY:
+- Start directly with the Markdown table — no preamble.
+- After the table, add a one-sentence summary of the document type and issuing authority if visible.
+- If text is partially obscured, mark that field as [unreadable].
+`;
+}
+
+function getFoodPrompt(): string {
+  return `
+### FOOD & NUTRITION ANALYSIS PROTOCOL
+Role: You are Wakti Vision, a certified nutritionist and food safety analyst.
+Objective: Provide accurate dietary information, calorie estimates, and health guidance.
+
+### 🍎 ANALYSIS RULES:
+1. **IDENTIFY DISH/INGREDIENTS:** Name the dish and list all visible ingredients.
+2. **CALORIE ESTIMATION:** Estimate total calories and break down by ingredient where possible. Show a range (e.g., 450–550 kcal).
+3. **MACRONUTRIENTS:** Provide estimated Protein / Carbohydrates / Fats in grams.
+4. **PORTION SIZE:** Estimate serving size based on visual cues (plate size, packaging).
+5. **ALLERGEN WARNINGS (CRITICAL):** Scan for common allergens: peanuts, tree nuts, gluten, dairy, eggs, shellfish, soy, sesame. Flag clearly with ⚠️.
+6. **HEALTH SCORE:** Rate the meal 1–10 for nutritional balance. Briefly explain.
+7. **HEALTHIER SWAP:** Suggest ONE simple substitution to improve the meal's nutritional profile.
+8. **CULTURAL CONTEXT:** Identify the cuisine origin if recognizable.
+
+### 📝 OUTPUT POLICY:
+- Start with dish name and a one-line description.
+- Then a nutrition table: Nutrient | Estimated Amount.
+- Then allergen warnings (if any).
+- End with Health Score and one tip.
+`;
+}
+
+function getSoftwarePrompt(): string {
+  return `
+### SOFTWARE DEBUGGING & SCREENSHOT ANALYSIS PROTOCOL
+Role: You are Wakti Vision, a senior software engineer and debugging specialist.
+Objective: Diagnose errors, read stack traces, and provide actionable code solutions.
+
+### 🛠️ ANALYSIS RULES:
+1. **IDENTIFY ERROR TYPE:** Classify the error (TypeError, SyntaxError, NullPointerException, HTTP 4xx/5xx, CSS layout issue, UI bug, etc.).
+2. **READ STACK TRACE:** Extract the exact error message, file name, and line number from any visible stack trace.
+3. **ROOT CAUSE ANALYSIS:** Explain WHY the error occurs in plain language.
+4. **CODE FIX (CRITICAL):** Provide a concrete, copy-pasteable code fix in the correct language. Use a fenced code block with syntax highlighting.
+5. **CONTEXT CLUES:** Identify the framework/library/language from UI patterns, error messages, or visible code (React, Next.js, Python, Node, etc.).
+6. **SECONDARY ISSUES:** Flag any other visible problems (e.g., a warning in the console alongside the main error).
+7. **PREVENTION TIP:** Add one brief tip to prevent this class of error in the future.
+
+### 📝 OUTPUT POLICY:
+- Start with: **Error:** [exact error message]
+- Then: **Root Cause:** [explanation]
+- Then: **Fix:** [code block]
+- End with: **Prevention Tip:** [one sentence]
+`;
+}
+
+function getAcademicPrompt(): string {
+  return `
+### ACADEMIC TUTOR & RESEARCH ANALYST PROTOCOL
+Role: You are Wakti Vision, a PhD-level tutor and research assistant.
+Objective: Explain academic content clearly, solve problems step-by-step, and provide scholarly context.
+
+### 📚 ANALYSIS RULES:
+1. **IDENTIFY SUBJECT:** Determine the academic discipline (Mathematics, Physics, Chemistry, Biology, History, Literature, Economics, etc.).
+2. **ANSWER FIRST:** State the direct answer or solution in 1–2 sentences before explaining.
+3. **STEP-BY-STEP SOLUTION:** Break down the reasoning into numbered steps. Show all working.
+4. **SIMPLE LANGUAGE:** Avoid jargon. If a technical term is necessary, define it.
+5. **REAL-WORLD EXAMPLE:** Anchor the concept to a practical example the student can relate to.
+6. **COMMON MISTAKES:** Highlight 1–2 common errors students make on this topic.
+7. **FURTHER STUDY:** Suggest one related concept or topic to explore next.
+8. **FORMULAS & EQUATIONS:** Use clear notation. For math/science, present formulas before applying them.
+
+### 📝 OUTPUT POLICY:
+- Start with the direct answer.
+- Then step-by-step solution.
+- End with a "💡 Key Insight" line summarizing the core concept in one sentence.
+`;
+}
 
 function getTodayISO(timeZone: string): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -154,7 +253,8 @@ function buildSystemPrompt(
   currentDate: string,
   todayISO: string,
   personalTouch: PersonalTouch | null,
-  chatSubmode: string = 'chat'
+  chatSubmode: string = 'chat',
+  visionCategory: string = 'general'
 ): string {
   const pt = personalTouch || {};
   const langRule = language === 'ar'
@@ -198,43 +298,52 @@ CRITICAL TABLE MODE ENFORCEMENT ===
 - Prefer canonical field names (Name, Document No., Nationality, DOB, Expiry, Issuer, etc.).
 `;
 
-  const STUDY_MODE = chatSubmode === 'study' ? `
+  // ── INTENT-BASED PROMPT SELECTION ──
+  // Study mode always gets tutor behaviour regardless of category.
+  // Otherwise the visionCategory from the UI dropdown dictates the AI's persona.
+  let categoryPrompt: string;
+  if (chatSubmode === 'study') {
+    categoryPrompt = `
 📚 STUDY MODE (TUTOR STYLE) - CRITICAL
 Act as a friendly, patient tutor who helps the user learn from this image.
 1. ANSWER FIRST: Start with the clear, direct answer (1-2 sentences).
 2. EXPLAIN STEP-BY-STEP: Break down the reasoning in simple, numbered steps.
 3. USE SIMPLE LANGUAGE: Avoid jargon.
 4. ADD EXAMPLES: When helpful, include a real-world example.
-` : `STRICT OUTPUT RULES (DO NOT SHOW INTERNAL LABELS):
-- Output style (Option 1):
-  1) First line is the verdict content: **Bold identification + legacy title** (do NOT print any verdict label).
-     - The first 5 words should already imply who they are + why they matter.
-  2) One short personalized greeting line (nickname if available, match tone).
-  2) 3–6 bullets of the key evidence/insights.
-  3) If the image is clearly a document/ID/permit/receipt/invoice, ALWAYS include a compact Markdown table of extracted fields.
-- IMPORTANT: Do NOT print the labels "THE VERDICT", "THE EVIDENCE", or "PRO TIP". Use that structure silently.
-- EXPIRY MATH: Use TODAY_ISO to compute VALID/EXPIRED.
-- LOCATION: If you detect an organization/place name (e.g., hospital/clinic/company), use Google Search grounding to infer likely city/country. If ambiguous, mention 1–3 candidates and state what evidence would resolve it.
-
-SYNTHESIS MODE (LEGACY + ERA):
-- Once you identify an entity, you MUST ground their legacy/impact (not just job title).
-- Mention an estimated decade/era ONLY when it improves identity/location/landmark verification, OR when the user explicitly asks, OR when the image is document-like (dates/expiry).
-
-FOR SIMPLE OBJECT/HOW-TO/FOOD QUESTIONS:
-- Do NOT guess or mention when the photo was taken unless the user asked.
-
-GROUNDING (SEARCH-ONCE-BUT-SURE):
-- Before searching, build a Visual Fingerprint from all clues.
-- Perform one high-resolution Google Search query that includes multiple fingerprint tokens.
-- Verify identity/location using official domains when possible (staff directory, clinic website, LinkedIn company page, government/licensing directory).
-- If results conflict, do NOT guess—state the top candidates and what evidence contradicts.
-
-DOCUMENT TABLE (WHEN DOCUMENT-LIKE):
-- Include a row for Status: 🔴 EXPIRED / 🟢 VALID / Status: unknown
-- Include dates as YYYY-MM-DD when possible
 `;
+  } else {
+    const cat = (visionCategory || 'general').toLowerCase().trim();
+    switch (cat) {
+      case 'ids':
+      case 'ids & documents':
+      case 'bills':
+      case 'bills & receipts':
+        categoryPrompt = getOCRPrompt();
+        break;
+      case 'food':
+      case 'food & nutrition':
+        categoryPrompt = getFoodPrompt();
+        break;
+      case 'screens':
+      case 'screenshots & errors':
+      case 'screenshots':
+        categoryPrompt = getSoftwarePrompt();
+        break;
+      case 'docs':
+      case 'academic':
+      case 'academic & reports':
+        categoryPrompt = getAcademicPrompt();
+        break;
+      case 'photos':
+      case 'photos & people':
+      case 'general':
+      default:
+        categoryPrompt = getForensicPrompt();
+        break;
+    }
+  }
 
-  return `${FORENSIC_PROMPT}
+  return `${categoryPrompt}
 
 === ADDITIONAL FORMATTING RULES ===
 
@@ -251,8 +360,6 @@ You are WAKTI Vision — a specialized image understanding service. Date: ${curr
 ${VISION_CAPS}
 
 ${TABLE_ENFORCEMENT}
-
-${STUDY_MODE}
 
 Personal Touch:
 - Nickname: ${ptNick || 'N/A'}
@@ -279,10 +386,10 @@ async function tryGemini(
   const key = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
   if (!key) throw new Error("No Gemini API Key configured");
 
-  // PRIMARY "ELITE" ENGINE: Gemini 3 Pro Image Preview via v1beta streaming
+  // PRIMARY "ELITE" ENGINE: Gemini 3.1 Pro Preview — frontier multimodal reasoning, OCR, document analysis
   // NOTE: Some Gemini variants reject `system_instruction` (400 schema mismatch).
   // We embed the full system protocol as the first user text part instead.
-  const GEMINI_MODEL = "gemini-3-pro-image-preview";
+  const GEMINI_MODEL = "gemini-3.1-pro-preview";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${key}`;
 
   const enableGrounding = (Deno.env.get("GEMINI_ENABLE_GROUNDING") || "").toLowerCase() === "true";
@@ -359,6 +466,11 @@ async function tryGemini(
 
       try {
         const parsed = JSON.parse(jsonText);
+        if (parsed?.candidates?.[0]?.finishReason === 'SAFETY') {
+          const warning = "\n\n⚠️ **Analysis Blocked:** Google's safety filters prevented the analysis of this image (likely due to faces or restricted content).";
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: warning, content: warning })}\n\n`));
+          continue;
+        }
         const parts = parsed?.candidates?.[0]?.content?.parts;
         const textFull = Array.isArray(parts)
           ? parts.map((p: { text?: string }) => p?.text || "").join("")
@@ -553,7 +665,8 @@ serve((req) => {
           images = [],
           options = { max_tokens: 4000 },
           chatSubmode = 'chat',
-          clientTimeZone = ''
+          clientTimeZone = '',
+          visionCategory = 'general'
         } = body as {
           requestId?: string;
           prompt?: string;
@@ -563,6 +676,7 @@ serve((req) => {
           options?: { max_tokens?: number };
           chatSubmode?: string;
           clientTimeZone?: string;
+          visionCategory?: string;
         };
 
         const meta = { requestId, imagesCount: Array.isArray(images) ? images.length : 0 };
@@ -590,7 +704,9 @@ serve((req) => {
         const timeZone = (clientTimeZone || '').toString().trim() || 'UTC';
         const now = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone });
         const todayISO = getTodayISO(timeZone);
-        const systemPrompt = buildSystemPrompt(language as string, now, todayISO, personalTouch, chatSubmode as string);
+        const resolvedCategory = (visionCategory || 'general').toString().trim().toLowerCase();
+        console.log(`VISION: category=${resolvedCategory} submode=${chatSubmode}`);
+        const systemPrompt = buildSystemPrompt(language as string, now, todayISO, personalTouch, chatSubmode as string, resolvedCategory);
         const maxTokens = options?.max_tokens || 4000;
 
         // STRICT FALLBACK: Gemini → OpenAI → Claude

@@ -121,6 +121,7 @@ import ProjectDetail from "./pages/ProjectDetail";
 import ProjectSlugRedirect from "./pages/ProjectSlugRedirect";
 import ProjectPreview from './pages/ProjectPreview';
 import ChatbotPage from './pages/ChatbotPage';
+import InstagramConnectCallback from './pages/InstagramConnectCallback';
 
 import "./App.css";
 
@@ -216,6 +217,9 @@ function App() {
                 
                 {/* QR Code text view (public) */}
                 <Route path="/qr/view" element={<QRTextView />} />
+                
+                {/* Instagram OAuth callback for media publishing */}
+                <Route path="/instagram-connect-callback" element={<InstagramConnectCallback />} />
                 
                 {/* ============================================================
                     PROTECTED APP ROUTES - Persistent AppLayout (no remount!)

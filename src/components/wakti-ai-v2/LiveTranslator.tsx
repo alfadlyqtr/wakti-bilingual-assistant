@@ -450,6 +450,13 @@ INSTRUCTIONS:
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
 
+      if (response.data?.error === 'TRIAL_LIMIT_REACHED') {
+        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: response.data?.feature || 'interpreter' } }));
+        setStatus('idle');
+        cleanup();
+        return;
+      }
+
       if (response.error || !response.data?.sdp_answer) {
         throw new Error(response.error?.message || 'Failed to get SDP answer');
       }

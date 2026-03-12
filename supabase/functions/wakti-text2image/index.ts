@@ -1,5 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
 
 // ─── AI Logger (inlined) ───
 interface AILogParams {
@@ -199,6 +200,22 @@ Deno.serve(async (req)=>{
     promptText = prompt;
 
     if (!prompt.trim()) return new Response(JSON.stringify({ success: false, error: "Missing prompt" }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
+
+    // ── Trial Token Check ──
+    if (userId) {
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      const trial = await checkAndConsumeTrialToken(supabaseAdmin, userId, 't2i', 2);
+      if (!trial.allowed) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'TRIAL_LIMIT_REACHED', feature: 't2i' }),
+          { status: 403, headers: { ...cors, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+    // ── End Trial Token Check ──
 
     const translated = await translateIfArabic(prompt);
     usedModel = quality === "best_fast" ? MODEL_BEST : MODEL_FAST;

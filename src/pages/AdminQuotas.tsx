@@ -1,17 +1,14 @@
-import { useState, useEffect } from "react";
-import { Gift, Search, Plus, Mic, Filter, Users, Music } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Gift, Search, Plus, Mic, Music, X, Loader2, Zap, ArrowUpRight, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 
-interface User {
+interface UserQuota {
   id: string;
   email: string;
   full_name: string;
@@ -22,534 +19,488 @@ interface User {
   subscription_status: string;
 }
 
+interface MusicUsage {
+  generated: number;
+  extra_generations: number;
+  base_limit: number;
+  total_limit: number;
+}
+
+function currentYearMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export default function AdminQuotas() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [displayedUsers, setDisplayedUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState<'all' | 'high_usage' | 'subscribed' | 'unsubscribed'>('all');
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<UserQuota[]>([]);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  const [selectedUser, setSelectedUser] = useState<UserQuota | null>(null);
+  const [featureType, setFeatureType] = useState<"voice" | "music">("voice");
+  const [voiceUsageMonth, setVoiceUsageMonth] = useState(currentYearMonth);
+  const [musicUsageMonth, setMusicUsageMonth] = useState(currentYearMonth);
+  const [musicUsage, setMusicUsage] = useState<MusicUsage | null>(null);
+  const [isMusicLoading, setIsMusicLoading] = useState(false);
+
   const [quotaAmount, setQuotaAmount] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
   const [isGifting, setIsGifting] = useState(false);
-  const [showAllUsers, setShowAllUsers] = useState(false);
-  const [featureType, setFeatureType] = useState<'voice' | 'music'>('voice');
-  const [voiceUsageMonth, setVoiceUsageMonth] = useState<string>(() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    return `${y}-${m}`;
-  });
-  const [musicUsageMonth, setMusicUsageMonth] = useState<string>(() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    return `${y}-${m}`;
-  });
-  const [musicMonthlyUsage, setMusicMonthlyUsage] = useState<{ generated: number; extra_generations: number; base_limit: number; total_limit: number } | null>(null);
-  const [userMusicUsage, setUserMusicUsage] = useState<Record<string, { generated: number; total_limit: number }>>({});
+  const [giftDone, setGiftDone] = useState(false);
 
-  console.log('--- RENDER CYCLE ---');
-  console.log('State [users]:', users);
-  console.log('State [displayedUsers]:', displayedUsers);
-  const alfadlyUserInUsers = users.find(u => u.email === 'alfadly@tmw.qa');
-  if (alfadlyUserInUsers) {
-    console.log('RENDER: alfadly@tmw.qa in `users` state:', alfadlyUserInUsers);
-  } 
-  const alfadlyUserInDisplayed = displayedUsers.find(u => u.email === 'alfadly@tmw.qa');
-  if (alfadlyUserInDisplayed) {
-    console.log('RENDER: alfadly@tmw.qa in `displayedUsers` state:', alfadlyUserInDisplayed);
-  }
-  console.log('--- END RENDER CYCLE ---');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Debounced search ──
   useEffect(() => {
-    loadUsers();
-  }, []);
-
-  useEffect(() => {
-    filterAndDisplayUsers();
-  }, [users, searchTerm, filterType, showAllUsers]);
-
-  useEffect(() => {
-    const run = async () => {
-      if (featureType === 'music' && selectedUser) {
-        try {
-          const { data, error } = await (supabase as any).rpc('admin_get_music_generations_monthly', {
-            p_user_id: selectedUser.id,
-            p_month: musicUsageMonth,
-          });
-          if (!error) setMusicMonthlyUsage(data as any);
-          else setMusicMonthlyUsage({ generated: 0, extra_generations: 0, base_limit: 5, total_limit: 5 });
-        } catch {
-          setMusicMonthlyUsage({ generated: 0, extra_generations: 0, base_limit: 5, total_limit: 5 });
-        }
-      } else {
-        setMusicMonthlyUsage(null);
-      }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!searchTerm.trim()) {
+      setSearchResults([]);
+      setHasSearched(false);
+      return;
+    }
+    debounceRef.current = setTimeout(() => {
+      runSearch(searchTerm.trim());
+    }, 400);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-    run();
-  }, [featureType, selectedUser, musicUsageMonth]);
+  }, [searchTerm]);
 
+  // ── Fetch music usage whenever featureType/selectedUser/month changes ──
+  useEffect(() => {
+    if (featureType !== "music" || !selectedUser) {
+      setMusicUsage(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setIsMusicLoading(true);
+      try {
+        const { data, error } = await (supabase as any).rpc(
+          "admin_get_music_generations_monthly",
+          { p_user_id: selectedUser.id, p_month: musicUsageMonth }
+        );
+        if (!cancelled) {
+          setMusicUsage(
+            error ? { generated: 0, extra_generations: 0, base_limit: 5, total_limit: 5 } : (data as MusicUsage)
+          );
+        }
+      } catch {
+        if (!cancelled)
+          setMusicUsage({ generated: 0, extra_generations: 0, base_limit: 5, total_limit: 5 });
+      } finally {
+        if (!cancelled) setIsMusicLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [featureType, selectedUser?.id, musicUsageMonth]);
 
-  const loadUsers = async () => {
+  const runSearch = async (term: string) => {
+    setIsSearching(true);
+    setHasSearched(true);
     try {
-      setIsLoading(true);
-      console.log('🔄 Loading users and voice usage data...');
+      const { data: quotasData, error } = await (supabase as any).rpc(
+        "admin_get_voice_quotas",
+        { p_user_id: null }
+      );
+      if (error) throw error;
 
-      const { data: quotasData, error: quotasError } = await (supabase as any).rpc('admin_get_voice_quotas', {
-        p_user_id: null,
-      });
+      const lower = term.toLowerCase();
+      const matched = (quotasData || []).filter(
+        (row: any) =>
+          (row.email || "").toLowerCase().includes(lower) ||
+          (row.display_name || "").toLowerCase().includes(lower)
+      );
 
-      if (quotasError) {
-        console.error('❌ Error loading voice quotas:', quotasError);
-        throw quotasError;
-      }
+      const currentMonth = currentYearMonth();
+      const results: UserQuota[] = await Promise.all(
+        matched.slice(0, 8).map(async (row: any) => {
+          let extra = row.gift_extra || 0;
+          try {
+            const { data: vm } = await (supabase as any).rpc(
+              "admin_get_voice_characters_monthly",
+              { p_user_id: row.user_id, p_month: currentMonth }
+            );
+            if (vm) extra = vm.extra_characters || 0;
+          } catch { /* ignore */ }
+          return {
+            id: row.user_id,
+            email: row.email || "No email",
+            full_name: row.display_name || "No name",
+            voice_characters_used: row.used || 0,
+            voice_characters_limit: row.base_limit || 0,
+            voice_extra_characters: extra,
+            is_subscribed: !!row.is_subscribed,
+            subscription_status: row.subscription_status || "inactive",
+          };
+        })
+      );
 
-      if (!quotasData || quotasData.length === 0) {
-        console.log('No users found');
-        setUsers([]);
-        return;
-      }
-
-      console.log('✅ Voice quotas loaded:', quotasData.length);
-
-      const formattedUsers: User[] = quotasData.map((row: any) => {
-        const userData = {
-          id: row.user_id,
-          email: row.email || "No email",
-          full_name: row.display_name || "No name",
-          voice_characters_used: row.used || 0,
-          voice_characters_limit: row.base_limit || 0,
-          voice_extra_characters: row.gift_extra || 0,
-          is_subscribed: !!row.is_subscribed,
-          subscription_status: row.subscription_status || 'inactive',
-        };
-        if (row.email === 'alfadly@tmw.qa') {
-          console.log('🎯 alfadly@tmw.qa data via admin_get_voice_quotas:', userData);
-        }
-        return userData;
-      });
-
-      console.log('✅ Combined user data successfully:', formattedUsers.length);
-      // Overlay this month's voice extras (monthly, non-carryover)
-      const currentMonth = voiceUsageMonth || new Date().toISOString().slice(0,7);
-      for (const u of formattedUsers) {
-        try {
-          const { data: vmonth } = await (supabase as any).rpc('admin_get_voice_characters_monthly', {
-            p_user_id: u.id,
-            p_month: currentMonth,
-          });
-          if (vmonth) {
-            // Use monthly extra for display
-            u.voice_extra_characters = vmonth.extra_characters || 0;
-          }
-        } catch (e) {
-          // ignore per-user failure
-        }
-      }
-      setUsers(formattedUsers);
-
-      // Load music usage for all users (current month)
-      const musicMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-      const musicUsageMap: Record<string, { generated: number; total_limit: number }> = {};
-      
-      for (const user of formattedUsers) {
-        try {
-          const { data: musicData } = await (supabase as any).rpc('admin_get_music_generations_monthly', {
-            p_user_id: user.id,
-            p_month: musicMonth,
-          });
-          if (musicData) {
-            musicUsageMap[user.id] = {
-              generated: musicData.generated || 0,
-              total_limit: musicData.total_limit || 5
-            };
-          }
-        } catch (err) {
-          console.error(`Failed to load music usage for ${user.email}:`, err);
-          musicUsageMap[user.id] = { generated: 0, total_limit: 5 };
-        }
-      }
-      setUserMusicUsage(musicUsageMap);
-    } catch (err) {
-      console.error('❌ Error in loadUsers:', err);
-      toast.error('Failed to load user quotas');
+      setSearchResults(results);
+    } catch {
+      toast.error("Search failed. Please try again.");
+      setSearchResults([]);
     } finally {
-      setIsLoading(false);
+      setIsSearching(false);
     }
   };
 
-  const filterAndDisplayUsers = () => {
-    let filtered = users;
+  const selectUser = (user: UserQuota) => {
+    setSelectedUser(user);
+    setQuotaAmount("");
+    setGiftDone(false);
+  };
 
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(user =>
-        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // Apply type filter
-    switch (filterType) {
-      case 'high_usage':
-        filtered = filtered.filter(user => 
-          (user.voice_characters_used / user.voice_characters_limit) > 0.8
-        );
-        break;
-      case 'subscribed':
-        filtered = filtered.filter(user => user.is_subscribed);
-        break;
-      case 'unsubscribed':
-        filtered = filtered.filter(user => !user.is_subscribed);
-        break;
-    }
-
-    // Sort by usage (highest first)
-    filtered.sort((a, b) => 
-      (b.voice_characters_used + b.voice_extra_characters) - 
-      (a.voice_characters_used + a.voice_extra_characters)
-    );
-
-    // Show top 5 by default, or all if requested
-    const toDisplay = showAllUsers ? filtered : filtered.slice(0, 5);
-    setDisplayedUsers(toDisplay);
+  const clearSelection = () => {
+    setSelectedUser(null);
+    setQuotaAmount("");
+    setGiftDone(false);
   };
 
   const giftQuota = async () => {
     if (!selectedUser || !quotaAmount) {
-      toast.error('Please select a user and enter quota amount');
+      toast.error("Select a user and enter an amount");
       return;
     }
-
     const amount = parseInt(quotaAmount);
     if (isNaN(amount) || amount === 0) {
-      toast.error('Please enter a non-zero quota amount');
+      toast.error("Enter a non-zero amount");
       return;
     }
 
     setIsGifting(true);
-
+    setGiftDone(false);
     try {
-      let error: any = null;
-      if (featureType === 'music') {
-        const { error: e } = await (supabase as any).rpc('admin_adjust_music_generations', {
+      let err: any = null;
+      if (featureType === "music") {
+        const { error } = await (supabase as any).rpc("admin_adjust_music_generations", {
           p_user_id: selectedUser.id,
           p_month: musicUsageMonth,
           p_delta: amount,
-          p_reason: amount > 0 ? 'Admin gifted music generations' : 'Admin revoked music generations'
+          p_reason: amount > 0 ? "Admin gifted music generations" : "Admin revoked music generations",
         });
-        error = e;
+        err = error;
       } else {
-        const { error: e } = await (supabase as any).rpc('admin_adjust_voice_characters', {
+        const { error } = await (supabase as any).rpc("admin_adjust_voice_characters", {
           p_user_id: selectedUser.id,
           p_month: voiceUsageMonth,
           p_delta: amount,
-          p_reason: amount > 0 ? 'Admin gifted voice characters (monthly)' : 'Admin revoked voice characters (monthly)',
+          p_reason:
+            amount > 0
+              ? "Admin gifted voice characters (monthly)"
+              : "Admin revoked voice characters (monthly)",
         });
-        error = e;
+        err = error;
       }
+      if (err) throw err;
 
-      if (error) throw error;
-
-      // Reload users to get updated data from the database
-      await loadUsers();
-      // Refresh music usage if relevant
-      if (featureType === 'music' && selectedUser) {
+      // Refresh the selected user's voice quota inline
+      if (featureType === "voice") {
         try {
-          const { data: mu } = await (supabase as any).rpc('admin_get_music_generations_monthly', {
+          const { data: vd } = await (supabase as any).rpc("admin_get_voice_characters_monthly", {
+            p_user_id: selectedUser.id,
+            p_month: voiceUsageMonth,
+          });
+          if (vd) {
+            const updated = { ...selectedUser, voice_extra_characters: vd.extra_characters || 0 };
+            setSelectedUser(updated);
+            setSearchResults((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+          }
+        } catch { /* silent */ }
+      }
+      // Refresh music usage
+      if (featureType === "music") {
+        try {
+          const { data: mu } = await (supabase as any).rpc("admin_get_music_generations_monthly", {
             p_user_id: selectedUser.id,
             p_month: musicUsageMonth,
           });
-          setMusicMonthlyUsage(mu as any);
-        } catch {}
+          setMusicUsage(mu as MusicUsage);
+        } catch { /* silent */ }
       }
 
-      if (amount > 0) {
-        toast.success(featureType === 'music'
-          ? `Gifted ${amount} extra music generations to ${selectedUser.email} (${musicUsageMonth})`
-          : `Gifted ${amount} monthly voice characters to ${selectedUser.email} (${voiceUsageMonth})`);
-      } else {
-        toast.success(featureType === 'music'
-          ? `Revoked ${Math.abs(amount)} music generations from ${selectedUser.email} (${musicUsageMonth})`
-          : `Revoked ${Math.abs(amount)} monthly voice characters from ${selectedUser.email} (${voiceUsageMonth})`);
-      }
-      setSelectedUser(null);
+      toast.success(
+        amount > 0
+          ? `Gifted ${amount} ${featureType === "music" ? "generations" : "characters"} to ${selectedUser.email}`
+          : `Revoked ${Math.abs(amount)} from ${selectedUser.email}`
+      );
       setQuotaAmount("");
-    } catch (err) {
-      console.error('Error gifting quota:', err);
-      toast.error('Failed to gift quota');
+      setGiftDone(true);
+    } catch {
+      toast.error("Failed to apply quota change");
     } finally {
       setIsGifting(false);
     }
   };
 
-
-  if (isLoading) {
-    return (
-      <div className="bg-gradient-background text-foreground flex items-center justify-center">
-        <div className="text-foreground">Loading quota management...</div>
-      </div>
-    );
-  }
+  // ── Derived values for selected user ──
+  const voiceTotalLimit = selectedUser
+    ? selectedUser.voice_characters_limit + selectedUser.voice_extra_characters
+    : 0;
+  const voicePct =
+    voiceTotalLimit > 0 ? Math.min((selectedUser!.voice_characters_used / voiceTotalLimit) * 100, 100) : 0;
+  const musicPct =
+    musicUsage && musicUsage.total_limit > 0
+      ? Math.min((musicUsage.generated / musicUsage.total_limit) * 100, 100)
+      : 0;
 
   return (
-    <div className="bg-gradient-background text-foreground min-h-screen">
-        <AdminHeader
-          title={featureType === 'music' ? 'Music Allowance Management' : 'Voice Quota Management'}
-          subtitle={featureType === 'music' ? 'Gift/Reset music minutes for users' : 'Gift voice credits to users'}
-          icon={featureType === 'music' ? <Music className="h-6 w-6 sm:h-8 sm:w-8 text-accent-purple" /> : <Gift className="h-6 w-6 sm:h-8 sm:w-8 text-accent-purple" />}
-        />
+    <div className="bg-[#0c0f14] text-white/90 min-h-screen">
+      <AdminHeader
+        title="Quota Gifter"
+        subtitle="Search → Select → Gift"
+        icon={<Gift className="h-5 w-5 text-white/50" />}
+      />
 
-      <div className="px-3 sm:px-6 pb-28 pt-4">
-        <div className="space-y-4 sm:space-y-6 max-w-full">
-          {/* Search and Filter Controls */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search users by email or name..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 sm:pl-10 input-enhanced h-9 sm:h-10 text-xs sm:text-sm"
-              />
-            </div>
-            
-            <Select value={featureType} onValueChange={(v: any) => setFeatureType(v)}>
-              <SelectTrigger className="h-9 sm:h-10">
-                <SelectValue placeholder="Feature" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="voice">Voice</SelectItem>
-                <SelectItem value="music">Music</SelectItem>
-              </SelectContent>
-            </Select>
+      <div className="max-w-[860px] mx-auto px-4 sm:px-6 py-6 pb-28 space-y-5">
 
-            <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
-              <SelectTrigger className="h-9 sm:h-10">
-                <SelectValue placeholder="Filter users" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">
-                  <div className="flex items-center">
-                    <Users className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                    <span className="text-xs sm:text-sm">All Users</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="high_usage">
-                  <div className="flex items-center">
-                    <Filter className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                    <span className="text-xs sm:text-sm">High Usage (80%+)</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="subscribed">
-                  <div className="flex items-center">
-                    <Gift className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                    <span className="text-xs sm:text-sm">Subscribed</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="unsubscribed">
-                  <div className="flex items-center">
-                    <Users className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                    <span className="text-xs sm:text-sm">Unsubscribed</span>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Button
-              onClick={() => setShowAllUsers(!showAllUsers)}
-              variant="outline"
-              className="h-9 sm:h-10 text-xs sm:text-sm"
-            >
-              {showAllUsers ? `Show Top 5` : `Show All (${users.length})`}
-            </Button>
+        {/* ── HERO SEARCH BAR ── */}
+        <div className="relative">
+          <div className="pointer-events-none absolute inset-y-0 left-4 flex items-center">
+            {isSearching ? (
+              <Loader2 className="h-5 w-5 text-violet-400 animate-spin" />
+            ) : (
+              <Search className="h-5 w-5 text-white/30" />
+            )}
           </div>
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by email or name…"
+            className="w-full h-14 rounded-2xl border border-white/10 bg-[#0e1119] pl-12 pr-12 text-base text-white placeholder-white/25 outline-none focus:border-violet-500/50 focus:ring-0 transition-colors duration-200 shadow-[0_0_40px_rgba(139,92,246,0.05)]"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => { setSearchTerm(""); setSelectedUser(null); setSearchResults([]); setHasSearched(false); }}
+              aria-label="Clear search"
+              className="absolute inset-y-0 right-4 flex items-center text-white/30 hover:text-white/60 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
 
-          {/* Gift Voice Credits Form - MOVED TO TOP */}
-          {selectedUser && (
-            <Card className="enhanced-card border-accent-purple/50 bg-gradient-to-r from-accent-purple/5 to-accent-blue/5">
-              <CardHeader className="pb-3 sm:pb-6">
-                <CardTitle className="text-enhanced-heading flex items-center text-sm sm:text-base">
-                  <Gift className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-purple" />
-                  {featureType === 'music' ? 'Manage Music Minutes' : 'Gift Voice Credits'}
-                </CardTitle>
-                <CardDescription className="text-xs sm:text-sm">
-                  Selected: <strong>{selectedUser.email}</strong>
-                  {featureType === 'voice' && (
-                    <>
-                      <br />
-                      Current: {selectedUser.voice_characters_used.toLocaleString()} / {(selectedUser.voice_characters_limit + selectedUser.voice_extra_characters).toLocaleString()} characters
-                      {selectedUser.voice_extra_characters > 0 && (
-                        <span className="text-accent-purple"> (includes {selectedUser.voice_extra_characters.toLocaleString()} gifted)</span>
-                      )}
-                    </>
-                  )}
-                  {featureType === 'music' && (
-                    <>
-                      <br />
-                      {musicMonthlyUsage ? (
-                        <>{musicMonthlyUsage.generated} out of {musicMonthlyUsage.total_limit} ({musicUsageMonth}){musicMonthlyUsage.extra_generations > 0 && ` • +${musicMonthlyUsage.extra_generations} gifted`}</>
-                      ) : (
-                        <>This month ({musicUsageMonth}): loading…</>
-                      )}
-                    </>
-                  )}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 sm:space-y-4">
-                {featureType === 'music' && (
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs sm:text-sm font-medium">Month</Label>
-                    <Input type="month" value={musicUsageMonth} onChange={(e) => setMusicUsageMonth(e.target.value)} className="h-9 sm:h-10 text-xs sm:text-sm w-[140px]" />
+        {/* ── EMPTY STATE (no search yet) ── */}
+        {!hasSearched && !selectedUser && (
+          <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+              <Gift className="h-8 w-8 text-violet-400" />
+            </div>
+            <p className="text-white/40 text-sm max-w-xs">
+              Type a user's email or name above to load their quota data and gift credits.
+            </p>
+          </div>
+        )}
+
+        {/* ── SEARCH RESULTS ── */}
+        {hasSearched && !selectedUser && (
+          <div className="space-y-2">
+            {searchResults.length === 0 && !isSearching && (
+              <div className="text-center py-10 text-white/30 text-sm">No users matched that search.</div>
+            )}
+            {searchResults.map((user) => (
+              <button
+                key={user.id}
+                onClick={() => selectUser(user)}
+                className="w-full flex items-center gap-4 rounded-2xl border border-white/8 bg-[#0e1119] px-4 py-3 hover:border-violet-500/30 hover:bg-[#12151f] transition-all duration-200 text-left group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-violet-500/15 flex items-center justify-center flex-shrink-0 text-sm font-semibold text-violet-300">
+                  {(user.full_name || user.email).charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white/90 truncate">{user.full_name || "—"}</p>
+                  <p className="text-xs text-white/40 truncate">{user.email}</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${user.is_subscribed ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10" : "border-white/10 text-white/30"}`}>
+                    {user.is_subscribed ? "Pro" : "Free"}
+                  </span>
+                  <ArrowUpRight className="h-3.5 w-3.5 text-white/20 group-hover:text-violet-400 transition-colors" />
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ── SELECTED USER PANEL ── */}
+        {selectedUser && (
+          <div className="space-y-4">
+
+            {/* User identity strip */}
+            <div className="flex items-center gap-3 rounded-2xl border border-white/8 bg-[#0e1119] px-4 py-3">
+              <div className="w-10 h-10 rounded-xl bg-violet-500/15 flex items-center justify-center text-sm font-semibold text-violet-300 flex-shrink-0">
+                {(selectedUser.full_name || selectedUser.email).charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white truncate">{selectedUser.full_name || "—"}</p>
+                <p className="text-xs text-white/40 truncate">{selectedUser.email}</p>
+              </div>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full border flex-shrink-0 ${selectedUser.is_subscribed ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10" : "border-white/10 text-white/30"}`}>
+                {selectedUser.is_subscribed ? "Pro" : "Free"}
+              </span>
+              <button onClick={clearSelection} aria-label="Clear selected user" className="text-white/25 hover:text-white/60 transition-colors flex-shrink-0">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Usage bars — bento pair */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+              {/* Voice bar */}
+              <div className="relative rounded-2xl border border-white/8 bg-[#0e1119] p-4 overflow-hidden">
+                <div className="pointer-events-none absolute -top-6 -left-6 w-28 h-28 rounded-full bg-blue-500/8 blur-2xl" />
+                <div className="flex items-center gap-2 mb-3">
+                  <Mic className="h-3.5 w-3.5 text-blue-400" />
+                  <span className="text-xs font-medium text-white/50 uppercase tracking-widest">Voice</span>
+                  <span className="ml-auto text-[11px] text-white/30">{voiceUsageMonth}</span>
+                </div>
+                <p className="text-2xl font-bold text-white mb-1">
+                  {selectedUser.voice_characters_used.toLocaleString()}
+                  <span className="text-sm font-normal text-white/30 ml-1">/ {voiceTotalLimit.toLocaleString()} chars</span>
+                </p>
+                <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden mt-2">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-blue-500 to-sky-400 transition-all duration-500"
+                    style={{ width: `${voicePct}%` }}
+                  />
+                </div>
+                {selectedUser.voice_extra_characters > 0 && (
+                  <p className="text-[11px] text-violet-400 mt-1.5">
+                    +{selectedUser.voice_extra_characters.toLocaleString()} gifted credits active
+                  </p>
+                )}
+              </div>
+
+              {/* Music bar */}
+              <div className="relative rounded-2xl border border-white/8 bg-[#0e1119] p-4 overflow-hidden">
+                <div className="pointer-events-none absolute -bottom-6 -right-6 w-28 h-28 rounded-full bg-violet-500/8 blur-2xl" />
+                <div className="flex items-center gap-2 mb-3">
+                  <Music className="h-3.5 w-3.5 text-violet-400" />
+                  <span className="text-xs font-medium text-white/50 uppercase tracking-widest">Music</span>
+                  <span className="ml-auto text-[11px] text-white/30">{musicUsageMonth}</span>
+                </div>
+                {isMusicLoading ? (
+                  <div className="flex items-center gap-2 text-white/30 text-sm py-3">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                  </div>
+                ) : musicUsage ? (
+                  <>
+                    <p className="text-2xl font-bold text-white mb-1">
+                      {musicUsage.generated}
+                      <span className="text-sm font-normal text-white/30 ml-1">/ {musicUsage.total_limit} songs</span>
+                    </p>
+                    <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden mt-2">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-400 transition-all duration-500"
+                        style={{ width: `${musicPct}%` }}
+                      />
+                    </div>
+                    {musicUsage.extra_generations > 0 && (
+                      <p className="text-[11px] text-violet-400 mt-1.5">
+                        +{musicUsage.extra_generations} gifted generations active
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-white/25 text-sm py-3">Select Music type to load</p>
+                )}
+              </div>
+            </div>
+
+            {/* ── GIFT CARD — the star ── */}
+            <div className="relative rounded-2xl border border-violet-500/25 bg-[#0e1119] p-5 overflow-hidden
+                            shadow-[0_0_50px_rgba(139,92,246,0.08)]">
+              <div className="pointer-events-none absolute -top-10 -right-10 w-48 h-48 rounded-full bg-violet-500/10 blur-3xl" />
+              <div className="pointer-events-none absolute -bottom-10 -left-10 w-40 h-40 rounded-full bg-blue-500/8 blur-3xl" />
+
+              {/* Card header */}
+              <div className="flex items-center gap-2.5 mb-5">
+                <div className="w-8 h-8 rounded-xl bg-violet-500/20 flex items-center justify-center">
+                  <Gift className="h-4 w-4 text-violet-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">Gift Credits</p>
+                  <p className="text-[11px] text-white/40">
+                    {selectedUser.email}
+                  </p>
+                </div>
+                {giftDone && (
+                  <div className="ml-auto flex items-center gap-1 text-emerald-400 text-xs">
+                    <CheckCircle className="h-3.5 w-3.5" />
+                    Applied
                   </div>
                 )}
+              </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  <div>
-                    <Label className="text-xs sm:text-sm font-medium">Amount ({featureType === 'music' ? 'Generations' : 'Characters'})</Label>
+              {/* Feature toggle + Month */}
+              <div className="flex flex-wrap gap-3 mb-4">
+                <div className="flex rounded-xl border border-white/8 overflow-hidden">
+                  <button
+                    onClick={() => setFeatureType("voice")}
+                    className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${featureType === "voice" ? "bg-blue-500/20 text-blue-300" : "text-white/40 hover:text-white/60"}`}
+                  >
+                    <Mic className="h-3 w-3" /> Voice
+                  </button>
+                  <button
+                    onClick={() => setFeatureType("music")}
+                    className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${featureType === "music" ? "bg-violet-500/20 text-violet-300" : "text-white/40 hover:text-white/60"}`}
+                  >
+                    <Music className="h-3 w-3" /> Music
+                  </button>
+                </div>
+
+                <Input
+                  type="month"
+                  value={featureType === "music" ? musicUsageMonth : voiceUsageMonth}
+                  onChange={(e) =>
+                    featureType === "music"
+                      ? setMusicUsageMonth(e.target.value)
+                      : setVoiceUsageMonth(e.target.value)
+                  }
+                  className="h-9 w-36 rounded-xl border-white/10 bg-white/5 text-xs text-white/70 px-3 focus:border-violet-500/50"
+                />
+              </div>
+
+              {/* Amount row */}
+              <div className="flex gap-3 items-end">
+                <div className="flex-1">
+                  <Label className="text-[11px] text-white/40 uppercase tracking-widest mb-1.5 block">
+                    {featureType === "music" ? "Generations (+ to gift, − to revoke)" : "Characters (+ to gift, − to revoke)"}
+                  </Label>
+                  <div className="relative">
+                    <Zap className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-violet-400/60" />
                     <Input
                       type="number"
-                      placeholder={featureType === 'music' ? 'e.g., 5' : 'e.g., 5000'}
+                      placeholder={featureType === "music" ? "e.g. 5" : "e.g. 5000"}
                       value={quotaAmount}
-                      onChange={(e) => setQuotaAmount(e.target.value)}
-                      className="input-enhanced h-9 sm:h-10 text-xs sm:text-sm"
+                      onChange={(e) => { setQuotaAmount(e.target.value); setGiftDone(false); }}
+                      className="pl-9 h-11 rounded-xl border-white/10 bg-white/5 text-white placeholder-white/20 focus:border-violet-500/50 text-sm"
                     />
                   </div>
-                  
-                  <div className="flex items-end gap-2">
-                    <Button
-                      onClick={giftQuota}
-                      disabled={!quotaAmount || isGifting}
-                      className="btn-enhanced w-full h-9 sm:h-10 text-xs sm:text-sm"
-                    >
-                      {isGifting ? 'Applying...' : (
-                        <>
-                          <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                          {featureType === 'music' ? 'Gift Generations' : 'Gift Credits'}
-                        </>
-                      )}
-                    </Button>
-                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          
-
-          {/* Users List */}
-          <div className="grid gap-2 sm:gap-4">
-            {displayedUsers.map((user) => {
-              const totalLimit = user.voice_characters_limit + user.voice_extra_characters;
-              const usagePercentage = totalLimit > 0 ? (user.voice_characters_used / totalLimit) * 100 : 0;
-              
-              return (
-                <Card 
-                  key={user.id} 
-                  className={`enhanced-card cursor-pointer transition-all ${
-                    selectedUser?.id === user.id ? 'ring-2 ring-accent-purple' : ''
-                  }`}
-                  onClick={() => setSelectedUser(user)}
+                <Button
+                  onClick={giftQuota}
+                  disabled={!quotaAmount || isGifting}
+                  className="h-11 px-6 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-sm border-0 shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:shadow-[0_0_28px_rgba(139,92,246,0.5)] transition-all duration-200 disabled:opacity-40 disabled:shadow-none"
                 >
-                  <CardContent className="p-3 sm:p-4">
-                    <div className="space-y-3">
-                      {/* User Info Row */}
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
-                          <span className="text-white font-medium text-xs sm:text-sm">
-                            {(user.full_name || user.email).charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-semibold text-enhanced-heading text-sm sm:text-base truncate">
-                            {user.full_name || "No name"}
-                          </h3>
-                          <p className="text-xs sm:text-sm text-muted-foreground truncate">{user.email}</p>
-                        </div>
-                        <div className="flex flex-col items-end gap-1">
-                          {selectedUser?.id === user.id && (
-                            <Badge className="bg-accent-purple text-xs flex-shrink-0">Selected</Badge>
-                          )}
-                          <Badge 
-                            variant={user.is_subscribed ? "default" : "secondary"}
-                            className="text-xs flex-shrink-0"
-                          >
-                            {user.is_subscribed ? "Subscribed" : "Free"}
-                          </Badge>
-                        </div>
-                      </div>
+                  {isGifting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4 mr-1.5" />
+                      Apply
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
 
-                      {/* Voice & Music Quota Display */}
-                      <div className="pt-2 border-t border-border/50 space-y-3">
-                        {/* Voice Usage */}
-                        <div>
-                          <div className="flex items-center space-x-2 mb-2">
-                            <Mic className="h-3 w-3 text-accent-blue flex-shrink-0" />
-                            <span className="text-xs font-medium">Voice Usage</span>
-                            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-accent-blue transition-all duration-300"
-                                style={{ 
-                                  width: `${Math.min(usagePercentage, 100)}%` 
-                                }}
-                              />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <Badge variant="outline" className="text-xs justify-center">
-                              {user.voice_characters_used.toLocaleString()} / {totalLimit.toLocaleString()}
-                            </Badge>
-                            {user.voice_extra_characters > 0 && (
-                              <Badge variant="secondary" className="text-xs justify-center bg-accent-purple/10 text-accent-purple border-accent-purple/20">
-                                +{user.voice_extra_characters.toLocaleString()} gifted
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Music Usage */}
-                        {(() => {
-                          const musicData = userMusicUsage[user.id] || { generated: 0, total_limit: 5 };
-                          const musicPercentage = (musicData.generated / musicData.total_limit) * 100;
-                          return (
-                            <div>
-                              <div className="flex items-center space-x-2 mb-2">
-                                <Music className="h-3 w-3 text-accent-purple flex-shrink-0" />
-                                <span className="text-xs font-medium">Music Usage</span>
-                                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                                  <div 
-                                    className="h-full bg-accent-purple transition-all duration-300"
-                                    style={{ 
-                                      width: `${Math.min(musicPercentage, 100)}%` 
-                                    }}
-                                  />
-                                </div>
-                              </div>
-                              <Badge variant="outline" className="text-xs justify-center">
-                                {musicData.generated} / {musicData.total_limit} songs
-                              </Badge>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
           </div>
+        )}
 
-          {displayedUsers.length === 0 && (
-            <Card className="enhanced-card">
-              <CardContent className="p-6 sm:p-12 text-center">
-                <Gift className="h-6 w-6 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-sm sm:text-lg font-medium text-enhanced-heading mb-2">No users found</h3>
-                <p className="text-muted-foreground text-xs sm:text-base">Try adjusting your search criteria.</p>
-              </CardContent>
-            </Card>
-          )}
-
-        </div>
       </div>
 
       <AdminMobileNav />

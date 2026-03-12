@@ -1,6 +1,26 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// === TRIAL TOKEN CHECK (inlined) ===
+// deno-lint-ignore no-explicit-any
+async function checkAndConsumeTrialToken(supabaseClient: any, userId: string, featureKey: string, maxLimit: number): Promise<{ allowed: boolean; isVip?: boolean }> {
+  const { data: profile, error } = await supabaseClient
+    .from('profiles')
+    .select('trial_usage, is_subscribed, payment_method, next_billing_date')
+    .eq('id', userId)
+    .single();
+  if (error || !profile) return { allowed: false };
+  if (profile.is_subscribed === true) return { allowed: true, isVip: true };
+  if (profile.payment_method === 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date()) return { allowed: true, isVip: true };
+  // deno-lint-ignore no-explicit-any
+  const usage: Record<string, number> = (profile.trial_usage as any) ?? {};
+  const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
+  if (current >= maxLimit) return { allowed: false };
+  const { error: updateError } = await supabaseClient.from('profiles').update({ trial_usage: { ...usage, [featureKey]: current + 1 } }).eq('id', userId);
+  if (updateError) return { allowed: false };
+  return { allowed: true };
+}
+
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -35,6 +55,15 @@ serve(async (req: Request) => {
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Trial gate: interpreter — limit 5 for free users
+    const trial = await checkAndConsumeTrialToken(supabase, user.id, 'interpreter', 5);
+    if (!trial.allowed) {
+      return new Response(JSON.stringify({ error: 'TRIAL_LIMIT_REACHED', feature: 'interpreter' }), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

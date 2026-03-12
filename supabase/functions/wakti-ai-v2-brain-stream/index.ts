@@ -48,6 +48,59 @@ type IpGeoLite = {
 
 const ipGeoCache = new Map<string, { at: number; geo: IpGeoLite | null }>();
 
+// === TRIAL TOKEN CHECK (inlined from _shared/trial-tracker.ts) ===
+async function checkAndConsumeTrialToken(
+  // deno-lint-ignore no-explicit-any
+  supabaseClient: any,
+  userId: string,
+  featureKey: string,
+  maxLimit: number
+): Promise<{ allowed: boolean; consumed: number; limit: number; isVip?: boolean }> {
+  const { data: profile, error: fetchError } = await supabaseClient
+    .from('profiles')
+    .select('trial_usage, is_subscribed, payment_method, next_billing_date')
+    .eq('id', userId)
+    .single();
+
+  if (fetchError || !profile) {
+    console.error('[trial-tracker] Failed to fetch profile:', fetchError);
+    return { allowed: false, consumed: 0, limit: maxLimit };
+  }
+
+  const isPaid = profile.is_subscribed === true;
+  const isActiveGift =
+    profile.payment_method === 'manual' &&
+    profile.next_billing_date != null &&
+    new Date(profile.next_billing_date as string) > new Date();
+
+  if (isPaid || isActiveGift) {
+    return { allowed: true, consumed: 0, limit: maxLimit, isVip: true };
+  }
+
+  // deno-lint-ignore no-explicit-any
+  const usage: Record<string, number> = (profile.trial_usage as any) ?? {};
+  const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
+
+  if (current >= maxLimit) {
+    return { allowed: false, consumed: current, limit: maxLimit };
+  }
+
+  const newValue = current + 1;
+  const updatedUsage = { ...usage, [featureKey]: newValue };
+
+  const { error: updateError } = await supabaseClient
+    .from('profiles')
+    .update({ trial_usage: updatedUsage })
+    .eq('id', userId);
+
+  if (updateError) {
+    console.error('[trial-tracker] Failed to increment usage:', updateError);
+    return { allowed: false, consumed: current, limit: maxLimit };
+  }
+
+  return { allowed: true, consumed: newValue, limit: maxLimit };
+}
+
 function extractClientIp(req: Request): string {
   // Check common CDN/proxy headers in priority order
   const headers = [
@@ -2029,6 +2082,18 @@ serve(async (req) => {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Message required' })}\n\n`));
           controller.close();
           return;
+        }
+
+        // Trial gate: ai_chat — 15 messages for free users
+        if (userId) {
+          const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+          const trial = await checkAndConsumeTrialToken(supabaseAdmin, userId, 'ai_chat', 15);
+          if (!trial.allowed) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'TRIAL_LIMIT_REACHED', feature: 'ai_chat', trialLimitReached: true })}\n\n`));
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+            return;
+          }
         }
 
         const stayHotSummary = buildStayHotSummary(Array.isArray(recentMessages) ? recentMessages : []);

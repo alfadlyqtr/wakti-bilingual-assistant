@@ -265,6 +265,11 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
       if (!data?.success) {
         console.error('🎤 FRONTEND: Function returned failure:', data);
+        if (data?.error === 'TRIAL_LIMIT_REACHED') {
+          window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: data?.feature || 'voice_clone' } }));
+          setIsCloning(false);
+          return;
+        }
         throw new Error(data?.error || 'Voice cloning failed');
       }
 

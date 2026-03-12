@@ -1506,6 +1506,11 @@ export default function ProjectDetail() {
           console.log('[Create Mode] Gateway timeout detected, will poll for job status...');
         } else {
           const startData: any = startRes.data;
+          if (startData?.error === 'TRIAL_LIMIT_REACHED') {
+            window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: startData?.feature || 'ai_coder' } }));
+            setIsGenerating(false);
+            return;
+          }
           if (!startData?.ok && !startData?.jobId) {
             throw new Error(startData?.error || 'Failed to start generation');
           }

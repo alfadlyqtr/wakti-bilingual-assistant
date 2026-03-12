@@ -1,7 +1,9 @@
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
+import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,6 +28,26 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // ── Trial Token Check ──
+    const authHeader = req.headers.get('Authorization');
+    if (authHeader) {
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
+      if (user) {
+        const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, 'tasjeel', 1);
+        if (!trial.allowed) {
+          return new Response(
+            JSON.stringify({ error: 'TRIAL_LIMIT_REACHED', feature: 'tasjeel' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+    }
+    // ── End Trial Token Check ──
 
     const contentType = req.headers.get('content-type') || '';
     let audioBlob: Blob;

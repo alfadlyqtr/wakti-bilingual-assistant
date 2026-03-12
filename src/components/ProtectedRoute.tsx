@@ -331,6 +331,17 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     };
   }, [user?.id, isLoading]);
 
+  // Listen for trial limit reached events — force paywall open
+  useEffect(() => {
+    const handleTrialLimit = () => {
+      if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) return;
+      setPaywallVariant('trial_expired');
+      setShowPaywall(true);
+    };
+    window.addEventListener('wakti-trial-limit-reached', handleTrialLimit);
+    return () => window.removeEventListener('wakti-trial-limit-reached', handleTrialLimit);
+  }, [TEMP_DISABLE_SUBSCRIPTION_CHECKS]);
+
   // Listen for subscription updates from AppLayout (after purchase/restore)
   useEffect(() => {
     const handleSubscriptionUpdate = () => {

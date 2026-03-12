@@ -4166,6 +4166,33 @@ serve(async (req: Request) => {
       });
     };
 
+    // Trial gate: ai_coder — limit 0 for free users (only on 'start' — status/get_files are reads)
+    if (action === 'start') {
+      const SUPA_URL = Deno.env.get('SUPABASE_URL')!;
+      const SUPA_SVC = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const adminForTrial = createClient(SUPA_URL, SUPA_SVC);
+      const { data: trialProfile, error: trialErr } = await adminForTrial
+        .from('profiles')
+        .select('trial_usage, is_subscribed, payment_method, next_billing_date')
+        .eq('id', userId)
+        .single();
+      if (!trialErr && trialProfile) {
+        const isPaid = trialProfile.is_subscribed === true;
+        const isGift = trialProfile.payment_method === 'manual' && trialProfile.next_billing_date && new Date(trialProfile.next_billing_date) > new Date();
+        if (!isPaid && !isGift) {
+          // deno-lint-ignore no-explicit-any
+          const usage: Record<string, number> = (trialProfile.trial_usage as any) ?? {};
+          const current = typeof usage['ai_coder'] === 'number' ? usage['ai_coder'] : 0;
+          if (current >= 0) {
+            return new Response(JSON.stringify({ ok: false, error: 'TRIAL_LIMIT_REACHED', feature: 'ai_coder' }), {
+              status: 403,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+        }
+      }
+    }
+
     if (action === 'status') {
       if (!jobId) return createResponse({ ok: false, error: 'Missing jobId' }, 400);
       const { data, error } = await supabase

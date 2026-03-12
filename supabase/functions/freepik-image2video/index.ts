@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
+import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -407,6 +408,20 @@ serve(async (req) => {
     }
 
     console.log("[kie-image2video] User:", user.id);
+
+    // ── Trial Token Check ──
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") || "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""
+    );
+    const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, "i2v", 1);
+    if (!trial.allowed) {
+      return new Response(
+        JSON.stringify({ error: "TRIAL_LIMIT_REACHED", feature: "i2v" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    // ── End Trial Token Check ──
 
     // Parse request body
     const body = await req.json();

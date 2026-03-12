@@ -640,6 +640,12 @@ const Tasjeel: React.FC = () => {
         message: error.message,
         stack: error.stack
       });
+
+      if (error.message && error.message.includes('TRIAL_LIMIT_REACHED')) {
+        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: 'tasjeel' } }));
+        setRecordingStatus("idle");
+        return;
+      }
       
       toast(error.message || "An error occurred while transcribing the audio");
       setRecordingStatus("idle");
@@ -718,6 +724,10 @@ const Tasjeel: React.FC = () => {
       
       if (!response.ok) {
         const errorData = await response.json();
+        if (errorData.error === 'TRIAL_LIMIT_REACHED') {
+          window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: errorData.feature || 'tts' } }));
+          return;
+        }
         throw new Error(errorData.error || 'Failed to generate audio');
       }
       

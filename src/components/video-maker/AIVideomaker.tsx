@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -854,6 +855,14 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
       if (error) {
         throw new Error(error.message || 'Failed to start video generation');
+      }
+
+      if (data?.error === 'TRIAL_LIMIT_REACHED') {
+        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: data?.feature || 'i2v' } }));
+        setIsGenerating(false);
+        setGenerationProgress(0);
+        setGenerationStatus('');
+        return;
       }
 
       if (!data?.ok || !data?.task_id) {
@@ -1758,6 +1767,15 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   </Button>
                 </div>
                 
+                {/* Instagram */}
+                <InstagramPublishButton
+                  mediaUrl={generatedVideoUrl}
+                  mediaType="reel"
+                  publishTarget="reel"
+                  defaultCaption={prompt || ''}
+                  language={language as 'en' | 'ar'}
+                />
+
                 {/* Create another button */}
                 <Button 
                   variant="outline" 

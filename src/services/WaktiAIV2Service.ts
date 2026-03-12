@@ -1078,6 +1078,14 @@ class WaktiAIV2ServiceClass {
                     ? errObj
                     : (errObj?.message || errObj?.type || JSON.stringify(errObj));
                   encounteredError = errMsg;
+
+                  // Trial limit reached — dispatch global event and stop cleanly
+                  if (errMsg === 'TRIAL_LIMIT_REACHED' || parsed.trialLimitReached) {
+                    window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: parsed.feature || 'ai_chat' } }));
+                    if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
+                    return;
+                  }
+
                   // If overload or Claude-specific error surfaces inside SSE, bubble up immediately
                   const low = errMsg.toLowerCase();
                   if (low.includes('overloaded') || low.includes('529') || low.includes('claude')) {
@@ -1311,7 +1319,9 @@ class WaktiAIV2ServiceClass {
         let resp: Response | null = null;
         for (let attempt = 1; attempt <= 2; attempt++) {
           try {
-            console.log(`🚀 VISION(SSE): Attempt ${attempt}/2 - Calling ${supabaseUrl}/functions/v1/wakti-vision-stream (provider=${primary})`);
+            // Extract visionCategory from the first image's imageType.id (set by the UI dropdown)
+            const visionCategory = (visionFiles[0] as any)?.imageType?.id || 'general';
+            console.log(`🚀 VISION(SSE): Attempt ${attempt}/2 - Calling ${supabaseUrl}/functions/v1/wakti-vision-stream (provider=gemini-vision, category=${visionCategory})`);
             const body = {
               requestId: requestId,
               prompt: visionPrompt,
@@ -1322,7 +1332,8 @@ class WaktiAIV2ServiceClass {
               stream: true,
               images: payloadImages,
               options: { ocr: true, max_tokens: 2000 },
-              chatSubmode: chatSubmode // Pass Study mode to Vision for tutor-style responses
+              chatSubmode: chatSubmode, // Pass Study mode to Vision for tutor-style responses
+              visionCategory // Pass the UI dropdown category for intent-based prompt routing
             };
             resp = await fetch(`${supabaseUrl}/functions/v1/wakti-vision-stream`, {
               method: 'POST',

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import ShareButton from '@/components/ui/ShareButton';
+import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
 import {
   Send,
   Loader2,
@@ -279,6 +280,10 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     });
     const json = await resp.json().catch(() => ({} as any));
     if (!resp.ok || !json?.success || !json?.url) {
+      if (json?.error === 'TRIAL_LIMIT_REACHED') {
+        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: json?.feature || 't2i' } }));
+        return null as unknown as string;
+      }
       throw new Error(json?.error || 'Text2Image failed');
     }
     return json.url as string;
@@ -668,6 +673,16 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         shareDescription={language === 'ar' ? 'تم إنشاؤها بواسطة Wakti AI' : 'Created with Wakti AI'}
         size="sm"
       />
+
+      {/* Instagram */}
+      {resultImageUrl && (
+        <InstagramPublishButton
+          mediaUrl={savedBucketUrl || resultImageUrl}
+          mediaType="image"
+          defaultCaption={prompt || ''}
+          language={language as 'en' | 'ar'}
+        />
+      )}
 
       {/* New */}
       <button

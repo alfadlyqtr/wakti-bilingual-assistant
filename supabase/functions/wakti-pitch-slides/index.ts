@@ -1,6 +1,8 @@
 // @ts-nocheck: Deno/Supabase edge runtime
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
+import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -146,6 +148,26 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // ── Trial Token Check ──
+    const authHeader = req.headers.get('Authorization');
+    if (authHeader) {
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
+      if (user) {
+        const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, 'ppt', 2);
+        if (!trial.allowed) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'TRIAL_LIMIT_REACHED', feature: 'ppt' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+    }
+    // ── End Trial Token Check ──
+
     const body = await req.json();
     const outline = body.outline;
     const brief = body.brief;

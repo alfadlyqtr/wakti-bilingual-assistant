@@ -1602,6 +1602,10 @@ const PresentationTab: React.FC = () => {
       });
 
       if (!response?.success || !response?.slides) {
+        if (response?.error === 'TRIAL_LIMIT_REACHED') {
+          window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: 'ppt' } }));
+          return;
+        }
         throw new Error(response?.error || 'Failed to generate slides');
       }
 

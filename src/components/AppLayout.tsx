@@ -718,6 +718,19 @@ export function AppLayout({ children }: AppLayoutProps) {
       purchasesLogin(user.id, user.email);
     }
   }, [user?.id, user?.email]);
+
+  // Global trial limit bouncer — show bilingual toast when any locked feature hits its limit
+  const { language } = useTheme();
+  React.useEffect(() => {
+    const handleTrialLimit = () => {
+      const msg = language === 'ar'
+        ? 'لقد استنفدت حد التجربة المجانية لهذه الميزة. يرجى الاشتراك للمتابعة!'
+        : 'You have reached your free trial limit for this feature. Please subscribe to continue!';
+      toast.error(msg, { duration: 5000 });
+    };
+    window.addEventListener('wakti-trial-limit-reached', handleTrialLimit);
+    return () => window.removeEventListener('wakti-trial-limit-reached', handleTrialLimit);
+  }, [language]);
   
   // Unified notification system - subscribes to notification_history for all notification types
   // including task_due, reminder_due, messages, contacts, RSVPs, etc.
