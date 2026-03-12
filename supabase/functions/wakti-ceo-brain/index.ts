@@ -34,7 +34,7 @@ const tools = [
       {
         name: "get_store_metrics",
         description:
-          "Fetches the last 14 days of app store metrics (downloads, ratings, reviews) from the app_metrics table. Returns a 'not available' note if the table does not exist yet.",
+          "Fetches the last 14 days of real Apple App Store download data from the app_metrics table (platform='apple'). Data is synced daily at 7 AM via the sync-apple-stats function. Returns date, platform, downloads, and revenue per row.",
         parameters: { type: "OBJECT", properties: {}, required: [] },
       },
       {
