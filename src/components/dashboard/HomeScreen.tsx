@@ -612,19 +612,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             </button>
           )}
 
-          {/* ── Welcome ── */}
-          <div className="flex-none px-5 pt-4 pb-2" dir={language === "ar" ? "rtl" : "ltr"}>
-            <h1 className="text-[22px] font-bold leading-tight tracking-tight"
-              style={{ color: headColor, textShadow: hasBg ? "0 1px 8px rgba(0,0,0,0.8)" : "none" }}>
-              {greeting}{displayName ? `, ${displayName}` : ""}
-            </h1>
-            <p className="text-xs mt-0.5" style={{ color: subColor }}>
-              {language === "ar" ? "إليك يومك" : "Here's your day"}
-            </p>
-          </div>
-
           {/* ── Stats ── */}
-          <div className="flex-none grid grid-cols-3 gap-2 px-5 mb-3">
+          <div className="flex-none grid grid-cols-3 gap-2 px-5 pt-3 mb-3">
             {[
               { label: language === "ar" ? "مهام"  : "Tasks",  value: pendingTasks,         accent: "#22c55e" },
               { label: language === "ar" ? "أحداث" : "Events", value: upcomingCount,        accent: "#a855f7" },
@@ -665,8 +654,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             </div>
           )}
 
-          {/* ── DOCK — flush to bottom with safe-area support ── */}
-          <div className="flex-none px-4 pt-1 hs-dock-bottom">
+          {/* ── DOCK — flush to very bottom ── */}
+          <div className="flex-none px-4 pt-1 pb-0" style={{ paddingBottom: 'max(0px, env(safe-area-inset-bottom))' }}>
             <div className={`flex items-center justify-around ${dockGlass} rounded-[28px] py-3 px-5`}>
               <SortableContext items={dockApps.map(a => `dock::${a.id}`)} strategy={horizontalListSortingStrategy}>
                 {dockApps.map(app => (

@@ -45,20 +45,8 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   // Check if we're on the Wakti AI V2 page
   const isWaktiAIPage = location.pathname === '/wakti-ai';
 
-  // Track homescreen-active body class reactively
-  const [isHomescreenActive, setIsHomescreenActive] = useState(
-    () => document.body.classList.contains('homescreen-active')
-  );
-  useEffect(() => {
-    const obs = new MutationObserver(() => {
-      setIsHomescreenActive(document.body.classList.contains('homescreen-active'));
-    });
-    obs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    return () => obs.disconnect();
-  }, []);
-
-  // Show back button when homescreen is active and user navigated away from /dashboard
-  const showHomescreenBack = isHomescreenActive && location.pathname !== '/dashboard';
+  // Detect homescreen mode from localStorage (persists across page navigations)
+  const isHomescreenMode = localStorage.getItem('wakti_dashboard_look') === 'homescreen';
   
   const handleLogout = async () => {
     await signOut();
@@ -267,7 +255,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
     if (!isMobile) return;
 
     // In homescreen mode, logo always goes back to dashboard
-    if (isHomescreenActive) {
+    if (isHomescreenMode) {
       navigate('/dashboard');
       return;
     }
@@ -325,7 +313,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
       >
         <div className="flex items-center gap-3">
           {isMobile ? (
-            showHomescreenBack ? (
+            (isHomescreenMode && location.pathname !== '/dashboard') ? (
               /* Back button — takes user back to homescreen */
               <button
                 onClick={() => navigate('/dashboard')}

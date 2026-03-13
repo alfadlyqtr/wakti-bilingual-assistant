@@ -59,7 +59,8 @@ export default function Dashboard() {
     };
   }, []);
 
-  // Lock the main scroll area when homescreen mode is active
+  // Lock the main scroll area when homescreen mode is active on /dashboard only.
+  // Removed on unmount so other pages can scroll normally.
   useEffect(() => {
     if (dashboardLook === 'homescreen') {
       document.body.classList.add('homescreen-active');
