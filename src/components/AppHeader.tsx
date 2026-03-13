@@ -314,14 +314,17 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
         <div className="flex items-center gap-3">
           {isMobile ? (
             (isHomescreenMode && location.pathname !== '/dashboard') ? (
-              /* Back button — takes user back to homescreen */
+              /* Back button with logo — takes user back to homescreen */
               <button
                 onClick={() => navigate('/dashboard')}
-                className="flex items-center gap-1.5 h-10 px-2 rounded-xl text-foreground/80 hover:text-foreground hover:bg-foreground/8 transition-all active:scale-95"
+                className="flex items-center gap-1 h-10 px-1 rounded-xl text-foreground/80 hover:text-foreground hover:bg-foreground/8 transition-all active:scale-95"
                 aria-label="Back to Home"
               >
-                <ChevronLeft className="w-6 h-6" strokeWidth={2.5} />
-                <span className="text-sm font-semibold">{language === 'ar' ? 'الرئيسية' : 'Home'}</span>
+                <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
+                <div className="rounded-[0.5rem] overflow-hidden">
+                  <Logo3D size="sm" />
+                </div>
+                <span className="text-sm font-semibold ml-0.5">{language === 'ar' ? 'الرئيسية' : 'Home'}</span>
               </button>
             ) : (
             <div ref={logoRef}>
