@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo } from "lucide-react";
+import { Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo3D } from "@/components/Logo3D";
 import { MobileSlideDownNav } from "@/components/MobileSlideDownNav";
@@ -44,6 +44,21 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   
   // Check if we're on the Wakti AI V2 page
   const isWaktiAIPage = location.pathname === '/wakti-ai';
+
+  // Track homescreen-active body class reactively
+  const [isHomescreenActive, setIsHomescreenActive] = useState(
+    () => document.body.classList.contains('homescreen-active')
+  );
+  useEffect(() => {
+    const obs = new MutationObserver(() => {
+      setIsHomescreenActive(document.body.classList.contains('homescreen-active'));
+    });
+    obs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
+
+  // Show back button when homescreen is active and user navigated away from /dashboard
+  const showHomescreenBack = isHomescreenActive && location.pathname !== '/dashboard';
   
   const handleLogout = async () => {
     await signOut();
@@ -304,6 +319,17 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
       >
         <div className="flex items-center gap-3">
           {isMobile ? (
+            showHomescreenBack ? (
+              /* Back button — takes user back to homescreen */
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="flex items-center gap-1.5 h-10 px-2 rounded-xl text-foreground/80 hover:text-foreground hover:bg-foreground/8 transition-all active:scale-95"
+                aria-label="Back to Home"
+              >
+                <ChevronLeft className="w-6 h-6" strokeWidth={2.5} />
+                <span className="text-sm font-semibold">{language === 'ar' ? 'الرئيسية' : 'Home'}</span>
+              </button>
+            ) : (
             <div ref={logoRef}>
               <div
                 className={cn(
@@ -321,6 +347,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
                 </div>
               </div>
             </div>
+            )
           ) : (
             <Link to="/dashboard" className="flex items-center">
               <div
