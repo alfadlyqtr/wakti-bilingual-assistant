@@ -2644,3 +2644,22 @@ body.chatbot-builder-page .app-main > div {
   width: 100% !important;
   height: 100% !important;
 }
+
+/* ── HomeScreen: lock main scroll, fill height ── */
+body.homescreen-active .app-main-scroll {
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+body.homescreen-active .app-main-scroll > .dashboard-container {
+  flex: 1 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Dock bottom: flush to edge + iPhone safe area */
+.hs-dock-bottom {
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}

@@ -29,7 +29,7 @@ import NotificationSettings from "@/components/notifications/NotificationSetting
 import { QuotePreferencesManager } from "@/components/settings/QuotePreferencesManager";
 import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 import { t } from "@/utils/translations";
-import { Shield, Users, Eye, Quote, Palette, Bell, Layout } from "lucide-react";
+import { Shield, Users, Eye, Quote, Palette, Bell, Layout, Home, LayoutDashboard } from "lucide-react";
 import { useToastHelper } from "@/hooks/use-toast-helper";
 
 export default function Settings() {
@@ -49,6 +49,9 @@ export default function Settings() {
     showWhoopWidget: true,
     showJournalWidget: true,
   });
+
+  // Dashboard look preference ('dashboard' = default widget grid, 'homescreen' = new home screen look)
+  const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen'>('dashboard');
 
   // Privacy settings
   const [privacySettings, setPrivacySettings] = useState({
@@ -82,7 +85,11 @@ export default function Settings() {
         }));
       }
 
-      // Load privacy settings
+      // Load dashboard look preference
+      const savedLook = profile?.settings?.dashboardLook;
+      if (savedLook === 'dashboard' || savedLook === 'homescreen') {
+        setDashboardLook(savedLook);
+      }
       setPrivacySettings({
         autoApproveContacts: profile?.auto_approve_contacts || false,
         profileVisibility: profile?.settings?.privacy?.profileVisibility !== false,
@@ -136,6 +143,39 @@ export default function Settings() {
       console.error('Error updating widget setting:', error);
       showError(t("errorUpdatingSettings", language));
       setWidgetSettings(widgetSettings);
+    }
+  };
+
+  const updateDashboardLook = async (look: 'dashboard' | 'homescreen') => {
+    try {
+      setDashboardLook(look);
+
+      const { data: currentProfile } = await supabase
+        .from('profiles')
+        .select('settings')
+        .eq('id', user?.id)
+        .single();
+
+      const currentSettings = currentProfile?.settings || {};
+
+      await supabase
+        .from('profiles')
+        .update({ 
+          settings: {
+            ...currentSettings,
+            dashboardLook: look
+          }
+        })
+        .eq('id', user?.id);
+
+      showSuccess(t("settingsUpdated", language));
+      
+      // Force dashboard to reload by dispatching a custom event
+      window.dispatchEvent(new CustomEvent('dashboardLookChanged', { detail: look }));
+    } catch (error) {
+      console.error('Error updating dashboard look:', error);
+      showError(t("errorUpdatingSettings", language));
+      setDashboardLook(dashboardLook);
     }
   };
 
@@ -343,6 +383,54 @@ export default function Settings() {
           </TabsContent>
 
           <TabsContent value="dashboard" className="space-y-6">
+            {/* Dashboard Look Toggle */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <LayoutDashboard className="h-5 w-5" />
+                  {language === "ar" ? "مظهر لوحة التحكم" : "Dashboard Look"}
+                </CardTitle>
+                <CardDescription>
+                  {language === "ar" ? "اختر مظهر شاشتك الرئيسية" : "Choose your home screen style"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between rounded-md border p-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      {language === "ar" ? "الشكل الافتراضي (لوحة التحكم)" : "Default Look (Dashboard)"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {language === "ar" 
+                        ? "عرض الأدوات كبطاقات قابلة للتخصيص" 
+                        : "Show widgets as customizable cards"}
+                    </p>
+                  </div>
+                  <Switch 
+                    checked={dashboardLook === 'dashboard'}
+                    onCheckedChange={(checked) => updateDashboardLook(checked ? 'dashboard' : 'homescreen')}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-md border p-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      {language === "ar" ? "شكل الشاشة الرئيسية" : "Home Screen Look"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {language === "ar" 
+                        ? "عرض أنيق ومركز للوصول السريع" 
+                        : "Clean, focused layout for quick access"}
+                    </p>
+                  </div>
+                  <Switch 
+                    checked={dashboardLook === 'homescreen'}
+                    onCheckedChange={(checked) => updateDashboardLook(checked ? 'homescreen' : 'dashboard')}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Widget Visibility */}
             <Card>
               <CardHeader>

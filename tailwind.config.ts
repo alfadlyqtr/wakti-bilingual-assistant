@@ -139,6 +139,12 @@ export default {
           "0%, 100%": { transform: "translateY(0)" },
           "50%": { transform: "translateY(-2px)" },
         },
+        "wiggle": {
+          "0%, 100%": { transform: "rotate(-2deg)" },
+          "25%": { transform: "rotate(2deg)" },
+          "50%": { transform: "rotate(-2deg)" },
+          "75%": { transform: "rotate(2deg)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -151,6 +157,7 @@ export default {
         "pulse-color": "pulse-color 2s ease-in-out infinite",
         "bounce-subtle": "bounce-subtle 1s ease-in-out infinite",
         "spin-slow": "spin 2s linear infinite",
+        "wiggle": "wiggle 0.4s ease-in-out infinite",
       },
     },
   },
