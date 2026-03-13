@@ -495,7 +495,7 @@ export function ChatInput({
   }, [message, isLoading]);
 
   const handleSendMessage = async () => {
-    if ((message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading) {
+    if (message.trim().length > 0 && !isLoading && !isUploading) {
       console.log('📤 SEND: Message being sent', { message: message.substring(0, 50), filesCount: uploadedFiles.length });
       
       // Use the current activeTrigger - no auto-switching for image mode
@@ -713,7 +713,7 @@ export function ChatInput({
   
   // Determine if send button should be enabled
   const hasArabic = (s: string) => /[\u0600-\u06FF]/.test(s || '');
-  const canSend = (message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading && isTextareaEnabled;
+  const canSend = message.trim().length > 0 && !isLoading && !isUploading && isTextareaEnabled;
 
   // Get appropriate placeholder text
   const getPlaceholderText = () => {

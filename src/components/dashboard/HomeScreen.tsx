@@ -13,6 +13,7 @@ import {
   useSensors,
   DragOverlay,
   useDroppable,
+  useDraggable,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -40,6 +41,14 @@ import {
   X,
   Check,
   Settings2,
+  Pencil,
+  GripVertical,
+  CheckSquare,
+  Clock,
+  BookOpen,
+  Activity,
+  Navigation,
+  CalendarDays,
 } from "lucide-react";
 import { WaktiIcon } from "@/components/icons/WaktiIcon";
 import { getQuoteForDisplay, getQuoteText, getQuoteAuthor } from "@/utils/quoteService";
@@ -70,6 +79,73 @@ const LS_ORDER_KEY  = "homescreen_icon_order_v2"; // v2 — forces clean slate
 const LS_DOCK_KEY   = "homescreen_dock_v2";
 const LS_QUOTE_KEY  = "homescreen_show_quote";
 const LS_BG_KEY     = "homescreen_bg";
+const LS_UNIFIED_KEY = "homescreen_unified_grid_v4";
+
+// Widget IDs used in the unified grid
+const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showNavWidget','showWhoopWidget','showJournalWidget'] as const;
+type WidgetId = typeof WIDGET_IDS[number];
+const MAX_WIDGETS = 3;
+
+// Calculate explicit grid positions ("parking spots") for each item
+function calcGridPositions(items: string[]) {
+  const positions = new Map<string, { col: number; row: number; colSpan: number; rowSpan: number }>();
+  const occupied: boolean[][] = [];
+  const isOcc = (r: number, c: number) => occupied[r]?.[c] === true;
+  const occ = (r: number, c: number) => {
+    if (!occupied[r]) occupied[r] = [false, false, false, false];
+    occupied[r][c] = true;
+  };
+  for (const id of items) {
+    const isW = id.startsWith('widget::');
+    const cs = isW ? 2 : 1, rs = isW ? 2 : 1;
+    // Widgets only start at col 0 or 2 (left or right half)
+    const starts = isW ? [0, 2] : [0, 1, 2, 3];
+    let placed = false;
+    for (let r = 0; !placed && r < 60; r++) {
+      for (const c of starts) {
+        if (c + cs > 4) continue;
+        let ok = true;
+        for (let dr = 0; dr < rs && ok; dr++)
+          for (let dc = 0; dc < cs && ok; dc++)
+            if (isOcc(r + dr, c + dc)) ok = false;
+        if (ok) {
+          positions.set(id, { col: c + 1, row: r + 1, colSpan: cs, rowSpan: rs });
+          for (let dr = 0; dr < rs; dr++)
+            for (let dc = 0; dc < cs; dc++)
+              occ(r + dr, c + dc);
+          placed = true;
+          break;
+        }
+      }
+    }
+  }
+  return positions;
+}
+
+// Build default unified grid: interleave widget + 4 icons per "big row"
+// Pattern: widget-left → 4 icons right, 4 icons left → widget-right, widget-left → 4 icons right ...
+// Excludes dock apps so the interleaving stays tight after effectiveUnified filtering
+function buildDefaultUnifiedGrid(hsWidgets: Record<string, boolean>, dockApps: string[] = DEFAULT_DOCK): string[] {
+  const widgets = WIDGET_IDS.filter(k => hsWidgets[k]).map(k => `widget::${k}`).slice(0, MAX_WIDGETS);
+  const dockSet = new Set(dockApps);
+  const apps = DEFAULT_ORDER.filter(id => !dockSet.has(id)).map(id => `app::${id}`);
+  const result: string[] = [];
+  let ai = 0;
+  for (let wi = 0; wi < widgets.length; wi++) {
+    if (wi % 2 === 0) {
+      // Widget on left: widget first, then 4 icons
+      result.push(widgets[wi]);
+      for (let i = 0; i < 4 && ai < apps.length; i++, ai++) result.push(apps[ai]);
+    } else {
+      // Widget on right: 4 icons first, then widget
+      for (let i = 0; i < 4 && ai < apps.length; i++, ai++) result.push(apps[ai]);
+      result.push(widgets[wi]);
+    }
+  }
+  // remaining icons
+  while (ai < apps.length) result.push(apps[ai++]);
+  return result;
+}
 
 const VALID_IDS = new Set(ALL_APPS.map(a => a.id));
 
@@ -101,10 +177,11 @@ function sanitizeDock(raw: string[]): string[] {
 
 // ─── Liquid-glass icon shell ───────────────────────────────────────────────────
 // The shimmer highlight on the top edge + soft inner glow gives real iOS 26 "liquid glass"
-function LiquidIcon({ app, size = 64, editMode }: {
+function LiquidIcon({ app, size = 64, editMode, glowEnabled = false }: {
   app: typeof ALL_APPS[0];
   size?: number;
   editMode: boolean;
+  glowEnabled?: boolean;
 }) {
   const px = `${size}px`;
   return (
@@ -116,7 +193,9 @@ function LiquidIcon({ app, size = 64, editMode }: {
       <div
         className={`absolute inset-0 rounded-[23%] bg-gradient-to-br ${app.gradient}`}
         style={{
-          boxShadow: `0 4px 16px ${app.glow}55, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`,
+          boxShadow: glowEnabled
+            ? `0 0 18px ${app.glow}cc, 0 4px 16px ${app.glow}66, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`
+            : `0 4px 16px ${app.glow}55, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`,
         }}
       />
       {/* Liquid glass highlight */}
@@ -145,12 +224,13 @@ function LiquidIcon({ app, size = 64, editMode }: {
 }
 
 // ─── Sortable grid icon ────────────────────────────────────────────────────────
-function GridIcon({ app, language, editMode, onTap, isDark }: {
+function GridIcon({ app, language, editMode, onTap, isDark, glowEnabled = false }: {
   app: typeof ALL_APPS[0];
   language: string;
   editMode: boolean;
   onTap: () => void;
   isDark: boolean;
+  glowEnabled?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `grid::${app.id}`,
@@ -172,7 +252,7 @@ function GridIcon({ app, language, editMode, onTap, isDark }: {
       className="flex flex-col items-center gap-1.5 select-none cursor-pointer"
       onClick={editMode ? undefined : onTap}
     >
-      <LiquidIcon app={app} size={64} editMode={editMode} />
+      <LiquidIcon app={app} size={64} editMode={editMode} glowEnabled={glowEnabled} />
       <span
         className="text-[11px] font-semibold text-center leading-tight"
         style={{
@@ -192,10 +272,11 @@ function GridIcon({ app, language, editMode, onTap, isDark }: {
 }
 
 // ─── Sortable dock icon ────────────────────────────────────────────────────────
-function DockIcon({ app, editMode, onTap }: {
+function DockIcon({ app, editMode, onTap, glowEnabled = false }: {
   app: typeof ALL_APPS[0];
   editMode: boolean;
   onTap: () => void;
+  glowEnabled?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `dock::${app.id}`,
@@ -217,7 +298,359 @@ function DockIcon({ app, editMode, onTap }: {
       className="flex flex-col items-center select-none cursor-pointer"
       onClick={editMode ? undefined : onTap}
     >
-      <LiquidIcon app={app} size={58} editMode={editMode} />
+      <LiquidIcon app={app} size={58} editMode={editMode} glowEnabled={glowEnabled} />
+    </div>
+  );
+}
+
+// ─── Stat widget cards (stable — defined outside HomeScreen to prevent flicker) ─
+interface StatWidgetsProps {
+  hsWidgets: Record<string, boolean>;
+  language: string;
+  theme: string;
+  hasBg: boolean;
+  pendingTasks: number;
+  completedToday: number;
+  upcomingCount: number;
+  statCardBase: string;
+  statLblColor: string;
+  navigate: (path: string) => void;
+}
+
+function StatWidgets({ hsWidgets, language, theme, hasBg, pendingTasks, completedToday, upcomingCount, statCardBase, statLblColor, navigate }: StatWidgetsProps) {
+  const isDark = theme === 'dark';
+  const now = new Date();
+  const dayNum     = now.getDate();
+  const dayLong    = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'long' });
+  const dayShort   = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'short' });
+  const monthShort = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { month: 'short' });
+
+  const total = pendingTasks + completedToday;
+  const pct   = total > 0 ? Math.round((completedToday / total) * 100) : 0;
+
+  // ── Dynamic color helpers ──
+  // Tasks: green = great progress (≥70% done), amber = some done (≥30%), red = mostly pending
+  const taskAccent = pct >= 70 ? '#22c55e' : pct >= 30 ? '#f59e0b' : pendingTasks === 0 ? '#22c55e' : '#ef4444';
+  const taskIconBg = pct >= 70 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : pct >= 30 ? 'linear-gradient(135deg,#b45309,#f59e0b)' : pendingTasks === 0 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : 'linear-gradient(135deg,#be123c,#ef4444)';
+  const taskSubMsg = pendingTasks === 0
+    ? (language === 'ar' ? '✅ كل شيء تم!' : '✅ All done!')
+    : pct >= 70
+      ? (language === 'ar' ? `${pct}% مكتمل 🔥` : `${pct}% done 🔥`)
+      : pct >= 30
+        ? (language === 'ar' ? `${pct}% مكتمل` : `${pct}% done`)
+        : (language === 'ar' ? `${pendingTasks} معلّقة` : `${pendingTasks} pending`);
+
+  // Events/Maw3d: 0 = gray (clear), 1-3 = green (manageable), 4+ = amber (busy)
+  const eventsAccent = upcomingCount === 0 ? '#6b7280' : upcomingCount <= 3 ? '#22c55e' : '#f59e0b';
+  const eventsSubMsg = upcomingCount === 0
+    ? (language === 'ar' ? 'لا أحداث' : 'Clear')
+    : upcomingCount <= 3
+      ? `+${upcomingCount} ${language === 'ar' ? 'حدث' : upcomingCount === 1 ? 'event' : 'events'}`
+      : `+${upcomingCount} ${language === 'ar' ? 'أحداث' : 'events'} 🔥`;
+
+  const maw3dAccent = upcomingCount === 0 ? '#6b7280' : upcomingCount <= 2 ? '#22c55e' : '#f59e0b';
+  const maw3dIconBg = upcomingCount === 0 ? 'linear-gradient(135deg,#374151,#6b7280)' : upcomingCount <= 2 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : 'linear-gradient(135deg,#b45309,#f59e0b)';
+
+  const labelColor  = isDark || hasBg ? '#ffffff' : '#060541';
+  const subColor    = statLblColor;
+  const base        = `${statCardBase} rounded-2xl overflow-hidden cursor-pointer active:scale-95 transition-transform select-none`;
+
+  const KEYS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showNavWidget','showWhoopWidget','showJournalWidget'];
+  const visible = KEYS.filter(k => hsWidgets[k]);
+  if (visible.length === 0) return null;
+
+  return (
+    <div
+      className="flex-none grid gap-2 px-5 pt-3 mb-3"
+      style={{ gridTemplateColumns: `repeat(${visible.length}, 1fr)` }}
+    >
+      {visible.includes('showTRWidget') && (
+        <div className={base} onClick={() => navigate('/tr')}>
+          <div className="p-2.5 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <div className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ background: taskIconBg }}>
+                <CheckSquare className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
+              </div>
+              <span className="text-lg font-black tabular-nums" style={{ color: taskAccent }}>{pendingTasks === 0 ? '✓' : pendingTasks}</span>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold leading-none" style={{ color: labelColor }}>{language === 'ar' ? 'المهام' : 'Tasks'}</p>
+              <p className="text-[9px] mt-0.5 font-semibold" style={{ color: taskAccent }}>{taskSubMsg}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {visible.includes('showCalendarWidget') && (
+        <div className={base} onClick={() => navigate('/calendar')}
+          style={{ background: hasBg ? 'rgba(168,85,247,0.25)' : isDark ? 'rgba(168,85,247,0.15)' : 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.4)' }}>
+          <div className="flex flex-col">
+            <div className="px-2.5 py-1.5" style={{ background: 'linear-gradient(135deg,#7c3aed,#a855f7)' }}>
+              <p className="text-[9px] font-bold text-white uppercase tracking-widest">{monthShort}</p>
+            </div>
+            <div className="px-2.5 pt-1 pb-2.5">
+              <span className="text-xl font-black leading-tight block tabular-nums" style={{ color: '#a855f7' }}>{dayNum}</span>
+              <p className="text-[9px] font-medium" style={{ color: subColor }}>{dayShort}</p>
+              <p className="text-[9px] font-semibold mt-0.5" style={{ color: eventsAccent }}>{eventsSubMsg}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {visible.includes('showMaw3dWidget') && (
+        <div className={base} onClick={() => navigate('/maw3d')}>
+          <div className="p-2.5 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <div className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ background: maw3dIconBg }}>
+                <Clock className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
+              </div>
+              <span className="text-lg font-black tabular-nums" style={{ color: maw3dAccent }}>{upcomingCount === 0 ? '—' : upcomingCount}</span>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold leading-none" style={{ color: labelColor }}>{language === 'ar' ? 'مواعيد' : 'Maw3d'}</p>
+              <p className="text-[9px] mt-0.5 font-semibold" style={{ color: maw3dAccent }}>
+                {upcomingCount === 0 ? (language === 'ar' ? 'لا مواعيد' : 'Clear') : upcomingCount <= 2 ? (language === 'ar' ? 'مجدولة ✓' : 'scheduled ✓') : (language === 'ar' ? 'مشغول 🔥' : 'busy 🔥')}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {visible.includes('showNavWidget') && (
+        <div className={base} onClick={() => navigate('/dashboard')}
+          style={{ background: hasBg ? 'rgba(56,189,248,0.2)' : isDark ? 'rgba(56,189,248,0.12)' : 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.35)' }}>
+          <div className="flex flex-col">
+            <div className="px-2.5 py-1.5" style={{ background: 'linear-gradient(135deg,#0369a1,#38bdf8)' }}>
+              <p className="text-[9px] font-bold text-white uppercase tracking-widest">{language === 'ar' ? 'اليوم' : 'Today'}</p>
+            </div>
+            <div className="px-2.5 pt-1 pb-2">
+              <span className="text-xl font-black leading-tight block tabular-nums" style={{ color: '#38bdf8' }}>{dayNum}</span>
+              <p className="text-[9px] leading-tight" style={{ color: subColor }}>{dayLong}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {visible.includes('showWhoopWidget') && (
+        <div className={base} onClick={() => navigate('/fitness')}>
+          <div className="p-2.5 flex flex-col gap-1.5">
+            <div className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#be123c,#ef4444)' }}>
+              <Activity className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold leading-none" style={{ color: labelColor }}>WHOOP</p>
+              <p className="text-[9px] font-semibold mt-0.5" style={{ color: '#ef4444' }}>{language === 'ar' ? 'عرض ←' : 'View →'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {visible.includes('showJournalWidget') && (
+        <div className={base} onClick={() => navigate('/journal')}
+          style={{ background: hasBg ? 'rgba(139,92,246,0.2)' : isDark ? 'rgba(139,92,246,0.12)' : 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.35)' }}>
+          <div className="p-2.5 flex flex-col gap-1.5">
+            <div className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#6d28d9,#8b5cf6)' }}>
+              <BookOpen className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold leading-none" style={{ color: labelColor }}>{language === 'ar' ? 'يومياتي' : 'Journal'}</p>
+              <p className="text-[9px] font-semibold mt-0.5" style={{ color: '#8b5cf6' }}>{language === 'ar' ? '✍️ اكتب اليوم' : '✍️ Write today'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Widget content renderer (no drag logic, just visuals) ────────────────────
+function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, pendingTasks, completedToday, upcomingCount, navigate }: {
+  wKey: WidgetId; editMode: boolean; language: string; theme: string;
+  hasBg: boolean; statCardBase: string;
+  pendingTasks: number; completedToday: number; upcomingCount: number;
+  navigate: (p: string) => void;
+}) {
+  const isDark = theme === 'dark';
+  const total = pendingTasks + completedToday;
+  const pct   = total > 0 ? Math.round((completedToday / total) * 100) : 0;
+  const taskAccent  = pct >= 70 ? '#22c55e' : pct >= 30 ? '#f59e0b' : pendingTasks === 0 ? '#22c55e' : '#ef4444';
+  const taskIconBg  = pct >= 70 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : pct >= 30 ? 'linear-gradient(135deg,#b45309,#f59e0b)' : pendingTasks === 0 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : 'linear-gradient(135deg,#be123c,#ef4444)';
+  const taskMsg     = pendingTasks === 0 ? (language === 'ar' ? '✅ كل شيء تم!' : '✅ All done!') : pct >= 70 ? (language === 'ar' ? `${pct}% مكتمل 🔥` : `${pct}% done 🔥`) : pct >= 30 ? (language === 'ar' ? `${pct}% مكتمل` : `${pct}% done`) : (language === 'ar' ? `${pendingTasks} معلّقة` : `${pendingTasks} pending`);
+  const evAccent    = upcomingCount === 0 ? '#6b7280' : upcomingCount <= 3 ? '#22c55e' : '#f59e0b';
+  const evMsg       = upcomingCount === 0 ? (language === 'ar' ? 'لا أحداث' : 'Clear') : upcomingCount <= 3 ? `+${upcomingCount} ${language === 'ar' ? 'حدث' : upcomingCount === 1 ? 'event' : 'events'}` : `+${upcomingCount} ${language === 'ar' ? 'أحداث' : 'events'} 🔥`;
+  const maw3dAccent = upcomingCount === 0 ? '#6b7280' : upcomingCount <= 2 ? '#22c55e' : '#f59e0b';
+  const maw3dBg     = upcomingCount === 0 ? 'linear-gradient(135deg,#374151,#6b7280)' : upcomingCount <= 2 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : 'linear-gradient(135deg,#b45309,#f59e0b)';
+  const labelColor  = isDark || hasBg ? '#ffffff' : '#060541';
+  const now         = new Date();
+  const dayNum      = now.getDate();
+  const dayShort    = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'short' });
+  const dayLong     = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'long' });
+  const monthShort  = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { month: 'short' });
+  const base = `${statCardBase} rounded-2xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-transform select-none`;
+
+  if (wKey === 'showTRWidget') return (
+    <div className={base} onClick={editMode ? undefined : () => navigate('/tr')}>
+      <div className="p-3 flex items-center gap-3 h-full">
+        <div className="w-10 h-10 rounded-2xl flex-shrink-0 flex items-center justify-center" style={{ background: taskIconBg }}>
+          <CheckSquare className="w-5 h-5 text-white" strokeWidth={2.5} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[18px] font-black tabular-nums" style={{ color: taskAccent }}>{pendingTasks === 0 ? '✓' : pendingTasks}</p>
+          <p className="text-[11px] font-bold leading-none" style={{ color: labelColor }}>{language === 'ar' ? 'المهام' : 'Tasks'}</p>
+          <p className="text-[9px] font-semibold mt-1" style={{ color: taskAccent }}>{taskMsg}</p>
+        </div>
+      </div>
+    </div>
+  );
+  if (wKey === 'showCalendarWidget') return (
+    <div className={`${statCardBase} rounded-2xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-transform select-none`} onClick={editMode ? undefined : () => navigate('/calendar')} style={{ background: hasBg ? 'rgba(168,85,247,0.25)' : isDark ? 'rgba(168,85,247,0.15)' : 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.4)' }}>
+      <div className="flex h-full">
+        <div className="px-3 py-3 flex flex-col justify-center items-center" style={{ background: 'linear-gradient(135deg,#7c3aed,#a855f7)', minWidth: 52 }}>
+          <p className="text-[8px] font-bold text-white uppercase tracking-wider">{monthShort}</p>
+          <span className="text-3xl font-black text-white leading-none tabular-nums">{dayNum}</span>
+        </div>
+        <div className="px-3 flex flex-col justify-center flex-1">
+          <p className="text-[13px] font-bold" style={{ color: labelColor }}>{dayShort}</p>
+          <p className="text-[10px] font-semibold mt-1" style={{ color: evAccent }}>{evMsg}</p>
+        </div>
+      </div>
+    </div>
+  );
+  if (wKey === 'showMaw3dWidget') return (
+    <div className={base} onClick={editMode ? undefined : () => navigate('/maw3d')}>
+      <div className="p-3 flex items-center gap-3 h-full">
+        <div className="w-10 h-10 rounded-2xl flex-shrink-0 flex items-center justify-center" style={{ background: maw3dBg }}>
+          <Clock className="w-5 h-5 text-white" strokeWidth={2.5} />
+        </div>
+        <div className="flex-1">
+          <p className="text-[18px] font-black tabular-nums" style={{ color: maw3dAccent }}>{upcomingCount === 0 ? '—' : upcomingCount}</p>
+          <p className="text-[11px] font-bold leading-none" style={{ color: labelColor }}>{language === 'ar' ? 'مواعيد' : 'Maw3d'}</p>
+          <p className="text-[9px] font-semibold mt-1" style={{ color: maw3dAccent }}>{upcomingCount === 0 ? (language === 'ar' ? 'لا مواعيد' : 'Clear') : upcomingCount <= 2 ? (language === 'ar' ? 'مجدولة ✓' : 'scheduled ✓') : (language === 'ar' ? 'مشغول 🔥' : 'busy 🔥')}</p>
+        </div>
+      </div>
+    </div>
+  );
+  if (wKey === 'showNavWidget') return (
+    <div className={`${statCardBase} rounded-2xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-transform select-none`} onClick={editMode ? undefined : () => navigate('/dashboard')} style={{ background: hasBg ? 'rgba(56,189,248,0.2)' : isDark ? 'rgba(56,189,248,0.12)' : 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.35)' }}>
+      <div className="flex h-full">
+        <div className="px-3 py-3 flex flex-col justify-center items-center" style={{ background: 'linear-gradient(135deg,#0369a1,#38bdf8)', minWidth: 52 }}>
+          <p className="text-[8px] font-bold text-white uppercase tracking-wider">{language === 'ar' ? 'اليوم' : 'Today'}</p>
+          <span className="text-3xl font-black text-white leading-none tabular-nums">{dayNum}</span>
+        </div>
+        <div className="px-3 flex flex-col justify-center flex-1">
+          <p className="text-[13px] font-bold" style={{ color: labelColor }}>{dayLong}</p>
+        </div>
+      </div>
+    </div>
+  );
+  if (wKey === 'showWhoopWidget') return (
+    <div className={base} onClick={editMode ? undefined : () => navigate('/fitness')}>
+      <div className="p-3 flex items-center gap-3 h-full">
+        <div className="w-10 h-10 rounded-2xl flex-shrink-0 flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#be123c,#ef4444)' }}>
+          <Activity className="w-5 h-5 text-white" strokeWidth={2.5} />
+        </div>
+        <div className="flex-1">
+          <p className="text-[13px] font-bold leading-none" style={{ color: labelColor }}>WHOOP</p>
+          <p className="text-[9px] font-semibold mt-1" style={{ color: '#ef4444' }}>{language === 'ar' ? 'الحيوية ←' : 'Vitality →'}</p>
+        </div>
+      </div>
+    </div>
+  );
+  if (wKey === 'showJournalWidget') return (
+    <div className={`${statCardBase} rounded-2xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-transform select-none`} onClick={editMode ? undefined : () => navigate('/journal')} style={{ background: hasBg ? 'rgba(139,92,246,0.2)' : isDark ? 'rgba(139,92,246,0.12)' : 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.35)' }}>
+      <div className="p-3 flex items-center gap-3 h-full">
+        <div className="w-10 h-10 rounded-2xl flex-shrink-0 flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#6d28d9,#8b5cf6)' }}>
+          <BookOpen className="w-5 h-5 text-white" strokeWidth={2.5} />
+        </div>
+        <div className="flex-1">
+          <p className="text-[13px] font-bold leading-none" style={{ color: labelColor }}>{language === 'ar' ? 'يومياتي' : 'Journal'}</p>
+          <p className="text-[9px] font-semibold mt-1" style={{ color: '#8b5cf6' }}>{language === 'ar' ? '✍️ اكتب اليوم' : '✍️ Write today'}</p>
+        </div>
+      </div>
+    </div>
+  );
+  return null;
+}
+
+// ─── Sortable widget cell ────────────────────────────────────────────────────
+interface UnifiedWidgetCellProps {
+  id: string; wKey: WidgetId; editMode: boolean; language: string; theme: string;
+  hasBg: boolean; statCardBase: string; statLblColor: string;
+  pendingTasks: number; completedToday: number; upcomingCount: number;
+  navigate: (p: string) => void;
+  gridPos: { col: number; row: number; colSpan: number; rowSpan: number };
+}
+function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridPos }: UnifiedWidgetCellProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id, data: { type: 'unified' },
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      className="relative"
+      style={{
+        gridColumn: `${gridPos.col} / span ${gridPos.colSpan}`,
+        gridRow: `${gridPos.row} / span ${gridPos.rowSpan}`,
+        transform: isDragging ? CSS.Transform.toString(transform) : undefined,
+        transition: isDragging ? transition : undefined,
+        opacity: isDragging ? 0.35 : 1,
+        touchAction: 'none',
+        zIndex: isDragging ? 50 : 'auto',
+      }}
+      {...attributes}
+      {...listeners}
+    >
+      <WidgetContent
+        wKey={wKey} editMode={editMode} language={language} theme={theme}
+        hasBg={hasBg} statCardBase={statCardBase}
+        pendingTasks={pendingTasks} completedToday={completedToday}
+        upcomingCount={upcomingCount} navigate={navigate}
+      />
+      {editMode && (
+        <div className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full bg-black/70 border border-white/30 flex items-center justify-center">
+          <GripVertical className="w-3 h-3 text-white/80" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Sortable app cell ──────────────────────────────────────────────────────
+interface UnifiedAppCellProps {
+  id: string; app: typeof ALL_APPS[0]; editMode: boolean;
+  language: string; isDark: boolean; glowEnabled: boolean;
+  navigate: (p: string) => void;
+  gridPos: { col: number; row: number; colSpan: number; rowSpan: number };
+}
+function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridPos }: UnifiedAppCellProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id, data: { type: 'unified' },
+  });
+  const name = language === 'ar' ? app.nameAr : app.nameEn;
+  return (
+    <div
+      ref={setNodeRef}
+      className="flex flex-col items-center justify-center gap-0.5 select-none cursor-pointer relative"
+      style={{
+        gridColumn: `${gridPos.col} / span ${gridPos.colSpan}`,
+        gridRow: `${gridPos.row} / span ${gridPos.rowSpan}`,
+        transform: isDragging ? CSS.Transform.toString(transform) : undefined,
+        transition: isDragging ? transition : undefined,
+        opacity: isDragging ? 0.25 : 1,
+        touchAction: 'none',
+        zIndex: isDragging ? 50 : 'auto',
+      }}
+      {...attributes}
+      {...listeners}
+      onClick={editMode ? undefined : () => navigate(app.path)}
+    >
+      <LiquidIcon app={app} size={48} editMode={editMode} glowEnabled={glowEnabled} />
+      <span
+        className="text-[9px] font-semibold text-center leading-tight"
+        style={{ color: isDark ? '#fff' : '#060541', textShadow: isDark ? '0 1px 4px rgba(0,0,0,0.95)' : 'none', maxWidth: 56, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
+      >
+        {name}
+      </span>
     </div>
   );
 }
@@ -251,12 +684,19 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   });
   const [showQuote,       setShowQuote]       = useState<boolean>(() => localStorage.getItem(LS_QUOTE_KEY) !== "false");
   const [bgImage,         setBgImage]         = useState<string>(() => localStorage.getItem(LS_BG_KEY) || "");
+
+  // Homescreen background style from Settings
+  const [hsBg, setHsBg] = useState<{ mode: 'solid'|'gradient'; color1: string; color2: string; color3: string; angle: number; glow: boolean }>(
+    { mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false }
+  );
   const [quote,           setQuote]           = useState<any>(null);
   const [greeting,        setGreeting]        = useState("");
   const [activeId,        setActiveId]        = useState<string | null>(null);
   const [dockPickerOpen,  setDockPickerOpen]  = useState(false);
+  const [bgPanelOpen,     setBgPanelOpen]     = useState(false);
   const bgInputRef    = useRef<HTMLInputElement>(null);
   const _pendingDock  = useRef<string[]>([]);
+  const _effectiveRef = useRef<string[]>([]);
 
   const { tasks }  = useOptimizedTRData();
   const { events } = useOptimizedMaw3dEvents();
@@ -269,6 +709,14 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const [hsWidgets, setHsWidgets] = useState({
     showNavWidget: true, showCalendarWidget: true, showTRWidget: true,
     showMaw3dWidget: false, showWhoopWidget: false, showJournalWidget: false, showQuoteWidget: false,
+  });
+
+  // Unified grid: ordered list of "widget::KEY" and "app::ID" items
+  const [unifiedGrid, setUnifiedGrid] = useState<string[]>(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(LS_UNIFIED_KEY) || 'null');
+      return Array.isArray(raw) && raw.length > 0 ? raw : [];
+    } catch { return []; }
   });
 
   useEffect(() => {
@@ -308,7 +756,49 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
         const s = (data?.settings as any);
         if (s?.homescreenWidgets) {
-          setHsWidgets(prev => clampHsWidgets({ ...prev, ...s.homescreenWidgets }));
+          const clamped = clampHsWidgets({ showNavWidget: true, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showWhoopWidget: false, showJournalWidget: false, showQuoteWidget: false, ...s.homescreenWidgets });
+          setHsWidgets(clamped);
+          // Build/restore unified grid
+          if (Array.isArray(s?.homescreen?.unifiedGrid) && s.homescreen.unifiedGrid.length > 0) {
+            const saved: string[] = s.homescreen.unifiedGrid;
+            const enabledWidgets = new Set(WIDGET_IDS.filter(k => clamped[k]).map(k => `widget::${k}`));
+            // Keep saved order, just filter out disabled widgets and invalid apps
+            const seen = new Set<string>();
+            const grid: string[] = [];
+            for (const id of saved) {
+              if (seen.has(id)) continue;
+              seen.add(id);
+              if (id.startsWith('widget::')) {
+                if (enabledWidgets.has(id)) grid.push(id);
+              } else if (id.startsWith('app::')) {
+                if (VALID_IDS.has(id.replace('app::',''))) grid.push(id);
+              }
+            }
+            // Append any missing enabled widgets at end
+            for (const w of enabledWidgets) { if (!seen.has(w)) grid.push(w); }
+            // Append any missing apps at end
+            for (const appId of DEFAULT_ORDER) {
+              const key = `app::${appId}`;
+              if (!seen.has(key)) grid.push(key);
+            }
+            setUnifiedGrid(grid);
+            localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(grid));
+          } else {
+            const grid = buildDefaultUnifiedGrid(clamped);
+            setUnifiedGrid(grid);
+            localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(grid));
+          }
+        }
+        if (s?.homescreenBg) {
+          const bg = s.homescreenBg;
+          setHsBg({
+            mode:   bg.mode   === 'gradient' ? 'gradient' : 'solid',
+            color1: bg.color1 || '',
+            color2: bg.color2 || '',
+            color3: bg.color3 || '',
+            angle:  typeof bg.angle === 'number' ? bg.angle : 180,
+            glow:   typeof bg.glow === 'boolean' ? bg.glow : false,
+          });
         }
         const hs = s?.homescreen;
         if (!hs) return;
@@ -337,10 +827,42 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     const handler = (e: any) => {
       const detail = e?.detail || {};
       if (detail.mode !== 'homescreen') return;
-      setHsWidgets(prev => clampHsWidgets({ ...prev, ...detail }));
+      setHsWidgets(prev => {
+        const next = clampHsWidgets({ ...prev, ...detail });
+        // Sync enabled/disabled widgets into unified grid
+        setUnifiedGrid(grid => {
+          const enabledWidgets = WIDGET_IDS.filter(k => next[k]).map(k => `widget::${k}`);
+          // Remove disabled widget entries
+          const withoutDisabled = grid.filter(id => !id.startsWith('widget::') || enabledWidgets.includes(id));
+          // Add newly enabled ones at the front if not already present
+          const newOnes = enabledWidgets.filter(w => !withoutDisabled.includes(w));
+          const updated = [...newOnes, ...withoutDisabled];
+          localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(updated));
+          return updated;
+        });
+        return next;
+      });
     };
     window.addEventListener('widgetSettingsChanged', handler);
     return () => window.removeEventListener('widgetSettingsChanged', handler);
+  }, []);
+
+  // Live update from Settings page background style changes
+  useEffect(() => {
+    const handler = (e: any) => {
+      const d = e?.detail;
+      if (!d) return;
+      setHsBg({
+        mode:   d.mode === 'gradient' ? 'gradient' : 'solid',
+        color1: d.color1 || '',
+        color2: d.color2 || '',
+        color3: d.color3 || '',
+        angle:  typeof d.angle === 'number' ? d.angle : 180,
+        glow:   !!d.glow,
+      });
+    };
+    window.addEventListener('homescreenBgChanged', handler);
+    return () => window.removeEventListener('homescreenBgChanged', handler);
   }, []);
 
   // ── Sensors ──
@@ -349,33 +871,33 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     useSensor(TouchSensor,   { activationConstraint: { delay: 250, tolerance: 6 } })
   );
 
-  // ── Unified drag handler (grid ↔ dock swap) ──
-  const handleDragStart = (e: any) => setActiveId(e.active.id);
+  // ── Unified drag handler ──
+  const handleDragStart = (e: any) => { setActiveId(e.active.id); setEditMode(true); };
   const handleDragEnd   = useCallback((e: any) => {
     setActiveId(null);
     const { active, over } = e;
     if (!over || active.id === over.id) return;
 
-    const activeType  = active.data.current?.type as "grid" | "dock";
-    const overType    = over.data.current?.type   as "grid" | "dock" | undefined;
-    const activeAppId = active.data.current?.appId as string;
-    const overAppId   = over.data.current?.appId   as string;
+    const activeType  = active.data.current?.type as "unified" | "dock";
+    const overType    = over.data.current?.type   as "unified" | "dock" | undefined;
 
-    if (!activeAppId) return;
-
-    // grid → grid reorder
-    if (activeType === "grid" && (overType === "grid" || !overType)) {
-      if (!overAppId) return;
-      setIconOrder(prev => {
-        const next = arrayMove(prev, prev.indexOf(activeAppId), prev.indexOf(overAppId));
-        syncToSupabase({ iconOrder: next });
-        return next;
-      });
+    // ── unified grid reorder (widgets + apps together) ──
+    if (activeType === "unified" && (overType === "unified" || !overType)) {
+      const current = _effectiveRef.current;
+      const from = current.indexOf(active.id);
+      const to   = current.indexOf(over.id);
+      if (from === -1 || to === -1) return;
+      const next = arrayMove(current, from, to);
+      setUnifiedGrid(next);
+      localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(next));
+      syncToSupabase({ unifiedGrid: next });
       return;
     }
 
     // dock → dock reorder
     if (activeType === "dock" && overType === "dock") {
+      const activeAppId = active.id.replace('dock::', '');
+      const overAppId   = over.id.replace('dock::', '');
       setDockIds(prev => {
         const from = prev.indexOf(activeAppId);
         const to   = prev.indexOf(overAppId);
@@ -384,43 +906,6 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         syncToSupabase({ dockIds: next });
         return next;
       });
-      return;
-    }
-
-    // grid → dock: push into dock, return old dock occupant to grid
-    if (activeType === "grid" && overType === "dock") {
-      setDockIds(prev => {
-        if (prev.includes(activeAppId)) return prev;
-        const idx = overAppId ? prev.indexOf(overAppId) : prev.length;
-        const next = [...prev];
-        const evicted = next.splice(idx, 1, activeAppId)[0];
-        // put evicted back into grid order after the active slot
-        setIconOrder(order => {
-          const newOrder = order.filter(id => id !== activeAppId);
-          if (evicted) newOrder.splice(newOrder.indexOf(overAppId) !== -1 ? newOrder.indexOf(overAppId) : newOrder.length, 0, evicted);
-          syncToSupabase({ iconOrder: newOrder, dockIds: next });
-          return newOrder;
-        });
-        return next;
-      });
-      return;
-    }
-
-    // dock → grid: remove from dock, insert into grid
-    if (activeType === "dock" && overType === "grid") {
-      setDockIds(prev => {
-        const next = prev.filter(id => id !== activeAppId);
-        setIconOrder(order => {
-          if (order.includes(activeAppId)) return order;
-          const insertAt = overAppId ? order.indexOf(overAppId) : order.length;
-          const newOrder = [...order];
-          newOrder.splice(insertAt, 0, activeAppId);
-          syncToSupabase({ iconOrder: newOrder, dockIds: next });
-          return newOrder;
-        });
-        return next;
-      });
-      return;
     }
   }, [syncToSupabase]);
 
@@ -438,6 +923,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     reader.readAsDataURL(file);
   };
   const removeBg = () => { setBgImage(""); localStorage.removeItem(LS_BG_KEY); syncToSupabase({ bgImage: "" }); };
+  const saveBgStyle = () => {
+    const patch = { mode: hsBg.mode, color1: hsBg.color1, color2: hsBg.color2, color3: hsBg.color3, angle: hsBg.angle, glow: hsBg.glow };
+    syncToSupabase({ homescreenBg: patch });
+    window.dispatchEvent(new Event('homescreenBgChanged'));
+    setBgPanelOpen(false);
+  };
   const toggleQuote = () => {
     const next = !showQuote;
     setShowQuote(next);
@@ -447,57 +938,79 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   const toggleDockIcon = useCallback((id: string) => {
     setDockIds(prevDock => {
-      setIconOrder(prevOrder => {
-        let nextDock: string[];
-        let nextOrder: string[];
-
-        if (prevDock.includes(id)) {
-          // Remove from dock → put back in grid
-          nextDock  = prevDock.filter(x => x !== id);
-          nextOrder = prevOrder.includes(id) ? prevOrder : [...prevOrder, id];
+      let nextDock: string[];
+      if (prevDock.includes(id)) {
+        nextDock = prevDock.filter(x => x !== id);
+        // Return the app to the unified grid
+        setUnifiedGrid(prev => {
+          if (prev.includes(`app::${id}`)) return prev;
+          const updated = [...prev, `app::${id}`];
+          localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(updated));
+          return updated;
+        });
+      } else {
+        if (prevDock.length < 3) {
+          nextDock = [...prevDock, id];
         } else {
-          if (prevDock.length < 3) {
-            // Empty slot — just add to dock
-            nextDock  = [...prevDock, id];
-            nextOrder = prevOrder.filter(x => x !== id);
-          } else {
-            // Dock full — evict the LAST icon back to grid, put new one in its place
-            const evicted = prevDock[prevDock.length - 1];
-            nextDock  = [...prevDock.slice(0, 2), id];
-            const orderWithoutNew = prevOrder.filter(x => x !== id);
-            // Insert evicted at end if not already there
-            nextOrder = orderWithoutNew.includes(evicted)
-              ? orderWithoutNew
-              : [...orderWithoutNew, evicted];
-          }
+          const evicted = prevDock[prevDock.length - 1];
+          nextDock = [...prevDock.slice(0, 2), id];
+          setUnifiedGrid(prev => {
+            if (prev.includes(`app::${evicted}`)) return prev;
+            const updated = [...prev, `app::${evicted}`];
+            localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(updated));
+            return updated;
+          });
         }
-
-        syncToSupabase({ iconOrder: nextOrder, dockIds: nextDock });
-        localStorage.setItem(LS_DOCK_KEY,  JSON.stringify(nextDock));
-        localStorage.setItem(LS_ORDER_KEY, JSON.stringify(nextOrder));
-        // Return the nextDock to the outer setDockIds via closure
-        // We use a ref trick — store it and read outside
-        _pendingDock.current = nextDock;
-        return nextOrder;
-      });
-      return _pendingDock.current ?? prevDock;
+        // Remove from unified grid
+        setUnifiedGrid(prev => {
+          const updated = prev.filter(x => x !== `app::${id}`);
+          localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(updated));
+          return updated;
+        });
+      }
+      localStorage.setItem(LS_DOCK_KEY, JSON.stringify(nextDock));
+      syncToSupabase({ dockIds: nextDock });
+      _pendingDock.current = nextDock;
+      return nextDock;
     });
   }, [syncToSupabase]);
 
   // ── Derived lists — bulletproof dedup ──
-  const dockSet  = new Set(dockIds);
-  const seenGrid = new Set<string>();
-  const gridApps = iconOrder
-    .filter(id => !dockSet.has(id) && VALID_IDS.has(id) && !seenGrid.has(id) && (seenGrid.add(id), true))
-    .map(id => ALL_APPS.find(a => a.id === id))
-    .filter(Boolean) as typeof ALL_APPS;
+  // Unified grid: filter out dock apps, ensure all app IDs present
+  const dockSet = new Set(dockIds);
+  const enabledWidgetIds = new Set(WIDGET_IDS.filter(k => hsWidgets[k]).map(k => `widget::${k}`));
+  // Compute the effective unified grid — add any missing items at end
+  const effectiveUnified = (() => {
+    if (unifiedGrid.length === 0) return buildDefaultUnifiedGrid(hsWidgets, dockIds);
+    const seen = new Set<string>();
+    const valid: string[] = [];
+    let widgetCount = 0;
+    for (const id of unifiedGrid) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      if (id.startsWith('widget::')) {
+        if (enabledWidgetIds.has(id) && widgetCount < MAX_WIDGETS) { valid.push(id); widgetCount++; }
+      } else if (id.startsWith('app::')) {
+        const appId = id.replace('app::','');
+        if (VALID_IDS.has(appId) && !dockSet.has(appId)) valid.push(id);
+      }
+    }
+    // Append any missing apps
+    for (const appId of DEFAULT_ORDER) {
+      const key = `app::${appId}`;
+      if (!seen.has(key) && !dockSet.has(appId)) { seen.add(key); valid.push(key); }
+    }
+    return valid;
+  })();
+  _effectiveRef.current = effectiveUnified;
+
   const seenDock = new Set<string>();
   const dockApps = dockIds
     .filter(id => VALID_IDS.has(id) && !seenDock.has(id) && (seenDock.add(id), true))
     .map(id => ALL_APPS.find(a => a.id === id))
     .filter(Boolean) as typeof ALL_APPS;
 
-  const activeApp    = activeId ? ALL_APPS.find(a => `grid::${a.id}` === activeId || `dock::${a.id}` === activeId) : null;
+  const activeApp    = activeId ? (activeId.startsWith('dock::') ? ALL_APPS.find(a => `dock::${a.id}` === activeId) : ALL_APPS.find(a => `app::${a.id}` === activeId)) : null;
   const activeInDock = activeId?.startsWith("dock::");
 
   const quoteText   = quote ? getQuoteText(quote, language) : "";
@@ -540,8 +1053,18 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   // Edit bar glass
   const editBarGlass = "bg-black/40 backdrop-blur-xl border-b border-white/10";
 
-  // Page background — used only when no custom BG
-  const pageBg = !hasBg
+  // Custom background from Settings (solid/gradient) — overrides theme default if set
+  const hasCustomBg = !hasBg && !!hsBg.color1;
+  const customBgStyle = hasCustomBg
+    ? hsBg.mode === 'gradient'
+      ? hsBg.color3
+        ? `linear-gradient(${hsBg.angle}deg, ${hsBg.color1} 0%, ${hsBg.color3} 50%, ${hsBg.color2 || hsBg.color1} 100%)`
+        : `linear-gradient(${hsBg.angle}deg, ${hsBg.color1} 0%, ${hsBg.color2 || hsBg.color1} 100%)`
+      : hsBg.color1
+    : undefined;
+
+  // Page background — used only when no custom BG and no photo BG
+  const pageBg = (!hasBg && !hasCustomBg)
     ? isDark
       ? "bg-[#0c0f14]"
       : "bg-gradient-to-b from-[#fcfefd] via-[#f0f0ff] to-[#e8e4f0]"
@@ -566,6 +1089,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             backgroundSize: "cover",
             backgroundPosition: "center",
             backgroundRepeat: "no-repeat",
+          } : hasCustomBg ? {
+            background: customBgStyle,
           } : {}),
         }}
       >
@@ -579,75 +1104,179 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         {/* ── Direct flex column layout ── */}
         <div className="relative z-10 flex flex-col flex-1 min-h-0">
 
-          {/* ── Edit toolbar ── */}
-          {editMode && (
-            <div className={`flex-none flex items-center justify-between px-3 py-2 ${editBarGlass}`}>
-              <button onClick={() => setDockPickerOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 text-white text-xs font-semibold">
-                <Settings2 className="w-3.5 h-3.5" />
-                Dock
+          {/* ── Greeting header + edit icon ── */}
+          <div className="flex-none flex items-center justify-between px-4 pt-3 pb-1">
+            <div>
+              <p className="text-[11px] font-semibold" style={{ color: subColor }}>{greeting}</p>
+              <p className="text-[17px] font-black leading-tight" style={{ color: headColor }}>{displayName}</p>
+            </div>
+            {!editMode ? (
+              <button onClick={() => setEditMode(true)} title="Edit homescreen" className="p-2 rounded-full bg-white/15 backdrop-blur-md">
+                <Pencil className="w-4 h-4" style={{ color: headColor }} />
               </button>
-              <div className="flex items-center gap-2">
-                <label htmlFor={bgInputId}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 text-white text-xs font-semibold cursor-pointer">
-                  <ImageIcon className="w-3.5 h-3.5" />
-                  {language === "ar" ? "خلفية" : "BG"}
-                </label>
-                {bgImage && (
-                  <button onClick={removeBg} title="Remove BG"
-                    className="px-3 py-1.5 rounded-full bg-red-500/70 text-white text-xs font-semibold">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                <button onClick={toggleQuote}
-                  className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-white text-xs font-semibold ${showQuote ? "bg-purple-500/80" : "bg-white/20"}`}>
-                  {language === "ar" ? "اقتباس" : "Quote"}
-                  {showQuote && <Check className="w-3 h-3" />}
+            ) : (
+              <button onClick={() => setEditMode(false)} className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-500/80 text-white text-xs font-semibold">
+                <Check className="w-3.5 h-3.5" />
+                {language === "ar" ? "تم" : "Done"}
+              </button>
+            )}
+          </div>
+
+          {/* ── Edit options bar ── */}
+          {editMode && (
+            <div className="flex-none flex items-center gap-2 px-4 pb-2">
+              <button onClick={() => setDockPickerOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 backdrop-blur-md text-white text-[11px] font-semibold">
+                <Settings2 className="w-3 h-3" /> Dock
+              </button>
+              <button onClick={() => setBgPanelOpen(v => !v)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-[11px] font-semibold ${bgPanelOpen ? 'bg-blue-500/70' : 'bg-white/15 backdrop-blur-md'}`}>
+                <ImageIcon className="w-3 h-3" />
+                {language === "ar" ? "خلفية" : "BG"}
+              </button>
+              {bgImage && (
+                <button onClick={removeBg} title="Remove BG"
+                  className="px-2.5 py-1.5 rounded-full bg-red-500/60 text-white text-[11px] font-semibold">
+                  <X className="w-3 h-3" />
                 </button>
-                <button onClick={() => setEditMode(false)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-500/80 text-white text-xs font-semibold">
-                  <Check className="w-3.5 h-3.5" />
-                  {language === "ar" ? "تم" : "Done"}
-                </button>
-              </div>
+              )}
+              <button onClick={toggleQuote}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-white text-[11px] font-semibold ${showQuote ? 'bg-purple-500/70' : 'bg-white/15 backdrop-blur-md'}`}>
+                {language === "ar" ? "اقتباس" : "Quote"}
+                {showQuote && <Check className="w-2.5 h-2.5" />}
+              </button>
             </div>
           )}
 
-          {/* ── Stats — driven by hsWidgets ── */}
-          {(() => {
-            const ALL_STATS = [
-              { key: 'showTRWidget',       labelEn: 'Tasks',   labelAr: 'مهام',    value: pendingTasks,         accent: '#22c55e' },
-              { key: 'showCalendarWidget', labelEn: 'Events',  labelAr: 'أحداث',   value: upcomingCount,        accent: '#a855f7' },
-              { key: 'showMaw3dWidget',    labelEn: 'Maw3d',   labelAr: 'مواعيد',  value: upcomingCount,        accent: '#f59e0b' },
-              { key: 'showNavWidget',      labelEn: 'Today',   labelAr: 'اليوم',   value: new Date().getDate(), accent: '#38bdf8' },
-              { key: 'showWhoopWidget',    labelEn: 'WHOOP',   labelAr: 'ووب',     value: 0,                    accent: '#ef4444' },
-              { key: 'showJournalWidget',  labelEn: 'Journal', labelAr: 'يوميات',  value: new Date().getDate(), accent: '#8b5cf6' },
-            ] as const;
-            const visible = ALL_STATS.filter(s => hsWidgets[s.key as keyof typeof hsWidgets]);
-            if (visible.length === 0) return null;
-            return (
-              <div className={`flex-none grid gap-2 px-5 pt-3 mb-3`} style={{ gridTemplateColumns: `repeat(${visible.length}, 1fr)` }}>
-                {visible.map(s => (
-                  <div key={s.key} className={`${statCardBase} rounded-2xl p-3 text-center`}>
-                    <div className={`text-xl font-bold ${statNumBase}`} style={{ color: s.accent }}>{s.value}</div>
-                    <div className="text-[10px] font-medium mt-0.5" style={{ color: statLblColor }}>
-                      {language === 'ar' ? s.labelAr : s.labelEn}
-                    </div>
-                  </div>
+          {/* ── BG Style Panel ── */}
+          {editMode && bgPanelOpen && (
+            <div className="flex-none mx-3 mb-2 rounded-2xl bg-black/50 backdrop-blur-2xl border border-white/15 p-3 space-y-3 max-h-[50vh] overflow-y-auto">
+              {/* Upload photo */}
+              <label htmlFor={bgInputId}
+                className="flex items-center gap-2 w-full py-2.5 px-3 rounded-xl bg-white/10 text-white text-xs font-semibold cursor-pointer">
+                <ImageIcon className="w-4 h-4" /> {language === "ar" ? "رفع صورة" : "Upload Photo"}
+              </label>
+
+              {/* Mode toggle */}
+              <div className="flex gap-2">
+                {(['solid', 'gradient'] as const).map(m => (
+                  <button key={m} onClick={() => setHsBg(p => ({ ...p, mode: m }))}
+                    className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                      hsBg.mode === m ? 'bg-white/20 border-white/40 text-white' : 'border-white/10 text-white/50'
+                    }`}>
+                    {m === 'solid' ? (language === 'ar' ? 'لون ثابت' : 'Solid') : (language === 'ar' ? 'تدرج' : 'Gradient')}
+                  </button>
                 ))}
               </div>
-            );
-          })()}
 
-          {/* ── Icon grid — flex-1 fills all remaining space, NO scroll ── */}
-          <div className="flex-1 min-h-0 px-5 overflow-hidden">
-            <SortableContext items={gridApps.map(a => `grid::${a.id}`)} strategy={rectSortingStrategy}>
-              <div className="grid grid-cols-3 h-full" style={{ alignContent: "space-evenly", paddingBottom: 4 }}>
-                {gridApps.map(app => (
-                  <div key={app.id} className="flex justify-center items-center">
-                    <GridIcon app={app} language={language} editMode={editMode} onTap={() => navigate(app.path)} isDark={isDark || hasBg} />
+              {/* Color 1 */}
+              <div className="flex items-center justify-between">
+                <span className="text-white/70 text-[11px]">{hsBg.mode === 'gradient' ? 'Color 1' : 'Color'}</span>
+                <input type="color" title="Color 1" value={hsBg.color1 || '#1a1a2e'} onChange={e => setHsBg(p => ({ ...p, color1: e.target.value }))}
+                  className="w-8 h-8 rounded-lg cursor-pointer border border-white/20 p-0.5 bg-transparent" />
+              </div>
+
+              {/* Color 2 — gradient */}
+              {hsBg.mode === 'gradient' && (
+                <div className="flex items-center justify-between">
+                  <span className="text-white/70 text-[11px]">Color 2</span>
+                  <input type="color" title="Color 2" value={hsBg.color2 || '#4a4a8a'} onChange={e => setHsBg(p => ({ ...p, color2: e.target.value }))}
+                    className="w-8 h-8 rounded-lg cursor-pointer border border-white/20 p-0.5 bg-transparent" />
+                </div>
+              )}
+
+              {/* Color 3 — gradient optional */}
+              {hsBg.mode === 'gradient' && (
+                <div className="flex items-center justify-between">
+                  <span className="text-white/70 text-[11px]">Color 3 <span className="text-white/30">(opt)</span></span>
+                  <div className="flex items-center gap-1">
+                    {hsBg.color3 && <button onClick={() => setHsBg(p => ({ ...p, color3: '' }))} className="text-[9px] text-red-400 px-1.5 py-0.5 rounded border border-red-400/30">✕</button>}
+                    <input type="color" title="Color 3" value={hsBg.color3 || hsBg.color1 || '#1a1a2e'} onChange={e => setHsBg(p => ({ ...p, color3: e.target.value }))}
+                      className="w-8 h-8 rounded-lg cursor-pointer border border-white/20 p-0.5 bg-transparent" />
                   </div>
-                ))}
+                </div>
+              )}
+
+              {/* Angle — gradient */}
+              {hsBg.mode === 'gradient' && (
+                <div className="space-y-1">
+                  <span className="text-white/70 text-[11px]">{language === 'ar' ? 'اتجاه' : 'Direction'}</span>
+                  <div className="grid grid-cols-4 gap-1">
+                    {[{d:180,i:'↓'},{d:0,i:'↑'},{d:90,i:'→'},{d:270,i:'←'},{d:135,i:'↘'},{d:45,i:'↗'},{d:225,i:'↙'},{d:315,i:'↖'}].map(a => (
+                      <button key={a.d} onClick={() => setHsBg(p => ({ ...p, angle: a.d }))}
+                        className={`py-1.5 rounded-lg text-sm font-bold border transition-all ${
+                          hsBg.angle === a.d ? 'border-white/50 bg-white/15 text-white' : 'border-white/10 text-white/40'
+                        }`}>{a.i}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Glow */}
+              <div className="flex items-center justify-between">
+                <span className="text-white/70 text-[11px]">{language === 'ar' ? 'تأثير إضاءة' : 'Glow ✨'}</span>
+                <button title="Toggle glow" onClick={() => setHsBg(p => ({ ...p, glow: !p.glow }))}
+                  className={`w-10 h-5 rounded-full transition-all ${hsBg.glow ? 'bg-blue-500' : 'bg-white/15'}`}>
+                  <div className={`w-4 h-4 rounded-full bg-white shadow transition-all ${hsBg.glow ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+
+              {/* Save */}
+              <button onClick={saveBgStyle}
+                className="w-full py-2.5 rounded-xl bg-blue-500/80 text-white text-xs font-bold">
+                {language === 'ar' ? 'حفظ' : 'Save Style'}
+              </button>
+            </div>
+          )}
+
+          {/* ── Unified iPhone-style grid: 3 big rows × 2 big cols = 6 rows × 4 cols ── */}
+          <div className="flex-1 min-h-0 px-3 pb-2 overflow-y-auto overflow-x-hidden">
+            <SortableContext items={effectiveUnified} strategy={rectSortingStrategy}>
+              <div className="grid grid-cols-4 gap-x-1 gap-y-2" style={{ gridAutoRows: '68px', alignContent: 'start', paddingTop: 8 }}>
+                {(() => {
+                  const gridPositions = calcGridPositions(effectiveUnified);
+                  return effectiveUnified.map(itemId => {
+                    const gp = gridPositions.get(itemId);
+                    if (!gp) return null;
+                    if (itemId.startsWith('widget::')) {
+                      const wKey = itemId.replace('widget::','') as WidgetId;
+                      return (
+                        <UnifiedWidgetCell
+                          key={itemId}
+                          id={itemId}
+                          wKey={wKey}
+                          editMode={editMode}
+                          language={language}
+                          theme={theme}
+                          hasBg={hasBg || hasCustomBg}
+                          statCardBase={statCardBase}
+                          statLblColor={statLblColor}
+                          pendingTasks={pendingTasks}
+                          completedToday={tasks.filter((t: any) => t.completed).length}
+                          upcomingCount={upcomingCount}
+                          navigate={navigate}
+                          gridPos={gp}
+                        />
+                      );
+                    }
+                    const appId = itemId.replace('app::','');
+                    const app = ALL_APPS.find(a => a.id === appId);
+                    if (!app) return null;
+                    return (
+                      <UnifiedAppCell
+                        key={itemId}
+                        id={itemId}
+                        app={app}
+                        editMode={editMode}
+                        language={language}
+                        isDark={isDark || hasBg || hasCustomBg}
+                        glowEnabled={hsBg.glow}
+                        navigate={navigate}
+                        gridPos={gp}
+                      />
+                    );
+                  });
+                })()}
               </div>
             </SortableContext>
           </div>
@@ -672,7 +1301,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             <div className={`flex items-center justify-around ${dockGlass} rounded-[28px] py-3 px-5`}>
               <SortableContext items={dockApps.map(a => `dock::${a.id}`)} strategy={horizontalListSortingStrategy}>
                 {dockApps.map(app => (
-                  <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} />
+                  <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} />
                 ))}
                 {Array.from({ length: Math.max(0, 3 - dockApps.length) }).map((_, i) => (
                   <div key={`slot-${i}`} className="w-14 h-14 rounded-[23%] border-2 border-dashed border-white/25" />
@@ -687,7 +1316,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.18,0.67,0.6,1.22)" }}>
           {activeApp && (
             <div style={{ opacity: 0.9, transform: "scale(1.12)" }}>
-              <LiquidIcon app={activeApp} size={activeInDock ? 58 : 64} editMode={false} />
+              <LiquidIcon app={activeApp} size={activeInDock ? 58 : 64} editMode={false} glowEnabled={hsBg.glow} />
             </div>
           )}
         </DragOverlay>
