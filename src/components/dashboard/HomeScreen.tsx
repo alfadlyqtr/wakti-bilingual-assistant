@@ -265,6 +265,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     try { return new Date(e.event_date) >= new Date(new Date().toDateString()); } catch { return false; }
   }).length;
 
+  // Widget visibility for homescreen stats — loaded from settings.homescreenWidgets
+  const [hsWidgets, setHsWidgets] = useState({
+    showNavWidget: true, showCalendarWidget: true, showTRWidget: true,
+    showMaw3dWidget: false, showWhoopWidget: false, showJournalWidget: false, showQuoteWidget: false,
+  });
+
   useEffect(() => {
     const h = new Date().getHours();
     if (language === "ar") setGreeting(h < 12 ? "صباح الخير" : h < 17 ? "مساء الخير" : "مساء النور");
@@ -284,12 +290,27 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     } catch { /* silent */ }
   }, [user]);
 
+  // Load homescreenWidgets from Supabase and clamp to max 3
+  const clampHsWidgets = (raw: Record<string, boolean>) => {
+    const keys = Object.keys(raw) as (keyof typeof hsWidgets)[];
+    let count = 0;
+    const result = { ...raw } as typeof hsWidgets;
+    for (const k of keys) {
+      if (result[k]) { if (count < 3) count++; else result[k] = false; }
+    }
+    return result;
+  };
+
   useEffect(() => {
     if (!user) return;
     (async () => {
       try {
         const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
-        const hs = (data?.settings as any)?.homescreen;
+        const s = (data?.settings as any);
+        if (s?.homescreenWidgets) {
+          setHsWidgets(prev => clampHsWidgets({ ...prev, ...s.homescreenWidgets }));
+        }
+        const hs = s?.homescreen;
         if (!hs) return;
         if (Array.isArray(hs.dockIds)) {
           const d = sanitizeDock(hs.dockIds);
@@ -310,6 +331,17 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       } catch { /* silent */ }
     })();
   }, [user]);
+
+  // Live update from Settings page widget toggle events
+  useEffect(() => {
+    const handler = (e: any) => {
+      const detail = e?.detail || {};
+      if (detail.mode !== 'homescreen') return;
+      setHsWidgets(prev => clampHsWidgets({ ...prev, ...detail }));
+    };
+    window.addEventListener('widgetSettingsChanged', handler);
+    return () => window.removeEventListener('widgetSettingsChanged', handler);
+  }, []);
 
   // ── Sensors ──
   const sensors = useSensors(
@@ -581,19 +613,31 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             </div>
           )}
 
-          {/* ── Stats ── */}
-          <div className="flex-none grid grid-cols-3 gap-2 px-5 pt-3 mb-3">
-            {[
-              { label: language === "ar" ? "مهام"  : "Tasks",  value: pendingTasks,         accent: "#22c55e" },
-              { label: language === "ar" ? "أحداث" : "Events", value: upcomingCount,        accent: "#a855f7" },
-              { label: language === "ar" ? "اليوم" : "Today",  value: new Date().getDate(), accent: "#38bdf8" },
-            ].map(s => (
-              <div key={s.label} className={`${statCardBase} rounded-2xl p-3 text-center`}>
-                <div className={`text-xl font-bold ${statNumBase}`} style={{ color: s.accent }}>{s.value}</div>
-                <div className="text-[10px] font-medium mt-0.5" style={{ color: statLblColor }}>{s.label}</div>
+          {/* ── Stats — driven by hsWidgets ── */}
+          {(() => {
+            const ALL_STATS = [
+              { key: 'showTRWidget',       labelEn: 'Tasks',   labelAr: 'مهام',    value: pendingTasks,         accent: '#22c55e' },
+              { key: 'showCalendarWidget', labelEn: 'Events',  labelAr: 'أحداث',   value: upcomingCount,        accent: '#a855f7' },
+              { key: 'showMaw3dWidget',    labelEn: 'Maw3d',   labelAr: 'مواعيد',  value: upcomingCount,        accent: '#f59e0b' },
+              { key: 'showNavWidget',      labelEn: 'Today',   labelAr: 'اليوم',   value: new Date().getDate(), accent: '#38bdf8' },
+              { key: 'showWhoopWidget',    labelEn: 'WHOOP',   labelAr: 'ووب',     value: 0,                    accent: '#ef4444' },
+              { key: 'showJournalWidget',  labelEn: 'Journal', labelAr: 'يوميات',  value: new Date().getDate(), accent: '#8b5cf6' },
+            ] as const;
+            const visible = ALL_STATS.filter(s => hsWidgets[s.key as keyof typeof hsWidgets]);
+            if (visible.length === 0) return null;
+            return (
+              <div className={`flex-none grid gap-2 px-5 pt-3 mb-3`} style={{ gridTemplateColumns: `repeat(${visible.length}, 1fr)` }}>
+                {visible.map(s => (
+                  <div key={s.key} className={`${statCardBase} rounded-2xl p-3 text-center`}>
+                    <div className={`text-xl font-bold ${statNumBase}`} style={{ color: s.accent }}>{s.value}</div>
+                    <div className="text-[10px] font-medium mt-0.5" style={{ color: statLblColor }}>
+                      {language === 'ar' ? s.labelAr : s.labelEn}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            );
+          })()}
 
           {/* ── Icon grid — flex-1 fills all remaining space, NO scroll ── */}
           <div className="flex-1 min-h-0 px-5 overflow-hidden">

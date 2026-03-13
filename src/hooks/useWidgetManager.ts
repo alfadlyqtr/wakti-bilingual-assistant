@@ -115,7 +115,8 @@ export const useWidgetManager = (language: "en" | "ar") => {
         const settingsPayload = data?.settings ?? {};
         setProfileSettings(settingsPayload);
 
-        const widgetPrefs = settingsPayload.widgets ?? {};
+        // Prefer dashboardWidgets key; fall back to legacy widgets key
+        const widgetPrefs = (settingsPayload as any).dashboardWidgets ?? (settingsPayload as any).widgets ?? {};
         setWidgetSettings({
           showNavWidget: widgetPrefs.showNavWidget !== false,
           showCalendarWidget: widgetPrefs.showCalendarWidget !== false,
@@ -159,10 +160,11 @@ export const useWidgetManager = (language: "en" | "ar") => {
     };
   }, [user]);
 
-  // Live update widget visibility when Settings dispatches the custom event
+  // Live update widget visibility when Settings dispatches the custom event (dashboard mode only)
   useEffect(() => {
     const handleWidgetSettingsChanged = (e: any) => {
       const prefs = (e && e.detail) || {};
+      if (prefs.mode === 'homescreen') return; // homescreen mode handled in HomeScreen.tsx
       setWidgetSettings({
         showNavWidget: prefs.showNavWidget !== false,
         showCalendarWidget: prefs.showCalendarWidget !== false,

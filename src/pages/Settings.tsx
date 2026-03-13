@@ -48,15 +48,21 @@ export default function Settings() {
     showWhoopWidget: boolean;
     showJournalWidget: boolean;
   };
-  const DEFAULT_WIDGETS: WidgetConfig = {
+  const DEFAULT_DASHBOARD_WIDGETS: WidgetConfig = {
     showNavWidget: true, showCalendarWidget: true, showEventsWidget: true,
     showQuoteWidget: true, showMaw3dWidget: true, showTRWidget: true,
     showWhoopWidget: true, showJournalWidget: true,
   };
+  // Homescreen: only 3 on by default
+  const DEFAULT_HOMESCREEN_WIDGETS: WidgetConfig = {
+    showNavWidget: true, showCalendarWidget: true, showTRWidget: true,
+    showEventsWidget: false, showQuoteWidget: false, showMaw3dWidget: false,
+    showWhoopWidget: false, showJournalWidget: false,
+  };
 
   // Separate widget settings for each mode — they never share state
-  const [dashboardWidgets, setDashboardWidgets] = useState<WidgetConfig>({ ...DEFAULT_WIDGETS });
-  const [homescreenWidgets, setHomescreenWidgets] = useState<WidgetConfig>({ ...DEFAULT_WIDGETS });
+  const [dashboardWidgets, setDashboardWidgets] = useState<WidgetConfig>({ ...DEFAULT_DASHBOARD_WIDGETS });
+  const [homescreenWidgets, setHomescreenWidgets] = useState<WidgetConfig>({ ...DEFAULT_HOMESCREEN_WIDGETS });
 
   // Dashboard look preference ('dashboard' = default widget grid, 'homescreen' = new home screen look)
   const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen'>(() => {
@@ -101,9 +107,19 @@ export default function Settings() {
         setDashboardWidgets(prev => ({ ...prev, ...w, showTRWidget: (w.showTRWidget !== false) || (w.showTasksWidget === true) }));
       }
 
-      // Load homescreen widgets
+      // Load homescreen widgets — enforce max 3 on load
       if (s?.homescreenWidgets) {
-        setHomescreenWidgets(prev => ({ ...prev, ...s.homescreenWidgets }));
+        const raw = { ...DEFAULT_HOMESCREEN_WIDGETS, ...s.homescreenWidgets };
+        const keys = Object.keys(raw) as (keyof WidgetConfig)[];
+        let onCount = 0;
+        const clamped = { ...raw };
+        for (const k of keys) {
+          if (clamped[k]) {
+            if (onCount < 3) onCount++;
+            else clamped[k] = false;
+          }
+        }
+        setHomescreenWidgets(clamped);
       }
 
       // Load dashboard look preference
