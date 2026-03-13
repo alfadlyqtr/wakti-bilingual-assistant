@@ -22,6 +22,8 @@ interface UserProfile {
   free_access_start_at?: string | null;
   revenuecat_id?: string | null;
   trial_popup_shown?: boolean | null;
+  payment_method?: string | null;
+  next_billing_date?: string | null;
 }
 
 export function useUserProfile() {
@@ -238,6 +240,9 @@ export function useUserProfile() {
     },
     get wasSubscribed() {
       return !profile?.is_subscribed && !!profile?.plan_name;
+    },
+    get isAdminGifted() {
+      return profile?.payment_method === 'manual' && !!profile?.next_billing_date && new Date(profile.next_billing_date) > new Date();
     }
   };
 }

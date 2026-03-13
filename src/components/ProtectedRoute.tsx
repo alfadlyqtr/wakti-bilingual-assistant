@@ -32,7 +32,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   const [hasAnySession, setHasAnySession] = useState<boolean>(!!session);
 
   // --- Fix #2: hooks moved here (top of component) to satisfy Rules of Hooks ---
-  const { isSubscribed, isGracePeriod, isAccessExpired, isNewUser, wasSubscribed, hasTrialStarted, profile, loading: isProfileLoading } = useUserProfile();
+  const { isSubscribed, isGracePeriod, isAccessExpired, isNewUser, wasSubscribed, hasTrialStarted, isAdminGifted, profile, loading: isProfileLoading } = useUserProfile();
   const [accessCheckTick, setAccessCheckTick] = useState(0);
 
   // Enable subscription/IAP enforcement
@@ -123,7 +123,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
         const fetchPromise = (async () => {
           const { data: profile, error } = await supabase
             .from('profiles')
-            .select('is_subscribed, subscription_status, next_billing_date, billing_start_date, plan_name')
+            .select('is_subscribed, subscription_status, next_billing_date, billing_start_date, plan_name, payment_method')
             .eq('id', user.id)
             .maybeSingle();
           return { profile, error } as const;
@@ -392,7 +392,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     if (isProfileLoading) { setShowPaywall(false); return; }
     
     // Close paywall if EITHER source confirms the subscription (prevents race conditions)
-    if (isSubscribed || subscriptionStatus.isSubscribed) { setShowPaywall(false); return; }
+    if (isSubscribed || subscriptionStatus.isSubscribed || isAdminGifted) { setShowPaywall(false); return; }
     const isAccount = location.pathname.startsWith('/account');
     if (isAccount) { setShowPaywall(false); return; }
 
@@ -530,7 +530,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   }
 
   // Evaluate whether the user is fully blocked (no valid subscription, loading finished)
-  const isBlocked = !subscriptionStatus.isLoading && !isProfileLoading && !(isSubscribed || subscriptionStatus.isSubscribed || isGracePeriod);
+  const isBlocked = !subscriptionStatus.isLoading && !isProfileLoading && !(isSubscribed || subscriptionStatus.isSubscribed || isGracePeriod || isAdminGifted);
 
   if (isBlocked && DEV) {
     console.log("ProtectedRoute: User blocked - no valid subscription:", {

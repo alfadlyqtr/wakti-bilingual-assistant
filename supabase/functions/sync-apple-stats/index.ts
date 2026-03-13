@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-// deno-lint-ignore no-explicit-any
 import { SignJWT } from "https://deno.land/x/jose@v4.15.5/index.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -147,8 +146,7 @@ async function upsertMetric(
         report_date: reportDate,
         platform: "apple",
         downloads,
-        revenue: 0, // Revenue comes from financial reports — sales report gives units only
-        updated_at: new Date().toISOString(),
+        revenue: 0,
       },
       { onConflict: "report_date,platform" }
     );
