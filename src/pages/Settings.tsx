@@ -38,20 +38,35 @@ export default function Settings() {
   const { showSuccess, showError } = useToastHelper();
   const [activeTab, setActiveTab] = useState("appearance");
 
-  // Widget visibility settings
-  const [widgetSettings, setWidgetSettings] = useState({
-    showNavWidget: true,
-    showCalendarWidget: true,
-    showEventsWidget: true,
-    showQuoteWidget: true,
-    showMaw3dWidget: true,
-    showTRWidget: true,
-    showWhoopWidget: true,
-    showJournalWidget: true,
-  });
+  type WidgetConfig = {
+    showNavWidget: boolean;
+    showCalendarWidget: boolean;
+    showEventsWidget: boolean;
+    showQuoteWidget: boolean;
+    showMaw3dWidget: boolean;
+    showTRWidget: boolean;
+    showWhoopWidget: boolean;
+    showJournalWidget: boolean;
+  };
+  const DEFAULT_WIDGETS: WidgetConfig = {
+    showNavWidget: true, showCalendarWidget: true, showEventsWidget: true,
+    showQuoteWidget: true, showMaw3dWidget: true, showTRWidget: true,
+    showWhoopWidget: true, showJournalWidget: true,
+  };
+
+  // Separate widget settings for each mode — they never share state
+  const [dashboardWidgets, setDashboardWidgets] = useState<WidgetConfig>({ ...DEFAULT_WIDGETS });
+  const [homescreenWidgets, setHomescreenWidgets] = useState<WidgetConfig>({ ...DEFAULT_WIDGETS });
 
   // Dashboard look preference ('dashboard' = default widget grid, 'homescreen' = new home screen look)
-  const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen'>('dashboard');
+  const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen'>(() => {
+    const cached = localStorage.getItem('wakti_dashboard_look');
+    return cached === 'homescreen' ? 'homescreen' : 'dashboard';
+  });
+
+  // Active widget settings based on current mode
+  const widgetSettings = dashboardLook === 'homescreen' ? homescreenWidgets : dashboardWidgets;
+  const setWidgetSettings = dashboardLook === 'homescreen' ? setHomescreenWidgets : setDashboardWidgets;
 
   // Privacy settings
   const [privacySettings, setPrivacySettings] = useState({
@@ -74,26 +89,33 @@ export default function Settings() {
         .eq('id', user?.id)
         .single();
 
-      if (profile?.settings?.widgets) {
-        const widgets = profile.settings.widgets as any;
-        // Merge legacy showTasksWidget into the combined showTRWidget
-        const mergedShowTR = (widgets.showTRWidget !== false) || (widgets.showTasksWidget === true);
-        setWidgetSettings(prev => ({
-          ...prev,
-          ...widgets,
-          showTRWidget: mergedShowTR,
-        }));
+      const s = profile?.settings as any;
+
+      // Load dashboard widgets (legacy key 'widgets' maps to dashboard)
+      if (s?.dashboardWidgets) {
+        const w = s.dashboardWidgets;
+        setDashboardWidgets(prev => ({ ...prev, ...w, showTRWidget: (w.showTRWidget !== false) || (w.showTasksWidget === true) }));
+      } else if (s?.widgets) {
+        // legacy fallback
+        const w = s.widgets;
+        setDashboardWidgets(prev => ({ ...prev, ...w, showTRWidget: (w.showTRWidget !== false) || (w.showTasksWidget === true) }));
+      }
+
+      // Load homescreen widgets
+      if (s?.homescreenWidgets) {
+        setHomescreenWidgets(prev => ({ ...prev, ...s.homescreenWidgets }));
       }
 
       // Load dashboard look preference
-      const savedLook = profile?.settings?.dashboardLook;
+      const savedLook = s?.dashboardLook;
       if (savedLook === 'dashboard' || savedLook === 'homescreen') {
         setDashboardLook(savedLook);
       }
+
       setPrivacySettings({
         autoApproveContacts: profile?.auto_approve_contacts || false,
-        profileVisibility: profile?.settings?.privacy?.profileVisibility !== false,
-        showActivityStatus: profile?.settings?.privacy?.activityStatus !== false
+        profileVisibility: s?.privacy?.profileVisibility !== false,
+        showActivityStatus: s?.privacy?.activityStatus !== false
       });
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -112,37 +134,45 @@ export default function Settings() {
     }
   };
 
-  const updateWidgetSetting = async (key: keyof typeof widgetSettings, value: boolean) => {
-    try {
-      const newSettings = { ...widgetSettings, [key]: value };
-      setWidgetSettings(newSettings);
+  const updateWidgetSetting = async (key: keyof WidgetConfig, value: boolean) => {
+    const isHomescreen = dashboardLook === 'homescreen';
+    const current = isHomescreen ? homescreenWidgets : dashboardWidgets;
+    const newSettings = { ...current, [key]: value };
 
+    // Optimistic update
+    if (isHomescreen) setHomescreenWidgets(newSettings);
+    else setDashboardWidgets(newSettings);
+
+    try {
       const { data: currentProfile } = await supabase
         .from('profiles')
         .select('settings')
         .eq('id', user?.id)
         .single();
 
-      const currentSettings = currentProfile?.settings || {};
+      const currentSettings = (currentProfile?.settings as any) || {};
+      const storageKey = isHomescreen ? 'homescreenWidgets' : 'dashboardWidgets';
 
       await supabase
         .from('profiles')
-        .update({ 
+        .update({
           settings: {
             ...currentSettings,
-            widgets: newSettings
+            [storageKey]: newSettings,
+            // Keep legacy 'widgets' key in sync for dashboard mode
+            ...(isHomescreen ? {} : { widgets: newSettings }),
           }
         })
         .eq('id', user?.id);
 
       showSuccess(t("settingsUpdated", language));
-      
-      // Force dashboard to reload by dispatching a custom event
-      window.dispatchEvent(new CustomEvent('widgetSettingsChanged', { detail: newSettings }));
+      window.dispatchEvent(new CustomEvent('widgetSettingsChanged', { detail: { ...newSettings, mode: dashboardLook } }));
     } catch (error) {
       console.error('Error updating widget setting:', error);
       showError(t("errorUpdatingSettings", language));
-      setWidgetSettings(widgetSettings);
+      // Revert
+      if (isHomescreen) setHomescreenWidgets(current);
+      else setDashboardWidgets(current);
     }
   };
 
@@ -431,100 +461,124 @@ export default function Settings() {
               </CardContent>
             </Card>
 
-            {/* Widget Visibility */}
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("widgetVisibility", language)}</CardTitle>
-                <CardDescription>
-                  {language === "ar" ? "اختر الأدوات التي تريد عرضها في لوحة التحكم" : "Choose which widgets to display on your dashboard"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between rounded-md border p-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">
-                      {language === "ar" ? "إظهار الوصول السريع" : "Show Quick Access"}
-                    </p>
-                  </div>
-                  <Switch 
-                    checked={widgetSettings.showNavWidget}
-                    onCheckedChange={(checked) => updateWidgetSetting('showNavWidget', checked)}
-                  />
-                </div>
+            {/* Widget Visibility — always shown, behavior changes per mode */}
+            {(() => {
+              const isHomescreen = dashboardLook === 'homescreen';
 
-                <div className="flex items-center justify-between rounded-md border p-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">
-                      {language === "ar" ? "إظهار الأحداث والمواعيد القادمة" : "Show upcoming events and appointments"}
-                    </p>
-                  </div>
-                  <Switch 
-                    checked={widgetSettings.showCalendarWidget}
-                    onCheckedChange={(checked) => updateWidgetSetting('showCalendarWidget', checked)}
-                  />
-                </div>
+              // Widget entries — for homescreen these are the stats/app row choices
+              const widgetEntries: { key: keyof typeof widgetSettings; labelEn: string; labelAr: string }[] = [
+                { key: 'showNavWidget',      labelEn: 'Quick Access',               labelAr: 'الوصول السريع' },
+                { key: 'showCalendarWidget', labelEn: 'Upcoming Events',            labelAr: 'الأحداث القادمة' },
+                { key: 'showTRWidget',       labelEn: 'Tasks & Reminders',          labelAr: 'المهام والتذكيرات' },
+                { key: 'showMaw3dWidget',    labelEn: 'Maw3d Events',               labelAr: 'أحداث مواعيد' },
+                { key: 'showWhoopWidget',    labelEn: 'WHOOP Widget',               labelAr: 'ويدجت WHOOP' },
+                { key: 'showJournalWidget',  labelEn: "Today's Journal",            labelAr: 'يوميات وقتي' },
+              ];
 
-                <div className="flex items-center justify-between rounded-md border p-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">
-                      {language === "ar" ? "إظهار المهام والتذكيرات" : "Show Tasks & Reminders"}
-                    </p>
-                  </div>
-                  <Switch 
-                    checked={widgetSettings.showTRWidget}
-                    onCheckedChange={(checked) => updateWidgetSetting('showTRWidget', checked)}
-                  />
-                </div>
+              // Count how many are currently ON
+              const enabledCount = widgetEntries.filter(e => widgetSettings[e.key]).length;
 
-                <div className="flex items-center justify-between rounded-md border p-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">
-                      {language === "ar" ? "إظهار أحداث مواعيد القادمة" : "Show upcoming Maw3d events"}
-                    </p>
-                  </div>
-                  <Switch 
-                    checked={widgetSettings.showMaw3dWidget}
-                    onCheckedChange={(checked) => updateWidgetSetting('showMaw3dWidget', checked)}
-                  />
-                </div>
+              const handleWidgetToggle = (key: keyof typeof widgetSettings, checked: boolean) => {
+                if (isHomescreen && checked && enabledCount >= 3) return; // max 3 in homescreen
+                updateWidgetSetting(key, checked);
+              };
 
-                <div className="flex items-center justify-between rounded-md border p-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">
-                      {language === "ar" ? "إظهار الاقتباسات التحفيزية اليومية" : "Show daily inspirational quotes"}
-                    </p>
-                  </div>
-                  <Switch 
-                    checked={widgetSettings.showQuoteWidget}
-                    onCheckedChange={(checked) => updateWidgetSetting('showQuoteWidget', checked)}
-                  />
-                </div>
+              return (
+                <>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between">
+                        <span>{t("widgetVisibility", language)}</span>
+                        {isHomescreen && (
+                          <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-1 rounded-full">
+                            {language === 'ar' ? `${enabledCount}/3 محدد` : `${enabledCount}/3 selected`}
+                          </span>
+                        )}
+                      </CardTitle>
+                      <CardDescription>
+                        {isHomescreen
+                          ? (language === "ar" ? "اختر ما يصل إلى ٣ إحصائيات تظهر في الشاشة الرئيسية" : "Choose up to 3 stats to show on your Home Screen")
+                          : (language === "ar" ? "اختر الأدوات التي تريد عرضها في لوحة التحكم" : "Choose which widgets to display on your dashboard")}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {widgetEntries.map(({ key, labelEn, labelAr }) => {
+                        const isOn = !!widgetSettings[key];
+                        const isDisabled = isHomescreen && !isOn && enabledCount >= 3;
+                        return (
+                          <div
+                            key={key}
+                            className={`flex items-center justify-between rounded-md border p-4 transition-opacity ${isDisabled ? 'opacity-40' : ''}`}
+                          >
+                            <div className="space-y-0.5">
+                              <p className="text-sm font-medium">
+                                {language === "ar" ? labelAr : labelEn}
+                              </p>
+                              {isDisabled && (
+                                <p className="text-xs text-muted-foreground">
+                                  {language === 'ar' ? 'الحد الأقصى ٣ عناصر' : 'Max 3 reached'}
+                                </p>
+                              )}
+                            </div>
+                            <Switch
+                              checked={isOn}
+                              disabled={isDisabled}
+                              onCheckedChange={(checked) => handleWidgetToggle(key, checked)}
+                            />
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
 
-                <div className="flex items-center justify-between rounded-md border p-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">
-                      {language === "ar" ? "ويدجت WHOOP للوحة التحكم" : "WHOOP Dashboard Widget"}
-                    </p>
-                  </div>
-                  <Switch 
-                    checked={widgetSettings.showWhoopWidget}
-                    onCheckedChange={(checked) => updateWidgetSetting('showWhoopWidget', checked)}
-                  />
-                </div>
+                  {/* Daily Quote toggle — only in homescreen mode */}
+                  {isHomescreen && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Quote className="h-5 w-5" />
+                          {language === 'ar' ? 'اقتباس اليوم' : 'Daily Quote'}
+                        </CardTitle>
+                        <CardDescription>
+                          {language === 'ar' ? 'إظهار اقتباس يومي ملهم في الشاشة الرئيسية' : 'Show a daily inspirational quote on your Home Screen'}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center justify-between rounded-md border p-4">
+                          <p className="text-sm font-medium">
+                            {language === 'ar' ? 'إظهار الاقتباسات اليومية' : 'Show daily inspirational quotes'}
+                          </p>
+                          <Switch
+                            checked={widgetSettings.showQuoteWidget}
+                            onCheckedChange={(checked) => updateWidgetSetting('showQuoteWidget', checked)}
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
 
-                <div className="flex items-center justify-between rounded-md border p-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">
-                      {language === "ar" ? "إظهار يوميات وقتي" : "Show Today's Journal"}
-                    </p>
-                  </div>
-                  <Switch 
-                    checked={widgetSettings.showJournalWidget}
-                    onCheckedChange={(checked) => updateWidgetSetting('showJournalWidget', checked)}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+                  {/* Dashboard mode: quote widget inline */}
+                  {!isHomescreen && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>{language === 'ar' ? 'الاقتباسات اليومية' : 'Daily Quotes'}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center justify-between rounded-md border p-4">
+                          <p className="text-sm font-medium">
+                            {language === "ar" ? "إظهار الاقتباسات التحفيزية اليومية" : "Show daily inspirational quotes"}
+                          </p>
+                          <Switch
+                            checked={widgetSettings.showQuoteWidget}
+                            onCheckedChange={(checked) => updateWidgetSetting('showQuoteWidget', checked)}
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
+              );
+            })()}
           </TabsContent>
         </Tabs>
         </div>

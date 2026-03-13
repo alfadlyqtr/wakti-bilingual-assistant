@@ -145,11 +145,12 @@ function LiquidIcon({ app, size = 64, editMode }: {
 }
 
 // ─── Sortable grid icon ────────────────────────────────────────────────────────
-function GridIcon({ app, language, editMode, onTap }: {
+function GridIcon({ app, language, editMode, onTap, isDark }: {
   app: typeof ALL_APPS[0];
   language: string;
   editMode: boolean;
   onTap: () => void;
+  isDark: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `grid::${app.id}`,
@@ -175,8 +176,8 @@ function GridIcon({ app, language, editMode, onTap }: {
       <span
         className="text-[11px] font-semibold text-center leading-tight"
         style={{
-          color: "#fff",
-          textShadow: "0 1px 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.6)",
+          color: isDark ? "#fff" : "#060541",
+          textShadow: isDark ? "0 1px 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.6)" : "none",
           maxWidth: 72,
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -483,26 +484,26 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     ? "bg-white/10 backdrop-blur-xl border border-white/25"
     : isDark
       ? "bg-white/[0.06] backdrop-blur-xl border border-white/10"
-      : "bg-white/80 backdrop-blur-xl border border-black/[0.07] shadow-sm";
+      : "bg-white backdrop-blur-xl border border-[#060541]/10 shadow-[0_2px_12px_rgba(6,5,65,0.08)]";
 
   const statNumBase = hasBg || isDark ? "" : "!text-[#060541]";
-  const statLblColor = hasBg ? "rgba(255,255,255,0.65)" : isDark ? "rgba(242,242,242,0.5)" : "rgba(6,5,65,0.5)";
+  const statLblColor = hasBg ? "rgba(255,255,255,0.65)" : isDark ? "rgba(242,242,242,0.5)" : "rgba(6,5,65,0.55)";
 
   // Dock glass
   const dockGlass = hasBg
     ? "bg-white/15 backdrop-blur-2xl border border-white/25 shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.3)]"
     : isDark
       ? "bg-white/[0.08] backdrop-blur-2xl border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]"
-      : "bg-white/60 backdrop-blur-2xl border border-black/[0.08] shadow-[0_8px_32px_rgba(6,5,65,0.12),inset_0_1px_0_rgba(255,255,255,0.9)]";
+      : "bg-[#060541]/90 backdrop-blur-2xl border border-[#060541]/20 shadow-[0_8px_32px_rgba(6,5,65,0.25),inset_0_1px_0_rgba(255,255,255,0.15)]";
 
   // Quote glass
   const quoteGlass = hasBg
     ? "bg-black/25 backdrop-blur-xl border border-white/15"
     : isDark
       ? "bg-white/[0.06] backdrop-blur-xl border border-white/10"
-      : "bg-white/70 backdrop-blur-xl border border-black/[0.06] shadow-sm";
+      : "bg-[#060541]/[0.06] backdrop-blur-xl border border-[#060541]/10 shadow-sm";
   const quoteTextColor   = hasBg || isDark ? "rgba(255,255,255,0.9)" : "#060541";
-  const quoteAuthorColor = hasBg || isDark ? "rgba(255,255,255,0.45)" : "rgba(6,5,65,0.45)";
+  const quoteAuthorColor = hasBg || isDark ? "rgba(255,255,255,0.45)" : "rgba(6,5,65,0.5)";
 
   // Edit bar glass
   const editBarGlass = "bg-black/40 backdrop-blur-xl border-b border-white/10";
@@ -511,7 +512,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const pageBg = !hasBg
     ? isDark
       ? "bg-[#0c0f14]"
-      : "bg-[#f0f4ff]"
+      : "bg-gradient-to-b from-[#fcfefd] via-[#f0f0ff] to-[#e8e4f0]"
     : "";
 
   // ── BG input id for label linkage ──
@@ -524,9 +525,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      {/* Root — fills parent via flex, no rounded corners so dock reaches very bottom */}
+      {/* Root — fills parent via flex, dock always at very bottom */}
       <div
-        className={`relative overflow-hidden flex-1 min-h-0 ${pageBg}`}
+        className={`relative overflow-hidden hs-root flex flex-col ${pageBg}`}
         style={{
           ...(hasBg ? {
             backgroundImage: `url(${bgImage})`,
@@ -538,25 +539,13 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       >
         {/* BG scrim */}
         {hasBg && <div className="absolute inset-0 pointer-events-none" style={{ background: "rgba(0,0,0,0.40)" }} />}
-        {/* Light shimmer */}
-        {!hasBg && !isDark && (
-          <div className="absolute inset-0 pointer-events-none"
-            style={{ background: "linear-gradient(160deg, rgba(210,220,255,0.4) 0%, rgba(240,244,255,0) 60%)" }} />
-        )}
 
         {/* Hidden BG file input — always in DOM */}
         <input ref={bgInputRef} id={bgInputId} type="file" accept="image/*"
           aria-label="Upload background image" className="hidden" onChange={handleBgChange} />
 
-        {/*
-          ── ABSOLUTE LAYOUT ──
-          Top area    (absolute, top-0)  : edit bar OR edit button
-          Header      (absolute)         : welcome + stats  
-          Icon grid   (absolute, fills middle between header and dock)
-          Quote       (absolute, just above dock if enabled)
-          Dock        (absolute, bottom-0) : always locked at very bottom
-        */}
-        <div className="absolute inset-0 z-10 flex flex-col">
+        {/* ── Direct flex column layout ── */}
+        <div className="relative z-10 flex flex-col flex-1 min-h-0">
 
           {/* ── Edit toolbar ── */}
           {editMode && (
@@ -592,26 +581,6 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             </div>
           )}
 
-          {/* ── Settings gear (normal mode top-right) ── */}
-          {!editMode && (
-            <button
-              title={language === "ar" ? "تعديل" : "Edit"}
-              onContextMenu={e => { e.preventDefault(); setEditMode(true); }}
-              onPointerDown={(() => {
-                let t: ReturnType<typeof setTimeout>;
-                return (ev: React.PointerEvent) => {
-                  t = setTimeout(() => setEditMode(true), 600);
-                  const cancel = () => clearTimeout(t);
-                  ev.currentTarget.addEventListener("pointerup",    cancel, { once: true });
-                  ev.currentTarget.addEventListener("pointerleave", cancel, { once: true });
-                };
-              })()}
-              className="absolute top-3 right-3 z-30 w-8 h-8 flex items-center justify-center rounded-full bg-black/20 backdrop-blur-md border border-white/20"
-            >
-              <Settings2 className="w-4 h-4 text-white/70" />
-            </button>
-          )}
-
           {/* ── Stats ── */}
           <div className="flex-none grid grid-cols-3 gap-2 px-5 pt-3 mb-3">
             {[
@@ -632,7 +601,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               <div className="grid grid-cols-3 h-full" style={{ alignContent: "space-evenly", paddingBottom: 4 }}>
                 {gridApps.map(app => (
                   <div key={app.id} className="flex justify-center items-center">
-                    <GridIcon app={app} language={language} editMode={editMode} onTap={() => navigate(app.path)} />
+                    <GridIcon app={app} language={language} editMode={editMode} onTap={() => navigate(app.path)} isDark={isDark || hasBg} />
                   </div>
                 ))}
               </div>
@@ -654,8 +623,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             </div>
           )}
 
-          {/* ── DOCK — flush to very bottom ── */}
-          <div className="flex-none px-4 pt-1 pb-0" style={{ paddingBottom: 'max(0px, env(safe-area-inset-bottom))' }}>
+          {/* ── DOCK — always at very bottom ── */}
+          <div className="mt-auto flex-none px-4 pt-1 hs-dock-bottom">
             <div className={`flex items-center justify-around ${dockGlass} rounded-[28px] py-3 px-5`}>
               <SortableContext items={dockApps.map(a => `dock::${a.id}`)} strategy={horizontalListSortingStrategy}>
                 {dockApps.map(app => (
@@ -668,7 +637,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             </div>
           </div>
 
-        </div>{/* end absolute flex column */}
+        </div>{/* end flex column */}
 
         {/* ── Drag Overlay ── */}
         <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.18,0.67,0.6,1.22)" }}>

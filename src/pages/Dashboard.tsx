@@ -120,7 +120,7 @@ export default function Dashboard() {
   // Render based on dashboard look preference
   if (dashboardLook === 'homescreen') {
     return (
-      <div className="dashboard-container" key={refreshKey} style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <div className="dashboard-container" key={refreshKey}>
         <HomeScreen displayName={displayName} />
       </div>
     );

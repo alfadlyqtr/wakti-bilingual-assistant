@@ -2645,11 +2645,13 @@ body.chatbot-builder-page .app-main > div {
   height: 100% !important;
 }
 
-/* ── HomeScreen: lock main scroll, fill height ── */
-body.homescreen-active .app-main-scroll {
+/* ── HomeScreen: lock main scroll, fill height, kill bottom padding ── */
+body.homescreen-active .app-main-scroll,
+body.homescreen-active .app-layout-mobile main {
   overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
+  padding-bottom: 0 !important;
 }
 body.homescreen-active .app-main-scroll > .dashboard-container {
   flex: 1 1 0% !important;
@@ -2657,6 +2659,12 @@ body.homescreen-active .app-main-scroll > .dashboard-container {
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
+}
+
+/* HomeScreen root: fill the dashboard-container completely */
+.hs-root {
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
 }
 
 /* Dock bottom: flush to edge + iPhone safe area */
