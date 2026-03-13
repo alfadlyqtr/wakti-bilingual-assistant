@@ -652,8 +652,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             </SortableContext>
           </div>
 
-          {/* ── Quote — above dock, only if enabled ── */}
-          {showQuote && quote && (
+          {/* ── Quote — above dock, only if enabled via Settings homescreenWidgets.showQuoteWidget ── */}
+          {hsWidgets.showQuoteWidget && quote && (
             <div className="flex-none px-5 mb-2">
               <div className={`${quoteGlass} rounded-2xl px-4 py-2.5`}>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-purple-400 mb-1">
