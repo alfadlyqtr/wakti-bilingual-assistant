@@ -14,45 +14,41 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [isDragging, setIsDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen'>('dashboard');
+  const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen'>(() => {
+    // Instant load from localStorage — no flash
+    const cached = localStorage.getItem('wakti_dashboard_look');
+    return cached === 'homescreen' ? 'homescreen' : 'dashboard';
+  });
 
-  // Load dashboard look preference from Supabase
+  // Sync from Supabase (source of truth) + cache to localStorage
   useEffect(() => {
     if (!user) return;
-    
-    const loadDashboardLook = async () => {
+    (async () => {
       try {
         const { data: profile } = await supabase
           .from('profiles')
           .select('settings')
           .eq('id', user.id)
           .single();
-        
         const savedLook = (profile?.settings as any)?.dashboardLook;
         if (savedLook === 'dashboard' || savedLook === 'homescreen') {
           setDashboardLook(savedLook);
+          localStorage.setItem('wakti_dashboard_look', savedLook);
         }
-      } catch (error) {
-        console.error('Error loading dashboard look:', error);
-      }
-    };
-    
-    loadDashboardLook();
+      } catch { /* silent */ }
+    })();
   }, [user]);
 
   // Listen for dashboard look changes from Settings page
   useEffect(() => {
     const handleDashboardLookChange = (e: CustomEvent) => {
-      console.log('Dashboard look changed:', e.detail);
-      setDashboardLook(e.detail);
+      const val = e.detail;
+      setDashboardLook(val);
+      localStorage.setItem('wakti_dashboard_look', val);
       setRefreshKey(prev => prev + 1);
     };
-
     window.addEventListener('dashboardLookChanged', handleDashboardLookChange as EventListener);
-    
-    return () => {
-      window.removeEventListener('dashboardLookChanged', handleDashboardLookChange as EventListener);
-    };
+    return () => window.removeEventListener('dashboardLookChanged', handleDashboardLookChange as EventListener);
   }, []);
 
   // Add a body class while on Dashboard so CSS can hide the scrollbar for this page only

@@ -265,6 +265,12 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
 
   const handleLogoClick = () => {
     if (!isMobile) return;
+
+    // In homescreen mode, logo always goes back to dashboard
+    if (isHomescreenActive) {
+      navigate('/dashboard');
+      return;
+    }
     
     if (logoRef.current) {
       const rect = logoRef.current.getBoundingClientRect();

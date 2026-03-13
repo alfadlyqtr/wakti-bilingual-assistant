@@ -524,12 +524,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      {/* Root — fills parent height, dock pinned at bottom via flex column */}
+      {/* Root — fills parent via flex, no rounded corners so dock reaches very bottom */}
       <div
-        className={`relative overflow-hidden rounded-2xl ${pageBg}`}
+        className={`relative overflow-hidden flex-1 min-h-0 ${pageBg}`}
         style={{
-          height: "100%",
-          minHeight: "100%",
           ...(hasBg ? {
             backgroundImage: `url(${bgImage})`,
             backgroundSize: "cover",

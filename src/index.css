@@ -2652,14 +2652,14 @@ body.homescreen-active .app-main-scroll {
   flex-direction: column !important;
 }
 body.homescreen-active .app-main-scroll > .dashboard-container {
-  flex: 1 !important;
+  flex: 1 1 0% !important;
   min-height: 0 !important;
-  height: 100% !important;
   display: flex !important;
   flex-direction: column !important;
+  overflow: hidden !important;
 }
 
 /* Dock bottom: flush to edge + iPhone safe area */
 .hs-dock-bottom {
-  padding-bottom: max(8px, env(safe-area-inset-bottom));
+  padding-bottom: max(4px, env(safe-area-inset-bottom));
 }
