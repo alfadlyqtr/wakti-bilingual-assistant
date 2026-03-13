@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Brain, Send, Loader2, Sparkles, ChevronDown, AlertCircle } from "lucide-react";
+import { Brain, Send, Loader2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Message {
@@ -156,136 +156,104 @@ export function AICEOAssistant() {
 
   return (
     <>
-      {/* ── Floating Trigger Button ── */}
+      {/* Trigger pill button */}
       <button
         onClick={() => setIsOpen((o) => !o)}
-        aria-label="Open CEO AI Assistant"
-        className={`
-          relative w-9 h-9 rounded-full flex items-center justify-center
-          border transition-all duration-300
-          ${isOpen
-            ? "bg-cyan-500/20 border-cyan-500/50 shadow-[0_0_20px_rgba(6,182,212,0.4)]"
-            : "bg-[#0e1119] border-white/15 hover:border-cyan-500/40 hover:shadow-[0_0_16px_rgba(6,182,212,0.2)]"
-          }
-        `}
+        aria-label="CEO Brain"
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
+          isOpen
+            ? "bg-cyan-500/20 border-cyan-500/50 text-cyan-300"
+            : "bg-[#0e1119] border-white/20 text-white/70 hover:border-cyan-400/50 hover:text-cyan-300"
+        }`}
       >
-        <Brain className={`h-4 w-4 transition-colors ${isOpen ? "text-cyan-400" : "text-white/50"}`} />
-        {/* Pulse dot: cyan normally, white/silver when fetching data */}
-        <span
-          className={`absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full animate-pulse transition-colors duration-500 ${
-            isFetching ? "bg-white/70" : "bg-cyan-400"
-          }`}
-        />
+        <Brain className="h-3.5 w-3.5" />
+        <span>CEO Brain</span>
+        <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+          isFetching ? "bg-white/60" : "bg-cyan-400"
+        }`} />
       </button>
 
-      {/* ── Panel ── */}
+      {/* Modal */}
       {isOpen && (
-        <div
-          className="
-            fixed bottom-24 right-4 z-[200]
-            w-[calc(100vw-2rem)] sm:w-[380px]
-            flex flex-col
-            rounded-2xl border border-cyan-500/20 bg-[#080b10]
-            shadow-[0_0_60px_rgba(6,182,212,0.12),0_8px_40px_rgba(0,0,0,0.7)]
-            overflow-hidden
-          "
-          style={{ maxHeight: "70vh" }}
-        >
-          {/* Header */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5 bg-[#0a0e18] flex-shrink-0">
-            <div className="w-7 h-7 rounded-lg bg-cyan-500/15 flex items-center justify-center flex-shrink-0">
-              <Brain className="h-4 w-4 text-cyan-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-white leading-none">CEO Command Shell</p>
-              <p className="text-[10px] text-cyan-400/60 mt-0.5 flex items-center gap-1">
-                <Sparkles className="h-2.5 w-2.5" />
-                {isFetching ? "Querying database…" : "AI · Strategic Intelligence"}
-              </p>
-            </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              aria-label="Close assistant"
-              className="text-white/25 hover:text-white/60 transition-colors"
-            >
-              <ChevronDown className="h-4 w-4" />
-            </button>
-          </div>
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-[199] bg-black/60"
+            onClick={() => setIsOpen(false)}
+          />
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`
-                    max-w-[85%] rounded-xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap
-                    ${msg.role === "user"
-                      ? "bg-cyan-500/15 border border-cyan-500/20 text-cyan-50"
-                      : msg.isError
-                        ? "bg-red-500/10 border border-red-500/20 text-red-300"
-                        : "bg-[#0c1828] border border-white/5 text-white/75"
-                    }
-                  `}
+          {/* Dialog box — absolute dead center */}
+          <div className="fixed inset-0 z-[200] pointer-events-none">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md max-h-[80vh] flex flex-col rounded-2xl overflow-hidden border border-cyan-500/30 bg-[#0d1117] shadow-2xl pointer-events-auto">
+
+              {/* Header */}
+              <div className="flex-shrink-0 flex items-center gap-3 px-4 py-3 border-b border-white/10 bg-[#080b10]">
+                <Brain className="h-5 w-5 text-cyan-400" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-white">CEO Brain</p>
+                  <p className="text-[10px] text-cyan-400/60">
+                    {isFetching ? "Querying data…" : "AI · Strategic Intelligence"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="text-white/40 hover:text-white transition-colors"
                 >
-                  {msg.role === "assistant" && (
-                    <div className="flex items-center gap-1.5 mb-1">
-                      {msg.isError
-                        ? <AlertCircle className="h-2.5 w-2.5 text-red-400/60" />
-                        : <Brain className="h-2.5 w-2.5 text-cyan-400/60" />
-                      }
-                      <span className={`text-[9px] uppercase tracking-widest ${msg.isError ? "text-red-400/50" : "text-cyan-400/50"}`}>
-                        {msg.isError ? "System" : "Wakti Intelligence"}
-                      </span>
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Messages — scrollable middle */}
+              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+                {messages.map((msg) => (
+                  <div key={msg.id} className={`flex ${
+                    msg.role === "user" ? "justify-end" : "justify-start"
+                  }`}>
+                    <div className={`max-w-[85%] rounded-xl px-3 py-2.5 text-sm leading-relaxed border ${msg.role === "user" ? "bg-cyan-600/20 border-cyan-500/30 text-cyan-100" : msg.isError ? "bg-red-500/15 border-red-500/30 text-red-200" : "bg-[#1a2332] border-white/10 text-white/90"}`}>
+                      {msg.role === "assistant" && !msg.isError && (
+                        <p className="text-[10px] text-cyan-400/70 font-semibold uppercase tracking-wider mb-1">Wakti Brain</p>
+                      )}
+                      {msg.content}
                     </div>
-                  )}
-                  {msg.content}
+                  </div>
+                ))}
+                {isThinking && (
+                  <div className="flex justify-start">
+                    <ThinkingAnimation isFetching={isFetching} />
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Input — pinned to bottom */}
+              <div className="flex-shrink-0 px-4 py-3 border-t border-white/10 bg-[#080b10]">
+                <div className="flex items-center gap-2 bg-[#0e1520] border border-white/10 rounded-xl px-3 py-2 focus-within:border-cyan-500/40 transition-colors">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Ask about users, revenue, growth…"
+                    disabled={isThinking}
+                    className="flex-1 bg-transparent text-sm text-white placeholder-white/30 outline-none"
+                  />
+                  <button
+                    onClick={handleSend}
+                    disabled={!input.trim() || isThinking}
+                    className="w-7 h-7 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/40 flex items-center justify-center transition-colors disabled:opacity-30"
+                  >
+                    {isThinking
+                      ? <Loader2 className="h-3.5 w-3.5 text-cyan-400 animate-spin" />
+                      : <Send className="h-3.5 w-3.5 text-cyan-400" />
+                    }
+                  </button>
                 </div>
               </div>
-            ))}
 
-            {isThinking && (
-              <div className="flex justify-start">
-                <ThinkingAnimation isFetching={isFetching} />
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Input */}
-          <div className="px-3 py-3 border-t border-white/5 bg-[#0a0e18] flex-shrink-0">
-            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#0e1520] px-3 py-2 focus-within:border-cyan-500/40 transition-colors">
-              <Brain className="h-3.5 w-3.5 text-cyan-400/40 flex-shrink-0" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask about growth, revenue, churn…"
-                disabled={isThinking}
-                className="flex-1 bg-transparent text-sm text-white placeholder-white/20 outline-none disabled:opacity-50"
-              />
-              <button
-                onClick={handleSend}
-                disabled={!input.trim() || isThinking}
-                aria-label="Send message"
-                className="flex-shrink-0 w-7 h-7 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 flex items-center justify-center transition-colors disabled:opacity-30"
-              >
-                {isThinking ? (
-                  <Loader2 className="h-3.5 w-3.5 text-cyan-400 animate-spin" />
-                ) : (
-                  <Send className="h-3.5 w-3.5 text-cyan-400" />
-                )}
-              </button>
             </div>
-            <p className="text-[9px] text-white/15 text-center mt-1.5">
-              Press Enter · Follow-up questions supported
-            </p>
           </div>
-        </div>
+        </>
       )}
     </>
   );

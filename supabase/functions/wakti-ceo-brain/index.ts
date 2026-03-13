@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GoogleGenerativeAI, FunctionCallingMode } from "https://esm.sh/@google/generative-ai@0.21.0";
+import { GoogleGenerativeAI, FunctionCallingMode } from "https://esm.sh/@google/generative-ai@0.24.0";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -138,7 +138,7 @@ serve(async (req: Request) => {
     // ── Build Gemini model + chat ──
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash",
       systemInstruction:
         "You are the Wakti Intelligence Engine, Abdullah's strategic advisor and executive right hand. " +
         "You have a direct neural link to the platform database. Be concise and strategic. " +

@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
+import { CEOBrainTab } from "@/components/admin/CEOBrainTab";
 import { format, subDays, subMonths, startOfDay, endOfDay } from "date-fns";
 import { Grid } from "gridjs-react";
 import { h } from "gridjs";
@@ -58,8 +59,10 @@ interface AIModelStats {
 }
 
 type DateRangeType = "today" | "7days" | "30days" | "all" | "custom";
+type TabType = "usage" | "brain";
 
 export default function AdminAIUsage() {
+  const [activeTab, setActiveTab] = useState<TabType>("usage");
   const [logs, setLogs] = useState<AILog[]>([]);
   const [stats, setStats] = useState<AIStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -503,6 +506,13 @@ export default function AdminAIUsage() {
       </AdminHeader>
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 space-y-6">
+        {/* Tab switcher */}
+        <div className="flex items-center gap-2 border-b border-white/10 pb-3">
+          <button onClick={() => setActiveTab("usage")} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "usage" ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30" : "text-white/60 hover:text-white hover:bg-white/5"}`}>AI Usage</button>
+          <button onClick={() => setActiveTab("brain")} className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "brain" ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30" : "text-white/60 hover:text-white hover:bg-white/5"}`}><Brain className="h-4 w-4" />CEO Brain</button>
+        </div>
+        {activeTab === "brain" && <CEOBrainTab />}
+        <div className={activeTab === "brain" ? "hidden" : "space-y-6"}>
         {/* Stats Cards */}
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -937,6 +947,7 @@ export default function AdminAIUsage() {
         </DialogContent>
       </Dialog>
 
+        </div>
       <AdminMobileNav />
     </div>
   );

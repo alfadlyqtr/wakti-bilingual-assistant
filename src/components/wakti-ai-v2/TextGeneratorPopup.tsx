@@ -8,6 +8,7 @@ import DiagramsTab from './DiagramsTab';
 import PresentationTab from './PresentationTab';
 import TextTranslateTab from './TextTranslateTab';
 import SavedItemsTab from './SavedItemsTab';
+import TrialGateOverlay from '@/components/TrialGateOverlay';
 
 interface TextGeneratorPopupProps {
   isOpen?: boolean;
@@ -807,6 +808,10 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         retryDelay: 500,
       });
 
+      if (resp?.error === 'TRIAL_LIMIT_REACHED') {
+        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: resp?.feature || (body.mode === 'reply' ? 'reply' : 'compose') } }));
+        return;
+      }
       if (resp?.success && resp?.generatedText) {
         setGeneratedText(resp.generatedText);
         // Capture web search sources if available
@@ -987,8 +992,20 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     setShowExtractedFields(false);
   }, []);
 
+  // Map activeTab to trial feature key/limit. Empty key = no gate (generated tab, etc.)
+  const textTabTrialMap: Record<Tab, { key: string; limit: number; en: string; ar: string }> = {
+    'compose':      { key: 'compose',  limit: 2, en: 'Compose',       ar: 'كتابة نص' },
+    'reply':        { key: 'reply',    limit: 2, en: 'Reply',         ar: 'رد' },
+    'diagrams':     { key: 'diagrams', limit: 2, en: 'Diagrams',      ar: 'الرسوم البيانية' },
+    'presentation': { key: '',         limit: 0, en: '',               ar: '' }, // PresentationTab has its own gate
+    'translate':    { key: '',         limit: 0, en: '',               ar: '' }, // 250 char limit handled separately
+    'generated':    { key: '',         limit: 0, en: '',               ar: '' }, // viewing only
+  };
+  const activeTextTrial = textTabTrialMap[activeTab];
+
   const body = (
     <div className="px-6 md:pb-6 pb-[calc(var(--app-bottom-tabs-h)+16px)]">
+          <TrialGateOverlay featureKey={activeTextTrial.key} limit={activeTextTrial.limit} featureLabel={{ en: activeTextTrial.en, ar: activeTextTrial.ar }} />
           {activeTab === 'compose' && (
             <div className="space-y-4">
               {/* URL Fetch + Web Search */}

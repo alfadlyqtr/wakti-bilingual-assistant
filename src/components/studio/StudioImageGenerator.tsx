@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -303,6 +304,10 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     });
     const json = await resp.json().catch(() => ({} as any));
     if (!resp.ok || !json?.success || !json?.url) {
+      if (json?.error === 'TRIAL_LIMIT_REACHED') {
+        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: json?.feature || 'i2i' } }));
+        return null as unknown as string;
+      }
       throw new Error(json?.error || 'Image2Image failed');
     }
     return json.url as string;
@@ -333,7 +338,13 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       }),
     });
     const json = await resp.json().catch(() => ({} as any));
-    if (!resp.ok) throw new Error(json?.error || 'Background edit failed');
+    if (!resp.ok) {
+      if (json?.error === 'TRIAL_LIMIT_REACHED') {
+        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: json?.feature || 'bg_removal' } }));
+        return null as unknown as string;
+      }
+      throw new Error(json?.error || 'Background edit failed');
+    }
     const outUrl = json?.imageUrl || json?.URL || json?.imageDataURI || json?.dataURI || null;
     if (!outUrl) throw new Error('No image generated');
     return outUrl as string;
@@ -792,9 +803,19 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     );
   }
 
+  // Map submode to trial feature key/limit/label. Draw mode is OPEN (no gate).
+  const submodeTrialMap: Record<ImageSubmode, { key: string; limit: number; en: string; ar: string }> = {
+    'text2image':         { key: 't2i',        limit: 2, en: 'Text to Image',      ar: 'نص إلى صورة' },
+    'image2image':        { key: 'i2i',        limit: 2, en: 'Image to Image',     ar: 'صورة إلى صورة' },
+    'background-removal': { key: 'bg_removal', limit: 2, en: 'Background Removal', ar: 'إزالة الخلفية' },
+    'draw':               { key: '',           limit: 0, en: '',                    ar: '' },
+  };
+  const activeTrialInfo = submodeTrialMap[submode];
+
   // ─── MAIN RENDER (T2I, I2I, BG Removal) ───
   return (
     <>
+    <TrialGateOverlay featureKey={activeTrialInfo.key} limit={activeTrialInfo.limit} featureLabel={{ en: activeTrialInfo.en, ar: activeTrialInfo.ar }} />
     <Lightbox />
     <div className="space-y-5">
       {/* Submode tabs */}

@@ -16,19 +16,37 @@ serve(async (req) => {
   }
 
   try {
-    const { userId } = await req.json();
-    
-    if (!userId) {
-      return new Response(JSON.stringify({ error: "userId required", isSubscribed: false }), {
-        status: 400,
+    // === SECURITY: Derive userId from verified JWT, never trust body ===
+    const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "unauthorized", isSubscribed: false }), {
+        status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    // Validate userId is a proper UUID to prevent injection
+    // Verify the JWT via Supabase Auth (network-validated, not just decoded)
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: authHeader } } }
+    );
+    const { data: { user: authedUser }, error: authError } = await supabaseAuth.auth.getUser();
+    if (authError || !authedUser) {
+      console.error("[check-subscription] JWT validation failed:", authError?.message);
+      return new Response(JSON.stringify({ error: "unauthorized", isSubscribed: false }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // userId is ALWAYS the verified JWT subject — body userId is ignored
+    const userId = authedUser.id;
+
+    // Validate userId is a proper UUID (defensive)
     if (typeof userId !== 'string' || !UUID_REGEX.test(userId)) {
-      console.error("[check-subscription] Invalid userId format");
-      return new Response(JSON.stringify({ error: "invalid userId format", isSubscribed: false }), {
+      console.error("[check-subscription] Invalid userId from JWT");
+      return new Response(JSON.stringify({ error: "invalid userId", isSubscribed: false }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });

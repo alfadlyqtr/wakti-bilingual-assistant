@@ -331,16 +331,13 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     };
   }, [user?.id, isLoading]);
 
-  // Listen for trial limit reached events — force paywall open
+  // Listen for trial limit reached events — no-op here, AppLayout handles the UX
+  // The full paywall only opens when the 24h trial expires or user was a cancelled subscriber
   useEffect(() => {
-    const handleTrialLimit = () => {
-      if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) return;
-      setPaywallVariant('trial_expired');
-      setShowPaywall(true);
-    };
+    const handleTrialLimit = () => {};
     window.addEventListener('wakti-trial-limit-reached', handleTrialLimit);
     return () => window.removeEventListener('wakti-trial-limit-reached', handleTrialLimit);
-  }, [TEMP_DISABLE_SUBSCRIPTION_CHECKS]);
+  }, []);
 
   // Listen for subscription updates from AppLayout (after purchase/restore)
   useEffect(() => {

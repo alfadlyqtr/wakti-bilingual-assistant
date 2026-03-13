@@ -14,7 +14,10 @@ export type TrialFeatureKey =
   | 'ppt'
   | 'tts'
   | 'translate'
-  | 'interpreter';
+  | 'interpreter'
+  | 'voice_clone'
+  | 'ai_coder'
+  | 'ai_chatbot';
 
 export interface TrialCheckResult {
   allowed: boolean;

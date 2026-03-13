@@ -719,19 +719,21 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
   }, [user?.id, user?.email]);
 
-  // Global trial limit bouncer — show bilingual toast when any locked feature hits its limit
   const { language } = useTheme();
+
+  // Trial limit bouncer — during 24h trial, show friendly bilingual toast (NOT the full paywall)
   React.useEffect(() => {
-    const handleTrialLimit = () => {
+    const handleTrialLimit = (e: Event) => {
+      const feature = (e as CustomEvent)?.detail?.feature || '';
       const msg = language === 'ar'
-        ? 'لقد استنفدت حد التجربة المجانية لهذه الميزة. يرجى الاشتراك للمتابعة!'
-        : 'You have reached your free trial limit for this feature. Please subscribe to continue!';
-      toast.error(msg, { duration: 5000 });
+        ? `لقد وصلت للحد المجاني لهذه الميزة. اشترك في وكتي للاستمتاع بوصول غير محدود! 🚀`
+        : `You've reached the free limit for this feature. Subscribe to Wakti for unlimited access! 🚀`;
+      toast.error(msg, { duration: 6000, id: `trial-limit-${feature}` });
     };
     window.addEventListener('wakti-trial-limit-reached', handleTrialLimit);
     return () => window.removeEventListener('wakti-trial-limit-reached', handleTrialLimit);
   }, [language]);
-  
+
   // Unified notification system - subscribes to notification_history for all notification types
   // including task_due, reminder_due, messages, contacts, RSVPs, etc.
   // This hook automatically shows in-app toasts when new notifications arrive

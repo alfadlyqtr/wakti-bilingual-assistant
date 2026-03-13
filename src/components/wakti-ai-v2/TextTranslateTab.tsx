@@ -30,6 +30,26 @@ export default function TextTranslateTab() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Trial user check — used to enforce 250 char translate limit
+  const [isTrialUser, setIsTrialUser] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { user: u } } = await supabase.auth.getUser();
+        if (!u?.id) return;
+        const { data: profile } = await (supabase as any)
+          .from('profiles')
+          .select('is_subscribed, payment_method, next_billing_date')
+          .eq('id', u.id)
+          .single();
+        if (!profile) return;
+        const isPaid = profile.is_subscribed === true;
+        const isGift = profile.payment_method === 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
+        if (!isPaid && !isGift) setIsTrialUser(true);
+      } catch {}
+    })();
+  }, []);
+
   const LANGS = [
     { code: 'en', nameEn: 'English', nameAr: 'الإنجليزية' },
     { code: 'ar', nameEn: 'Arabic', nameAr: 'العربية' },
@@ -779,11 +799,20 @@ export default function TextTranslateTab() {
             <textarea
               id="tt-source-text"
               value={ttText}
-              onChange={(e) => setTtText(e.target.value.slice(0, TT_MAX))}
+              onChange={(e) => {
+                const max = isTrialUser ? 250 : TT_MAX;
+                setTtText(e.target.value.slice(0, max));
+              }}
+              maxLength={isTrialUser ? 250 : TT_MAX}
               dir="auto"
               placeholder={language === 'ar' ? 'ألصق النص هنا...' : 'Paste your text here...'}
               className="w-full min-h-32 rounded-xl border border-border input-enhanced p-4"
             />
+            {isTrialUser && (
+              <div className="text-xs text-muted-foreground text-right mt-1">
+                {ttText.length}/250 {language === 'ar' ? 'حرف (حد التجربة)' : 'chars (trial limit)'}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

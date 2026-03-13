@@ -409,22 +409,32 @@ serve(async (req) => {
 
     console.log("[kie-image2video] User:", user.id);
 
-    // ── Trial Token Check ──
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") || "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""
-    );
-    const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, "i2v", 1);
-    if (!trial.allowed) {
-      return new Response(
-        JSON.stringify({ error: "TRIAL_LIMIT_REACHED", feature: "i2v" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    // Parse request body (need it before trial check to detect generation_type)
+    const body = await req.json();
+
+    // ── Trial Token Check: detect generation_type for correct key ──
+    const genType = body?.generation_type || 'image_to_video';
+    const trialKeyMap: Record<string, string> = {
+      'image_to_video': 'i2v',
+      'text_to_video': 't2v',
+      '2images_to_video': '2i2v',
+    };
+    const trialFeatureKey = trialKeyMap[genType] || 'i2v';
+    // Only check trial for generation requests (not status polls)
+    if (body?.mode !== 'status') {
+      const supabaseAdmin = createClient(
+        Deno.env.get("SUPABASE_URL") || "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""
       );
+      const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, trialFeatureKey as any, 1);
+      if (!trial.allowed) {
+        return new Response(
+          JSON.stringify({ error: "TRIAL_LIMIT_REACHED", feature: trialFeatureKey }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
     // ── End Trial Token Check ──
-
-    // Parse request body
-    const body = await req.json();
     const { image, image1, image2, prompt, mode, duration: reqDuration, aspect_ratio, fixed_lens, generate_audio, generation_type, resolution, video_style_mode } = body;
 
     // Mode: 'status' to check task status

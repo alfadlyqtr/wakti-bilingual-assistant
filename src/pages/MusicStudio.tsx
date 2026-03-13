@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -797,8 +798,13 @@ export default function MusicStudio() {
     },
   ];
 
+  // Music tab trial gate (music:1). Other tabs have their own sub-component gates or are OPEN (qrcode).
+  const musicTrialKey = mainTab === 'music' ? 'music' : '';
+  const musicTrialLimit = mainTab === 'music' ? 1 : 0;
+
   return (
     <div className="w-full max-w-6xl mx-auto p-3 md:p-6 pb-20 md:pb-6 space-y-4">
+      <TrialGateOverlay featureKey={musicTrialKey} limit={musicTrialLimit} featureLabel={{ en: 'Music', ar: 'الموسيقى' }} />
       <div className="grid grid-cols-4 gap-1.5 md:gap-2 pb-3">
         {[
           { key: 'music' as const, icon: <Music className="h-4 w-4" />, labelEn: 'Music', labelAr: 'الموسيقى' },
@@ -1784,7 +1790,17 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
         }
       });
 
-      if (genError) throw genError;
+      if (genError) {
+        if (genError?.message?.includes?.('TRIAL_LIMIT_REACHED') || genData?.error === 'TRIAL_LIMIT_REACHED') {
+          window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: 'music' } }));
+          return;
+        }
+        throw genError;
+      }
+      if (genData?.error === 'TRIAL_LIMIT_REACHED') {
+        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: 'music' } }));
+        return;
+      }
       if (!genData?.publicUrl) throw new Error('No audio returned from ElevenLabs');
 
       const storedUrl = genData.publicUrl as string;

@@ -356,11 +356,20 @@ export const callEdgeFunctionWithRetry = async <T>(
       const fullUrl = `${effectiveUrl}/functions/v1/${functionName}`;
       console.log(`Using direct fetch to: ${fullUrl}`);
       
+      // Central Trial Gate: send user JWT as Authorization so backend trial checks can identify the user.
+      // Anon key goes in apikey header for project identification.
+      let authToken = effectiveAnon;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) authToken = session.access_token;
+      } catch { /* fall back to anon key */ }
+
       const fetchOptions: RequestInit = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${effectiveAnon}`,
+          'apikey': effectiveAnon,
+          'Authorization': `Bearer ${authToken}`,
           ...headers
         },
         body: JSON.stringify(body)

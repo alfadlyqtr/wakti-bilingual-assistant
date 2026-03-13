@@ -1,4 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -89,6 +91,26 @@ serve(async (req) => {
     }
 
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+
+    // ── Trial Token Check: bg_removal ──
+    const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
+    if (authHeader) {
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
+      if (user) {
+        const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, 'bg_removal', 2);
+        if (!trial.allowed) {
+          return new Response(
+            JSON.stringify({ error: 'TRIAL_LIMIT_REACHED', feature: 'bg_removal' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+    }
+    // ── End Trial Token Check ──
 
     // Support both single image (backwards compat) and multiple images
     const imagesToProcess: unknown[] = [];

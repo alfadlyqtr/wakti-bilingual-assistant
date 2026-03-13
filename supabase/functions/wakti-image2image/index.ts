@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
+import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -189,6 +190,16 @@ serve(async (req: Request) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // ── Trial Token Check: i2i ──
+    const trial = await checkAndConsumeTrialToken(supabase, user_id, 'i2i', 2);
+    if (!trial.allowed) {
+      return new Response(
+        JSON.stringify({ error: 'TRIAL_LIMIT_REACHED', feature: 'i2i' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    // ── End Trial Token Check ──
 
     const { base64, mimeHint } = stripDataUrlPrefix(image_base64_raw);
     const inputBytes = decodeBase64ToUint8Array(base64);

@@ -6,6 +6,7 @@ import RippleGrid from '../components/landing/RippleGrid';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { Button } from '@/components/ui/button';
 import ShareButton from '@/components/ui/ShareButton';
 import { 
@@ -861,6 +862,26 @@ export default function Projects() {
   const isDark = theme === 'dark';
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Trial user check — used to enforce 1 project limit
+  const [isTrialUser, setIsTrialUser] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { user: u } } = await supabase.auth.getUser();
+        if (!u?.id) return;
+        const { data: profile } = await (supabase as any)
+          .from('profiles')
+          .select('is_subscribed, payment_method, next_billing_date')
+          .eq('id', u.id)
+          .single();
+        if (!profile) return;
+        const isPaid = profile.is_subscribed === true;
+        const isGift = profile.payment_method === 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
+        if (!isPaid && !isGift) setIsTrialUser(true);
+      } catch {}
+    })();
+  }, []);
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -1432,6 +1453,16 @@ Apply these styles consistently throughout the entire design.`;
       setIsDetectingContext(false);
     }
 
+    // Trial users: 1 project max
+    if (isTrialUser && projects.length >= 1) {
+      toast.error(
+        isRTL
+          ? 'التجربة المجانية تسمح بمشروع واحد فقط. اشترك لإنشاء المزيد!'
+          : 'Free trial allows only 1 project. Subscribe to create more!'
+      );
+      return;
+    }
+
     if (projects.length >= MAX_PROJECTS) {
       toast.error(
         isRTL
@@ -1840,6 +1871,8 @@ Apply these styles consistently throughout the entire design.`;
 
       {/* ============ AI ASSISTANT TAB ============ */}
       {activeTab === 'assistant' && (
+        <>
+        <TrialGateOverlay featureKey="ai_chatbot" limit={0} featureLabel={{ en: 'AI Chatbot Builder', ar: 'منشئ الشات بوت' }} />
         <Suspense fallback={
           <div className="flex justify-center py-20">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -1847,6 +1880,7 @@ Apply these styles consistently throughout the entire design.`;
         }>
           <WaktiAssistant />
         </Suspense>
+        </>
       )}
 
       {/* ============ AI CODER TAB ============ */}

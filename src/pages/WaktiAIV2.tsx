@@ -34,6 +34,7 @@ const WaktiAIV2 = () => {
   const [inputReservePx, setInputReservePx] = useState<number>(120);
   const [chatSubmode, setChatSubmode] = useState<ChatSubmode>('chat');
   const [replyContext, setReplyContext] = useState<ReplyContext | null>(null);
+  const [chatTrialLimitReached, setChatTrialLimitReached] = useState(false);
   // Streaming isolation: active stream ID tracked in state (one set per message, not per token).
   // Token content goes directly to DOM via streamingBubbleRef — zero React re-renders per token.
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
@@ -49,11 +50,37 @@ const WaktiAIV2 = () => {
   const { showError } = useToastHelper();
   const { isDesktop } = useIsDesktop();
 
-  const canSendMessage = useMemo(() => !isLoading && userProfile?.id, [isLoading, userProfile?.id]);
+  const canSendMessage = useMemo(() => !isLoading && !chatTrialLimitReached && userProfile?.id, [isLoading, chatTrialLimitReached, userProfile?.id]);
 
   const loadUserProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     setUserProfile(user);
+    if (!user?.id) return;
+    // Mount-time backend check: has this user already exhausted their ai_chat trial?
+    // Prevents the refresh loophole where chatTrialLimitReached resets to false on reload.
+    try {
+      const { data: profile } = await (supabase as any)
+        .from('profiles')
+        .select('trial_usage, is_subscribed, payment_method, next_billing_date')
+        .eq('id', user.id)
+        .single();
+      if (profile) {
+        const isPaid = profile.is_subscribed === true;
+        const isActiveGift =
+          profile.payment_method === 'manual' &&
+          profile.next_billing_date != null &&
+          new Date(profile.next_billing_date) > new Date();
+        if (!isPaid && !isActiveGift) {
+          const usage = (profile.trial_usage as Record<string, number>) ?? {};
+          const aiChatUsed = typeof usage['ai_chat'] === 'number' ? usage['ai_chat'] : 0;
+          if (aiChatUsed >= 15) {
+            setChatTrialLimitReached(true);
+          }
+        }
+      }
+    } catch {
+      // non-critical — if check fails, backend will block on next send
+    }
   };
 
   const loadPersonalTouch = () => {
@@ -64,6 +91,18 @@ const WaktiAIV2 = () => {
       setPersonalTouch(null);
     }
   };
+
+  // Lock chat input when ai_chat trial limit is reached
+  useEffect(() => {
+    const handleTrialLimit = (e: Event) => {
+      const feature = (e as CustomEvent)?.detail?.feature;
+      if (!feature || feature === 'ai_chat') {
+        setChatTrialLimitReached(true);
+      }
+    };
+    window.addEventListener('wakti-trial-limit-reached', handleTrialLimit);
+    return () => window.removeEventListener('wakti-trial-limit-reached', handleTrialLimit);
+  }, []);
 
   // Listen for quick action prompts from EnhancedQuickActions component
   useEffect(() => {
@@ -571,8 +610,12 @@ const WaktiAIV2 = () => {
           },
           (err: string) => { 
             console.error('Stream error:', err);
-            // CRITICAL: Clear loading state on error to prevent "I'm on it..." stuck forever
             setIsLoading(false);
+            // Trial limit: remove placeholder silently — overlay handles the UX
+            if (err === 'TRIAL_LIMIT_REACHED') {
+              setSessionMessages(prev => prev.filter(m => m.id !== assistantMessageId));
+              return;
+            }
             setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { 
               ...m, 
               metadata: { ...(m.metadata || {}), loading: false, error: true }
@@ -632,6 +675,14 @@ const WaktiAIV2 = () => {
 
     } catch (error: any) {
       console.error('Error sending message:', error);
+      // Trial limit: remove placeholder silently — overlay handles the UX
+      if (error?.message === 'TRIAL_LIMIT_REACHED' || String(error?.message).includes('TRIAL_LIMIT')) {
+        setSessionMessages(prev => prev.filter(m => m.id !== assistantMessageId));
+        setIsLoading(false);
+        setStreamingMessageId(null);
+        streamingBubbleRef.current?.reset();
+        return;
+      }
       const errorEndTime = Date.now();
       // If we already streamed some content (e.g., fallback provider succeeded), keep it.
       setSessionMessages(prev => {
@@ -760,7 +811,95 @@ const WaktiAIV2 = () => {
   }, [currentConversationId]);
 
   return (
-    <div className="wakti-ai-page-container">
+    <div className="wakti-ai-page-container" style={{ position: 'relative' }}>
+
+      {/* Trial limit overlay — shades the page, centered subscribe card */}
+      {chatTrialLimitReached && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999,
+          background: 'rgba(0,0,0,0.88)',
+          backdropFilter: 'blur(6px)',
+          WebkitBackdropFilter: 'blur(6px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #0c0f14 0%, hsl(235,25%,10%) 50%, hsl(250,20%,12%) 100%)',
+            border: '1.5px solid rgba(130,100,255,0.35)',
+            borderRadius: '1.5rem',
+            padding: '40px 32px',
+            maxWidth: '420px',
+            width: '100%',
+            textAlign: 'center',
+            boxShadow: '0 0 0 1px rgba(255,255,255,0.05), 0 24px 80px rgba(0,0,0,0.9), 0 0 60px rgba(130,100,255,0.15)',
+          }}>
+            <div style={{ fontSize: '3.5rem', marginBottom: '16px', lineHeight: 1 }}>🚀</div>
+            <h2 style={{
+              margin: '0 0 12px',
+              fontSize: '1.5rem',
+              fontWeight: 800,
+              color: '#f2f2f2',
+              letterSpacing: '-0.02em',
+            }}>
+              {language === 'ar' ? 'انتهت رسائلك المجانية' : 'Free Messages Used Up'}
+            </h2>
+            <p style={{
+              margin: '0 0 28px',
+              fontSize: '1rem',
+              color: 'rgba(242,242,242,0.7)',
+              lineHeight: 1.6,
+            }}>
+              {language === 'ar'
+                ? 'استخدمت ١٥ رسالة مجانية (Chat، Study، بحث الويب، ويوتيوب مجتمعة). اشترك للحصول على وصول غير محدود!'
+                : "You've used all 15 free messages — Chat, Study, Web Search & YouTube combined. Subscribe for unlimited access!"}
+            </p>
+            <a
+              href="https://apps.apple.com/us/app/wakti-ai/id6755150700"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'block',
+                background: 'linear-gradient(135deg, hsl(210,100%,65%) 0%, hsl(260,80%,65%) 50%, hsl(280,70%,65%) 100%)',
+                color: '#fff',
+                fontWeight: 800,
+                fontSize: '1.1rem',
+                borderRadius: '1rem',
+                padding: '16px 24px',
+                textDecoration: 'none',
+                marginBottom: '14px',
+                boxShadow: '0 4px 24px hsla(260,80%,65%,0.45)',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              {language === 'ar' ? '⚡ اشترك الآن' : '⚡ Subscribe Now'}
+            </a>
+            <button
+              onClick={() => window.history.back()}
+              style={{
+                display: 'block',
+                width: '100%',
+                background: 'transparent',
+                border: '1.5px solid rgba(242,242,242,0.18)',
+                borderRadius: '1rem',
+                color: 'rgba(242,242,242,0.7)',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                padding: '13px 24px',
+                transition: 'border-color 0.2s, color 0.2s',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(242,242,242,0.45)'; (e.currentTarget as HTMLButtonElement).style.color = '#f2f2f2'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(242,242,242,0.18)'; (e.currentTarget as HTMLButtonElement).style.color = 'rgba(242,242,242,0.7)'; }}
+            >
+              {language === 'ar' ? '← رجوع' : 'Go back →'}
+            </button>
+          </div>
+        </div>
+      )}
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}

@@ -1,7 +1,9 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateGemini } from "../_shared/gemini.ts";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
+import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -193,6 +195,29 @@ serve(async (req) => {
     }
 
     const { prompt, mode, language, languageVariant, messageAnalysis, modelPreference: _modelPreference, temperature: _temperature, contentType, length, replyLength, wordCount, replyWordCount, tone, register, emojis, captionPlatform, image, extractTarget, webSearch, webSearchUrl, fetchUrlOnly } = requestBody;
+
+    // ── Trial Token Check: compose/reply (skip for extract/fetch_url modes) ──
+    if (mode === 'compose' || mode === 'reply') {
+      const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
+      if (authHeader) {
+        const supabaseAdmin = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+        const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
+        if (user) {
+          const trialKey = mode === 'reply' ? 'reply' : 'compose';
+          const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, trialKey, 2);
+          if (!trial.allowed) {
+            return new Response(
+              JSON.stringify({ success: false, error: 'TRIAL_LIMIT_REACHED', feature: trialKey }),
+              { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+        }
+      }
+    }
+    // ── End Trial Token Check ──
 
     console.log("🎯 Request details:", { 
       promptLength: prompt?.length || 0, 
@@ -603,7 +628,6 @@ Return ONLY the JSON, no additional text.`;
     console.log("🎯 Mode:", mode, "| Language:", language, "| Prompt length:", prompt.length);
     console.log("🎯 Structured fields:", { tone, register, languageVariant, emojis, contentType });
 
-<<<<<<< Updated upstream
     // ── Handle Summarize Content Type ──
     let finalPrompt = prompt;
     if (contentType === 'summarize') {
@@ -612,15 +636,6 @@ Return ONLY the JSON, no additional text.`;
         ? `اقرأ النص التالي بعناية وأعد ملخصاً واضحاً وموجزاً يحتفظ بأهم النقاط والمعلومات الأساسية. الملخص يجب أن يكون قصيراً وسهل الفهم وخالياً من التفاصيل غير الضرورية.\n\nالنص المراد تلخيصه:\n${prompt}`
         : `Read the following text carefully and provide a clear, concise summary that captures the key points and essential information. The summary should be brief, easy to understand, and free of unnecessary details.\n\nText to summarize:\n${prompt}`;
     }
-=======
-    const systemPrompt = getSystemPrompt(language);
-    const temp = typeof temperature === 'number' ? Math.max(0, Math.min(1, temperature)) : 0.7;
-    const preferredOpenAIModel = modelPreference === 'gpt-4o' ? 'gpt-4o' : 'gpt-4o-mini';
-    const temperatureUsed = temp;
-    
-    let generatedText = "";
-    let modelUsed = "";
->>>>>>> Stashed changes
 
     const webSearchAllowed = !!contentType && WEB_SEARCH_ALLOWED_CONTENT_TYPES.has(contentType);
     const webSearchEnabled = !!webSearch && webSearchAllowed;

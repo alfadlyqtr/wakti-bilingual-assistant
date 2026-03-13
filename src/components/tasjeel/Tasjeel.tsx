@@ -37,6 +37,7 @@ import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router-dom";
 import SavedRecordings from "./SavedRecordings";
 import { SummaryAudioUploadResult } from "./types";
+import TrialGateOverlay from "@/components/TrialGateOverlay";
 
 // Define maximum recording time (45 minutes in seconds)
 const MAX_RECORDING_TIME = 2700; // 45 minutes
@@ -713,11 +714,19 @@ const Tasjeel: React.FC = () => {
         tempRecordId
       });
       
+      // Central Trial Gate: send user JWT so backend can identify user for trial limits
+      let speechAuthToken = supabaseAnonKey;
+      try {
+        const { data: { session: speechSession } } = await supabase.auth.getSession();
+        if (speechSession?.access_token) speechAuthToken = speechSession.access_token;
+      } catch { /* fall back to anon */ }
+
       const response = await fetch(`${supabaseUrl}/functions/v1/generate-speech`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseAnonKey}`
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${speechAuthToken}`
         },
         body: JSON.stringify(requestBody)
       });
@@ -980,10 +989,18 @@ const Tasjeel: React.FC = () => {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://hxauxozopvpzpdygoqwf.supabase.co";
       const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU";
       
+      // Central Trial Gate: send user JWT so backend can identify user for trial limits
+      let qsAuthToken = supabaseAnonKey;
+      try {
+        const { data: { session: qsSession } } = await supabase.auth.getSession();
+        if (qsSession?.access_token) qsAuthToken = qsSession.access_token;
+      } catch { /* fall back to anon */ }
+
       const response = await fetch(`${supabaseUrl}/functions/v1/quick-summary`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${supabaseAnonKey}`
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${qsAuthToken}`
         },
         body: formData
       });
@@ -1053,6 +1070,7 @@ const Tasjeel: React.FC = () => {
   
   return (
     <PageContainer title={translationTexts.pageTitle} showBackButton={true} showHeader={false}>
+      <TrialGateOverlay featureKey="tasjeel" limit={1} featureLabel={{ en: 'Tasjeel', ar: 'تسجيل' }} />
       <div className="container py-4 space-y-6">
         {/* Page title area above tabs, matching sidebar */}
         <PageTitle title={translationTexts.pageTitle} Icon={Mic} colorClass="text-cyan-500" />

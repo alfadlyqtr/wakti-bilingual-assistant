@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { callEdgeFunctionWithRetry, supabase } from '@/integrations/supabase/client';
+import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import { 
@@ -6229,6 +6230,7 @@ const PresentationTab: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <TrialGateOverlay featureKey="ppt" limit={2} featureLabel={{ en: 'Presentations', ar: 'العروض التقديمية' }} />
       {/* Tab switcher */}
       <div className="flex items-center justify-center gap-2 mb-4">
         <button

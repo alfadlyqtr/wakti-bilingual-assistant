@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
+import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -154,6 +155,18 @@ serve(async (req) => {
     }
 
     const ownerId = userId && userId.trim().length > 0 ? userId : `anon-${crypto.randomUUID().slice(0, 8)}`;
+
+    // ── Trial Token Check: diagrams ──
+    if (userId && userId.trim().length > 0) {
+      const trial = await checkAndConsumeTrialToken(supabase, userId, 'diagrams', 2);
+      if (!trial.allowed) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'TRIAL_LIMIT_REACHED', feature: 'diagrams' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+    // ── End Trial Token Check ──
 
     let textToProcess = inputText || fileContent || "";
 

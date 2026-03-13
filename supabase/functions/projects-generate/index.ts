@@ -4166,30 +4166,41 @@ serve(async (req: Request) => {
       });
     };
 
-    // Trial gate: ai_coder — limit 0 for free users (only on 'start' — status/get_files are reads)
+    // Trial gate: ai_coder — 5 prompts for free users (only on 'start' — status/get_files are reads)
     if (action === 'start') {
       const SUPA_URL = Deno.env.get('SUPABASE_URL')!;
       const SUPA_SVC = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const adminForTrial = createClient(SUPA_URL, SUPA_SVC);
-      const { data: trialProfile, error: trialErr } = await adminForTrial
-        .from('profiles')
-        .select('trial_usage, is_subscribed, payment_method, next_billing_date')
-        .eq('id', userId)
-        .single();
-      if (!trialErr && trialProfile) {
-        const isPaid = trialProfile.is_subscribed === true;
-        const isGift = trialProfile.payment_method === 'manual' && trialProfile.next_billing_date && new Date(trialProfile.next_billing_date) > new Date();
-        if (!isPaid && !isGift) {
-          // deno-lint-ignore no-explicit-any
-          const usage: Record<string, number> = (trialProfile.trial_usage as any) ?? {};
+      const trial = await (async () => {
+        try {
+          const { data: profile } = await adminForTrial
+            .from('profiles')
+            .select('trial_usage, is_subscribed, payment_method, next_billing_date')
+            .eq('id', userId)
+            .single();
+          if (!profile) return { allowed: true };
+          const isPaid = profile.is_subscribed === true;
+          const isGift = profile.payment_method === 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
+          if (isPaid || isGift) return { allowed: true };
+          const usage: Record<string, number> = (profile.trial_usage as Record<string, number>) ?? {};
           const current = typeof usage['ai_coder'] === 'number' ? usage['ai_coder'] : 0;
-          if (current >= 0) {
-            return new Response(JSON.stringify({ ok: false, error: 'TRIAL_LIMIT_REACHED', feature: 'ai_coder' }), {
-              status: 403,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-          }
-        }
+          if (current >= 5) return { allowed: false };
+          const updated = { ...usage, ai_coder: current + 1 };
+          await adminForTrial.from('profiles').update({ trial_usage: updated }).eq('id', userId);
+          return { allowed: true };
+        } catch { return { allowed: true }; }
+      })();
+      if (!trial.allowed) {
+        return new Response(JSON.stringify({
+          ok: false,
+          error: 'TRIAL_LIMIT_REACHED',
+          feature: 'ai_coder',
+          message: 'Free trial allows 5 prompts. Subscribe for unlimited access!',
+          messageAr: 'التجربة المجانية تسمح بـ 5 أوامر فقط. اشترك للحصول على وصول غير محدود!',
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
     }
 

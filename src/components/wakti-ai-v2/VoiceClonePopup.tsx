@@ -6,6 +6,7 @@ import { VoiceCloneScreen3 } from './VoiceCloneScreen3';
 import { VoiceTTSScreen } from './VoiceTTSScreen';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
+import TrialGateOverlay from '@/components/TrialGateOverlay';
 
 interface VoiceClonePopupProps {
   open: boolean;
@@ -80,6 +81,7 @@ export function VoiceClonePopup({ open, onOpenChange }: VoiceClonePopupProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[90vw] max-w-[90vw] md:max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl" hideCloseButton={false}>
+        <TrialGateOverlay featureKey="voice_clone" limit={0} featureLabel={{ en: 'Voice Cloning', ar: 'استنساخ الصوت' }} />
         <DialogHeader>
           <DialogTitle className="sr-only">Voice Clone</DialogTitle>
           <DialogDescription className="sr-only">

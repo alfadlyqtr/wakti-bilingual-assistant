@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
+import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { toast } from 'sonner';
 import {
   Upload,
@@ -1019,8 +1020,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     : false;
   const showLatestVideo = !generatedVideoUrl && !!(latestVideo?.signedUrl || latestVideo?.video_url);
 
+  // Map generationMode to trial feature key/limit/label
+  const videoTrialMap: Record<string, { key: string; limit: number; en: string; ar: string }> = {
+    'image_to_video':    { key: 'i2v',  limit: 1, en: 'Image to Video',    ar: 'صورة إلى فيديو' },
+    'text_to_video':     { key: 't2v',  limit: 1, en: 'Text to Video',     ar: 'نص إلى فيديو' },
+    '2images_to_video':  { key: '2i2v', limit: 1, en: '2 Images to Video', ar: 'صورتان إلى فيديو' },
+  };
+  const activeVideoTrial = videoTrialMap[generationMode] || videoTrialMap['image_to_video'];
+
   return (
     <div className="relative">
+      <TrialGateOverlay featureKey={activeVideoTrial.key} limit={activeVideoTrial.limit} featureLabel={{ en: activeVideoTrial.en, ar: activeVideoTrial.ar }} />
       {/* Glowing background effects */}
       <div className="pointer-events-none absolute -inset-4 rounded-[2rem] opacity-40 blur-3xl bg-gradient-to-br from-[hsl(210,100%,65%)] via-[hsl(180,85%,60%)] to-[hsl(160,80%,55%)] dark:opacity-20" />
       

@@ -84,6 +84,26 @@ export default function VoiceTTS() {
   const { language } = useTheme();
   const defaultVoices = getDefaultVoices(language);
   const [text, setText] = useState('');
+
+  // Trial user check — used to enforce 250 char TTS limit
+  const [isTrialUser, setIsTrialUser] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { user: u } } = await supabase.auth.getUser();
+        if (!u?.id) return;
+        const { data: profile } = await (supabase as any)
+          .from('profiles')
+          .select('is_subscribed, payment_method, next_billing_date')
+          .eq('id', u.id)
+          .single();
+        if (!profile) return;
+        const isPaid = profile.is_subscribed === true;
+        const isGift = profile.payment_method === 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
+        if (!isPaid && !isGift) setIsTrialUser(true);
+      } catch {}
+    })();
+  }, []);
   const [voices, setVoices] = useState<VoiceClone[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
   const [selectedStyle, setSelectedStyle] = useState<keyof typeof VOICE_STYLES>('neutral');
@@ -723,13 +743,18 @@ export default function VoiceTTS() {
         </div>
         <Textarea
           className="min-h-32 resize-none"
-          maxLength={2000}
+          maxLength={isTrialUser ? 250 : 2000}
           value={text}
-          onChange={(e) => { setText(e.target.value); if (isCorrected) setIsCorrected(false); }}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (isTrialUser && val.length > 250) return;
+            setText(val);
+            if (isCorrected) setIsCorrected(false);
+          }}
           placeholder={language === 'ar' ? 'اكتب ما تريد سماعه بأي لغة...' : 'Type what you want to hear in any language...'}
         />
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{text.length} / 2000</span>
+          <span>{text.length} / {isTrialUser ? 250 : 2000}{isTrialUser ? (language === 'ar' ? ' (حد التجربة)' : ' (trial limit)') : ''}</span>
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -129,6 +130,16 @@ serve(async (req) => {
     if (authError || !user) {
       throw new Error("Authentication failed");
     }
+
+    // ── Trial Token Check: music ──
+    const trial = await checkAndConsumeTrialToken(supabaseService, user.id, 'music', 1);
+    if (!trial.allowed) {
+      return new Response(
+        JSON.stringify({ error: 'TRIAL_LIMIT_REACHED', feature: 'music' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    // ── End Trial Token Check ──
 
     if (req.method !== "POST") {
       throw new Error("Method not allowed");

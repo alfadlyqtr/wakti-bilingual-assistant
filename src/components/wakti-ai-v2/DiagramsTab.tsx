@@ -313,6 +313,11 @@ const DiagramsTab: React.FC = () => {
         },
       });
 
+      if (response.error === 'TRIAL_LIMIT_REACHED') {
+        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: 'diagrams' } }));
+        setIsLoading(false);
+        return;
+      }
       if (!response.success) {
         throw new Error(response.error || 'Failed to generate diagrams');
       }

@@ -4,6 +4,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDebugContext } from '@/hooks/useDebugContext';
 import { supabase } from '@/integrations/supabase/client';
+import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -213,6 +214,26 @@ export default function ProjectDetail() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const thinkingStartTimeRef = useRef<number | null>(null);
+
+  // Trial user check — used to block publish and limit projects
+  const [isTrialUser, setIsTrialUser] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { user: u } } = await supabase.auth.getUser();
+        if (!u?.id) return;
+        const { data: profile } = await (supabase as any)
+          .from('profiles')
+          .select('is_subscribed, payment_method, next_billing_date')
+          .eq('id', u.id)
+          .single();
+        if (!profile) return;
+        const isPaid = profile.is_subscribed === true;
+        const isGift = profile.payment_method === 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
+        if (!isPaid && !isGift) setIsTrialUser(true);
+      } catch {}
+    })();
+  }, []);
 
   const [project, setProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<ProjectFile[]>([]);
@@ -2223,6 +2244,11 @@ export default function ProjectDetail() {
 
   // Open publish modal
   const openPublishModal = () => {
+    // Block publish for trial users
+    if (isTrialUser) {
+      toast.error(isRTL ? 'النشر متاح فقط للمشتركين. اشترك للحصول على وصول كامل!' : 'Publishing is only available for subscribers. Subscribe for full access!');
+      return;
+    }
     // Pre-fill with existing subdomain or generate from project name
     const defaultSubdomain = project?.subdomain || 
       project?.name?.toLowerCase()
@@ -5334,6 +5360,18 @@ ${fixInstructions}
         
         // 🔧 FIX: Handle ok: false responses from the edge function
         if (agentResult?.ok === false) {
+          if (agentResult.error === 'SUBSCRIPTION_REQUIRED') {
+            const friendlyMsg = isRTL
+              ? (agentResult.messageAr || 'هذه الميزة متاحة للمشتركين فقط. اشترك في وكتي للاستمتاع بمنشئ المواقع بالذكاء الاصطناعي 🚀')
+              : (agentResult.message || 'This feature is for subscribers only. Subscribe to Wakti to unlock the AI Website Builder 🚀');
+            setChatMessages(prev => [...prev, {
+              id: `sub-${Date.now()}`,
+              role: 'assistant',
+              content: friendlyMsg,
+              timestamp: new Date(),
+            }]);
+            return;
+          }
           throw new Error(agentResult.error || 'Agent request failed');
         }
         
@@ -5903,6 +5941,7 @@ ${fixInstructions}
       className={cn("h-full w-full flex flex-col bg-background overflow-hidden", isRTL && "rtl")}
       style={{ height: 'calc(100vh - 84px)', maxHeight: 'calc(100vh - 84px)' }}
     >
+      <TrialGateOverlay featureKey="ai_coder" limit={5} featureLabel={{ en: 'AI Coder', ar: 'مبرمج الذكاء' }} />
 
       {/* Celebratory Modal for Project Completion */}
       {showProjectCompleteModal && (

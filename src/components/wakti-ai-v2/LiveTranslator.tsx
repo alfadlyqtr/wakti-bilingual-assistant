@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ArrowLeftRight, Mic, User, UserRound, X, Volume2, Languages, Loader2 } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
+import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -563,6 +564,7 @@ INSTRUCTIONS:
       onPaste={(e) => e.preventDefault()}
       onContextMenu={(e) => e.preventDefault()}
     >
+      <TrialGateOverlay featureKey="interpreter" limit={5} featureLabel={{ en: 'Interpreter', ar: 'المترجم الفوري' }} />
       <style>{`
         .live-translator-nocopy,
         .live-translator-nocopy * {
