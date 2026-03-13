@@ -79,72 +79,66 @@ const LS_ORDER_KEY  = "homescreen_icon_order_v2"; // v2 — forces clean slate
 const LS_DOCK_KEY   = "homescreen_dock_v2";
 const LS_QUOTE_KEY  = "homescreen_show_quote";
 const LS_BG_KEY     = "homescreen_bg";
-const LS_UNIFIED_KEY = "homescreen_unified_grid_v4";
+const LS_UNIFIED_KEY = "homescreen_unified_grid_v5";
 
 // Widget IDs used in the unified grid
 const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showNavWidget','showWhoopWidget','showJournalWidget'] as const;
 type WidgetId = typeof WIDGET_IDS[number];
 const MAX_WIDGETS = 3;
 
-// Calculate explicit grid positions ("parking spots") for each item
+// ── Strict Hardcoded Grid Layout ──
+// 3 big rows (6 small rows) x 2 big cols (4 small cols) = 24 cells.
+// Widgets are 2x2. Icons are 1x1.
+// Layout:
+// Row 1-2: Widget 1 (Left), 4 Icons (Right)
+// Row 3-4: 4 Icons (Left), Widget 2 (Right)
+// Row 5-6: Widget 3 (Left), 4 Icons (Right) - Last icon slot is empty (11 icons total)
+
+const HARDCODED_WIDGET_SLOTS = [
+  { col: 1, row: 1, colSpan: 2, rowSpan: 2 }, // W1: Left, Row 1-2
+  { col: 3, row: 3, colSpan: 2, rowSpan: 2 }, // W2: Right, Row 3-4
+  { col: 1, row: 5, colSpan: 2, rowSpan: 2 }, // W3: Left, Row 5-6
+];
+
+const HARDCODED_ICON_SLOTS = [
+  // Next to W1
+  { col: 3, row: 1, colSpan: 1, rowSpan: 1 }, { col: 4, row: 1, colSpan: 1, rowSpan: 1 },
+  { col: 3, row: 2, colSpan: 1, rowSpan: 1 }, { col: 4, row: 2, colSpan: 1, rowSpan: 1 },
+  // Next to W2
+  { col: 1, row: 3, colSpan: 1, rowSpan: 1 }, { col: 2, row: 3, colSpan: 1, rowSpan: 1 },
+  { col: 1, row: 4, colSpan: 1, rowSpan: 1 }, { col: 2, row: 4, colSpan: 1, rowSpan: 1 },
+  // Next to W3 (only 3 slots used by default, 4th is empty)
+  { col: 3, row: 5, colSpan: 1, rowSpan: 1 }, { col: 4, row: 5, colSpan: 1, rowSpan: 1 },
+  { col: 3, row: 6, colSpan: 1, rowSpan: 1 }, { col: 4, row: 6, colSpan: 1, rowSpan: 1 },
+];
+
 function calcGridPositions(items: string[]) {
   const positions = new Map<string, { col: number; row: number; colSpan: number; rowSpan: number }>();
-  const occupied: boolean[][] = [];
-  const isOcc = (r: number, c: number) => occupied[r]?.[c] === true;
-  const occ = (r: number, c: number) => {
-    if (!occupied[r]) occupied[r] = [false, false, false, false];
-    occupied[r][c] = true;
-  };
+  let wIndex = 0;
+  let iIndex = 0;
+  
   for (const id of items) {
-    const isW = id.startsWith('widget::');
-    const cs = isW ? 2 : 1, rs = isW ? 2 : 1;
-    // Widgets only start at col 0 or 2 (left or right half)
-    const starts = isW ? [0, 2] : [0, 1, 2, 3];
-    let placed = false;
-    for (let r = 0; !placed && r < 60; r++) {
-      for (const c of starts) {
-        if (c + cs > 4) continue;
-        let ok = true;
-        for (let dr = 0; dr < rs && ok; dr++)
-          for (let dc = 0; dc < cs && ok; dc++)
-            if (isOcc(r + dr, c + dc)) ok = false;
-        if (ok) {
-          positions.set(id, { col: c + 1, row: r + 1, colSpan: cs, rowSpan: rs });
-          for (let dr = 0; dr < rs; dr++)
-            for (let dc = 0; dc < cs; dc++)
-              occ(r + dr, c + dc);
-          placed = true;
-          break;
-        }
+    if (id.startsWith('widget::')) {
+      if (wIndex < HARDCODED_WIDGET_SLOTS.length) {
+        positions.set(id, HARDCODED_WIDGET_SLOTS[wIndex]);
+        wIndex++;
+      }
+    } else {
+      if (iIndex < HARDCODED_ICON_SLOTS.length) {
+        positions.set(id, HARDCODED_ICON_SLOTS[iIndex]);
+        iIndex++;
       }
     }
   }
   return positions;
 }
 
-// Build default unified grid: interleave widget + 4 icons per "big row"
-// Pattern: widget-left → 4 icons right, 4 icons left → widget-right, widget-left → 4 icons right ...
-// Excludes dock apps so the interleaving stays tight after effectiveUnified filtering
+// Build default unified grid: flat list of widgets and apps
 function buildDefaultUnifiedGrid(hsWidgets: Record<string, boolean>, dockApps: string[] = DEFAULT_DOCK): string[] {
   const widgets = WIDGET_IDS.filter(k => hsWidgets[k]).map(k => `widget::${k}`).slice(0, MAX_WIDGETS);
   const dockSet = new Set(dockApps);
   const apps = DEFAULT_ORDER.filter(id => !dockSet.has(id)).map(id => `app::${id}`);
-  const result: string[] = [];
-  let ai = 0;
-  for (let wi = 0; wi < widgets.length; wi++) {
-    if (wi % 2 === 0) {
-      // Widget on left: widget first, then 4 icons
-      result.push(widgets[wi]);
-      for (let i = 0; i < 4 && ai < apps.length; i++, ai++) result.push(apps[ai]);
-    } else {
-      // Widget on right: 4 icons first, then widget
-      for (let i = 0; i < 4 && ai < apps.length; i++, ai++) result.push(apps[ai]);
-      result.push(widgets[wi]);
-    }
-  }
-  // remaining icons
-  while (ai < apps.length) result.push(apps[ai++]);
-  return result;
+  return [...widgets, ...apps];
 }
 
 const VALID_IDS = new Set(ALL_APPS.map(a => a.id));
