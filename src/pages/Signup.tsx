@@ -432,75 +432,7 @@ export default function Signup() {
                     >
                       <form onSubmit={handleSignup} className="space-y-5 w-full overflow-x-hidden">
 
-                        {/* ── Name ── */}
-                        <div className="space-y-1.5">
-                          <Label htmlFor="name" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                            {t.name}<span className="text-red-400 ml-0.5">*</span>
-                          </Label>
-                          <div className="relative group">
-                            <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
-                              <User
-                                className="h-4.5 w-4.5"
-                                style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
-                              />
-                            </div>
-                            <Input
-                              id="name"
-                              placeholder={t.namePlaceholder}
-                              type="text"
-                              autoCapitalize="none"
-                              autoCorrect="off"
-                              disabled={isLoading}
-                              value={name}
-                              onChange={(e) => setName(e.target.value)}
-                              className={cn(
-                                "pl-10 h-12 text-sm rounded-xl transition-all",
-                                "bg-background/70 border border-border/60 shadow-sm",
-                                "focus:bg-background focus:border-[#060541]/45 focus:ring-2 focus:ring-[#060541]/15",
-                                "dark:bg-[#0c0f14]/55 dark:border-white/12 dark:shadow-none",
-                                "dark:focus:bg-[#0c0f14]/65 dark:focus:border-[hsla(210,100%,65%,0.55)] dark:focus:ring-2 dark:focus:ring-[hsla(210,100%,65%,0.22)]"
-                              )}
-                              required
-                            />
-                          </div>
-                        </div>
-
-                        {/* ── Username + Email ── */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="username" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                              {t.username}<span className="text-red-400 ml-0.5">*</span>
-                            </Label>
-                            <div className="relative group">
-                              <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
-                                <span
-                                  className="text-sm font-semibold"
-                                  style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
-                                >
-                                  @
-                                </span>
-                              </div>
-                              <Input
-                                id="username"
-                                placeholder={t.usernamePlaceholder}
-                                type="text"
-                                autoCapitalize="none"
-                                autoCorrect="off"
-                                disabled={isLoading}
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                className={cn(
-                                  "pl-9 h-12 text-sm rounded-xl transition-all",
-                                  "bg-background/70 border border-border/60 shadow-sm",
-                                  "focus:bg-background focus:border-[#060541]/45 focus:ring-2 focus:ring-[#060541]/15",
-                                  "dark:bg-[#0c0f14]/55 dark:border-white/12 dark:shadow-none",
-                                  "dark:focus:bg-[#0c0f14]/65 dark:focus:border-[hsla(210,100%,65%,0.55)] dark:focus:ring-2 dark:focus:ring-[hsla(210,100%,65%,0.22)]"
-                                )}
-                                required
-                              />
-                            </div>
-                          </div>
-
+                        <div className="space-y-4">
                           <div className="space-y-1.5">
                             <Label htmlFor="email" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
                               {t.email}<span className="text-red-400 ml-0.5">*</span>
@@ -535,8 +467,8 @@ export default function Signup() {
                           </div>
                         </div>
 
-                        {/* ── Password + Confirm ── */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* ── Password ── */}
+                        <div className="space-y-4">
                           <div className="space-y-1.5">
                             <Label htmlFor="password" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
                               {t.password}<span className="text-red-400 ml-0.5">*</span>
@@ -590,59 +522,6 @@ export default function Signup() {
                             </div>
                             <p className="text-[11px] text-muted-foreground/70 pl-1">{t.passwordRequirements}</p>
                           </div>
-
-                          <div className="space-y-1.5">
-                            <Label htmlFor="confirmPassword" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                              {t.confirmPassword}<span className="text-red-400 ml-0.5">*</span>
-                            </Label>
-                            <div className="relative group">
-                              <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
-                                <Lock
-                                  className="h-4 w-4"
-                                  style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
-                                />
-                              </div>
-                              <Input
-                                id="confirmPassword"
-                                type={showConfirmPassword ? "text" : "password"}
-                                placeholder={t.confirmPasswordPlaceholder}
-                                autoCapitalize="none"
-                                autoComplete="new-password"
-                                disabled={isLoading}
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                className={cn(
-                                  "pl-10 pr-10 h-12 text-sm rounded-xl transition-all",
-                                  "bg-background/70 border border-border/60 shadow-sm",
-                                  "focus:bg-background focus:border-[#060541]/45 focus:ring-2 focus:ring-[#060541]/15",
-                                  "dark:bg-[#0c0f14]/55 dark:border-white/12 dark:shadow-none",
-                                  "dark:focus:bg-[#0c0f14]/65 dark:focus:border-[hsla(210,100%,65%,0.55)] dark:focus:ring-2 dark:focus:ring-[hsla(210,100%,65%,0.22)]"
-                                )}
-                                required
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                className={cn(
-                                  "absolute inset-y-0 right-0 flex items-center pr-3.5 transition-colors",
-                                  "text-[#060541]/60 hover:text-[#060541]",
-                                  "dark:text-[hsl(210,100%,65%)]/55 dark:hover:text-[hsl(210,100%,65%)]"
-                                )}
-                              >
-                                {showConfirmPassword ? (
-                                  <EyeOff
-                                    className="h-4 w-4"
-                                    style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
-                                  />
-                                ) : (
-                                  <Eye
-                                    className="h-4 w-4"
-                                    style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
-                                  />
-                                )}
-                              </button>
-                            </div>
-                          </div>
                         </div>
 
                         {/* ── Divider — Optional Fields ── */}
@@ -651,123 +530,170 @@ export default function Signup() {
                             <div className="w-full border-t border-border/30" />
                           </div>
                           <div className="relative flex justify-center">
-                            <span
-                              className="px-3 text-[11px] font-medium uppercase tracking-widest text-muted-foreground/50"
+                            <button
+                              type="button"
+                              onClick={() => setShowOptionalFields(!showOptionalFields)}
+                              className="px-3 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
                               style={{ background: 'var(--card, var(--background))' }}
                             >
-                              {language === 'ar' ? 'اختياري' : 'Optional'}
-                            </span>
+                              {language === 'ar' ? 'أضف تفاصيل الملف الشخصي (اختياري)' : 'Add profile details (Optional)'}
+                              {showOptionalFields ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                            </button>
                           </div>
                         </div>
 
-                        {/* ── Date of Birth ── */}
-                        <div className="space-y-1.5">
-                          <Label htmlFor="dateOfBirth" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                            {t.dateOfBirth}
-                          </Label>
-                          <div className="relative group">
-                            <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none z-10">
-                              <CalendarIcon
-                                className="h-4 w-4"
-                                style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
-                              />
-                            </div>
-                            <Input
-                              id="dateOfBirth"
-                              type="date"
-                              disabled={isLoading}
-                              value={dateOfBirth ? dateOfBirth.toISOString().slice(0, 10) : ""}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                setDateOfBirth(v ? new Date(`${v}T00:00:00`) : undefined);
-                              }}
-                              className={cn(
-                                "pl-10 h-12 text-sm rounded-xl transition-all",
-                                "bg-background/70 border border-border/60 shadow-sm",
-                                "focus:bg-background focus:border-[#060541]/45 focus:ring-2 focus:ring-[#060541]/15",
-                                "dark:bg-[#0c0f14]/55 dark:border-white/12 dark:shadow-none",
-                                "dark:focus:bg-[#0c0f14]/65 dark:focus:border-[hsla(210,100%,65%,0.55)] dark:focus:ring-2 dark:focus:ring-[hsla(210,100%,65%,0.22)]",
-                                !dateOfBirth && "text-muted-foreground"
-                              )}
-                              min="1900-01-01"
-                              max={new Date().toISOString().slice(0, 10)}
-                            />
-                          </div>
-                        </div>
-
-                        {/* ── Country + City ── */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="country" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                              {t.country}
-                            </Label>
-                            <div className="relative group">
-                              <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none z-10">
-                                <Globe
-                                  className="h-4 w-4"
-                                  style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
-                                />
+                        <AnimatePresence>
+                          {showOptionalFields && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                              animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                              exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                              transition={{ duration: 0.3 }}
+                              className="space-y-5"
+                            >
+                              {/* ── Name ── */}
+                              <div className="space-y-1.5">
+                                <Label htmlFor="name" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
+                                  {t.name}
+                                </Label>
+                                <div className="relative group">
+                                  <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+                                    <User
+                                      className="h-4.5 w-4.5"
+                                      style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
+                                    />
+                                  </div>
+                                  <Input
+                                    id="name"
+                                    placeholder={t.namePlaceholder}
+                                    type="text"
+                                    autoCapitalize="none"
+                                    autoCorrect="off"
+                                    disabled={isLoading}
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    className={cn(
+                                      "pl-10 h-12 text-sm rounded-xl transition-all",
+                                      "bg-background/70 border border-border/60 shadow-sm",
+                                      "focus:bg-background focus:border-[#060541]/45 focus:ring-2 focus:ring-[#060541]/15",
+                                      "dark:bg-[#0c0f14]/55 dark:border-white/12 dark:shadow-none",
+                                      "dark:focus:bg-[#0c0f14]/65 dark:focus:border-[hsla(210,100%,65%,0.55)] dark:focus:ring-2 dark:focus:ring-[hsla(210,100%,65%,0.22)]"
+                                    )}
+                                  />
+                                </div>
                               </div>
-                              <Select
-                                value={country}
-                                onValueChange={setCountry}
-                                disabled={isLoading}
-                              >
-                                <SelectTrigger
-                                  className={cn(
-                                    "pl-10 h-12 text-sm rounded-xl transition-all",
-                                    "bg-background/70 border border-border/60 shadow-sm",
-                                    "focus:bg-background focus:border-[#060541]/45 focus:ring-2 focus:ring-[#060541]/15",
-                                    "text-[#060541]/80",
-                                    "dark:bg-[#0c0f14]/55 dark:border-white/12 dark:shadow-none dark:text-white/75",
-                                    "dark:focus:bg-[#0c0f14]/65 dark:focus:border-[hsla(210,100%,65%,0.55)] dark:focus:ring-2 dark:focus:ring-[hsla(210,100%,65%,0.22)]",
-                                    "[&>svg]:text-[#060541] dark:[&>svg]:text-[hsl(210,100%,65%)]"
-                                  )}
-                                >
-                                  <SelectValue placeholder={t.selectCountry} />
-                                </SelectTrigger>
-                                <SelectContent className="max-h-60 max-w-[calc(100vw-2rem)] rounded-xl">
-                                  {countries.map((c) => (
-                                    <SelectItem key={c.code} value={c.code}>
-                                      {language === 'ar' ? c.nameAr : c.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
 
-                          <div className="space-y-1.5">
-                            <Label htmlFor="city" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                              {language === 'ar' ? 'المدينة' : 'City'}
-                            </Label>
-                            <div className="relative group">
-                              <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none z-10">
-                                <MapPin
-                                  className="h-4 w-4"
-                                  style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
-                                />
+                              {/* ── Date of Birth ── */}
+                              <div className="space-y-1.5">
+                                <Label htmlFor="dateOfBirth" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
+                                  {t.dateOfBirth}
+                                </Label>
+                                <div className="relative group">
+                                  <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none z-10">
+                                    <CalendarIcon
+                                      className="h-4 w-4"
+                                      style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
+                                    />
+                                  </div>
+                                  <Input
+                                    id="dateOfBirth"
+                                    type="date"
+                                    disabled={isLoading}
+                                    value={dateOfBirth ? dateOfBirth.toISOString().slice(0, 10) : ""}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setDateOfBirth(v ? new Date(`${v}T00:00:00`) : undefined);
+                                    }}
+                                    className={cn(
+                                      "pl-10 h-12 text-sm rounded-xl transition-all",
+                                      "bg-background/70 border border-border/60 shadow-sm",
+                                      "focus:bg-background focus:border-[#060541]/45 focus:ring-2 focus:ring-[#060541]/15",
+                                      "dark:bg-[#0c0f14]/55 dark:border-white/12 dark:shadow-none",
+                                      "dark:focus:bg-[#0c0f14]/65 dark:focus:border-[hsla(210,100%,65%,0.55)] dark:focus:ring-2 dark:focus:ring-[hsla(210,100%,65%,0.22)]",
+                                      !dateOfBirth && "text-muted-foreground"
+                                    )}
+                                    min="1900-01-01"
+                                    max={new Date().toISOString().slice(0, 10)}
+                                  />
+                                </div>
                               </div>
-                              <Input
-                                id="city"
-                                placeholder={language === 'ar' ? 'أدخل مدينتك' : 'Enter your city'}
-                                type="text"
-                                autoCapitalize="words"
-                                autoCorrect="off"
-                                disabled={isLoading || !country}
-                                value={city}
-                                onChange={(e) => setCity(e.target.value)}
-                                className={cn(
-                                  "pl-10 h-12 text-sm rounded-xl transition-all",
-                                  "bg-background/70 border border-border/60 shadow-sm",
-                                  "focus:bg-background focus:border-[#060541]/45 focus:ring-2 focus:ring-[#060541]/15",
-                                  "dark:bg-[#0c0f14]/55 dark:border-white/12 dark:shadow-none",
-                                  "dark:focus:bg-[#0c0f14]/65 dark:focus:border-[hsla(210,100%,65%,0.55)] dark:focus:ring-2 dark:focus:ring-[hsla(210,100%,65%,0.22)]"
-                                )}
-                              />
-                            </div>
-                          </div>
-                        </div>
+
+                              {/* ── Country + City ── */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                  <Label htmlFor="country" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
+                                    {t.country}
+                                  </Label>
+                                  <div className="relative group">
+                                    <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none z-10">
+                                      <Globe
+                                        className="h-4 w-4"
+                                        style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
+                                      />
+                                    </div>
+                                    <Select
+                                      value={country}
+                                      onValueChange={setCountry}
+                                      disabled={isLoading}
+                                    >
+                                      <SelectTrigger
+                                        className={cn(
+                                          "pl-10 h-12 text-sm rounded-xl transition-all",
+                                          "bg-background/70 border border-border/60 shadow-sm",
+                                          "focus:bg-background focus:border-[#060541]/45 focus:ring-2 focus:ring-[#060541]/15",
+                                          "text-[#060541]/80",
+                                          "dark:bg-[#0c0f14]/55 dark:border-white/12 dark:shadow-none dark:text-white/75",
+                                          "dark:focus:bg-[#0c0f14]/65 dark:focus:border-[hsla(210,100%,65%,0.55)] dark:focus:ring-2 dark:focus:ring-[hsla(210,100%,65%,0.22)]",
+                                          "[&>svg]:text-[#060541] dark:[&>svg]:text-[hsl(210,100%,65%)]"
+                                        )}
+                                      >
+                                        <SelectValue placeholder={t.selectCountry} />
+                                      </SelectTrigger>
+                                      <SelectContent className="max-h-60 max-w-[calc(100vw-2rem)] rounded-xl">
+                                        {countries.map((c) => (
+                                          <SelectItem key={c.code} value={c.code}>
+                                            {language === 'ar' ? c.nameAr : c.name}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                  <Label htmlFor="city" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
+                                    {language === 'ar' ? 'المدينة' : 'City'}
+                                  </Label>
+                                  <div className="relative group">
+                                    <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none z-10">
+                                      <MapPin
+                                        className="h-4 w-4"
+                                        style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
+                                      />
+                                    </div>
+                                    <Input
+                                      id="city"
+                                      placeholder={language === 'ar' ? 'أدخل مدينتك' : 'Enter your city'}
+                                      type="text"
+                                      autoCapitalize="words"
+                                      autoCorrect="off"
+                                      disabled={isLoading || !country}
+                                      value={city}
+                                      onChange={(e) => setCity(e.target.value)}
+                                      className={cn(
+                                        "pl-10 h-12 text-sm rounded-xl transition-all",
+                                        "bg-background/70 border border-border/60 shadow-sm",
+                                        "focus:bg-background focus:border-[#060541]/45 focus:ring-2 focus:ring-[#060541]/15",
+                                        "dark:bg-[#0c0f14]/55 dark:border-white/12 dark:shadow-none",
+                                        "dark:focus:bg-[#0c0f14]/65 dark:focus:border-[hsla(210,100%,65%,0.55)] dark:focus:ring-2 dark:focus:ring-[hsla(210,100%,65%,0.22)]"
+                                      )}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
 
                         {/* ── Terms ── */}
                         <div className="flex items-start gap-3 pt-1">
