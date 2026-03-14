@@ -76,7 +76,7 @@ export default function Settings() {
   // Dashboard look preference ('dashboard' = default widget grid, 'homescreen' = new home screen look)
   const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen'>(() => {
     const cached = localStorage.getItem('wakti_dashboard_look');
-    return cached === 'homescreen' ? 'homescreen' : 'dashboard';
+    return cached === 'dashboard' ? 'dashboard' : 'homescreen';
   });
 
   // Active widget settings based on current mode
