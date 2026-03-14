@@ -55,19 +55,19 @@ import { useOptimizedMaw3dEvents } from "@/hooks/useOptimizedMaw3dEvents";
 
 // ─── App definitions ──────────────────────────────────────────────────────────
 const ALL_APPS = [
-  { id: "calendar",  nameEn: "Calendar",  nameAr: "التقويم",   path: "/calendar",           icon: Calendar,        gradient: "from-sky-400/70 to-sky-600/70",         glow: "#38bdf8" },
-  { id: "journal",   nameEn: "Journal",   nameAr: "المذكرات",  path: "/journal",            icon: NotebookPen,     gradient: "from-pink-500/70 to-rose-600/70",       glow: "#ec4899" },
-  { id: "maw3d",     nameEn: "Maw3d",     nameAr: "مواعيد",   path: "/maw3d",              icon: CalendarClock,   gradient: "from-purple-500/70 to-purple-700/70",   glow: "#a855f7" },
-  { id: "tr",        nameEn: "T & R",     nameAr: "م & ت",    path: "/tr",                 icon: ListTodo,        gradient: "from-green-500/70 to-emerald-600/70",   glow: "#22c55e" },
-  { id: "wakti-ai",  nameEn: "WAKTI AI",  nameAr: "WAKTI AI", path: "/wakti-ai",           icon: Sparkles,        gradient: "from-orange-500/70 to-amber-400/70",    glow: "#f97316" },
-  { id: "studio",    nameEn: "Studio",    nameAr: "الاستوديو", path: "/music",              icon: Aperture,        gradient: "from-fuchsia-500/70 to-violet-600/70",  glow: "#d946ef" },
-  { id: "vitality",  nameEn: "Vitality",  nameAr: "الحيوية",  path: "/fitness",            icon: null,            gradient: "from-rose-500/70 to-red-600/70",        glow: "#f43f5e", isWaktiIcon: true },
-  { id: "tasjeel",   nameEn: "Tasjeel",   nameAr: "تسجيل",    path: "/tasjeel",            icon: AudioLines,      gradient: "from-cyan-400/70 to-cyan-600/70",       glow: "#06b6d4" },
-  { id: "warranty",  nameEn: "My Files",  nameAr: "ملفاتي",   path: "/my-warranty",        icon: FolderOpen,      gradient: "from-emerald-400/70 to-emerald-600/70", glow: "#10b981" },
-  { id: "projects",  nameEn: "Projects",  nameAr: "مشاريع",   path: "/projects",           icon: Code2,           gradient: "from-indigo-500/70 to-indigo-700/70",   glow: "#6366f1" },
-  { id: "text",      nameEn: "Text",      nameAr: "نص",       path: "/tools/text",         icon: PenTool,         gradient: "from-violet-500/70 to-violet-700/70",   glow: "#8b5cf6" },
-  { id: "voice",     nameEn: "Voice",     nameAr: "صوت",      path: "/tools/voice-studio", icon: Mic,             gradient: "from-pink-400/70 to-pink-600/70",       glow: "#f472b6" },
-  { id: "game",      nameEn: "Game",      nameAr: "لعبة",     path: "/tools/game",         icon: Gamepad2,        gradient: "from-red-500/70 to-red-700/70",         glow: "#ef4444" },
+  { id: "calendar",  nameEn: "Calendar",  nameAr: "التقويم",   path: "/calendar",           icon: Calendar,        gradient: "from-sky-400 to-sky-600",         glow: "#38bdf8" },
+  { id: "journal",   nameEn: "Journal",   nameAr: "المذكرات",  path: "/journal",            icon: NotebookPen,     gradient: "from-pink-500 to-rose-600",       glow: "#ec4899" },
+  { id: "maw3d",     nameEn: "Maw3d",     nameAr: "مواعيد",   path: "/maw3d",              icon: CalendarClock,   gradient: "from-purple-500 to-purple-700",   glow: "#a855f7" },
+  { id: "tr",        nameEn: "T & R",     nameAr: "م & ت",    path: "/tr",                 icon: ListTodo,        gradient: "from-green-500 to-emerald-600",   glow: "#22c55e" },
+  { id: "wakti-ai",  nameEn: "WAKTI AI",  nameAr: "WAKTI AI", path: "/wakti-ai",           icon: Sparkles,        gradient: "from-orange-500 to-amber-400",    glow: "#f97316" },
+  { id: "studio",    nameEn: "Studio",    nameAr: "الاستوديو", path: "/music",              icon: Aperture,        gradient: "from-fuchsia-500 to-violet-600",  glow: "#d946ef" },
+  { id: "vitality",  nameEn: "Vitality",  nameAr: "الحيوية",  path: "/fitness",            icon: null,            gradient: "from-rose-500 to-red-600",        glow: "#f43f5e", isWaktiIcon: true },
+  { id: "tasjeel",   nameEn: "Tasjeel",   nameAr: "تسجيل",    path: "/tasjeel",            icon: AudioLines,      gradient: "from-cyan-400 to-cyan-600",       glow: "#06b6d4" },
+  { id: "warranty",  nameEn: "My Files",  nameAr: "ملفاتي",   path: "/my-warranty",        icon: FolderOpen,      gradient: "from-emerald-400 to-emerald-600", glow: "#10b981" },
+  { id: "projects",  nameEn: "Projects",  nameAr: "مشاريع",   path: "/projects",           icon: Code2,           gradient: "from-indigo-500 to-indigo-700",   glow: "#6366f1" },
+  { id: "text",      nameEn: "Text",      nameAr: "نص",       path: "/tools/text",         icon: PenTool,         gradient: "from-violet-500 to-violet-700",   glow: "#8b5cf6" },
+  { id: "voice",     nameEn: "Voice",     nameAr: "صوت",      path: "/tools/voice-studio", icon: Mic,             gradient: "from-pink-400 to-pink-600",       glow: "#f472b6" },
+  { id: "game",      nameEn: "Game",      nameAr: "لعبة",     path: "/tools/game",         icon: Gamepad2,        gradient: "from-red-500 to-red-700",         glow: "#ef4444" },
 ];
 
 const DEFAULT_ORDER = ALL_APPS.map(a => a.id);
@@ -174,11 +174,12 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false }: {
       <div
         className={`absolute inset-0 rounded-[23%] bg-gradient-to-br ${app.gradient}`}
         style={{
+          opacity: 0.75,
           backdropFilter: 'blur(20px) saturate(180%)',
           WebkitBackdropFilter: 'blur(20px) saturate(180%)',
           boxShadow: glowEnabled
-            ? `0 0 18px ${app.glow}cc, 0 4px 16px ${app.glow}66, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`
-            : `0 4px 16px ${app.glow}55, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`,
+            ? `0 0 12px ${app.glow}99, 0 4px 12px ${app.glow}44, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`
+            : `0 4px 12px ${app.glow}33, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`,
         }}
       />
       {/* Liquid glass highlight */}
@@ -477,9 +478,10 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
       className="rounded-3xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-all select-none relative"
       style={{
         background: bg,
+        opacity: 0.75,
         backdropFilter: 'blur(20px) saturate(180%)',
         WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-        boxShadow: `0 4px 24px ${glow}55, 0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)`,
+        boxShadow: `0 4px 20px ${glow}33, 0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)`,
       }}
     >
       {/* Glass shimmer overlay */}
@@ -798,7 +800,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   // Homescreen background style from Settings
   const [hsBg, setHsBg] = useState<{ mode: 'solid'|'gradient'; color1: string; color2: string; color3: string; angle: number; glow: boolean }>(
-    { mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: true }
+    { mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false }
   );
   const [quote,           setQuote]           = useState<any>(null);
   const [greeting,        setGreeting]        = useState("");
@@ -911,14 +913,15 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         }
         if (s?.homescreenBg) {
           const bg = s.homescreenBg;
-          setHsBg({
+          const newBg = {
             mode:   bg.mode   === 'gradient' ? 'gradient' : 'solid',
             color1: bg.color1 || '',
             color2: bg.color2 || '',
             color3: bg.color3 || '',
             angle:  typeof bg.angle === 'number' ? bg.angle : 180,
             glow:   typeof bg.glow === 'boolean' ? bg.glow : false,
-          });
+          };
+          setHsBg(newBg);
         }
         const hs = s?.homescreen;
         if (!hs) return;
