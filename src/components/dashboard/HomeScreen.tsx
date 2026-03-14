@@ -1502,8 +1502,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       <>
       {/* Root — fills parent via flex, dock always at very bottom */}
       <div
-        className={`relative overflow-hidden hs-root flex flex-col ${pageBg}`}
+        className={`relative overflow-hidden overscroll-none hs-root flex flex-col ${pageBg}`}
         style={{
+          height: '100dvh', // Explicitly force viewport height to prevent drift
           ...(hasBg ? {
             backgroundImage: `url(${bgImage})`,
             backgroundSize: "cover",
@@ -1656,11 +1657,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           )}
 
           {/* ── Unified iPhone-style grid: 3 big rows × 2 big cols = 6 rows × 4 cols ── */}
-          <div className="flex-1 min-h-0 px-3 pb-2 overflow-y-auto overflow-x-hidden relative">
+          <div className="flex-1 min-h-0 px-3 pb-2 overflow-hidden relative">
             
             {/* Visual Guide exactly matching the user's diagram in edit mode */}
             {editMode && (
-              <div className="absolute inset-0 px-3 pt-2 grid gap-x-1 gap-y-2 pointer-events-none" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 88px)', gridTemplateAreas: gridTemplateAreas, zIndex: 0 }}>
+              <div className="absolute inset-0 px-3 pt-2 grid gap-x-1 gap-y-2 pointer-events-none" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', gridTemplateAreas: gridTemplateAreas, zIndex: 0 }}>
                 {/* Visual grid is dynamically rendered based on gridTemplateAreas now to match real positions */}
                 {effectiveUnified.map(itemId => {
                   const gp = gridPositions.get(itemId);
@@ -1676,7 +1677,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             )}
 
             <SortableContext items={effectiveUnified} strategy={rectSortingStrategy}>
-              <div className="grid gap-x-1 gap-y-2 relative z-10" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 88px)', gridTemplateAreas: gridTemplateAreas, alignContent: 'start', paddingTop: 8 }}>
+              <div className="grid gap-x-1 gap-y-2 relative z-10 h-full" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', gridTemplateAreas: gridTemplateAreas, alignContent: 'start', paddingTop: 8 }}>
                 {(() => {
                   return effectiveUnified.map(itemId => {
                     const gp = gridPositions.get(itemId);
