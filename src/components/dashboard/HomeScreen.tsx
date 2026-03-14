@@ -165,30 +165,17 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false }: {
   glowEnabled?: boolean;
 }) {
   const px = `${size}px`;
-  
-  // Convert hex glow color to rgba for semi-transparent gradient
-  const hexToRgba = (hex: string, alpha: number) => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
-  
-  // Create semi-transparent gradient based on app color
-  const glassGradient = `linear-gradient(135deg, ${hexToRgba(app.glow, 0.75)} 0%, ${hexToRgba(app.glow, 0.55)} 100%)`;
-  
   return (
     <div
       className={`relative flex-shrink-0 ${editMode ? "animate-wiggle" : ""}`}
       style={{ width: px, height: px }}
     >
-      {/* Main gradient body with frosted glass effect */}
+      {/* Main gradient body with iOS-style frosted glass */}
       <div
-        className={`absolute inset-0 rounded-[23%]`}
+        className={`absolute inset-0 rounded-[23%] bg-gradient-to-br ${app.gradient}`}
         style={{
-          background: glassGradient,
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
           boxShadow: glowEnabled
             ? `0 0 18px ${app.glow}cc, 0 4px 16px ${app.glow}66, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`
             : `0 4px 16px ${app.glow}55, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`,
@@ -819,6 +806,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const bgInputRef    = useRef<HTMLInputElement>(null);
   const _pendingDock  = useRef<string[]>([]);
   const _effectiveRef = useRef<string[]>([]);
+  const _hasLoadedFromSupabase = useRef(false);
 
   const { tasks }  = useOptimizedTRData();
   const { events } = useOptimizedMaw3dEvents();
@@ -873,6 +861,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   useEffect(() => {
     if (!user) return;
+    // Skip if already loaded from Supabase and localStorage has data
+    if (_hasLoadedFromSupabase.current && localStorage.getItem(LS_UNIFIED_KEY)) return;
+    _hasLoadedFromSupabase.current = true;
     (async () => {
       try {
         const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
