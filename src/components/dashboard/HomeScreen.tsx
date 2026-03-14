@@ -53,6 +53,7 @@ import { WaktiIcon } from "@/components/icons/WaktiIcon";
 import { getQuoteForDisplay, getQuoteText, getQuoteAuthor } from "@/utils/quoteService";
 import { useOptimizedTRData } from "@/hooks/useOptimizedTRData";
 import { useOptimizedMaw3dEvents } from "@/hooks/useOptimizedMaw3dEvents";
+import { useWhoopData } from "@/hooks/useWhoopData";
 import { SavedImagesPicker } from "@/components/dashboard/SavedImagesPicker";
 
 // ─── App definitions ──────────────────────────────────────────────────────────
@@ -452,12 +453,13 @@ function StatWidgets({ hsWidgets, language, theme, hasBg, pendingTasks, complete
 }
 
 // ─── Widget content renderer (no drag logic, just visuals) ────────────────────
-function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, pendingTasks, completedToday, upcomingCount, navigate, quoteText, quoteAuthor }: {
+function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, pendingTasks, completedToday, upcomingCount, navigate, quoteText, quoteAuthor, whoopData }: {
   wKey: WidgetId; editMode: boolean; language: string; theme: string;
   hasBg: boolean; statCardBase: string;
   pendingTasks: number; completedToday: number; upcomingCount: number;
   navigate: (p: string) => void;
   quoteText?: string; quoteAuthor?: string;
+  whoopData?: any;
 }) {
   const isDark = theme === 'dark';
   const total = pendingTasks + completedToday;
@@ -475,6 +477,12 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   const dayShort    = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'short' });
   const dayLong     = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'long' });
   const monthShort  = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { month: 'short' });
+  
+  // Real WHOOP Data logic
+  const recovery = whoopData?.recovery ?? null;
+  const strain   = whoopData?.strain ?? null;
+  const recColor = recovery ? (recovery >= 67 ? '#22c55e' : recovery >= 34 ? '#f59e0b' : '#ef4444') : '#ef4444';
+  
   // Shared widget shell: full-bleed gradient background, rounded corners, glow
   const shell = (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => (
     <div
@@ -509,7 +517,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
         </div>
         <div className="text-right">
           <span className="text-4xl font-black tabular-nums text-white leading-none" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>{pendingTasks === 0 ? '✓' : pendingTasks}</span>
-          <p className="text-[9px] font-bold text-white/50 uppercase tracking-wider">{language === 'ar' ? 'معلّقة' : 'pending'}</p>
+          <p className="text-[9px] font-bold text-white/50 uppercase tracking-wider">{pendingTasks === 0 ? (language === 'ar' ? 'مكتملة' : 'DONE') : (language === 'ar' ? 'معلّقة' : 'pending')}</p>
         </div>
       </div>
       {/* Progress bar */}
@@ -600,51 +608,90 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
     </div>
   );
 
-  if (wKey === 'showWhoopWidget') return shell(
-    'rgba(0,0,0,0.7)',
-    '#ef4444',
-    () => navigate('/fitness'),
-    <div className="p-4 flex flex-col justify-between h-full">
-      <div className="flex items-start justify-between">
-        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
-          <Activity className="w-6 h-6 text-white" strokeWidth={2} />
+  if (wKey === 'showWhoopWidget') {
+    const bgGradient = recovery 
+      ? (recovery >= 67 
+          ? 'linear-gradient(145deg,rgba(6,78,59,0.7) 0%,rgba(6,95,70,0.7) 40%,rgba(4,120,87,0.7) 100%)' 
+          : recovery >= 34 
+            ? 'linear-gradient(145deg,rgba(120,53,15,0.7) 0%,rgba(146,64,14,0.7) 40%,rgba(180,83,9,0.7) 100%)' 
+            : 'linear-gradient(145deg,rgba(127,29,29,0.7) 0%,rgba(153,27,27,0.7) 40%,rgba(185,28,28,0.7) 100%)')
+      : 'rgba(0,0,0,0.7)'; // Default dark background if no data
+
+    return shell(
+      bgGradient,
+      recColor,
+      () => navigate('/fitness'),
+      <div className="p-4 flex flex-col justify-between h-full">
+        <div className="flex items-start justify-between">
+          <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
+            <Activity className="w-6 h-6 text-white" strokeWidth={2} />
+          </div>
+          <div className="text-right">
+            <span className="text-4xl font-black text-white leading-none tabular-nums" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>
+              {recovery !== null ? `${recovery}%` : '♥'}
+            </span>
+            {recovery !== null && (
+              <p className="text-[9px] font-bold text-white/50 uppercase tracking-wider">{language === 'ar' ? 'استشفاء' : 'Recovery'}</p>
+            )}
+          </div>
         </div>
-        <span className="text-4xl font-black text-white leading-none">♥</span>
-      </div>
-      {/* Animated EKG-style bar */}
-      <div>
-        <div className="flex items-end gap-0.5 mb-2 h-6">
-          {[3,5,2,7,4,8,3,6,2,5,3,4].map((h, i) => (
-            <div key={i} className="flex-1 rounded-sm" style={{ height: `${h * 10}%`, background: i === 7 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)' }} />
-          ))}
+        {/* Animated EKG-style bar or Strain data */}
+        <div>
+          {recovery !== null ? (
+            <div className="mb-1">
+              <div className="flex justify-between items-end mb-1">
+                <span className="text-[10px] text-white/70 font-bold uppercase">{language === 'ar' ? 'إجهاد' : 'Strain'}</span>
+                <span className="text-[12px] text-white font-bold">{strain !== null ? strain : '--'}</span>
+              </div>
+              <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-white/90 rounded-full" 
+                  style={{ width: `${Math.min(((strain || 0) / 21) * 100, 100)}%` }} 
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-end gap-0.5 mb-2 h-6">
+              {[3,5,2,7,4,8,3,6,2,5,3,4].map((h, i) => (
+                <div key={i} className="flex-1 rounded-sm" style={{ height: `${h * 10}%`, background: i === 7 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)' }} />
+              ))}
+            </div>
+          )}
+          <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>WHOOP</p>
+          <p className="text-[11px] font-semibold mt-0.5 text-white/80" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>
+            {recovery !== null 
+              ? (language === 'ar' ? 'تم التحديث' : 'Updated') 
+              : (language === 'ar' ? 'الحيوية والنشاط' : 'Vitality & fitness')}
+          </p>
         </div>
-        <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>WHOOP</p>
-        <p className="text-[11px] font-semibold mt-0.5 text-white/80" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>{language === 'ar' ? 'الحيوية والنشاط' : 'Vitality & fitness'}</p>
       </div>
-    </div>
-  );
+    );
+  }
 
   if (wKey === 'showHealthKitWidget') return shell(
     'linear-gradient(145deg,rgba(22,163,74,0.7) 0%,rgba(34,197,94,0.7) 40%,rgba(74,222,128,0.7) 100%)',
     '#22c55e',
-    () => navigate('/fitness'), // Navigates to same fitness page for now
+    () => navigate('/fitness'),
     <div className="p-4 flex flex-col justify-between h-full">
       <div className="flex items-start justify-between">
-        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
-          <Heart className="w-6 h-6 text-white" strokeWidth={2} fill="white" />
+        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.25)', backdropFilter: 'blur(8px)' }}>
+          <Heart className="w-6 h-6 text-white" strokeWidth={2.5} fill="white" />
         </div>
-        <span className="text-4xl font-black text-white leading-none"></span>
+        <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-md border border-white/10">
+          <Heart className="w-5 h-5 text-white" strokeWidth={3} />
+        </div>
       </div>
       <div>
-        <div className="flex gap-1 mb-2">
+        <div className="flex gap-1.5 mb-2 items-end h-8">
           {['S','M','T','W','T','F','S'].map((d, i) => (
-            <div key={i} className="flex-1 h-6 bg-white/20 rounded-sm flex items-end overflow-hidden">
-               <div className="w-full bg-white/90" style={{ height: `${[40,60,30,80,50,90,45][i]}%` }}></div>
+            <div key={i} className="flex-1 flex flex-col justify-end gap-1 group">
+               <div className="w-full bg-white/40 rounded-t-sm transition-all group-hover:bg-white/60" style={{ height: `${[40,60,30,80,50,90,45][i]}%` }}></div>
+               <span className="text-[7px] text-white/60 text-center font-bold">{d}</span>
             </div>
           ))}
         </div>
         <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{language === 'ar' ? 'صحتي' : 'HealthKit'}</p>
-        <p className="text-[11px] font-semibold mt-0.5 text-white/80" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>{language === 'ar' ? 'نشاط أبل' : 'Apple Health'}</p>
+        <p className="text-[11px] font-semibold mt-0.5 text-white/90" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>{language === 'ar' ? 'نشاط أبل' : 'Apple Health'}</p>
       </div>
     </div>
   );
@@ -707,8 +754,9 @@ interface UnifiedWidgetCellProps {
   navigate: (p: string) => void;
   gridArea: string;
   quoteText?: string; quoteAuthor?: string;
+  whoopData?: any;
 }
-function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor }: UnifiedWidgetCellProps) {
+function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData }: UnifiedWidgetCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id, data: { type: 'unified' },
   });
@@ -733,6 +781,7 @@ function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCar
         pendingTasks={pendingTasks} completedToday={completedToday}
         upcomingCount={upcomingCount} navigate={navigate}
         quoteText={quoteText} quoteAuthor={quoteAuthor}
+        whoopData={whoopData}
       />
       {editMode && (
         <div className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full bg-black/70 border border-white/30 flex items-center justify-center">
@@ -852,6 +901,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   const { tasks }  = useOptimizedTRData();
   const { events } = useOptimizedMaw3dEvents();
+  const whoopData = useWhoopData();
   const pendingTasks  = tasks.filter(t => !t.completed).length;
   const upcomingCount = events.filter(e => {
     try { return new Date(e.event_date) >= new Date(new Date().toDateString()); } catch { return false; }
@@ -1646,6 +1696,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                           gridArea={gp}
                           quoteText={quoteText}
                           quoteAuthor={quoteAuthor}
+                          whoopData={whoopData}
                         />
                       );
                     }
