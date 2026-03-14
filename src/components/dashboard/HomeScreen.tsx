@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -12,8 +12,6 @@ import {
   useSensor,
   useSensors,
   DragOverlay,
-  useDroppable,
-  useDraggable,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -100,19 +98,20 @@ const GRID_TEMPLATE_AREAS = `
 `;
 
 // Calculate explicit grid positions ("parking spots") for each item as area strings
+// Handles widget::, app::, and empty:: items
 function calcGridPositions(items: string[]) {
   const positions = new Map<string, string>();
   let wIndex = 1;
   let iIndex = 1;
   
   for (const id of items) {
-    if (id.startsWith('widget::')) {
+    if (id.startsWith('widget::') || id.startsWith('empty-w::')) {
       if (wIndex <= 3) {
         positions.set(id, `w${wIndex}`);
         wIndex++;
       }
     } else {
-      if (iIndex <= 11) { // Max 11 icons (cell i12 is left empty to match 3 widgets + 11 icons = 23 items, but grid supports 12)
+      if (iIndex <= 12) {
         positions.set(id, `i${iIndex}`);
         iIndex++;
       }
@@ -198,7 +197,7 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false }: {
       {/* Edit badge */}
       {editMode && (
         <div className="absolute -top-1 -left-1 z-10 w-5 h-5 rounded-full bg-black/80 border border-white/40 flex items-center justify-center shadow">
-          <X className="w-3 h-3 text-white" />
+          <GripVertical className="w-3 h-3 text-white/80" />
         </div>
       )}
     </div>
@@ -624,14 +623,28 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
       {...listeners}
       onClick={editMode ? undefined : () => navigate(app.path)}
     >
-      <LiquidIcon app={app} size={48} editMode={editMode} glowEnabled={glowEnabled} />
+      <LiquidIcon app={app} size={60} editMode={editMode} glowEnabled={glowEnabled} />
       <span
-        className="text-[9px] font-semibold text-center leading-tight"
-        style={{ color: isDark ? '#fff' : '#060541', textShadow: isDark ? '0 1px 4px rgba(0,0,0,0.95)' : 'none', maxWidth: 56, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
+        className="text-[11px] font-semibold text-center leading-tight mt-1.5"
+        style={{ color: isDark ? '#fff' : '#060541', textShadow: isDark ? '0 1px 4px rgba(0,0,0,0.95)' : 'none', maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
       >
         {name}
       </span>
     </div>
+  );
+}
+
+// ─── Empty slot (sortable target in edit mode) ─────────────────────────────
+function EmptySlotCell({ id, gridArea, isWidget, editMode }: { id: string; gridArea: string; isWidget: boolean; editMode: boolean }) {
+  const { setNodeRef, isOver } = useSortable({ id, data: { type: 'unified' } });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ gridArea }}
+      className={`${isWidget ? 'rounded-3xl' : 'rounded-2xl'} transition-colors ${
+        isOver ? 'bg-white/20 border-2 border-white/60' : ''
+      } ${editMode ? '' : 'pointer-events-none'}`}
+    />
   );
 }
 
@@ -742,7 +755,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           if (Array.isArray(s?.homescreen?.unifiedGrid) && s.homescreen.unifiedGrid.length > 0) {
             const saved: string[] = s.homescreen.unifiedGrid;
             const enabledWidgets = new Set(WIDGET_IDS.filter(k => clamped[k]).map(k => `widget::${k}`));
-            // Keep saved order, just filter out disabled widgets and invalid apps
+            // Keep saved order, filter disabled widgets, invalid apps, but KEEP empties to preserve layout
             const seen = new Set<string>();
             const grid: string[] = [];
             for (const id of saved) {
@@ -752,6 +765,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                 if (enabledWidgets.has(id)) grid.push(id);
               } else if (id.startsWith('app::')) {
                 if (VALID_IDS.has(id.replace('app::',''))) grid.push(id);
+              } else if (id.startsWith('empty-w::') || id.startsWith('empty-i::')) {
+                grid.push(id);
               }
             }
             // Append any missing enabled widgets at end
@@ -875,15 +890,70 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
     // ── unified grid reorder (widgets + apps together) ──
     if (activeType === "unified" && (overType === "unified" || !overType)) {
-      const current = _effectiveRef.current;
-      const from = current.indexOf(active.id);
-      const to   = current.indexOf(over.id);
-      if (from === -1 || to === -1) return;
-      const next = arrayMove(current, from, to);
-      setUnifiedGrid(next);
-      localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(next));
-      syncToSupabase({ unifiedGrid: next });
-      return;
+      const overId = over.id as string;
+      const activeIdStr = active.id as string;
+      const current = _effectiveRef.current; // effectiveUnified (includes empties)
+      
+      const activeIsWidget = activeIdStr.startsWith('widget::') || activeIdStr.startsWith('empty-w::');
+      const overIsWidget = overId.startsWith('widget::') || overId.startsWith('empty-w::');
+
+      if (activeIsWidget === overIsWidget) {
+        // Same type: STRICT 1:1 SWAP (trade places)
+        const from = current.indexOf(activeIdStr);
+        const to = current.indexOf(overId);
+        if (from === -1 || to === -1) return;
+
+        const next = [...current];
+        next[from] = current[to];
+        next[to] = current[from];
+
+        setUnifiedGrid(next);
+        localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(next));
+        syncToSupabase({ unifiedGrid: next });
+        return;
+      } else {
+        // Different types: BLOCK SWAP (swap entire section)
+        const blocks: { type: 'W' | 'I', items: string[] }[] = [];
+        let currentIconBlock: string[] = [];
+        
+        for (const id of current) {
+          if (id.startsWith('widget::') || id.startsWith('empty-w::')) {
+            if (currentIconBlock.length > 0) {
+              blocks.push({ type: 'I', items: currentIconBlock });
+              currentIconBlock = [];
+            }
+            blocks.push({ type: 'W', items: [id] });
+          } else {
+            currentIconBlock.push(id);
+            if (currentIconBlock.length === 4) {
+              blocks.push({ type: 'I', items: currentIconBlock });
+              currentIconBlock = [];
+            }
+          }
+        }
+        if (currentIconBlock.length > 0) {
+          blocks.push({ type: 'I', items: currentIconBlock });
+        }
+
+        let activeBlockIndex = -1;
+        let overBlockIndex = -1;
+        blocks.forEach((b, i) => {
+          if (b.items.includes(activeIdStr)) activeBlockIndex = i;
+          if (b.items.includes(overId)) overBlockIndex = i;
+        });
+
+        if (activeBlockIndex !== -1 && overBlockIndex !== -1) {
+          const temp = blocks[activeBlockIndex];
+          blocks[activeBlockIndex] = blocks[overBlockIndex];
+          blocks[overBlockIndex] = temp;
+          
+          const nextFlat = blocks.flatMap(b => b.items);
+          setUnifiedGrid(nextFlat);
+          localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(nextFlat));
+          syncToSupabase({ unifiedGrid: nextFlat });
+        }
+        return;
+      }
     }
 
     // dock → dock reorder
@@ -967,34 +1037,131 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     });
   }, [syncToSupabase]);
 
-  // ── Derived lists — bulletproof dedup ──
-  // Unified grid: filter out dock apps, ensure all app IDs present
+  // ── Derived lists — bulletproof dedup & dynamic grid generation ──
   const dockSet = new Set(dockIds);
   const enabledWidgetIds = new Set(WIDGET_IDS.filter(k => hsWidgets[k]).map(k => `widget::${k}`));
-  // Compute the effective unified grid — add any missing items at end
-  const effectiveUnified = (() => {
-    if (unifiedGrid.length === 0) return buildDefaultUnifiedGrid(hsWidgets, dockIds);
+
+  const { effectiveUnified, realItems, gridTemplateAreas, gridPositions } = React.useMemo(() => {
+    // 1. Extract valid real items from saved grid
+    const widgets: string[] = [];
+    const icons: string[] = [];
     const seen = new Set<string>();
-    const valid: string[] = [];
-    let widgetCount = 0;
-    for (const id of unifiedGrid) {
+    
+    const sourceGrid = unifiedGrid.length > 0 ? unifiedGrid : buildDefaultUnifiedGrid(hsWidgets, dockIds);
+
+    for (const id of sourceGrid) {
       if (seen.has(id)) continue;
       seen.add(id);
       if (id.startsWith('widget::')) {
-        if (enabledWidgetIds.has(id) && widgetCount < MAX_WIDGETS) { valid.push(id); widgetCount++; }
+        if (enabledWidgetIds.has(id) && widgets.length < 3) widgets.push(id);
       } else if (id.startsWith('app::')) {
-        const appId = id.replace('app::','');
-        if (VALID_IDS.has(appId) && !dockSet.has(appId)) valid.push(id);
+        const appId = id.replace('app::', '');
+        if (VALID_IDS.has(appId) && !dockSet.has(appId)) icons.push(id);
       }
     }
-    // Append any missing apps
+    
+    // Append missing apps
     for (const appId of DEFAULT_ORDER) {
       const key = `app::${appId}`;
-      if (!seen.has(key) && !dockSet.has(appId)) { seen.add(key); valid.push(key); }
+      if (!seen.has(key) && !dockSet.has(appId)) {
+        icons.push(key);
+        seen.add(key);
+      }
     }
-    return valid;
-  })();
-  _effectiveRef.current = effectiveUnified;
+    
+    // 2. Determine block types based on sourceGrid
+    const blockTypes: ('W' | 'I')[] = [];
+    let currentIconCount = 0;
+    for (const id of sourceGrid) {
+      if (id.startsWith('widget::') || id.startsWith('empty-w::')) {
+        if (currentIconCount > 0) { // incomplete icon block, force close it
+          blockTypes.push('I');
+          currentIconCount = 0;
+        }
+        blockTypes.push('W');
+      } else if (id.startsWith('app::') || id.startsWith('empty-i::')) {
+        currentIconCount++;
+        if (currentIconCount === 4) {
+          blockTypes.push('I');
+          currentIconCount = 0;
+        }
+      }
+    }
+    if (currentIconCount > 0) blockTypes.push('I');
+    
+    // 3. Force exactly 3 W and 3 I blocks
+    const finalTypes: ('W' | 'I')[] = [];
+    let wCount = 0, iCount = 0;
+    for (const t of blockTypes) {
+      if (t === 'W' && wCount < 3) { finalTypes.push('W'); wCount++; }
+      if (t === 'I' && iCount < 3) { finalTypes.push('I'); iCount++; }
+    }
+    // Pad missing types with default iPhone layout (W, I, I, W, W, I)
+    const defaultTypes = ['W', 'I', 'I', 'W', 'W', 'I'];
+    for (const t of defaultTypes) {
+      if (finalTypes.length === 6) break;
+      if (t === 'W' && wCount < 3) { finalTypes.push('W'); wCount++; }
+      if (t === 'I' && iCount < 3) { finalTypes.push('I'); iCount++; }
+    }
+
+    // 4. Fill blocks from queues
+    let wIdx = 1, iIdx = 1;
+    const finalItems: string[] = [];
+    for (const t of finalTypes) {
+      if (t === 'W') {
+        finalItems.push(widgets.length > 0 ? widgets.shift()! : `empty-w::${wIdx++}`);
+      } else {
+        for (let i=0; i<4; i++) {
+          finalItems.push(icons.length > 0 ? icons.shift()! : `empty-i::${iIdx++}`);
+        }
+      }
+    }
+    
+    // 5. Generate grid-template-areas dynamically
+    const rowStrings = ["", "", "", "", "", ""];
+    let gW = 1, gI = 1;
+    finalTypes.forEach((t, i) => {
+      const rStart = Math.floor(i / 2) * 2;
+      const isLeft = i % 2 === 0;
+      let topStr = "", botStr = "";
+      
+      if (t === 'W') {
+        const wName = `w${gW++}`;
+        topStr = `${wName} ${wName}`;
+        botStr = `${wName} ${wName}`;
+      } else {
+        const i1 = `i${gI++}`, i2 = `i${gI++}`, i3 = `i${gI++}`, i4 = `i${gI++}`;
+        topStr = `${i1} ${i2}`;
+        botStr = `${i3} ${i4}`;
+      }
+      
+      if (isLeft) {
+        rowStrings[rStart] += topStr;
+        rowStrings[rStart+1] += botStr;
+      } else {
+        rowStrings[rStart] += " " + topStr;
+        rowStrings[rStart+1] += " " + botStr;
+      }
+    });
+    
+    const gridAreas = rowStrings.map(s => `"${s.trim()}"`).join("\n");
+    const rItems = finalItems.filter(id => !id.startsWith('empty-'));
+    
+    // Build gridPositions map: iterate finalItems in order, assign w1/w2.../i1/i2...
+    const gpMap = new Map<string, string>();
+    let gW2 = 1, gI2 = 1;
+    for (const id of finalItems) {
+      if (id.startsWith('widget::') || id.startsWith('empty-w::')) {
+        gpMap.set(id, `w${gW2++}`);
+      } else {
+        gpMap.set(id, `i${gI2++}`);
+      }
+    }
+    
+    return { effectiveUnified: finalItems, realItems: rItems, gridTemplateAreas: gridAreas, gridPositions: gpMap };
+  }, [unifiedGrid, hsWidgets, dockIds]);
+
+  _effectiveRef.current = effectiveUnified; // Use the FULL padded array for drag reference
 
   const seenDock = new Set<string>();
   const dockApps = dockIds
@@ -1226,37 +1393,40 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             
             {/* Visual Guide exactly matching the user's diagram in edit mode */}
             {editMode && (
-              <div className="absolute inset-0 px-3 pt-2 grid gap-x-1 gap-y-2 pointer-events-none" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 68px)', gridTemplateAreas: GRID_TEMPLATE_AREAS, zIndex: 0 }}>
-                {/* Big Row 1 */}
-                <div style={{ gridArea: 'w1' }} className="border-[3px] border-dashed border-white/50 rounded-3xl" />
-                <div style={{ gridArea: 'i1' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
-                <div style={{ gridArea: 'i2' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
-                <div style={{ gridArea: 'i3' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
-                <div style={{ gridArea: 'i4' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
-                
-                {/* Big Row 2 */}
-                <div style={{ gridArea: 'i5' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
-                <div style={{ gridArea: 'i6' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
-                <div style={{ gridArea: 'i7' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
-                <div style={{ gridArea: 'i8' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
-                <div style={{ gridArea: 'w2' }} className="border-[3px] border-dashed border-white/50 rounded-3xl" />
-
-                {/* Big Row 3 */}
-                <div style={{ gridArea: 'w3' }} className="border-[3px] border-dashed border-white/50 rounded-3xl" />
-                <div style={{ gridArea: 'i9' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
-                <div style={{ gridArea: 'i10' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
-                <div style={{ gridArea: 'i11' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
-                <div style={{ gridArea: 'i12' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
+              <div className="absolute inset-0 px-3 pt-2 grid gap-x-1 gap-y-2 pointer-events-none" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 88px)', gridTemplateAreas: gridTemplateAreas, zIndex: 0 }}>
+                {/* Visual grid is dynamically rendered based on gridTemplateAreas now to match real positions */}
+                {effectiveUnified.map(itemId => {
+                  const gp = gridPositions.get(itemId);
+                  if (!gp) return null;
+                  if (itemId.startsWith('empty-w::') || itemId.startsWith('widget::')) {
+                    return <div key={`vis-${itemId}`} style={{ gridArea: gp }} className="border-[3px] border-dashed border-white/50 rounded-3xl" />;
+                  } else if (itemId.startsWith('empty-i::') || itemId.startsWith('app::')) {
+                    return <div key={`vis-${itemId}`} style={{ gridArea: gp }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />;
+                  }
+                  return null;
+                })}
               </div>
             )}
 
             <SortableContext items={effectiveUnified} strategy={rectSortingStrategy}>
-              <div className="grid gap-x-1 gap-y-2 relative z-10" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 68px)', gridTemplateAreas: GRID_TEMPLATE_AREAS, alignContent: 'start', paddingTop: 8 }}>
+              <div className="grid gap-x-1 gap-y-2 relative z-10" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 88px)', gridTemplateAreas: gridTemplateAreas, alignContent: 'start', paddingTop: 8 }}>
                 {(() => {
-                  const gridPositions = calcGridPositions(effectiveUnified);
                   return effectiveUnified.map(itemId => {
                     const gp = gridPositions.get(itemId);
-                    if (!gp) return null; // Hide extras entirely
+                    if (!gp) return null;
+
+                    // Empty placeholder slots — droppable targets in edit mode
+                    if (itemId.startsWith('empty-w::') || itemId.startsWith('empty-i::')) {
+                      return (
+                        <EmptySlotCell
+                          key={itemId}
+                          id={itemId}
+                          gridArea={gp}
+                          isWidget={itemId.startsWith('empty-w::')}
+                          editMode={editMode}
+                        />
+                      );
+                    }
                     
                     if (itemId.startsWith('widget::')) {
                       const wKey = itemId.replace('widget::','') as WidgetId;

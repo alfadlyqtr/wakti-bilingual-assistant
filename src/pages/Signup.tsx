@@ -9,12 +9,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Logo3D } from "@/components/Logo3D";
-import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, CalendarIcon, Globe, Mic, FileText, Sparkles, MapPin } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, CalendarIcon, Globe, Mic, FileText, Sparkles, MapPin, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { EmailConfirmationDialog } from "@/components/EmailConfirmationDialog";
-import { validateDisplayName, validateEmail, validatePassword, validateConfirmPassword } from "@/utils/validations";
+import { validateDisplayName, validateEmail, validatePassword } from "@/utils/validations";
 import { countries, getCountryByCode } from "@/utils/countries";
 import { VoiceSignup } from "@/components/auth/VoiceSignup";
 
@@ -22,13 +22,12 @@ export default function Signup() {
   const navigate = useNavigate();
   const { language, theme } = useTheme();
   const [name, setName] = useState("");
-  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(undefined);
   const [country, setCountry] = useState("");
   const [city, setCity] = useState("");
+  const [showOptionalFields, setShowOptionalFields] = useState(false);
   // Reset city when country changes
   useEffect(() => {
     setCity("");
@@ -37,7 +36,6 @@ export default function Signup() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isEmailConfirmationDialogOpen, setIsEmailConfirmationDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'voice' | 'normal'>('normal');
@@ -46,20 +44,14 @@ export default function Signup() {
     e.preventDefault();
     setErrorMsg(null);
     
-    // Validate all fields
-    const nameError = validateDisplayName(name);
+    // Validate required fields
     const emailError = validateEmail(email);
     const passwordError = validatePassword(password);
-    const confirmPasswordError = validateConfirmPassword(password, confirmPassword);
     
-    if (nameError) {
-      setErrorMsg(nameError);
-      return;
-    }
-    
-    if (!username.trim()) {
-      setErrorMsg(language === 'en' ? 'Username is required' : 'اسم المستخدم مطلوب');
-      return;
+    // Only validate name if optional fields are shown and user entered something
+    let nameError = null;
+    if (showOptionalFields && name.trim()) {
+      nameError = validateDisplayName(name);
     }
     
     if (emailError) {
@@ -71,9 +63,9 @@ export default function Signup() {
       setErrorMsg(passwordError);
       return;
     }
-    
-    if (confirmPasswordError) {
-      setErrorMsg(confirmPasswordError);
+
+    if (nameError) {
+      setErrorMsg(nameError);
       return;
     }
     
@@ -101,7 +93,6 @@ export default function Signup() {
           emailRedirectTo: redirectUrl,
           data: {
             full_name: name,
-            username,
             date_of_birth: dateOfBirth ? dateOfBirth.toISOString().split('T')[0] : '',
             country: selectedCountry?.name || '',
             country_code: country,
