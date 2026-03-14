@@ -467,89 +467,144 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   const dayShort    = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'short' });
   const dayLong     = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'long' });
   const monthShort  = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { month: 'short' });
-  const base = `${statCardBase} rounded-2xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-transform select-none`;
+  // Shared widget shell: full-bleed gradient background, rounded corners, glow
+  const shell = (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => (
+    <div
+      onClick={editMode ? undefined : onClick}
+      className="rounded-3xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-all select-none relative"
+      style={{
+        background: bg,
+        boxShadow: `0 4px 24px ${glow}55, 0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)`,
+      }}
+    >
+      {/* Glass shimmer overlay */}
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.03) 50%, transparent 100%)' }} />
+      {children}
+    </div>
+  );
 
-  if (wKey === 'showTRWidget') return (
-    <div className={base} onClick={editMode ? undefined : () => navigate('/tr')}>
-      <div className="p-3 flex items-center gap-3 h-full">
-        <div className="w-10 h-10 rounded-2xl flex-shrink-0 flex items-center justify-center" style={{ background: taskIconBg }}>
-          <CheckSquare className="w-5 h-5 text-white" strokeWidth={2.5} />
+  if (wKey === 'showTRWidget') return shell(
+    taskAccent === '#22c55e'
+      ? 'linear-gradient(145deg,#064e3b 0%,#065f46 40%,#047857 100%)'
+      : taskAccent === '#f59e0b'
+      ? 'linear-gradient(145deg,#78350f 0%,#92400e 40%,#b45309 100%)'
+      : 'linear-gradient(145deg,#7f1d1d 0%,#991b1b 40%,#b91c1c 100%)',
+    taskAccent,
+    () => navigate('/tr'),
+    <div className="p-4 flex flex-col justify-between h-full">
+      <div className="flex items-start justify-between">
+        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
+          <CheckSquare className="w-6 h-6 text-white" strokeWidth={2} />
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[18px] font-black tabular-nums" style={{ color: taskAccent }}>{pendingTasks === 0 ? '✓' : pendingTasks}</p>
-          <p className="text-[11px] font-bold leading-none" style={{ color: labelColor }}>{language === 'ar' ? 'المهام' : 'Tasks'}</p>
-          <p className="text-[9px] font-semibold mt-1" style={{ color: taskAccent }}>{taskMsg}</p>
-        </div>
+        <span className="text-4xl font-black tabular-nums text-white leading-none" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>{pendingTasks === 0 ? '✓' : pendingTasks}</span>
+      </div>
+      <div>
+        <p className="text-[15px] font-black text-white leading-tight">{language === 'ar' ? 'المهام' : 'Tasks'}</p>
+        <p className="text-[11px] font-semibold mt-0.5" style={{ color: 'rgba(255,255,255,0.75)' }}>{taskMsg}</p>
       </div>
     </div>
   );
-  if (wKey === 'showCalendarWidget') return (
-    <div className={`${statCardBase} rounded-2xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-transform select-none`} onClick={editMode ? undefined : () => navigate('/calendar')} style={{ background: hasBg ? 'rgba(168,85,247,0.25)' : isDark ? 'rgba(168,85,247,0.15)' : 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.4)' }}>
-      <div className="flex h-full">
-        <div className="px-3 py-3 flex flex-col justify-center items-center" style={{ background: 'linear-gradient(135deg,#7c3aed,#a855f7)', minWidth: 52 }}>
-          <p className="text-[8px] font-bold text-white uppercase tracking-wider">{monthShort}</p>
-          <span className="text-3xl font-black text-white leading-none tabular-nums">{dayNum}</span>
+
+  if (wKey === 'showCalendarWidget') return shell(
+    'linear-gradient(145deg,#3b0764 0%,#581c87 40%,#7e22ce 100%)',
+    '#a855f7',
+    () => navigate('/calendar'),
+    <div className="p-4 flex flex-col justify-between h-full">
+      <div className="flex items-start justify-between">
+        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
+          <CalendarDays className="w-6 h-6 text-white" strokeWidth={2} />
         </div>
-        <div className="px-3 flex flex-col justify-center flex-1">
-          <p className="text-[13px] font-bold" style={{ color: labelColor }}>{dayShort}</p>
-          <p className="text-[10px] font-semibold mt-1" style={{ color: evAccent }}>{evMsg}</p>
+        <div className="text-right">
+          <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest">{monthShort}</p>
+          <span className="text-4xl font-black text-white leading-none tabular-nums">{dayNum}</span>
         </div>
+      </div>
+      <div>
+        <p className="text-[15px] font-black text-white leading-tight">{dayShort}</p>
+        <p className="text-[11px] font-semibold mt-0.5" style={{ color: evAccent === '#6b7280' ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.85)' }}>{evMsg}</p>
       </div>
     </div>
   );
-  if (wKey === 'showMaw3dWidget') return (
-    <div className={base} onClick={editMode ? undefined : () => navigate('/maw3d')}>
-      <div className="p-3 flex items-center gap-3 h-full">
-        <div className="w-10 h-10 rounded-2xl flex-shrink-0 flex items-center justify-center" style={{ background: maw3dBg }}>
-          <Clock className="w-5 h-5 text-white" strokeWidth={2.5} />
+
+  if (wKey === 'showMaw3dWidget') return shell(
+    maw3dAccent === '#22c55e'
+      ? 'linear-gradient(145deg,#064e3b 0%,#065f46 40%,#047857 100%)'
+      : maw3dAccent === '#f59e0b'
+      ? 'linear-gradient(145deg,#78350f 0%,#92400e 40%,#b45309 100%)'
+      : 'linear-gradient(145deg,#1e1b4b 0%,#312e81 40%,#4338ca 100%)',
+    maw3dAccent,
+    () => navigate('/maw3d'),
+    <div className="p-4 flex flex-col justify-between h-full">
+      <div className="flex items-start justify-between">
+        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
+          <Clock className="w-6 h-6 text-white" strokeWidth={2} />
         </div>
-        <div className="flex-1">
-          <p className="text-[18px] font-black tabular-nums" style={{ color: maw3dAccent }}>{upcomingCount === 0 ? '—' : upcomingCount}</p>
-          <p className="text-[11px] font-bold leading-none" style={{ color: labelColor }}>{language === 'ar' ? 'مواعيد' : 'Maw3d'}</p>
-          <p className="text-[9px] font-semibold mt-1" style={{ color: maw3dAccent }}>{upcomingCount === 0 ? (language === 'ar' ? 'لا مواعيد' : 'Clear') : upcomingCount <= 2 ? (language === 'ar' ? 'مجدولة ✓' : 'scheduled ✓') : (language === 'ar' ? 'مشغول 🔥' : 'busy 🔥')}</p>
-        </div>
+        <span className="text-4xl font-black tabular-nums text-white leading-none" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>{upcomingCount === 0 ? '0' : upcomingCount}</span>
+      </div>
+      <div>
+        <p className="text-[15px] font-black text-white leading-tight">{language === 'ar' ? 'مواعيد' : 'Maw3d'}</p>
+        <p className="text-[11px] font-semibold mt-0.5" style={{ color: 'rgba(255,255,255,0.75)' }}>{upcomingCount === 0 ? (language === 'ar' ? 'لا مواعيد 📭' : 'All clear 📭') : upcomingCount <= 2 ? (language === 'ar' ? 'مجدولة ✓' : 'scheduled ✓') : (language === 'ar' ? 'مشغول 🔥' : 'busy 🔥')}</p>
       </div>
     </div>
   );
-  if (wKey === 'showNavWidget') return (
-    <div className={`${statCardBase} rounded-2xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-transform select-none`} onClick={editMode ? undefined : () => navigate('/dashboard')} style={{ background: hasBg ? 'rgba(56,189,248,0.2)' : isDark ? 'rgba(56,189,248,0.12)' : 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.35)' }}>
-      <div className="flex h-full">
-        <div className="px-3 py-3 flex flex-col justify-center items-center" style={{ background: 'linear-gradient(135deg,#0369a1,#38bdf8)', minWidth: 52 }}>
-          <p className="text-[8px] font-bold text-white uppercase tracking-wider">{language === 'ar' ? 'اليوم' : 'Today'}</p>
-          <span className="text-3xl font-black text-white leading-none tabular-nums">{dayNum}</span>
+
+  if (wKey === 'showNavWidget') return shell(
+    'linear-gradient(145deg,#0c4a6e 0%,#075985 40%,#0284c7 100%)',
+    '#38bdf8',
+    () => navigate('/dashboard'),
+    <div className="p-4 flex flex-col justify-between h-full">
+      <div className="flex items-start justify-between">
+        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
+          <CalendarDays className="w-6 h-6 text-white" strokeWidth={2} />
         </div>
-        <div className="px-3 flex flex-col justify-center flex-1">
-          <p className="text-[13px] font-bold" style={{ color: labelColor }}>{dayLong}</p>
+        <div className="text-right">
+          <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest">{monthShort}</p>
+          <span className="text-4xl font-black text-white leading-none tabular-nums">{dayNum}</span>
         </div>
+      </div>
+      <div>
+        <p className="text-[15px] font-black text-white leading-tight">{dayLong}</p>
+        <p className="text-[11px] font-semibold mt-0.5 text-white/60">{language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}</p>
       </div>
     </div>
   );
-  if (wKey === 'showWhoopWidget') return (
-    <div className={base} onClick={editMode ? undefined : () => navigate('/fitness')}>
-      <div className="p-3 flex items-center gap-3 h-full">
-        <div className="w-10 h-10 rounded-2xl flex-shrink-0 flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#be123c,#ef4444)' }}>
-          <Activity className="w-5 h-5 text-white" strokeWidth={2.5} />
+
+  if (wKey === 'showWhoopWidget') return shell(
+    'linear-gradient(145deg,#7f1d1d 0%,#991b1b 40%,#dc2626 100%)',
+    '#ef4444',
+    () => navigate('/fitness'),
+    <div className="p-4 flex flex-col justify-between h-full">
+      <div className="flex items-start justify-between">
+        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
+          <Activity className="w-6 h-6 text-white" strokeWidth={2} />
         </div>
-        <div className="flex-1">
-          <p className="text-[13px] font-bold leading-none" style={{ color: labelColor }}>WHOOP</p>
-          <p className="text-[9px] font-semibold mt-1" style={{ color: '#ef4444' }}>{language === 'ar' ? 'الحيوية ←' : 'Vitality →'}</p>
-        </div>
+        <span className="text-4xl font-black text-white leading-none">♥</span>
+      </div>
+      <div>
+        <p className="text-[15px] font-black text-white leading-tight">WHOOP</p>
+        <p className="text-[11px] font-semibold mt-0.5 text-white/70">{language === 'ar' ? 'الحيوية والنشاط' : 'Vitality & fitness'}</p>
       </div>
     </div>
   );
-  if (wKey === 'showJournalWidget') return (
-    <div className={`${statCardBase} rounded-2xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-transform select-none`} onClick={editMode ? undefined : () => navigate('/journal')} style={{ background: hasBg ? 'rgba(139,92,246,0.2)' : isDark ? 'rgba(139,92,246,0.12)' : 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.35)' }}>
-      <div className="p-3 flex items-center gap-3 h-full">
-        <div className="w-10 h-10 rounded-2xl flex-shrink-0 flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#6d28d9,#8b5cf6)' }}>
-          <BookOpen className="w-5 h-5 text-white" strokeWidth={2.5} />
+
+  if (wKey === 'showJournalWidget') return shell(
+    'linear-gradient(145deg,#2e1065 0%,#4c1d95 40%,#6d28d9 100%)',
+    '#8b5cf6',
+    () => navigate('/journal'),
+    <div className="p-4 flex flex-col justify-between h-full">
+      <div className="flex items-start justify-between">
+        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
+          <BookOpen className="w-6 h-6 text-white" strokeWidth={2} />
         </div>
-        <div className="flex-1">
-          <p className="text-[13px] font-bold leading-none" style={{ color: labelColor }}>{language === 'ar' ? 'يومياتي' : 'Journal'}</p>
-          <p className="text-[9px] font-semibold mt-1" style={{ color: '#8b5cf6' }}>{language === 'ar' ? '✍️ اكتب اليوم' : '✍️ Write today'}</p>
-        </div>
+        <span className="text-3xl leading-none">✍️</span>
+      </div>
+      <div>
+        <p className="text-[15px] font-black text-white leading-tight">{language === 'ar' ? 'يومياتي' : 'Journal'}</p>
+        <p className="text-[11px] font-semibold mt-0.5 text-white/70">{language === 'ar' ? 'سجّل يومك' : 'Write today'}</p>
       </div>
     </div>
   );
+
   return null;
 }
 

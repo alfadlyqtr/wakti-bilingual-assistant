@@ -154,19 +154,8 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
               boxShadow: "0 8px 32px rgba(233, 206, 176, 0.3)",
             }}
           >
-            {isArabic ? "أنشئ حسابك" : "Create your account"}
+            {isArabic ? "جرب وقتي AI مجاناً" : "Try Wakti AI for Free"}
           </Button>
-
-          <button
-            type="button"
-            onClick={() => {
-              const pricingEl = document.getElementById("pricing");
-              pricingEl?.scrollIntoView({ behavior: "smooth", block: "start" });
-            }}
-            className="mt-4 text-xs font-light tracking-[0.2em] uppercase text-blue-200/80 hover:text-blue-100 transition-colors"
-          >
-            {isArabic ? "السعر" : "Price"}
-          </button>
         </motion.div>
       </motion.div>
 
