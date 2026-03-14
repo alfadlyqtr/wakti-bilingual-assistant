@@ -54,6 +54,7 @@ import { getQuoteForDisplay, getQuoteText, getQuoteAuthor } from "@/utils/quoteS
 import { useOptimizedTRData } from "@/hooks/useOptimizedTRData";
 import { useOptimizedMaw3dEvents } from "@/hooks/useOptimizedMaw3dEvents";
 import { useWhoopData } from "@/hooks/useWhoopData";
+import { useJournalData } from "@/hooks/useJournalData";
 import { SavedImagesPicker } from "@/components/dashboard/SavedImagesPicker";
 
 // ─── App definitions ──────────────────────────────────────────────────────────
@@ -902,6 +903,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const { tasks }  = useOptimizedTRData();
   const { events } = useOptimizedMaw3dEvents();
   const whoopData = useWhoopData();
+  const journalData = useJournalData();
   const pendingTasks  = tasks.filter(t => !t.completed).length;
   const upcomingCount = events.filter(e => {
     try { return new Date(e.event_date) >= new Date(new Date().toDateString()); } catch { return false; }
@@ -1697,6 +1699,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                           quoteText={quoteText}
                           quoteAuthor={quoteAuthor}
                           whoopData={whoopData}
+                          journalData={journalData}
                         />
                       );
                     }
