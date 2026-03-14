@@ -76,6 +76,7 @@ const LS_ORDER_KEY  = "homescreen_icon_order_v2"; // v2 — forces clean slate
 const LS_DOCK_KEY   = "homescreen_dock_v2";
 const LS_QUOTE_KEY  = "homescreen_show_quote";
 const LS_BG_KEY     = "homescreen_bg";
+const LS_HEADER_COLOR_KEY = "homescreen_header_color";
 const LS_UNIFIED_KEY = "homescreen_unified_grid_v6";
 
 // Widget IDs used in the unified grid
@@ -789,6 +790,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   });
   const [showQuote,       setShowQuote]       = useState<boolean>(() => localStorage.getItem(LS_QUOTE_KEY) !== "false");
   const [bgImage,         setBgImage]         = useState<string>(() => localStorage.getItem(LS_BG_KEY) || "");
+  const [headerColor,     setHeaderColor]     = useState<string>(() => localStorage.getItem(LS_HEADER_COLOR_KEY) || "");
 
   // Homescreen background style from Settings
   const [hsBg, setHsBg] = useState<{ mode: 'solid'|'gradient'; color1: string; color2: string; color3: string; angle: number; glow: boolean }>(
@@ -937,6 +939,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         }
         if (typeof hs.showQuote === "boolean" && String(hs.showQuote) !== localStorage.getItem(LS_QUOTE_KEY)) { setShowQuote(hs.showQuote); localStorage.setItem(LS_QUOTE_KEY, String(hs.showQuote)); }
         if (hs.bgImage && hs.bgImage !== localStorage.getItem(LS_BG_KEY)) { setBgImage(hs.bgImage); localStorage.setItem(LS_BG_KEY, hs.bgImage); }
+        if (hs.headerColor && hs.headerColor !== localStorage.getItem(LS_HEADER_COLOR_KEY)) { setHeaderColor(hs.headerColor); localStorage.setItem(LS_HEADER_COLOR_KEY, hs.headerColor); }
       } catch { /* silent */ }
     })();
   }, [user]);
@@ -1102,6 +1105,16 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     syncToSupabase({ homescreenBg: patch });
     window.dispatchEvent(new Event('homescreenBgChanged'));
     setBgPanelOpen(false);
+  };
+  const saveHeaderColor = (color: string) => {
+    setHeaderColor(color);
+    localStorage.setItem(LS_HEADER_COLOR_KEY, color);
+    syncToSupabase({ headerColor: color });
+  };
+  const removeHeaderColor = () => {
+    setHeaderColor("");
+    localStorage.removeItem(LS_HEADER_COLOR_KEY);
+    syncToSupabase({ headerColor: "" });
   };
   const toggleQuote = () => {
     const next = !showQuote;
@@ -1291,9 +1304,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const isDark = theme === "dark";
   const hasBg  = !!bgImage;
 
-  // Greeting text — always white over BG, theme-sensitive otherwise
-  const headColor = hasBg ? "#ffffff" : isDark ? "#f2f2f2" : "#060541";
-  const subColor  = hasBg ? "rgba(255,255,255,0.72)" : isDark ? "rgba(242,242,242,0.55)" : "rgba(6,5,65,0.55)";
+  // Greeting text — custom header color overrides, then BG/theme defaults
+  const headColor = headerColor || (hasBg ? "#ffffff" : isDark ? "#f2f2f2" : "#060541");
+  const subColor  = headerColor ? `${headerColor}b3` : (hasBg ? "rgba(255,255,255,0.72)" : isDark ? "rgba(242,242,242,0.55)" : "rgba(6,5,65,0.55)");
 
   // Stat card surface
   const statCardBase = hasBg
@@ -1416,6 +1429,16 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                 {language === "ar" ? "اقتباس" : "Quote"}
                 {showQuote && <Check className="w-2.5 h-2.5" />}
               </button>
+              <div className="flex items-center gap-1">
+                <input type="color" title="Header color" value={headerColor || '#ffffff'} onChange={e => saveHeaderColor(e.target.value)}
+                  className="w-7 h-7 rounded-lg cursor-pointer border border-white/30 p-0.5 bg-transparent" />
+                {headerColor && (
+                  <button onClick={removeHeaderColor} title="Reset header color"
+                    className="px-2 py-1.5 rounded-full bg-red-500/60 text-white">
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
