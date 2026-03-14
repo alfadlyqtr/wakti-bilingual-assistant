@@ -55,7 +55,6 @@ import { useOptimizedMaw3dEvents } from "@/hooks/useOptimizedMaw3dEvents";
 
 // ─── App definitions ──────────────────────────────────────────────────────────
 const ALL_APPS = [
-  { id: "dashboard", nameEn: "Dashboard", nameAr: "الرئيسية",  path: "/dashboard",         icon: LayoutDashboard, gradient: "from-blue-500 to-blue-700",       glow: "#3b82f6" },
   { id: "calendar",  nameEn: "Calendar",  nameAr: "التقويم",   path: "/calendar",           icon: Calendar,        gradient: "from-sky-400 to-sky-600",         glow: "#38bdf8" },
   { id: "journal",   nameEn: "Journal",   nameAr: "المذكرات",  path: "/journal",            icon: NotebookPen,     gradient: "from-pink-500 to-rose-600",       glow: "#ec4899" },
   { id: "maw3d",     nameEn: "Maw3d",     nameAr: "مواعيد",   path: "/maw3d",              icon: CalendarClock,   gradient: "from-purple-500 to-purple-700",   glow: "#a855f7" },
@@ -80,7 +79,7 @@ const LS_BG_KEY     = "homescreen_bg";
 const LS_UNIFIED_KEY = "homescreen_unified_grid_v6";
 
 // Widget IDs used in the unified grid
-const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showNavWidget','showWhoopWidget','showJournalWidget'] as const;
+const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showNavWidget','showWhoopWidget','showJournalWidget','showQuoteWidget'] as const;
 type WidgetId = typeof WIDGET_IDS[number];
 const MAX_WIDGETS = 3;
 
@@ -445,11 +444,12 @@ function StatWidgets({ hsWidgets, language, theme, hasBg, pendingTasks, complete
 }
 
 // ─── Widget content renderer (no drag logic, just visuals) ────────────────────
-function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, pendingTasks, completedToday, upcomingCount, navigate }: {
+function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, pendingTasks, completedToday, upcomingCount, navigate, quoteText, quoteAuthor }: {
   wKey: WidgetId; editMode: boolean; language: string; theme: string;
   hasBg: boolean; statCardBase: string;
   pendingTasks: number; completedToday: number; upcomingCount: number;
   navigate: (p: string) => void;
+  quoteText?: string; quoteAuthor?: string;
 }) {
   const isDark = theme === 'dark';
   const total = pendingTasks + completedToday;
@@ -496,9 +496,16 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
         <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
           <CheckSquare className="w-6 h-6 text-white" strokeWidth={2} />
         </div>
-        <span className="text-4xl font-black tabular-nums text-white leading-none" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>{pendingTasks === 0 ? '✓' : pendingTasks}</span>
+        <div className="text-right">
+          <span className="text-4xl font-black tabular-nums text-white leading-none" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>{pendingTasks === 0 ? '✓' : pendingTasks}</span>
+          <p className="text-[9px] font-bold text-white/50 uppercase tracking-wider">{language === 'ar' ? 'معلّقة' : 'pending'}</p>
+        </div>
       </div>
+      {/* Progress bar */}
       <div>
+        <div className="w-full h-1.5 rounded-full mb-2" style={{ background: 'rgba(255,255,255,0.2)' }}>
+          <div className="h-1.5 rounded-full transition-all" style={{ width: `${pct}%`, background: 'rgba(255,255,255,0.85)' }} />
+        </div>
         <p className="text-[15px] font-black text-white leading-tight">{language === 'ar' ? 'المهام' : 'Tasks'}</p>
         <p className="text-[11px] font-semibold mt-0.5" style={{ color: 'rgba(255,255,255,0.75)' }}>{taskMsg}</p>
       </div>
@@ -515,13 +522,16 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
           <CalendarDays className="w-6 h-6 text-white" strokeWidth={2} />
         </div>
         <div className="text-right">
-          <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest">{monthShort}</p>
+          <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest">{monthShort}</p>
           <span className="text-4xl font-black text-white leading-none tabular-nums">{dayNum}</span>
         </div>
       </div>
       <div>
-        <p className="text-[15px] font-black text-white leading-tight">{dayShort}</p>
-        <p className="text-[11px] font-semibold mt-0.5" style={{ color: evAccent === '#6b7280' ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.85)' }}>{evMsg}</p>
+        <p className="text-[15px] font-black text-white leading-tight">{dayLong}</p>
+        <div className="flex items-center gap-1.5 mt-1">
+          <div className="w-2 h-2 rounded-full" style={{ background: evAccent === '#6b7280' ? 'rgba(255,255,255,0.3)' : evAccent }} />
+          <p className="text-[11px] font-semibold" style={{ color: evAccent === '#6b7280' ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.9)' }}>{evMsg}</p>
+        </div>
       </div>
     </div>
   );
@@ -539,9 +549,19 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
         <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
           <Clock className="w-6 h-6 text-white" strokeWidth={2} />
         </div>
-        <span className="text-4xl font-black tabular-nums text-white leading-none" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>{upcomingCount === 0 ? '0' : upcomingCount}</span>
+        <div className="text-right">
+          <span className="text-4xl font-black tabular-nums text-white leading-none">{upcomingCount === 0 ? '0' : upcomingCount}</span>
+          <p className="text-[9px] font-bold text-white/50 uppercase tracking-wider">{language === 'ar' ? 'مواعيد' : 'events'}</p>
+        </div>
       </div>
+      {/* Mini event dots */}
       <div>
+        <div className="flex gap-1 mb-2">
+          {Array.from({ length: Math.min(upcomingCount, 5) }).map((_, i) => (
+            <div key={i} className="w-2 h-2 rounded-full" style={{ background: maw3dAccent === '#6b7280' ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.7)' }} />
+          ))}
+          {upcomingCount === 0 && <div className="w-2 h-2 rounded-full" style={{ background: 'rgba(255,255,255,0.2)' }} />}
+        </div>
         <p className="text-[15px] font-black text-white leading-tight">{language === 'ar' ? 'مواعيد' : 'Maw3d'}</p>
         <p className="text-[11px] font-semibold mt-0.5" style={{ color: 'rgba(255,255,255,0.75)' }}>{upcomingCount === 0 ? (language === 'ar' ? 'لا مواعيد 📭' : 'All clear 📭') : upcomingCount <= 2 ? (language === 'ar' ? 'مجدولة ✓' : 'scheduled ✓') : (language === 'ar' ? 'مشغول 🔥' : 'busy 🔥')}</p>
       </div>
@@ -580,7 +600,13 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
         </div>
         <span className="text-4xl font-black text-white leading-none">♥</span>
       </div>
+      {/* Animated EKG-style bar */}
       <div>
+        <div className="flex items-end gap-0.5 mb-2 h-6">
+          {[3,5,2,7,4,8,3,6,2,5,3,4].map((h, i) => (
+            <div key={i} className="flex-1 rounded-sm" style={{ height: `${h * 10}%`, background: i === 7 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)' }} />
+          ))}
+        </div>
         <p className="text-[15px] font-black text-white leading-tight">WHOOP</p>
         <p className="text-[11px] font-semibold mt-0.5 text-white/70">{language === 'ar' ? 'الحيوية والنشاط' : 'Vitality & fitness'}</p>
       </div>
@@ -598,9 +624,38 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
         </div>
         <span className="text-3xl leading-none">✍️</span>
       </div>
+      {/* 7-day streak dots */}
       <div>
+        <div className="flex gap-1 mb-2">
+          {['M','T','W','T','F','S','S'].map((d, i) => (
+            <div key={i} className="flex flex-col items-center gap-0.5">
+              <div className="w-4 h-4 rounded-full" style={{ background: i < new Date().getDay() ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.2)' }} />
+              <span className="text-[7px] text-white/40">{d}</span>
+            </div>
+          ))}
+        </div>
         <p className="text-[15px] font-black text-white leading-tight">{language === 'ar' ? 'يومياتي' : 'Journal'}</p>
         <p className="text-[11px] font-semibold mt-0.5 text-white/70">{language === 'ar' ? 'سجّل يومك' : 'Write today'}</p>
+      </div>
+    </div>
+  );
+
+  if (wKey === 'showQuoteWidget') return shell(
+    'linear-gradient(145deg,#0f172a 0%,#1e293b 40%,#334155 100%)',
+    '#94a3b8',
+    () => {},
+    <div className="p-4 flex flex-col justify-between h-full">
+      <div className="flex items-start justify-between">
+        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
+          <span className="text-xl">💬</span>
+        </div>
+        <span className="text-[9px] font-bold text-white/40 uppercase tracking-widest pt-1">{language === 'ar' ? 'اقتباس' : 'Quote'}</span>
+      </div>
+      <div>
+        <p className="text-[11px] italic leading-snug text-white/90 line-clamp-3" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+          {quoteText ? `"${quoteText}"` : '...'}
+        </p>
+        {quoteAuthor && <p className="text-[10px] mt-1 text-white/45 font-medium">— {quoteAuthor}</p>}
       </div>
     </div>
   );
@@ -615,8 +670,9 @@ interface UnifiedWidgetCellProps {
   pendingTasks: number; completedToday: number; upcomingCount: number;
   navigate: (p: string) => void;
   gridArea: string;
+  quoteText?: string; quoteAuthor?: string;
 }
-function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea }: UnifiedWidgetCellProps) {
+function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor }: UnifiedWidgetCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id, data: { type: 'unified' },
   });
@@ -640,6 +696,7 @@ function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCar
         hasBg={hasBg} statCardBase={statCardBase}
         pendingTasks={pendingTasks} completedToday={completedToday}
         upcomingCount={upcomingCount} navigate={navigate}
+        quoteText={quoteText} quoteAuthor={quoteAuthor}
       />
       {editMode && (
         <div className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full bg-black/70 border border-white/30 flex items-center justify-center">
@@ -1501,6 +1558,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                           upcomingCount={upcomingCount}
                           navigate={navigate}
                           gridArea={gp}
+                          quoteText={quoteText}
+                          quoteAuthor={quoteAuthor}
                         />
                       );
                     }
