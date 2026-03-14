@@ -1585,21 +1585,6 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             </SortableContext>
           </div>
 
-          {/* ── Quote — above dock, only if enabled via Settings homescreenWidgets.showQuoteWidget ── */}
-          {hsWidgets.showQuoteWidget && quote && (
-            <div className="flex-none px-5 mb-2">
-              <div className={`${quoteGlass} rounded-2xl px-4 py-2.5`}>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-purple-400 mb-1">
-                  {language === "ar" ? "اقتباس اليوم" : "Daily Quote"}
-                </p>
-                <p className="text-[11px] italic leading-snug" style={{ color: quoteTextColor }} dir={language === "ar" ? "rtl" : "ltr"}>
-                  "{quoteText}"
-                </p>
-                <p className="text-[10px] mt-1" style={{ color: quoteAuthorColor }}>— {quoteAuthor}</p>
-              </div>
-            </div>
-          )}
-
           {/* ── DOCK — always at very bottom ── */}
           <div className="mt-auto flex-none px-4 pt-1 hs-dock-bottom">
             <div className={`flex items-center justify-around ${dockGlass} rounded-[28px] py-3 px-5`}>
