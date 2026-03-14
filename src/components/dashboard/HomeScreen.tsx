@@ -477,6 +477,8 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
       className="rounded-3xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-all select-none relative"
       style={{
         background: bg,
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         boxShadow: `0 4px 24px ${glow}55, 0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)`,
       }}
     >
@@ -488,10 +490,10 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
 
   if (wKey === 'showTRWidget') return shell(
     taskAccent === '#22c55e'
-      ? 'linear-gradient(145deg,#064e3b 0%,#065f46 40%,#047857 100%)'
+      ? 'linear-gradient(145deg,rgba(6,78,59,0.7) 0%,rgba(6,95,70,0.7) 40%,rgba(4,120,87,0.7) 100%)'
       : taskAccent === '#f59e0b'
-      ? 'linear-gradient(145deg,#78350f 0%,#92400e 40%,#b45309 100%)'
-      : 'linear-gradient(145deg,#7f1d1d 0%,#991b1b 40%,#b91c1c 100%)',
+      ? 'linear-gradient(145deg,rgba(120,53,15,0.7) 0%,rgba(146,64,14,0.7) 40%,rgba(180,83,9,0.7) 100%)'
+      : 'linear-gradient(145deg,rgba(127,29,29,0.7) 0%,rgba(153,27,27,0.7) 40%,rgba(185,28,28,0.7) 100%)',
     taskAccent,
     () => navigate('/tr'),
     <div className="p-4 flex flex-col justify-between h-full">
@@ -516,7 +518,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   );
 
   if (wKey === 'showCalendarWidget') return shell(
-    'linear-gradient(145deg,#3b0764 0%,#581c87 40%,#7e22ce 100%)',
+    'linear-gradient(145deg,rgba(59,7,100,0.7) 0%,rgba(88,28,135,0.7) 40%,rgba(126,34,206,0.7) 100%)',
     '#a855f7',
     () => navigate('/calendar'),
     <div className="p-4 flex flex-col justify-between h-full">
@@ -541,10 +543,10 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
 
   if (wKey === 'showMaw3dWidget') return shell(
     maw3dAccent === '#22c55e'
-      ? 'linear-gradient(145deg,#064e3b 0%,#065f46 40%,#047857 100%)'
+      ? 'linear-gradient(145deg,rgba(6,78,59,0.7) 0%,rgba(6,95,70,0.7) 40%,rgba(4,120,87,0.7) 100%)'
       : maw3dAccent === '#f59e0b'
-      ? 'linear-gradient(145deg,#78350f 0%,#92400e 40%,#b45309 100%)'
-      : 'linear-gradient(145deg,#1e1b4b 0%,#312e81 40%,#4338ca 100%)',
+      ? 'linear-gradient(145deg,rgba(120,53,15,0.7) 0%,rgba(146,64,14,0.7) 40%,rgba(180,83,9,0.7) 100%)'
+      : 'linear-gradient(145deg,rgba(30,27,75,0.7) 0%,rgba(49,46,129,0.7) 40%,rgba(67,56,202,0.7) 100%)',
     maw3dAccent,
     () => navigate('/maw3d'),
     <div className="p-4 flex flex-col justify-between h-full">
@@ -572,7 +574,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   );
 
   if (wKey === 'showNavWidget') return shell(
-    'linear-gradient(145deg,#0c4a6e 0%,#075985 40%,#0284c7 100%)',
+    'linear-gradient(145deg,rgba(12,74,110,0.7) 0%,rgba(7,89,133,0.7) 40%,rgba(2,132,199,0.7) 100%)',
     '#38bdf8',
     () => navigate('/dashboard'),
     <div className="p-4 flex flex-col justify-between h-full">
@@ -593,7 +595,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   );
 
   if (wKey === 'showWhoopWidget') return shell(
-    'linear-gradient(145deg,#7f1d1d 0%,#991b1b 40%,#dc2626 100%)',
+    'rgba(0,0,0,0.7)',
     '#ef4444',
     () => navigate('/fitness'),
     <div className="p-4 flex flex-col justify-between h-full">
@@ -617,7 +619,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   );
 
   if (wKey === 'showJournalWidget') return shell(
-    'linear-gradient(145deg,#2e1065 0%,#4c1d95 40%,#6d28d9 100%)',
+    'rgba(0,0,0,0.7)',
     '#8b5cf6',
     () => navigate('/journal'),
     <div className="p-4 flex flex-col justify-between h-full">
@@ -644,7 +646,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   );
 
   if (wKey === 'showQuoteWidget') return shell(
-    'linear-gradient(145deg,#0f172a 0%,#1e293b 40%,#334155 100%)',
+    'linear-gradient(145deg,rgba(15,23,42,0.7) 0%,rgba(30,41,59,0.7) 40%,rgba(51,65,85,0.7) 100%)',
     '#94a3b8',
     () => {},
     <div className="p-4 flex flex-col justify-between h-full">
