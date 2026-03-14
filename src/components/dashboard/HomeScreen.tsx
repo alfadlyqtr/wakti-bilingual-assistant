@@ -55,19 +55,19 @@ import { useOptimizedMaw3dEvents } from "@/hooks/useOptimizedMaw3dEvents";
 
 // ─── App definitions ──────────────────────────────────────────────────────────
 const ALL_APPS = [
-  { id: "calendar",  nameEn: "Calendar",  nameAr: "التقويم",   path: "/calendar",           icon: Calendar,        gradient: "from-sky-400 to-sky-600",         glow: "#38bdf8" },
-  { id: "journal",   nameEn: "Journal",   nameAr: "المذكرات",  path: "/journal",            icon: NotebookPen,     gradient: "from-pink-500 to-rose-600",       glow: "#ec4899" },
-  { id: "maw3d",     nameEn: "Maw3d",     nameAr: "مواعيد",   path: "/maw3d",              icon: CalendarClock,   gradient: "from-purple-500 to-purple-700",   glow: "#a855f7" },
-  { id: "tr",        nameEn: "T & R",     nameAr: "م & ت",    path: "/tr",                 icon: ListTodo,        gradient: "from-green-500 to-emerald-600",   glow: "#22c55e" },
-  { id: "wakti-ai",  nameEn: "WAKTI AI",  nameAr: "WAKTI AI", path: "/wakti-ai",           icon: Sparkles,        gradient: "from-orange-500 to-amber-400",    glow: "#f97316" },
-  { id: "studio",    nameEn: "Studio",    nameAr: "الاستوديو", path: "/music",              icon: Aperture,        gradient: "from-fuchsia-500 to-violet-600",  glow: "#d946ef" },
-  { id: "vitality",  nameEn: "Vitality",  nameAr: "الحيوية",  path: "/fitness",            icon: null,            gradient: "from-rose-500 to-red-600",        glow: "#f43f5e", isWaktiIcon: true },
-  { id: "tasjeel",   nameEn: "Tasjeel",   nameAr: "تسجيل",    path: "/tasjeel",            icon: AudioLines,      gradient: "from-cyan-400 to-cyan-600",       glow: "#06b6d4" },
-  { id: "warranty",  nameEn: "My Files",  nameAr: "ملفاتي",   path: "/my-warranty",        icon: FolderOpen,      gradient: "from-emerald-400 to-emerald-600", glow: "#10b981" },
-  { id: "projects",  nameEn: "Projects",  nameAr: "مشاريع",   path: "/projects",           icon: Code2,           gradient: "from-indigo-500 to-indigo-700",   glow: "#6366f1" },
-  { id: "text",      nameEn: "Text",      nameAr: "نص",       path: "/tools/text",         icon: PenTool,         gradient: "from-violet-500 to-violet-700",   glow: "#8b5cf6" },
-  { id: "voice",     nameEn: "Voice",     nameAr: "صوت",      path: "/tools/voice-studio", icon: Mic,             gradient: "from-pink-400 to-pink-600",       glow: "#f472b6" },
-  { id: "game",      nameEn: "Game",      nameAr: "لعبة",     path: "/tools/game",         icon: Gamepad2,        gradient: "from-red-500 to-red-700",         glow: "#ef4444" },
+  { id: "calendar",  nameEn: "Calendar",  nameAr: "التقويم",   path: "/calendar",           icon: Calendar,        gradient: "from-sky-400/70 to-sky-600/70",         glow: "#38bdf8" },
+  { id: "journal",   nameEn: "Journal",   nameAr: "المذكرات",  path: "/journal",            icon: NotebookPen,     gradient: "from-pink-500/70 to-rose-600/70",       glow: "#ec4899" },
+  { id: "maw3d",     nameEn: "Maw3d",     nameAr: "مواعيد",   path: "/maw3d",              icon: CalendarClock,   gradient: "from-purple-500/70 to-purple-700/70",   glow: "#a855f7" },
+  { id: "tr",        nameEn: "T & R",     nameAr: "م & ت",    path: "/tr",                 icon: ListTodo,        gradient: "from-green-500/70 to-emerald-600/70",   glow: "#22c55e" },
+  { id: "wakti-ai",  nameEn: "WAKTI AI",  nameAr: "WAKTI AI", path: "/wakti-ai",           icon: Sparkles,        gradient: "from-orange-500/70 to-amber-400/70",    glow: "#f97316" },
+  { id: "studio",    nameEn: "Studio",    nameAr: "الاستوديو", path: "/music",              icon: Aperture,        gradient: "from-fuchsia-500/70 to-violet-600/70",  glow: "#d946ef" },
+  { id: "vitality",  nameEn: "Vitality",  nameAr: "الحيوية",  path: "/fitness",            icon: null,            gradient: "from-rose-500/70 to-red-600/70",        glow: "#f43f5e", isWaktiIcon: true },
+  { id: "tasjeel",   nameEn: "Tasjeel",   nameAr: "تسجيل",    path: "/tasjeel",            icon: AudioLines,      gradient: "from-cyan-400/70 to-cyan-600/70",       glow: "#06b6d4" },
+  { id: "warranty",  nameEn: "My Files",  nameAr: "ملفاتي",   path: "/my-warranty",        icon: FolderOpen,      gradient: "from-emerald-400/70 to-emerald-600/70", glow: "#10b981" },
+  { id: "projects",  nameEn: "Projects",  nameAr: "مشاريع",   path: "/projects",           icon: Code2,           gradient: "from-indigo-500/70 to-indigo-700/70",   glow: "#6366f1" },
+  { id: "text",      nameEn: "Text",      nameAr: "نص",       path: "/tools/text",         icon: PenTool,         gradient: "from-violet-500/70 to-violet-700/70",   glow: "#8b5cf6" },
+  { id: "voice",     nameEn: "Voice",     nameAr: "صوت",      path: "/tools/voice-studio", icon: Mic,             gradient: "from-pink-400/70 to-pink-600/70",       glow: "#f472b6" },
+  { id: "game",      nameEn: "Game",      nameAr: "لعبة",     path: "/tools/game",         icon: Gamepad2,        gradient: "from-red-500/70 to-red-700/70",         glow: "#ef4444" },
 ];
 
 const DEFAULT_ORDER = ALL_APPS.map(a => a.id);
