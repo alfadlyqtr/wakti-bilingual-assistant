@@ -118,11 +118,12 @@ export default function Settings() {
 
       // Load homescreen widgets — enforce max 3 on load
       if (s?.homescreenWidgets) {
-        const raw = { ...DEFAULT_HOMESCREEN_WIDGETS, ...s.homescreenWidgets };
-        const keys = Object.keys(raw) as (keyof WidgetConfig)[];
+        const raw = { ...DEFAULT_HOMESCREEN_WIDGETS, ...s.homescreenWidgets, showNavWidget: false };
+        // Only the 6 visible widget keys count toward the 3-max
+        const VISIBLE_KEYS: (keyof WidgetConfig)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showWhoopWidget','showJournalWidget','showQuoteWidget'];
         let onCount = 0;
         const clamped = { ...raw };
-        for (const k of keys) {
+        for (const k of VISIBLE_KEYS) {
           if (clamped[k]) {
             if (onCount < 3) onCount++;
             else clamped[k] = false;
@@ -528,7 +529,7 @@ export default function Settings() {
                 { key: 'showQuoteWidget',    labelEn: 'Daily Quote',                labelAr: 'اقتباس اليوم' },
               ];
 
-              // Count how many are currently ON
+              // Count only the visible widget entries (excludes showNavWidget)
               const enabledCount = widgetEntries.filter(e => widgetSettings[e.key]).length;
 
               const handleWidgetToggle = (key: keyof typeof widgetSettings, checked: boolean) => {

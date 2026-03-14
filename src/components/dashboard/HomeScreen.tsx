@@ -845,10 +845,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   // Load homescreenWidgets from Supabase and clamp to max 3
   const clampHsWidgets = (raw: Record<string, boolean>) => {
-    const keys = Object.keys(raw) as (keyof typeof hsWidgets)[];
+    const result = { ...raw, showNavWidget: false } as typeof hsWidgets;
+    const VISIBLE: (keyof typeof hsWidgets)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showWhoopWidget','showJournalWidget','showQuoteWidget'];
     let count = 0;
-    const result = { ...raw } as typeof hsWidgets;
-    for (const k of keys) {
+    for (const k of VISIBLE) {
       if (result[k]) { if (count < 3) count++; else result[k] = false; }
     }
     return result;
