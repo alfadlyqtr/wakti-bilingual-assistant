@@ -154,7 +154,11 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
               boxShadow: "0 8px 32px rgba(233, 206, 176, 0.3)",
             }}
           >
-            {isArabic ? "جرب وقتي AI مجاناً" : "Try Wakti AI for Free"}
+            {isArabic ? (
+              <span dir="rtl" style={{ unicodeBidi: 'embed' }}>
+                جرب وقتي AI مجاناً
+              </span>
+            ) : "Try Wakti AI for Free"}
           </Button>
         </motion.div>
       </motion.div>

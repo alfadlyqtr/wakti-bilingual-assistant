@@ -44,7 +44,8 @@ export default function TextTranslateTab() {
           .single();
         if (!profile) return;
         const isPaid = profile.is_subscribed === true;
-        const isGift = profile.payment_method === 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
+        const hasPaymentMethod = profile.payment_method != null && profile.payment_method.trim().length > 0;
+        const isGift = hasPaymentMethod && (!profile.next_billing_date || new Date(profile.next_billing_date) > new Date());
         if (!isPaid && !isGift) setIsTrialUser(true);
       } catch {}
     })();

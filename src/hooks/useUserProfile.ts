@@ -242,7 +242,11 @@ export function useUserProfile() {
       return !profile?.is_subscribed && !!profile?.plan_name;
     },
     get isAdminGifted() {
-      return profile?.payment_method === 'manual' && !!profile?.next_billing_date && new Date(profile.next_billing_date) > new Date();
+      const hasPaymentMethod =
+        profile?.payment_method != null &&
+        typeof profile.payment_method === 'string' &&
+        profile.payment_method.trim().length > 0;
+      return hasPaymentMethod && (!profile?.next_billing_date || new Date(profile.next_billing_date) > new Date());
     }
   };
 }

@@ -216,6 +216,7 @@ export default function Settings() {
   const updateDashboardLook = async (look: 'dashboard' | 'homescreen') => {
     try {
       setDashboardLook(look);
+      localStorage.setItem('wakti_dashboard_look', look);
 
       const { data: currentProfile } = await supabase
         .from('profiles')

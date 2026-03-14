@@ -200,8 +200,14 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
         let isValidSubscription = false;
         let needsPayment = true;
 
-        // Basic subscription check
-        const hasActiveSubscription = profile.is_subscribed === true && profile.subscription_status === 'active';
+        // Determine if user has a valid active status
+        const isPaid = profile.is_subscribed === true;
+        const hasPaymentMethod =
+          profile.payment_method != null &&
+          typeof profile.payment_method === 'string' &&
+          profile.payment_method.trim().length > 0;
+          
+        const hasActiveSubscription = isPaid || hasPaymentMethod;
         
         if (hasActiveSubscription && profile.next_billing_date) {
           const nextBillingDate = new Date(profile.next_billing_date);
@@ -223,7 +229,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
             daysOverdue: needsPayment ? Math.ceil((now.getTime() - nextBillingDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
           });
         } else if (hasActiveSubscription && !profile.next_billing_date) {
-          // Active subscription without billing date (like admin gifts) - consider valid
+          // Active subscription without billing date (like admin gifts or lifetime) - consider valid
           isValidSubscription = true;
           needsPayment = false;
           console.log('ProtectedRoute: Active subscription without billing date (admin gift/special case)');
