@@ -178,8 +178,8 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false }: {
           backdropFilter: 'blur(20px) saturate(180%)',
           WebkitBackdropFilter: 'blur(20px) saturate(180%)',
           boxShadow: glowEnabled
-            ? `0 0 12px ${app.glow}99, 0 4px 12px ${app.glow}44, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`
-            : `0 4px 12px ${app.glow}33, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`,
+            ? `0 0 16px ${app.glow}bb, 0 4px 14px ${app.glow}55, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`
+            : `0 4px 14px ${app.glow}44, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`,
         }}
       />
       {/* Liquid glass highlight */}
@@ -481,7 +481,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
         opacity: 0.75,
         backdropFilter: 'blur(20px) saturate(180%)',
         WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-        boxShadow: `0 4px 20px ${glow}33, 0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)`,
+        boxShadow: `0 4px 22px ${glow}44, 0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)`,
       }}
     >
       {/* Glass shimmer overlay */}
