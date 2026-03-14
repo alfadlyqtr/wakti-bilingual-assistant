@@ -79,6 +79,8 @@ const LS_QUOTE_KEY  = "homescreen_show_quote";
 const LS_BG_KEY     = "homescreen_bg";
 const LS_HEADER_COLOR_KEY = "homescreen_header_color";
 const LS_UNIFIED_KEY = "homescreen_unified_grid_v6";
+const LS_WIDGETS_KEY = "homescreen_widgets_v1";
+const LS_HSBG_KEY    = "homescreen_bg_style_v1";
 
 // Widget IDs used in the unified grid
 const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showWhoopWidget','showJournalWidget','showQuoteWidget'] as const;
@@ -799,12 +801,20 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const [bgImage,         setBgImage]         = useState<string>(() => localStorage.getItem(LS_BG_KEY) || "");
   const [headerColor,     setHeaderColor]     = useState<string>(() => localStorage.getItem(LS_HEADER_COLOR_KEY) || "");
 
-  // Homescreen background style from Settings
-  const [hsBg, setHsBg] = useState<{ mode: 'solid'|'gradient'; color1: string; color2: string; color3: string; angle: number; glow: boolean }>(
-    { mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false }
-  );
+  // Homescreen background style from Settings — cached in localStorage for instant restore
+  const [hsBg, setHsBg] = useState<{ mode: 'solid'|'gradient'; color1: string; color2: string; color3: string; angle: number; glow: boolean }>(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem(LS_HSBG_KEY) || 'null');
+      if (cached && typeof cached === 'object') return { mode: cached.mode || 'solid', color1: cached.color1 || '', color2: cached.color2 || '', color3: cached.color3 || '', angle: cached.angle ?? 180, glow: typeof cached.glow === 'boolean' ? cached.glow : false };
+    } catch {}
+    return { mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false };
+  });
   const [quote,           setQuote]           = useState<any>(null);
-  const [greeting,        setGreeting]        = useState("");
+  const [greeting,        setGreeting]        = useState(() => {
+    const h = new Date().getHours();
+    if (language === "ar") return h < 12 ? "صباح الخير" : h < 17 ? "مساء الخير" : "مساء النور";
+    return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  });
   const [activeId,        setActiveId]        = useState<string | null>(null);
   const [dockPickerOpen,  setDockPickerOpen]  = useState(false);
   const [bgPanelOpen,     setBgPanelOpen]     = useState(false);
@@ -821,10 +831,14 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     try { return new Date(e.event_date) >= new Date(new Date().toDateString()); } catch { return false; }
   }).length;
 
-  // Widget visibility for homescreen stats — loaded from settings.homescreenWidgets
-  const [hsWidgets, setHsWidgets] = useState({
-    showNavWidget: false, showCalendarWidget: true, showTRWidget: true,
-    showMaw3dWidget: false, showWhoopWidget: false, showJournalWidget: false, showQuoteWidget: false,
+  // Widget visibility for homescreen stats — cached in localStorage for instant restore
+  const [hsWidgets, setHsWidgets] = useState(() => {
+    const defaults = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showWhoopWidget: false, showJournalWidget: false, showQuoteWidget: false };
+    try {
+      const cached = JSON.parse(localStorage.getItem(LS_WIDGETS_KEY) || 'null');
+      if (cached && typeof cached === 'object') return { ...defaults, ...cached };
+    } catch {}
+    return defaults;
   });
 
   // Unified grid: ordered list of "widget::KEY" and "app::ID" items
@@ -877,7 +891,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         if (s?.homescreenWidgets) {
           const clamped = clampHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showWhoopWidget: false, showJournalWidget: false, showQuoteWidget: false, ...s.homescreenWidgets });
           // Only update if different
-          setHsWidgets(prev => JSON.stringify(prev) === JSON.stringify(clamped) ? prev : clamped);
+          const clampedJson = JSON.stringify(clamped);
+          setHsWidgets(prev => JSON.stringify(prev) === clampedJson ? prev : clamped);
+          localStorage.setItem(LS_WIDGETS_KEY, clampedJson);
           // Build/restore unified grid
           if (Array.isArray(s?.homescreen?.unifiedGrid) && s.homescreen.unifiedGrid.length > 0) {
             const saved: string[] = s.homescreen.unifiedGrid;
@@ -925,7 +941,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             angle:  typeof bg.angle === 'number' ? bg.angle : 180,
             glow:   typeof bg.glow === 'boolean' ? bg.glow : false,
           };
-          setHsBg(prev => JSON.stringify(prev) === JSON.stringify(newBg) ? prev : newBg);
+          const newBgJson = JSON.stringify(newBg);
+          setHsBg(prev => JSON.stringify(prev) === newBgJson ? prev : newBg);
+          localStorage.setItem(LS_HSBG_KEY, newBgJson);
         }
         const hs = s?.homescreen;
         if (!hs) return;
@@ -969,6 +987,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       if (detail.mode !== 'homescreen') return;
       setHsWidgets(prev => {
         const next = clampHsWidgets({ ...prev, ...detail });
+        localStorage.setItem(LS_WIDGETS_KEY, JSON.stringify(next));
         // Sync enabled/disabled widgets into unified grid
         setUnifiedGrid(grid => {
           const enabledWidgets = WIDGET_IDS.filter(k => next[k]).map(k => `widget::${k}`);
@@ -992,14 +1011,16 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     const handler = (e: any) => {
       const d = e?.detail;
       if (!d) return;
-      setHsBg({
-        mode:   d.mode === 'gradient' ? 'gradient' : 'solid',
+      const updated = {
+        mode:   d.mode === 'gradient' ? 'gradient' as const : 'solid' as const,
         color1: d.color1 || '',
         color2: d.color2 || '',
         color3: d.color3 || '',
         angle:  typeof d.angle === 'number' ? d.angle : 180,
         glow:   !!d.glow,
-      });
+      };
+      setHsBg(updated);
+      localStorage.setItem(LS_HSBG_KEY, JSON.stringify(updated));
     };
     window.addEventListener('homescreenBgChanged', handler);
     return () => window.removeEventListener('homescreenBgChanged', handler);
@@ -1120,6 +1141,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const removeBg = () => { setBgImage(""); localStorage.removeItem(LS_BG_KEY); syncToSupabase({ bgImage: "" }); };
   const saveBgStyle = () => {
     const patch = { mode: hsBg.mode, color1: hsBg.color1, color2: hsBg.color2, color3: hsBg.color3, angle: hsBg.angle, glow: hsBg.glow };
+    localStorage.setItem(LS_HSBG_KEY, JSON.stringify(patch));
     syncToSupabase({ homescreenBg: patch });
     window.dispatchEvent(new Event('homescreenBgChanged'));
     setBgPanelOpen(false);
