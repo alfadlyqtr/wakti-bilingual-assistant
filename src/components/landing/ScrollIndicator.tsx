@@ -14,15 +14,6 @@ export function ScrollIndicator({ className }: ScrollIndicatorProps) {
       transition={{ delay: 1.5, duration: 0.6 }}
     >
       <motion.div
-        animate={{ 
-          y: [0, 8, 0],
-          opacity: [0.4, 1, 0.4]
-        }}
-        transition={{ 
-          duration: 2,
-          repeat: Infinity,
-          ease: "easeInOut"
-        }}
         className="flex flex-col items-center gap-1"
       >
         <span 

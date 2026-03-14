@@ -213,9 +213,23 @@ export function useUserProfile() {
     get isSubscribed() {
       return (profile?.is_subscribed ?? false);
     },
+    get isAdminGifted() {
+      const hasPaymentMethod =
+        profile?.payment_method != null &&
+        typeof profile.payment_method === 'string' &&
+        profile.payment_method.trim().length > 0;
+      return hasPaymentMethod && (!profile?.next_billing_date || new Date(profile.next_billing_date) > new Date());
+    },
     get isGracePeriod() {
       const isSubscribed = (profile?.is_subscribed ?? false);
       if (isSubscribed) return false;
+      const hasPaymentMethod =
+        profile?.payment_method != null &&
+        typeof profile?.payment_method === 'string' &&
+        profile.payment_method.trim().length > 0;
+      const isAdminGifted = hasPaymentMethod && (!profile?.next_billing_date || new Date(profile.next_billing_date) > new Date());
+      if (isAdminGifted) return false;
+      
       const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;
       if (start == null) return false; // NOT STARTED = not grace, not expired
       const elapsedMin = Math.floor((Date.now() - start) / 60000);
@@ -230,6 +244,13 @@ export function useUserProfile() {
     get isAccessExpired() {
       const isSubscribed = (profile?.is_subscribed ?? false);
       if (isSubscribed) return false;
+      const hasPaymentMethod =
+        profile?.payment_method != null &&
+        typeof profile?.payment_method === 'string' &&
+        profile.payment_method.trim().length > 0;
+      const isAdminGifted = hasPaymentMethod && (!profile?.next_billing_date || new Date(profile.next_billing_date) > new Date());
+      if (isAdminGifted) return false;
+      
       const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;
       if (start == null) return false; // not set counts as grace, not expired
       const elapsedMin = Math.floor((Date.now() - start) / 60000);
@@ -240,13 +261,6 @@ export function useUserProfile() {
     },
     get wasSubscribed() {
       return !profile?.is_subscribed && !!profile?.plan_name;
-    },
-    get isAdminGifted() {
-      const hasPaymentMethod =
-        profile?.payment_method != null &&
-        typeof profile.payment_method === 'string' &&
-        profile.payment_method.trim().length > 0;
-      return hasPaymentMethod && (!profile?.next_billing_date || new Date(profile.next_billing_date) > new Date());
     }
   };
 }

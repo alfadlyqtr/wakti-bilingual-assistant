@@ -1421,7 +1421,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       >
           <div className="flex-none flex items-center justify-between px-4 pt-3 pb-1">
             <div className="px-3 py-2 rounded-xl bg-black/25 backdrop-blur-md border border-white/10">
-              <p className="text-[11px] font-semibold" style={{ color: subColor, textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>{greeting}</p>
+              <p className="text-[12px] font-bold" style={{ color: subColor, textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>{greeting}</p>
               <p className="text-[17px] font-black leading-tight" style={{ color: headColor, textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>{displayName}</p>
             </div>
             {!editMode ? (

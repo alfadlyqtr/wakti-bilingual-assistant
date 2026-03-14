@@ -147,38 +147,37 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
           <Button
             onClick={() => navigate("/signup")}
             size="lg"
-            className="px-10 py-6 rounded-full text-base font-semibold tracking-[0.05em] uppercase transition-all duration-300 hover:scale-[1.05] active:scale-[0.98] relative overflow-hidden group"
+            className="px-10 py-6 rounded-full text-base font-semibold tracking-[0.05em] uppercase transition-all duration-300 active:scale-[0.96] relative overflow-hidden"
             style={{
               background: "linear-gradient(135deg, #e9ceb0 0%, #d4b896 50%, #e9ceb0 100%)",
               color: "#060541",
-              boxShadow: "0 8px 32px rgba(233, 206, 176, 0.5), 0 0 60px rgba(233, 206, 176, 0.3), inset 0 1px 0 rgba(255,255,255,0.3)",
+              boxShadow: "0 12px 40px rgba(233, 206, 176, 0.6), 0 0 80px rgba(233, 206, 176, 0.4), 0 0 120px rgba(233, 206, 176, 0.2), inset 0 1px 0 rgba(255,255,255,0.4)",
+              animation: "cta-breathe 2s ease-in-out infinite"
             }}
           >
-            {/* Animated shimmer overlay */}
+            {/* Constant pulsing glow ring */}
             <span 
-              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+              className="absolute -inset-2 rounded-full"
               style={{
-                background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)",
-                transform: "translateX(-100%)",
-                animation: "shimmer 2s infinite"
+                background: "linear-gradient(135deg, rgba(233,206,176,0.8), rgba(245,230,211,0.6), rgba(233,206,176,0.8))",
+                filter: "blur(12px)",
+                zIndex: -1,
+                animation: "cta-pulse 1.5s ease-in-out infinite"
               }}
             />
-            {/* Pulsing glow ring */}
+            {/* Inner shine */}
             <span 
-              className="absolute -inset-1 rounded-full opacity-70"
+              className="absolute inset-0 rounded-full opacity-60"
               style={{
-                background: "linear-gradient(135deg, #e9ceb0, #f5e6d3, #e9ceb0)",
-                filter: "blur(8px)",
-                zIndex: -1,
-                animation: "pulse-glow 2s ease-in-out infinite"
+                background: "linear-gradient(180deg, rgba(255,255,255,0.5) 0%, transparent 50%)",
               }}
             />
             {isArabic ? (
-              <span dir="rtl" style={{ unicodeBidi: 'embed' }} className="relative z-10">
+              <span dir="rtl" style={{ unicodeBidi: 'embed' }} className="relative z-10 drop-shadow-sm">
                 جرب وقتي AI مجاناً
               </span>
             ) : (
-              <span className="relative z-10">Try Wakti AI for Free</span>
+              <span className="relative z-10 drop-shadow-sm">Try Wakti AI for Free</span>
             )}
           </Button>
         </motion.div>
