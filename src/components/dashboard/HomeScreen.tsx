@@ -794,7 +794,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   // Homescreen background style from Settings
   const [hsBg, setHsBg] = useState<{ mode: 'solid'|'gradient'; color1: string; color2: string; color3: string; angle: number; glow: boolean }>(
-    { mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false }
+    { mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: true }
   );
   const [quote,           setQuote]           = useState<any>(null);
   const [greeting,        setGreeting]        = useState("");
