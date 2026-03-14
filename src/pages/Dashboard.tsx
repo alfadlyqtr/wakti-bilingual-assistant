@@ -17,7 +17,7 @@ export default function Dashboard() {
   const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen'>(() => {
     // Instant load from localStorage — no flash
     const cached = localStorage.getItem('wakti_dashboard_look');
-    return cached === 'homescreen' ? 'homescreen' : 'dashboard';
+    return cached === 'dashboard' ? 'dashboard' : 'homescreen';
   });
 
   // Sync from Supabase (source of truth) + cache to localStorage

@@ -52,6 +52,7 @@ import { WaktiIcon } from "@/components/icons/WaktiIcon";
 import { getQuoteForDisplay, getQuoteText, getQuoteAuthor } from "@/utils/quoteService";
 import { useOptimizedTRData } from "@/hooks/useOptimizedTRData";
 import { useOptimizedMaw3dEvents } from "@/hooks/useOptimizedMaw3dEvents";
+import { SavedImagesPicker } from "@/components/dashboard/SavedImagesPicker";
 
 // ─── App definitions ──────────────────────────────────────────────────────────
 const ALL_APPS = [
@@ -651,7 +652,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
     'linear-gradient(145deg,rgba(15,23,42,0.7) 0%,rgba(30,41,59,0.7) 40%,rgba(51,65,85,0.7) 100%)',
     '#94a3b8',
     () => {},
-    <div className="p-4 flex flex-col justify-between h-full">
+    <div className="p-4 flex flex-col justify-between h-full" key={`${quoteText}-${quoteAuthor}`}>
       <div className="flex items-start justify-between">
         <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
           <span className="text-xl">💬</span>
@@ -807,6 +808,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const [activeId,        setActiveId]        = useState<string | null>(null);
   const [dockPickerOpen,  setDockPickerOpen]  = useState(false);
   const [bgPanelOpen,     setBgPanelOpen]     = useState(false);
+  const [savedImagesOpen, setSavedImagesOpen] = useState(false);
   const bgInputRef    = useRef<HTMLInputElement>(null);
   const _pendingDock  = useRef<string[]>([]);
   const _effectiveRef = useRef<string[]>([]);
@@ -1313,8 +1315,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const activeApp    = activeId ? (activeId.startsWith('dock::') ? ALL_APPS.find(a => `dock::${a.id}` === activeId) : ALL_APPS.find(a => `app::${a.id}` === activeId)) : null;
   const activeInDock = activeId?.startsWith("dock::");
 
-  const quoteText   = quote ? getQuoteText(quote, language) : "";
-  const quoteAuthor = quote ? getQuoteAuthor(quote) : "";
+  const quoteText   = useMemo(() => quote ? getQuoteText(quote, language) : "", [quote, language]);
+  const quoteAuthor = useMemo(() => quote ? getQuoteAuthor(quote) : "", [quote]);
 
   // ── Theme-aware surface colors ──
   const isDark = theme === "dark";
@@ -1394,17 +1396,6 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           } : {}),
         }}
       >
-        {/* BG scrim */}
-        {hasBg && <div className="absolute inset-0 pointer-events-none" style={{ background: "rgba(0,0,0,0.40)" }} />}
-
-        {/* Hidden BG file input — always in DOM */}
-        <input ref={bgInputRef} id={bgInputId} type="file" accept="image/*"
-          aria-label="Upload background image" className="hidden" onChange={handleBgChange} />
-
-        {/* ── Direct flex column layout ── */}
-        <div className="relative z-10 flex flex-col flex-1 min-h-0">
-
-          {/* ── Greeting header + edit icon ── */}
           <div className="flex-none flex items-center justify-between px-4 pt-3 pb-1">
             <div>
               <p className="text-[11px] font-semibold" style={{ color: subColor }}>{greeting}</p>
@@ -1466,6 +1457,13 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                 className="flex items-center gap-2 w-full py-2.5 px-3 rounded-xl bg-white/10 text-white text-xs font-semibold cursor-pointer">
                 <ImageIcon className="w-4 h-4" /> {language === "ar" ? "رفع صورة" : "Upload Photo"}
               </label>
+
+              {/* Pick from Saved Images */}
+              <button
+                onClick={() => setSavedImagesOpen(true)}
+                className="flex items-center gap-2 w-full py-2.5 px-3 rounded-xl bg-orange-500/20 hover:bg-orange-500/30 border border-orange-400/30 text-white text-xs font-semibold transition-colors">
+                <ImageIcon className="w-4 h-4" /> {language === "ar" ? "اختر من الصور المحفوظة" : "Pick from Saved"}
+              </button>
 
               {/* Mode toggle */}
               <div className="flex gap-2">
@@ -1681,6 +1679,20 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             </button>
           </div>
         </div>
+      )}
+
+      <input ref={bgInputRef} id={bgInputId} type="file" accept="image/*" className="hidden" onChange={handleBgChange} />
+
+      {/* Saved Images Picker Modal */}
+      {savedImagesOpen && (
+        <SavedImagesPicker
+          onSelect={(imageUrl) => {
+            setBgImage(imageUrl);
+            localStorage.setItem(LS_BG_KEY, imageUrl);
+            syncToSupabase({ bgImage: imageUrl });
+          }}
+          onClose={() => setSavedImagesOpen(false)}
+        />
       )}
     </DndContext>
   );
