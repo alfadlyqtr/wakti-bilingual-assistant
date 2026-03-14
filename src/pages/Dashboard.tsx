@@ -120,15 +120,15 @@ export default function Dashboard() {
   // Render based on dashboard look preference
   if (dashboardLook === 'homescreen') {
     return (
-      <div className="dashboard-container" key={refreshKey}>
-        <HomeScreen displayName={displayName} />
+      <div className="dashboard-container">
+        <HomeScreen displayName={displayName} key={refreshKey} />
       </div>
     );
   }
 
   // Default dashboard look (widget grid)
   return (
-    <div className="px-4 pb-4 pt-4 pr-4 dashboard-container" key={refreshKey}>
+    <div className="px-4 pb-4 pt-4 pr-4 dashboard-container">
         <DragModeToggle
           isDragging={isDragging}
           onToggle={toggleDragMode}
@@ -136,7 +136,7 @@ export default function Dashboard() {
           displayName={displayName}
         />
 
-        <WidgetGrid widgets={widgets} isDragging={isDragging} onDragEnd={handleDragEnd} />
+        <WidgetGrid widgets={widgets} isDragging={isDragging} onDragEnd={handleDragEnd} key={refreshKey} />
     </div>
   );
 }
