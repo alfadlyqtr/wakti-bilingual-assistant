@@ -874,7 +874,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         const s = (data?.settings as any);
         if (s?.homescreenWidgets) {
           const clamped = clampHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showWhoopWidget: false, showJournalWidget: false, showQuoteWidget: false, ...s.homescreenWidgets });
-          setHsWidgets(clamped);
+          // Only update if different
+          setHsWidgets(prev => JSON.stringify(prev) === JSON.stringify(clamped) ? prev : clamped);
           // Build/restore unified grid
           if (Array.isArray(s?.homescreen?.unifiedGrid) && s.homescreen.unifiedGrid.length > 0) {
             const saved: string[] = s.homescreen.unifiedGrid;
@@ -901,13 +902,14 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               if (!seen.has(key)) grid.push(key);
             }
             const gridJson = JSON.stringify(grid);
-            if (gridJson !== localStorage.getItem(LS_UNIFIED_KEY)) {
-              setUnifiedGrid(grid);
+            const cachedGrid = localStorage.getItem(LS_UNIFIED_KEY);
+            if (gridJson !== cachedGrid) {
+              setUnifiedGrid(prev => JSON.stringify(prev) === gridJson ? prev : grid);
               localStorage.setItem(LS_UNIFIED_KEY, gridJson);
             }
           } else if (!localStorage.getItem(LS_UNIFIED_KEY)) {
             const grid = buildDefaultUnifiedGrid(clamped);
-            setUnifiedGrid(grid);
+            setUnifiedGrid(prev => JSON.stringify(prev) === JSON.stringify(grid) ? prev : grid);
             localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(grid));
           }
         }
@@ -921,36 +923,39 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             angle:  typeof bg.angle === 'number' ? bg.angle : 180,
             glow:   typeof bg.glow === 'boolean' ? bg.glow : false,
           };
-          setHsBg(newBg);
+          setHsBg(prev => JSON.stringify(prev) === JSON.stringify(newBg) ? prev : newBg);
         }
         const hs = s?.homescreen;
         if (!hs) return;
         if (Array.isArray(hs.dockIds)) {
           const d = sanitizeDock(hs.dockIds);
           const dJson = JSON.stringify(d);
-          if (dJson !== localStorage.getItem(LS_DOCK_KEY)) {
-            setDockIds(d);
+          const cachedDock = localStorage.getItem(LS_DOCK_KEY);
+          if (dJson !== cachedDock) {
+            setDockIds(prev => JSON.stringify(prev) === dJson ? prev : d);
             localStorage.setItem(LS_DOCK_KEY, dJson);
           }
           if (Array.isArray(hs.iconOrder)) {
             const o = sanitizeOrder(hs.iconOrder);
             const oJson = JSON.stringify(o);
-            if (oJson !== localStorage.getItem(LS_ORDER_KEY)) {
-              setIconOrder(o);
+            const cachedOrder = localStorage.getItem(LS_ORDER_KEY);
+            if (oJson !== cachedOrder) {
+              setIconOrder(prev => JSON.stringify(prev) === oJson ? prev : o);
               localStorage.setItem(LS_ORDER_KEY, oJson);
             }
           }
         } else if (Array.isArray(hs.iconOrder)) {
           const o = sanitizeOrder(hs.iconOrder);
           const oJson = JSON.stringify(o);
-          if (oJson !== localStorage.getItem(LS_ORDER_KEY)) {
-            setIconOrder(o);
+          const cachedOrder = localStorage.getItem(LS_ORDER_KEY);
+          if (oJson !== cachedOrder) {
+            setIconOrder(prev => JSON.stringify(prev) === oJson ? prev : o);
             localStorage.setItem(LS_ORDER_KEY, oJson);
           }
         }
-        if (typeof hs.showQuote === "boolean" && String(hs.showQuote) !== localStorage.getItem(LS_QUOTE_KEY)) { setShowQuote(hs.showQuote); localStorage.setItem(LS_QUOTE_KEY, String(hs.showQuote)); }
-        if (hs.bgImage && hs.bgImage !== localStorage.getItem(LS_BG_KEY)) { setBgImage(hs.bgImage); localStorage.setItem(LS_BG_KEY, hs.bgImage); }
-        if (hs.headerColor && hs.headerColor !== localStorage.getItem(LS_HEADER_COLOR_KEY)) { setHeaderColor(hs.headerColor); localStorage.setItem(LS_HEADER_COLOR_KEY, hs.headerColor); }
+        if (typeof hs.showQuote === "boolean" && String(hs.showQuote) !== localStorage.getItem(LS_QUOTE_KEY)) { setShowQuote(prev => prev === hs.showQuote ? prev : hs.showQuote); localStorage.setItem(LS_QUOTE_KEY, String(hs.showQuote)); }
+        if (hs.bgImage && hs.bgImage !== localStorage.getItem(LS_BG_KEY)) { setBgImage(prev => prev === hs.bgImage ? prev : hs.bgImage); localStorage.setItem(LS_BG_KEY, hs.bgImage); }
+        if (hs.headerColor && hs.headerColor !== localStorage.getItem(LS_HEADER_COLOR_KEY)) { setHeaderColor(prev => prev === hs.headerColor ? prev : hs.headerColor); localStorage.setItem(LS_HEADER_COLOR_KEY, hs.headerColor); }
       } catch { /* silent */ }
     })();
   }, [user]);
