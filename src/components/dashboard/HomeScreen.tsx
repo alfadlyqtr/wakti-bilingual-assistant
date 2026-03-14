@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   DndContext,
   closestCenter,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   useSensor,
   useSensors,
@@ -1123,8 +1123,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   // ── Sensors ──
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor,   { activationConstraint: { delay: 250, tolerance: 6 } })
+    useSensor(MouseSensor, { activationConstraint: { distance: 10 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
   );
 
   // ── Unified drag handler ──
