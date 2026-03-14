@@ -165,28 +165,33 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false }: {
   glowEnabled?: boolean;
 }) {
   const px = `${size}px`;
+  
+  // Convert hex glow color to rgba for semi-transparent gradient
+  const hexToRgba = (hex: string, alpha: number) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+  
+  // Create semi-transparent gradient based on app color
+  const glassGradient = `linear-gradient(135deg, ${hexToRgba(app.glow, 0.75)} 0%, ${hexToRgba(app.glow, 0.55)} 100%)`;
+  
   return (
     <div
       className={`relative flex-shrink-0 ${editMode ? "animate-wiggle" : ""}`}
       style={{ width: px, height: px }}
     >
-      {/* Main gradient body - semi-transparent for glass effect */}
+      {/* Main gradient body with frosted glass effect */}
       <div
-        className={`absolute inset-0 rounded-[23%] bg-gradient-to-br ${app.gradient}`}
+        className={`absolute inset-0 rounded-[23%]`}
         style={{
-          opacity: 0.85,
+          background: glassGradient,
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
           boxShadow: glowEnabled
             ? `0 0 18px ${app.glow}cc, 0 4px 16px ${app.glow}66, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`
             : `0 4px 16px ${app.glow}55, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`,
-        }}
-      />
-      {/* Subtle dark backdrop for depth */}
-      <div
-        className="absolute rounded-[23%] pointer-events-none"
-        style={{
-          inset: 0,
-          background: "rgba(0,0,0,0.25)",
-          zIndex: -1,
         }}
       />
       {/* Liquid glass highlight */}
