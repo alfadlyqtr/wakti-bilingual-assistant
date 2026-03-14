@@ -59,12 +59,17 @@ export async function checkAndConsumeTrialToken(
   }
 
   const isPaid = profile.is_subscribed === true;
-  const isActiveGift =
-    profile.payment_method === 'manual' &&
-    profile.next_billing_date != null &&
-    new Date(profile.next_billing_date as string) > new Date();
+  const hasPaymentMethod =
+    profile.payment_method != null &&
+    typeof profile.payment_method === 'string' &&
+    profile.payment_method.trim().length > 0;
+  const isActiveSubscriber =
+    hasPaymentMethod && (
+      profile.next_billing_date == null ||
+      new Date(profile.next_billing_date as string) > new Date()
+    );
 
-  if (isPaid || isActiveGift) {
+  if (isPaid || isActiveSubscriber) {
     return { allowed: true, consumed: 0, limit: maxLimit, isVip: true };
   }
 

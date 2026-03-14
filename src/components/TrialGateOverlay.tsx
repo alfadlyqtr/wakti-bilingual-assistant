@@ -31,11 +31,16 @@ const TrialGateOverlay: React.FC<TrialGateOverlayProps> = ({ featureKey, limit, 
           .single();
         if (!profile || !mounted) return;
         const isPaid = profile.is_subscribed === true;
-        const isActiveGift =
-          profile.payment_method === 'manual' &&
-          profile.next_billing_date != null &&
-          new Date(profile.next_billing_date) > new Date();
-        if (isPaid || isActiveGift) return;
+        const hasPaymentMethod =
+          profile.payment_method != null &&
+          typeof profile.payment_method === 'string' &&
+          profile.payment_method.trim().length > 0;
+        const isActiveSubscriber =
+          hasPaymentMethod && (
+            profile.next_billing_date == null ||
+            new Date(profile.next_billing_date) > new Date()
+          );
+        if (isPaid || isActiveSubscriber) return;
         const usage = (profile.trial_usage as Record<string, number>) ?? {};
         const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
         if (current >= limit) {

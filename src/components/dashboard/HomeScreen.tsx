@@ -79,53 +79,41 @@ const LS_ORDER_KEY  = "homescreen_icon_order_v2"; // v2 — forces clean slate
 const LS_DOCK_KEY   = "homescreen_dock_v2";
 const LS_QUOTE_KEY  = "homescreen_show_quote";
 const LS_BG_KEY     = "homescreen_bg";
-const LS_UNIFIED_KEY = "homescreen_unified_grid_v5";
+const LS_UNIFIED_KEY = "homescreen_unified_grid_v6";
 
 // Widget IDs used in the unified grid
 const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showNavWidget','showWhoopWidget','showJournalWidget'] as const;
 type WidgetId = typeof WIDGET_IDS[number];
 const MAX_WIDGETS = 3;
 
-// ── Strict Hardcoded Grid Layout ──
-// 3 big rows (6 small rows) x 2 big cols (4 small cols) = 24 cells.
+// ── Strict Hardcoded Grid Layout using grid-template-areas ──
+// 3 big rows x 2 big cols = 24 cells.
 // Widgets are 2x2. Icons are 1x1.
-// Layout:
-// Row 1-2: Widget 1 (Left), 4 Icons (Right)
-// Row 3-4: 4 Icons (Left), Widget 2 (Right)
-// Row 5-6: Widget 3 (Left), 4 Icons (Right) - Last icon slot is empty (11 icons total)
+// We map these strictly to 14 DOM elements (3 widgets, 11 icons max).
+const GRID_TEMPLATE_AREAS = `
+  "w1 w1 i1 i2"
+  "w1 w1 i3 i4"
+  "i5 i6 w2 w2"
+  "i7 i8 w2 w2"
+  "w3 w3 i9 i10"
+  "w3 w3 i11 i12"
+`;
 
-const HARDCODED_WIDGET_SLOTS = [
-  { col: 1, row: 1, colSpan: 2, rowSpan: 2 }, // W1: Left, Row 1-2
-  { col: 3, row: 3, colSpan: 2, rowSpan: 2 }, // W2: Right, Row 3-4
-  { col: 1, row: 5, colSpan: 2, rowSpan: 2 }, // W3: Left, Row 5-6
-];
-
-const HARDCODED_ICON_SLOTS = [
-  // Next to W1
-  { col: 3, row: 1, colSpan: 1, rowSpan: 1 }, { col: 4, row: 1, colSpan: 1, rowSpan: 1 },
-  { col: 3, row: 2, colSpan: 1, rowSpan: 1 }, { col: 4, row: 2, colSpan: 1, rowSpan: 1 },
-  // Next to W2
-  { col: 1, row: 3, colSpan: 1, rowSpan: 1 }, { col: 2, row: 3, colSpan: 1, rowSpan: 1 },
-  { col: 1, row: 4, colSpan: 1, rowSpan: 1 }, { col: 2, row: 4, colSpan: 1, rowSpan: 1 },
-  // Next to W3 (only 3 slots used by default, 4th is empty)
-  { col: 3, row: 5, colSpan: 1, rowSpan: 1 }, { col: 4, row: 5, colSpan: 1, rowSpan: 1 },
-  { col: 3, row: 6, colSpan: 1, rowSpan: 1 }, { col: 4, row: 6, colSpan: 1, rowSpan: 1 },
-];
-
+// Calculate explicit grid positions ("parking spots") for each item as area strings
 function calcGridPositions(items: string[]) {
-  const positions = new Map<string, { col: number; row: number; colSpan: number; rowSpan: number }>();
-  let wIndex = 0;
-  let iIndex = 0;
+  const positions = new Map<string, string>();
+  let wIndex = 1;
+  let iIndex = 1;
   
   for (const id of items) {
     if (id.startsWith('widget::')) {
-      if (wIndex < HARDCODED_WIDGET_SLOTS.length) {
-        positions.set(id, HARDCODED_WIDGET_SLOTS[wIndex]);
+      if (wIndex <= 3) {
+        positions.set(id, `w${wIndex}`);
         wIndex++;
       }
     } else {
-      if (iIndex < HARDCODED_ICON_SLOTS.length) {
-        positions.set(id, HARDCODED_ICON_SLOTS[iIndex]);
+      if (iIndex <= 11) { // Max 11 icons (cell i12 is left empty to match 3 widgets + 11 icons = 23 items, but grid supports 12)
+        positions.set(id, `i${iIndex}`);
         iIndex++;
       }
     }
@@ -572,9 +560,9 @@ interface UnifiedWidgetCellProps {
   hasBg: boolean; statCardBase: string; statLblColor: string;
   pendingTasks: number; completedToday: number; upcomingCount: number;
   navigate: (p: string) => void;
-  gridPos: { col: number; row: number; colSpan: number; rowSpan: number };
+  gridArea: string;
 }
-function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridPos }: UnifiedWidgetCellProps) {
+function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea }: UnifiedWidgetCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id, data: { type: 'unified' },
   });
@@ -583,8 +571,7 @@ function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCar
       ref={setNodeRef}
       className="relative"
       style={{
-        gridColumn: `${gridPos.col} / span ${gridPos.colSpan}`,
-        gridRow: `${gridPos.row} / span ${gridPos.rowSpan}`,
+        gridArea,
         transform: isDragging ? CSS.Transform.toString(transform) : undefined,
         transition: isDragging ? transition : undefined,
         opacity: isDragging ? 0.35 : 1,
@@ -614,9 +601,9 @@ interface UnifiedAppCellProps {
   id: string; app: typeof ALL_APPS[0]; editMode: boolean;
   language: string; isDark: boolean; glowEnabled: boolean;
   navigate: (p: string) => void;
-  gridPos: { col: number; row: number; colSpan: number; rowSpan: number };
+  gridArea: string;
 }
-function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridPos }: UnifiedAppCellProps) {
+function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridArea }: UnifiedAppCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id, data: { type: 'unified' },
   });
@@ -626,8 +613,7 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
       ref={setNodeRef}
       className="flex flex-col items-center justify-center gap-0.5 select-none cursor-pointer relative"
       style={{
-        gridColumn: `${gridPos.col} / span ${gridPos.colSpan}`,
-        gridRow: `${gridPos.row} / span ${gridPos.rowSpan}`,
+        gridArea,
         transform: isDragging ? CSS.Transform.toString(transform) : undefined,
         transition: isDragging ? transition : undefined,
         opacity: isDragging ? 0.25 : 1,
@@ -775,9 +761,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               const key = `app::${appId}`;
               if (!seen.has(key)) grid.push(key);
             }
-            setUnifiedGrid(grid);
-            localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(grid));
-          } else {
+            const gridJson = JSON.stringify(grid);
+            if (gridJson !== localStorage.getItem(LS_UNIFIED_KEY)) {
+              setUnifiedGrid(grid);
+              localStorage.setItem(LS_UNIFIED_KEY, gridJson);
+            }
+          } else if (!localStorage.getItem(LS_UNIFIED_KEY)) {
             const grid = buildDefaultUnifiedGrid(clamped);
             setUnifiedGrid(grid);
             localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(grid));
@@ -798,20 +787,29 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         if (!hs) return;
         if (Array.isArray(hs.dockIds)) {
           const d = sanitizeDock(hs.dockIds);
-          setDockIds(d);
-          localStorage.setItem(LS_DOCK_KEY, JSON.stringify(d));
+          const dJson = JSON.stringify(d);
+          if (dJson !== localStorage.getItem(LS_DOCK_KEY)) {
+            setDockIds(d);
+            localStorage.setItem(LS_DOCK_KEY, dJson);
+          }
           if (Array.isArray(hs.iconOrder)) {
             const o = sanitizeOrder(hs.iconOrder);
-            setIconOrder(o);
-            localStorage.setItem(LS_ORDER_KEY, JSON.stringify(o));
+            const oJson = JSON.stringify(o);
+            if (oJson !== localStorage.getItem(LS_ORDER_KEY)) {
+              setIconOrder(o);
+              localStorage.setItem(LS_ORDER_KEY, oJson);
+            }
           }
         } else if (Array.isArray(hs.iconOrder)) {
           const o = sanitizeOrder(hs.iconOrder);
-          setIconOrder(o);
-          localStorage.setItem(LS_ORDER_KEY, JSON.stringify(o));
+          const oJson = JSON.stringify(o);
+          if (oJson !== localStorage.getItem(LS_ORDER_KEY)) {
+            setIconOrder(o);
+            localStorage.setItem(LS_ORDER_KEY, oJson);
+          }
         }
-        if (typeof hs.showQuote === "boolean") { setShowQuote(hs.showQuote); localStorage.setItem(LS_QUOTE_KEY, String(hs.showQuote)); }
-        if (hs.bgImage) { setBgImage(hs.bgImage); localStorage.setItem(LS_BG_KEY, hs.bgImage); }
+        if (typeof hs.showQuote === "boolean" && String(hs.showQuote) !== localStorage.getItem(LS_QUOTE_KEY)) { setShowQuote(hs.showQuote); localStorage.setItem(LS_QUOTE_KEY, String(hs.showQuote)); }
+        if (hs.bgImage && hs.bgImage !== localStorage.getItem(LS_BG_KEY)) { setBgImage(hs.bgImage); localStorage.setItem(LS_BG_KEY, hs.bgImage); }
       } catch { /* silent */ }
     })();
   }, [user]);
@@ -1224,14 +1222,42 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           )}
 
           {/* ── Unified iPhone-style grid: 3 big rows × 2 big cols = 6 rows × 4 cols ── */}
-          <div className="flex-1 min-h-0 px-3 pb-2 overflow-y-auto overflow-x-hidden">
+          <div className="flex-1 min-h-0 px-3 pb-2 overflow-y-auto overflow-x-hidden relative">
+            
+            {/* Visual Guide exactly matching the user's diagram in edit mode */}
+            {editMode && (
+              <div className="absolute inset-0 px-3 pt-2 grid gap-x-1 gap-y-2 pointer-events-none" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 68px)', gridTemplateAreas: GRID_TEMPLATE_AREAS, zIndex: 0 }}>
+                {/* Big Row 1 */}
+                <div style={{ gridArea: 'w1' }} className="border-[3px] border-dashed border-white/50 rounded-3xl" />
+                <div style={{ gridArea: 'i1' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
+                <div style={{ gridArea: 'i2' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
+                <div style={{ gridArea: 'i3' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
+                <div style={{ gridArea: 'i4' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
+                
+                {/* Big Row 2 */}
+                <div style={{ gridArea: 'i5' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
+                <div style={{ gridArea: 'i6' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
+                <div style={{ gridArea: 'i7' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
+                <div style={{ gridArea: 'i8' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
+                <div style={{ gridArea: 'w2' }} className="border-[3px] border-dashed border-white/50 rounded-3xl" />
+
+                {/* Big Row 3 */}
+                <div style={{ gridArea: 'w3' }} className="border-[3px] border-dashed border-white/50 rounded-3xl" />
+                <div style={{ gridArea: 'i9' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
+                <div style={{ gridArea: 'i10' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
+                <div style={{ gridArea: 'i11' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
+                <div style={{ gridArea: 'i12' }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />
+              </div>
+            )}
+
             <SortableContext items={effectiveUnified} strategy={rectSortingStrategy}>
-              <div className="grid grid-cols-4 gap-x-1 gap-y-2" style={{ gridAutoRows: '68px', alignContent: 'start', paddingTop: 8 }}>
+              <div className="grid gap-x-1 gap-y-2 relative z-10" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 68px)', gridTemplateAreas: GRID_TEMPLATE_AREAS, alignContent: 'start', paddingTop: 8 }}>
                 {(() => {
                   const gridPositions = calcGridPositions(effectiveUnified);
                   return effectiveUnified.map(itemId => {
                     const gp = gridPositions.get(itemId);
-                    if (!gp) return null;
+                    if (!gp) return null; // Hide extras entirely
+                    
                     if (itemId.startsWith('widget::')) {
                       const wKey = itemId.replace('widget::','') as WidgetId;
                       return (
@@ -1249,7 +1275,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                           completedToday={tasks.filter((t: any) => t.completed).length}
                           upcomingCount={upcomingCount}
                           navigate={navigate}
-                          gridPos={gp}
+                          gridArea={gp}
                         />
                       );
                     }
@@ -1266,7 +1292,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         isDark={isDark || hasBg || hasCustomBg}
                         glowEnabled={hsBg.glow}
                         navigate={navigate}
-                        gridPos={gp}
+                        gridArea={gp}
                       />
                     );
                   });
