@@ -1404,6 +1404,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
+      <>
       {/* Root — fills parent via flex, dock always at very bottom */}
       <div
         className={`relative overflow-hidden hs-root flex flex-col ${pageBg}`}
@@ -1668,54 +1669,54 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             </div>
           )}
         </DragOverlay>
-      </div>
 
-      {/* ── Dock picker sheet ── */}
-      {dockPickerOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDockPickerOpen(false)} />
-          <div className="relative z-10 w-full max-w-lg bg-background rounded-t-3xl p-5 pb-8 shadow-2xl max-h-[70dvh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold">
-                {language === "ar" ? "اختر أيقونات Dock (٣ كحد أقصى)" : "Choose Dock Icons (max 3)"}
-              </h3>
-              <span className="text-xs text-muted-foreground">{dockIds.length}/3</span>
+        {/* ── Dock picker sheet ── */}
+        {dockPickerOpen && (
+          <div className="fixed inset-0 z-[100] flex items-end justify-center">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDockPickerOpen(false)} />
+            <div className="relative z-10 w-full max-w-lg bg-background rounded-t-3xl p-5 pb-8 shadow-2xl max-h-[70dvh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold">
+                  {language === "ar" ? "اختر أيقونات Dock (٣ كحد أقصى)" : "Choose Dock Icons (max 3)"}
+                </h3>
+                <span className="text-xs text-muted-foreground">{dockIds.length}/3</span>
+              </div>
+              <div className="grid grid-cols-4 gap-4">
+                {ALL_APPS.map(app => {
+                  const sel = dockIds.includes(app.id);
+                  return (
+                    <button key={app.id} onClick={() => toggleDockIcon(app.id)}
+                      className="flex flex-col items-center gap-1.5">
+                      <div className={`transition-all ${sel ? "scale-110 ring-2 ring-blue-500 ring-offset-2 rounded-[23%]" : "opacity-70"}`}>
+                        <LiquidIcon app={app} size={52} editMode={false} />
+                      </div>
+                      <span className="text-[10px] font-medium text-center">{language === "ar" ? app.nameAr : app.nameEn}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <button onClick={() => setDockPickerOpen(false)}
+                className="mt-5 w-full py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-bold">
+                {language === "ar" ? "تم" : "Done"}
+              </button>
             </div>
-            <div className="grid grid-cols-4 gap-4">
-              {ALL_APPS.map(app => {
-                const sel = dockIds.includes(app.id);
-                return (
-                  <button key={app.id} onClick={() => toggleDockIcon(app.id)}
-                    className="flex flex-col items-center gap-1.5">
-                    <div className={`transition-all ${sel ? "scale-110 ring-2 ring-blue-500 ring-offset-2 rounded-[23%]" : "opacity-70"}`}>
-                      <LiquidIcon app={app} size={52} editMode={false} />
-                    </div>
-                    <span className="text-[10px] font-medium text-center">{language === "ar" ? app.nameAr : app.nameEn}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <button onClick={() => setDockPickerOpen(false)}
-              className="mt-5 w-full py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-bold">
-              {language === "ar" ? "تم" : "Done"}
-            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      <input ref={bgInputRef} id={bgInputId} type="file" accept="image/*" className="hidden" onChange={handleBgChange} />
+        <input ref={bgInputRef} id={bgInputId} type="file" accept="image/*" className="hidden" onChange={handleBgChange} />
 
-      {/* Saved Images Picker Modal */}
-      {savedImagesOpen && (
-        <SavedImagesPicker
-          onSelect={(imageUrl) => {
-            setBgImage(imageUrl);
-            localStorage.setItem(LS_BG_KEY, imageUrl);
-            syncToSupabase({ bgImage: imageUrl });
-          }}
-          onClose={() => setSavedImagesOpen(false)}
-        />
-      )}
+        {/* Saved Images Picker Modal */}
+        {savedImagesOpen && (
+          <SavedImagesPicker
+            onSelect={(imageUrl) => {
+              setBgImage(imageUrl);
+              localStorage.setItem(LS_BG_KEY, imageUrl);
+              syncToSupabase({ bgImage: imageUrl });
+            }}
+            onClose={() => setSavedImagesOpen(false)}
+          />
+        )}
+      </>
     </DndContext>
   );
 }
