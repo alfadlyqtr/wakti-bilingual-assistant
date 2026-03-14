@@ -79,7 +79,7 @@ const LS_BG_KEY     = "homescreen_bg";
 const LS_UNIFIED_KEY = "homescreen_unified_grid_v6";
 
 // Widget IDs used in the unified grid
-const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showNavWidget','showWhoopWidget','showJournalWidget','showQuoteWidget'] as const;
+const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showWhoopWidget','showJournalWidget','showQuoteWidget'] as const;
 type WidgetId = typeof WIDGET_IDS[number];
 const MAX_WIDGETS = 3;
 
@@ -335,7 +335,7 @@ function StatWidgets({ hsWidgets, language, theme, hasBg, pendingTasks, complete
   const subColor    = statLblColor;
   const base        = `${statCardBase} rounded-2xl overflow-hidden cursor-pointer active:scale-95 transition-transform select-none`;
 
-  const KEYS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showNavWidget','showWhoopWidget','showJournalWidget'];
+  const KEYS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showWhoopWidget','showJournalWidget','showQuoteWidget'];
   const visible = KEYS.filter(k => hsWidgets[k]);
   if (visible.length === 0) return null;
 
@@ -812,7 +812,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   // Widget visibility for homescreen stats — loaded from settings.homescreenWidgets
   const [hsWidgets, setHsWidgets] = useState({
-    showNavWidget: true, showCalendarWidget: true, showTRWidget: true,
+    showNavWidget: false, showCalendarWidget: true, showTRWidget: true,
     showMaw3dWidget: false, showWhoopWidget: false, showJournalWidget: false, showQuoteWidget: false,
   });
 
@@ -861,7 +861,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
         const s = (data?.settings as any);
         if (s?.homescreenWidgets) {
-          const clamped = clampHsWidgets({ showNavWidget: true, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showWhoopWidget: false, showJournalWidget: false, showQuoteWidget: false, ...s.homescreenWidgets });
+          const clamped = clampHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showWhoopWidget: false, showJournalWidget: false, showQuoteWidget: false, ...s.homescreenWidgets });
           setHsWidgets(clamped);
           // Build/restore unified grid
           if (Array.isArray(s?.homescreen?.unifiedGrid) && s.homescreen.unifiedGrid.length > 0) {

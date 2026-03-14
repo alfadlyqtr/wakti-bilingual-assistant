@@ -55,7 +55,7 @@ export default function Settings() {
   };
   // Homescreen: only 3 on by default
   const DEFAULT_HOMESCREEN_WIDGETS: WidgetConfig = {
-    showNavWidget: true, showCalendarWidget: true, showTRWidget: true,
+    showNavWidget: false, showCalendarWidget: true, showTRWidget: true,
     showEventsWidget: false, showQuoteWidget: false, showMaw3dWidget: false,
     showWhoopWidget: false, showJournalWidget: false,
   };
@@ -520,12 +520,12 @@ export default function Settings() {
 
               // Widget entries — for homescreen these are the stats/app row choices
               const widgetEntries: { key: keyof typeof widgetSettings; labelEn: string; labelAr: string }[] = [
-                { key: 'showNavWidget',      labelEn: 'Quick Access',               labelAr: 'الوصول السريع' },
-                { key: 'showCalendarWidget', labelEn: 'Upcoming Events',            labelAr: 'الأحداث القادمة' },
+                { key: 'showCalendarWidget', labelEn: 'Calendar',                   labelAr: 'التقويم' },
                 { key: 'showTRWidget',       labelEn: 'Tasks & Reminders',          labelAr: 'المهام والتذكيرات' },
                 { key: 'showMaw3dWidget',    labelEn: 'Maw3d Events',               labelAr: 'أحداث مواعيد' },
                 { key: 'showWhoopWidget',    labelEn: 'WHOOP Widget',               labelAr: 'ويدجت WHOOP' },
                 { key: 'showJournalWidget',  labelEn: "Today's Journal",            labelAr: 'يوميات وقتي' },
+                { key: 'showQuoteWidget',    labelEn: 'Daily Quote',                labelAr: 'اقتباس اليوم' },
               ];
 
               // Count how many are currently ON
@@ -584,31 +584,6 @@ export default function Settings() {
                     </CardContent>
                   </Card>
 
-                  {/* Daily Quote toggle — only in homescreen mode */}
-                  {isHomescreen && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Quote className="h-5 w-5" />
-                          {language === 'ar' ? 'اقتباس اليوم' : 'Daily Quote'}
-                        </CardTitle>
-                        <CardDescription>
-                          {language === 'ar' ? 'إظهار اقتباس يومي ملهم في الشاشة الرئيسية' : 'Show a daily inspirational quote on your Home Screen'}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex items-center justify-between rounded-md border p-4">
-                          <p className="text-sm font-medium">
-                            {language === 'ar' ? 'إظهار الاقتباسات اليومية' : 'Show daily inspirational quotes'}
-                          </p>
-                          <Switch
-                            checked={widgetSettings.showQuoteWidget}
-                            onCheckedChange={(checked) => updateWidgetSetting('showQuoteWidget', checked)}
-                          />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
 
                   {/* Dashboard mode: quote widget inline */}
                   {!isHomescreen && (
