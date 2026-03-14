@@ -179,12 +179,12 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false }: {
             : `0 4px 16px ${app.glow}55, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`,
         }}
       />
-      {/* Dark tint overlay for frosted glass effect */}
+      {/* Dark tint overlay for see-through glass effect */}
       <div
-        className="absolute inset-0 rounded-[23%] pointer-events-none"
+        className="absolute rounded-[23%] pointer-events-none"
         style={{
-          background: "rgba(0,0,0,0.25)",
-          backdropFilter: "blur(2px)",
+          inset: 0,
+          background: "rgba(0,0,0,0.15)",
         }}
       />
       {/* Liquid glass highlight */}
