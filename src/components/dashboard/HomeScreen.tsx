@@ -454,13 +454,14 @@ function StatWidgets({ hsWidgets, language, theme, hasBg, pendingTasks, complete
 }
 
 // ─── Widget content renderer (no drag logic, just visuals) ────────────────────
-function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, pendingTasks, completedToday, upcomingCount, navigate, quoteText, quoteAuthor, whoopData }: {
+function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, pendingTasks, completedToday, upcomingCount, navigate, quoteText, quoteAuthor, whoopData, journalData }: {
   wKey: WidgetId; editMode: boolean; language: string; theme: string;
   hasBg: boolean; statCardBase: string;
   pendingTasks: number; completedToday: number; upcomingCount: number;
   navigate: (p: string) => void;
   quoteText?: string; quoteAuthor?: string;
   whoopData?: any;
+  journalData?: any;
 }) {
   const isDark = theme === 'dark';
   const total = pendingTasks + completedToday;
@@ -697,32 +698,46 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
     </div>
   );
 
-  if (wKey === 'showJournalWidget') return shell(
-    'rgba(0,0,0,0.7)',
-    '#8b5cf6',
-    () => navigate('/journal'),
-    <div className="p-4 flex flex-col justify-between h-full">
-      <div className="flex items-start justify-between">
-        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
-          <BookOpen className="w-6 h-6 text-white" strokeWidth={2} />
+  if (wKey === 'showJournalWidget') {
+    const hasEntry = journalData?.hasEntry;
+    return shell(
+      hasEntry 
+        ? 'linear-gradient(145deg,rgba(124,58,237,0.7) 0%,rgba(139,92,246,0.7) 40%,rgba(167,139,250,0.7) 100%)'
+        : 'rgba(0,0,0,0.7)',
+      '#8b5cf6',
+      () => navigate('/journal'),
+      <div className="p-4 flex flex-col justify-between h-full">
+        <div className="flex items-start justify-between">
+          <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
+            {hasEntry ? <Check className="w-6 h-6 text-white" strokeWidth={3} /> : <BookOpen className="w-6 h-6 text-white" strokeWidth={2} />}
+          </div>
+          <span className="text-3xl leading-none">{hasEntry ? '✅' : '✍️'}</span>
         </div>
-        <span className="text-3xl leading-none">✍️</span>
-      </div>
-      {/* 7-day streak dots */}
-      <div>
-        <div className="flex gap-1 mb-2">
-          {['M','T','W','T','F','S','S'].map((d, i) => (
-            <div key={i} className="flex flex-col items-center gap-0.5">
-              <div className="w-4 h-4 rounded-full" style={{ background: i < new Date().getDay() ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.2)' }} />
-              <span className="text-[7px] text-white/40">{d}</span>
-            </div>
-          ))}
+        {/* 7-day streak dots (simulated visual for now, but state reflects today) */}
+        <div>
+          <div className="flex gap-1 mb-2">
+            {['M','T','W','T','F','S','S'].map((d, i) => {
+              // Highlight today if entry exists
+              const isToday = i === (new Date().getDay() + 6) % 7; 
+              const active = isToday && hasEntry;
+              return (
+                <div key={i} className="flex flex-col items-center gap-0.5">
+                  <div className={`w-4 h-4 rounded-full transition-all ${active ? 'bg-green-400 scale-110 shadow-sm' : 'bg-white/20'}`} />
+                  <span className="text-[7px] text-white/40">{d}</span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{language === 'ar' ? 'يومياتي' : 'Journal'}</p>
+          <p className="text-[11px] font-semibold mt-0.5 text-white/80" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>
+            {hasEntry 
+              ? (language === 'ar' ? 'تم التسجيل ✓' : 'Entry saved ✓') 
+              : (language === 'ar' ? 'سجّل يومك' : 'Write today')}
+          </p>
         </div>
-        <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{language === 'ar' ? 'يومياتي' : 'Journal'}</p>
-        <p className="text-[11px] font-semibold mt-0.5 text-white/80" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>{language === 'ar' ? 'سجّل يومك' : 'Write today'}</p>
       </div>
-    </div>
-  );
+    );
+  }
 
   if (wKey === 'showQuoteWidget') return shell(
     'linear-gradient(145deg,rgba(15,23,42,0.7) 0%,rgba(30,41,59,0.7) 40%,rgba(51,65,85,0.7) 100%)',
@@ -756,8 +771,9 @@ interface UnifiedWidgetCellProps {
   gridArea: string;
   quoteText?: string; quoteAuthor?: string;
   whoopData?: any;
+  journalData?: any;
 }
-function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData }: UnifiedWidgetCellProps) {
+function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData, journalData }: UnifiedWidgetCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id, data: { type: 'unified' },
   });
@@ -783,6 +799,7 @@ function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCar
         upcomingCount={upcomingCount} navigate={navigate}
         quoteText={quoteText} quoteAuthor={quoteAuthor}
         whoopData={whoopData}
+        journalData={journalData}
       />
       {editMode && (
         <div className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full bg-black/70 border border-white/30 flex items-center justify-center">
