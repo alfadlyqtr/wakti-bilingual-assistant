@@ -516,8 +516,8 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
         <div className="w-full h-1.5 rounded-full mb-2" style={{ background: 'rgba(255,255,255,0.2)' }}>
           <div className="h-1.5 rounded-full transition-all" style={{ width: `${pct}%`, background: 'rgba(255,255,255,0.85)' }} />
         </div>
-        <p className="text-[15px] font-black text-white leading-tight">{language === 'ar' ? 'المهام' : 'Tasks'}</p>
-        <p className="text-[11px] font-semibold mt-0.5" style={{ color: 'rgba(255,255,255,0.75)' }}>{taskMsg}</p>
+        <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{language === 'ar' ? 'المهام' : 'Tasks'}</p>
+        <p className="text-[11px] font-semibold mt-0.5" style={{ color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>{taskMsg}</p>
       </div>
     </div>
   );
@@ -537,10 +537,10 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
         </div>
       </div>
       <div>
-        <p className="text-[15px] font-black text-white leading-tight">{dayLong}</p>
+        <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{dayLong}</p>
         <div className="flex items-center gap-1.5 mt-1">
           <div className="w-2 h-2 rounded-full" style={{ background: evAccent === '#6b7280' ? 'rgba(255,255,255,0.3)' : evAccent }} />
-          <p className="text-[11px] font-semibold" style={{ color: evAccent === '#6b7280' ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.9)' }}>{evMsg}</p>
+          <p className="text-[11px] font-semibold" style={{ color: evAccent === '#6b7280' ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.95)', textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>{evMsg}</p>
         </div>
       </div>
     </div>
@@ -572,8 +572,8 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
           ))}
           {upcomingCount === 0 && <div className="w-2 h-2 rounded-full" style={{ background: 'rgba(255,255,255,0.2)' }} />}
         </div>
-        <p className="text-[15px] font-black text-white leading-tight">{language === 'ar' ? 'مواعيد' : 'Maw3d'}</p>
-        <p className="text-[11px] font-semibold mt-0.5" style={{ color: 'rgba(255,255,255,0.75)' }}>{upcomingCount === 0 ? (language === 'ar' ? 'لا مواعيد 📭' : 'All clear 📭') : upcomingCount <= 2 ? (language === 'ar' ? 'مجدولة ✓' : 'scheduled ✓') : (language === 'ar' ? 'مشغول 🔥' : 'busy 🔥')}</p>
+        <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{language === 'ar' ? 'مواعيد' : 'Maw3d'}</p>
+        <p className="text-[11px] font-semibold mt-0.5" style={{ color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>{upcomingCount === 0 ? (language === 'ar' ? 'لا مواعيد 📭' : 'All clear 📭') : upcomingCount <= 2 ? (language === 'ar' ? 'مجدولة ✓' : 'scheduled ✓') : (language === 'ar' ? 'مشغول 🔥' : 'busy 🔥')}</p>
       </div>
     </div>
   );
@@ -593,8 +593,8 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
         </div>
       </div>
       <div>
-        <p className="text-[15px] font-black text-white leading-tight">{dayLong}</p>
-        <p className="text-[11px] font-semibold mt-0.5 text-white/60">{language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}</p>
+        <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{dayLong}</p>
+        <p className="text-[11px] font-semibold mt-0.5 text-white/80" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>{language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}</p>
       </div>
     </div>
   );
@@ -617,8 +617,8 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
             <div key={i} className="flex-1 rounded-sm" style={{ height: `${h * 10}%`, background: i === 7 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)' }} />
           ))}
         </div>
-        <p className="text-[15px] font-black text-white leading-tight">WHOOP</p>
-        <p className="text-[11px] font-semibold mt-0.5 text-white/70">{language === 'ar' ? 'الحيوية والنشاط' : 'Vitality & fitness'}</p>
+        <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>WHOOP</p>
+        <p className="text-[11px] font-semibold mt-0.5 text-white/80" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>{language === 'ar' ? 'الحيوية والنشاط' : 'Vitality & fitness'}</p>
       </div>
     </div>
   );
@@ -644,8 +644,8 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
             </div>
           ))}
         </div>
-        <p className="text-[15px] font-black text-white leading-tight">{language === 'ar' ? 'يومياتي' : 'Journal'}</p>
-        <p className="text-[11px] font-semibold mt-0.5 text-white/70">{language === 'ar' ? 'سجّل يومك' : 'Write today'}</p>
+        <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{language === 'ar' ? 'يومياتي' : 'Journal'}</p>
+        <p className="text-[11px] font-semibold mt-0.5 text-white/80" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>{language === 'ar' ? 'سجّل يومك' : 'Write today'}</p>
       </div>
     </div>
   );
@@ -662,10 +662,10 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
         <span className="text-[9px] font-bold text-white/40 uppercase tracking-widest pt-1">{language === 'ar' ? 'اقتباس' : 'Quote'}</span>
       </div>
       <div>
-        <p className="text-[11px] italic leading-snug text-white/90 line-clamp-3" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+        <p className="text-[11px] italic leading-snug text-white/95 line-clamp-3" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir={language === 'ar' ? 'rtl' : 'ltr'}>
           {quoteText ? `"${quoteText}"` : '...'}
         </p>
-        {quoteAuthor && <p className="text-[10px] mt-1 text-white/45 font-medium">— {quoteAuthor}</p>}
+        {quoteAuthor && <p className="text-[10px] mt-1 text-white/70 font-medium" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>— {quoteAuthor}</p>}
       </div>
     </div>
   );
@@ -1420,9 +1420,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         }}
       >
           <div className="flex-none flex items-center justify-between px-4 pt-3 pb-1">
-            <div>
-              <p className="text-[11px] font-semibold" style={{ color: subColor }}>{greeting}</p>
-              <p className="text-[17px] font-black leading-tight" style={{ color: headColor }}>{displayName}</p>
+            <div className="px-3 py-2 rounded-xl bg-black/25 backdrop-blur-md border border-white/10">
+              <p className="text-[11px] font-semibold" style={{ color: subColor, textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>{greeting}</p>
+              <p className="text-[17px] font-black leading-tight" style={{ color: headColor, textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>{displayName}</p>
             </div>
             {!editMode ? (
               <button onClick={() => setEditMode(true)} title="Edit homescreen" className="p-2 rounded-full bg-white/15 backdrop-blur-md">
