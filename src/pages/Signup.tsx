@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -16,7 +16,6 @@ import { cn } from "@/lib/utils";
 import { EmailConfirmationDialog } from "@/components/EmailConfirmationDialog";
 import { validateDisplayName, validateEmail, validatePassword } from "@/utils/validations";
 import { countries, getCountryByCode } from "@/utils/countries";
-import { VoiceSignup } from "@/components/auth/VoiceSignup";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -38,7 +37,150 @@ export default function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isEmailConfirmationDialogOpen, setIsEmailConfirmationDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'voice' | 'normal'>('normal');
+
+  // ─── Voice State ───
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [countdown, setCountdown] = useState(10);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const dcRef = useRef<RTCDataChannel | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isStoppingRef = useRef(false);
+  const holdStartRef = useRef(0);
+  const isConnectionReadyRef = useRef(false);
+  const MAX_RECORD_SECONDS = 10;
+
+  // Auto-Greeting Logic
+  useEffect(() => {
+    const playGreeting = async () => {
+      if (audioRef.current) {
+        audioRef.current.src = language === 'ar' ? '/welcome to wakti arabic.mp3' : '/welcome to wakti english.mp3';
+        try {
+          await audioRef.current.play();
+          setAudioUnlocked(true);
+        } catch (e) {
+          console.warn('Auto-play blocked, waiting for interaction', e);
+        }
+      }
+    };
+    playGreeting();
+  }, [language]);
+
+  // Clean up email from transcription
+  const cleanEmail = (raw: string) => {
+    let e = raw.trim().toLowerCase();
+    e = e.replace(/\s*at\s*/gi, '@').replace(/\s*آت\s*/gi, '@');
+    e = e.replace(/\s*dot\s*/gi, '.').replace(/\s*دوت\s*/gi, '.').replace(/\s*نقطة\s*/gi, '.').replace(/\s*point\s*/gi, '.');
+    e = e.replace(/\s+/g, '');
+    e = e.replace(/@@+/g, '@').replace(/\.\./g, '.');
+    return e;
+  };
+
+  // WebRTC initialization
+  const initializeVoice = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      const pc = new RTCPeerConnection();
+      pcRef.current = pc;
+      stream.getAudioTracks().forEach(track => pc.addTrack(track, stream));
+
+      const dc = pc.createDataChannel('oai-events', { ordered: true });
+      dcRef.current = dc;
+
+      dc.onopen = () => {
+        isConnectionReadyRef.current = true;
+        dc.send(JSON.stringify({
+          type: 'session.update',
+          session: {
+            instructions: 'You are an email transcription assistant. Only output exactly what the user says as an email address. Do not respond to them or talk.',
+            voice: 'shimmer',
+            input_audio_transcription: language === 'ar' ? { model: 'whisper-1', language: 'ar' } : { model: 'whisper-1' },
+            turn_detection: null
+          }
+        }));
+      };
+
+      dc.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'conversation.item.input_audio_transcription.completed' && msg.transcript) {
+            setEmail(prev => cleanEmail(msg.transcript));
+            dc.send(JSON.stringify({ type: 'response.cancel' }));
+          }
+        } catch {}
+      };
+
+      await pc.setLocalDescription();
+      const offer = pc.localDescription;
+      if (!offer) return;
+
+      const response = await supabase.functions.invoke('live-voice-signup', {
+        body: { sdp_offer: offer.sdp, language },
+      });
+
+      if (response.data?.sdp_answer) {
+        await pc.setRemoteDescription({ type: 'answer', sdp: response.data.sdp_answer });
+      }
+    } catch (e) {
+      console.error('Voice initialization failed:', e);
+    }
+  }, [language]);
+
+  useEffect(() => {
+    initializeVoice();
+    return () => {
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+      if (pcRef.current) pcRef.current.close();
+      if (dcRef.current) dcRef.current.close();
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    };
+  }, [initializeVoice]);
+
+  const handleHoldStart = (e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    if (!audioUnlocked && audioRef.current) {
+      audioRef.current.play().catch(() => {});
+      setAudioUnlocked(true);
+    }
+    
+    if (!isConnectionReadyRef.current || !dcRef.current || dcRef.current.readyState !== 'open') return;
+    
+    setIsRecording(true);
+    isStoppingRef.current = false;
+    dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+    holdStartRef.current = Date.now();
+    setCountdown(MAX_RECORD_SECONDS);
+
+    countdownIntervalRef.current = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - holdStartRef.current) / 1000);
+      const remaining = Math.max(0, MAX_RECORD_SECONDS - elapsed);
+      setCountdown(remaining);
+      if (remaining <= 0) handleHoldEnd(e as any);
+    }, 200);
+  };
+
+  const handleHoldEnd = (e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    if (isStoppingRef.current) return;
+    isStoppingRef.current = true;
+    setIsRecording(false);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+
+    if (Date.now() - holdStartRef.current < 500) {
+      if (dcRef.current?.readyState === 'open') {
+        dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+      }
+    } else {
+      if (dcRef.current?.readyState === 'open') {
+        dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+      }
+    }
+    setTimeout(() => { isStoppingRef.current = false; }, 1000);
+  };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -276,17 +418,15 @@ export default function Signup() {
             >
               {/* Logo + Title */}
               <div className="text-center mb-8">
-                {activeTab === 'normal' && (
-                  <motion.div
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: 0.1, duration: 0.4 }}
-                    className="inline-block cursor-pointer mb-5"
-                    onClick={() => navigate("/")}
-                  >
-                    <Logo3D size="lg" />
-                  </motion.div>
-                )}
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.1, duration: 0.4 }}
+                  className="inline-block cursor-pointer mb-5"
+                  onClick={() => navigate("/")}
+                >
+                  <Logo3D size="lg" />
+                </motion.div>
                 <h1
                   className="text-3xl sm:text-4xl font-bold tracking-tight"
                   style={{
@@ -298,11 +438,58 @@ export default function Signup() {
                 >
                   {t.createAccount}
                 </h1>
-                <p className="mt-2 text-sm text-muted-foreground">
+                <p className="mt-2 text-sm text-muted-foreground max-w-[280px] sm:max-w-md mx-auto leading-relaxed">
                   {language === 'ar'
-                    ? 'انضم إلى وقتي وابدأ رحلتك'
-                    : 'Join Wakti and start your journey'}
+                    ? 'أهلاً بك في وقتي. شكراً لانضمامك إلينا، يسعدنا جداً وجودك معنا. لنُجهز حسابك في ثوانٍ معدودة؛ فقط اضغط مع الاستمرار على (الكرة المتوهجة) للتحدث، أو اكتب بريدك الإلكتروني للبدء.'
+                    : 'Welcome to Wakti. Thanks for joining. We’re thrilled to have you. Let’s set up your account in seconds, just hold the GLOWING SPHERE to speak, or type your email to begin.'}
                 </p>
+
+                {/* Unified Voice Sphere UI */}
+                <div className="flex flex-col items-center justify-center my-8">
+                  <audio ref={audioRef} playsInline className="hidden" />
+                  <button
+                    onMouseDown={handleHoldStart}
+                    onMouseUp={handleHoldEnd}
+                    onMouseLeave={handleHoldEnd}
+                    onTouchStart={handleHoldStart}
+                    onTouchEnd={handleHoldEnd}
+                    onContextMenu={(e) => e.preventDefault()}
+                    className={cn(
+                      "relative w-[120px] h-[120px] rounded-full flex items-center justify-center transition-all duration-500",
+                      isRecording ? "scale-110" : "hover:scale-105 active:scale-95"
+                    )}
+                    style={{
+                      background: isDarkMode
+                        ? `radial-gradient(circle at 35% 25%, hsla(210,100%,90%,0.5) 0%, transparent 25%),
+                           radial-gradient(circle at 30% 30%, hsl(210,100%,72%) 0%, hsl(215,90%,55%) 20%, hsl(225,75%,38%) 45%, hsl(235,55%,22%) 70%, #080c16 100%)`
+                        : `radial-gradient(circle at 35% 25%, hsla(210,100%,95%,0.8) 0%, transparent 25%),
+                           radial-gradient(circle at 30% 30%, hsl(210,100%,82%) 0%, hsl(220,80%,68%) 20%, hsl(230,65%,55%) 45%, hsl(240,50%,42%) 70%, hsl(243,84%,14%) 100%)`,
+                      boxShadow: isRecording
+                        ? "0 0 60px hsla(0,80%,55%,0.6), 0 0 120px hsla(0,80%,50%,0.3)"
+                        : isDarkMode
+                        ? "0 0 40px hsla(215,90%,60%,0.4), inset 0 4px 15px rgba(255,255,255,0.1)"
+                        : "0 0 30px hsla(220,70%,60%,0.3), inset 0 4px 15px rgba(255,255,255,0.3)",
+                      animation: isRecording ? "none" : "cta-breathe 4s ease-in-out infinite"
+                    }}
+                  >
+                    {/* Ring effects */}
+                    <div className={cn("absolute -inset-6 border rounded-full pointer-events-none opacity-0 transition-opacity", isRecording && "opacity-100 border-red-500/30 animate-ping")} />
+                    <div className={cn("absolute -inset-10 border rounded-full pointer-events-none opacity-0 transition-opacity", isRecording && "opacity-100 border-red-500/20 animate-ping")} style={{ animationDelay: '0.2s' }} />
+                    
+                    <div className="relative z-10 pointer-events-none flex flex-col items-center gap-1">
+                      {isRecording ? (
+                        <Mic className="w-10 h-10 text-white drop-shadow-md animate-pulse" />
+                      ) : (
+                        <Logo3D size="sm" />
+                      )}
+                    </div>
+                  </button>
+                  <p className="mt-4 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+                    {isRecording 
+                      ? (language === 'ar' ? `أسمعك... (${countdown}ث)` : `Listening... (${countdown}s)`)
+                      : (language === 'ar' ? 'اضغط وتحدث' : 'Hold to Speak')}
+                  </p>
+                </div>
 
                 {/* Error message */}
                 <AnimatePresence>
@@ -323,95 +510,14 @@ export default function Signup() {
                 </AnimatePresence>
               </div>
 
-              {/* Tab Switcher — pill style */}
-              <div className="flex items-center justify-center mb-8">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                {/* Card container */}
                 <div
-                  className="inline-flex items-center gap-1 p-1 rounded-2xl"
-                  style={{
-                    background: 'hsla(0, 0%, 50%, 0.06)',
-                    backdropFilter: 'blur(8px)',
-                    border: '1px solid hsla(0, 0%, 50%, 0.08)',
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('normal')}
-                    className={cn(
-                      "relative flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300",
-                      activeTab === 'normal'
-                        ? "text-white shadow-lg"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                    style={activeTab === 'normal' ? {
-                      background: 'linear-gradient(135deg, #060541 0%, hsl(260, 70%, 30%) 100%)',
-                      boxShadow: '0 4px 20px hsla(260, 70%, 30%, 0.3)',
-                    } : {}}
-                  >
-                    <FileText className="w-4 h-4" />
-                    {language === 'ar' ? 'تسجيل عادي' : 'Sign Up'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('voice')}
-                    className={cn(
-                      "relative flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300",
-                      activeTab === 'voice'
-                        ? "text-white shadow-lg"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                    style={activeTab === 'voice' ? {
-                      background: 'linear-gradient(135deg, hsl(210, 100%, 55%) 0%, hsl(180, 85%, 50%) 100%)',
-                      boxShadow: '0 4px 20px hsla(210, 100%, 55%, 0.35)',
-                    } : {}}
-                  >
-                    <Mic className="w-4 h-4" />
-                    {language === 'ar' ? 'تسجيل بمساعدة الصوت' : 'Voice Assisted'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Voice Sign Up Tab */}
-              <AnimatePresence mode="wait">
-                {activeTab === 'voice' && (
-                  <motion.div
-                    key="voice"
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <VoiceSignup
-                      onSignupComplete={(needsEmailConfirmation) => {
-                        if (needsEmailConfirmation) {
-                          toast.success(language === 'en'
-                            ? 'Please check your email and click the confirmation link to verify your account.'
-                            : 'يرجى فحص بريدك الإلكتروني والنقر على رابط التأكيد للتحقق من حسابك.'
-                          );
-                          setIsEmailConfirmationDialogOpen(true);
-                        } else {
-                          navigate("/dashboard");
-                        }
-                      }}
-                      onError={(msg) => {
-                        setErrorMsg(msg);
-                        toast.error(msg);
-                      }}
-                    />
-                  </motion.div>
-                )}
-
-                {/* Normal Sign Up Tab */}
-                {activeTab === 'normal' && (
-                  <motion.div
-                    key="normal"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    {/* Card container */}
-                    <div
-                      className="rounded-3xl p-6 sm:p-8"
+                  className="rounded-3xl p-6 sm:p-8"
                       style={isDarkMode ? {
                         background:
                           'linear-gradient(135deg, hsla(222, 20%, 6%, 0.82) 0%, hsla(240, 3%, 20%, 0.55) 100%)',
@@ -764,26 +870,24 @@ export default function Signup() {
                         </button>
                       </form>
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
 
-              {/* Already have account */}
-              <div className="mt-8 text-center">
-                <p className="text-sm text-muted-foreground">
-                  {t.alreadyHaveAccount}{" "}
-                  <button
-                    onClick={() => navigate("/login")}
-                    className="font-semibold text-[hsl(210,100%,55%)] hover:text-[hsl(210,100%,45%)] transition-colors"
-                  >
-                    {t.login}
-                  </button>
-                </p>
-              </div>
+                    <div className="mt-8 text-center">
+                      <p className="text-sm text-muted-foreground">
+                        {t.alreadyHaveAccount}{" "}
+                        <button
+                          onClick={() => navigate("/login")}
+                          className="font-semibold text-[hsl(210,100%,55%)] hover:text-[hsl(210,100%,45%)] transition-colors"
+                        >
+                          {t.login}
+                        </button>
+                      </p>
+                    </div>
+              </motion.div>
             </motion.div>
           </div>
         </div>
       </div>
+
       <EmailConfirmationDialog
         open={isEmailConfirmationDialogOpen}
         onClose={handleDialogClose}
