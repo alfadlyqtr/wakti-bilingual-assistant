@@ -46,18 +46,19 @@ export default function Settings() {
     showMaw3dWidget: boolean;
     showTRWidget: boolean;
     showWhoopWidget: boolean;
+    showHealthKitWidget: boolean;
     showJournalWidget: boolean;
   };
   const DEFAULT_DASHBOARD_WIDGETS: WidgetConfig = {
     showNavWidget: true, showCalendarWidget: true, showEventsWidget: true,
     showQuoteWidget: true, showMaw3dWidget: true, showTRWidget: true,
-    showWhoopWidget: true, showJournalWidget: true,
+    showWhoopWidget: true, showHealthKitWidget: true, showJournalWidget: true,
   };
   // Homescreen: only 3 on by default
   const DEFAULT_HOMESCREEN_WIDGETS: WidgetConfig = {
     showNavWidget: false, showCalendarWidget: true, showTRWidget: true,
     showEventsWidget: false, showQuoteWidget: false, showMaw3dWidget: false,
-    showWhoopWidget: false, showJournalWidget: false,
+    showWhoopWidget: false, showHealthKitWidget: false, showJournalWidget: false,
   };
 
   // Separate widget settings for each mode — they never share state
@@ -119,8 +120,8 @@ export default function Settings() {
       // Load homescreen widgets — enforce max 3 on load
       if (s?.homescreenWidgets) {
         const raw = { ...DEFAULT_HOMESCREEN_WIDGETS, ...s.homescreenWidgets, showNavWidget: false };
-        // Only the 6 visible widget keys count toward the 3-max
-        const VISIBLE_KEYS: (keyof WidgetConfig)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showWhoopWidget','showJournalWidget','showQuoteWidget'];
+        // Only the 7 visible widget keys count toward the 3-max
+        const VISIBLE_KEYS: (keyof WidgetConfig)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showWhoopWidget','showHealthKitWidget','showJournalWidget','showQuoteWidget'];
         let onCount = 0;
         const clamped = { ...raw };
         for (const k of VISIBLE_KEYS) {
@@ -526,6 +527,7 @@ export default function Settings() {
                 { key: 'showTRWidget',       labelEn: 'Tasks & Reminders',          labelAr: 'المهام والتذكيرات' },
                 { key: 'showMaw3dWidget',    labelEn: 'Maw3d Events',               labelAr: 'أحداث مواعيد' },
                 { key: 'showWhoopWidget',    labelEn: 'WHOOP Widget',               labelAr: 'ويدجت WHOOP' },
+                { key: 'showHealthKitWidget',labelEn: 'HealthKit Widget',           labelAr: 'ويدجت صحتي' },
                 { key: 'showJournalWidget',  labelEn: "Today's Journal",            labelAr: 'يوميات وقتي' },
                 { key: 'showQuoteWidget',    labelEn: 'Daily Quote',                labelAr: 'اقتباس اليوم' },
               ];
@@ -585,27 +587,6 @@ export default function Settings() {
                       })}
                     </CardContent>
                   </Card>
-
-
-                  {/* Dashboard mode: quote widget inline */}
-                  {!isHomescreen && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>{language === 'ar' ? 'الاقتباسات اليومية' : 'Daily Quotes'}</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex items-center justify-between rounded-md border p-4">
-                          <p className="text-sm font-medium">
-                            {language === "ar" ? "إظهار الاقتباسات التحفيزية اليومية" : "Show daily inspirational quotes"}
-                          </p>
-                          <Switch
-                            checked={widgetSettings.showQuoteWidget}
-                            onCheckedChange={(checked) => updateWidgetSetting('showQuoteWidget', checked)}
-                          />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
                 </>
               );
             })()}

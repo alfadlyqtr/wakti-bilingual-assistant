@@ -45,6 +45,7 @@ import {
   Clock,
   BookOpen,
   Activity,
+  Heart,
   Navigation,
   CalendarDays,
 } from "lucide-react";
@@ -83,7 +84,7 @@ const LS_WIDGETS_KEY = "homescreen_widgets_v1";
 const LS_HSBG_KEY    = "homescreen_bg_style_v1";
 
 // Widget IDs used in the unified grid
-const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showWhoopWidget','showJournalWidget','showQuoteWidget'] as const;
+const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showWhoopWidget','showHealthKitWidget','showJournalWidget','showQuoteWidget'] as const;
 type WidgetId = typeof WIDGET_IDS[number];
 const MAX_WIDGETS = 3;
 
@@ -623,6 +624,31 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
     </div>
   );
 
+  if (wKey === 'showHealthKitWidget') return shell(
+    'linear-gradient(145deg,rgba(22,163,74,0.7) 0%,rgba(34,197,94,0.7) 40%,rgba(74,222,128,0.7) 100%)',
+    '#22c55e',
+    () => navigate('/fitness'), // Navigates to same fitness page for now
+    <div className="p-4 flex flex-col justify-between h-full">
+      <div className="flex items-start justify-between">
+        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
+          <Heart className="w-6 h-6 text-white" strokeWidth={2} fill="white" />
+        </div>
+        <span className="text-4xl font-black text-white leading-none"></span>
+      </div>
+      <div>
+        <div className="flex gap-1 mb-2">
+          {['S','M','T','W','T','F','S'].map((d, i) => (
+            <div key={i} className="flex-1 h-6 bg-white/20 rounded-sm flex items-end overflow-hidden">
+               <div className="w-full bg-white/90" style={{ height: `${[40,60,30,80,50,90,45][i]}%` }}></div>
+            </div>
+          ))}
+        </div>
+        <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{language === 'ar' ? 'صحتي' : 'HealthKit'}</p>
+        <p className="text-[11px] font-semibold mt-0.5 text-white/80" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>{language === 'ar' ? 'نشاط أبل' : 'Apple Health'}</p>
+      </div>
+    </div>
+  );
+
   if (wKey === 'showJournalWidget') return shell(
     'rgba(0,0,0,0.7)',
     '#8b5cf6',
@@ -833,7 +859,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   // Widget visibility for homescreen stats — cached in localStorage for instant restore
   const [hsWidgets, setHsWidgets] = useState(() => {
-    const defaults = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showWhoopWidget: false, showJournalWidget: false, showQuoteWidget: false };
+    const defaults = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showWhoopWidget: false, showHealthKitWidget: false, showJournalWidget: false, showQuoteWidget: false };
     try {
       const cached = JSON.parse(localStorage.getItem(LS_WIDGETS_KEY) || 'null');
       if (cached && typeof cached === 'object') return { ...defaults, ...cached };
@@ -871,7 +897,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   // Load homescreenWidgets from Supabase and clamp to max 3
   const clampHsWidgets = (raw: Record<string, boolean>) => {
     const result = { ...raw, showNavWidget: false } as typeof hsWidgets;
-    const VISIBLE: (keyof typeof hsWidgets)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showWhoopWidget','showJournalWidget','showQuoteWidget'];
+    const VISIBLE: (keyof typeof hsWidgets)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showWhoopWidget','showHealthKitWidget','showJournalWidget','showQuoteWidget'];
     let count = 0;
     for (const k of VISIBLE) {
       if (result[k]) { if (count < 3) count++; else result[k] = false; }

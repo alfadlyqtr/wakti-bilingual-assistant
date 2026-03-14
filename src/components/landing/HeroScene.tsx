@@ -174,10 +174,10 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
             />
             {isArabic ? (
               <span dir="rtl" style={{ unicodeBidi: 'embed' }} className="relative z-10 drop-shadow-sm">
-                جرب وقتي AI مجاناً
+                جرب وقتي AI <span style={{ color: '#1e3a5f', fontWeight: 800 }}>مجاناً</span>
               </span>
             ) : (
-              <span className="relative z-10 drop-shadow-sm">Try Wakti AI for Free</span>
+              <span className="relative z-10 drop-shadow-sm">Try Wakti AI for <span style={{ color: '#1e3a5f', fontWeight: 800 }}>Free</span></span>
             )}
           </Button>
         </motion.div>
