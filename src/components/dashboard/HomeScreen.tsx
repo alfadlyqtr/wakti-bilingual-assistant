@@ -170,21 +170,23 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false }: {
       className={`relative flex-shrink-0 ${editMode ? "animate-wiggle" : ""}`}
       style={{ width: px, height: px }}
     >
-      {/* Main gradient body */}
+      {/* Main gradient body - semi-transparent for glass effect */}
       <div
         className={`absolute inset-0 rounded-[23%] bg-gradient-to-br ${app.gradient}`}
         style={{
+          opacity: 0.85,
           boxShadow: glowEnabled
             ? `0 0 18px ${app.glow}cc, 0 4px 16px ${app.glow}66, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`
             : `0 4px 16px ${app.glow}55, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`,
         }}
       />
-      {/* Dark tint overlay for see-through glass effect */}
+      {/* Subtle dark backdrop for depth */}
       <div
         className="absolute rounded-[23%] pointer-events-none"
         style={{
           inset: 0,
-          background: "rgba(0,0,0,0.15)",
+          background: "rgba(0,0,0,0.25)",
+          zIndex: -1,
         }}
       />
       {/* Liquid glass highlight */}
