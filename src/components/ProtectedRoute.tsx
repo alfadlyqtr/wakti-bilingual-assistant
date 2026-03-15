@@ -290,23 +290,10 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
 
     if (!isLoading && user) {
       console.log("ProtectedRoute: Auth loaded, starting subscription check");
-      // Prime from cache immediately for UX, then refresh
-      try {
-        const cacheKey = `wakti_sub_status_${user.id}`;
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          const fresh = typeof parsed.ts === 'number' && (Date.now() - parsed.ts) <= CACHE_TTL_MS;
-          if (fresh) {
-            setSubscriptionStatus({
-              isSubscribed: !!parsed.isSubscribed,
-              isLoading: false,
-              needsPayment: !!parsed.needsPayment,
-              subscriptionDetails: parsed.subscriptionDetails
-            });
-          }
-        }
-      } catch {}
+      // ZERO-LEAK FIX: Never prime isSubscribed from cache
+      // Cache can only mark isLoading=false to stop the spinner, but access
+      // decisions are made exclusively from live profile data (useUserProfile).
+      // This prevents stale/cross-account cache from granting dashboard access.
       // Track user changes and reset retry gate
       if (lastUserIdRef.current !== user.id) {
         lastUserIdRef.current = user.id;
@@ -469,28 +456,16 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
       const key = location.pathname;
       if (loggedStillLoadingRef.current !== key) {
         loggedStillLoadingRef.current = key;
-        console.log("ProtectedRoute: Still loading - rendering children with auth banner");
+        console.log("ProtectedRoute: Still loading - BLOCKING (black screen)");
       }
     }
+    // ZERO-LEAK FIX: Never render children while auth is loading
     return (
-      <>
-        <div
-          style={{
-            position: 'fixed',
-            top: 'calc(var(--app-header-h, 64px))',
-            left: 0,
-            right: 0,
-            zIndex: 2147483000,
-            display: 'flex',
-            justifyContent: 'center'
-          }}
-        >
-          <div className="mx-auto mt-2 px-3 py-1 rounded-full text-xs bg-primary/10 text-primary shadow-sm">
-            Signing you in…
-          </div>
+      <div className="w-screen h-[100dvh] bg-background flex items-center justify-center overflow-hidden">
+        <div className="mx-auto px-3 py-1 rounded-full text-xs bg-primary/10 text-primary shadow-sm">
+          Signing you in…
         </div>
-        {children}
-      </>
+      </div>
     );
   }
 
@@ -531,8 +506,11 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     );
   }
 
-  // TASK 2: Implement the 'Access Confirmed' Logic
-  const hasConfirmedAccess = !isLoading && !isProfileLoading && !subscriptionStatus.isLoading && (isSubscribed || subscriptionStatus.isSubscribed || isGracePeriod || isAdminGifted);
+  // TASK 2: Implement the 'Access Confirmed' Logic — STRICT WHITELIST
+  // ONLY live profile data can grant access. subscriptionStatus.isSubscribed is
+  // deliberately excluded because it can be primed from stale localStorage cache
+  // or timeout fallbacks, allowing new users to bypass the paywall.
+  const hasConfirmedAccess = !isLoading && !isProfileLoading && !subscriptionStatus.isLoading && (isSubscribed || isGracePeriod || isAdminGifted);
 
   // TASK 3: Final Return Surgery - Block by Default
   // Only render children if access is 100% confirmed
@@ -553,7 +531,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
       {hasConfirmedAccess ? (
         children
       ) : (
-        <div className="w-screen h-[100dvh] bg-[#0c0f14] flex items-center justify-center overflow-hidden" />
+        <div className="w-screen h-[100dvh] bg-background flex items-center justify-center overflow-hidden" />
       )}
     </>
   );
