@@ -148,12 +148,14 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
                   subscriptionDetails: parsed.subscriptionDetails
                 });
               } else {
-                // Stale cache: treat as no cache
-                setSubscriptionStatus({ isSubscribed: true, isLoading: false, needsPayment: false });
+                // SURGICAL FIX #3: Secure the Timeout Fallback
+                // Default to unsubscribed - better to show paywall than give away app
+                setSubscriptionStatus({ isSubscribed: false, isLoading: false, needsPayment: true });
               }
             } else {
-              // Allow temporarily to avoid blocking paid users; schedule retry
-              setSubscriptionStatus({ isSubscribed: true, isLoading: false, needsPayment: false });
+              // SURGICAL FIX #3: Secure the Timeout Fallback
+              // Default to unsubscribed - better to show paywall than give away app
+              setSubscriptionStatus({ isSubscribed: false, isLoading: false, needsPayment: true });
             }
           } catch {}
 
@@ -391,11 +393,13 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) return;
     if (!user?.id) return;
     
-    // CRITICAL FIX: Don't show paywall while profile is loading to prevent race condition
-    if (isProfileLoading) { setShowPaywall(false); return; }
+    // SURGICAL FIX #2: Block the Loading Loophole
+    // DO NOT show paywall while profile is loading - keep user in wait state
+    if (isProfileLoading) { return; }
     
-    // Close paywall if EITHER source confirms the subscription (prevents race conditions)
-    if (isSubscribed || subscriptionStatus.isSubscribed || isAdminGifted) { setShowPaywall(false); return; }
+    // SURGICAL FIX #1: Stop Trusting the Cache for Walls
+    // Trust ONLY live profile data, not cached subscriptionStatus
+    if (isSubscribed || isAdminGifted || isGracePeriod) { setShowPaywall(false); return; }
     const isAccount = location.pathname.startsWith('/account');
     if (isAccount) { setShowPaywall(false); return; }
 
