@@ -1507,8 +1507,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           height: '100dvh', // Explicitly force viewport height to prevent drift
           ...(hasBg ? {
             backgroundImage: `url(${bgImage})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
+            backgroundSize: "100% 100%",
+            backgroundPosition: "center top",
             backgroundRepeat: "no-repeat",
           } : hasCustomBg ? {
             background: customBgStyle,
