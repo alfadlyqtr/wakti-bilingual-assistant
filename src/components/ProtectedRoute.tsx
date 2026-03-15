@@ -494,11 +494,18 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     );
   }
 
+  // TASK 1: Kill the 'Polite' Returns - Block by Default
   // IMPORTANT: Never redirect to /login while AuthContext is still loading.
   // On refresh, Supabase session restoration can complete AFTER initial render.
   if (isLoading) {
-    if (DEV) console.log("ProtectedRoute: Auth still loading - suppressing login redirect");
-    return <>{children}</>;
+    if (DEV) console.log("ProtectedRoute: Auth still loading - BLOCKING access");
+    return (
+      <div className="w-screen h-[100dvh] bg-background flex items-center justify-center overflow-hidden">
+        <div className="mx-auto mt-2 px-3 py-1 rounded-full text-xs bg-primary/10 text-primary shadow-sm">
+          Signing you in…
+        </div>
+      </div>
+    );
   }
 
   // Proper authentication check - redirect appropriately if not authenticated
@@ -512,51 +519,41 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     return <>{children}</>;
   }
 
+  // TASK 1: Kill the 'Polite' Returns - Block by Default
   if (subscriptionStatus.isLoading) {
-    if (DEV) console.log("ProtectedRoute: Subscription pending - rendering optimistically");
+    if (DEV) console.log("ProtectedRoute: Subscription pending - BLOCKING access");
     return (
-      <>
-        <div
-          style={{
-            position: 'fixed',
-            top: 'calc(var(--app-header-h, 64px))',
-            left: 0,
-            right: 0,
-            zIndex: 2147483000,
-            display: 'flex',
-            justifyContent: 'center'
-          }}
-        >
-          <div className="mx-auto mt-2 px-3 py-1 rounded-full text-xs bg-primary/10 text-primary shadow-sm">
-            Verifying subscription…
-          </div>
+      <div className="w-screen h-[100dvh] bg-background flex items-center justify-center overflow-hidden">
+        <div className="mx-auto mt-2 px-3 py-1 rounded-full text-xs bg-primary/10 text-primary shadow-sm">
+          Verifying subscription…
         </div>
-        {children}
-      </>
+      </div>
     );
   }
 
-  // Evaluate whether the user is fully blocked (no valid subscription, loading finished)
-  const isBlocked = !subscriptionStatus.isLoading && !isProfileLoading && !(isSubscribed || subscriptionStatus.isSubscribed || isGracePeriod || isAdminGifted);
+  // TASK 2: Implement the 'Access Confirmed' Logic
+  const hasConfirmedAccess = !isLoading && !isProfileLoading && !subscriptionStatus.isLoading && (isSubscribed || subscriptionStatus.isSubscribed || isGracePeriod || isAdminGifted);
 
-  if (isBlocked && DEV) {
-    console.log("ProtectedRoute: User blocked - no valid subscription:", {
+  // TASK 3: Final Return Surgery - Block by Default
+  // Only render children if access is 100% confirmed
+  if (hasConfirmedAccess && DEV) {
+    console.log("ProtectedRoute: Access confirmed - allowing entry:", {
       email: user?.email,
-      isSubscribed: subscriptionStatus.isSubscribed,
-      needsPayment: subscriptionStatus.needsPayment
+      isSubscribed,
+      isAdminGifted,
+      isGracePeriod
     });
   }
 
-  // Task 4: Soft Gate — block the DOM entirely when user is blocked
   return (
     <>
       {CustomPaywallModal && (
         <CustomPaywallModal open={showPaywall} onOpenChange={setShowPaywall} variant={paywallVariant} />
       )}
-      {isBlocked ? (
-        <div className="w-screen h-[100dvh] bg-background flex items-center justify-center overflow-hidden" />
-      ) : (
+      {hasConfirmedAccess ? (
         children
+      ) : (
+        <div className="w-screen h-[100dvh] bg-[#0c0f14] flex items-center justify-center overflow-hidden" />
       )}
     </>
   );
