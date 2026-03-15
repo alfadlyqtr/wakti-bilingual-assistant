@@ -217,20 +217,15 @@ export function useUserProfile() {
       // ZERO-TRUST: is_subscribed MUST be true. payment_method alone is
       // NOT sufficient — it was causing brand-new users to bypass the paywall.
       if (!profile?.is_subscribed) return false;
-      const hasPaymentMethod =
-        profile?.payment_method != null &&
-        typeof profile.payment_method === 'string' &&
-        profile.payment_method.trim().length > 0;
-      return hasPaymentMethod && (!profile?.next_billing_date || new Date(profile.next_billing_date) > new Date());
+      const isAdminStrictGift = profile?.payment_method === 'manual';
+      return isAdminStrictGift && (!profile?.next_billing_date || new Date(profile.next_billing_date) > new Date());
     },
     get isGracePeriod() {
       const isSubscribed = (profile?.is_subscribed ?? false);
       if (isSubscribed) return false;
-      const hasPaymentMethod =
-        profile?.payment_method != null &&
-        typeof profile?.payment_method === 'string' &&
-        profile.payment_method.trim().length > 0;
-      const isAdminGifted = hasPaymentMethod && (!profile?.next_billing_date || new Date(profile.next_billing_date) > new Date());
+      
+      const isAdminStrictGift = profile?.payment_method === 'manual';
+      const isAdminGifted = isAdminStrictGift && (!profile?.next_billing_date || new Date(profile.next_billing_date) > new Date());
       if (isAdminGifted) return false;
       
       const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;
@@ -247,11 +242,9 @@ export function useUserProfile() {
     get isAccessExpired() {
       const isSubscribed = (profile?.is_subscribed ?? false);
       if (isSubscribed) return false;
-      const hasPaymentMethod =
-        profile?.payment_method != null &&
-        typeof profile?.payment_method === 'string' &&
-        profile.payment_method.trim().length > 0;
-      const isAdminGifted = hasPaymentMethod && (!profile?.next_billing_date || new Date(profile.next_billing_date) > new Date());
+      
+      const isAdminStrictGift = profile?.payment_method === 'manual';
+      const isAdminGifted = isAdminStrictGift && (!profile?.next_billing_date || new Date(profile.next_billing_date) > new Date());
       if (isAdminGifted) return false;
       
       const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;

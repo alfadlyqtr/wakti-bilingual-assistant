@@ -203,15 +203,14 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
         let needsPayment = true;
 
         // Determine if user has a valid active status
-        // ZERO-TRUST: is_subscribed MUST be explicitly true. payment_method alone
-        // is NOT enough — it was causing false positives for new users.
+        // ZERO-TRUST: is_subscribed MUST be explicitly true.
         const isPaid = profile.is_subscribed === true;
-        const hasPaymentMethod =
-          profile.payment_method != null &&
-          typeof profile.payment_method === 'string' &&
-          profile.payment_method.trim().length > 0;
-          
-        const hasActiveSubscription = isPaid && (hasPaymentMethod || !!profile.plan_name || !!profile.next_billing_date);
+        
+        // STRICT ADMIN GIFT CHECK: must be exactly 'manual'
+        const isManualGift = profile.payment_method === 'manual';
+        
+        // Default to false strictly if not met
+        const hasActiveSubscription = isPaid;
         
         if (hasActiveSubscription && profile.next_billing_date) {
           const nextBillingDate = new Date(profile.next_billing_date);
@@ -232,9 +231,8 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
             daysUntilDue: Math.ceil((nextBillingDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
             daysOverdue: needsPayment ? Math.ceil((now.getTime() - nextBillingDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
           });
-        } else if (isPaid && !profile.next_billing_date) {
-          // ZERO-TRUST: Only trust is_subscribed===true for no-billing-date cases
-          // (admin gifts or lifetime). hasPaymentMethod alone is NOT sufficient.
+        } else if (isPaid && isManualGift && !profile.next_billing_date) {
+          // ZERO-TRUST: Only trust is_subscribed===true AND payment_method==='manual' for no-billing-date cases
           isValidSubscription = true;
           needsPayment = false;
           console.log('ProtectedRoute: Active subscription without billing date (admin gift/special case)');
