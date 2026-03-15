@@ -214,20 +214,21 @@ export function useUserProfile() {
       return (profile?.is_subscribed ?? false);
     },
     get isAdminGifted() {
-      // ZERO-TRUST: is_subscribed MUST be true. payment_method alone is
-      // NOT sufficient — it was causing brand-new users to bypass the paywall.
-      if (!profile?.is_subscribed) return false;
-      const isAdminStrictGift = profile?.payment_method === 'manual';
-      return isAdminStrictGift && (!profile?.next_billing_date || new Date(profile.next_billing_date) > new Date());
+      // A user is "gifted" if they have a REAL payment method (gift, apple, google, stripe)
+      // with a valid next_billing_date (future date). NULL payment_method = regular user.
+      // NOTE: 'manual' with null billing = old DB default, NOT a gift.
+      const pm = profile?.payment_method;
+      if (!pm || pm === 'manual') return false;
+      // Must have a future billing date to be active
+      if (!profile?.next_billing_date) return false;
+      return new Date(profile.next_billing_date) > new Date();
     },
     get isGracePeriod() {
-      const isSubscribed = (profile?.is_subscribed ?? false);
-      if (isSubscribed) return false;
-      
-      const isAdminStrictGift = profile?.payment_method === 'manual';
-      const isAdminGifted = isAdminStrictGift && (!profile?.next_billing_date || new Date(profile.next_billing_date) > new Date());
-      if (isAdminGifted) return false;
-      
+      if (profile?.is_subscribed) return false;
+      // Check gifted inline (same logic as isAdminGifted)
+      const pm = profile?.payment_method;
+      if (pm && pm !== 'manual' && profile?.next_billing_date && new Date(profile.next_billing_date) > new Date()) return false;
+
       const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;
       if (start == null) return false; // NOT STARTED = not grace, not expired
       const elapsedMin = Math.floor((Date.now() - start) / 60000);
@@ -240,15 +241,13 @@ export function useUserProfile() {
       return profile?.trial_popup_shown ?? false;
     },
     get isAccessExpired() {
-      const isSubscribed = (profile?.is_subscribed ?? false);
-      if (isSubscribed) return false;
-      
-      const isAdminStrictGift = profile?.payment_method === 'manual';
-      const isAdminGifted = isAdminStrictGift && (!profile?.next_billing_date || new Date(profile.next_billing_date) > new Date());
-      if (isAdminGifted) return false;
-      
+      if (profile?.is_subscribed) return false;
+      // Check gifted inline
+      const pm = profile?.payment_method;
+      if (pm && pm !== 'manual' && profile?.next_billing_date && new Date(profile.next_billing_date) > new Date()) return false;
+
       const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;
-      if (start == null) return false; // not set counts as grace, not expired
+      if (start == null) return false; // not set counts as not expired
       const elapsedMin = Math.floor((Date.now() - start) / 60000);
       return elapsedMin >= 1440; // 24 hours
     },

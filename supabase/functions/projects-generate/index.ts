@@ -4180,7 +4180,8 @@ serve(async (req: Request) => {
             .single();
           if (!profile) return { allowed: true };
           const isPaid = profile.is_subscribed === true;
-          const isGift = profile.payment_method === 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
+          const pm = profile.payment_method;
+          const isGift = pm && pm !== 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
           if (isPaid || isGift) return { allowed: true };
           const usage: Record<string, number> = (profile.trial_usage as Record<string, number>) ?? {};
           const current = typeof usage['ai_coder'] === 'number' ? usage['ai_coder'] : 0;

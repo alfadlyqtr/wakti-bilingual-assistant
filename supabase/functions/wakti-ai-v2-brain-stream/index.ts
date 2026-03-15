@@ -68,8 +68,9 @@ async function checkAndConsumeTrialToken(
   }
 
   const isPaid = profile.is_subscribed === true;
+  const pm = profile.payment_method;
   const isActiveGift =
-    profile.payment_method === 'manual' &&
+    pm != null && typeof pm === 'string' && pm.trim().length > 0 && pm !== 'manual' &&
     profile.next_billing_date != null &&
     new Date(profile.next_billing_date as string) > new Date();
 

@@ -76,14 +76,32 @@ const ALL_APPS = [
 
 const DEFAULT_ORDER = ALL_APPS.map(a => a.id);
 const DEFAULT_DOCK  = ["wakti-ai", "calendar", "tr"];
-const LS_ORDER_KEY  = "homescreen_icon_order_v2"; // v2 — forces clean slate
-const LS_DOCK_KEY   = "homescreen_dock_v2";
-const LS_QUOTE_KEY  = "homescreen_show_quote";
-const LS_BG_KEY     = "homescreen_bg";
-const LS_HEADER_COLOR_KEY = "homescreen_header_color";
-const LS_UNIFIED_KEY = "homescreen_unified_grid_v6";
-const LS_WIDGETS_KEY = "homescreen_widgets_v1";
-const LS_HSBG_KEY    = "homescreen_bg_style_v1";
+// ── Per-user localStorage key helpers ─────────────────────────────────────────
+// Keys are scoped to the logged-in user so different accounts on the same browser
+// never bleed their homescreen data into each other.
+const DEFAULT_BG = "/wakti-image-1773608945903.jpg"; // default homescreen wallpaper
+const LS_ACTIVE_USER = "homescreen_active_uid"; // meta key tracking who is cached
+const lsKey = (uid: string, base: string) => `${base}__${uid}`;
+const LS_ORDER_BASE        = "homescreen_icon_order_v2";
+const LS_DOCK_BASE         = "homescreen_dock_v2";
+const LS_QUOTE_BASE        = "homescreen_show_quote";
+const LS_BG_BASE           = "homescreen_bg";
+const LS_HEADER_COLOR_BASE = "homescreen_header_color";
+const LS_UNIFIED_BASE      = "homescreen_unified_grid_v6";
+const LS_WIDGETS_BASE      = "homescreen_widgets_v1";
+const LS_HSBG_BASE         = "homescreen_bg_style_v1";
+
+// Read the currently-cached user ID (set on login) so useState initialisers can
+// immediately read the correct user-scoped key before useEffect fires.
+const _cachedUid = () => localStorage.getItem(LS_ACTIVE_USER) || "";
+const LS_ORDER_KEY        = () => lsKey(_cachedUid(), LS_ORDER_BASE);
+const LS_DOCK_KEY         = () => lsKey(_cachedUid(), LS_DOCK_BASE);
+const LS_QUOTE_KEY        = () => lsKey(_cachedUid(), LS_QUOTE_BASE);
+const LS_BG_KEY           = () => lsKey(_cachedUid(), LS_BG_BASE);
+const LS_HEADER_COLOR_KEY = () => lsKey(_cachedUid(), LS_HEADER_COLOR_BASE);
+const LS_UNIFIED_KEY      = () => lsKey(_cachedUid(), LS_UNIFIED_BASE);
+const LS_WIDGETS_KEY      = () => lsKey(_cachedUid(), LS_WIDGETS_BASE);
+const LS_HSBG_KEY         = () => lsKey(_cachedUid(), LS_HSBG_BASE);
 
 // Widget IDs used in the unified grid
 const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showWhoopWidget','showHealthKitWidget','showJournalWidget','showQuoteWidget'] as const;
@@ -874,7 +892,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const [editMode,        setEditMode]        = useState(false);
   const [dockIds,         setDockIds]         = useState<string[]>(() => {
     try {
-      const raw = JSON.parse(localStorage.getItem(LS_DOCK_KEY) || "null");
+      const raw = JSON.parse(localStorage.getItem(LS_DOCK_KEY()) || "null");
       return Array.isArray(raw) ? sanitizeDock(raw) : sanitizeDock(DEFAULT_DOCK);
     } catch { return sanitizeDock(DEFAULT_DOCK); }
   });
@@ -882,22 +900,22 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     try {
       const dock = (() => {
         try {
-          const raw = JSON.parse(localStorage.getItem(LS_DOCK_KEY) || "null");
+          const raw = JSON.parse(localStorage.getItem(LS_DOCK_KEY()) || "null");
           return Array.isArray(raw) ? sanitizeDock(raw) : DEFAULT_DOCK;
         } catch { return DEFAULT_DOCK; }
       })();
-      const raw = JSON.parse(localStorage.getItem(LS_ORDER_KEY) || "null");
+      const raw = JSON.parse(localStorage.getItem(LS_ORDER_KEY()) || "null");
       return sanitizeOrder(Array.isArray(raw) ? raw : DEFAULT_ORDER);
     } catch { return sanitizeOrder(DEFAULT_ORDER); }
   });
-  const [showQuote,       setShowQuote]       = useState<boolean>(() => localStorage.getItem(LS_QUOTE_KEY) !== "false");
-  const [bgImage,         setBgImage]         = useState<string>(() => localStorage.getItem(LS_BG_KEY) || "");
-  const [headerColor,     setHeaderColor]     = useState<string>(() => localStorage.getItem(LS_HEADER_COLOR_KEY) || "");
+  const [showQuote,       setShowQuote]       = useState<boolean>(() => localStorage.getItem(LS_QUOTE_KEY()) !== "false");
+  const [bgImage,         setBgImage]         = useState<string>(() => localStorage.getItem(LS_BG_KEY()) || DEFAULT_BG);
+  const [headerColor,     setHeaderColor]     = useState<string>(() => localStorage.getItem(LS_HEADER_COLOR_KEY()) || "");
 
   // Homescreen background style from Settings — cached in localStorage for instant restore
   const [hsBg, setHsBg] = useState<{ mode: 'solid'|'gradient'; color1: string; color2: string; color3: string; angle: number; glow: boolean }>(() => {
     try {
-      const cached = JSON.parse(localStorage.getItem(LS_HSBG_KEY) || 'null');
+      const cached = JSON.parse(localStorage.getItem(LS_HSBG_KEY()) || 'null');
       if (cached && typeof cached === 'object') return { mode: cached.mode || 'solid', color1: cached.color1 || '', color2: cached.color2 || '', color3: cached.color3 || '', angle: cached.angle ?? 180, glow: typeof cached.glow === 'boolean' ? cached.glow : false };
     } catch {}
     return { mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false };
@@ -930,7 +948,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const [hsWidgets, setHsWidgets] = useState(() => {
     const defaults = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showWhoopWidget: false, showHealthKitWidget: false, showJournalWidget: false, showQuoteWidget: false };
     try {
-      const cached = JSON.parse(localStorage.getItem(LS_WIDGETS_KEY) || 'null');
+      const cached = JSON.parse(localStorage.getItem(LS_WIDGETS_KEY()) || 'null');
       if (cached && typeof cached === 'object') return { ...defaults, ...cached };
     } catch {}
     return defaults;
@@ -939,7 +957,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   // Unified grid: ordered list of "widget::KEY" and "app::ID" items
   const [unifiedGrid, setUnifiedGrid] = useState<string[]>(() => {
     try {
-      const raw = JSON.parse(localStorage.getItem(LS_UNIFIED_KEY) || 'null');
+      const raw = JSON.parse(localStorage.getItem(LS_UNIFIED_KEY()) || 'null');
       return Array.isArray(raw) && raw.length > 0 ? raw : [];
     } catch { return []; }
   });
@@ -950,9 +968,32 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     else                   setGreeting(h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening");
   }, [language]);
 
+  // ── Write LS_ACTIVE_USER when user is known so scoped keys resolve correctly ──
+  useEffect(() => {
+    if (!user?.id) return;
+    const prevUid = localStorage.getItem(LS_ACTIVE_USER);
+    if (prevUid === user.id) return;
+    // Different user — clear ALL old cached keys so they don't bleed through
+    if (prevUid) {
+      [LS_ORDER_BASE,LS_DOCK_BASE,LS_QUOTE_BASE,LS_BG_BASE,LS_HEADER_COLOR_BASE,LS_UNIFIED_BASE,LS_WIDGETS_BASE,LS_HSBG_BASE]
+        .forEach(base => localStorage.removeItem(lsKey(prevUid, base)));
+    }
+    localStorage.setItem(LS_ACTIVE_USER, user.id);
+    _hasLoadedFromSupabase.current = false; // force re-fetch for new user
+    // Reset state to defaults so the new user starts clean until Supabase loads
+    setDockIds(sanitizeDock(DEFAULT_DOCK));
+    setIconOrder(sanitizeOrder(DEFAULT_ORDER));
+    setShowQuote(true);
+    setBgImage(DEFAULT_BG);
+    setHeaderColor("");
+    setHsBg({ mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false });
+    setHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showWhoopWidget: false, showHealthKitWidget: false, showJournalWidget: false, showQuoteWidget: false });
+    setUnifiedGrid([]);
+  }, [user?.id]);
+
   useEffect(() => { setQuote(getQuoteForDisplay()); }, []);
-  useEffect(() => { localStorage.setItem(LS_ORDER_KEY, JSON.stringify(iconOrder)); }, [iconOrder]);
-  useEffect(() => { localStorage.setItem(LS_DOCK_KEY,  JSON.stringify(dockIds));  }, [dockIds]);
+  useEffect(() => { if (user?.id) localStorage.setItem(LS_ORDER_KEY(), JSON.stringify(iconOrder)); }, [iconOrder, user?.id]);
+  useEffect(() => { if (user?.id) localStorage.setItem(LS_DOCK_KEY(),  JSON.stringify(dockIds));  }, [dockIds, user?.id]);
 
   const syncToSupabase = useCallback(async (patch: Record<string, any>) => {
     if (!user) return;
@@ -977,7 +1018,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   useEffect(() => {
     if (!user) return;
     // Skip if already loaded from Supabase and localStorage has data
-    if (_hasLoadedFromSupabase.current && localStorage.getItem(LS_UNIFIED_KEY)) return;
+    if (_hasLoadedFromSupabase.current && localStorage.getItem(LS_UNIFIED_KEY())) return;
     _hasLoadedFromSupabase.current = true;
     (async () => {
       try {
@@ -988,7 +1029,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           // Only update if different
           const clampedJson = JSON.stringify(clamped);
           setHsWidgets(prev => JSON.stringify(prev) === clampedJson ? prev : clamped);
-          localStorage.setItem(LS_WIDGETS_KEY, clampedJson);
+          localStorage.setItem(LS_WIDGETS_KEY(), clampedJson);
           // Build/restore unified grid
           if (Array.isArray(s?.homescreen?.unifiedGrid) && s.homescreen.unifiedGrid.length > 0) {
             const saved: string[] = s.homescreen.unifiedGrid;
@@ -1015,15 +1056,15 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               if (!seen.has(key)) grid.push(key);
             }
             const gridJson = JSON.stringify(grid);
-            const cachedGrid = localStorage.getItem(LS_UNIFIED_KEY);
+            const cachedGrid = localStorage.getItem(LS_UNIFIED_KEY());
             if (gridJson !== cachedGrid) {
               setUnifiedGrid(prev => JSON.stringify(prev) === gridJson ? prev : grid);
-              localStorage.setItem(LS_UNIFIED_KEY, gridJson);
+              localStorage.setItem(LS_UNIFIED_KEY(), gridJson);
             }
-          } else if (!localStorage.getItem(LS_UNIFIED_KEY)) {
+          } else if (!localStorage.getItem(LS_UNIFIED_KEY())) {
             const grid = buildDefaultUnifiedGrid(clamped);
             setUnifiedGrid(prev => JSON.stringify(prev) === JSON.stringify(grid) ? prev : grid);
-            localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(grid));
+            localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(grid));
           }
         }
         if (s?.homescreenBg) {
@@ -1038,39 +1079,39 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           };
           const newBgJson = JSON.stringify(newBg);
           setHsBg(prev => JSON.stringify(prev) === newBgJson ? prev : newBg);
-          localStorage.setItem(LS_HSBG_KEY, newBgJson);
+          localStorage.setItem(LS_HSBG_KEY(), newBgJson);
         }
         const hs = s?.homescreen;
         if (!hs) return;
         if (Array.isArray(hs.dockIds)) {
           const d = sanitizeDock(hs.dockIds);
           const dJson = JSON.stringify(d);
-          const cachedDock = localStorage.getItem(LS_DOCK_KEY);
+          const cachedDock = localStorage.getItem(LS_DOCK_KEY());
           if (dJson !== cachedDock) {
             setDockIds(prev => JSON.stringify(prev) === dJson ? prev : d);
-            localStorage.setItem(LS_DOCK_KEY, dJson);
+            localStorage.setItem(LS_DOCK_KEY(), dJson);
           }
           if (Array.isArray(hs.iconOrder)) {
             const o = sanitizeOrder(hs.iconOrder);
             const oJson = JSON.stringify(o);
-            const cachedOrder = localStorage.getItem(LS_ORDER_KEY);
+            const cachedOrder = localStorage.getItem(LS_ORDER_KEY());
             if (oJson !== cachedOrder) {
               setIconOrder(prev => JSON.stringify(prev) === oJson ? prev : o);
-              localStorage.setItem(LS_ORDER_KEY, oJson);
+              localStorage.setItem(LS_ORDER_KEY(), oJson);
             }
           }
         } else if (Array.isArray(hs.iconOrder)) {
           const o = sanitizeOrder(hs.iconOrder);
           const oJson = JSON.stringify(o);
-          const cachedOrder = localStorage.getItem(LS_ORDER_KEY);
+          const cachedOrder = localStorage.getItem(LS_ORDER_KEY());
           if (oJson !== cachedOrder) {
             setIconOrder(prev => JSON.stringify(prev) === oJson ? prev : o);
-            localStorage.setItem(LS_ORDER_KEY, oJson);
+            localStorage.setItem(LS_ORDER_KEY(), oJson);
           }
         }
-        if (typeof hs.showQuote === "boolean" && String(hs.showQuote) !== localStorage.getItem(LS_QUOTE_KEY)) { setShowQuote(prev => prev === hs.showQuote ? prev : hs.showQuote); localStorage.setItem(LS_QUOTE_KEY, String(hs.showQuote)); }
-        if (hs.bgImage && hs.bgImage !== localStorage.getItem(LS_BG_KEY)) { setBgImage(prev => prev === hs.bgImage ? prev : hs.bgImage); localStorage.setItem(LS_BG_KEY, hs.bgImage); }
-        if (hs.headerColor && hs.headerColor !== localStorage.getItem(LS_HEADER_COLOR_KEY)) { setHeaderColor(prev => prev === hs.headerColor ? prev : hs.headerColor); localStorage.setItem(LS_HEADER_COLOR_KEY, hs.headerColor); }
+        if (typeof hs.showQuote === "boolean" && String(hs.showQuote) !== localStorage.getItem(LS_QUOTE_KEY())) { setShowQuote(prev => prev === hs.showQuote ? prev : hs.showQuote); localStorage.setItem(LS_QUOTE_KEY(), String(hs.showQuote)); }
+        if (hs.bgImage && hs.bgImage !== localStorage.getItem(LS_BG_KEY())) { setBgImage(prev => prev === hs.bgImage ? prev : hs.bgImage); localStorage.setItem(LS_BG_KEY(), hs.bgImage); }
+        if (hs.headerColor && hs.headerColor !== localStorage.getItem(LS_HEADER_COLOR_KEY())) { setHeaderColor(prev => prev === hs.headerColor ? prev : hs.headerColor); localStorage.setItem(LS_HEADER_COLOR_KEY(), hs.headerColor); }
       } catch { /* silent */ }
     })();
   }, [user]);
@@ -1082,7 +1123,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       if (detail.mode !== 'homescreen') return;
       setHsWidgets(prev => {
         const next = clampHsWidgets({ ...prev, ...detail });
-        localStorage.setItem(LS_WIDGETS_KEY, JSON.stringify(next));
+        localStorage.setItem(LS_WIDGETS_KEY(), JSON.stringify(next));
         // Sync enabled/disabled widgets into unified grid
         setUnifiedGrid(grid => {
           const enabledWidgets = WIDGET_IDS.filter(k => next[k]).map(k => `widget::${k}`);
@@ -1091,7 +1132,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           // Add newly enabled ones at the front if not already present
           const newOnes = enabledWidgets.filter(w => !withoutDisabled.includes(w));
           const updated = [...newOnes, ...withoutDisabled];
-          localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(updated));
+          localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(updated));
           return updated;
         });
         return next;
@@ -1115,7 +1156,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         glow:   !!d.glow,
       };
       setHsBg(updated);
-      localStorage.setItem(LS_HSBG_KEY, JSON.stringify(updated));
+      localStorage.setItem(LS_HSBG_KEY(), JSON.stringify(updated));
     };
     window.addEventListener('homescreenBgChanged', handler);
     return () => window.removeEventListener('homescreenBgChanged', handler);
@@ -1228,33 +1269,33 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     reader.onload = (ev) => {
       const url = ev.target?.result as string;
       setBgImage(url);
-      localStorage.setItem(LS_BG_KEY, url);
+      localStorage.setItem(LS_BG_KEY(), url);
       syncToSupabase({ bgImage: url });
     };
     reader.readAsDataURL(file);
   };
-  const removeBg = () => { setBgImage(""); localStorage.removeItem(LS_BG_KEY); syncToSupabase({ bgImage: "" }); };
+  const removeBg = () => { setBgImage(DEFAULT_BG); localStorage.removeItem(LS_BG_KEY()); syncToSupabase({ bgImage: "" }); };
   const saveBgStyle = () => {
     const patch = { mode: hsBg.mode, color1: hsBg.color1, color2: hsBg.color2, color3: hsBg.color3, angle: hsBg.angle, glow: hsBg.glow };
-    localStorage.setItem(LS_HSBG_KEY, JSON.stringify(patch));
+    localStorage.setItem(LS_HSBG_KEY(), JSON.stringify(patch));
     syncToSupabase({ homescreenBg: patch });
     window.dispatchEvent(new Event('homescreenBgChanged'));
     setBgPanelOpen(false);
   };
   const saveHeaderColor = (color: string) => {
     setHeaderColor(color);
-    localStorage.setItem(LS_HEADER_COLOR_KEY, color);
+    localStorage.setItem(LS_HEADER_COLOR_KEY(), color);
     syncToSupabase({ headerColor: color });
   };
   const removeHeaderColor = () => {
     setHeaderColor("");
-    localStorage.removeItem(LS_HEADER_COLOR_KEY);
+    localStorage.removeItem(LS_HEADER_COLOR_KEY());
     syncToSupabase({ headerColor: "" });
   };
   const toggleQuote = () => {
     const next = !showQuote;
     setShowQuote(next);
-    localStorage.setItem(LS_QUOTE_KEY, String(next));
+    localStorage.setItem(LS_QUOTE_KEY(), String(next));
     syncToSupabase({ showQuote: next });
   };
 
@@ -1507,8 +1548,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           height: '100dvh', // Explicitly force viewport height to prevent drift
           ...(hasBg ? {
             backgroundImage: `url(${bgImage})`,
-            backgroundSize: "100% 100%",
-            backgroundPosition: "center top",
+            backgroundSize: "contain",
+            backgroundPosition: "center center",
             backgroundRepeat: "no-repeat",
           } : hasCustomBg ? {
             background: customBgStyle,
@@ -1808,7 +1849,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           <SavedImagesPicker
             onSelect={(imageUrl) => {
               setBgImage(imageUrl);
-              localStorage.setItem(LS_BG_KEY, imageUrl);
+              localStorage.setItem(LS_BG_KEY(), imageUrl);
               syncToSupabase({ bgImage: imageUrl });
             }}
             onClose={() => setSavedImagesOpen(false)}

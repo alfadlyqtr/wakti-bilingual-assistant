@@ -876,8 +876,8 @@ export default function Projects() {
           .single();
         if (!profile) return;
         const isPaid = profile.is_subscribed === true;
-        const hasPaymentMethod = profile.payment_method != null && profile.payment_method.trim().length > 0;
-      const isGift = hasPaymentMethod && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
+        const pm = profile.payment_method;
+        const isGift = pm && pm !== 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
         if (!isPaid && !isGift) setIsTrialUser(true);
       } catch {}
     })();

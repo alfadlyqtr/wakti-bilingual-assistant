@@ -202,25 +202,20 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
         let isValidSubscription = false;
         let needsPayment = true;
 
-        // Determine if user has a valid active status
-        // ZERO-TRUST: is_subscribed MUST be explicitly true.
         const isPaid = profile.is_subscribed === true;
-        
-        // STRICT ADMIN GIFT CHECK: must be exactly 'manual'
-        const isManualGift = profile.payment_method === 'manual';
-        
-        // Default to false strictly if not met
-        const hasActiveSubscription = isPaid;
-        
-        if (hasActiveSubscription && profile.next_billing_date) {
+        // Real payment methods: gift, apple, google, stripe (NOT 'manual' — that's the old DB default for everyone)
+        const pm = profile.payment_method;
+        const hasRealPaymentMethod = pm && pm !== 'manual';
+        const hasActiveGift = hasRealPaymentMethod && profile.next_billing_date && new Date(profile.next_billing_date) > now;
+
+        if (isPaid && profile.next_billing_date) {
           const nextBillingDate = new Date(profile.next_billing_date);
-          const gracePeriodDays = 1; // 1 day grace period after due date
+          const gracePeriodDays = 1;
           const gracePeriodEnd = new Date(nextBillingDate);
           gracePeriodEnd.setDate(gracePeriodEnd.getDate() + gracePeriodDays);
           
-          // Subscription is valid if we haven't passed the grace period
           isValidSubscription = now <= gracePeriodEnd;
-          needsPayment = now > nextBillingDate; // Payment needed if past due date
+          needsPayment = now > nextBillingDate;
           
           console.log('ProtectedRoute: Date-based subscription check:', {
             now: now.toISOString(),
@@ -228,14 +223,16 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
             gracePeriodEnd: gracePeriodEnd.toISOString(),
             isValidSubscription,
             needsPayment,
-            daysUntilDue: Math.ceil((nextBillingDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
-            daysOverdue: needsPayment ? Math.ceil((now.getTime() - nextBillingDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
           });
-        } else if (isPaid && isManualGift && !profile.next_billing_date) {
-          // ZERO-TRUST: Only trust is_subscribed===true AND payment_method==='manual' for no-billing-date cases
+        } else if (isPaid && !profile.next_billing_date) {
           isValidSubscription = true;
           needsPayment = false;
-          console.log('ProtectedRoute: Active subscription without billing date (admin gift/special case)');
+          console.log('ProtectedRoute: Active subscription without billing date');
+        } else if (hasActiveGift) {
+          // Gift/Apple/Google user with future billing but is_subscribed=false
+          isValidSubscription = true;
+          needsPayment = false;
+          console.log('ProtectedRoute: Active gift/IAP user:', pm);
         }
 
         console.log('ProtectedRoute: Final subscription evaluation:', {
@@ -244,7 +241,8 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
           subscriptionStatus: profile.subscription_status,
           nextBillingDate: profile.next_billing_date,
           planName: profile.plan_name,
-          hasActiveSubscription,
+          isPaid,
+          hasActiveGift,
           isValidSubscription,
           needsPayment
         });
@@ -387,7 +385,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     
     // SURGICAL FIX #1: Stop Trusting the Cache for Walls
     // Trust ONLY live profile data, not cached subscriptionStatus
-    if (isSubscribed || isAdminGifted || isGracePeriod) { setShowPaywall(false); return; }
+    if (isSubscribed || subscriptionStatus.isSubscribed || isAdminGifted || isGracePeriod) { setShowPaywall(false); return; }
     const isAccount = location.pathname.startsWith('/account');
     if (isAccount) { setShowPaywall(false); return; }
 

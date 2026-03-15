@@ -66,8 +66,8 @@ const WaktiAIV2 = () => {
         .single();
       if (profile) {
         const isPaid = profile.is_subscribed === true;
-        const hasPaymentMethod = profile.payment_method != null && profile.payment_method.trim().length > 0;
-        const isGift = hasPaymentMethod && (!profile.next_billing_date || new Date(profile.next_billing_date) > new Date());
+        const pm = profile.payment_method;
+        const isGift = pm && pm !== 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
         if (!isPaid && !isGift) {
           const usage = (profile.trial_usage as Record<string, number>) ?? {};
           const aiChatUsed = typeof usage['ai_chat'] === 'number' ? usage['ai_chat'] : 0;

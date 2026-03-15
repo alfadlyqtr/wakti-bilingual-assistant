@@ -59,15 +59,13 @@ export async function checkAndConsumeTrialToken(
   }
 
   const isPaid = profile.is_subscribed === true;
-  const hasPaymentMethod =
-    profile.payment_method != null &&
-    typeof profile.payment_method === 'string' &&
-    profile.payment_method.trim().length > 0;
+  // Real payment methods: gift, apple, google, stripe (NOT 'manual' — old DB default for all users)
+  const pm = profile.payment_method;
+  const hasRealPaymentMethod =
+    pm != null && typeof pm === 'string' && pm.trim().length > 0 && pm !== 'manual';
   const isActiveSubscriber =
-    hasPaymentMethod && (
-      profile.next_billing_date == null ||
-      new Date(profile.next_billing_date as string) > new Date()
-    );
+    hasRealPaymentMethod && profile.next_billing_date != null &&
+    new Date(profile.next_billing_date as string) > new Date();
 
   if (isPaid || isActiveSubscriber) {
     return { allowed: true, consumed: 0, limit: maxLimit, isVip: true };

@@ -11,7 +11,8 @@ async function checkAndConsumeTrialToken(supabaseClient: any, userId: string, fe
     .single();
   if (error || !profile) return { allowed: false };
   if (profile.is_subscribed === true) return { allowed: true, isVip: true };
-  if (profile.payment_method === 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date()) return { allowed: true, isVip: true };
+  const pm = profile.payment_method;
+  if (pm && pm !== 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date()) return { allowed: true, isVip: true };
   // deno-lint-ignore no-explicit-any
   const usage: Record<string, number> = (profile.trial_usage as any) ?? {};
   const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
