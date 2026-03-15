@@ -473,94 +473,111 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
   whoopData?: any;
 }) {
   const [activeTab, setActiveTab] = useState<'whoop' | 'healthkit'>('whoop');
+
+  // Real live WHOOP data
   const recovery = whoopData?.recovery ?? null;
-  const strain   = whoopData?.strain ?? null;
-  const recColor = recovery ? (recovery >= 67 ? '#22c55e' : recovery >= 34 ? '#f59e0b' : '#ef4444') : '#ef4444';
+  const strain   = whoopData?.strain   ?? null;
+  const hrv      = whoopData?.hrv      ?? null;
+  const rhr      = whoopData?.rhr      ?? null;
 
-  const bgGradient = activeTab === 'whoop'
-    ? (recovery
-        ? (recovery >= 67
-            ? 'linear-gradient(145deg,rgba(6,78,59,0.7) 0%,rgba(6,95,70,0.7) 40%,rgba(4,120,87,0.7) 100%)'
-            : recovery >= 34
-              ? 'linear-gradient(145deg,rgba(120,53,15,0.7) 0%,rgba(146,64,14,0.7) 40%,rgba(180,83,9,0.7) 100%)'
-              : 'linear-gradient(145deg,rgba(127,29,29,0.7) 0%,rgba(153,27,27,0.7) 40%,rgba(185,28,28,0.7) 100%)')
-        : 'linear-gradient(145deg,rgba(30,20,60,0.7) 0%,rgba(50,30,90,0.7) 100%)')
-    : 'linear-gradient(145deg,rgba(22,163,74,0.7) 0%,rgba(34,197,94,0.7) 40%,rgba(74,222,128,0.7) 100%)';
+  const recColor = recovery != null
+    ? (recovery >= 67 ? '#22c55e' : recovery >= 34 ? '#f59e0b' : '#ef4444')
+    : '#6366f1';
 
-  const glowColor = activeTab === 'whoop' ? recColor : '#22c55e';
+  const bgWhoop = recovery != null
+    ? (recovery >= 67
+        ? 'linear-gradient(145deg,rgba(6,78,59,0.85) 0%,rgba(4,120,87,0.85) 100%)'
+        : recovery >= 34
+          ? 'linear-gradient(145deg,rgba(120,53,15,0.85) 0%,rgba(180,83,9,0.85) 100%)'
+          : 'linear-gradient(145deg,rgba(127,29,29,0.85) 0%,rgba(185,28,28,0.85) 100%)')
+    : 'linear-gradient(145deg,rgba(30,20,60,0.85) 0%,rgba(50,30,90,0.85) 100%)';
 
+  const bgHealth = 'linear-gradient(145deg,rgba(22,163,74,0.85) 0%,rgba(74,222,128,0.85) 100%)';
+
+  const bgGradient = activeTab === 'whoop' ? bgWhoop : bgHealth;
+  const glowColor  = activeTab === 'whoop' ? recColor : '#22c55e';
+
+  // Tapping the widget body navigates to /fitness
   return shell(bgGradient, glowColor, () => navigate('/fitness'),
     <div className="p-3 flex flex-col justify-between h-full">
-      {/* Tab buttons row */}
-      <div className="flex items-center justify-between mb-1">
-        {/* WHOOP tab — top left */}
+
+      {/* ── Tab buttons: WHOOP top-left, Heart top-right ── */}
+      <div className="flex items-center justify-between">
         <button
           title="WHOOP"
-          onClick={(e) => { e.stopPropagation(); setActiveTab('whoop'); }}
-          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
-            activeTab === 'whoop'
-              ? 'bg-white/30 border border-white/40 shadow-md scale-105'
-              : 'bg-white/10 border border-white/15 opacity-60'
+          onClick={(e) => { e.stopPropagation(); setActiveTab('whoop'); navigate('/fitness'); }}
+          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-90 ${
+            activeTab === 'whoop' ? 'bg-white/30 border border-white/50 shadow-lg' : 'bg-white/10 border border-white/15 opacity-55'
           }`}
-          style={{ backdropFilter: 'blur(8px)' }}
         >
-          <Activity className="w-5 h-5 text-white" strokeWidth={2} />
+          <Activity className="w-5 h-5 text-white" strokeWidth={2.2} />
         </button>
-        {/* HealthKit tab — top right */}
         <button
           title="HealthKit"
-          onClick={(e) => { e.stopPropagation(); setActiveTab('healthkit'); }}
-          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
-            activeTab === 'healthkit'
-              ? 'bg-white/30 border border-white/40 shadow-md scale-105'
-              : 'bg-white/10 border border-white/15 opacity-60'
+          onClick={(e) => { e.stopPropagation(); setActiveTab('healthkit'); navigate('/fitness'); }}
+          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-90 ${
+            activeTab === 'healthkit' ? 'bg-white/30 border border-white/50 shadow-lg' : 'bg-white/10 border border-white/15 opacity-55'
           }`}
-          style={{ backdropFilter: 'blur(8px)' }}
         >
           <Heart className="w-5 h-5 text-white" strokeWidth={2.5} />
         </button>
       </div>
 
-      {/* WHOOP content */}
+      {/* ── WHOOP live data ── */}
       {activeTab === 'whoop' && (
-        <div className="flex flex-col justify-end flex-1">
-          {recovery !== null ? (
-            <div className="mb-1">
-              <div className="flex justify-between items-end mb-1">
-                <span className="text-[10px] text-white/70 font-bold uppercase">{language === 'ar' ? 'إجهاد' : 'Strain'}</span>
-                <span className="text-[12px] text-white font-bold">{strain !== null ? strain : '--'}</span>
+        <div className="flex flex-col justify-end flex-1 mt-2">
+          {recovery != null ? (
+            <>
+              {/* Recovery score big number */}
+              <div className="flex items-end gap-2 mb-1">
+                <span className="text-3xl font-black text-white leading-none tabular-nums" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{Math.round(recovery)}%</span>
+                <span className="text-[10px] font-bold text-white/70 uppercase mb-1">{language === 'ar' ? 'استشفاء' : 'Recovery'}</span>
               </div>
-              <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
-                <div className="h-full bg-white/90 rounded-full" style={{ width: `${Math.min(((strain || 0) / 21) * 100, 100)}%` }} />
+              {/* Strain bar */}
+              {strain != null && (
+                <div className="mb-1.5">
+                  <div className="flex justify-between items-center mb-0.5">
+                    <span className="text-[9px] text-white/60 font-bold uppercase">{language === 'ar' ? 'إجهاد' : 'Strain'}</span>
+                    <span className="text-[10px] text-white font-bold">{strain.toFixed(1)}/21</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full bg-white/85 transition-all" style={{ width: `${Math.min((strain / 21) * 100, 100)}%` }} />
+                  </div>
+                </div>
+              )}
+              {/* HRV + RHR */}
+              <div className="flex gap-3">
+                {hrv != null && <span className="text-[9px] text-white/70 font-semibold">HRV <span className="text-white font-bold">{Math.round(hrv)}</span></span>}
+                {rhr != null && <span className="text-[9px] text-white/70 font-semibold">RHR <span className="text-white font-bold">{Math.round(rhr)}</span></span>}
               </div>
-            </div>
+            </>
           ) : (
-            <div className="flex items-end gap-0.5 mb-2 h-6">
-              {[3,5,2,7,4,8,3,6,2,5,3,4].map((h, i) => (
-                <div key={i} className="flex-1 rounded-sm" style={{ height: `${h * 10}%`, background: i === 7 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)' }} />
-              ))}
-            </div>
+            <>
+              <div className="flex items-end gap-0.5 mb-2 h-7">
+                {[3,5,2,7,4,8,3,6,2,5,3,4].map((h, i) => (
+                  <div key={i} className="flex-1 rounded-sm" style={{ height: `${h * 10}%`, background: i === 7 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.25)' }} />
+                ))}
+              </div>
+              <p className="text-[14px] font-black text-white" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>WHOOP</p>
+              <p className="text-[10px] text-white/70">{language === 'ar' ? 'لا يوجد اتصال' : 'Not connected'}</p>
+            </>
           )}
-          <p className="text-[14px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>WHOOP</p>
-          <p className="text-[10px] font-semibold mt-0.5 text-white/80">
-            {recovery !== null ? `${recovery}% ${language === 'ar' ? 'استشفاء' : 'Recovery'}` : (language === 'ar' ? 'الحيوية والنشاط' : 'Vitality & fitness')}
-          </p>
         </div>
       )}
 
-      {/* HealthKit content */}
+      {/* ── HealthKit live data (Apple Health placeholder — no native API in web) ── */}
       {activeTab === 'healthkit' && (
-        <div className="flex flex-col justify-end flex-1">
-          <div className="flex gap-1 mb-2 items-end h-8">
+        <div className="flex flex-col justify-end flex-1 mt-2">
+          <div className="flex gap-1 mb-1.5 items-end h-8">
             {['S','M','T','W','T','F','S'].map((d, i) => (
               <div key={i} className="flex-1 flex flex-col justify-end gap-0.5">
-                <div className="w-full bg-white/40 rounded-t-sm" style={{ height: `${[40,60,30,80,50,90,45][i]}%` }} />
+                <div className="w-full bg-white/45 rounded-t-sm" style={{ height: `${[40,60,30,80,50,90,45][i]}%` }} />
                 <span className="text-[6px] text-white/60 text-center font-bold">{d}</span>
               </div>
             ))}
           </div>
           <p className="text-[14px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{language === 'ar' ? 'صحتي' : 'HealthKit'}</p>
-          <p className="text-[10px] font-semibold mt-0.5 text-white/80">{language === 'ar' ? 'نشاط أبل' : 'Apple Health'}</p>
+          <p className="text-[10px] text-white/70">{language === 'ar' ? 'نشاط أبل' : 'Apple Health'}</p>
         </div>
       )}
     </div>
