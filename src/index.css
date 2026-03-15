@@ -2665,6 +2665,7 @@ body.homescreen-active .app-main-scroll > .dashboard-container {
 .hs-root {
   flex: 1 1 0% !important;
   min-height: 0 !important;
+  height: 100% !important;
 }
 
 /* Dock bottom: flush to edge + iPhone safe area */

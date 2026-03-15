@@ -2,9 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
@@ -42,6 +40,8 @@ export default function Signup() {
   const [isRecording, setIsRecording] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [countdown, setCountdown] = useState(10);
+  const [emailCaptured, setEmailCaptured] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -50,6 +50,7 @@ export default function Signup() {
   const isStoppingRef = useRef(false);
   const holdStartRef = useRef(0);
   const isConnectionReadyRef = useRef(false);
+  const passwordRef = useRef<HTMLInputElement | null>(null);
   const MAX_RECORD_SECONDS = 10;
 
   // Auto-Greeting Logic
@@ -57,6 +58,9 @@ export default function Signup() {
     const playGreeting = async () => {
       if (audioRef.current) {
         audioRef.current.src = language === 'ar' ? '/welcome to wakti arabic.mp3' : '/welcome to wakti english.mp3';
+        audioRef.current.onplay  = () => setIsPlayingAudio(true);
+        audioRef.current.onended = () => setIsPlayingAudio(false);
+        audioRef.current.onpause = () => setIsPlayingAudio(false);
         try {
           await audioRef.current.play();
           setAudioUnlocked(true);
@@ -107,9 +111,23 @@ export default function Signup() {
       dc.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          if (msg.type === 'conversation.item.input_audio_transcription.completed' && msg.transcript) {
-            setEmail(prev => cleanEmail(msg.transcript));
-            dc.send(JSON.stringify({ type: 'response.cancel' }));
+          // Handle both transcription event types from OpenAI Realtime
+          const transcript =
+            msg.transcript ??
+            msg.delta ??
+            (msg.type === 'conversation.item.input_audio_transcription.completed' ? msg.transcript : null);
+          if (
+            (msg.type === 'conversation.item.input_audio_transcription.completed' ||
+             msg.type === 'input_audio_transcription.completed') &&
+            msg.transcript
+          ) {
+            const cleaned = cleanEmail(msg.transcript);
+            setEmail(cleaned);
+            setEmailCaptured(true);
+            // Suppress any AI text response
+            try { dc.send(JSON.stringify({ type: 'response.cancel' })); } catch {}
+            // Auto-focus password after short delay
+            setTimeout(() => passwordRef.current?.focus(), 600);
           }
         } catch {}
       };
@@ -361,530 +379,597 @@ export default function Signup() {
   const isRtl = language === 'ar';
   const isDarkMode = theme === 'dark';
 
+  const dk = isDarkMode;
+  const fgHi  = (op: string) => (dk ? `rgba(255,255,255,${op})` : `rgba(6,5,65,${op})`);
+  const accent = dk ? 'hsl(210,100%,65%)' : '#060541';
+
+  /* shared input class */
+  const fieldCls = cn(
+    "h-11 text-sm rounded-xl transition-all duration-200 border bg-transparent",
+    dk
+      ? "border-white/10 text-white placeholder:text-white/25 focus:border-white/30 focus:ring-1 focus:ring-white/15"
+      : "border-[#060541]/12 text-[#060541] placeholder:text-[#060541]/30 focus:border-[#060541]/35 focus:ring-1 focus:ring-[#060541]/10"
+  );
+
   return (
     <>
-      <div
-        className={cn(
-          "fixed inset-0 h-[100dvh] w-full overflow-x-hidden overflow-y-auto overscroll-contain touch-pan-y relative",
-          isRtl && "rtl"
-        )}
-        style={{
-          background: 'var(--background)',
-          WebkitOverflowScrolling: 'touch',
-        }}
-      >
-        {/* Ambient background glow */}
-        <div
-          className="pointer-events-none fixed inset-0 z-0"
-          style={{
-            background: `
-              radial-gradient(ellipse 60% 50% at 20% 10%, hsla(210, 100%, 65%, 0.08) 0%, transparent 60%),
-              radial-gradient(ellipse 50% 40% at 80% 90%, hsla(280, 70%, 65%, 0.06) 0%, transparent 60%),
-              radial-gradient(ellipse 40% 30% at 50% 50%, hsla(25, 95%, 60%, 0.04) 0%, transparent 50%)
-            `,
-          }}
-        />
+      {/* ── CSS ── */}
+      <style>{`
+        /* page: fixed, NO scroll */
+        .su-page {
+          position: fixed; inset: 0; width: 100%; height: 100dvh;
+          overflow: hidden; display: flex; flex-direction: column;
+          background: ${dk ? '#07080f' : '#eef0f8'};
+        }
 
-        {/* Header — frosted glass */}
-        <header
-          className="sticky top-0 z-20"
-          style={{
-            background: 'hsla(var(--background-hsl, 0 0% 100%), 0.72)',
-            backdropFilter: 'blur(20px) saturate(1.6)',
-            WebkitBackdropFilter: 'blur(20px) saturate(1.6)',
-            borderBottom: '1px solid hsla(0, 0%, 50%, 0.08)',
-          }}
-        >
-          <div className="container mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-            <button
-              onClick={() => navigate("/")}
-              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors group"
-            >
-              <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
-              <span>{t.backToHome}</span>
-            </button>
-            <ThemeLanguageToggle />
+        /* aurora bg */
+        .su-bg {
+          position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
+        }
+        .su-bg::before {
+          content:''; position:absolute; inset:-60%;
+          background:
+            ${dk
+              ? `radial-gradient(ellipse 65% 50% at 15% 5%,  hsla(320,70%,55%,0.18) 0%, transparent 55%),
+                 radial-gradient(ellipse 60% 45% at 88% 95%,  hsla(180,90%,50%,0.16) 0%, transparent 55%),
+                 radial-gradient(ellipse 55% 40% at 50% 50%,  hsla(260,80%,55%,0.10) 0%, transparent 60%)`
+              : `radial-gradient(ellipse 65% 50% at 15% 5%,  hsla(320,50%,70%,0.12) 0%, transparent 55%),
+                 radial-gradient(ellipse 60% 45% at 88% 95%,  hsla(180,60%,55%,0.10) 0%, transparent 55%),
+                 radial-gradient(ellipse 55% 40% at 50% 50%,  hsla(260,60%,65%,0.07) 0%, transparent 60%)`
+            };
+          animation: suBgDrift 22s ease-in-out infinite alternate;
+        }
+        @keyframes suBgDrift {
+          0%   { transform: scale(1)    rotate(0deg); }
+          100% { transform: scale(1.06) rotate(-2deg); }
+        }
+
+        /* ─── SIRI ORB ─── */
+        .siri-wrap {
+          position: relative;
+          width: 130px; height: 130px;
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer;
+          user-select: none; -webkit-user-select: none;
+          touch-action: none;
+          flex-shrink: 0;
+        }
+        /* outer frosted shell */
+        .siri-shell {
+          position: absolute; inset: 0; border-radius: 50%;
+          background: ${dk
+            ? 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)'
+            : 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.18) 100%)'
+          };
+          backdrop-filter: blur(18px) saturate(1.6);
+          -webkit-backdrop-filter: blur(18px) saturate(1.6);
+          border: 1px solid ${dk ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.6)'};
+          box-shadow: ${dk
+            ? '0 0 50px rgba(200,100,255,0.12), 0 0 100px rgba(100,200,255,0.08), inset 0 1px 0 rgba(255,255,255,0.07)'
+            : '0 8px 40px rgba(100,80,200,0.12), 0 2px 16px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)'
+          };
+        }
+        /* lobe 1 — pink/magenta */
+        .siri-lobe1 {
+          position: absolute;
+          width: 72%; height: 72%;
+          top: 8%; left: 4%;
+          border-radius: 50% 44% 58% 42% / 48% 56% 44% 52%;
+          background: ${dk
+            ? 'radial-gradient(ellipse at 40% 40%, hsla(330,90%,65%,0.75) 0%, hsla(320,80%,55%,0.45) 45%, transparent 75%)'
+            : 'radial-gradient(ellipse at 40% 40%, hsla(330,80%,70%,0.65) 0%, hsla(320,70%,62%,0.38) 45%, transparent 75%)'
+          };
+          filter: blur(3px);
+          animation: siLobe1 6s ease-in-out infinite;
+        }
+        @keyframes siLobe1 {
+          0%,100% { transform: rotate(0deg)   scale(1)    translate(0,0); }
+          33%      { transform: rotate(15deg)  scale(1.08) translate(3px,-2px); }
+          66%      { transform: rotate(-8deg)  scale(0.95) translate(-2px,3px); }
+        }
+        /* lobe 2 — cyan/teal */
+        .siri-lobe2 {
+          position: absolute;
+          width: 68%; height: 68%;
+          bottom: 6%; right: 2%;
+          border-radius: 44% 56% 42% 58% / 52% 44% 56% 48%;
+          background: ${dk
+            ? 'radial-gradient(ellipse at 60% 60%, hsla(185,95%,60%,0.72) 0%, hsla(200,85%,52%,0.42) 45%, transparent 75%)'
+            : 'radial-gradient(ellipse at 60% 60%, hsla(185,85%,55%,0.60) 0%, hsla(200,75%,50%,0.35) 45%, transparent 75%)'
+          };
+          filter: blur(3px);
+          animation: siLobe2 7s ease-in-out infinite 0.8s;
+        }
+        @keyframes siLobe2 {
+          0%,100% { transform: rotate(0deg)   scale(1)    translate(0,0); }
+          33%      { transform: rotate(-12deg) scale(1.06) translate(-3px,2px); }
+          66%      { transform: rotate(10deg)  scale(0.96) translate(2px,-3px); }
+        }
+        /* lobe 3 — purple/violet centre */
+        .siri-lobe3 {
+          position: absolute;
+          width: 55%; height: 55%;
+          top: 22%; left: 22%;
+          border-radius: 50%;
+          background: ${dk
+            ? 'radial-gradient(ellipse at 50% 40%, hsla(270,80%,70%,0.55) 0%, hsla(250,70%,55%,0.30) 55%, transparent 80%)'
+            : 'radial-gradient(ellipse at 50% 40%, hsla(270,70%,72%,0.45) 0%, hsla(250,60%,60%,0.25) 55%, transparent 80%)'
+          };
+          filter: blur(4px);
+          animation: siLobe3 9s ease-in-out infinite 1.4s;
+        }
+        @keyframes siLobe3 {
+          0%,100% { transform: scale(1)    rotate(0deg); }
+          50%      { transform: scale(1.12) rotate(180deg); }
+        }
+        /* lobe 4 — green accent */
+        .siri-lobe4 {
+          position: absolute;
+          width: 48%; height: 48%;
+          top: 42%; left: 28%;
+          border-radius: 42% 58% 55% 45% / 50% 46% 54% 50%;
+          background: ${dk
+            ? 'radial-gradient(ellipse at 45% 55%, hsla(160,85%,58%,0.45) 0%, hsla(170,75%,48%,0.22) 55%, transparent 80%)'
+            : 'radial-gradient(ellipse at 45% 55%, hsla(160,75%,55%,0.38) 0%, hsla(170,65%,48%,0.18) 55%, transparent 80%)'
+          };
+          filter: blur(3.5px);
+          animation: siLobe4 8s ease-in-out infinite 2s;
+        }
+        @keyframes siLobe4 {
+          0%,100% { transform: rotate(0deg)  scale(1);    }
+          50%      { transform: rotate(-20deg) scale(1.1); }
+        }
+        /* specular hotspot */
+        .siri-specular {
+          position: absolute;
+          width: 35%; height: 22%;
+          top: 12%; left: 20%;
+          border-radius: 50%;
+          background: radial-gradient(ellipse, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.25) 40%, transparent 75%);
+          filter: blur(2px);
+          pointer-events: none;
+          animation: siSpec 5s ease-in-out infinite;
+        }
+        @keyframes siSpec {
+          0%,100% { opacity: 0.8; transform: scale(1) translate(0,0); }
+          50%      { opacity: 0.5; transform: scale(0.85) translate(4px,2px); }
+        }
+        /* idle breathe — whole orb */
+        .siri-wrap:not(.siri-active) .siri-shell {
+          animation: siBreath 4.5s ease-in-out infinite;
+        }
+        @keyframes siBreath {
+          0%,100% { transform: scale(1);    }
+          50%      { transform: scale(1.04); }
+        }
+        /* active / listening state */
+        .siri-wrap.siri-active .siri-lobe1 { animation-duration: 1.4s !important; }
+        .siri-wrap.siri-active .siri-lobe2 { animation-duration: 1.6s !important; }
+        .siri-wrap.siri-active .siri-lobe3 { animation-duration: 1.2s !important; }
+        .siri-wrap.siri-active .siri-lobe4 { animation-duration: 1.8s !important; }
+        .siri-wrap.siri-active .siri-shell {
+          box-shadow: ${dk
+            ? '0 0 60px rgba(200,100,255,0.35), 0 0 120px rgba(100,200,255,0.20), inset 0 1px 0 rgba(255,255,255,0.1)'
+            : '0 0 50px rgba(180,80,255,0.22), 0 0 100px rgba(80,200,230,0.15), inset 0 1px 0 rgba(255,255,255,0.9)'
+          };
+          animation: siActivePulse 0.85s ease-in-out infinite !important;
+        }
+        @keyframes siActivePulse {
+          0%,100% { transform: scale(1.04); }
+          50%      { transform: scale(1.10); }
+        }
+        /* ripple waves on active */
+        .siri-ripple {
+          position: absolute; inset: -20px; border-radius: 50%;
+          border: 1px solid ${dk ? 'rgba(180,100,255,0.3)' : 'rgba(100,80,200,0.2)'};
+          opacity: 0; pointer-events: none;
+        }
+        .siri-wrap.siri-active .siri-ripple { animation: siRipple 1.6s ease-out infinite; }
+        .siri-ripple-2 { animation-delay: 0.53s !important; }
+        .siri-ripple-3 { animation-delay: 1.06s !important; }
+        @keyframes siRipple {
+          0%   { transform: scale(1);   opacity: 0.6; }
+          100% { transform: scale(2.0); opacity: 0;   }
+        }
+
+        /* ─── form glass panel ─── */
+        .su-panel {
+          border-radius: 24px;
+          background: ${dk
+            ? 'rgba(255,255,255,0.045)'
+            : 'rgba(255,255,255,0.78)'
+          };
+          backdrop-filter: blur(36px) saturate(1.5);
+          -webkit-backdrop-filter: blur(36px) saturate(1.5);
+          border: 1px solid ${dk ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.9)'};
+          box-shadow: ${dk
+            ? '0 16px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)'
+            : '0 16px 60px rgba(6,5,65,0.10), inset 0 1px 0 rgba(255,255,255,1)'
+          };
+        }
+
+        /* ─── submit pill ─── */
+        .su-pill {
+          display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+          height: 46px; padding: 0 32px; border-radius: 999px;
+          font-size: 0.84rem; font-weight: 800; letter-spacing: 0.08em;
+          color: #fff; border: none; cursor: pointer;
+          transition: all 0.28s cubic-bezier(0.22,1,0.36,1);
+          position: relative; overflow: hidden;
+          background: ${dk
+            ? 'linear-gradient(135deg, hsl(280,65%,42%) 0%, hsl(220,85%,45%) 50%, hsl(180,80%,40%) 100%)'
+            : 'linear-gradient(135deg, #060541 0%, hsl(250,70%,30%) 40%, hsl(210,90%,35%) 100%)'
+          };
+          box-shadow: ${dk
+            ? '0 6px 28px rgba(150,80,255,0.35), 0 2px 10px rgba(80,180,255,0.2), inset 0 1px 0 rgba(255,255,255,0.15)'
+            : '0 6px 28px rgba(6,5,65,0.30), 0 2px 10px rgba(6,5,65,0.15), inset 0 1px 0 rgba(255,255,255,0.2)'
+          };
+        }
+        .su-pill::after {
+          content: ''; position: absolute; inset: 0;
+          background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.22) 42%, rgba(255,255,255,0.05) 50%, transparent 55%);
+          animation: suShimmer 3s ease-in-out infinite;
+        }
+        @keyframes suShimmer {
+          0%   { transform: translateX(-120%); }
+          60%  { transform: translateX(120%); }
+          100% { transform: translateX(120%); }
+        }
+        .su-pill:not(:disabled):hover { transform: translateY(-2px) scale(1.04); box-shadow: ${dk
+          ? '0 10px 40px rgba(150,80,255,0.45), 0 4px 16px rgba(80,180,255,0.25)'
+          : '0 10px 40px rgba(6,5,65,0.40), 0 4px 16px rgba(6,5,65,0.20)'
+        }; }
+        .su-pill:not(:disabled):active { transform: scale(0.96); }
+        .su-pill:disabled {
+          background: ${dk ? 'rgba(255,255,255,0.06)' : 'rgba(6,5,65,0.06)'};
+          color: ${dk ? 'rgba(255,255,255,0.2)' : 'rgba(6,5,65,0.2)'};
+          box-shadow: none; cursor: not-allowed;
+        }
+        .su-pill:disabled::after { display: none; }
+
+        /* ─── add-details vibrant pill ─── */
+        .su-details-pill {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 5px 16px; border-radius: 999px;
+          font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+          cursor: pointer; transition: all 0.3s cubic-bezier(0.22,1,0.36,1);
+          position: relative;
+          background: ${dk
+            ? 'linear-gradient(135deg, hsla(280,55%,50%,0.22) 0%, hsla(210,75%,50%,0.18) 50%, hsla(180,70%,45%,0.14) 100%)'
+            : 'linear-gradient(135deg, hsla(243,70%,20%,0.08) 0%, hsla(210,80%,40%,0.08) 50%, hsla(280,50%,45%,0.06) 100%)'
+          };
+          border: 1.5px solid transparent;
+          background-clip: padding-box;
+          color: ${dk ? 'hsl(270,60%,80%)' : 'hsl(243,84%,22%)'};
+          text-shadow: ${dk ? '0 0 12px hsla(280,60%,65%,0.3)' : 'none'};
+        }
+        .su-details-pill::before {
+          content: ''; position: absolute; inset: -1.5px; border-radius: 999px; z-index: -1;
+          background: ${dk
+            ? 'linear-gradient(135deg, hsl(280,60%,55%), hsl(210,80%,55%), hsl(180,75%,50%), hsl(280,60%,55%))'
+            : 'linear-gradient(135deg, hsl(243,84%,30%), hsl(210,80%,40%), hsl(280,50%,45%), hsl(243,84%,30%))'
+          };
+          background-size: 300% 300%;
+          animation: suDetailsBorder 4s ease infinite;
+          opacity: ${dk ? '0.5' : '0.35'};
+        }
+        @keyframes suDetailsBorder {
+          0%,100% { background-position: 0% 50%; }
+          50%     { background-position: 100% 50%; }
+        }
+        .su-details-pill:hover {
+          transform: translateY(-2px) scale(1.05);
+          color: ${dk ? 'hsl(270,65%,88%)' : 'hsl(243,84%,14%)'};
+          box-shadow: ${dk
+            ? '0 4px 18px hsla(280,60%,55%,0.25), 0 2px 8px hsla(210,80%,55%,0.15)'
+            : '0 4px 18px hsla(243,84%,14%,0.15), 0 2px 8px hsla(210,80%,50%,0.10)'
+          };
+        }
+        .su-details-pill:hover::before { opacity: ${dk ? '0.75' : '0.55'}; }
+
+        /* ─── vibrant checkbox ─── */
+        .su-checkbox {
+          width: 16px !important; height: 16px !important;
+          border-radius: 5px !important;
+          border: 2px solid ${dk ? 'hsl(280,60%,55%)' : 'hsl(243,84%,30%)'} !important;
+          background: transparent !important;
+          transition: all 0.2s ease !important;
+          flex-shrink: 0;
+        }
+        .su-checkbox[data-state='checked'] {
+          background: ${dk
+            ? 'linear-gradient(135deg, hsl(280,60%,50%) 0%, hsl(210,80%,50%) 100%)'
+            : 'linear-gradient(135deg, #060541 0%, hsl(250,70%,35%) 100%)'
+          } !important;
+          border-color: transparent !important;
+          box-shadow: ${dk
+            ? '0 0 12px hsla(280,60%,55%,0.4), 0 0 4px hsla(210,80%,55%,0.3)'
+            : '0 0 8px hsla(243,84%,14%,0.25)'
+          };
+        }
+
+        /* ─── login link ─── */
+        .su-login-link {
+          font-weight: 800; letter-spacing: 0.03em;
+          background: ${dk
+            ? 'linear-gradient(135deg, hsl(210,100%,65%) 0%, hsl(280,70%,70%) 50%, hsl(180,80%,60%) 100%)'
+            : 'linear-gradient(135deg, #060541 0%, hsl(250,70%,32%) 50%, hsl(210,90%,38%) 100%)'
+          };
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          text-decoration: none;
+          position: relative;
+          transition: all 0.25s ease;
+          padding: 0 1px;
+        }
+        .su-login-link::after {
+          content: ''; position: absolute;
+          bottom: -1px; left: 0; right: 0; height: 1.5px;
+          border-radius: 2px;
+          background: ${dk
+            ? 'linear-gradient(90deg, hsl(210,100%,65%), hsl(280,70%,65%), hsl(180,80%,55%))'
+            : 'linear-gradient(90deg, #060541, hsl(250,70%,32%), hsl(210,90%,38%))'
+          };
+          opacity: 0.5;
+          transform: scaleX(0.6);
+          transition: all 0.25s ease;
+        }
+        .su-login-link:hover::after {
+          opacity: 1; transform: scaleX(1);
+        }
+        .su-login-link:hover {
+          filter: ${dk ? 'drop-shadow(0 0 8px hsla(210,100%,65%,0.4))' : 'drop-shadow(0 0 6px hsla(243,84%,14%,0.2))'};
+        }
+
+        /* ─── field icon ─── */
+        .su-icon { color: ${accent}; opacity: 0.45; }
+      `}</style>
+
+      <audio ref={audioRef} playsInline className="hidden" />
+
+      <div className={cn("su-page", isRtl && "rtl")}>
+        <div className="su-bg" />
+
+        {/* ── Top bar: back + toggle only ── */}
+        <div className="relative z-20 flex items-center justify-between px-5 pt-3 pb-0 flex-shrink-0">
+          <button
+            onClick={() => navigate("/")}
+            className="flex items-center gap-1 text-[11px] font-medium transition-opacity hover:opacity-70"
+            style={{ color: fgHi('0.35') }}
+          >
+            <ArrowLeft className="h-3 w-3" />
+            <span className="sr-only">{t.backToHome}</span>
+          </button>
+          <ThemeLanguageToggle />
+        </div>
+
+        {/* ── Main layout: everything fits in remaining height ── */}
+        <div className="relative z-10 flex flex-col items-center justify-center flex-1 overflow-hidden px-5 pb-3 gap-3">
+
+          {/* ── Logo ── */}
+          <div className="flex-shrink-0 cursor-pointer" onClick={() => navigate("/")}>
+            <Logo3D size="lg" />
           </div>
-        </header>
 
-        {/* Main Content */}
-        <div className="relative z-10 container mx-auto px-4 sm:px-6 py-6 sm:py-10 overflow-x-hidden">
-          <div className="flex flex-col">
-            <motion.div
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              className="w-full max-w-lg mx-auto"
+          {/* ── Siri Orb ── */}
+          <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
+            <button
+              onMouseDown={handleHoldStart}
+              onMouseUp={handleHoldEnd}
+              onMouseLeave={handleHoldEnd}
+              onTouchStart={handleHoldStart}
+              onTouchEnd={handleHoldEnd}
+              onContextMenu={(e) => e.preventDefault()}
+              className={cn("siri-wrap focus:outline-none", (isRecording || isPlayingAudio) && "siri-active")}
+              aria-label={language === 'ar' ? 'اضغط وتحدث' : 'Hold to speak your email'}
             >
-              {/* Logo + Title */}
-              <div className="text-center mb-8">
+              <div className="siri-ripple" />
+              <div className="siri-ripple siri-ripple-2" />
+              <div className="siri-ripple siri-ripple-3" />
+              <div className="siri-shell" />
+              <div className="siri-lobe1" />
+              <div className="siri-lobe2" />
+              <div className="siri-lobe3" />
+              <div className="siri-lobe4" />
+              <div className="siri-specular" />
+            </button>
+
+            {/* Status hint */}
+            <motion.p
+              key={isRecording ? 'rec' : 'idle'}
+              initial={{ opacity: 0, y: 3 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-[10px] font-semibold tracking-[0.18em] uppercase"
+              style={{ color: isRecording ? 'hsl(180,85%,60%)' : fgHi('0.3') }}
+            >
+              {isRecording
+                ? (language === 'ar' ? `جارٍ الاستماع · ${countdown}` : `Listening · ${countdown}s`)
+                : (language === 'ar' ? 'اضغط باستمرار للتحدث' : 'Hold to speak your email')}
+            </motion.p>
+
+            {/* Email captured banner */}
+            <AnimatePresence>
+              {emailCaptured && (
                 <motion.div
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ delay: 0.1, duration: 0.4 }}
-                  className="inline-block cursor-pointer mb-5"
-                  onClick={() => navigate("/")}
-                >
-                  <Logo3D size="lg" />
-                </motion.div>
-                <h1
-                  className="text-3xl sm:text-4xl font-bold tracking-tight"
+                  initial={{ opacity: 0, scale: 0.92, y: 6 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.3 }}
+                  className="px-4 py-2 rounded-2xl text-xs font-medium text-center"
                   style={{
-                    background: 'linear-gradient(135deg, var(--foreground) 0%, hsl(210, 60%, 55%) 100%)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
+                    background: dk ? 'hsla(142,76%,55%,0.1)' : 'hsla(142,60%,45%,0.08)',
+                    border: '1px solid hsla(142,76%,55%,0.22)',
+                    color: dk ? 'hsl(142,76%,62%)' : 'hsl(142,55%,32%)',
                   }}
                 >
-                  {t.createAccount}
-                </h1>
-                <p className="mt-2 text-sm text-muted-foreground max-w-[280px] sm:max-w-md mx-auto leading-relaxed">
                   {language === 'ar'
-                    ? 'أهلاً بك في وقتي. شكراً لانضمامك إلينا، يسعدنا جداً وجودك معنا. لنُجهز حسابك في ثوانٍ معدودة؛ فقط اضغط مع الاستمرار على (الكرة المتوهجة) للتحدث، أو اكتب بريدك الإلكتروني للبدء.'
-                    : 'Welcome to Wakti. Thanks for joining. We’re thrilled to have you. Let’s set up your account in seconds, just hold the GLOWING SPHERE to speak, or type your email to begin.'}
-                </p>
+                    ? '✓ رائع! اكتب كلمة مرور قوية — لا تشاركها.'
+                    : '✓ Got it! Now type a strong password.'}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
-                {/* Unified Voice Sphere UI */}
-                <div className="flex flex-col items-center justify-center my-8">
-                  <audio ref={audioRef} playsInline className="hidden" />
-                  <button
-                    onMouseDown={handleHoldStart}
-                    onMouseUp={handleHoldEnd}
-                    onMouseLeave={handleHoldEnd}
-                    onTouchStart={handleHoldStart}
-                    onTouchEnd={handleHoldEnd}
-                    onContextMenu={(e) => e.preventDefault()}
-                    className={cn(
-                      "relative w-[120px] h-[120px] rounded-full flex items-center justify-center transition-all duration-500",
-                      isRecording ? "scale-110" : "hover:scale-105 active:scale-95"
-                    )}
-                    style={{
-                      background: isDarkMode
-                        ? `radial-gradient(circle at 35% 25%, hsla(210,100%,90%,0.5) 0%, transparent 25%),
-                           radial-gradient(circle at 30% 30%, hsl(210,100%,72%) 0%, hsl(215,90%,55%) 20%, hsl(225,75%,38%) 45%, hsl(235,55%,22%) 70%, #080c16 100%)`
-                        : `radial-gradient(circle at 35% 25%, hsla(210,100%,95%,0.8) 0%, transparent 25%),
-                           radial-gradient(circle at 30% 30%, hsl(210,100%,82%) 0%, hsl(220,80%,68%) 20%, hsl(230,65%,55%) 45%, hsl(240,50%,42%) 70%, hsl(243,84%,14%) 100%)`,
-                      boxShadow: isRecording
-                        ? "0 0 60px hsla(0,80%,55%,0.6), 0 0 120px hsla(0,80%,50%,0.3)"
-                        : isDarkMode
-                        ? "0 0 40px hsla(215,90%,60%,0.4), inset 0 4px 15px rgba(255,255,255,0.1)"
-                        : "0 0 30px hsla(220,70%,60%,0.3), inset 0 4px 15px rgba(255,255,255,0.3)",
-                      animation: isRecording ? "none" : "cta-breathe 4s ease-in-out infinite"
-                    }}
-                  >
-                    {/* Ring effects */}
-                    <div className={cn("absolute -inset-6 border rounded-full pointer-events-none opacity-0 transition-opacity", isRecording && "opacity-100 border-red-500/30 animate-ping")} />
-                    <div className={cn("absolute -inset-10 border rounded-full pointer-events-none opacity-0 transition-opacity", isRecording && "opacity-100 border-red-500/20 animate-ping")} style={{ animationDelay: '0.2s' }} />
-                    
-                    <div className="relative z-10 pointer-events-none flex flex-col items-center gap-1">
-                      {isRecording ? (
-                        <Mic className="w-10 h-10 text-white drop-shadow-md animate-pulse" />
-                      ) : (
-                        <Logo3D size="sm" />
-                      )}
-                    </div>
-                  </button>
-                  <p className="mt-4 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
-                    {isRecording 
-                      ? (language === 'ar' ? `أسمعك... (${countdown}ث)` : `Listening... (${countdown}s)`)
-                      : (language === 'ar' ? 'اضغط وتحدث' : 'Hold to Speak')}
-                  </p>
-                </div>
+          {/* ── Glass form panel ── */}
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1, duration: 0.5, ease: [0.22,1,0.36,1] }}
+            className="su-panel w-full max-w-sm px-5 py-4"
+          >
+            {/* Error */}
+            <AnimatePresence>
+              {errorMsg && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mb-3 px-3 py-2.5 rounded-xl text-xs font-medium"
+                  style={{
+                    background: 'hsla(0,80%,50%,0.08)',
+                    border: '1px solid hsla(0,80%,50%,0.18)',
+                    color: dk ? 'hsl(0,80%,68%)' : 'hsl(0,60%,42%)',
+                  }}
+                >{errorMsg}</motion.div>
+              )}
+            </AnimatePresence>
 
-                {/* Error message */}
-                <AnimatePresence>
-                  {errorMsg && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      className="mt-4 px-4 py-2.5 rounded-xl text-sm font-medium text-red-600 dark:text-red-400"
-                      style={{
-                        background: 'hsla(0, 80%, 50%, 0.08)',
-                        border: '1px solid hsla(0, 80%, 50%, 0.15)',
-                      }}
-                    >
-                      {errorMsg}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+            <form onSubmit={handleSignup} className="space-y-2.5">
+
+              {/* Email */}
+              <div className="relative">
+                <Mail className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none" />
+                <Input
+                  id="email" placeholder={t.emailPlaceholder} type="email"
+                  autoCapitalize="none" autoComplete="email" autoCorrect="off"
+                  disabled={isLoading} value={email}
+                  onChange={(e) => { setEmail(e.target.value); setEmailCaptured(false); }}
+                  className={cn(fieldCls, "pl-9")} required
+                />
               </div>
 
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                {/* Card container */}
-                <div
-                  className="rounded-3xl p-6 sm:p-8"
-                      style={isDarkMode ? {
-                        background:
-                          'linear-gradient(135deg, hsla(222, 20%, 6%, 0.82) 0%, hsla(240, 3%, 20%, 0.55) 100%)',
-                        backdropFilter: 'blur(26px) saturate(1.25)',
-                        WebkitBackdropFilter: 'blur(26px) saturate(1.25)',
-                        border: '1px solid hsla(210, 100%, 65%, 0.18)',
-                        boxShadow:
-                          '0 18px 70px hsla(0, 0%, 0%, 0.60), 0 6px 26px hsla(210, 100%, 65%, 0.14)',
-                      } : {
-                        background:
-                          'linear-gradient(135deg, hsla(180, 4%, 99%, 0.96) 0%, hsla(36, 67%, 81%, 0.22) 100%)',
-                        backdropFilter: 'blur(20px) saturate(1.15)',
-                        WebkitBackdropFilter: 'blur(20px) saturate(1.15)',
-                        border: '1px solid hsla(243, 84%, 14%, 0.12)',
-                        boxShadow:
-                          '0 20px 70px hsla(243, 84%, 14%, 0.14), 0 8px 24px hsla(36, 67%, 81%, 0.22)',
-                      }}
-                    >
-                      <form onSubmit={handleSignup} className="space-y-5 w-full overflow-x-hidden">
+              {/* Password */}
+              <div className="relative">
+                <Lock className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none" />
+                <Input
+                  id="password" ref={passwordRef}
+                  type={showPassword ? "text" : "password"}
+                  placeholder={t.passwordPlaceholder}
+                  autoCapitalize="none" autoComplete="new-password"
+                  disabled={isLoading} value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={cn(fieldCls, "pl-9 pr-9")} required
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  className="su-icon absolute right-3 top-1/2 -translate-y-1/2 hover:opacity-80 transition-opacity">
+                  {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+              </div>
 
-                        <div className="space-y-4">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="email" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                              {t.email}<span className="text-red-400 ml-0.5">*</span>
-                            </Label>
-                            <div className="relative group">
-                              <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
-                                <Mail
-                                  className="h-4 w-4"
-                                  style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
-                                />
-                              </div>
-                              <Input
-                                id="email"
-                                placeholder={t.emailPlaceholder}
-                                type="email"
-                                autoCapitalize="none"
-                                autoComplete="email"
-                                autoCorrect="off"
-                                disabled={isLoading}
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className={cn(
-                                  "pl-10 h-12 text-sm rounded-xl transition-all",
-                                  "bg-background/70 border border-border/60 shadow-sm",
-                                  "focus:bg-background focus:border-[#060541]/45 focus:ring-2 focus:ring-[#060541]/15",
-                                  "dark:bg-[#0c0f14]/55 dark:border-white/12 dark:shadow-none",
-                                  "dark:focus:bg-[#0c0f14]/65 dark:focus:border-[hsla(210,100%,65%,0.55)] dark:focus:ring-2 dark:focus:ring-[hsla(210,100%,65%,0.22)]"
-                                )}
-                                required
-                              />
-                            </div>
-                          </div>
-                        </div>
+              {/* Optional fields toggle */}
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setShowOptionalFields(!showOptionalFields)}
+                  className="su-details-pill"
+                >
+                  {language === 'ar' ? 'تفاصيل إضافية' : 'Add details'}
+                  {showOptionalFields ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
+                </button>
+              </div>
 
-                        {/* ── Password ── */}
-                        <div className="space-y-4">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="password" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                              {t.password}<span className="text-red-400 ml-0.5">*</span>
-                            </Label>
-                            <div className="relative group">
-                              <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
-                                <Lock
-                                  className="h-4 w-4"
-                                  style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
-                                />
-                              </div>
-                              <Input
-                                id="password"
-                                type={showPassword ? "text" : "password"}
-                                placeholder={t.passwordPlaceholder}
-                                autoCapitalize="none"
-                                autoComplete="new-password"
-                                disabled={isLoading}
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className={cn(
-                                  "pl-10 pr-10 h-12 text-sm rounded-xl transition-all",
-                                  "bg-background/70 border border-border/60 shadow-sm",
-                                  "focus:bg-background focus:border-[#060541]/45 focus:ring-2 focus:ring-[#060541]/15",
-                                  "dark:bg-[#0c0f14]/55 dark:border-white/12 dark:shadow-none",
-                                  "dark:focus:bg-[#0c0f14]/65 dark:focus:border-[hsla(210,100%,65%,0.55)] dark:focus:ring-2 dark:focus:ring-[hsla(210,100%,65%,0.22)]"
-                                )}
-                                required
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className={cn(
-                                  "absolute inset-y-0 right-0 flex items-center pr-3.5 transition-colors",
-                                  "text-[#060541]/60 hover:text-[#060541]",
-                                  "dark:text-[hsl(210,100%,65%)]/55 dark:hover:text-[hsl(210,100%,65%)]"
-                                )}
-                              >
-                                {showPassword ? (
-                                  <EyeOff
-                                    className="h-4 w-4"
-                                    style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
-                                  />
-                                ) : (
-                                  <Eye
-                                    className="h-4 w-4"
-                                    style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
-                                  />
-                                )}
-                              </button>
-                            </div>
-                            <p className="text-[11px] text-muted-foreground/70 pl-1">{t.passwordRequirements}</p>
-                          </div>
-                        </div>
-
-                        {/* ── Divider — Optional Fields ── */}
-                        <div className="relative py-2">
-                          <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-border/30" />
-                          </div>
-                          <div className="relative flex justify-center">
-                            <button
-                              type="button"
-                              onClick={() => setShowOptionalFields(!showOptionalFields)}
-                              className="px-3 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
-                              style={{ background: 'var(--card, var(--background))' }}
-                            >
-                              {language === 'ar' ? 'أضف تفاصيل الملف الشخصي (اختياري)' : 'Add profile details (Optional)'}
-                              {showOptionalFields ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                            </button>
-                          </div>
-                        </div>
-
-                        <AnimatePresence>
-                          {showOptionalFields && (
-                            <motion.div
-                              initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                              animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
-                              exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                              transition={{ duration: 0.3 }}
-                              className="space-y-5"
-                            >
-                              {/* ── Name ── */}
-                              <div className="space-y-1.5">
-                                <Label htmlFor="name" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                                  {t.name}
-                                </Label>
-                                <div className="relative group">
-                                  <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
-                                    <User
-                                      className="h-4.5 w-4.5"
-                                      style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
-                                    />
-                                  </div>
-                                  <Input
-                                    id="name"
-                                    placeholder={t.namePlaceholder}
-                                    type="text"
-                                    autoCapitalize="none"
-                                    autoCorrect="off"
-                                    disabled={isLoading}
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    className={cn(
-                                      "pl-10 h-12 text-sm rounded-xl transition-all",
-                                      "bg-background/70 border border-border/60 shadow-sm",
-                                      "focus:bg-background focus:border-[#060541]/45 focus:ring-2 focus:ring-[#060541]/15",
-                                      "dark:bg-[#0c0f14]/55 dark:border-white/12 dark:shadow-none",
-                                      "dark:focus:bg-[#0c0f14]/65 dark:focus:border-[hsla(210,100%,65%,0.55)] dark:focus:ring-2 dark:focus:ring-[hsla(210,100%,65%,0.22)]"
-                                    )}
-                                  />
-                                </div>
-                              </div>
-
-                              {/* ── Date of Birth ── */}
-                              <div className="space-y-1.5">
-                                <Label htmlFor="dateOfBirth" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                                  {t.dateOfBirth}
-                                </Label>
-                                <div className="relative group">
-                                  <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none z-10">
-                                    <CalendarIcon
-                                      className="h-4 w-4"
-                                      style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
-                                    />
-                                  </div>
-                                  <Input
-                                    id="dateOfBirth"
-                                    type="date"
-                                    disabled={isLoading}
-                                    value={dateOfBirth ? dateOfBirth.toISOString().slice(0, 10) : ""}
-                                    onChange={(e) => {
-                                      const v = e.target.value;
-                                      setDateOfBirth(v ? new Date(`${v}T00:00:00`) : undefined);
-                                    }}
-                                    className={cn(
-                                      "pl-10 h-12 text-sm rounded-xl transition-all",
-                                      "bg-background/70 border border-border/60 shadow-sm",
-                                      "focus:bg-background focus:border-[#060541]/45 focus:ring-2 focus:ring-[#060541]/15",
-                                      "dark:bg-[#0c0f14]/55 dark:border-white/12 dark:shadow-none",
-                                      "dark:focus:bg-[#0c0f14]/65 dark:focus:border-[hsla(210,100%,65%,0.55)] dark:focus:ring-2 dark:focus:ring-[hsla(210,100%,65%,0.22)]",
-                                      !dateOfBirth && "text-muted-foreground"
-                                    )}
-                                    min="1900-01-01"
-                                    max={new Date().toISOString().slice(0, 10)}
-                                  />
-                                </div>
-                              </div>
-
-                              {/* ── Country + City ── */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                  <Label htmlFor="country" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                                    {t.country}
-                                  </Label>
-                                  <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none z-10">
-                                      <Globe
-                                        className="h-4 w-4"
-                                        style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
-                                      />
-                                    </div>
-                                    <Select
-                                      value={country}
-                                      onValueChange={setCountry}
-                                      disabled={isLoading}
-                                    >
-                                      <SelectTrigger
-                                        className={cn(
-                                          "pl-10 h-12 text-sm rounded-xl transition-all",
-                                          "bg-background/70 border border-border/60 shadow-sm",
-                                          "focus:bg-background focus:border-[#060541]/45 focus:ring-2 focus:ring-[#060541]/15",
-                                          "text-[#060541]/80",
-                                          "dark:bg-[#0c0f14]/55 dark:border-white/12 dark:shadow-none dark:text-white/75",
-                                          "dark:focus:bg-[#0c0f14]/65 dark:focus:border-[hsla(210,100%,65%,0.55)] dark:focus:ring-2 dark:focus:ring-[hsla(210,100%,65%,0.22)]",
-                                          "[&>svg]:text-[#060541] dark:[&>svg]:text-[hsl(210,100%,65%)]"
-                                        )}
-                                      >
-                                        <SelectValue placeholder={t.selectCountry} />
-                                      </SelectTrigger>
-                                      <SelectContent className="max-h-60 max-w-[calc(100vw-2rem)] rounded-xl">
-                                        {countries.map((c) => (
-                                          <SelectItem key={c.code} value={c.code}>
-                                            {language === 'ar' ? c.nameAr : c.name}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                </div>
-
-                                <div className="space-y-1.5">
-                                  <Label htmlFor="city" className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
-                                    {language === 'ar' ? 'المدينة' : 'City'}
-                                  </Label>
-                                  <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none z-10">
-                                      <MapPin
-                                        className="h-4 w-4"
-                                        style={{ color: isDarkMode ? 'hsl(210 100% 65%)' : '#060541' }}
-                                      />
-                                    </div>
-                                    <Input
-                                      id="city"
-                                      placeholder={language === 'ar' ? 'أدخل مدينتك' : 'Enter your city'}
-                                      type="text"
-                                      autoCapitalize="words"
-                                      autoCorrect="off"
-                                      disabled={isLoading || !country}
-                                      value={city}
-                                      onChange={(e) => setCity(e.target.value)}
-                                      className={cn(
-                                        "pl-10 h-12 text-sm rounded-xl transition-all",
-                                        "bg-background/70 border border-border/60 shadow-sm",
-                                        "focus:bg-background focus:border-[#060541]/45 focus:ring-2 focus:ring-[#060541]/15",
-                                        "dark:bg-[#0c0f14]/55 dark:border-white/12 dark:shadow-none",
-                                        "dark:focus:bg-[#0c0f14]/65 dark:focus:border-[hsla(210,100%,65%,0.55)] dark:focus:ring-2 dark:focus:ring-[hsla(210,100%,65%,0.22)]"
-                                      )}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-
-                        {/* ── Terms ── */}
-                        <div className="flex items-start gap-3 pt-1">
-                          <Checkbox
-                            id="terms"
-                            checked={agreedToTerms}
-                            onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
-                            disabled={isLoading}
-                            className="mt-0.5 rounded-md border-border/60"
-                          />
-                          <label htmlFor="terms" className="cursor-pointer text-xs leading-relaxed text-muted-foreground">
-                            <span className="text-red-400 mr-0.5">*</span>
-                            {language === 'ar' ? 'أوافق على ' : 'I agree to the '}
-                            <button
-                              type="button"
-                              onClick={() => navigate("/privacy-terms")}
-                              className="font-bold hover:opacity-75 transition-opacity text-[#060541] dark:text-[hsl(210,100%,65%)]"
-                            >
-                              {language === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy'}
-                            </button>
-                            {language === 'ar' ? ' و' : ' and '}
-                            <button
-                              type="button"
-                              onClick={() => navigate("/privacy-terms")}
-                              className="font-bold hover:opacity-75 transition-opacity text-[#060541] dark:text-[hsl(210,100%,65%)]"
-                            >
-                              {language === 'ar' ? 'شروط الخدمة' : 'Terms of Service'}
-                            </button>
-                            {language === 'ar'
-                              ? '، وأسمح باستخدام بياناتي (النص والصوت والصور) مع مزودي الذكاء الاصطناعي الموثوقين '
-                              : ', and I allow my text, voice, and image data to be used with trusted third-party AI providers '}
-                            <button
-                              type="button"
-                              onClick={() => navigate("/privacy-terms#ai-providers")}
-                              className="hover:opacity-75 transition-opacity"
-                            >
-                              <small>
-                                <i className="font-semibold text-[hsl(25,95%,55%)] dark:text-[hsl(25,95%,60%)]">
-                                  {language === 'ar' ? '(انظر مزودي الذكاء الاصطناعي)' : '(see AI providers)'}
-                                </i>
-                              </small>
-                            </button>
-                            {language === 'ar' ? ' لتشغيل ميزات وقتي.' : ' to power WAKTI\'s features.'}
-                          </label>
-                        </div>
-
-                        {/* ── Submit Button ── */}
-                        <button
-                          type="submit"
-                          disabled={isLoading || !agreedToTerms}
-                          className={cn(
-                            "w-full h-12 rounded-xl text-sm font-bold tracking-wide text-white transition-all duration-300",
-                            "active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100",
-                          )}
-                          style={{
-                            background: (!isLoading && agreedToTerms)
-                              ? 'linear-gradient(135deg, #060541 0%, #060541 55%, #0b0a63 100%)'
-                              : 'hsla(0, 0%, 50%, 0.2)',
-                            boxShadow: (!isLoading && agreedToTerms)
-                              ? '0 10px 30px hsla(243, 84%, 14%, 0.25), 0 6px 18px hsla(36, 67%, 81%, 0.25)'
-                              : 'none',
-                          }}
-                        >
-                          <span className="flex items-center justify-center gap-2">
-                            <Sparkles className="w-4 h-4" />
-                            {isLoading ? t.loading : t.signup}
-                          </span>
-                        </button>
-                      </form>
+              {/* Optional fields */}
+              <AnimatePresence>
+                {showOptionalFields && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                    animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                    exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                    transition={{ duration: 0.25 }}
+                    className="space-y-2.5"
+                  >
+                    <div className="relative">
+                      <User className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none" />
+                      <Input id="name" placeholder={t.namePlaceholder} type="text" autoCapitalize="none" autoCorrect="off" disabled={isLoading} value={name} onChange={(e) => setName(e.target.value)} className={cn(fieldCls, "pl-9")} />
                     </div>
-
-                    <div className="mt-8 text-center">
-                      <p className="text-sm text-muted-foreground">
-                        {t.alreadyHaveAccount}{" "}
-                        <button
-                          onClick={() => navigate("/login")}
-                          className="font-semibold text-[hsl(210,100%,55%)] hover:text-[hsl(210,100%,45%)] transition-colors"
-                        >
-                          {t.login}
-                        </button>
-                      </p>
+                    <div className="relative">
+                      <CalendarIcon className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none z-10" />
+                      <Input id="dob" type="date" disabled={isLoading} value={dateOfBirth ? dateOfBirth.toISOString().slice(0,10) : ""} onChange={(e) => { const v = e.target.value; setDateOfBirth(v ? new Date(`${v}T00:00:00`) : undefined); }} className={cn(fieldCls, "pl-9", !dateOfBirth && "text-muted-foreground")} min="1900-01-01" max={new Date().toISOString().slice(0,10)} />
                     </div>
-              </motion.div>
-            </motion.div>
-          </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="relative">
+                        <Globe className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none z-10" />
+                        <Select value={country} onValueChange={setCountry} disabled={isLoading}>
+                          <SelectTrigger className={cn(fieldCls, "pl-9")}>
+                            <SelectValue placeholder={t.selectCountry} />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-52 rounded-xl">
+                            {countries.map((c) => (
+                              <SelectItem key={c.code} value={c.code}>{language === 'ar' ? c.nameAr : c.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="relative">
+                        <MapPin className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none z-10" />
+                        <Input id="city" placeholder={language === 'ar' ? 'مدينتك' : 'City'} type="text" autoCapitalize="words" autoCorrect="off" disabled={isLoading || !country} value={city} onChange={(e) => setCity(e.target.value)} className={cn(fieldCls, "pl-9")} />
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Terms */}
+              <div className="flex items-start gap-2.5 pt-0.5">
+                <Checkbox
+                  id="terms"
+                  checked={agreedToTerms}
+                  onCheckedChange={(v) => setAgreedToTerms(v as boolean)}
+                  disabled={isLoading}
+                  className="su-checkbox mt-0.5"
+                />
+                <label htmlFor="terms" className="cursor-pointer text-[10px] leading-relaxed" style={{ color: fgHi('0.35') }}>
+                  {language === 'ar' ? '* أوافق على ' : '* I agree to the '}
+                  <button type="button" onClick={() => navigate("/privacy-terms")} className="font-bold underline decoration-dotted underline-offset-2" style={{ color: accent }}>
+                    {language === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy'}
+                  </button>
+                  {language === 'ar' ? ' و' : ' and '}
+                  <button type="button" onClick={() => navigate("/privacy-terms")} className="font-bold underline decoration-dotted underline-offset-2" style={{ color: accent }}>
+                    {language === 'ar' ? 'شروط الخدمة' : 'Terms of Service'}
+                  </button>
+                  {language === 'ar'
+                    ? '، وأسمح باستخدام بياناتي مع '
+                    : ', and I allow my text, voice & image data to be used with trusted '}
+                  <button type="button" onClick={() => navigate("/privacy-terms#ai-providers")} className="font-semibold" style={{ color: dk ? 'hsl(45,100%,60%)' : 'hsl(25,95%,40%)' }}>
+                    {language === 'ar' ? 'مزودي الذكاء الاصطناعي' : 'AI providers'}
+                  </button>
+                  {language === 'ar' ? ' لتشغيل وقتي.' : ' to power WAKTI.'}
+                </label>
+              </div>
+
+              {/* Submit */}
+              <div className="flex flex-col items-center gap-2.5 pt-1">
+                <button type="submit" disabled={isLoading || !agreedToTerms} className="su-pill">
+                  {isLoading
+                    ? <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
+                    : <><Sparkles className="w-3.5 h-3.5" />{t.signup}</>
+                  }
+                </button>
+                <p className="text-[11px] text-center" style={{ color: fgHi('0.35') }}>
+                  {t.alreadyHaveAccount}{' '}
+                  <button
+                    onClick={() => navigate("/login")}
+                    className="su-login-link"
+                  >
+                    {t.login}
+                  </button>
+                </p>
+              </div>
+
+            </form>
+          </motion.div>
+
         </div>
       </div>
 

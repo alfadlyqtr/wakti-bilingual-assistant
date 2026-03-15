@@ -75,7 +75,9 @@ const ALL_APPS = [
 ];
 
 const DEFAULT_ORDER = ALL_APPS.map(a => a.id);
-const DEFAULT_DOCK  = ["wakti-ai", "calendar", "tr"];
+const DEFAULT_DOCK  = ["wakti-ai", "calendar", "tr", "maw3d", "journal"];
+const MAX_DOCK_MOBILE  = 3;
+const MAX_DOCK_DESKTOP = 5;
 // ── Per-user localStorage key helpers ─────────────────────────────────────────
 // Keys are scoped to the logged-in user so different accounts on the same browser
 // never bleed their homescreen data into each other.
@@ -104,7 +106,7 @@ const LS_WIDGETS_KEY      = () => lsKey(_cachedUid(), LS_WIDGETS_BASE);
 const LS_HSBG_KEY         = () => lsKey(_cachedUid(), LS_HSBG_BASE);
 
 // Widget IDs used in the unified grid
-const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showWhoopWidget','showHealthKitWidget','showJournalWidget','showQuoteWidget'] as const;
+const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'] as const;
 type WidgetId = typeof WIDGET_IDS[number];
 const MAX_WIDGETS = 3;
 
@@ -167,17 +169,9 @@ function sanitizeOrder(raw: string[]): string[] {
   return valid;
 }
 
-function sanitizeDock(raw: string[]): string[] {
+function sanitizeDock(raw: string[], maxSlots = MAX_DOCK_DESKTOP): string[] {
   const seen = new Set<string>();
-  const valid = raw.filter(id => VALID_IDS.has(id) && !seen.has(id) && (seen.add(id), true)).slice(0, 3);
-  // Always pad to exactly 3 slots using defaults
-  if (valid.length < 3) {
-    for (const def of DEFAULT_DOCK) {
-      if (valid.length >= 3) break;
-      if (!valid.includes(def)) valid.push(def);
-    }
-  }
-  return valid;
+  return raw.filter(id => VALID_IDS.has(id) && !seen.has(id) && (seen.add(id), true)).slice(0, maxSlots);
 }
 
 // ─── Liquid-glass icon shell ───────────────────────────────────────────────────
@@ -363,7 +357,7 @@ function StatWidgets({ hsWidgets, language, theme, hasBg, pendingTasks, complete
   const subColor    = statLblColor;
   const base        = `${statCardBase} rounded-2xl overflow-hidden cursor-pointer active:scale-95 transition-transform select-none`;
 
-  const KEYS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showWhoopWidget','showJournalWidget','showQuoteWidget'];
+  const KEYS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'];
   const visible = KEYS.filter(k => hsWidgets[k]);
   if (visible.length === 0) return null;
 
@@ -439,7 +433,7 @@ function StatWidgets({ hsWidgets, language, theme, hasBg, pendingTasks, complete
         </div>
       )}
 
-      {visible.includes('showWhoopWidget') && (
+      {visible.includes('showVitalityWidget') && (
         <div className={base} onClick={() => navigate('/fitness')}>
           <div className="p-2.5 flex flex-col gap-1.5">
             <div className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#be123c,#ef4444)' }}>
@@ -465,6 +459,108 @@ function StatWidgets({ hsWidgets, language, theme, hasBg, pendingTasks, complete
               <p className="text-[9px] font-semibold mt-0.5" style={{ color: '#8b5cf6' }}>{language === 'ar' ? '✍️ اكتب اليوم' : '✍️ Write today'}</p>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Combined Vitality widget (WHOOP + HealthKit tabs) ────────────────────────
+function VitalityWidget({ shell, language, navigate, whoopData }: {
+  shell: (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => React.ReactNode;
+  language: string;
+  navigate: (p: string) => void;
+  whoopData?: any;
+}) {
+  const [activeTab, setActiveTab] = useState<'whoop' | 'healthkit'>('whoop');
+  const recovery = whoopData?.recovery ?? null;
+  const strain   = whoopData?.strain ?? null;
+  const recColor = recovery ? (recovery >= 67 ? '#22c55e' : recovery >= 34 ? '#f59e0b' : '#ef4444') : '#ef4444';
+
+  const bgGradient = activeTab === 'whoop'
+    ? (recovery
+        ? (recovery >= 67
+            ? 'linear-gradient(145deg,rgba(6,78,59,0.7) 0%,rgba(6,95,70,0.7) 40%,rgba(4,120,87,0.7) 100%)'
+            : recovery >= 34
+              ? 'linear-gradient(145deg,rgba(120,53,15,0.7) 0%,rgba(146,64,14,0.7) 40%,rgba(180,83,9,0.7) 100%)'
+              : 'linear-gradient(145deg,rgba(127,29,29,0.7) 0%,rgba(153,27,27,0.7) 40%,rgba(185,28,28,0.7) 100%)')
+        : 'linear-gradient(145deg,rgba(30,20,60,0.7) 0%,rgba(50,30,90,0.7) 100%)')
+    : 'linear-gradient(145deg,rgba(22,163,74,0.7) 0%,rgba(34,197,94,0.7) 40%,rgba(74,222,128,0.7) 100%)';
+
+  const glowColor = activeTab === 'whoop' ? recColor : '#22c55e';
+
+  return shell(bgGradient, glowColor, () => navigate('/fitness'),
+    <div className="p-3 flex flex-col justify-between h-full">
+      {/* Tab buttons row */}
+      <div className="flex items-center justify-between mb-1">
+        {/* WHOOP tab — top left */}
+        <button
+          title="WHOOP"
+          onClick={(e) => { e.stopPropagation(); setActiveTab('whoop'); }}
+          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+            activeTab === 'whoop'
+              ? 'bg-white/30 border border-white/40 shadow-md scale-105'
+              : 'bg-white/10 border border-white/15 opacity-60'
+          }`}
+          style={{ backdropFilter: 'blur(8px)' }}
+        >
+          <Activity className="w-5 h-5 text-white" strokeWidth={2} />
+        </button>
+        {/* HealthKit tab — top right */}
+        <button
+          title="HealthKit"
+          onClick={(e) => { e.stopPropagation(); setActiveTab('healthkit'); }}
+          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+            activeTab === 'healthkit'
+              ? 'bg-white/30 border border-white/40 shadow-md scale-105'
+              : 'bg-white/10 border border-white/15 opacity-60'
+          }`}
+          style={{ backdropFilter: 'blur(8px)' }}
+        >
+          <Heart className="w-5 h-5 text-white" strokeWidth={2.5} />
+        </button>
+      </div>
+
+      {/* WHOOP content */}
+      {activeTab === 'whoop' && (
+        <div className="flex flex-col justify-end flex-1">
+          {recovery !== null ? (
+            <div className="mb-1">
+              <div className="flex justify-between items-end mb-1">
+                <span className="text-[10px] text-white/70 font-bold uppercase">{language === 'ar' ? 'إجهاد' : 'Strain'}</span>
+                <span className="text-[12px] text-white font-bold">{strain !== null ? strain : '--'}</span>
+              </div>
+              <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
+                <div className="h-full bg-white/90 rounded-full" style={{ width: `${Math.min(((strain || 0) / 21) * 100, 100)}%` }} />
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-end gap-0.5 mb-2 h-6">
+              {[3,5,2,7,4,8,3,6,2,5,3,4].map((h, i) => (
+                <div key={i} className="flex-1 rounded-sm" style={{ height: `${h * 10}%`, background: i === 7 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)' }} />
+              ))}
+            </div>
+          )}
+          <p className="text-[14px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>WHOOP</p>
+          <p className="text-[10px] font-semibold mt-0.5 text-white/80">
+            {recovery !== null ? `${recovery}% ${language === 'ar' ? 'استشفاء' : 'Recovery'}` : (language === 'ar' ? 'الحيوية والنشاط' : 'Vitality & fitness')}
+          </p>
+        </div>
+      )}
+
+      {/* HealthKit content */}
+      {activeTab === 'healthkit' && (
+        <div className="flex flex-col justify-end flex-1">
+          <div className="flex gap-1 mb-2 items-end h-8">
+            {['S','M','T','W','T','F','S'].map((d, i) => (
+              <div key={i} className="flex-1 flex flex-col justify-end gap-0.5">
+                <div className="w-full bg-white/40 rounded-t-sm" style={{ height: `${[40,60,30,80,50,90,45][i]}%` }} />
+                <span className="text-[6px] text-white/60 text-center font-bold">{d}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[14px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{language === 'ar' ? 'صحتي' : 'HealthKit'}</p>
+          <p className="text-[10px] font-semibold mt-0.5 text-white/80">{language === 'ar' ? 'نشاط أبل' : 'Apple Health'}</p>
         </div>
       )}
     </div>
@@ -628,7 +724,9 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
     </div>
   );
 
-  if (wKey === 'showWhoopWidget') {
+  if (wKey === 'showVitalityWidget') { return <VitalityWidget shell={shell} language={language} navigate={navigate} whoopData={whoopData} />; }
+
+  if (wKey === 'showWhoopWidget_REMOVED') {
     const bgGradient = recovery 
       ? (recovery >= 67 
           ? 'linear-gradient(145deg,rgba(6,78,59,0.7) 0%,rgba(6,95,70,0.7) 40%,rgba(4,120,87,0.7) 100%)' 
@@ -688,7 +786,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
     );
   }
 
-  if (wKey === 'showHealthKitWidget') return shell(
+  if (wKey === 'showHealthKitWidget_REMOVED') return shell(
     'linear-gradient(145deg,rgba(22,163,74,0.7) 0%,rgba(34,197,94,0.7) 40%,rgba(74,222,128,0.7) 100%)',
     '#22c55e',
     () => navigate('/fitness'),
@@ -946,7 +1044,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   // Widget visibility for homescreen stats — cached in localStorage for instant restore
   const [hsWidgets, setHsWidgets] = useState(() => {
-    const defaults = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showWhoopWidget: false, showHealthKitWidget: false, showJournalWidget: false, showQuoteWidget: false };
+    const defaults = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
     try {
       const cached = JSON.parse(localStorage.getItem(LS_WIDGETS_KEY()) || 'null');
       if (cached && typeof cached === 'object') return { ...defaults, ...cached };
@@ -987,7 +1085,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     setBgImage(DEFAULT_BG);
     setHeaderColor("");
     setHsBg({ mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false });
-    setHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showWhoopWidget: false, showHealthKitWidget: false, showJournalWidget: false, showQuoteWidget: false });
+    setHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false });
     setUnifiedGrid([]);
   }, [user?.id]);
 
@@ -1007,7 +1105,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   // Load homescreenWidgets from Supabase and clamp to max 3
   const clampHsWidgets = (raw: Record<string, boolean>) => {
     const result = { ...raw, showNavWidget: false } as typeof hsWidgets;
-    const VISIBLE: (keyof typeof hsWidgets)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showWhoopWidget','showHealthKitWidget','showJournalWidget','showQuoteWidget'];
+    const VISIBLE: (keyof typeof hsWidgets)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'];
     let count = 0;
     for (const k of VISIBLE) {
       if (result[k]) { if (count < 3) count++; else result[k] = false; }
@@ -1025,7 +1123,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
         const s = (data?.settings as any);
         if (s?.homescreenWidgets) {
-          const clamped = clampHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showWhoopWidget: false, showJournalWidget: false, showQuoteWidget: false, ...s.homescreenWidgets });
+          const clamped = clampHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false, ...s.homescreenWidgets });
           // Only update if different
           const clampedJson = JSON.stringify(clamped);
           setHsWidgets(prev => JSON.stringify(prev) === clampedJson ? prev : clamped);
@@ -1312,11 +1410,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           return updated;
         });
       } else {
-        if (prevDock.length < 3) {
+        if (prevDock.length < MAX_DOCK_DESKTOP) {
           nextDock = [...prevDock, id];
         } else {
           const evicted = prevDock[prevDock.length - 1];
-          nextDock = [...prevDock.slice(0, 2), id];
+          nextDock = [...prevDock.slice(0, MAX_DOCK_DESKTOP - 1), id];
           setUnifiedGrid(prev => {
             if (prev.includes(`app::${evicted}`)) return prev;
             const updated = [...prev, `app::${evicted}`];
@@ -1545,7 +1643,6 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       <div
         className={`relative overflow-hidden overscroll-none hs-root flex flex-col ${pageBg}`}
         style={{
-          height: '100dvh', // Explicitly force viewport height to prevent drift
           ...(hasBg ? {
             backgroundImage: `url(${bgImage})`,
             backgroundSize: "contain",
@@ -1785,13 +1882,22 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           </div>
 
           {/* ── DOCK — always at very bottom ── */}
-          <div className="mt-auto flex-none px-4 pt-1 hs-dock-bottom">
-            <div className={`flex items-center justify-around ${dockGlass} rounded-[28px] py-3 px-5`}>
+          <div className="mt-auto flex-none mx-2 md:mx-4 lg:mx-6 pt-1 hs-dock-bottom">
+            <div
+              className="flex items-center justify-around w-full rounded-[2.75rem] py-3 px-5"
+              style={{
+                background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 100%), var(--gradient-background)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                border: '1px solid rgba(255,255,255,0.28)',
+                boxShadow: '0 34px 70px -16px rgba(0,0,0,0.4), 0 16px 46px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.08)',
+              }}
+            >
               <SortableContext items={dockApps.map(a => `dock::${a.id}`)} strategy={horizontalListSortingStrategy}>
                 {dockApps.map(app => (
                   <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} />
                 ))}
-                {Array.from({ length: Math.max(0, 3 - dockApps.length) }).map((_, i) => (
+                {Array.from({ length: Math.max(0, MAX_DOCK_DESKTOP - dockApps.length) }).map((_, i) => (
                   <div key={`slot-${i}`} className="w-14 h-14 rounded-[23%] border-2 border-dashed border-white/25" />
                 ))}
               </SortableContext>
@@ -1816,9 +1922,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             <div className="relative z-10 w-full max-w-lg bg-background rounded-t-3xl p-5 pb-8 shadow-2xl max-h-[70dvh] overflow-y-auto">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-bold">
-                  {language === "ar" ? "اختر أيقونات Dock (٣ كحد أقصى)" : "Choose Dock Icons (max 3)"}
+                  {language === "ar" ? `اختر أيقونات Dock (${MAX_DOCK_DESKTOP} كحد أقصى)` : `Choose Dock Icons (max ${MAX_DOCK_DESKTOP})`}
                 </h3>
-                <span className="text-xs text-muted-foreground">{dockIds.length}/3</span>
+                <span className="text-xs text-muted-foreground">{dockIds.length}/{MAX_DOCK_DESKTOP}</span>
               </div>
               <div className="grid grid-cols-4 gap-4">
                 {ALL_APPS.map(app => {

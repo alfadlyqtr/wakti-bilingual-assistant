@@ -1,16 +1,55 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { DesktopHeader } from "@/components/DesktopHeader";
 import { DesktopSidebar } from "@/components/DesktopSidebar";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useLocation } from "react-router-dom";
 
 interface DesktopLayoutProps {
   children: React.ReactNode;
 }
 
 export function DesktopLayout({ children }: DesktopLayoutProps) {
-  // Initialize the unified notification system
   useUnreadMessages();
+  const location = useLocation();
+  const [dashboardLook, setDashboardLook] = useState<string>(
+    () => localStorage.getItem('wakti_dashboard_look') || 'homescreen'
+  );
+
+  useEffect(() => {
+    const handler = (e: CustomEvent) => setDashboardLook(e.detail);
+    window.addEventListener('dashboardLookChanged', handler as EventListener);
+    return () => window.removeEventListener('dashboardLookChanged', handler as EventListener);
+  }, []);
+
+  const isHomescreenMode = location.pathname === '/dashboard' && dashboardLook === 'homescreen';
+  const isHomescreenNav   = location.pathname === '/settings'  && dashboardLook === 'homescreen';
+
+  if (isHomescreenMode) {
+    return (
+      <ProtectedRoute>
+        <div className="h-screen overflow-hidden flex flex-col bg-background w-full" dir="ltr">
+          <DesktopHeader />
+          <div className="flex-1 min-h-0 w-full overflow-hidden">
+            {children}
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  if (isHomescreenNav) {
+    return (
+      <ProtectedRoute>
+        <div className="h-screen overflow-hidden flex flex-col bg-background w-full" dir="ltr">
+          <header className="fixed-header"><DesktopHeader /></header>
+          <main className="app-main flex-1 overflow-auto w-full p-4 md:p-6 mt-[calc(var(--desktop-header-h,60px)+1.5rem)]">
+            <div className="w-full max-w-full">{children}</div>
+          </main>
+        </div>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute>

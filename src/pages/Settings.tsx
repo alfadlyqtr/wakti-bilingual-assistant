@@ -45,20 +45,19 @@ export default function Settings() {
     showQuoteWidget: boolean;
     showMaw3dWidget: boolean;
     showTRWidget: boolean;
-    showWhoopWidget: boolean;
-    showHealthKitWidget: boolean;
+    showVitalityWidget: boolean;
     showJournalWidget: boolean;
   };
   const DEFAULT_DASHBOARD_WIDGETS: WidgetConfig = {
     showNavWidget: true, showCalendarWidget: true, showEventsWidget: true,
     showQuoteWidget: true, showMaw3dWidget: true, showTRWidget: true,
-    showWhoopWidget: true, showHealthKitWidget: true, showJournalWidget: true,
+    showVitalityWidget: true, showJournalWidget: true,
   };
   // Homescreen: only 3 on by default
   const DEFAULT_HOMESCREEN_WIDGETS: WidgetConfig = {
     showNavWidget: false, showCalendarWidget: true, showTRWidget: true,
     showEventsWidget: false, showQuoteWidget: false, showMaw3dWidget: false,
-    showWhoopWidget: false, showHealthKitWidget: false, showJournalWidget: false,
+    showVitalityWidget: false, showJournalWidget: false,
   };
 
   // Separate widget settings for each mode — they never share state
@@ -121,7 +120,7 @@ export default function Settings() {
       if (s?.homescreenWidgets) {
         const raw = { ...DEFAULT_HOMESCREEN_WIDGETS, ...s.homescreenWidgets, showNavWidget: false };
         // Only the 7 visible widget keys count toward the 3-max
-        const VISIBLE_KEYS: (keyof WidgetConfig)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showWhoopWidget','showHealthKitWidget','showJournalWidget','showQuoteWidget'];
+        const VISIBLE_KEYS: (keyof WidgetConfig)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'];
         let onCount = 0;
         const clamped = { ...raw };
         for (const k of VISIBLE_KEYS) {
@@ -526,8 +525,7 @@ export default function Settings() {
                 { key: 'showCalendarWidget', labelEn: 'Calendar',                   labelAr: 'التقويم' },
                 { key: 'showTRWidget',       labelEn: 'Tasks & Reminders',          labelAr: 'المهام والتذكيرات' },
                 { key: 'showMaw3dWidget',    labelEn: 'Maw3d Events',               labelAr: 'أحداث مواعيد' },
-                { key: 'showWhoopWidget',    labelEn: 'WHOOP Widget',               labelAr: 'ويدجت WHOOP' },
-                { key: 'showHealthKitWidget',labelEn: 'HealthKit Widget',           labelAr: 'ويدجت صحتي' },
+                { key: 'showVitalityWidget', labelEn: 'Vitality (WHOOP + Health)', labelAr: 'الحيوية (WHOOP + صحتي)' },
                 { key: 'showJournalWidget',  labelEn: "Today's Journal",            labelAr: 'يوميات وقتي' },
                 { key: 'showQuoteWidget',    labelEn: 'Daily Quote',                labelAr: 'اقتباس اليوم' },
               ];
