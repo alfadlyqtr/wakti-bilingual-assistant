@@ -214,6 +214,9 @@ export function useUserProfile() {
       return (profile?.is_subscribed ?? false);
     },
     get isAdminGifted() {
+      // ZERO-TRUST: is_subscribed MUST be true. payment_method alone is
+      // NOT sufficient — it was causing brand-new users to bypass the paywall.
+      if (!profile?.is_subscribed) return false;
       const hasPaymentMethod =
         profile?.payment_method != null &&
         typeof profile.payment_method === 'string' &&

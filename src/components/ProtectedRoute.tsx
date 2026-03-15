@@ -203,13 +203,15 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
         let needsPayment = true;
 
         // Determine if user has a valid active status
+        // ZERO-TRUST: is_subscribed MUST be explicitly true. payment_method alone
+        // is NOT enough — it was causing false positives for new users.
         const isPaid = profile.is_subscribed === true;
         const hasPaymentMethod =
           profile.payment_method != null &&
           typeof profile.payment_method === 'string' &&
           profile.payment_method.trim().length > 0;
           
-        const hasActiveSubscription = isPaid || hasPaymentMethod;
+        const hasActiveSubscription = isPaid && (hasPaymentMethod || !!profile.plan_name || !!profile.next_billing_date);
         
         if (hasActiveSubscription && profile.next_billing_date) {
           const nextBillingDate = new Date(profile.next_billing_date);
@@ -230,8 +232,9 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
             daysUntilDue: Math.ceil((nextBillingDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
             daysOverdue: needsPayment ? Math.ceil((now.getTime() - nextBillingDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
           });
-        } else if (hasActiveSubscription && !profile.next_billing_date) {
-          // Active subscription without billing date (like admin gifts or lifetime) - consider valid
+        } else if (isPaid && !profile.next_billing_date) {
+          // ZERO-TRUST: Only trust is_subscribed===true for no-billing-date cases
+          // (admin gifts or lifetime). hasPaymentMethod alone is NOT sufficient.
           isValidSubscription = true;
           needsPayment = false;
           console.log('ProtectedRoute: Active subscription without billing date (admin gift/special case)');
@@ -506,20 +509,23 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     );
   }
 
-  // TASK 2: Implement the 'Access Confirmed' Logic — STRICT WHITELIST
-  // ONLY live profile data can grant access. subscriptionStatus.isSubscribed is
-  // deliberately excluded because it can be primed from stale localStorage cache
-  // or timeout fallbacks, allowing new users to bypass the paywall.
-  const hasConfirmedAccess = !isLoading && !isProfileLoading && !subscriptionStatus.isLoading && (isSubscribed || isGracePeriod || isAdminGifted);
+  // ── ZERO-TRUST WHITELIST ──
+  // Step 1: Is this user verified as a subscriber/gifted/trial?
+  const isVerifiedSubscriber = (isSubscribed || subscriptionStatus.isSubscribed || isAdminGifted || isGracePeriod);
+  // Step 2: Can they see the dashboard? NEVER if isNewUser is true.
+  const shouldSeeDashboard = !isLoading && !isProfileLoading && !subscriptionStatus.isLoading && isVerifiedSubscriber && !isNewUser;
 
-  // TASK 3: Final Return Surgery - Block by Default
-  // Only render children if access is 100% confirmed
-  if (hasConfirmedAccess && DEV) {
-    console.log("ProtectedRoute: Access confirmed - allowing entry:", {
+  if (DEV) {
+    console.log("ProtectedRoute: Access decision:", {
       email: user?.email,
+      shouldSeeDashboard,
+      isVerifiedSubscriber,
+      isNewUser,
       isSubscribed,
       isAdminGifted,
-      isGracePeriod
+      isGracePeriod,
+      showPaywall,
+      paywallVariant
     });
   }
 
@@ -528,10 +534,12 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
       {CustomPaywallModal && (
         <CustomPaywallModal open={showPaywall} onOpenChange={setShowPaywall} variant={paywallVariant} />
       )}
-      {hasConfirmedAccess ? (
+      {shouldSeeDashboard ? (
         children
       ) : (
-        <div className="w-screen h-[100dvh] bg-background flex items-center justify-center overflow-hidden" />
+        <div className="w-screen h-[100dvh] bg-[#0c0f14] flex items-center justify-center overflow-hidden">
+          {/* Pitch-black. No greetings. No icons. No leaks. */}
+        </div>
       )}
     </>
   );
