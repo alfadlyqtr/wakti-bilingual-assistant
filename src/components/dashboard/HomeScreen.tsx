@@ -97,6 +97,7 @@ const LS_UNIFIED_BASE      = "homescreen_unified_grid_v6";
 const LS_WIDGETS_BASE      = "homescreen_widgets_v1";
 const LS_HSBG_BASE         = "homescreen_bg_style_v1";
 const LS_HSBG_ACTIVE_BASE  = "homescreen_bg_style_active";
+const LS_DOCK_COLOR_BASE   = "homescreen_dock_color";
 
 // Read the currently-cached user ID (set on login) so useState initialisers can
 // immediately read the correct user-scoped key before useEffect fires.
@@ -1589,6 +1590,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   });
   const [activeId,        setActiveId]        = useState<string | null>(null);
   const [dockPickerOpen,  setDockPickerOpen]  = useState(false);
+  const [dockColor,        setDockColor]        = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(), LS_DOCK_COLOR_BASE)) || ''; } catch { return ''; } });
   const [bgPanelOpen,     setBgPanelOpen]     = useState(false);
   const [bgGradPicker,    setBgGradPicker]    = useState(false);
   const [bgGradLeft,      setBgGradLeft]      = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(),'hs_grad_left')) || ''; } catch { return ''; } });
@@ -2349,6 +2351,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                       // Reset custom BG style active flag
                       setHsBgActive(false);
                       try { localStorage.removeItem(lsKey(uid, LS_HSBG_ACTIVE_BASE)); } catch {}
+                      // Reset dock color
+                      setDockColor('');
+                      try { localStorage.removeItem(lsKey(uid, LS_DOCK_COLOR_BASE)); } catch {}
                       // Reset unified grid
                       setUnifiedGrid([]);
                       localStorage.removeItem(LS_UNIFIED_KEY());
@@ -2596,7 +2601,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             <div
               className="flex items-center justify-around w-full rounded-[2.75rem] py-3 px-5"
               style={{
-                background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 100%), var(--gradient-background)',
+                background: dockColor
+                  ? `linear-gradient(135deg, ${dockColor}ee 0%, ${dockColor}cc 50%, ${dockColor}ee 100%)`
+                  : 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 100%), var(--gradient-background)',
                 backdropFilter: 'blur(20px)',
                 WebkitBackdropFilter: 'blur(20px)',
                 border: '1px solid transparent',
@@ -2652,8 +2659,22 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                   );
                 })}
               </div>
+              {/* Dock BG Color */}
+              <div className="mt-4 flex items-center justify-between rounded-xl border border-border/40 px-3 py-2.5">
+                <span className="text-xs font-semibold">{language === 'ar' ? 'لون خلفية الدوك' : 'Dock Background'}</span>
+                <div className="flex items-center gap-2">
+                  <input type="color" title="Dock background color" value={dockColor || (isDark ? '#0c0f14' : '#060541')} onChange={e => { setDockColor(e.target.value); localStorage.setItem(lsKey(_cachedUid(), LS_DOCK_COLOR_BASE), e.target.value); }}
+                    className="w-7 h-7 rounded-lg cursor-pointer border border-border/30 p-0.5 bg-transparent" />
+                  {dockColor && (
+                    <button onClick={() => { setDockColor(''); localStorage.removeItem(lsKey(_cachedUid(), LS_DOCK_COLOR_BASE)); }}
+                      className="text-[10px] px-2 py-1 rounded-full bg-red-500/20 text-red-500 border border-red-500/30 font-semibold">
+                      {language === 'ar' ? 'إعادة' : 'Reset'}
+                    </button>
+                  )}
+                </div>
+              </div>
               <button onClick={() => setDockPickerOpen(false)}
-                className="mt-5 w-full py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-bold">
+                className="mt-4 w-full py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-bold">
                 {language === "ar" ? "تم" : "Done"}
               </button>
             </div>
