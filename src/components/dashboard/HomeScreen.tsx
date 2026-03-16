@@ -595,35 +595,43 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
       {/* ── HealthKit tab ── */}
       {activeTab === 'healthkit' && (
         <div className="flex flex-col flex-1 justify-between">
-          {/* Top: sleep stats */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
-              <Heart className="w-5 h-5 text-white" strokeWidth={2} fill="rgba(255,255,255,0.3)" />
+          {/* Header */}
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0">
+              <Heart className="w-4 h-4 text-white" strokeWidth={2} fill="rgba(255,255,255,0.4)" />
             </div>
             <div>
-              <p className="text-[13px] font-black text-white leading-none">{language === 'ar' ? 'صحتي' : 'HealthKit'}</p>
-              <p className="text-[9px] text-white/50 mt-0.5">{language === 'ar' ? 'أبل هيلث' : 'Apple Health'}</p>
+              <p className="text-[12px] font-black text-white leading-none">{language === 'ar' ? 'أبل هيلث' : 'Apple Health'}</p>
+              <p className="text-[8px] text-white/50 mt-0.5">{language === 'ar' ? 'بيانات الصحة' : 'Health data'}</p>
             </div>
           </div>
 
-          {/* Middle: sleep data from WHOOP (best available) */}
+          {/* Data grid — uses WHOOP sleep/health data as best available source */}
           <div className="grid grid-cols-2 gap-1">
             <div className="bg-white/10 rounded-lg p-1.5">
-              <p className="text-[8px] text-white/50 uppercase">{language === 'ar' ? 'ساعات النوم' : 'Sleep'}</p>
-              <p className="text-[13px] font-black text-white">{sleepHours != null ? `${sleepHours}h` : '--'}</p>
+              <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'نوم' : 'Sleep'}</p>
+              <p className="text-[12px] font-black text-white leading-tight">{sleepHours != null ? `${sleepHours}h` : '--'}</p>
             </div>
             <div className="bg-white/10 rounded-lg p-1.5">
-              <p className="text-[8px] text-white/50 uppercase">{language === 'ar' ? 'جودة' : 'Quality'}</p>
-              <p className="text-[13px] font-black text-white">{sleepPerf != null ? `${Math.round(sleepPerf)}%` : '--'}</p>
+              <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'جودة' : 'Quality'}</p>
+              <p className="text-[12px] font-black text-white leading-tight">{sleepPerf != null ? `${Math.round(sleepPerf)}%` : '--'}</p>
             </div>
             <div className="bg-white/10 rounded-lg p-1.5">
-              <p className="text-[8px] text-white/50 uppercase">{language === 'ar' ? 'انتظام' : 'Consist.'}</p>
-              <p className="text-[13px] font-black text-white">{sleepConsistency != null ? `${Math.round(sleepConsistency)}%` : '--'}</p>
+              <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'انتظام' : 'Consist.'}</p>
+              <p className="text-[12px] font-black text-white leading-tight">{sleepConsistency != null ? `${Math.round(sleepConsistency)}%` : '--'}</p>
             </div>
             <div className="bg-white/10 rounded-lg p-1.5">
-              <p className="text-[8px] text-white/50 uppercase">{language === 'ar' ? 'ن.قلب' : 'Avg HR'}</p>
-              <p className="text-[13px] font-black text-white">{avgHr != null ? Math.round(avgHr) : '--'}</p>
+              <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'ن.قلب' : 'Avg HR'}</p>
+              <p className="text-[12px] font-black text-white leading-tight">{avgHr != null ? Math.round(avgHr) : '--'}</p>
             </div>
+          </div>
+
+          {/* Connect prompt */}
+          <div
+            onClick={(e) => { e.stopPropagation(); navigate('/fitness'); }}
+            className="flex items-center justify-center gap-1 bg-white/10 border border-white/20 rounded-lg py-1 active:scale-95 transition-all cursor-pointer"
+          >
+            <span className="text-[9px] text-white/70 font-semibold">{language === 'ar' ? 'ربط أبل هيلث ←' : 'Connect Apple Health →'}</span>
           </div>
         </div>
       )}
@@ -1626,11 +1634,15 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   _effectiveRef.current = effectiveUnified; // Use the FULL padded array for drag reference
 
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const maxDock = isMobile ? MAX_DOCK_MOBILE : MAX_DOCK_DESKTOP;
+
   const seenDock = new Set<string>();
   const dockApps = dockIds
     .filter(id => VALID_IDS.has(id) && !seenDock.has(id) && (seenDock.add(id), true))
     .map(id => ALL_APPS.find(a => a.id === id))
-    .filter(Boolean) as typeof ALL_APPS;
+    .filter(Boolean)
+    .slice(0, maxDock) as typeof ALL_APPS;
 
   const activeApp    = activeId ? (activeId.startsWith('dock::') ? ALL_APPS.find(a => `dock::${a.id}` === activeId) : ALL_APPS.find(a => `app::${a.id}` === activeId)) : null;
   const activeInDock = activeId?.startsWith("dock::");
@@ -1961,7 +1973,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                 {dockApps.map(app => (
                   <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} />
                 ))}
-                {Array.from({ length: Math.max(0, MAX_DOCK_DESKTOP - dockApps.length) }).map((_, i) => (
+                {Array.from({ length: Math.max(0, maxDock - dockApps.length) }).map((_, i) => (
                   <div key={`slot-${i}`} className="w-14 h-14 rounded-[23%] border-2 border-dashed border-white/25" />
                 ))}
               </SortableContext>
