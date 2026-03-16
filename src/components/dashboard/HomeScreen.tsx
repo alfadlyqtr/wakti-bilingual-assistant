@@ -1637,14 +1637,17 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   useEffect(() => {
     if (!user) return;
-    // Skip if already loaded from Supabase and localStorage has data
-    if (_hasLoadedFromSupabase.current && localStorage.getItem(LS_UNIFIED_KEY())) return;
+    // localStorage is the source of truth — only pull from Supabase if we have NO local data
+    const hasLocalWidgets = !!localStorage.getItem(LS_WIDGETS_KEY());
+    const hasLocalGrid    = !!localStorage.getItem(LS_UNIFIED_KEY());
+    const hasLocalDock    = !!localStorage.getItem(LS_DOCK_KEY());
+    if (_hasLoadedFromSupabase.current && (hasLocalWidgets || hasLocalGrid || hasLocalDock)) return;
     _hasLoadedFromSupabase.current = true;
     (async () => {
       try {
         const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
         const s = (data?.settings as any);
-        if (s?.homescreenWidgets) {
+        if (s?.homescreenWidgets && !hasLocalWidgets) {
           const clamped = clampHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false, ...s.homescreenWidgets });
           // Only update if different
           const clampedJson = JSON.stringify(clamped);

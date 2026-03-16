@@ -25,28 +25,21 @@ const defaultContextValue: ThemeContextType = {
 const ThemeContext = createContext<ThemeContextType>(defaultContextValue);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("light");
-  const [language, setLanguage] = useState<Language>("en");
-
-  useEffect(() => {
-    const storedTheme = localStorage.getItem("theme") as Theme | null;
-    const storedLanguage = localStorage.getItem("language") as Language | null;
-    
-    if (storedTheme) {
-      setTheme(storedTheme);
-    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      setTheme("dark");
-    }
-    
-    if (storedLanguage) {
-      setLanguage(storedLanguage);
-    } else {
-      // Detect device language on first visit
-      const deviceLanguage = navigator.language || navigator.languages?.[0] || 'en';
-      const isArabic = deviceLanguage.toLowerCase().startsWith('ar');
-      setLanguage(isArabic ? 'ar' : 'en');
-    }
-  }, []);
+  const [theme, setTheme] = useState<Theme>(() => {
+    try {
+      const stored = localStorage.getItem("theme") as Theme | null;
+      if (stored === "dark" || stored === "light") return stored;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "dark";
+    } catch { return "dark"; }
+  });
+  const [language, setLanguage] = useState<Language>(() => {
+    try {
+      const stored = localStorage.getItem("language") as Language | null;
+      if (stored === "en" || stored === "ar") return stored;
+      const deviceLang = navigator.language || navigator.languages?.[0] || "en";
+      return deviceLang.toLowerCase().startsWith("ar") ? "ar" : "en";
+    } catch { return "en"; }
+  });
 
   useEffect(() => {
     localStorage.setItem("theme", theme);
