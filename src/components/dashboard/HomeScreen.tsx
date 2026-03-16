@@ -588,9 +588,11 @@ function CalendarWidget({ shell, navigate, language, upcomingCount }: {
   const [startX, setStartX] = useState<number | null>(null);
 
   const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  const tomorrow  = new Date(today); tomorrow.setDate(today.getDate() + 1);
   const days = [
     { num: yesterday.getDate(), label: yesterday.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'long' }), isToday: false },
     { num: today.getDate(),     label: today.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'long' }),     isToday: true  },
+    { num: tomorrow.getDate(),  label: tomorrow.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'long' }),  isToday: false },
   ];
   const selectedDate = days.find(d => d.num === selectedDay) ?? days[1];
   const monthLabel = today.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { month: 'short' });
