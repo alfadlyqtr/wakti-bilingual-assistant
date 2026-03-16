@@ -1188,10 +1188,10 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
         border: '0.5px solid rgba(180,190,200,0.25)',
       }}
     >
-      {/* Background layer at 0.6 opacity — isolated so children stay fully opaque */}
-      <div className="absolute inset-0" style={{ background: bg, opacity: 0.6 }} />
+      {/* Background layer — low opacity for see-through liquid glass */}
+      <div className="absolute inset-0" style={{ background: bg, opacity: 0.3 }} />
       {/* Frosted glass shimmer overlay */}
-      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.04) 50%, transparent 100%)' }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 50%, transparent 100%)' }} />
       <div className="relative z-10 w-full h-full">{children}</div>
     </div>
   );
@@ -2221,7 +2221,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       >
           {/* 1px BG image blur overlay — only when a BG image is active */}
           {(hasBg || hasCustomBg) && (
-            <div className="absolute inset-0 pointer-events-none z-0" style={{ backdropFilter: 'blur(1px)', WebkitBackdropFilter: 'blur(1px)' }} />
+            <div className="absolute inset-0 pointer-events-none z-0" style={{ backdropFilter: 'blur(0.5px)', WebkitBackdropFilter: 'blur(0.5px)' }} />
           )}
           <div className="flex-none flex items-center justify-between px-4 pt-3 pb-1">
             <div className="px-3 py-2 rounded-xl bg-black/25 backdrop-blur-md border border-white/10">
