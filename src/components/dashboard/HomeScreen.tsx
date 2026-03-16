@@ -54,6 +54,7 @@ import {
 } from "lucide-react";
 import { WaktiIcon } from "@/components/icons/WaktiIcon";
 import { getQuoteForDisplay, getQuoteText, getQuoteAuthor } from "@/utils/quoteService";
+import { getTodayHealthSummary, getSleepAnalysis, isHealthKitSDKAvailable } from "@/integrations/natively/healthkitBridge";
 import { useOptimizedTRData } from "@/hooks/useOptimizedTRData";
 import { useOptimizedMaw3dEvents } from "@/hooks/useOptimizedMaw3dEvents";
 import { useWhoopData } from "@/hooks/useWhoopData";
@@ -480,6 +481,35 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
 }) {
   const [activeTab, setActiveTab] = useState<'whoop' | 'healthkit'>('whoop');
 
+  // Real HealthKit data state
+  const [hkData, setHkData] = useState<{ steps: number; avgHr: number | null; rhr: number | null; sleepHours: number | null; } | null>(null);
+  const [hkLoading, setHkLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== 'healthkit') return;
+    if (hkData || hkLoading) return;
+    setHkLoading(true);
+    (async () => {
+      try {
+        const [summary, sleepArr] = await Promise.all([
+          getTodayHealthSummary(),
+          getSleepAnalysis(new Date(Date.now() - 86400000), new Date(), 1),
+        ]);
+        const sleepRecord = sleepArr?.[0];
+        const asleepMin = sleepRecord ? ((sleepRecord.asleep ?? 0) + (sleepRecord.asleepRem ?? 0) + (sleepRecord.asleepDeep ?? 0) + (sleepRecord.asleepLight ?? 0)) : null;
+        const sleepHrs = asleepMin && asleepMin > 0 ? Math.round((asleepMin / 60) * 10) / 10 : null;
+        setHkData({
+          steps: summary.steps,
+          avgHr: summary.heartRate?.avg ?? null,
+          rhr: summary.restingHeartRate,
+          sleepHours: sleepHrs,
+        });
+      } catch { /* ignore */ } finally {
+        setHkLoading(false);
+      }
+    })();
+  }, [activeTab]);
+
   const recovery         = whoopData?.recovery         ?? null;
   const strain           = whoopData?.strain           ?? null;
   const hrv              = whoopData?.hrv              ?? null;
@@ -604,34 +634,40 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
             </div>
             <div>
               <p className="text-[12px] font-black text-white leading-none">{language === 'ar' ? 'أبل هيلث' : 'Apple Health'}</p>
-              <p className="text-[8px] text-white/50 mt-0.5">{language === 'ar' ? 'بيانات الصحة' : 'Health data'}</p>
+              <p className="text-[8px] text-white/50 mt-0.5">{language === 'ar' ? 'بيانات اليوم' : 'Today\'s data'}</p>
             </div>
           </div>
           {/* Data grid */}
-          <div className="grid grid-cols-2 gap-1">
-            <div className="bg-white/10 rounded-lg p-1.5">
-              <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'نوم' : 'Sleep'}</p>
-              <p className="text-[12px] font-black text-white leading-tight">{sleepHours != null ? `${sleepHours}h` : '--'}</p>
+          {hkLoading ? (
+            <div className="flex items-center justify-center flex-1">
+              <p className="text-[9px] text-white/50">{language === 'ar' ? 'جار التحميل...' : 'Loading...'}</p>
             </div>
-            <div className="bg-white/10 rounded-lg p-1.5">
-              <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'جودة' : 'Quality'}</p>
-              <p className="text-[12px] font-black text-white leading-tight">{sleepPerf != null ? `${Math.round(sleepPerf)}%` : '--'}</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-1">
+              <div className="bg-white/10 rounded-lg p-1.5">
+                <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'خطوات' : 'Steps'}</p>
+                <p className="text-[12px] font-black text-white leading-tight">{hkData?.steps ? hkData.steps.toLocaleString() : '--'}</p>
+              </div>
+              <div className="bg-white/10 rounded-lg p-1.5">
+                <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'نبض' : 'Avg HR'}</p>
+                <p className="text-[12px] font-black text-white leading-tight">{hkData?.avgHr != null ? hkData.avgHr : '--'}</p>
+              </div>
+              <div className="bg-white/10 rounded-lg p-1.5">
+                <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'نوم' : 'Sleep'}</p>
+                <p className="text-[12px] font-black text-white leading-tight">{hkData?.sleepHours != null ? `${hkData.sleepHours}h` : '--'}</p>
+              </div>
+              <div className="bg-white/10 rounded-lg p-1.5">
+                <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'نبض راحة' : 'RHR'}</p>
+                <p className="text-[12px] font-black text-white leading-tight">{hkData?.rhr != null ? hkData.rhr : '--'}</p>
+              </div>
             </div>
-            <div className="bg-white/10 rounded-lg p-1.5">
-              <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'انتظام' : 'Consist.'}</p>
-              <p className="text-[12px] font-black text-white leading-tight">{sleepConsistency != null ? `${Math.round(sleepConsistency)}%` : '--'}</p>
-            </div>
-            <div className="bg-white/10 rounded-lg p-1.5">
-              <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'ن.قلب' : 'Avg HR'}</p>
-              <p className="text-[12px] font-black text-white leading-tight">{avgHr != null ? Math.round(avgHr) : '--'}</p>
-            </div>
-          </div>
-          {/* Connect prompt */}
+          )}
+          {/* Open Vitality link */}
           <div
             onClick={(e) => { e.stopPropagation(); navigate('/fitness'); }}
             className="flex items-center justify-center gap-1 bg-white/10 border border-white/20 rounded-lg py-1 active:scale-95 transition-all cursor-pointer"
           >
-            <span className="text-[9px] text-white/70 font-semibold">{language === 'ar' ? 'ربط أبل هيلث →' : 'Connect Apple Health →'}</span>
+            <span className="text-[9px] text-white/70 font-semibold">{language === 'ar' ? 'فتح الحيوية →' : 'Open Vitality →'}</span>
           </div>
         </div>
       )}
@@ -1553,8 +1589,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const [dockPickerOpen,  setDockPickerOpen]  = useState(false);
   const [bgPanelOpen,     setBgPanelOpen]     = useState(false);
   const [bgGradPicker,    setBgGradPicker]    = useState(false);
-  const [bgGradLeft,      setBgGradLeft]      = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(),'hs_grad_left')) || '#050507'; } catch { return '#050507'; } });
-  const [bgGradRight,     setBgGradRight]     = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(),'hs_grad_right')) || '#12102e'; } catch { return '#12102e'; } });
+  const [bgGradLeft,      setBgGradLeft]      = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(),'hs_grad_left')) || '#000000'; } catch { return '#000000'; } });
+  const [bgGradRight,     setBgGradRight]     = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(),'hs_grad_right')) || '#000000'; } catch { return '#000000'; } });
   const [savedImagesOpen, setSavedImagesOpen] = useState(false);
   const bgInputRef    = useRef<HTMLInputElement>(null);
   const _pendingDock  = useRef<string[]>([]);
