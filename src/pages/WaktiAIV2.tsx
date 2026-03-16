@@ -61,14 +61,17 @@ const WaktiAIV2 = () => {
     try {
       const { data: profile } = await (supabase as any)
         .from('profiles')
-        .select('trial_usage, is_subscribed, payment_method, next_billing_date')
+        .select('trial_usage, is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at')
         .eq('id', user.id)
         .single();
       if (profile) {
         const isPaid = profile.is_subscribed === true;
+        const isGifted = profile.admin_gifted === true;
         const pm = profile.payment_method;
         const isGift = pm && pm !== 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
-        if (!isPaid && !isGift) {
+        // Token limits ONLY apply to users on the 24-hour trial (free_access_start_at is set)
+        const isOn24hTrial = profile.free_access_start_at != null;
+        if (!isPaid && !isGift && !isGifted && isOn24hTrial) {
           const usage = (profile.trial_usage as Record<string, number>) ?? {};
           const aiChatUsed = typeof usage['ai_chat'] === 'number' ? usage['ai_chat'] : 0;
           if (aiChatUsed >= 15) {

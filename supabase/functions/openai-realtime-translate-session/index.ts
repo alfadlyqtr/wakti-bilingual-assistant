@@ -6,13 +6,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 async function checkAndConsumeTrialToken(supabaseClient: any, userId: string, featureKey: string, maxLimit: number): Promise<{ allowed: boolean; isVip?: boolean }> {
   const { data: profile, error } = await supabaseClient
     .from('profiles')
-    .select('trial_usage, is_subscribed, payment_method, next_billing_date')
+    .select('trial_usage, is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at')
     .eq('id', userId)
     .single();
   if (error || !profile) return { allowed: false };
   if (profile.is_subscribed === true) return { allowed: true, isVip: true };
+  if (profile.admin_gifted === true) return { allowed: true, isVip: true };
   const pm = profile.payment_method;
   if (pm && pm !== 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date()) return { allowed: true, isVip: true };
+  if (profile.free_access_start_at == null) return { allowed: true, isVip: false };
   // deno-lint-ignore no-explicit-any
   const usage: Record<string, number> = (profile.trial_usage as any) ?? {};
   const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;

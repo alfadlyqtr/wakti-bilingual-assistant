@@ -49,7 +49,7 @@ export async function checkAndConsumeTrialToken(
 ): Promise<TrialCheckResult> {
   const { data: profile, error: fetchError } = await supabaseClient
     .from('profiles')
-    .select('trial_usage, is_subscribed, payment_method, next_billing_date')
+    .select('trial_usage, is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at')
     .eq('id', userId)
     .single();
 
@@ -59,6 +59,7 @@ export async function checkAndConsumeTrialToken(
   }
 
   const isPaid = profile.is_subscribed === true;
+  const isGifted = profile.admin_gifted === true;
   // Real payment methods: gift, apple, google, stripe (NOT 'manual' — old DB default for all users)
   const pm = profile.payment_method;
   const hasRealPaymentMethod =
@@ -66,8 +67,10 @@ export async function checkAndConsumeTrialToken(
   const isActiveSubscriber =
     hasRealPaymentMethod && profile.next_billing_date != null &&
     new Date(profile.next_billing_date as string) > new Date();
+  // Token limits ONLY apply to users on the 24-hour trial (free_access_start_at is set)
+  const isOn24hTrial = profile.free_access_start_at != null;
 
-  if (isPaid || isActiveSubscriber) {
+  if (isPaid || isActiveSubscriber || isGifted || !isOn24hTrial) {
     return { allowed: true, consumed: 0, limit: maxLimit, isVip: true };
   }
 

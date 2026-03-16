@@ -26,17 +26,20 @@ const TrialGateOverlay: React.FC<TrialGateOverlayProps> = ({ featureKey, limit, 
         if (!user?.id) return;
         const { data: profile } = await (supabase as any)
           .from('profiles')
-          .select('trial_usage, is_subscribed, payment_method, next_billing_date')
+          .select('trial_usage, is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at')
           .eq('id', user.id)
           .single();
         if (!profile || !mounted) return;
         const isPaid = profile.is_subscribed === true;
+        const isGifted = profile.admin_gifted === true;
         // Real payment methods: gift, apple, google, stripe (NOT 'manual' — old DB default)
         const pm = profile.payment_method;
         const hasRealPaymentMethod = pm != null && typeof pm === 'string' && pm.trim().length > 0 && pm !== 'manual';
         const isActiveSubscriber =
           hasRealPaymentMethod && profile.next_billing_date != null && new Date(profile.next_billing_date) > new Date();
-        if (isPaid || isActiveSubscriber) return;
+        // Token limits ONLY apply to users on the 24-hour trial (free_access_start_at is set)
+        const isOn24hTrial = profile.free_access_start_at != null;
+        if (isPaid || isActiveSubscriber || isGifted || !isOn24hTrial) return;
         const usage = (profile.trial_usage as Record<string, number>) ?? {};
         const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
         if (current >= limit) {
