@@ -477,92 +477,160 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
   whoopData?: any;
 }) {
   const [activeTab, setActiveTab] = useState<'whoop' | 'healthkit'>('whoop');
-  const recovery = whoopData?.recovery ?? null;
-  const strain   = whoopData?.strain ?? null;
-  const recColor = recovery ? (recovery >= 67 ? '#22c55e' : recovery >= 34 ? '#f59e0b' : '#ef4444') : '#ef4444';
 
-  const bgGradient = activeTab === 'whoop'
-    ? (recovery
-        ? (recovery >= 67
-            ? 'linear-gradient(145deg,rgba(6,78,59,0.7) 0%,rgba(6,95,70,0.7) 40%,rgba(4,120,87,0.7) 100%)'
-            : recovery >= 34
-              ? 'linear-gradient(145deg,rgba(120,53,15,0.7) 0%,rgba(146,64,14,0.7) 40%,rgba(180,83,9,0.7) 100%)'
-              : 'linear-gradient(145deg,rgba(127,29,29,0.7) 0%,rgba(153,27,27,0.7) 40%,rgba(185,28,28,0.7) 100%)')
-        : 'linear-gradient(145deg,rgba(30,20,60,0.7) 0%,rgba(50,30,90,0.7) 100%)')
-    : 'linear-gradient(145deg,rgba(22,163,74,0.7) 0%,rgba(34,197,94,0.7) 40%,rgba(74,222,128,0.7) 100%)';
+  const recovery         = whoopData?.recovery         ?? null;
+  const strain           = whoopData?.strain           ?? null;
+  const hrv              = whoopData?.hrv              ?? null;
+  const rhr              = whoopData?.rhr              ?? null;
+  const sleepPerf        = whoopData?.sleepPerformance  ?? null;
+  const sleepHours       = whoopData?.sleepHours       ?? null;
+  const sleepConsistency = whoopData?.sleepConsistency ?? null;
+  const avgHr            = whoopData?.avgHr            ?? null;
 
-  const glowColor = activeTab === 'whoop' ? recColor : '#22c55e';
+  const recColor = recovery != null
+    ? (recovery >= 67 ? '#22c55e' : recovery >= 34 ? '#f59e0b' : '#ef4444')
+    : '#6366f1';
+
+  const bgWhoop = recovery != null
+    ? (recovery >= 67
+        ? 'linear-gradient(145deg,rgba(4,60,40,0.92) 0%,rgba(4,100,65,0.92) 100%)'
+        : recovery >= 34
+          ? 'linear-gradient(145deg,rgba(100,40,8,0.92) 0%,rgba(160,70,6,0.92) 100%)'
+          : 'linear-gradient(145deg,rgba(110,20,20,0.92) 0%,rgba(170,20,20,0.92) 100%)')
+    : 'linear-gradient(145deg,rgba(25,15,50,0.92) 0%,rgba(45,25,80,0.92) 100%)';
+
+  const bgHealth   = 'linear-gradient(145deg,rgba(10,60,40,0.92) 0%,rgba(15,90,60,0.92) 100%)';
+  const bgGradient = activeTab === 'whoop' ? bgWhoop : bgHealth;
+  const glowColor  = activeTab === 'whoop' ? recColor : '#22c55e';
+
+  const R = 18; const C = 2 * Math.PI * R;
+  const recPct = recovery != null ? Math.min(recovery / 100, 1) : 0;
 
   return shell(bgGradient, glowColor, () => navigate('/fitness'),
-    <div className="p-3 flex flex-col justify-between h-full">
-      {/* Tab buttons row */}
-      <div className="flex items-center justify-between mb-1">
+    <div className="p-2.5 flex flex-col h-full gap-1.5">
+
+      {/* Toggle pill */}
+      <div className="flex justify-center">
         <button
-          title="WHOOP"
-          onClick={(e) => { e.stopPropagation(); setActiveTab('whoop'); }}
-          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
-            activeTab === 'whoop'
-              ? 'bg-white/30 border border-white/40 shadow-md scale-105'
-              : 'bg-white/10 border border-white/15 opacity-60'
-          }`}
-          style={{ backdropFilter: 'blur(8px)' }}
+          title={activeTab === 'whoop' ? 'Switch to HealthKit' : 'Switch to WHOOP'}
+          onClick={(e) => { e.stopPropagation(); setActiveTab(t => t === 'whoop' ? 'healthkit' : 'whoop'); }}
+          className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 border border-white/25 active:scale-95 transition-all"
         >
-          <Activity className="w-5 h-5 text-white" strokeWidth={2} />
-        </button>
-        <button
-          title="HealthKit"
-          onClick={(e) => { e.stopPropagation(); setActiveTab('healthkit'); }}
-          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
-            activeTab === 'healthkit'
-              ? 'bg-white/30 border border-white/40 shadow-md scale-105'
-              : 'bg-white/10 border border-white/15 opacity-60'
-          }`}
-          style={{ backdropFilter: 'blur(8px)' }}
-        >
-          <Heart className="w-5 h-5 text-white" strokeWidth={2.5} />
+          <Activity className={`w-3 h-3 ${activeTab === 'whoop' ? 'text-white' : 'text-white/30'}`} strokeWidth={2.5} />
+          <div className="w-px h-2.5 bg-white/25" />
+          <Heart className={`w-3 h-3 ${activeTab === 'healthkit' ? 'text-white' : 'text-white/30'}`} strokeWidth={2.5} />
         </button>
       </div>
 
-      {/* WHOOP content */}
+      {/* WHOOP tab */}
       {activeTab === 'whoop' && (
-        <div className="flex flex-col justify-end flex-1">
-          {recovery !== null ? (
-            <div className="mb-1">
-              <div className="flex justify-between items-end mb-1">
-                <span className="text-[10px] text-white/70 font-bold uppercase">{language === 'ar' ? 'إجهاد' : 'Strain'}</span>
-                <span className="text-[12px] text-white font-bold">{strain !== null ? strain : '--'}</span>
+        <div className="flex flex-col flex-1 justify-between">
+          {recovery != null ? (
+            <>
+              {/* Recovery ring + big number */}
+              <div className="flex items-center gap-2.5">
+                <svg width="44" height="44" viewBox="0 0 44 44" className="flex-shrink-0 -rotate-90">
+                  <circle cx="22" cy="22" r={R} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="4" />
+                  <circle cx="22" cy="22" r={R} fill="none" stroke={recColor} strokeWidth="4"
+                    strokeDasharray={C} strokeDashoffset={C * (1 - recPct)}
+                    strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
+                </svg>
+                <div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-black text-white tabular-nums leading-none">{Math.round(recovery)}%</span>
+                    <span className="text-[9px] text-white/60 font-bold uppercase">{language === 'ar' ? 'استشفاء' : 'REC'}</span>
+                  </div>
+                  {sleepHours != null && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <span className="text-[9px] text-white/50">{language === 'ar' ? 'نوم' : 'Sleep'}</span>
+                      <span className="text-[10px] text-white font-bold">{sleepHours}h</span>
+                      {sleepPerf != null && <span className="text-[8px] text-white/40">· {Math.round(sleepPerf)}%</span>}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
-                <div className="h-full bg-white/90 rounded-full" style={{ width: `${Math.min(((strain || 0) / 21) * 100, 100)}%` }} />
+              {/* Strain bar */}
+              {strain != null && (
+                <div>
+                  <div className="flex justify-between items-center mb-0.5">
+                    <span className="text-[8px] text-white/50 font-bold uppercase">{language === 'ar' ? 'إجهاد' : 'Strain'}</span>
+                    <span className="text-[9px] text-white font-bold">{strain.toFixed(1)}<span className="text-white/40">/21</span></span>
+                  </div>
+                  <div className="w-full h-1 bg-white/15 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.min((strain / 21) * 100, 100)}%`, background: recColor }} />
+                  </div>
+                </div>
+              )}
+              {/* HRV / RHR / AvgHR pills */}
+              <div className="flex gap-1.5 flex-wrap">
+                {hrv != null && (
+                  <div className="flex flex-col items-center bg-white/10 rounded-lg px-2 py-0.5">
+                    <span className="text-[8px] text-white/50 uppercase">HRV</span>
+                    <span className="text-[11px] text-white font-black">{Math.round(hrv)}</span>
+                  </div>
+                )}
+                {rhr != null && (
+                  <div className="flex flex-col items-center bg-white/10 rounded-lg px-2 py-0.5">
+                    <span className="text-[8px] text-white/50 uppercase">RHR</span>
+                    <span className="text-[11px] text-white font-black">{Math.round(rhr)}</span>
+                  </div>
+                )}
+                {avgHr != null && (
+                  <div className="flex flex-col items-center bg-white/10 rounded-lg px-2 py-0.5">
+                    <span className="text-[8px] text-white/50 uppercase">{language === 'ar' ? 'ن.قلب' : 'AvgHR'}</span>
+                    <span className="text-[11px] text-white font-black">{Math.round(avgHr)}</span>
+                  </div>
+                )}
               </div>
-            </div>
+            </>
           ) : (
-            <div className="flex items-end gap-0.5 mb-2 h-6">
-              {[3,5,2,7,4,8,3,6,2,5,3,4].map((h, i) => (
-                <div key={i} className="flex-1 rounded-sm" style={{ height: `${h * 10}%`, background: i === 7 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)' }} />
-              ))}
+            <div className="flex flex-col justify-end flex-1">
+              <p className="text-[13px] font-black text-white">WHOOP</p>
+              <p className="text-[9px] text-white/60">{language === 'ar' ? 'غير متصل' : 'Not connected'}</p>
             </div>
           )}
-          <p className="text-[14px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>WHOOP</p>
-          <p className="text-[10px] font-semibold mt-0.5 text-white/80">
-            {recovery !== null ? `${recovery}% ${language === 'ar' ? 'استشفاء' : 'Recovery'}` : (language === 'ar' ? 'الحيوية والنشاط' : 'Vitality & fitness')}
-          </p>
         </div>
       )}
 
-      {/* HealthKit content */}
+      {/* HealthKit tab */}
       {activeTab === 'healthkit' && (
-        <div className="flex flex-col justify-end flex-1">
-          <div className="flex gap-1 mb-2 items-end h-8">
-            {['S','M','T','W','T','F','S'].map((d, i) => (
-              <div key={i} className="flex-1 flex flex-col justify-end gap-0.5">
-                <div className="w-full bg-white/40 rounded-t-sm" style={{ height: `${[40,60,30,80,50,90,45][i]}%` }} />
-                <span className="text-[6px] text-white/60 text-center font-bold">{d}</span>
-              </div>
-            ))}
+        <div className="flex flex-col flex-1 justify-between">
+          {/* Header */}
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0">
+              <Heart className="w-4 h-4 text-white" strokeWidth={2} fill="rgba(255,255,255,0.4)" />
+            </div>
+            <div>
+              <p className="text-[12px] font-black text-white leading-none">{language === 'ar' ? 'أبل هيلث' : 'Apple Health'}</p>
+              <p className="text-[8px] text-white/50 mt-0.5">{language === 'ar' ? 'بيانات الصحة' : 'Health data'}</p>
+            </div>
           </div>
-          <p className="text-[14px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{language === 'ar' ? 'صحتي' : 'HealthKit'}</p>
-          <p className="text-[10px] font-semibold mt-0.5 text-white/80">{language === 'ar' ? 'نشاط أبل' : 'Apple Health'}</p>
+          {/* Data grid */}
+          <div className="grid grid-cols-2 gap-1">
+            <div className="bg-white/10 rounded-lg p-1.5">
+              <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'نوم' : 'Sleep'}</p>
+              <p className="text-[12px] font-black text-white leading-tight">{sleepHours != null ? `${sleepHours}h` : '--'}</p>
+            </div>
+            <div className="bg-white/10 rounded-lg p-1.5">
+              <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'جودة' : 'Quality'}</p>
+              <p className="text-[12px] font-black text-white leading-tight">{sleepPerf != null ? `${Math.round(sleepPerf)}%` : '--'}</p>
+            </div>
+            <div className="bg-white/10 rounded-lg p-1.5">
+              <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'انتظام' : 'Consist.'}</p>
+              <p className="text-[12px] font-black text-white leading-tight">{sleepConsistency != null ? `${Math.round(sleepConsistency)}%` : '--'}</p>
+            </div>
+            <div className="bg-white/10 rounded-lg p-1.5">
+              <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'ن.قلب' : 'Avg HR'}</p>
+              <p className="text-[12px] font-black text-white leading-tight">{avgHr != null ? Math.round(avgHr) : '--'}</p>
+            </div>
+          </div>
+          {/* Connect prompt */}
+          <div
+            onClick={(e) => { e.stopPropagation(); navigate('/fitness'); }}
+            className="flex items-center justify-center gap-1 bg-white/10 border border-white/20 rounded-lg py-1 active:scale-95 transition-all cursor-pointer"
+          >
+            <span className="text-[9px] text-white/70 font-semibold">{language === 'ar' ? 'ربط أبل هيلث →' : 'Connect Apple Health →'}</span>
+          </div>
         </div>
       )}
     </div>

@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
-import { Check, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LandingScene } from "./LandingScene";
 import { useNavigate } from "react-router-dom";
@@ -11,30 +12,7 @@ interface PricingSceneProps {
 export function PricingScene({ language = "en" }: PricingSceneProps) {
   const navigate = useNavigate();
   const isArabic = language === "ar";
-
-  const includedFeatures = isArabic
-    ? [
-        "وقتي AI — دردشة، بحث، ويب، يوتيوب",
-        "توليد الصور، الرسم، الفيديو",
-        "الاستوديو — موسيقى + فيديو",
-        "استنساخ الصوت والترجمة الفورية (60+ لغة)",
-        "مولد النص، PPT، PDF",
-        "المبرمج الذكي + بناء الشات بوت",
-        "المهام، التقويم، مواعيد، التوثيق",
-        "الحيوية (WHOOP)، المذكرات، تسجيل، المراسلة",
-        "ألعاب AI",
-      ]
-    : [
-        "WAKTI AI — Chat, Search, Web, YouTube",
-        "Image Gen, Draw, Video Studio",
-        "Studio — Music + Video creation",
-        "Voice Clone & Real-time Translation (60+ langs)",
-        "Smart Text, PPT & PDF Generator",
-        "AI Coder + Chatbot Builder",
-        "Tasks, Calendar, Maw3d, Docs Hub",
-        "Vitality (WHOOP), Journal, Tasjeel, Messaging",
-        "AI Games",
-      ];
+  const [showQAR, setShowQAR] = useState(true);
 
   return (
     <LandingScene
@@ -42,7 +20,6 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
       className="bg-[#0c0f14]"
       gradient="radial-gradient(ellipse 70% 55% at 50% 55%, rgba(233,206,176,0.07) 0%, rgba(12,15,20,0.88) 55%, #0c0f14 100%)"
     >
-      {/* ── Shimmer keyframes injected once ── */}
       <style>{`
         @keyframes pricing-shimmer {
           0%   { transform: translateX(-110%) rotate(25deg); }
@@ -59,13 +36,10 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
         whileInView={{ scale: 1, opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.85, ease: "easeOut" }}
-        className="relative w-full max-w-sm"
+        className="relative w-full max-w-xs"
       >
-        {/* Outer ambient glow */}
-        <div
-          className="absolute -inset-2 rounded-[2rem] blur-2xl pointer-events-none"
-          style={{ background: "radial-gradient(ellipse at 50% 50%, rgba(233,206,176,0.22) 0%, transparent 70%)" }}
-        />
+        {/* Outer glow */}
+        <div className="absolute -inset-2 rounded-[2rem] blur-2xl pointer-events-none" style={{ background: "radial-gradient(ellipse at 50% 50%, rgba(233,206,176,0.22) 0%, transparent 70%)" }} />
 
         {/* ── Platinum Card ── */}
         <div
@@ -75,117 +49,111 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
             boxShadow: "0 24px 80px rgba(0,0,0,0.75), 0 2px 0 rgba(255,255,255,0.06) inset",
           }}
         >
-          {/* Premium glass border — white-to-transparent gradient border */}
-          <div
-            className="absolute inset-0 rounded-[1.6rem] pointer-events-none"
-            style={{
-              border: "1.5px solid transparent",
-              backgroundImage: "linear-gradient(160deg, rgba(255,255,255,0.22), rgba(233,206,176,0.35) 30%, rgba(255,255,255,0.06) 60%, rgba(233,206,176,0.18))",
-              WebkitMask: "linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0)",
-              WebkitMaskComposite: "destination-out",
-              maskComposite: "exclude",
-            }}
-          />
+          {/* Glass border */}
+          <div className="absolute inset-0 rounded-[1.6rem] pointer-events-none" style={{ border: "1.5px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(255,255,255,0.22), rgba(233,206,176,0.35) 30%, rgba(255,255,255,0.06) 60%, rgba(233,206,176,0.18))", WebkitMask: "linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0)", WebkitMaskComposite: "destination-out", maskComposite: "exclude" }} />
 
-          {/* Diagonal shimmer sweep */}
-          <div
-            className="absolute inset-0 pointer-events-none overflow-hidden rounded-[1.6rem]"
-          >
-            <div
-              className="pricing-shimmer-sweep absolute inset-y-0"
-              style={{
-                width: "45%",
-                background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.07) 45%, rgba(233,206,176,0.12) 50%, rgba(255,255,255,0.07) 55%, transparent 100%)",
-              }}
-            />
+          {/* Shimmer sweep */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-[1.6rem]">
+            <div className="pricing-shimmer-sweep absolute inset-y-0" style={{ width: "45%", background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.07) 45%, rgba(233,206,176,0.12) 50%, rgba(255,255,255,0.07) 55%, transparent 100%)" }} />
           </div>
 
-          <div className="relative z-10 p-7">
-            {/* Badge */}
+          <div className="relative z-10 p-7 flex flex-col items-center">
+            {/* "One Plan" label */}
+            <motion.p
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+              className="text-[#e9ceb0] text-sm font-medium tracking-[0.3em] uppercase mb-5"
+            >
+              {isArabic ? "اشتراك واحد" : "One Plan"}
+            </motion.p>
+
+            {/* ── Flag Toggle ── */}
             <motion.div
-              initial={{ opacity: 0, y: -8 }}
+              initial={{ opacity: 0, y: -6 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: 0.25 }}
-              className="flex items-center justify-center gap-2 mb-5"
+              transition={{ delay: 0.28 }}
+              className="flex items-center gap-0 mb-5 rounded-full overflow-hidden"
+              style={{ border: "1px solid rgba(233,206,176,0.25)", background: "rgba(233,206,176,0.06)" }}
             >
-              <div
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full"
+              <button
+                type="button"
+                onClick={() => setShowQAR(true)}
+                className="flex items-center gap-1.5 px-4 py-1.5 text-[12px] font-semibold transition-all duration-200"
                 style={{
-                  background: "linear-gradient(135deg, rgba(233,206,176,0.18) 0%, rgba(196,164,126,0.12) 100%)",
-                  border: "1px solid rgba(233,206,176,0.3)",
+                  background: showQAR ? "rgba(233,206,176,0.18)" : "transparent",
+                  color: showQAR ? "#e9ceb0" : "rgba(255,255,255,0.4)",
                 }}
               >
-                <Sparkles className="w-3 h-3 text-[#e9ceb0]" />
-                <span className="text-[#e9ceb0] text-[10px] font-bold tracking-[0.25em] uppercase">
-                  {isArabic ? "كل شيء مضمن" : "Everything Included"}
-                </span>
-              </div>
+                <span className="text-base">🇶🇦</span> QAR
+              </button>
+              <div style={{ width: 1, height: 20, background: "rgba(233,206,176,0.2)" }} />
+              <button
+                type="button"
+                onClick={() => setShowQAR(false)}
+                className="flex items-center gap-1.5 px-4 py-1.5 text-[12px] font-semibold transition-all duration-200"
+                style={{
+                  background: !showQAR ? "rgba(233,206,176,0.18)" : "transparent",
+                  color: !showQAR ? "#e9ceb0" : "rgba(255,255,255,0.4)",
+                }}
+              >
+                <span className="text-base">🇺🇸</span> USD
+              </button>
             </motion.div>
 
-            {/* Prices */}
+            {/* ── Price Display ── */}
             <motion.div
               initial={{ opacity: 0, scale: 0.92 }}
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
               transition={{ delay: 0.35 }}
-              className="text-center mb-2"
+              className="text-center mb-3"
             >
-              {/* QAR row */}
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <span className="text-2xl" role="img" aria-label="Qatar">🇶🇦</span>
+              <div className="flex items-baseline justify-center gap-1.5">
                 <span
-                  className="text-5xl font-extralight"
+                  className="text-6xl font-extralight"
                   style={{
                     background: "linear-gradient(135deg, #e9ceb0 0%, #fff 50%, #e9ceb0 100%)",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    backgroundClip: "text",
+                    WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
                   }}
                 >
-                  92
+                  {showQAR ? "92" : "$24.99"}
                 </span>
                 <div className="flex flex-col items-start leading-none">
-                  <span className="text-[#e9ceb0] text-base font-semibold">QAR</span>
-                  <span className="text-white/50 text-[10px] font-light">{isArabic ? "/ شهر" : "/ mo"}</span>
+                  <span className="text-[#e9ceb0] text-base font-semibold">{showQAR ? "QAR" : "USD"}</span>
+                  <span className="text-white/50 text-[10px] font-light">{isArabic ? "/ شهرياً" : "/ monthly"}</span>
                 </div>
-              </div>
-
-              {/* USD row */}
-              <div className="flex items-center justify-center gap-1.5">
-                <span className="text-base" role="img" aria-label="USA">🇺🇸</span>
-                <span className="text-white/70 text-sm font-light">≈</span>
-                <span className="text-white/85 text-base font-semibold">$24.99</span>
-                <span className="text-white/50 text-[11px] font-light">USD {isArabic ? "/ شهر" : "/ mo"}</span>
               </div>
             </motion.div>
 
             {/* Divider */}
-            <div className="h-px my-5" style={{ background: "linear-gradient(90deg, transparent, rgba(233,206,176,0.3), transparent)" }} />
+            <div className="w-full h-px my-4" style={{ background: "linear-gradient(90deg, transparent, rgba(233,206,176,0.3), transparent)" }} />
 
-            {/* Feature list */}
-            <motion.ul
+            {/* Everything Included badge */}
+            <motion.div
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
-              transition={{ delay: 0.5 }}
-              className="space-y-2 mb-6"
-              style={{ direction: isArabic ? "rtl" : "ltr" }}
+              transition={{ delay: 0.45 }}
+              className="flex items-center justify-center gap-2 mb-6"
             >
-              {includedFeatures.map((f, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <Check className="w-3.5 h-3.5 text-[#e9ceb0] flex-shrink-0 mt-0.5" strokeWidth={2.5} />
-                  <span className="text-white/72 text-[11.5px] font-light leading-snug">{f}</span>
-                </li>
-              ))}
-            </motion.ul>
+              <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full" style={{ background: "linear-gradient(135deg, rgba(233,206,176,0.15) 0%, rgba(196,164,126,0.08) 100%)", border: "1px solid rgba(233,206,176,0.25)" }}>
+                <Sparkles className="w-3.5 h-3.5 text-[#e9ceb0]" />
+                <span className="text-[#e9ceb0] text-[11px] font-bold tracking-[0.2em] uppercase">
+                  {isArabic ? "كل شيء مضمن" : "Everything Included"}
+                </span>
+              </div>
+            </motion.div>
 
-            {/* CTA Button */}
+            {/* CTA */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: 0.65 }}
+              transition={{ delay: 0.55 }}
+              className="w-full"
             >
               <Button
                 onClick={() => navigate("/signup")}
@@ -196,13 +164,8 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
                   boxShadow: "0 8px 32px rgba(233,206,176,0.38), 0 0 60px rgba(233,206,176,0.15)",
                 }}
               >
-                <span
-                  className="absolute inset-0 rounded-full pointer-events-none"
-                  style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.4) 0%, transparent 55%)" }}
-                />
-                <span className="relative z-10">
-                  {isArabic ? "ابدأ وقتي مجاناً" : "START WAKTI FOR FREE"}
-                </span>
+                <span className="absolute inset-0 rounded-full pointer-events-none" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.4) 0%, transparent 55%)" }} />
+                <span className="relative z-10">{isArabic ? "ابدأ وقتي مجاناً" : "START WAKTI FOR FREE"}</span>
               </Button>
             </motion.div>
 
@@ -210,8 +173,8 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
-              transition={{ delay: 0.75 }}
-              className="text-center text-white/45 text-[10.5px] mt-3 font-light tracking-wide"
+              transition={{ delay: 0.65 }}
+              className="text-center text-white/40 text-[10px] mt-3 font-light tracking-wide"
             >
               {isArabic ? "تطبيق شامل مدعوم بالذكاء الاصطناعي" : "All-in-One AI-Powered App · No hidden fees"}
             </motion.p>
