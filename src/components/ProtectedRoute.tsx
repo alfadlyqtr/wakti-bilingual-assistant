@@ -44,6 +44,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   const destroyedRef = useRef(false);
   const retriedRef = useRef(false); // allow at most one background retry per user
   const lastUserIdRef = useRef<string | null>(null);
+  const trialJustStartedRef = useRef(false); // suppress paywall bounce-back after skip/X
 
   // Owner accounts that bypass all restrictions
   const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
@@ -363,6 +364,17 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     return () => window.removeEventListener('wakti-subscription-updated', handleSubscriptionUpdate);
   }, [user?.id]);
 
+  // Listen for trial start (X pressed) — suppress paywall re-open for 3s while profile refreshes
+  useEffect(() => {
+    const handleTrialStarted = () => {
+      trialJustStartedRef.current = true;
+      setShowPaywall(false);
+      setTimeout(() => { trialJustStartedRef.current = false; }, 3000);
+    };
+    window.addEventListener('wakti-trial-started', handleTrialStarted);
+    return () => window.removeEventListener('wakti-trial-started', handleTrialStarted);
+  }, []);
+
   // Force re-evaluation of isAccessExpired every 10 seconds
   useEffect(() => {
     if (isSubscribed || !profile?.free_access_start_at) return;
@@ -385,6 +397,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     
     // SURGICAL FIX #1: Stop Trusting the Cache for Walls
     // Trust ONLY live profile data, not cached subscriptionStatus
+    if (trialJustStartedRef.current) { setShowPaywall(false); return; }
     if (isSubscribed || subscriptionStatus.isSubscribed || isAdminGifted || isGracePeriod) { setShowPaywall(false); return; }
     const isAccount = location.pathname.startsWith('/account');
     if (isAccount) { setShowPaywall(false); return; }

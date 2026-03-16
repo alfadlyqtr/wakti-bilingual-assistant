@@ -314,13 +314,26 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const handleSkip = async () => {
     if (!user?.id) return;
     try {
-      await supabase
+      // Use upsert so this works even if profile row is missing (trigger failure edge case)
+      const { error: upsertError } = await supabase
         .from('profiles')
-        .update({
+        .upsert({
+          id: user.id,
+          email: user.email || '',
           free_access_start_at: new Date().toISOString(),
           trial_popup_shown: true
-        })
-        .eq('id', user.id);
+        }, { onConflict: 'id', ignoreDuplicates: false });
+      if (upsertError) {
+        console.error('[Paywall] Profile upsert failed:', upsertError);
+        // Fallback: try plain update
+        await supabase
+          .from('profiles')
+          .update({
+            free_access_start_at: new Date().toISOString(),
+            trial_popup_shown: true
+          })
+          .eq('id', user.id);
+      }
 
       // Schedule push notifications at 12h, 22h, and 24h
       try {
@@ -344,6 +357,8 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
         }
       } catch {}
 
+      // Signal ProtectedRoute to suppress paywall bounce-back for 3s while profile refreshes
+      window.dispatchEvent(new CustomEvent('wakti-trial-started'));
       // Force profile refresh
       window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
       onOpenChange(false);
