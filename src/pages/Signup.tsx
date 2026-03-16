@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Logo3D } from "@/components/Logo3D";
-import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, CalendarIcon, Globe, Mic, FileText, Sparkles, MapPin, ChevronDown, ChevronUp } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User, AtSign, ArrowLeft, CalendarIcon, Globe, Mic, FileText, Sparkles, MapPin, ChevronDown, ChevronUp, Pause, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ export default function Signup() {
   const navigate = useNavigate();
   const { language, theme } = useTheme();
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(undefined);
@@ -100,8 +101,9 @@ export default function Signup() {
         dc.send(JSON.stringify({
           type: 'session.update',
           session: {
-            instructions: 'You are an email transcription assistant. Only output exactly what the user says as an email address. Do not respond to them or talk.',
+            instructions: 'You are a silent email transcription tool. Your ONLY job is to listen to the user spell or say an email address and transcribe it exactly. NEVER respond with speech, text, greetings, or any output. NEVER generate any response. NEVER speak. Just transcribe the email address the user says or spells. Output nothing.',
             voice: 'shimmer',
+            modalities: ['text'],
             input_audio_transcription: language === 'ar' ? { model: 'whisper-1', language: 'ar' } : { model: 'whisper-1' },
             turn_detection: null
           }
@@ -116,6 +118,11 @@ export default function Signup() {
             msg.transcript ??
             msg.delta ??
             (msg.type === 'conversation.item.input_audio_transcription.completed' ? msg.transcript : null);
+          // Cancel any AI response immediately
+          if (msg.type === 'response.created' || msg.type === 'response.audio.delta' || msg.type === 'response.text.delta') {
+            try { dc.send(JSON.stringify({ type: 'response.cancel' })); } catch {}
+            return;
+          }
           if (
             (msg.type === 'conversation.item.input_audio_transcription.completed' ||
              msg.type === 'input_audio_transcription.completed') &&
@@ -124,7 +131,7 @@ export default function Signup() {
             const cleaned = cleanEmail(msg.transcript);
             setEmail(cleaned);
             setEmailCaptured(true);
-            // Suppress any AI text response
+            // Kill any pending AI response
             try { dc.send(JSON.stringify({ type: 'response.cancel' })); } catch {}
             // Auto-focus password after short delay
             setTimeout(() => passwordRef.current?.focus(), 600);
@@ -253,6 +260,7 @@ export default function Signup() {
           emailRedirectTo: redirectUrl,
           data: {
             full_name: name,
+            username: username || '',
             date_of_birth: dateOfBirth ? dateOfBirth.toISOString().split('T')[0] : '',
             country: selectedCountry?.name || '',
             country_code: country,
@@ -327,7 +335,7 @@ export default function Signup() {
       seeAiProviders: "see AI providers",
       toProvideFeatures: ") to provide WAKTI's features.",
       passwordRequirements: "At least 6 characters",
-      selectCountry: "Select your country",
+      selectCountry: "Country",
       // Placeholders
       namePlaceholder: "Your Name",
       usernamePlaceholder: "username",
@@ -358,7 +366,7 @@ export default function Signup() {
       seeAiProviders: "انظر مزودي الذكاء الاصطناعي",
       toProvideFeatures: ") لتوفير ميزات وقتي.",
       passwordRequirements: "على الأقل 6 أحرف",
-      selectCountry: "اختر بلدك",
+      selectCountry: "البلد",
       // Placeholders
       namePlaceholder: "اسمك",
       usernamePlaceholder: "اسم المستخدم",
@@ -722,6 +730,57 @@ export default function Signup() {
           filter: ${dk ? 'drop-shadow(0 0 8px hsla(210,100%,65%,0.4))' : 'drop-shadow(0 0 6px hsla(243,84%,14%,0.2))'};
         }
 
+        /* ─── back button ─── */
+        .su-back-btn {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 6px 14px 6px 10px; border-radius: 999px;
+          font-size: 12px; font-weight: 600;
+          cursor: pointer; transition: all 0.25s ease;
+          border: 1px solid ${dk ? 'hsla(280,50%,55%,0.25)' : 'hsla(243,84%,14%,0.12)'};
+          background: ${dk
+            ? 'linear-gradient(135deg, hsla(280,50%,40%,0.15) 0%, hsla(210,70%,45%,0.12) 100%)'
+            : 'linear-gradient(135deg, hsla(243,70%,20%,0.06) 0%, hsla(210,80%,40%,0.05) 100%)'
+          };
+          color: ${dk ? 'hsl(270,50%,78%)' : 'hsl(243,84%,22%)'};
+          backdrop-filter: blur(10px);
+        }
+        .su-back-btn:hover {
+          transform: translateX(-2px);
+          border-color: ${dk ? 'hsla(280,50%,55%,0.4)' : 'hsla(243,84%,14%,0.22)'};
+          box-shadow: ${dk
+            ? '0 2px 12px hsla(280,50%,55%,0.2)'
+            : '0 2px 8px hsla(243,84%,14%,0.1)'
+          };
+        }
+        .su-back-btn:active { transform: scale(0.95); }
+
+        /* ─── audio mini button ─── */
+        .su-audio-btn {
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 28px; height: 28px; border-radius: 50%;
+          border: none; cursor: pointer;
+          transition: all 0.2s ease;
+          background: ${dk
+            ? 'linear-gradient(135deg, hsla(280,55%,50%,0.25) 0%, hsla(210,75%,50%,0.2) 100%)'
+            : 'linear-gradient(135deg, hsla(243,70%,20%,0.1) 0%, hsla(210,80%,40%,0.08) 100%)'
+          };
+          border: 1px solid ${dk ? 'hsla(280,60%,60%,0.3)' : 'hsla(243,84%,14%,0.15)'};
+          color: ${dk ? 'hsl(280,60%,75%)' : 'hsl(243,84%,25%)'};
+          backdrop-filter: blur(8px);
+        }
+        .su-audio-btn:hover {
+          transform: scale(1.1);
+          background: ${dk
+            ? 'linear-gradient(135deg, hsla(280,55%,50%,0.4) 0%, hsla(210,75%,50%,0.35) 100%)'
+            : 'linear-gradient(135deg, hsla(243,70%,20%,0.16) 0%, hsla(210,80%,40%,0.14) 100%)'
+          };
+          box-shadow: ${dk
+            ? '0 0 12px hsla(280,60%,55%,0.3)'
+            : '0 0 8px hsla(243,84%,14%,0.15)'
+          };
+        }
+        .su-audio-btn:active { transform: scale(0.92); }
+
         /* ─── field icon ─── */
         .su-icon { color: ${accent}; opacity: 0.45; }
       `}</style>
@@ -735,11 +794,10 @@ export default function Signup() {
         <div className="relative z-20 flex items-center justify-between px-5 pt-3 pb-0 flex-shrink-0">
           <button
             onClick={() => navigate("/")}
-            className="flex items-center gap-1 text-[11px] font-medium transition-opacity hover:opacity-70"
-            style={{ color: fgHi('0.35') }}
+            className="su-back-btn"
           >
-            <ArrowLeft className="h-3 w-3" />
-            <span className="sr-only">{t.backToHome}</span>
+            <ArrowLeft className="h-4 w-4" />
+            <span>{language === 'ar' ? 'رجوع' : 'Back'}</span>
           </button>
           <ThemeLanguageToggle />
         </div>
@@ -788,6 +846,48 @@ export default function Signup() {
                 : (language === 'ar' ? 'اضغط باستمرار للتحدث' : 'Hold to speak your email')}
             </motion.p>
 
+            {/* Audio mini player */}
+            <AnimatePresence>
+              {isPlayingAudio && (
+                <motion.button
+                  type="button"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={() => {
+                    if (audioRef.current) {
+                      audioRef.current.pause();
+                      setIsPlayingAudio(false);
+                    }
+                  }}
+                  className="su-audio-btn"
+                  aria-label="Pause"
+                >
+                  <Pause className="w-3 h-3" />
+                </motion.button>
+              )}
+              {!isPlayingAudio && audioUnlocked && (
+                <motion.button
+                  type="button"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={() => {
+                    if (audioRef.current) {
+                      audioRef.current.currentTime = 0;
+                      audioRef.current.play();
+                    }
+                  }}
+                  className="su-audio-btn"
+                  aria-label="Play"
+                >
+                  <Play className="w-3 h-3" />
+                </motion.button>
+              )}
+            </AnimatePresence>
+
             {/* Email captured banner */}
             <AnimatePresence>
               {emailCaptured && (
@@ -804,8 +904,8 @@ export default function Signup() {
                   }}
                 >
                   {language === 'ar'
-                    ? '✓ رائع! اكتب كلمة مرور قوية — لا تشاركها.'
-                    : '✓ Got it! Now type a strong password.'}
+                    ? '✓ شكراً! اكتب كلمة المرور لخصوصيتك — لا تقلها بصوت.'
+                    : '✓ Thank you! Now type your password for privacy — don\u2019t say it.'}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -889,14 +989,23 @@ export default function Signup() {
                     transition={{ duration: 0.25 }}
                     className="space-y-2.5"
                   >
-                    <div className="relative">
-                      <User className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none" />
-                      <Input id="name" placeholder={t.namePlaceholder} type="text" autoCapitalize="none" autoCorrect="off" disabled={isLoading} value={name} onChange={(e) => setName(e.target.value)} className={cn(fieldCls, "pl-9")} />
+                    {/* Name | Username row */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="relative">
+                        <User className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none" />
+                        <Input id="name" placeholder={language === 'ar' ? 'اسمك' : 'Your Name'} type="text" autoCapitalize="words" autoCorrect="off" disabled={isLoading} value={name} onChange={(e) => setName(e.target.value)} className={cn(fieldCls, "pl-9")} />
+                      </div>
+                      <div className="relative">
+                        <AtSign className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none" />
+                        <Input id="username" placeholder={language === 'ar' ? 'اسم المستخدم' : 'Username'} type="text" autoCapitalize="none" autoCorrect="off" disabled={isLoading} value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ''))} className={cn(fieldCls, "pl-9")} />
+                      </div>
                     </div>
+                    {/* DOB full width */}
                     <div className="relative">
                       <CalendarIcon className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none z-10" />
                       <Input id="dob" type="date" disabled={isLoading} value={dateOfBirth ? dateOfBirth.toISOString().slice(0,10) : ""} onChange={(e) => { const v = e.target.value; setDateOfBirth(v ? new Date(`${v}T00:00:00`) : undefined); }} className={cn(fieldCls, "pl-9", !dateOfBirth && "text-muted-foreground")} min="1900-01-01" max={new Date().toISOString().slice(0,10)} />
                     </div>
+                    {/* Country | City row */}
                     <div className="grid grid-cols-2 gap-2">
                       <div className="relative">
                         <Globe className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none z-10" />

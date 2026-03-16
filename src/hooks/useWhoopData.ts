@@ -10,6 +10,7 @@ export function useWhoopData() {
     rhr: number | null;
     sleepPerformance: number | null;
     strain: number | null;
+    connected: boolean;
     lastUpdated: Date | null;
   }>({
     recovery: null,
@@ -17,6 +18,7 @@ export function useWhoopData() {
     rhr: null,
     sleepPerformance: null,
     strain: null,
+    connected: false,
     lastUpdated: null,
   });
 
@@ -25,32 +27,46 @@ export function useWhoopData() {
 
     const fetchData = async () => {
       try {
-        // Fetch latest recovery
-        const { data: recoveryData } = await supabase
-          .from("whoop_recovery")
-          .select("score, hrv_ms, rhr_bpm, created_at")
+        const { data: cache } = await supabase
+          .from("user_whoop_metrics_cache")
+          .select("metrics, status, updated_at")
           .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
           .single();
 
-        // Fetch latest cycle/strain (if available, assume table is whoop_cycles based on typical schema)
-        // Adjust table name if needed based on previous schema check which showed whoop_cycles exists
-        const { data: cycleData } = await supabase
-          .from("whoop_cycles")
-          .select("day_strain, created_at")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .single();
+        if (!cache) return;
+
+        const m = cache.metrics as any;
+        const st = cache.status as any;
+        const connected: boolean = st?.connected ?? false;
+
+        // Recovery score — from metrics.recovery (may be null) or sleep performance as proxy
+        const recoveryScore: number | null =
+          m?.recovery?.score ?? m?.recovery?.recovery_score ?? null;
+
+        // Sleep performance percentage
+        const sleepPerf: number | null =
+          m?.sleep?.performance_pct ??
+          m?.sleep?.data?.score?.sleep_performance_percentage ??
+          null;
+
+        // Strain from latest cycle
+        const strain: number | null =
+          m?.cycle?.day_strain ?? m?.cycle?.data?.score?.strain ?? null;
+
+        // HRV from recovery or body max heart rate as fallback
+        const hrv: number | null = m?.recovery?.hrv_ms ?? null;
+
+        // RHR
+        const rhr: number | null = m?.recovery?.rhr_bpm ?? null;
 
         setData({
-          recovery: recoveryData?.score ?? null,
-          hrv: recoveryData?.hrv_ms ?? null,
-          rhr: recoveryData?.rhr_bpm ?? null,
-          sleepPerformance: null, // Add sleep fetch if table exists
-          strain: cycleData?.day_strain ?? null,
-          lastUpdated: recoveryData?.created_at ? new Date(recoveryData.created_at) : null,
+          recovery: recoveryScore ?? (sleepPerf !== null ? sleepPerf : null),
+          hrv,
+          rhr,
+          sleepPerformance: sleepPerf,
+          strain,
+          connected,
+          lastUpdated: cache.updated_at ? new Date(cache.updated_at) : null,
         });
       } catch (error) {
         console.error("Error fetching WHOOP data:", error);

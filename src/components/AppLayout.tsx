@@ -73,6 +73,11 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const [purchaseInProgress, setPurchaseInProgress] = useState(false);
   const [activePackageId, setActivePackageId] = useState<string>('$rc_monthly');
   const [step, setStep] = useState(variant === 'new_user' ? 1 : 2);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [usernameInput, setUsernameInput] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [nameError, setNameError] = useState('');
   const contactUrl = "https://wa.me/97433994166";
   const rawName = profile?.display_name || (profile as any)?.first_name || profile?.username || user?.email || '';
   const userName = rawName.includes('@') ? rawName.split('@')[0] : rawName;
@@ -439,7 +444,14 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
       >
         {/* Top bar: logo | language toggle + X (top-right, step 2 only) */}
         <div className="flex items-center justify-between">
-          <Logo3D size="sm" className="w-8 h-8" />
+          <button
+            onClick={async () => { await supabase.auth.signOut(); navigate('/'); }}
+            className="hover:opacity-70 active:scale-95 transition-all duration-150"
+            aria-label="Log out"
+            title={language === 'ar' ? 'تسجيل الخروج' : 'Log out'}
+          >
+            <Logo3D size="sm" className="w-8 h-8" />
+          </button>
           <div className="flex items-center gap-2">
             {(() => {
               const other = language === 'ar' ? 'en' : 'ar';
@@ -535,6 +547,74 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                     ? `أهلاً ${userName ? userName + '،' : ''} مرحباً بك في وقتي!`
                     : `Hello${userName ? ' ' + userName : ''}, welcome to Wakti!`}
                 </h2>
+                {/* Edit profile inline */}
+                {!editingName ? (
+                  <button
+                    onClick={() => {
+                      setNameInput(profile?.display_name || '');
+                      setUsernameInput(profile?.username || '');
+                      setNameError('');
+                      setEditingName(true);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] rounded-full border border-foreground/20 text-foreground/40 hover:text-foreground/70 hover:border-foreground/35 hover:bg-foreground/5 active:scale-95 transition-all duration-150"
+                  >
+                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                    {language === 'ar' ? 'تعديل الملف الشخصي' : 'Set up your profile'}
+                  </button>
+                ) : (
+                  <div className="w-full mt-2 rounded-xl border border-foreground/15 bg-foreground/5 p-3 space-y-2 text-left">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-foreground/50 font-medium">{language === 'ar' ? 'الاسم الظاهر' : 'Display Name'}</label>
+                      <input
+                        autoFocus
+                        value={nameInput}
+                        onChange={e => setNameInput(e.target.value)}
+                        placeholder={language === 'ar' ? 'مثال: أحمد محمد' : 'e.g. John Smith'}
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-foreground/20 bg-background text-foreground placeholder:text-foreground/30 outline-none focus:border-[hsl(210,100%,65%)] focus:ring-1 focus:ring-[hsl(210,100%,65%,0.3)] transition-all"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-foreground/50 font-medium">{language === 'ar' ? 'اسم المستخدم' : 'Username'}</label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/40 text-xs">@</span>
+                        <input
+                          value={usernameInput}
+                          onChange={e => { setUsernameInput(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, '')); setNameError(''); }}
+                          placeholder={language === 'ar' ? 'مثال: ahmed99' : 'e.g. john99'}
+                          className="w-full pl-6 pr-3 py-1.5 text-xs rounded-lg border border-foreground/20 bg-background text-foreground placeholder:text-foreground/30 outline-none focus:border-[hsl(210,100%,65%)] focus:ring-1 focus:ring-[hsl(210,100%,65%,0.3)] transition-all"
+                        />
+                      </div>
+                      {nameError && <p className="text-[10px] text-red-400">{nameError}</p>}
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        disabled={savingName}
+                        onClick={async () => {
+                          if (!user?.id) return;
+                          if (!nameInput.trim() && !usernameInput.trim()) { setNameError(language === 'ar' ? 'يرجى إدخال اسم أو اسم مستخدم' : 'Please enter a name or username'); return; }
+                          setSavingName(true); setNameError('');
+                          try {
+                            const updates: Record<string, string> = {};
+                            if (nameInput.trim()) updates.display_name = nameInput.trim();
+                            if (usernameInput.trim()) updates.username = usernameInput.trim();
+                            const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
+                            if (error?.message?.includes('duplicate') || error?.message?.includes('unique')) {
+                              setNameError(language === 'ar' ? 'اسم المستخدم مأخوذ، جرب آخر' : 'Username taken, try another');
+                              setSavingName(false); return;
+                            }
+                            window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+                            setSavingName(false); setEditingName(false);
+                          } catch { setSavingName(false); }
+                        }}
+                        className="flex-1 py-1.5 text-xs rounded-lg bg-[hsl(210,100%,55%)] hover:bg-[hsl(210,100%,50%)] text-white font-medium disabled:opacity-50 active:scale-[0.98] transition-all"
+                      >{savingName ? '...' : (language === 'ar' ? 'حفظ' : 'Save')}</button>
+                      <button
+                        onClick={() => setEditingName(false)}
+                        className="px-3 py-1.5 text-xs rounded-lg border border-foreground/20 text-foreground/50 hover:text-foreground/80 hover:bg-foreground/5 transition-all"
+                      >{language === 'ar' ? 'إلغاء' : 'Cancel'}</button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Pitch */}

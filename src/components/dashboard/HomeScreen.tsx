@@ -505,7 +505,7 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
       <div className="flex items-center justify-between">
         <button
           title="WHOOP"
-          onClick={(e) => { e.stopPropagation(); setActiveTab('whoop'); navigate('/fitness'); }}
+          onClick={(e) => { e.stopPropagation(); setActiveTab('whoop'); }}
           className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-90 ${
             activeTab === 'whoop' ? 'bg-white/30 border border-white/50 shadow-lg' : 'bg-white/10 border border-white/15 opacity-55'
           }`}
@@ -514,7 +514,7 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
         </button>
         <button
           title="HealthKit"
-          onClick={(e) => { e.stopPropagation(); setActiveTab('healthkit'); navigate('/fitness'); }}
+          onClick={(e) => { e.stopPropagation(); setActiveTab('healthkit'); }}
           className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-90 ${
             activeTab === 'healthkit' ? 'bg-white/30 border border-white/50 shadow-lg' : 'bg-white/10 border border-white/15 opacity-55'
           }`}
