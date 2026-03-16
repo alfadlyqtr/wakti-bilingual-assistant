@@ -578,7 +578,36 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
 }
 
 // ─── T&R Widget (Tasks + Reminders tabs) ──────────────────────────────────────
-function TRWidget({ shell, navigate, language, pendingTasks, completedToday, total, pct, taskAccent, taskIconBg }: {
+function useLiveClock() {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
+
+function formatCountdown(diffMs: number, language: string): string {
+  const abs = Math.abs(diffMs);
+  const totalSec = Math.floor(abs / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  if (h > 0) return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  return `${pad(m)}:${pad(s)}`;
+}
+
+function parseReminderDate(r: any): number | null {
+  try {
+    if (!r.due_date) return null;
+    const dateStr = r.due_time ? `${r.due_date}T${r.due_time}` : `${r.due_date}T00:00:00`;
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d.getTime();
+  } catch { return null; }
+}
+
+function TRWidget({ shell, navigate, language, pendingTasks, completedToday, total, pct, taskAccent, taskIconBg, reminders }: {
   shell: (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => React.ReactNode;
   navigate: (p: string) => void;
   language: string;
@@ -588,8 +617,23 @@ function TRWidget({ shell, navigate, language, pendingTasks, completedToday, tot
   pct: number;
   taskAccent: string;
   taskIconBg: string;
+  reminders: any[];
 }) {
   const [activeTab, setActiveTab] = useState<'tasks' | 'reminders'>('tasks');
+  const now = useLiveClock();
+
+  // Sort: overdue first (by how late), then upcoming (by how soon)
+  const activeReminders = reminders
+    .map(r => ({ ...r, dueMs: parseReminderDate(r) }))
+    .filter(r => r.dueMs !== null)
+    .sort((a, b) => {
+      const aOverdue = a.dueMs! < now;
+      const bOverdue = b.dueMs! < now;
+      if (aOverdue && !bOverdue) return -1;
+      if (!aOverdue && bOverdue) return 1;
+      return aOverdue ? (a.dueMs! - b.dueMs!) : (a.dueMs! - b.dueMs!);
+    })
+    .slice(0, 3);
   const trBg = pct >= 70 || pendingTasks === 0
     ? 'linear-gradient(145deg,rgba(4,50,32,0.95) 0%,rgba(5,78,50,0.95) 50%,rgba(4,100,65,0.95) 100%)'
     : pct >= 30
@@ -658,9 +702,26 @@ function TRWidget({ shell, navigate, language, pendingTasks, completedToday, tot
                 <div key={`e${i}`} className="flex-1 rounded-t-sm bg-white/10" style={{ height: `${30 + i * 8}%` }} />
               ))}
             </>
+          ) : activeReminders.length > 0 ? (
+            <div className="flex flex-col gap-1 flex-1 justify-center">
+              {activeReminders.map(r => {
+                const overdue = r.dueMs! < now;
+                const diff = r.dueMs! - now;
+                const countdown = formatCountdown(diff, language);
+                return (
+                  <div key={r.id} className="flex items-center justify-between rounded-lg px-2 py-1" style={{ background: overdue ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.1)' }}>
+                    <span className="text-[8px] font-bold text-white truncate max-w-[55%]">{r.title}</span>
+                    <div className="flex items-center gap-0.5 flex-shrink-0">
+                      {overdue && <span className="text-[7px] font-black text-red-400 uppercase">{language === 'ar' ? 'متأخر' : 'LATE'}</span>}
+                      <span className={`text-[9px] font-black tabular-nums ${overdue ? 'text-red-300' : 'text-white'}`}>{countdown}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <span className="text-[8px] text-white/30 uppercase">{language === 'ar' ? 'لا تنبيهات' : 'No alerts'}</span>
+              <span className="text-[8px] text-white/30 uppercase">{language === 'ar' ? 'لا تنبيهات' : 'No reminders'}</span>
             </div>
           )}
         </div>
@@ -768,7 +829,7 @@ function CalendarWidget({ shell, navigate, language, upcomingCount }: {
 }
 
 // ─── Widget content renderer (no drag logic, just visuals) ────────────────────
-function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, pendingTasks, completedToday, upcomingCount, navigate, quoteText, quoteAuthor, whoopData, journalData }: {
+function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, pendingTasks, completedToday, upcomingCount, navigate, quoteText, quoteAuthor, whoopData, journalData, reminders }: {
   wKey: WidgetId; editMode: boolean; language: string; theme: string;
   hasBg: boolean; statCardBase: string;
   pendingTasks: number; completedToday: number; upcomingCount: number;
@@ -776,6 +837,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   quoteText?: string; quoteAuthor?: string;
   whoopData?: any;
   journalData?: any;
+  reminders?: any[];
 }) {
   const isDark = theme === 'dark';
   const total = pendingTasks + completedToday;
@@ -819,7 +881,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   );
 
   if (wKey === 'showTRWidget') {
-    return <TRWidget shell={shell} navigate={navigate} language={language} theme={theme} pendingTasks={pendingTasks} completedToday={completedToday} total={total} pct={pct} taskAccent={taskAccent} taskIconBg={taskIconBg} />;
+    return <TRWidget shell={shell} navigate={navigate} language={language} theme={theme} pendingTasks={pendingTasks} completedToday={completedToday} total={total} pct={pct} taskAccent={taskAccent} taskIconBg={taskIconBg} reminders={reminders ?? []} />;
   }
 
   if (wKey === 'showCalendarWidget') {
@@ -1043,8 +1105,9 @@ interface UnifiedWidgetCellProps {
   quoteText?: string; quoteAuthor?: string;
   whoopData?: any;
   journalData?: any;
+  reminders?: any[];
 }
-function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData, journalData }: UnifiedWidgetCellProps) {
+function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData, journalData, reminders }: UnifiedWidgetCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id, data: { type: 'unified' },
   });
@@ -1071,6 +1134,7 @@ function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCar
         quoteText={quoteText} quoteAuthor={quoteAuthor}
         whoopData={whoopData}
         journalData={journalData}
+        reminders={reminders}
       />
       {editMode && (
         <div className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full bg-black/70 border border-white/30 flex items-center justify-center">
@@ -1188,7 +1252,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const _effectiveRef = useRef<string[]>([]);
   const _hasLoadedFromSupabase = useRef(false);
 
-  const { tasks }  = useOptimizedTRData();
+  const { tasks, reminders }  = useOptimizedTRData();
   const { events } = useOptimizedMaw3dEvents();
   const whoopData = useWhoopData();
   const journalData = useJournalData();
@@ -2018,6 +2082,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                           quoteAuthor={quoteAuthor}
                           whoopData={whoopData}
                           journalData={journalData}
+                          reminders={reminders}
                         />
                       );
                     }

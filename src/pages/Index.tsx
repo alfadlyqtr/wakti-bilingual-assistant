@@ -84,7 +84,7 @@ export default function Index() {
   }, []);
 
   // Single monthly plan pricing (matches RevenueCat/Natively)
-  const MONTHLY_PRICE_QAR = 95;
+  const MONTHLY_PRICE_QAR = 92;
   const MONTHLY_PRICE_USD = 24.99;
 
   const containerVariants = {
