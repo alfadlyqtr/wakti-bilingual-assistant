@@ -191,33 +191,25 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false }: {
       className={`relative flex-shrink-0 ${editMode ? "animate-wiggle" : ""}`}
       style={{ width: px, height: px }}
     >
-      {/* Main gradient body — 3D glassmorphic tile */}
+      {/* Main gradient body with iOS-style frosted glass */}
       <div
         className={`absolute inset-0 rounded-[23%] bg-gradient-to-br ${app.gradient}`}
         style={{
-          opacity: 0.82,
-          backdropFilter: 'blur(24px) saturate(200%)',
-          WebkitBackdropFilter: 'blur(24px) saturate(200%)',
+          opacity: 0.75,
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
           boxShadow: glowEnabled
-            ? `0 0 18px ${app.glow}cc, 0 6px 18px ${app.glow}66, 0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.2)`
-            : `0 6px 18px ${app.glow}55, 0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.2)`,
+            ? `0 0 16px ${app.glow}bb, 0 4px 14px ${app.glow}55, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`
+            : `0 4px 14px ${app.glow}44, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`,
           outline: '0.5px solid rgba(180,190,200,0.28)',
         }}
       />
-      {/* 3D top-left edge highlight */}
+      {/* Liquid glass highlight */}
       <div
         className="absolute rounded-[23%] pointer-events-none"
         style={{
           inset: 0,
-          background: "linear-gradient(135deg, rgba(255,255,255,0.52) 0%, rgba(255,255,255,0.12) 30%, transparent 60%)",
-        }}
-      />
-      {/* Soft inner glow at bottom-right (depth) */}
-      <div
-        className="absolute rounded-[23%] pointer-events-none"
-        style={{
-          inset: 0,
-          background: `radial-gradient(ellipse at 80% 80%, ${app.glow}33 0%, transparent 65%)`,
+          background: "linear-gradient(145deg, rgba(255,255,255,0.38) 0%, rgba(255,255,255,0.08) 40%, transparent 70%)",
         }}
       />
       {/* Icon */}
