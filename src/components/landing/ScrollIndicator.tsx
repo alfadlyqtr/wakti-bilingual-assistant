@@ -3,9 +3,12 @@ import { ChevronDown } from "lucide-react";
 
 interface ScrollIndicatorProps {
   className?: string;
+  language?: "en" | "ar";
 }
 
-export function ScrollIndicator({ className }: ScrollIndicatorProps) {
+export function ScrollIndicator({ className, language = "en" }: ScrollIndicatorProps) {
+  const isArabic = language === "ar";
+
   return (
     <motion.div
       className={className}
@@ -26,7 +29,7 @@ export function ScrollIndicator({ className }: ScrollIndicatorProps) {
             textShadow: "0 0 15px rgba(233, 206, 176, 0.6)"
           }}
         >
-          SCROLL
+          {isArabic ? "اسحب للأسفل" : "SCROLL"}
         </span>
         <ChevronDown 
           className="h-6 w-6" 

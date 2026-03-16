@@ -206,7 +206,7 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
       </motion.div>
 
       {/* Scroll Indicator */}
-      <ScrollIndicator className="absolute bottom-32 inset-x-0 z-10 flex justify-center" />
+      <ScrollIndicator className="absolute bottom-32 inset-x-0 z-10 flex justify-center" language={language} />
     </section>
   );
 }
