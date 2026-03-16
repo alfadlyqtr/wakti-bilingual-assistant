@@ -747,54 +747,89 @@ export default function MusicStudio() {
 
   const isArabic = language === 'ar';
 
-  const studioCards: { key: 'music' | 'video' | 'image' | 'qrcode'; icon: React.ReactNode; titleEn: string; titleAr: string; descEn: string; descAr: string; cardBg: string; iconBg: string; iconColor: string; shadow: string }[] = [
+  const studioCards: {
+    key: 'music' | 'video' | 'image' | 'qrcode';
+    icon: React.ReactNode;
+    icon3dBg: string;
+    icon3dGlow: string;
+    icon3dInner: string;
+    titleEn: string;
+    titleAr: string;
+    descEn: string;
+    descAr: string;
+    cardBg: string;
+    cardBorder: string;
+    shadow: string;
+    prominent?: boolean;
+    bentoSpan?: string;
+    accentGlowStyle: string;
+    badge?: { en: string; ar: string };
+  }[] = [
     {
       key: 'music',
-      icon: <Music className="h-6 w-6" />,
+      icon: <Music className="h-7 w-7" />,
+      icon3dBg: 'linear-gradient(135deg, #38bdf8 0%, #2563eb 60%, #1e40af 100%)',
+      icon3dGlow: '0 0 22px hsla(210,100%,65%,0.7), 0 0 8px hsla(210,100%,75%,0.5), inset 0 1px 0 rgba(255,255,255,0.35)',
+      icon3dInner: 'linear-gradient(145deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 100%)',
       titleEn: 'Music',
       titleAr: 'الموسيقى',
       descEn: 'Compose AI-powered tracks, choose genres, moods & instruments.',
       descAr: 'أنشئ مقطوعات موسيقية بالذكاء الاصطناعي، اختر الأنماط والمزاج والآلات.',
-      cardBg: 'bg-gradient-to-br from-sky-50 via-blue-50/80 to-cyan-50 dark:from-sky-950/40 dark:via-blue-950/30 dark:to-cyan-950/40',
-      iconBg: 'bg-gradient-to-br from-sky-500 to-blue-600',
-      iconColor: 'text-white',
-      shadow: 'shadow-[0_8px_30px_-4px_hsla(210,70%,50%,0.25)] dark:shadow-[0_8px_30px_-4px_hsla(210,100%,65%,0.2)]',
+      cardBg: 'bg-gradient-to-br from-sky-900/30 via-blue-950/40 to-cyan-900/20 dark:from-sky-950/50 dark:via-blue-950/50 dark:to-cyan-950/30',
+      cardBorder: 'border border-sky-400/20 dark:border-sky-400/15',
+      shadow: 'shadow-[0_8px_32px_-4px_hsla(210,100%,65%,0.18)]',
+      accentGlowStyle: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(210,100%,65%,0.18), transparent)',
     },
     {
       key: 'video',
-      icon: <Video className="h-6 w-6" />,
+      icon: <Video className="h-8 w-8" />,
+      icon3dBg: 'linear-gradient(135deg, #fb923c 0%, #f43f5e 55%, #dc2626 100%)',
+      icon3dGlow: '0 0 26px hsla(25,95%,60%,0.8), 0 0 10px hsla(350,90%,65%,0.5), inset 0 1px 0 rgba(255,255,255,0.35)',
+      icon3dInner: 'linear-gradient(145deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.04) 100%)',
       titleEn: 'Video',
       titleAr: 'الفيديو',
       descEn: 'Generate cinematic videos from text or images in seconds.',
       descAr: 'أنشئ فيديوهات سينمائية من النصوص أو الصور في ثوانٍ.',
-      cardBg: 'bg-gradient-to-br from-orange-50 via-rose-50/80 to-pink-50 dark:from-orange-950/40 dark:via-rose-950/30 dark:to-pink-950/40',
-      iconBg: 'bg-gradient-to-br from-orange-500 to-rose-500',
-      iconColor: 'text-white',
-      shadow: 'shadow-[0_8px_30px_-4px_hsla(25,80%,50%,0.25)] dark:shadow-[0_8px_30px_-4px_hsla(25,95%,60%,0.2)]',
+      cardBg: 'bg-gradient-to-br from-orange-900/35 via-rose-950/40 to-pink-900/25 dark:from-orange-950/55 dark:via-rose-950/50 dark:to-pink-950/35',
+      cardBorder: 'border border-orange-400/25 dark:border-orange-400/20',
+      shadow: 'shadow-[0_8px_40px_-4px_hsla(25,95%,60%,0.28)]',
+      prominent: true,
+      bentoSpan: 'md:col-span-1 md:row-span-2',
+      accentGlowStyle: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(25,95%,60%,0.22), transparent)',
+      badge: { en: '🎬 Featured', ar: '🎬 مميز' },
     },
     {
       key: 'image',
-      icon: <Palette className="h-6 w-6" />,
+      icon: <Palette className="h-8 w-8" />,
+      icon3dBg: 'linear-gradient(135deg, #34d399 0%, #0d9488 55%, #065f46 100%)',
+      icon3dGlow: '0 0 26px hsla(160,80%,55%,0.8), 0 0 10px hsla(175,80%,50%,0.5), inset 0 1px 0 rgba(255,255,255,0.35)',
+      icon3dInner: 'linear-gradient(145deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.04) 100%)',
       titleEn: 'Image',
       titleAr: 'الصورة',
       descEn: 'Create stunning visuals, style transfers, background removal & more.',
       descAr: 'أنشئ صورًا مذهلة، نقل الأنماط، إزالة الخلفية والمزيد.',
-      cardBg: 'bg-gradient-to-br from-emerald-50 via-teal-50/80 to-cyan-50 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-cyan-950/40',
-      iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-500',
-      iconColor: 'text-white',
-      shadow: 'shadow-[0_8px_30px_-4px_hsla(160,60%,40%,0.25)] dark:shadow-[0_8px_30px_-4px_hsla(160,80%,55%,0.2)]',
+      cardBg: 'bg-gradient-to-br from-emerald-900/35 via-teal-950/40 to-cyan-900/25 dark:from-emerald-950/55 dark:via-teal-950/50 dark:to-cyan-950/35',
+      cardBorder: 'border border-emerald-400/25 dark:border-emerald-400/20',
+      shadow: 'shadow-[0_8px_40px_-4px_hsla(160,80%,55%,0.28)]',
+      prominent: true,
+      bentoSpan: 'md:col-span-1 md:row-span-2',
+      accentGlowStyle: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(160,80%,55%,0.22), transparent)',
+      badge: { en: '✨ Popular', ar: '✨ الأكثر استخداماً' },
     },
     {
       key: 'qrcode',
-      icon: <QrCode className="h-6 w-6" />,
+      icon: <QrCode className="h-7 w-7" />,
+      icon3dBg: 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 55%, #4c1d95 100%)',
+      icon3dGlow: '0 0 22px hsla(280,70%,65%,0.7), 0 0 8px hsla(280,80%,75%,0.5), inset 0 1px 0 rgba(255,255,255,0.35)',
+      icon3dInner: 'linear-gradient(145deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 100%)',
       titleEn: 'QR Code',
       titleAr: 'كود QR رموز',
       descEn: 'Create custom QR codes for links, contacts, Wi-Fi & more.',
       descAr: 'أنشئ رموز QR مخصصة للروابط وجهات الاتصال والواي فاي والمزيد.',
-      cardBg: 'bg-gradient-to-br from-sky-50 via-blue-50/80 to-cyan-50 dark:from-sky-950/40 dark:via-blue-950/30 dark:to-cyan-950/40',
-      iconBg: 'bg-gradient-to-br from-sky-500 to-blue-600',
-      iconColor: 'text-white',
-      shadow: 'shadow-[0_8px_30px_-4px_hsla(210,70%,50%,0.25)] dark:shadow-[0_8px_30px_-4px_hsla(210,100%,65%,0.2)]',
+      cardBg: 'bg-gradient-to-br from-violet-900/30 via-purple-950/40 to-indigo-900/20 dark:from-violet-950/50 dark:via-purple-950/50 dark:to-indigo-950/30',
+      cardBorder: 'border border-violet-400/20 dark:border-violet-400/15',
+      shadow: 'shadow-[0_8px_32px_-4px_hsla(280,70%,65%,0.18)]',
+      accentGlowStyle: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(280,70%,65%,0.18), transparent)',
     },
   ];
 
@@ -805,20 +840,21 @@ export default function MusicStudio() {
   return (
     <div className="w-full max-w-6xl mx-auto p-3 md:p-6 pb-20 md:pb-6 space-y-4">
       <TrialGateOverlay featureKey={musicTrialKey} limit={musicTrialLimit} featureLabel={{ en: 'Music', ar: 'الموسيقى' }} />
-      <div className="grid grid-cols-4 gap-1.5 md:gap-2 pb-3">
+      {/* ─── Pressable Pill Tabs ─── */}
+      <div className="flex gap-2.5 p-2 rounded-2xl bg-black/20 dark:bg-black/30 backdrop-blur-xl border border-white/10 dark:border-white/[0.08] shadow-inner overflow-x-auto scrollbar-hide">
         {[
-          { key: 'music' as const, icon: <Music className="h-4 w-4" />, labelEn: 'Music', labelAr: 'الموسيقى' },
-          { key: 'video' as const, icon: <Video className="h-4 w-4" />, labelEn: 'Video', labelAr: 'الفيديو' },
-          { key: 'image' as const, icon: <ImageIcon className="h-4 w-4" />, labelEn: 'Image', labelAr: 'الصورة' },
-          { key: 'qrcode' as const, icon: <QrCode className="h-4 w-4" />, labelEn: 'QR Code', labelAr: 'كود QR رموز' },
+          { key: 'music' as const, icon: <Music className="h-3.5 w-3.5" />, labelEn: 'Music', labelAr: 'الموسيقى', activeGrad: 'from-sky-500 to-blue-600', activeShadow: 'shadow-[0_4px_14px_hsla(210,100%,65%,0.45)]' },
+          { key: 'video' as const, icon: <Video className="h-3.5 w-3.5" />, labelEn: 'Video', labelAr: 'الفيديو', activeGrad: 'from-orange-500 to-rose-500', activeShadow: 'shadow-[0_4px_14px_hsla(25,95%,60%,0.45)]' },
+          { key: 'image' as const, icon: <ImageIcon className="h-3.5 w-3.5" />, labelEn: 'Image', labelAr: 'الصورة', activeGrad: 'from-emerald-500 to-teal-500', activeShadow: 'shadow-[0_4px_14px_hsla(160,80%,55%,0.45)]' },
+          { key: 'qrcode' as const, icon: <QrCode className="h-3.5 w-3.5" />, labelEn: 'QR Code', labelAr: 'كود QR', activeGrad: 'from-violet-500 to-purple-600', activeShadow: 'shadow-[0_4px_14px_hsla(280,70%,65%,0.45)]' },
         ].map((tab) => (
           <button
             key={tab.key}
             onClick={() => setMainTab(tab.key)}
-            className={`flex items-center justify-center gap-1.5 px-2 md:px-4 py-2.5 rounded-xl font-semibold text-xs md:text-sm transition-all active:scale-95 whitespace-nowrap ${
+            className={`flex items-center justify-center gap-1.5 px-4 md:px-6 py-2.5 rounded-xl font-semibold text-xs md:text-sm transition-all duration-200 active:scale-[0.93] whitespace-nowrap flex-shrink-0 flex-1 ${
               mainTab === tab.key
-                ? 'bg-[#060541] dark:bg-sky-600 text-white shadow-[0_4px_12px_hsla(220,60%,20%,0.3)] dark:shadow-[0_4px_12px_hsla(200,80%,50%,0.3)]'
-                : 'bg-white dark:bg-white/[0.06] text-foreground hover:bg-gray-100 dark:hover:bg-white/[0.1] shadow-[0_2px_6px_hsla(0,0%,0%,0.08)] dark:shadow-[0_2px_6px_hsla(0,0%,0%,0.3)] border border-gray-200 dark:border-white/[0.1]'
+                ? `bg-gradient-to-r ${tab.activeGrad} text-white ${tab.activeShadow} scale-[1.03]`
+                : 'bg-white/[0.07] dark:bg-white/[0.05] text-foreground/70 hover:bg-white/[0.13] dark:hover:bg-white/[0.1] hover:text-foreground border border-white/10 dark:border-white/[0.07]'
             }`}
           >
             {tab.icon}
@@ -829,42 +865,124 @@ export default function MusicStudio() {
 
       {/* ─── Studio Landing Hub ─── */}
       {mainTab === 'studio' && (
-        <div className="space-y-10 py-6 md:py-10">
+        <div className="relative space-y-8 py-4 md:py-8">
+
+          {/* Ambient radial glow background */}
+          <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-3xl">
+            <div className="absolute top-[-10%] left-[10%] w-[55%] h-[45%] rounded-full opacity-30 dark:opacity-20 blur-[80px]" style={{ background: 'radial-gradient(ellipse, hsla(210,100%,65%,1) 0%, transparent 70%)' }} />
+            <div className="absolute top-[20%] right-[5%] w-[45%] h-[40%] rounded-full opacity-25 dark:opacity-18 blur-[90px]" style={{ background: 'radial-gradient(ellipse, hsla(280,70%,65%,1) 0%, transparent 70%)' }} />
+            <div className="absolute bottom-[5%] left-[20%] w-[50%] h-[40%] rounded-full opacity-20 dark:opacity-15 blur-[100px]" style={{ background: 'radial-gradient(ellipse, hsla(160,80%,55%,1) 0%, transparent 70%)' }} />
+            <div className="absolute bottom-[15%] right-[15%] w-[35%] h-[30%] rounded-full opacity-20 dark:opacity-15 blur-[70px]" style={{ background: 'radial-gradient(ellipse, hsla(25,95%,60%,1) 0%, transparent 70%)' }} />
+          </div>
+
           {/* Hero */}
-          <div className="text-center space-y-4">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-br from-[#060541] to-blue-600 dark:from-sky-500 dark:to-blue-600 shadow-[0_4px_24px_hsla(210,70%,40%,0.35)] dark:shadow-[0_4px_24px_hsla(210,80%,55%,0.4)]">
-              <Sparkles className="h-7 w-7 text-white" />
-            </div>
+          <div className="text-center">
             <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-[#060541] via-blue-600 to-sky-500 dark:from-white dark:via-sky-200 dark:to-blue-300 bg-clip-text text-transparent leading-tight">
               {isArabic ? 'استوديو وقتي الإبداعي' : 'Wakti Creative Studio'}
             </h1>
           </div>
 
-          {/* Feature Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 md:gap-6">
-            {studioCards.map((card) => (
+          {/* Bento Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 grid-rows-auto md:grid-rows-2 gap-3 md:gap-4">
+            {/* Music — small top-left */}
+            {studioCards.filter(c => c.key === 'music').map((card) => (
               <button
                 key={card.key}
                 onClick={() => setMainTab(card.key)}
-                className={`relative text-left p-6 rounded-3xl ${card.cardBg} ${card.shadow} border border-white/60 dark:border-white/[0.08] transition-transform duration-200 active:scale-[0.97]`}
+                className={`relative text-left p-5 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1`}
               >
-                {/* Icon pill */}
-                <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl ${card.iconBg} ${card.iconColor} shadow-lg mb-5`}>
-                  {card.icon}
+                <div className="pointer-events-none absolute inset-0" style={{ background: card.accentGlowStyle }} />
+                <div
+                  className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4 relative"
+                  style={{ background: card.icon3dBg, boxShadow: card.icon3dGlow }}
+                >
+                  <div className="absolute inset-0 rounded-2xl" style={{ background: card.icon3dInner }} />
+                  <span className="relative text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]">{card.icon}</span>
                 </div>
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-base font-bold text-foreground">{isArabic ? card.titleAr : card.titleEn}</h3>
+                  <ArrowRight className={`h-4 w-4 text-muted-foreground/40 shrink-0 ${isArabic ? 'rotate-180' : ''}`} />
+                </div>
+                <p className="text-[12px] text-muted-foreground/80 leading-relaxed line-clamp-2">{isArabic ? card.descAr : card.descEn}</p>
+              </button>
+            ))}
 
-                {/* Title + arrow */}
+            {/* Video — prominent, spans 2 rows on md */}
+            {studioCards.filter(c => c.key === 'video').map((card) => (
+              <button
+                key={card.key}
+                onClick={() => setMainTab(card.key)}
+                className={`relative text-left p-6 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1 md:row-span-2`}
+              >
+                <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(25,95%,60%,0.22), transparent)' }} />
+                {card.badge && (
+                  <span className="absolute top-4 right-4 text-[10px] font-semibold px-2.5 py-1 rounded-full bg-orange-500/20 text-orange-300 border border-orange-400/30 backdrop-blur-sm">
+                    {isArabic ? card.badge.ar : card.badge.en}
+                  </span>
+                )}
+                <div
+                  className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-5 relative"
+                  style={{ background: card.icon3dBg, boxShadow: card.icon3dGlow }}
+                >
+                  <div className="absolute inset-0 rounded-2xl" style={{ background: card.icon3dInner }} />
+                  <span className="relative text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]">{card.icon}</span>
+                </div>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xl font-bold tracking-tight text-foreground">
-                    {isArabic ? card.titleAr : card.titleEn}
-                  </h3>
-                  <ArrowRight className={`h-5 w-5 text-muted-foreground/40 ${isArabic ? 'rotate-180' : ''}`} />
+                  <h3 className="text-xl font-bold text-foreground">{isArabic ? card.titleAr : card.titleEn}</h3>
+                  <ArrowRight className={`h-5 w-5 text-muted-foreground/40 shrink-0 ${isArabic ? 'rotate-180' : ''}`} />
                 </div>
+                <p className="text-[13px] text-muted-foreground/80 leading-relaxed">{isArabic ? card.descAr : card.descEn}</p>
+              </button>
+            ))}
 
-                {/* Description */}
-                <p className="text-[13px] text-muted-foreground leading-relaxed">
-                  {isArabic ? card.descAr : card.descEn}
-                </p>
+            {/* Image — prominent, spans 2 rows on md */}
+            {studioCards.filter(c => c.key === 'image').map((card) => (
+              <button
+                key={card.key}
+                onClick={() => setMainTab(card.key)}
+                className={`relative text-left p-6 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1 md:row-span-2`}
+              >
+                <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(160,80%,55%,0.22), transparent)' }} />
+                {card.badge && (
+                  <span className="absolute top-4 right-4 text-[10px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 backdrop-blur-sm">
+                    {isArabic ? card.badge.ar : card.badge.en}
+                  </span>
+                )}
+                <div
+                  className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-5 relative"
+                  style={{ background: card.icon3dBg, boxShadow: card.icon3dGlow }}
+                >
+                  <div className="absolute inset-0 rounded-2xl" style={{ background: card.icon3dInner }} />
+                  <span className="relative text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]">{card.icon}</span>
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xl font-bold text-foreground">{isArabic ? card.titleAr : card.titleEn}</h3>
+                  <ArrowRight className={`h-5 w-5 text-muted-foreground/40 shrink-0 ${isArabic ? 'rotate-180' : ''}`} />
+                </div>
+                <p className="text-[13px] text-muted-foreground/80 leading-relaxed">{isArabic ? card.descAr : card.descEn}</p>
+              </button>
+            ))}
+
+            {/* QR Code — small bottom-right */}
+            {studioCards.filter(c => c.key === 'qrcode').map((card) => (
+              <button
+                key={card.key}
+                onClick={() => setMainTab(card.key)}
+                className={`relative text-left p-5 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1`}
+              >
+                <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(280,70%,65%,0.18), transparent)' }} />
+                <div
+                  className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4 relative"
+                  style={{ background: card.icon3dBg, boxShadow: card.icon3dGlow }}
+                >
+                  <div className="absolute inset-0 rounded-2xl" style={{ background: card.icon3dInner }} />
+                  <span className="relative text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]">{card.icon}</span>
+                </div>
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-base font-bold text-foreground">{isArabic ? card.titleAr : card.titleEn}</h3>
+                  <ArrowRight className={`h-4 w-4 text-muted-foreground/40 shrink-0 ${isArabic ? 'rotate-180' : ''}`} />
+                </div>
+                <p className="text-[12px] text-muted-foreground/80 leading-relaxed line-clamp-2">{isArabic ? card.descAr : card.descEn}</p>
               </button>
             ))}
           </div>
@@ -873,9 +991,7 @@ export default function MusicStudio() {
           <div className="flex items-center justify-center gap-2 pt-1">
             <Zap className="h-3.5 w-3.5 text-amber-500" />
             <p className="text-[11px] text-muted-foreground/70 font-medium tracking-wide uppercase">
-              {isArabic
-                ? 'مدعوم بوقتي AI'
-                : 'Powered by Wakti AI'}
+              {isArabic ? 'مدعوم بوقتي AI' : 'Powered by Wakti AI'}
             </p>
           </div>
         </div>

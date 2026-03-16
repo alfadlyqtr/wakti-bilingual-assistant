@@ -2270,8 +2270,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               <p className="text-[17px] font-semibold leading-tight" style={{ color: headColor, textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>{displayName}</p>
             </div>
             {!editMode ? (
-              <button onClick={() => setEditMode(true)} title="Edit homescreen" className="p-2 rounded-full bg-white/15 backdrop-blur-md">
-                <Pencil className="w-4 h-4" style={{ color: headColor }} />
+              <button onClick={() => setEditMode(true)} title="Edit homescreen" className={`p-2 rounded-full backdrop-blur-md border ${isDark ? 'bg-white/15 border-white/20 text-white' : 'bg-[#060541]/15 border-[#060541]/20 text-[#060541]'}`}>
+                <Pencil className="w-4 h-4" />
               </button>
             ) : (
               <button onClick={() => setEditMode(false)} className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-500/80 text-white text-xs font-semibold">
@@ -2298,13 +2298,13 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
                   {/* Dock */}
                   <button onClick={() => setDockPickerOpen(true)}
-                    className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 backdrop-blur-md text-white text-[11px] font-semibold border border-white/20">
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-md text-[11px] font-semibold border ${isDark ? 'bg-white/15 border-white/20 text-white' : 'bg-[#060541]/15 border-[#060541]/20 text-[#060541]'}`}>
                     <Settings2 className="w-3 h-3" />
                     <span>{language === 'ar' ? 'الدوك' : 'Dock'}</span>
                   </button>
                   {/* BG */}
                   <button onClick={() => setBgPanelOpen(v => !v)}
-                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-[11px] font-semibold border ${bgPanelOpen ? 'bg-blue-500/70 border-blue-400/50' : 'bg-white/15 backdrop-blur-md border-white/20'}`}>
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border ${bgPanelOpen ? 'bg-blue-500/70 border-blue-400/50 text-white' : isDark ? 'bg-white/15 backdrop-blur-md border-white/20 text-white' : 'bg-[#060541]/15 backdrop-blur-md border-[#060541]/20 text-[#060541]'}`}>
                     <ImageIcon className="w-3 h-3" />
                     <span>{language === 'ar' ? 'الخلفية' : 'Background'}</span>
                     {bgImage && bgImage !== DEFAULT_BG && <span className="w-1.5 h-1.5 rounded-full bg-blue-300 ml-0.5" />}
@@ -2342,17 +2342,17 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                       // Sync
                       syncToSupabase({ bgImage: '', headerColor: '', homescreenWidgets: DEFAULT_WIDGETS });
                     }}
-                    className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/10 border border-white/20 text-white/60 text-[10px] font-semibold hover:bg-red-500/30 hover:text-white transition-all">
+                    className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-semibold transition-all ${isDark ? 'bg-white/10 border border-white/20 text-white/60 hover:bg-red-500/30 hover:text-white' : 'bg-[#060541]/10 border border-[#060541]/20 text-[#060541]/60 hover:bg-red-500/30 hover:text-[#060541]'}`}>
                     <RotateCcw className="w-2.5 h-2.5" />
                     <span>{language === 'ar' ? 'افتراضي' : 'Default'}</span>
                   </button>
                   {/* Header color */}
-                  <div className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-md border border-white/20">
-                    <span className="text-[10px] text-white/70 font-semibold">{language === 'ar' ? 'لون العنوان' : 'Header'}</span>
+                  <div className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-md border ${isDark ? 'bg-white/15 border-white/20' : 'bg-[#060541]/15 border-[#060541]/20'}`}>
+                    <span className={`text-[10px] font-semibold ${isDark ? 'text-white/70' : 'text-[#060541]/70'}`}>{language === 'ar' ? 'لون العنوان' : 'Header'}</span>
                     <input type="color" title="Header color" value={headerColor || '#ffffff'} onChange={e => saveHeaderColor(e.target.value)}
                       className="w-5 h-5 rounded cursor-pointer border-0 bg-transparent p-0" />
                     {headerColor && (
-                      <button onClick={removeHeaderColor} title={language === 'ar' ? 'إعادة تعيين اللون' : 'Reset color'} className="text-white/60 hover:text-white">
+                      <button onClick={removeHeaderColor} title={language === 'ar' ? 'إعادة تعيين اللون' : 'Reset color'} className={isDark ? 'text-white/60 hover:text-white' : 'text-[#060541]/60 hover:text-[#060541]'}>
                         <X className="w-2.5 h-2.5" />
                       </button>
                     )}
@@ -2362,10 +2362,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                 {/* Row 2: Widget toggles */}
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center justify-between px-0.5">
-                    <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest">
+                    <span className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? 'text-white/50' : 'text-[#060541]/50'}`}>
                       {language === 'ar' ? 'الودجتات' : 'Widgets'}
                     </span>
-                    <span className={`text-[9px] font-bold ${activeWidgetCount >= 3 ? 'text-amber-400' : 'text-white/40'}`}>
+                    <span className={`text-[9px] font-bold ${activeWidgetCount >= 3 ? 'text-amber-400' : isDark ? 'text-white/40' : 'text-[#060541]/40'}`}>
                       {activeWidgetCount}/3 {language === 'ar' ? 'نشط' : 'active'}
                     </span>
                   </div>
@@ -2381,10 +2381,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                             isOn
                               ? 'bg-indigo-500/70 border-indigo-400/50 text-white'
                               : isDisabled
-                                ? 'bg-white/5 border-white/10 text-white/20 cursor-not-allowed'
-                                : 'bg-white/10 border-white/20 text-white/60'
-                          }`}
-                        >
+                                ? isDark ? 'bg-white/5 border-white/10 text-white/20 cursor-not-allowed' : 'bg-[#060541]/5 border-[#060541]/10 text-[#060541]/20 cursor-not-allowed'
+                                : isDark ? 'bg-white/10 border-white/20 text-white/60' : 'bg-[#060541]/10 border-[#060541]/20 text-[#060541]/60'
+                          }`}>
                           {isOn && <Check className="w-2 h-2 flex-shrink-0" />}
                           <span className="truncate">{language === 'ar' ? labelAr : labelEn}</span>
                         </button>
