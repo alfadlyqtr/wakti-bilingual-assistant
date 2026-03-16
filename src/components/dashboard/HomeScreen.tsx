@@ -48,6 +48,7 @@ import {
   Heart,
   Navigation,
   CalendarDays,
+  Bell,
 } from "lucide-react";
 import { WaktiIcon } from "@/components/icons/WaktiIcon";
 import { getQuoteForDisplay, getQuoteText, getQuoteAuthor } from "@/utils/quoteService";
@@ -576,7 +577,6 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
   );
 }
 
-// ─── Calendar Widget (swipeable days strip) ───────────────────────────────────
 function CalendarWidget({ shell, navigate, language, upcomingCount }: {
   shell: (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => React.ReactNode;
   navigate: (p: string) => void;
@@ -721,73 +721,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   );
 
   if (wKey === 'showTRWidget') {
-    const trBg = pct >= 70 || pendingTasks === 0
-      ? 'linear-gradient(145deg,rgba(4,50,32,0.95) 0%,rgba(5,78,50,0.95) 50%,rgba(4,100,65,0.95) 100%)'
-      : pct >= 30
-      ? 'linear-gradient(145deg,rgba(80,30,5,0.95) 0%,rgba(120,50,8,0.95) 50%,rgba(160,70,6,0.95) 100%)'
-      : pendingTasks === 0
-      ? 'linear-gradient(145deg,rgba(4,50,32,0.95) 0%,rgba(4,100,65,0.95) 100%)'
-      : 'linear-gradient(145deg,rgba(70,10,10,0.95) 0%,rgba(120,15,15,0.95) 50%,rgba(160,20,20,0.95) 100%)';
-    const Rtr = 16; const Ctr = 2 * Math.PI * Rtr;
-    return shell(trBg, taskAccent, () => navigate('/tr'),
-      <div className="p-2.5 flex flex-col h-full justify-between">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <div className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ background: taskIconBg }}>
-              <CheckSquare className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
-            </div>
-            <span className="text-[11px] font-black text-white uppercase tracking-wide">{language === 'ar' ? 'المهام' : 'T & R'}</span>
-          </div>
-          {/* Completion ring */}
-          <svg width="36" height="36" viewBox="0 0 36 36" className="-rotate-90 flex-shrink-0">
-            <circle cx="18" cy="18" r={Rtr} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="3.5" />
-            <circle cx="18" cy="18" r={Rtr} fill="none" stroke={taskAccent} strokeWidth="3.5"
-              strokeDasharray={Ctr} strokeDashoffset={Ctr * (1 - pct / 100)}
-              strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
-          </svg>
-        </div>
-
-        {/* Total + Done cards */}
-        <div className="grid grid-cols-2 gap-1.5">
-          <div className="bg-white/10 rounded-xl p-2 flex flex-col gap-0.5">
-            <span className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'الكل' : 'Total'}</span>
-            <span className="text-[20px] font-black text-white leading-none tabular-nums">{total}</span>
-          </div>
-          <div className="bg-white/10 rounded-xl p-2 flex flex-col gap-0.5">
-            <span className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'مكتمل' : 'Done'}</span>
-            <span className="text-[20px] font-black leading-none tabular-nums" style={{ color: taskAccent }}>{completedToday}</span>
-          </div>
-        </div>
-
-        {/* Mini bar graph — shows done vs pending as adjacent bars */}
-        <div className="flex flex-col gap-1">
-          <div className="flex items-end gap-0.5 h-8">
-            {/* Pending bars (dimmed) */}
-            {Array.from({ length: Math.min(pendingTasks, 8) }).map((_, i) => (
-              <div key={`p${i}`} className="flex-1 rounded-t-sm bg-white/20"
-                style={{ height: `${40 + (i % 3) * 15}%` }} />
-            ))}
-            {/* Done bars (colored) */}
-            {Array.from({ length: Math.min(completedToday, 8) }).map((_, i) => (
-              <div key={`d${i}`} className="flex-1 rounded-t-sm transition-all"
-                style={{ height: `${55 + (i % 4) * 11}%`, background: taskAccent }} />
-            ))}
-            {/* Empty state */}
-            {total === 0 && Array.from({ length: 6 }).map((_, i) => (
-              <div key={`e${i}`} className="flex-1 rounded-t-sm bg-white/10"
-                style={{ height: `${30 + i * 8}%` }} />
-            ))}
-          </div>
-          {/* Bar labels */}
-          <div className="flex justify-between">
-            <span className="text-[7px] text-white/40 font-bold">{language === 'ar' ? 'معلّق' : 'pending'}</span>
-            <span className="text-[7px] font-bold" style={{ color: taskAccent }}>{pct}%</span>
-            <span className="text-[7px] text-white/40 font-bold">{language === 'ar' ? 'مكتمل' : 'done'}</span>
-          </div>
-        </div>
-      </div>
-    );
+    return <TRWidget shell={shell} navigate={navigate} language={language} theme={theme} pendingTasks={pendingTasks} completedToday={completedToday} total={total} pct={pct} taskAccent={taskAccent} taskIconBg={taskIconBg} />;
   }
 
   if (wKey === 'showCalendarWidget') {
