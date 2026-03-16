@@ -576,6 +576,112 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
   );
 }
 
+// ─── Calendar Widget (swipeable days strip) ───────────────────────────────────
+function CalendarWidget({ shell, navigate, language, upcomingCount }: {
+  shell: (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => React.ReactNode;
+  navigate: (p: string) => void;
+  language: string;
+  upcomingCount: number;
+}) {
+  const today = new Date();
+  const [selectedDay, setSelectedDay] = useState(today.getDate());
+  const [startX, setStartX] = useState<number | null>(null);
+
+  // Build 7-day strip centred on today
+  const days = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() - 3 + i);
+      return {
+        num:   d.getDate(),
+        label: d.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'short' }),
+        month: d.getMonth(),
+        year:  d.getFullYear(),
+        isToday: d.toDateString() === today.toDateString(),
+      };
+    });
+  }, [language]);
+
+  const selectedDate = days.find(d => d.num === selectedDay) ?? days[3];
+  const monthLabel = today.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { month: 'long' });
+  const yearLabel  = today.getFullYear();
+  const evAccent   = upcomingCount === 0 ? '#a78bfa' : upcomingCount <= 3 ? '#34d399' : '#fbbf24';
+
+  const handleTouchStart = (e: React.TouchEvent) => setStartX(e.touches[0].clientX);
+  const handleTouchEnd   = (e: React.TouchEvent) => {
+    if (startX === null) return;
+    const dx = e.changedTouches[0].clientX - startX;
+    if (Math.abs(dx) > 40) {
+      const idx = days.findIndex(d => d.num === selectedDay);
+      if (dx < 0 && idx < days.length - 1) setSelectedDay(days[idx + 1].num);
+      else if (dx > 0 && idx > 0) setSelectedDay(days[idx - 1].num);
+    }
+    setStartX(null);
+  };
+
+  return shell(
+    'linear-gradient(145deg,rgba(45,8,95,0.95) 0%,rgba(76,20,150,0.95) 50%,rgba(109,30,200,0.95) 100%)',
+    '#a855f7',
+    () => navigate('/calendar'),
+    <div className="p-2.5 flex flex-col h-full justify-between"
+      onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+
+      {/* Header: month + big day number */}
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-[9px] text-white/50 font-bold uppercase tracking-widest">{monthLabel} {yearLabel}</p>
+          <p className="text-3xl font-black text-white leading-none tabular-nums">{selectedDay}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-[11px] font-black text-white">{selectedDate.label}</p>
+          {selectedDate.isToday && (
+            <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-purple-400/30 text-purple-200">
+              {language === 'ar' ? 'اليوم' : 'Today'}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Days strip */}
+      <div className="flex justify-between gap-0.5">
+        {days.map(d => {
+          const isSelected = d.num === selectedDay;
+          return (
+            <button
+              key={`${d.year}-${d.month}-${d.num}`}
+              onClick={(e) => { e.stopPropagation(); setSelectedDay(d.num); }}
+              className={`flex flex-col items-center flex-1 py-1 rounded-xl transition-all active:scale-95 ${
+                isSelected
+                  ? 'bg-white/25 border border-white/40'
+                  : d.isToday
+                  ? 'bg-white/10 border border-purple-400/40'
+                  : 'bg-white/5'
+              }`}
+            >
+              <span className="text-[7px] font-bold text-white/50 uppercase">{d.label.charAt(0)}</span>
+              <span className={`text-[11px] font-black tabular-nums ${isSelected ? 'text-white' : d.isToday ? 'text-purple-300' : 'text-white/60'}`}>{d.num}</span>
+              {/* Event dot for today */}
+              {d.isToday && upcomingCount > 0 && (
+                <div className="w-1 h-1 rounded-full mt-0.5" style={{ background: evAccent }} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Events summary */}
+      <div className="flex items-center gap-1.5">
+        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: evAccent }} />
+        <p className="text-[10px] font-semibold text-white/80">
+          {upcomingCount === 0
+            ? (language === 'ar' ? 'لا أحداث قادمة' : 'No upcoming events')
+            : `${upcomingCount} ${language === 'ar' ? 'حدث قادم' : upcomingCount === 1 ? 'upcoming event' : 'upcoming events'}`}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Widget content renderer (no drag logic, just visuals) ────────────────────
 function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, pendingTasks, completedToday, upcomingCount, navigate, quoteText, quoteAuthor, whoopData, journalData }: {
   wKey: WidgetId; editMode: boolean; language: string; theme: string;
@@ -627,58 +733,65 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
     </div>
   );
 
-  if (wKey === 'showTRWidget') return shell(
-    taskAccent === '#22c55e'
-      ? 'linear-gradient(145deg,rgba(6,78,59,0.7) 0%,rgba(6,95,70,0.7) 40%,rgba(4,120,87,0.7) 100%)'
-      : taskAccent === '#f59e0b'
-      ? 'linear-gradient(145deg,rgba(120,53,15,0.7) 0%,rgba(146,64,14,0.7) 40%,rgba(180,83,9,0.7) 100%)'
-      : 'linear-gradient(145deg,rgba(127,29,29,0.7) 0%,rgba(153,27,27,0.7) 40%,rgba(185,28,28,0.7) 100%)',
-    taskAccent,
-    () => navigate('/tr'),
-    <div className="p-4 flex flex-col justify-between h-full">
-      <div className="flex items-start justify-between">
-        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
-          <CheckSquare className="w-6 h-6 text-white" strokeWidth={2} />
+  if (wKey === 'showTRWidget') {
+    const trBg = pct >= 70 || pendingTasks === 0
+      ? 'linear-gradient(145deg,rgba(4,50,32,0.95) 0%,rgba(5,78,50,0.95) 50%,rgba(4,100,65,0.95) 100%)'
+      : pct >= 30
+      ? 'linear-gradient(145deg,rgba(80,30,5,0.95) 0%,rgba(120,50,8,0.95) 50%,rgba(160,70,6,0.95) 100%)'
+      : pendingTasks === 0
+      ? 'linear-gradient(145deg,rgba(4,50,32,0.95) 0%,rgba(4,100,65,0.95) 100%)'
+      : 'linear-gradient(145deg,rgba(70,10,10,0.95) 0%,rgba(120,15,15,0.95) 50%,rgba(160,20,20,0.95) 100%)';
+    const Rtr = 16; const Ctr = 2 * Math.PI * Rtr;
+    return shell(trBg, taskAccent, () => navigate('/tr'),
+      <div className="p-2.5 flex flex-col h-full justify-between">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <div className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ background: taskIconBg }}>
+              <CheckSquare className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
+            </div>
+            <span className="text-[11px] font-black text-white uppercase tracking-wide">{language === 'ar' ? 'المهام' : 'T & R'}</span>
+          </div>
+          {/* Completion ring */}
+          <svg width="36" height="36" viewBox="0 0 36 36" className="-rotate-90 flex-shrink-0">
+            <circle cx="18" cy="18" r={Rtr} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="3.5" />
+            <circle cx="18" cy="18" r={Rtr} fill="none" stroke={taskAccent} strokeWidth="3.5"
+              strokeDasharray={Ctr} strokeDashoffset={Ctr * (1 - pct / 100)}
+              strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
+          </svg>
         </div>
-        <div className="text-right">
-          <span className="text-4xl font-black tabular-nums text-white leading-none" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>{pendingTasks === 0 ? '✓' : pendingTasks}</span>
-          <p className="text-[9px] font-bold text-white/50 uppercase tracking-wider">{pendingTasks === 0 ? (language === 'ar' ? 'مكتملة' : 'DONE') : (language === 'ar' ? 'معلّقة' : 'pending')}</p>
-        </div>
-      </div>
-      {/* Progress bar */}
-      <div>
-        <div className="w-full h-1.5 rounded-full mb-2" style={{ background: 'rgba(255,255,255,0.2)' }}>
-          <div className="h-1.5 rounded-full transition-all" style={{ width: `${pct}%`, background: 'rgba(255,255,255,0.85)' }} />
-        </div>
-        <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{language === 'ar' ? 'المهام' : 'Tasks'}</p>
-        <p className="text-[11px] font-semibold mt-0.5" style={{ color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>{taskMsg}</p>
-      </div>
-    </div>
-  );
 
-  if (wKey === 'showCalendarWidget') return shell(
-    'linear-gradient(145deg,rgba(59,7,100,0.7) 0%,rgba(88,28,135,0.7) 40%,rgba(126,34,206,0.7) 100%)',
-    '#a855f7',
-    () => navigate('/calendar'),
-    <div className="p-4 flex flex-col justify-between h-full">
-      <div className="flex items-start justify-between">
-        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
-          <CalendarDays className="w-6 h-6 text-white" strokeWidth={2} />
+        {/* Metric cards grid */}
+        <div className="grid grid-cols-2 gap-1 flex-1 my-1.5">
+          <div className="bg-white/10 rounded-xl p-1.5 flex flex-col justify-between">
+            <span className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'الكل' : 'Total'}</span>
+            <span className="text-[15px] font-black text-white leading-none">{total}</span>
+          </div>
+          <div className="bg-white/10 rounded-xl p-1.5 flex flex-col justify-between">
+            <span className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'مكتمل' : 'Done'}</span>
+            <span className="text-[15px] font-black leading-none" style={{ color: taskAccent }}>{completedToday}</span>
+          </div>
+          <div className="bg-white/10 rounded-xl p-1.5 flex flex-col justify-between">
+            <span className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'معلّق' : 'Pending'}</span>
+            <span className="text-[15px] font-black text-white leading-none">{pendingTasks}</span>
+          </div>
+          <div className="bg-white/10 rounded-xl p-1.5 flex flex-col justify-between">
+            <span className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'نسبة' : 'Rate'}</span>
+            <span className="text-[15px] font-black leading-none" style={{ color: taskAccent }}>{pct}%</span>
+          </div>
         </div>
-        <div className="text-right">
-          <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest">{monthShort}</p>
-          <span className="text-4xl font-black text-white leading-none tabular-nums">{dayNum}</span>
+
+        {/* Progress bar */}
+        <div className="w-full h-1 bg-white/15 rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: taskAccent }} />
         </div>
       </div>
-      <div>
-        <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{dayLong}</p>
-        <div className="flex items-center gap-1.5 mt-1">
-          <div className="w-2 h-2 rounded-full" style={{ background: evAccent === '#6b7280' ? 'rgba(255,255,255,0.3)' : evAccent }} />
-          <p className="text-[11px] font-semibold" style={{ color: evAccent === '#6b7280' ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.95)', textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>{evMsg}</p>
-        </div>
-      </div>
-    </div>
-  );
+    );
+  }
+
+  if (wKey === 'showCalendarWidget') {
+    return <CalendarWidget shell={shell} navigate={navigate} language={language} upcomingCount={upcomingCount} />;
+  }
 
   if (wKey === 'showMaw3dWidget') return shell(
     maw3dAccent === '#22c55e'
