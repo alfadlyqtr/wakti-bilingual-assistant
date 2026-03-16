@@ -45,6 +45,7 @@ import {
   Clock,
   BookOpen,
   Activity,
+  RotateCcw,
   Heart,
   Navigation,
   CalendarDays,
@@ -2247,7 +2248,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             const activeWidgetCount = WIDGET_OPTIONS.filter(w => hsWidgets[w.key]).length;
             return (
               <div className="flex-none flex flex-col gap-1.5 px-4 pb-2">
-                {/* Row 1: Dock / BG / Header color */}
+                {/* Row 1: Dock / BG / Header color / Restore */}
                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
                   {/* Dock */}
                   <button onClick={() => setDockPickerOpen(true)}
@@ -2270,6 +2271,35 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                       <span>{language === 'ar' ? 'حذف BG' : 'Remove BG'}</span>
                     </button>
                   )}
+                  {/* Restore Default */}
+                  <button
+                    title={language === 'ar' ? 'استعادة الإعدادات الافتراضية' : 'Restore defaults'}
+                    onClick={() => {
+                      const uid = _cachedUid();
+                      const DEFAULT_WIDGETS = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
+                      // Reset widgets
+                      setHsWidgets(DEFAULT_WIDGETS);
+                      localStorage.setItem(LS_WIDGETS_KEY(), JSON.stringify(DEFAULT_WIDGETS));
+                      // Reset BG image
+                      setBgImage(DEFAULT_BG);
+                      localStorage.removeItem(LS_BG_KEY());
+                      // Reset header color
+                      setHeaderColor('');
+                      localStorage.removeItem(LS_HEADER_COLOR_KEY());
+                      // Reset BG gradient colors
+                      setBgGradLeft('#050507');
+                      setBgGradRight('#12102e');
+                      try { localStorage.setItem(lsKey(uid,'hs_grad_left'),'#050507'); localStorage.setItem(lsKey(uid,'hs_grad_right'),'#12102e'); } catch {}
+                      // Reset unified grid
+                      setUnifiedGrid([]);
+                      localStorage.removeItem(LS_UNIFIED_KEY());
+                      // Sync
+                      syncToSupabase({ bgImage: '', headerColor: '', homescreenWidgets: DEFAULT_WIDGETS });
+                    }}
+                    className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/10 border border-white/20 text-white/60 text-[10px] font-semibold hover:bg-red-500/30 hover:text-white transition-all">
+                    <RotateCcw className="w-2.5 h-2.5" />
+                    <span>{language === 'ar' ? 'افتراضي' : 'Default'}</span>
+                  </button>
                   {/* BG Gradient picker */}
                   <button onClick={() => setBgGradPicker(v => !v)}
                     className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-[11px] font-semibold border transition-all ${bgGradPicker ? 'bg-purple-500/70 border-purple-400/50' : 'bg-white/15 backdrop-blur-md border-white/20'}`}>
@@ -2551,7 +2581,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                 WebkitBackdropFilter: 'blur(20px)',
                 border: '1px solid transparent',
                 backgroundClip: 'padding-box',
-                boxShadow: '0 34px 70px -16px rgba(0,0,0,0.4), 0 16px 46px rgba(0,0,0,0.18), 0 0 0 1px rgba(192,165,104,0.35), 0 0 0 2px rgba(255,255,255,0.06)',
+                boxShadow: '0 34px 70px -16px rgba(0,0,0,0.4), 0 16px 46px rgba(0,0,0,0.18), 0 0 0 1px rgba(192,200,210,0.45), 0 0 0 2px rgba(255,255,255,0.06)',
               }}
             >
               <SortableContext items={dockApps.map(a => `dock::${a.id}`)} strategy={horizontalListSortingStrategy}>
