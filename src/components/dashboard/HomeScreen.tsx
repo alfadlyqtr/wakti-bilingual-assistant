@@ -1226,10 +1226,10 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
         border: '0.5px solid rgba(180,190,200,0.25)',
       }}
     >
-      {/* Background layer — low opacity for see-through liquid glass */}
-      <div className="absolute inset-0" style={{ background: bg, opacity: 0.3 }} />
+      {/* Background layer */}
+      <div className="absolute inset-0" style={{ background: bg, opacity: 0.6 }} />
       {/* Frosted glass shimmer overlay */}
-      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 50%, transparent 100%)' }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.04) 50%, transparent 100%)' }} />
       <div className={`${isDark || hasBg ? 'widget-text-glow-dark' : 'widget-text-glow-light'} relative z-10 w-full h-full`}>{children}</div>
     </div>
   );
