@@ -2201,10 +2201,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         className={`relative overflow-hidden overscroll-none hs-root flex flex-col ${pageBg}`}
         style={{
           ...(hasBg ? {
-            backgroundImage: `url(${bgImage})`,
-            backgroundSize: "contain",
-            backgroundPosition: "center center",
-            backgroundRepeat: "no-repeat",
+            backgroundColor: '#0c0f14',
+            backgroundImage: `radial-gradient(ellipse at center, transparent 30%, rgba(12,15,20,0.6) 60%, #0c0f14 80%), url(${bgImage})`,
+            backgroundSize: "cover, contain",
+            backgroundPosition: "center center, center center",
+            backgroundRepeat: "no-repeat, no-repeat",
           } : hasCustomBg ? {
             background: customBgStyle,
           } : {}),
