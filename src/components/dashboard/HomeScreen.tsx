@@ -360,7 +360,7 @@ function StatWidgets({ hsWidgets, language, theme, hasBg, pendingTasks, complete
   const maw3dAccent = upcomingCount === 0 ? '#6b7280' : upcomingCount <= 2 ? '#22c55e' : '#f59e0b';
   const maw3dIconBg = upcomingCount === 0 ? 'linear-gradient(135deg,#374151,#6b7280)' : upcomingCount <= 2 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : 'linear-gradient(135deg,#b45309,#f59e0b)';
 
-  const labelColor  = theme === 'dark' ? '#ffffff' : '#060541';
+  const labelColor  = isDark || hasBg ? '#ffffff' : '#060541';
   const subColor    = statLblColor;
   const base        = `${statCardBase} rounded-2xl overflow-hidden cursor-pointer active:scale-95 transition-transform select-none`;
 
@@ -550,9 +550,9 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
           onClick={(e) => { e.stopPropagation(); setActiveTab(t => t === 'whoop' ? 'healthkit' : 'whoop'); }}
           className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 border border-white/25 active:scale-95 transition-all"
         >
-          <Activity className={`w-3 h-3 ${activeTab === 'whoop' ? 'text-white' : 'text-white/30'}`} strokeWidth={2.5} />
+          <Activity className={`w-3 h-3 ${activeTab === 'whoop' ? 'text-white' : 'text-white/70'}`} strokeWidth={2.5} />
           <div className="w-px h-2.5 bg-white/25" />
-          <Heart className={`w-3 h-3 ${activeTab === 'healthkit' ? 'text-white' : 'text-white/30'}`} strokeWidth={2.5} />
+          <Heart className={`w-3 h-3 ${activeTab === 'healthkit' ? 'text-white' : 'text-white/70'}`} strokeWidth={2.5} />
         </button>
       </div>
 
@@ -572,13 +572,13 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
                 <div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-2xl font-black text-white tabular-nums leading-none">{Math.round(recovery)}%</span>
-                    <span className="text-[9px] text-white/60 font-bold uppercase">{language === 'ar' ? 'استشفاء' : 'REC'}</span>
+                    <span className="text-[9px] text-white/90 font-bold uppercase">{language === 'ar' ? 'استشفاء' : 'REC'}</span>
                   </div>
                   {sleepHours != null && (
                     <div className="flex items-center gap-1 mt-0.5">
-                      <span className="text-[9px] text-white/50">{language === 'ar' ? 'نوم' : 'Sleep'}</span>
+                      <span className="text-[9px] text-white/85">{language === 'ar' ? 'نوم' : 'Sleep'}</span>
                       <span className="text-[10px] text-white font-bold">{sleepHours}h</span>
-                      {sleepPerf != null && <span className="text-[8px] text-white/40">· {Math.round(sleepPerf)}%</span>}
+                      {sleepPerf != null && <span className="text-[8px] text-white/80">· {Math.round(sleepPerf)}%</span>}
                     </div>
                   )}
                 </div>
@@ -587,8 +587,8 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
               {strain != null && (
                 <div>
                   <div className="flex justify-between items-center mb-0.5">
-                    <span className="text-[8px] text-white/50 font-bold uppercase">{language === 'ar' ? 'إجهاد' : 'Strain'}</span>
-                    <span className="text-[9px] text-white font-bold">{strain.toFixed(1)}<span className="text-white/40">/21</span></span>
+                    <span className="text-[8px] text-white/85 font-bold uppercase">{language === 'ar' ? 'إجهاد' : 'Strain'}</span>
+                    <span className="text-[9px] text-white font-bold">{strain.toFixed(1)}<span className="text-white/80">/21</span></span>
                   </div>
                   <div className="w-full h-1 bg-white/15 rounded-full overflow-hidden">
                     <div className="h-full rounded-full transition-all" style={{ width: `${Math.min((strain / 21) * 100, 100)}%`, background: recColor }} />
@@ -599,19 +599,19 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
               <div className="flex gap-1.5 flex-wrap">
                 {hrv != null && (
                   <div className="flex flex-col items-center bg-white/10 rounded-lg px-2 py-0.5">
-                    <span className="text-[8px] text-white/50 uppercase">HRV</span>
+                    <span className="text-[8px] text-white/90 uppercase">HRV</span>
                     <span className="text-[11px] text-white font-black">{Math.round(hrv)}</span>
                   </div>
                 )}
                 {rhr != null && (
                   <div className="flex flex-col items-center bg-white/10 rounded-lg px-2 py-0.5">
-                    <span className="text-[8px] text-white/50 uppercase">RHR</span>
+                    <span className="text-[8px] text-white/90 uppercase">RHR</span>
                     <span className="text-[11px] text-white font-black">{Math.round(rhr)}</span>
                   </div>
                 )}
                 {avgHr != null && (
                   <div className="flex flex-col items-center bg-white/10 rounded-lg px-2 py-0.5">
-                    <span className="text-[8px] text-white/50 uppercase">{language === 'ar' ? 'ن.قلب' : 'AvgHR'}</span>
+                    <span className="text-[8px] text-white/90 uppercase">{language === 'ar' ? 'ن.قلب' : 'AvgHR'}</span>
                     <span className="text-[11px] text-white font-black">{Math.round(avgHr)}</span>
                   </div>
                 )}
@@ -620,7 +620,7 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
           ) : (
             <div className="flex flex-col justify-end flex-1">
               <p className="text-[13px] font-black text-white">WHOOP</p>
-              <p className="text-[9px] text-white/60">{language === 'ar' ? 'غير متصل' : 'Not connected'}</p>
+              <p className="text-[9px] text-white/90">{language === 'ar' ? 'غير متصل' : 'Not connected'}</p>
             </div>
           )}
         </div>
@@ -636,30 +636,30 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
             </div>
             <div>
               <p className="text-[12px] font-black text-white leading-none">{language === 'ar' ? 'أبل هيلث' : 'Apple Health'}</p>
-              <p className="text-[8px] text-white/50 mt-0.5">{language === 'ar' ? 'بيانات اليوم' : 'Today\'s data'}</p>
+              <p className="text-[8px] text-white/85 mt-0.5">{language === 'ar' ? 'بيانات اليوم' : 'Today\'s data'}</p>
             </div>
           </div>
           {/* Data grid */}
           {hkLoading ? (
             <div className="flex items-center justify-center flex-1">
-              <p className="text-[9px] text-white/50">{language === 'ar' ? 'جار التحميل...' : 'Loading...'}</p>
+              <p className="text-[9px] text-white/85">{language === 'ar' ? 'جار التحميل...' : 'Loading...'}</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-1">
               <div className="bg-white/10 rounded-lg p-1.5">
-                <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'خطوات' : 'Steps'}</p>
+                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'خطوات' : 'Steps'}</p>
                 <p className="text-[12px] font-black text-white leading-tight">{hkData?.steps ? hkData.steps.toLocaleString() : '--'}</p>
               </div>
               <div className="bg-white/10 rounded-lg p-1.5">
-                <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'نبض' : 'Avg HR'}</p>
+                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'نبض' : 'Avg HR'}</p>
                 <p className="text-[12px] font-black text-white leading-tight">{hkData?.avgHr != null ? hkData.avgHr : '--'}</p>
               </div>
               <div className="bg-white/10 rounded-lg p-1.5">
-                <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'نوم' : 'Sleep'}</p>
+                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'نوم' : 'Sleep'}</p>
                 <p className="text-[12px] font-black text-white leading-tight">{hkData?.sleepHours != null ? `${hkData.sleepHours}h` : '--'}</p>
               </div>
               <div className="bg-white/10 rounded-lg p-1.5">
-                <p className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'نبض راحة' : 'RHR'}</p>
+                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'نبض راحة' : 'RHR'}</p>
                 <p className="text-[12px] font-black text-white leading-tight">{hkData?.rhr != null ? hkData.rhr : '--'}</p>
               </div>
             </div>
@@ -669,7 +669,7 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
             onClick={(e) => { e.stopPropagation(); navigate('/fitness'); }}
             className="flex items-center justify-center gap-1 bg-white/10 border border-white/20 rounded-lg py-1 active:scale-95 transition-all cursor-pointer"
           >
-            <span className="text-[9px] text-white/70 font-semibold">{language === 'ar' ? 'فتح الحيوية →' : 'Open Vitality →'}</span>
+            <span className="text-[9px] text-white/90 font-semibold">{language === 'ar' ? 'فتح الحيوية →' : 'Open Vitality →'}</span>
           </div>
         </div>
       )}
@@ -746,9 +746,9 @@ function TRWidget({ shell, navigate, language, pendingTasks, completedToday, tot
           onClick={(e) => { e.stopPropagation(); setActiveTab(t => t === 'tasks' ? 'reminders' : 'tasks'); }}
           className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 border border-white/25 active:scale-95 transition-all"
         >
-          <CheckSquare className={`w-3 h-3 ${activeTab === 'tasks' ? 'text-white' : 'text-white/30'}`} strokeWidth={2.5} />
+          <CheckSquare className={`w-3 h-3 ${activeTab === 'tasks' ? 'text-white' : 'text-white/70'}`} strokeWidth={2.5} />
           <div className="w-px h-2.5 bg-white/25" />
-          <Bell className={`w-3 h-3 ${activeTab === 'reminders' ? 'text-white' : 'text-white/30'}`} strokeWidth={2.5} />
+          <Bell className={`w-3 h-3 ${activeTab === 'reminders' ? 'text-white' : 'text-white/70'}`} strokeWidth={2.5} />
         </button>
       </div>
 
@@ -775,11 +775,11 @@ function TRWidget({ shell, navigate, language, pendingTasks, completedToday, tot
       {/* Metric cards */}
       <div className="grid grid-cols-2 gap-1.5">
         <div className="bg-white/10 rounded-xl p-2 flex flex-col gap-0.5">
-          <span className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'الكل' : 'Total'}</span>
+          <span className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'الكل' : 'Total'}</span>
           <span className="text-[20px] font-black text-white leading-none tabular-nums">{activeTab === 'tasks' ? total : 0}</span>
         </div>
         <div className="bg-white/10 rounded-xl p-2 flex flex-col gap-0.5">
-          <span className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'مكتمل' : 'Done'}</span>
+          <span className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'مكتمل' : 'Done'}</span>
           <span className="text-[20px] font-black leading-none tabular-nums" style={{ color: taskAccent }}>{activeTab === 'tasks' ? completedToday : 0}</span>
         </div>
       </div>
@@ -818,14 +818,14 @@ function TRWidget({ shell, navigate, language, pendingTasks, completedToday, tot
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <span className="text-[8px] text-white/30 uppercase">{language === 'ar' ? 'لا تنبيهات' : 'No reminders'}</span>
+              <span className="text-[8px] text-white/80 uppercase">{language === 'ar' ? 'لا تنبيهات' : 'No reminders'}</span>
             </div>
           )}
         </div>
         <div className="flex justify-between">
-          <span className="text-[7px] text-white/40 font-bold">{language === 'ar' ? 'معلّق' : 'pending'}</span>
+          <span className="text-[7px] text-white/85 font-bold">{language === 'ar' ? 'معلّق' : 'pending'}</span>
           <span className="text-[7px] font-bold" style={{ color: taskAccent }}>{activeTab === 'tasks' ? pct : 0}%</span>
-          <span className="text-[7px] text-white/40 font-bold">{language === 'ar' ? 'مكتمل' : 'done'}</span>
+          <span className="text-[7px] text-white/85 font-bold">{language === 'ar' ? 'مكتمل' : 'done'}</span>
         </div>
       </div>
     </div>
@@ -911,30 +911,30 @@ function JournalWidget({ shell, navigate, language, journalData }: {
                 <span className="text-[8px] font-black" style={{ color: mood ? MOOD_COLOR[mood] : '#a78bfa' }}>
                   {mood ? (language === 'ar' ? MOOD_LABEL_AR[mood] : MOOD_LABEL_EN[mood]) : ''}
                 </span>
-                {timeStr && <span className="text-[7px] text-white/40 tabular-nums">{timeStr}</span>}
+                {timeStr && <span className="text-[7px] text-white/80 tabular-nums">{timeStr}</span>}
               </div>
               {noteSnippet ? (
-                <span className="text-[7px] text-white/75 leading-snug line-clamp-2">{noteSnippet}</span>
+                <span className="text-[7px] text-white/90 leading-snug line-clamp-2">{noteSnippet}</span>
               ) : (
-                <span className="text-[7px] text-white/40">{language === 'ar' ? 'لا ملاحظات' : 'No note'}</span>
+                <span className="text-[7px] text-white/80">{language === 'ar' ? 'لا ملاحظات' : 'No note'}</span>
               )}
             </>
           ) : (
-            <span className="text-[8px] text-white/50">{language === 'ar' ? 'لم تكتب اليوم بعد' : 'No entry yet today'}</span>
+            <span className="text-[8px] text-white/85">{language === 'ar' ? 'لم تكتب اليوم بعد' : 'No entry yet today'}</span>
           )}
         </div>
       </div>
 
       {/* Chart range toggle */}
       <div className="flex items-center justify-between">
-        <span className="text-[7px] text-white/40 uppercase font-bold">{language === 'ar' ? 'المزاج' : 'Mood'}</span>
+        <span className="text-[7px] text-white/85 uppercase font-bold">{language === 'ar' ? 'المزاج' : 'Mood'}</span>
         <div className="flex rounded-full overflow-hidden border border-white/20">
           {(['1m','3m','6m'] as const).map(r => (
             <button
               key={r}
               title={r}
               onClick={(e) => { e.stopPropagation(); setChartRange(r); }}
-              className={`px-1.5 py-0.5 text-[7px] font-black uppercase transition-all ${chartRange === r ? 'bg-white/30 text-white' : 'text-white/35'}`}
+              className={`px-1.5 py-0.5 text-[7px] font-black uppercase transition-all ${chartRange === r ? 'bg-white/30 text-white' : 'text-white/75'}`}
             >
               {r}
             </button>
@@ -1026,7 +1026,7 @@ function Maw3dWidget({ shell, navigate, language, events, attendingCounts }: {
         </div>
         <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border border-purple-400/30" style={{ background: 'rgba(124,58,237,0.25)' }}>
           <span className="text-[9px] font-black text-purple-200 tabular-nums">{active.length}</span>
-          <span className="text-[7px] text-purple-300/70 uppercase">{language === 'ar' ? ' حدث' : ' event'}{active.length !== 1 ? 's' : ''}</span>
+          <span className="text-[7px] text-purple-200 uppercase">{language === 'ar' ? ' حدث' : ' event'}{active.length !== 1 ? 's' : ''}</span>
         </div>
       </div>
 
@@ -1050,7 +1050,7 @@ function Maw3dWidget({ shell, navigate, language, events, attendingCounts }: {
                 {/* Date pill */}
                 <div className="flex flex-col items-center justify-center rounded-lg px-1.5 py-0.5 flex-shrink-0" style={{ background: 'rgba(124,58,237,0.4)', minWidth: 28 }}>
                   <span className="text-[8px] font-black text-purple-200 leading-tight">{fmtDate(ev.event_date)}</span>
-                  {ev.start_time && <span className="text-[6px] text-purple-300/70 leading-tight tabular-nums">{fmtTime(ev.start_time)}</span>}
+                  {ev.start_time && <span className="text-[6px] text-purple-200 leading-tight tabular-nums">{fmtTime(ev.start_time)}</span>}
                 </div>
                 {/* Title + RSVP */}
                 <div className="flex flex-col min-w-0 flex-1 gap-0">
@@ -1058,7 +1058,7 @@ function Maw3dWidget({ shell, navigate, language, events, attendingCounts }: {
                   <div className="flex items-center gap-0.5">
                     <Users className="w-2 h-2 text-green-400 flex-shrink-0" strokeWidth={2.5} />
                     <span className="text-[7px] text-green-300 font-bold tabular-nums">{rsvp}</span>
-                    <span className="text-[6px] text-white/30">{language === 'ar' ? ' قبل' : ' going'}</span>
+                    <span className="text-[6px] text-white/80">{language === 'ar' ? ' قبل' : ' going'}</span>
                   </div>
                 </div>
                 {isToday && <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0 animate-pulse" />}
@@ -1068,13 +1068,13 @@ function Maw3dWidget({ shell, navigate, language, events, attendingCounts }: {
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center">
-          <span className="text-[9px] text-white/30 uppercase">{language === 'ar' ? 'لا مواعيد قادمة' : 'No upcoming events'}</span>
+          <span className="text-[9px] text-white/80 uppercase">{language === 'ar' ? 'لا مواعيد قادمة' : 'No upcoming events'}</span>
         </div>
       )}
 
       {/* Footer: total RSVP attending */}
       <div className="flex items-center justify-between">
-        <span className="text-[7px] text-white/35 uppercase font-bold">
+        <span className="text-[7px] text-white/85 uppercase font-bold">
           {language === 'ar' ? 'إجمالي الحضور' : 'Total attending'}
         </span>
         <div className="flex items-center gap-0.5">
@@ -1130,7 +1130,7 @@ function CalendarWidget({ shell, navigate, language, upcomingCount }: {
       {/* Month + today's big number */}
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-[9px] text-white/50 font-bold uppercase tracking-widest">{monthLabel} {today.getFullYear()}</p>
+          <p className="text-[9px] text-white/90 font-bold uppercase tracking-widest">{monthLabel} {today.getFullYear()}</p>
           <p className="text-3xl font-black text-white leading-none tabular-nums">{today.getDate()}</p>
         </div>
         <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-orange-400/30 text-orange-200 self-start mt-1">
@@ -1152,8 +1152,8 @@ function CalendarWidget({ shell, navigate, language, upcomingCount }: {
                   : 'bg-white/8 border border-white/10'
               }`}
             >
-              <span className="text-[8px] font-bold text-white/50 uppercase mb-0.5">{d.label.slice(0,3)}</span>
-              <span className={`text-xl font-black tabular-nums leading-none ${isSelected ? 'text-white' : 'text-white/50'}`}>{d.num}</span>
+              <span className="text-[8px] font-bold text-white/85 uppercase mb-0.5">{d.label.slice(0,3)}</span>
+              <span className={`text-xl font-black tabular-nums leading-none ${isSelected ? 'text-white' : 'text-white/80'}`}>{d.num}</span>
               {d.isToday && upcomingCount > 0 && (
                 <div className="flex gap-0.5 mt-1">
                   {Array.from({ length: Math.min(upcomingCount, 3) }).map((_, i) => (
@@ -1202,7 +1202,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   const evMsg       = upcomingCount === 0 ? (language === 'ar' ? 'لا أحداث' : 'Clear') : upcomingCount <= 3 ? `+${upcomingCount} ${language === 'ar' ? 'حدث' : upcomingCount === 1 ? 'event' : 'events'}` : `+${upcomingCount} ${language === 'ar' ? 'أحداث' : 'events'} 🔥`;
   const maw3dAccent = upcomingCount === 0 ? '#6b7280' : upcomingCount <= 2 ? '#22c55e' : '#f59e0b';
   const maw3dBg     = upcomingCount === 0 ? 'linear-gradient(135deg,#374151,#6b7280)' : upcomingCount <= 2 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : 'linear-gradient(135deg,#b45309,#f59e0b)';
-  const labelColor  = theme === 'dark' ? '#ffffff' : '#060541';
+  const labelColor  = isDark || hasBg ? '#ffffff' : '#060541';
   const now         = new Date();
   const dayNum      = now.getDate();
   const dayShort    = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'short' });
@@ -1226,11 +1226,11 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
         border: '0.5px solid rgba(180,190,200,0.25)',
       }}
     >
-      {/* Background layer */}
-      <div className="absolute inset-0" style={{ background: bg, opacity: 0.6 }} />
+      {/* Background layer — low opacity for see-through liquid glass */}
+      <div className="absolute inset-0" style={{ background: bg, opacity: 0.3 }} />
       {/* Frosted glass shimmer overlay */}
-      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.04) 50%, transparent 100%)' }} />
-      <div className={`${isDark || hasBg ? 'widget-text-glow-dark' : 'widget-text-glow-light'} relative z-10 w-full h-full flex flex-col`}>{children}</div>
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 50%, transparent 100%)' }} />
+      <div className="relative z-10 w-full h-full">{children}</div>
     </div>
   );
 
@@ -2584,7 +2584,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         app={app}
                         editMode={editMode}
                         language={language}
-                        isDark={isDark || hasUserImage || hasCustomBg}
+                        isDark={isDark || hasBg || hasCustomBg}
                         glowEnabled={hsBg.glow}
                         navigate={navigate}
                         gridArea={gp}

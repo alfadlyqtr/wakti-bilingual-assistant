@@ -2,13 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Widget text glow — dark mode: dark shadow for contrast on dark/image backgrounds */
-.widget-text-glow-dark * {
+/* Widget text glow — applied to the content wrapper inside every widget shell */
+.widget-text-glow * {
   text-shadow: 0 0 8px rgba(0,0,0,0.9), 0 1px 4px rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.95);
-}
-/* Widget text glow — light mode: subtle shadow for depth on light backgrounds */
-.widget-text-glow-light * {
-  text-shadow: 0 1px 3px rgba(6,5,65,0.25), 0 0 6px rgba(6,5,65,0.15);
 }
 
 /* Premium shimmer animation for task cards */
