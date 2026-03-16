@@ -69,6 +69,28 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
         className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded-full px-2 py-2 backdrop-blur-xl bg-[#0c0f14]/60 border border-blue-400/25 shadow-[0_0_26px_hsla(210,100%,65%,0.55)]"
         style={{ top: "calc(env(safe-area-inset-top, 0px) + 1rem)" }}
       >
+        {/* Pricing Button */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            const el = document.getElementById('pricing');
+            if (el) {
+              const container = el.closest('.scroll-snap-container') as HTMLElement | null;
+              if (container) {
+                container.scrollTo({ top: el.offsetTop, behavior: 'smooth' });
+              } else {
+                el.scrollIntoView({ behavior: 'smooth' });
+              }
+            }
+          }}
+          className="rounded-full text-[#e9ceb0] hover:text-white bg-[#0c0f14]/50 hover:bg-[#e9ceb0]/10 transition-all duration-300 h-9 px-4 font-medium border border-[#e9ceb0]/25 shadow-[0_0_14px_rgba(233,206,176,0.2)] hover:shadow-[0_0_22px_rgba(233,206,176,0.4)]"
+        >
+          <span className="text-sm font-light tracking-wide">
+            {isArabic ? "الأسعار" : "Pricing"}
+          </span>
+        </Button>
+
         {/* Login Button */}
         <Button
           variant="outline"

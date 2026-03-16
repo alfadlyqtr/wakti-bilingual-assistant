@@ -57,7 +57,7 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
               transition={{ delay: 0.4 }}
               className="flex items-baseline justify-center gap-1"
             >
-              <span className="text-5xl font-extralight text-white">95</span>
+              <span className="text-5xl font-extralight text-white">92</span>
               <span className="text-xl text-white/80 font-light">QAR</span>
               <span className="text-white/70 font-light">/</span>
               <span className="text-white/70 font-light">{isArabic ? "شهرياً" : "monthly"}</span>

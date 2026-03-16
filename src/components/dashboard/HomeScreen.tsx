@@ -735,6 +735,139 @@ function TRWidget({ shell, navigate, language, pendingTasks, completedToday, tot
   );
 }
 
+// ─── Journal Widget ───────────────────────────────────────────────────────────
+const MOOD_EMOJI = ['', '😞', '😕', '😐', '😊', '🤩'];
+const MOOD_COLOR = ['', '#ef4444', '#f97316', '#eab308', '#22c55e', '#8b5cf6'];
+const MOOD_LABEL_EN = ['', 'Awful', 'Bad', 'Meh', 'Good', 'Amazing'];
+const MOOD_LABEL_AR = ['', 'سيء جداً', 'سيء', 'عادي', 'جيد', 'رائع'];
+
+function JournalWidget({ shell, navigate, language, journalData }: {
+  shell: (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => React.ReactNode;
+  navigate: (p: string) => void;
+  language: string;
+  journalData: any;
+}) {
+  const [chartRange, setChartRange] = useState<'1m' | '3m' | '6m'>('1m');
+  const hasEntry = journalData?.hasEntry;
+  const todayEntry = journalData?.todayEntry;
+  const currentStreak = journalData?.currentStreak ?? 0;
+  const bestStreak = journalData?.bestStreak ?? 0;
+  const history: { date: string; mood: number }[] = journalData?.history ?? [];
+  const mood = todayEntry?.mood_value ?? null;
+
+  // Filter history by chart range
+  const now = new Date();
+  const cutoff = new Date(now);
+  if (chartRange === '1m') cutoff.setMonth(now.getMonth() - 1);
+  else if (chartRange === '3m') cutoff.setMonth(now.getMonth() - 3);
+  else cutoff.setMonth(now.getMonth() - 6);
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+  const filtered = history.filter(e => e.date >= cutoffStr);
+
+  // Mood frequency count for bar chart (moods 1–5)
+  const moodCounts = [0, 0, 0, 0, 0, 0]; // index 1–5
+  filtered.forEach(e => { if (e.mood >= 1 && e.mood <= 5) moodCounts[e.mood]++; });
+  const maxCount = Math.max(...moodCounts.slice(1), 1);
+
+  // Today's note snippet
+  const noteSnippet = todayEntry?.note || todayEntry?.morning_reflection || todayEntry?.evening_reflection || null;
+  const timeStr = todayEntry?.created_at
+    ? new Date(todayEntry.created_at).toLocaleTimeString(language === 'ar' ? 'ar-SA' : 'en-US', { hour: '2-digit', minute: '2-digit' })
+    : null;
+
+  const jBg = hasEntry
+    ? 'linear-gradient(145deg,rgba(76,29,149,0.95) 0%,rgba(109,40,217,0.95) 50%,rgba(124,58,237,0.95) 100%)'
+    : 'linear-gradient(145deg,rgba(30,10,60,0.95) 0%,rgba(50,20,80,0.95) 50%,rgba(60,25,90,0.95) 100%)';
+
+  return shell(jBg, '#8b5cf6', () => navigate('/journal'),
+    <div className="p-2.5 flex flex-col h-full justify-between">
+      {/* Header: title + streak badges */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-white/20">
+            <BookOpen className="w-3 h-3 text-white" strokeWidth={2.5} />
+          </div>
+          <span className="text-[10px] font-black text-white uppercase tracking-wide">
+            {language === 'ar' ? 'يومياتي' : 'Journal'}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-orange-500/30 border border-orange-400/40">
+            <span className="text-[8px]">🔥</span>
+            <span className="text-[8px] font-black text-orange-300 tabular-nums">{currentStreak}</span>
+          </div>
+          <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-yellow-500/20 border border-yellow-400/30">
+            <span className="text-[8px]">🏆</span>
+            <span className="text-[8px] font-black text-yellow-300 tabular-nums">{bestStreak}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Today's entry card */}
+      <div className="rounded-xl bg-white/10 px-2 py-1.5 flex items-start gap-1.5">
+        <span className="text-[18px] leading-none flex-shrink-0 mt-0.5">{mood ? MOOD_EMOJI[mood] : '✍️'}</span>
+        <div className="flex flex-col gap-0 min-w-0 flex-1">
+          {hasEntry ? (
+            <>
+              <div className="flex items-center justify-between">
+                <span className="text-[8px] font-black" style={{ color: mood ? MOOD_COLOR[mood] : '#a78bfa' }}>
+                  {mood ? (language === 'ar' ? MOOD_LABEL_AR[mood] : MOOD_LABEL_EN[mood]) : ''}
+                </span>
+                {timeStr && <span className="text-[7px] text-white/40 tabular-nums">{timeStr}</span>}
+              </div>
+              {noteSnippet ? (
+                <span className="text-[7px] text-white/75 leading-snug line-clamp-2">{noteSnippet}</span>
+              ) : (
+                <span className="text-[7px] text-white/40">{language === 'ar' ? 'لا ملاحظات' : 'No note'}</span>
+              )}
+            </>
+          ) : (
+            <span className="text-[8px] text-white/50">{language === 'ar' ? 'لم تكتب اليوم بعد' : 'No entry yet today'}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Chart range toggle */}
+      <div className="flex items-center justify-between">
+        <span className="text-[7px] text-white/40 uppercase font-bold">{language === 'ar' ? 'المزاج' : 'Mood'}</span>
+        <div className="flex rounded-full overflow-hidden border border-white/20">
+          {(['1m','3m','6m'] as const).map(r => (
+            <button
+              key={r}
+              title={r}
+              onClick={(e) => { e.stopPropagation(); setChartRange(r); }}
+              className={`px-1.5 py-0.5 text-[7px] font-black uppercase transition-all ${chartRange === r ? 'bg-white/30 text-white' : 'text-white/35'}`}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Mini mood bar chart (moods 5 down to 1) */}
+      <div className="flex items-end gap-1 h-8">
+        {[5,4,3,2,1].map(m => {
+          const count = moodCounts[m];
+          const pct = maxCount > 0 ? (count / maxCount) * 100 : 0;
+          return (
+            <div key={m} className="flex-1 flex flex-col items-center gap-0.5 h-full justify-end">
+              <div
+                className="w-full rounded-t-sm transition-all"
+                style={{
+                  height: `${Math.max(pct, count > 0 ? 12 : 4)}%`,
+                  background: count > 0 ? MOOD_COLOR[m] : 'rgba(255,255,255,0.1)',
+                  opacity: count > 0 ? 0.85 : 0.4,
+                }}
+              />
+              <span className="text-[7px] leading-none">{MOOD_EMOJI[m]}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Calendar Widget (swipeable days strip) ───────────────────────────────────
 function CalendarWidget({ shell, navigate, language, upcomingCount }: {
   shell: (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => React.ReactNode;
@@ -1032,44 +1165,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   );
 
   if (wKey === 'showJournalWidget') {
-    const hasEntry = journalData?.hasEntry;
-    return shell(
-      hasEntry 
-        ? 'linear-gradient(145deg,rgba(124,58,237,0.7) 0%,rgba(139,92,246,0.7) 40%,rgba(167,139,250,0.7) 100%)'
-        : 'rgba(0,0,0,0.7)',
-      '#8b5cf6',
-      () => navigate('/journal'),
-      <div className="p-4 flex flex-col justify-between h-full">
-        <div className="flex items-start justify-between">
-          <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
-            {hasEntry ? <Check className="w-6 h-6 text-white" strokeWidth={3} /> : <BookOpen className="w-6 h-6 text-white" strokeWidth={2} />}
-          </div>
-          <span className="text-3xl leading-none">{hasEntry ? '✅' : '✍️'}</span>
-        </div>
-        {/* 7-day streak dots (simulated visual for now, but state reflects today) */}
-        <div>
-          <div className="flex gap-1 mb-2">
-            {['M','T','W','T','F','S','S'].map((d, i) => {
-              // Highlight today if entry exists
-              const isToday = i === (new Date().getDay() + 6) % 7; 
-              const active = isToday && hasEntry;
-              return (
-                <div key={i} className="flex flex-col items-center gap-0.5">
-                  <div className={`w-4 h-4 rounded-full transition-all ${active ? 'bg-green-400 scale-110 shadow-sm' : 'bg-white/20'}`} />
-                  <span className="text-[7px] text-white/40">{d}</span>
-                </div>
-              );
-            })}
-          </div>
-          <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{language === 'ar' ? 'يومياتي' : 'Journal'}</p>
-          <p className="text-[11px] font-semibold mt-0.5 text-white/80" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>
-            {hasEntry 
-              ? (language === 'ar' ? 'تم التسجيل ✓' : 'Entry saved ✓') 
-              : (language === 'ar' ? 'سجّل يومك' : 'Write today')}
-          </p>
-        </div>
-      </div>
-    );
+    return <JournalWidget shell={shell} navigate={navigate} language={language} journalData={journalData} />;
   }
 
   if (wKey === 'showQuoteWidget') return shell(
