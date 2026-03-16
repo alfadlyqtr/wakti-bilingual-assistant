@@ -889,8 +889,12 @@ export default function MusicStudio() {
               <button
                 key={card.key}
                 onClick={() => setMainTab(card.key)}
-                className={`relative text-left p-5 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1`}
+                className={`relative text-left p-5 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1 group`}
               >
+                {/* Soft radial pulse behind card */}
+                <div className="pointer-events-none absolute inset-0 -z-10 scale-110 opacity-30 blur-2xl" style={{ background: 'radial-gradient(circle, hsla(210,100%,65%,0.4) 0%, transparent 70%)' }} />
+                {/* Shimmering glass border effect */}
+                <div className="absolute inset-0 rounded-3xl border border-white/40 dark:border-white/30" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 75%, rgba(255,255,255,0.3) 100%)', mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'xor', WebkitMaskComposite: 'xor', padding: '1px', opacity: 0.8 }} />
                 <div className="pointer-events-none absolute inset-0" style={{ background: card.accentGlowStyle }} />
                 <div
                   className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4 relative"
@@ -900,7 +904,7 @@ export default function MusicStudio() {
                   <span className="relative text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]">{card.icon}</span>
                 </div>
                 <div className="flex items-center justify-between mb-1">
-                  <h3 className="text-base font-bold text-foreground">{isArabic ? card.titleAr : card.titleEn}</h3>
+                  <h3 className="text-base font-extrabold text-foreground tracking-tight">{isArabic ? card.titleAr : card.titleEn}</h3>
                   <ArrowRight className={`h-4 w-4 text-muted-foreground/40 shrink-0 ${isArabic ? 'rotate-180' : ''}`} />
                 </div>
                 <p className="text-[12px] text-muted-foreground/80 leading-relaxed line-clamp-2">{isArabic ? card.descAr : card.descEn}</p>
@@ -912,14 +916,18 @@ export default function MusicStudio() {
               <button
                 key={card.key}
                 onClick={() => setMainTab(card.key)}
-                className={`relative text-left p-6 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1 md:row-span-2`}
+                className={`relative text-left p-6 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1 md:row-span-2 group`}
               >
+                {/* Soft radial pulse behind card — orange */}
+                <div className="pointer-events-none absolute inset-0 -z-10 scale-110 opacity-40 blur-3xl" style={{ background: 'radial-gradient(circle, hsla(25,95%,60%,0.35) 0%, transparent 70%)' }} />
                 <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(25,95%,60%,0.22), transparent)' }} />
                 {card.badge && (
                   <span className="absolute top-4 right-4 text-[10px] font-semibold px-2.5 py-1 rounded-full bg-orange-500/20 text-orange-300 border border-orange-400/30 backdrop-blur-sm">
                     {isArabic ? card.badge.ar : card.badge.en}
                   </span>
                 )}
+                {/* Shimmering glass border effect */}
+                <div className="absolute inset-0 rounded-3xl border border-white/40 dark:border-white/30" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 75%, rgba(255,255,255,0.35) 100%)', mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'xor', WebkitMaskComposite: 'xor', padding: '1px', opacity: 0.8 }} />
                 <div
                   className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-5 relative"
                   style={{ background: card.icon3dBg, boxShadow: card.icon3dGlow }}
@@ -928,7 +936,7 @@ export default function MusicStudio() {
                   <span className="relative text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]">{card.icon}</span>
                 </div>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xl font-bold text-foreground">{isArabic ? card.titleAr : card.titleEn}</h3>
+                  <h3 className="text-xl font-extrabold text-foreground tracking-tight">{isArabic ? card.titleAr : card.titleEn}</h3>
                   <ArrowRight className={`h-5 w-5 text-muted-foreground/40 shrink-0 ${isArabic ? 'rotate-180' : ''}`} />
                 </div>
                 <p className="text-[13px] text-muted-foreground/80 leading-relaxed">{isArabic ? card.descAr : card.descEn}</p>
@@ -940,14 +948,18 @@ export default function MusicStudio() {
               <button
                 key={card.key}
                 onClick={() => setMainTab(card.key)}
-                className={`relative text-left p-6 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1 md:row-span-2`}
+                className={`relative text-left p-6 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1 md:row-span-2 group`}
               >
+                {/* Soft radial pulse behind card — emerald */}
+                <div className="pointer-events-none absolute inset-0 -z-10 scale-110 opacity-40 blur-3xl" style={{ background: 'radial-gradient(circle, hsla(160,80%,55%,0.35) 0%, transparent 70%)' }} />
                 <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(160,80%,55%,0.22), transparent)' }} />
                 {card.badge && (
                   <span className="absolute top-4 right-4 text-[10px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 backdrop-blur-sm">
                     {isArabic ? card.badge.ar : card.badge.en}
                   </span>
                 )}
+                {/* Shimmering glass border effect */}
+                <div className="absolute inset-0 rounded-3xl border border-white/40 dark:border-white/30" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 75%, rgba(255,255,255,0.35) 100%)', mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'xor', WebkitMaskComposite: 'xor', padding: '1px', opacity: 0.8 }} />
                 <div
                   className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-5 relative"
                   style={{ background: card.icon3dBg, boxShadow: card.icon3dGlow }}
@@ -956,7 +968,7 @@ export default function MusicStudio() {
                   <span className="relative text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]">{card.icon}</span>
                 </div>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xl font-bold text-foreground">{isArabic ? card.titleAr : card.titleEn}</h3>
+                  <h3 className="text-xl font-extrabold text-foreground tracking-tight">{isArabic ? card.titleAr : card.titleEn}</h3>
                   <ArrowRight className={`h-5 w-5 text-muted-foreground/40 shrink-0 ${isArabic ? 'rotate-180' : ''}`} />
                 </div>
                 <p className="text-[13px] text-muted-foreground/80 leading-relaxed">{isArabic ? card.descAr : card.descEn}</p>
@@ -968,9 +980,13 @@ export default function MusicStudio() {
               <button
                 key={card.key}
                 onClick={() => setMainTab(card.key)}
-                className={`relative text-left p-5 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1`}
+                className={`relative text-left p-5 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1 group`}
               >
+                {/* Soft radial pulse behind card — violet */}
+                <div className="pointer-events-none absolute inset-0 -z-10 scale-110 opacity-30 blur-2xl" style={{ background: 'radial-gradient(circle, hsla(280,70%,65%,0.4) 0%, transparent 70%)' }} />
                 <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(280,70%,65%,0.18), transparent)' }} />
+                {/* Shimmering glass border effect */}
+                <div className="absolute inset-0 rounded-3xl border border-white/40 dark:border-white/30" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 75%, rgba(255,255,255,0.3) 100%)', mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'xor', WebkitMaskComposite: 'xor', padding: '1px', opacity: 0.8 }} />
                 <div
                   className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4 relative"
                   style={{ background: card.icon3dBg, boxShadow: card.icon3dGlow }}
@@ -979,7 +995,7 @@ export default function MusicStudio() {
                   <span className="relative text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]">{card.icon}</span>
                 </div>
                 <div className="flex items-center justify-between mb-1">
-                  <h3 className="text-base font-bold text-foreground">{isArabic ? card.titleAr : card.titleEn}</h3>
+                  <h3 className="text-base font-extrabold text-foreground tracking-tight">{isArabic ? card.titleAr : card.titleEn}</h3>
                   <ArrowRight className={`h-4 w-4 text-muted-foreground/40 shrink-0 ${isArabic ? 'rotate-180' : ''}`} />
                 </div>
                 <p className="text-[12px] text-muted-foreground/80 leading-relaxed line-clamp-2">{isArabic ? card.descAr : card.descEn}</p>

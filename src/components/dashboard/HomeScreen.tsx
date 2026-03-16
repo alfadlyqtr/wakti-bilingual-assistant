@@ -96,6 +96,7 @@ const LS_HEADER_COLOR_BASE = "homescreen_header_color";
 const LS_UNIFIED_BASE      = "homescreen_unified_grid_v6";
 const LS_WIDGETS_BASE      = "homescreen_widgets_v1";
 const LS_HSBG_BASE         = "homescreen_bg_style_v1";
+const LS_HSBG_ACTIVE_BASE  = "homescreen_bg_style_active";
 
 // Read the currently-cached user ID (set on login) so useState initialisers can
 // immediately read the correct user-scoped key before useEffect fires.
@@ -1572,6 +1573,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const [headerColor,     setHeaderColor]     = useState<string>(() => localStorage.getItem(LS_HEADER_COLOR_KEY()) || "");
 
   // Homescreen background style from Settings — cached in localStorage for instant restore
+  const [hsBgActive, setHsBgActive] = useState<boolean>(() => localStorage.getItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE)) === 'true');
   const [hsBg, setHsBg] = useState<{ mode: 'solid'|'gradient'; color1: string; color2: string; color3: string; angle: number; glow: boolean }>(() => {
     try {
       const cached = JSON.parse(localStorage.getItem(LS_HSBG_KEY()) || 'null');
@@ -1943,6 +1945,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const saveBgStyle = () => {
     const patch = { mode: hsBg.mode, color1: hsBg.color1, color2: hsBg.color2, color3: hsBg.color3, angle: hsBg.angle, glow: hsBg.glow };
     localStorage.setItem(LS_HSBG_KEY(), JSON.stringify(patch));
+    localStorage.setItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE), 'true');
+    setHsBgActive(true);
     syncToSupabase({ homescreenBg: patch });
     window.dispatchEvent(new Event('homescreenBgChanged'));
     setBgPanelOpen(false);
@@ -2213,8 +2217,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   // Edit bar glass
   const editBarGlass = "bg-black/40 backdrop-blur-xl border-b border-white/10";
 
-  // Custom background from Settings (solid/gradient) — overrides theme default if set
-  const hasCustomBg = !hasBg && !!hsBg.color1 && hsBg.color1 !== '#1a1a2e';
+  // Custom background from Settings (solid/gradient) — only active when user explicitly saved
+  const hasCustomBg = !hasBg && hsBgActive;
   const customBgStyle = hasCustomBg
     ? hsBg.mode === 'gradient'
       ? hsBg.color3
@@ -2336,6 +2340,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                       setBgGradLeft('');
                       setBgGradRight('');
                       try { localStorage.removeItem(lsKey(uid,'hs_grad_left')); localStorage.removeItem(lsKey(uid,'hs_grad_right')); } catch {}
+                      // Reset custom BG style active flag
+                      setHsBgActive(false);
+                      try { localStorage.removeItem(lsKey(uid, LS_HSBG_ACTIVE_BASE)); } catch {}
                       // Reset unified grid
                       setUnifiedGrid([]);
                       localStorage.removeItem(LS_UNIFIED_KEY());
