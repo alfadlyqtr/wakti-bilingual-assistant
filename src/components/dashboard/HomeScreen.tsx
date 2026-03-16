@@ -1317,7 +1317,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
       <div className="relative flex-1 flex flex-col justify-center">
         <span className="absolute top-0 left-0 text-[40px] font-serif leading-none select-none" style={{ color: 'rgba(99,102,241,0.22)', lineHeight: 1 }}>"</span>
         <p
-          className="text-[10px] italic leading-snug text-white/90 line-clamp-4 px-3 pt-2"
+          className="text-[12px] italic leading-snug text-white/90 line-clamp-3 px-3 pt-2"
           style={{ textShadow: '0 1px 6px rgba(0,0,0,0.6)' }}
           dir={language === 'ar' ? 'rtl' : 'ltr'}
         >
