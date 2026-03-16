@@ -2286,7 +2286,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                       {activeWidgetCount}/3 {language === 'ar' ? 'نشط' : 'active'}
                     </span>
                   </div>
-                  <div className="grid grid-cols-3 gap-1.5">
+                  <div className="flex items-center gap-1">
                     {WIDGET_OPTIONS.map(({ key, labelEn, labelAr }) => {
                       const isOn = hsWidgets[key];
                       const isDisabled = !isOn && activeWidgetCount >= 3;
@@ -2294,18 +2294,15 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         <button
                           key={key}
                           onClick={() => !isDisabled && toggleHsWidget(key)}
-                          className={`flex items-center justify-center gap-1 px-2 py-1.5 rounded-full text-[11px] font-semibold border transition-all ${
+                          className={`flex-1 flex items-center justify-center gap-0.5 py-1 rounded-full text-[10px] font-semibold border transition-all ${
                             isOn
                               ? 'bg-indigo-500/70 border-indigo-400/50 text-white'
                               : isDisabled
-                                ? 'bg-white/5 border-white/10 text-white/25 cursor-not-allowed'
-                                : 'bg-white/12 border-white/20 text-white/70 hover:bg-white/20'
+                                ? 'bg-white/5 border-white/10 text-white/20 cursor-not-allowed'
+                                : 'bg-white/10 border-white/20 text-white/60'
                           }`}
                         >
-                          {isOn
-                            ? <Check className="w-2.5 h-2.5 flex-shrink-0" />
-                            : <span className="w-2.5 h-2.5 rounded-full border border-current opacity-60 flex-shrink-0" />
-                          }
+                          {isOn && <Check className="w-2 h-2 flex-shrink-0" />}
                           <span className="truncate">{language === 'ar' ? labelAr : labelEn}</span>
                         </button>
                       );

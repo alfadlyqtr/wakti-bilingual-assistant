@@ -88,9 +88,12 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
                   boxShadow: showQAR ? "0 0 0 1px rgba(233,206,176,0.35) inset" : "none",
                 }}
               >
-                <span className="text-[15px] leading-none">🇶🇦</span>
-                <span>QA</span>
-                <span className="text-[10px] font-semibold opacity-80">QAR</span>
+                {/* Qatar flag: white left + maroon right */}
+                <span style={{ display: "inline-flex", width: 18, height: 13, borderRadius: 2, overflow: "hidden", flexShrink: 0, border: "0.5px solid rgba(255,255,255,0.2)" }}>
+                  <span style={{ flex: "0 0 35%", background: "#fff" }} />
+                  <span style={{ flex: 1, background: "#8D1B3D", clipPath: "polygon(8px 0,100% 0,100% 100%,8px 100%,0 50%)" }} />
+                </span>
+                <span>QAR</span>
               </button>
               <div style={{ width: 1, height: 18, background: "rgba(233,206,176,0.18)", flexShrink: 0 }} />
               <button
@@ -103,9 +106,11 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
                   boxShadow: !showQAR ? "0 0 0 1px rgba(233,206,176,0.35) inset" : "none",
                 }}
               >
-                <span className="text-[15px] leading-none">🇺🇸</span>
-                <span>US</span>
-                <span className="text-[10px] font-semibold opacity-80">USD</span>
+                {/* US flag: red/white stripes + blue canton */}
+                <span style={{ display: "inline-flex", width: 18, height: 13, borderRadius: 2, overflow: "hidden", flexShrink: 0, border: "0.5px solid rgba(255,255,255,0.2)", position: "relative", background: "repeating-linear-gradient(180deg, #B22234 0px, #B22234 2px, #fff 2px, #fff 4px)" }}>
+                  <span style={{ position: "absolute", top: 0, left: 0, width: 8, height: 7, background: "#3C3B6E" }} />
+                </span>
+                <span>USD</span>
               </button>
             </motion.div>
 

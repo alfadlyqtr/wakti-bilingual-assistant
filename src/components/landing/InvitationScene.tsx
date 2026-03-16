@@ -12,10 +12,6 @@ export function InvitationScene({ language = "en" }: InvitationSceneProps) {
   const navigate = useNavigate();
   const isArabic = language === "ar";
 
-  const featureChips = isArabic
-    ? ["🤖 AI Chat", "🎨 توليد صور", "💻 مبرمج AI", "🎙️ استنساخ صوت", "🌐 ترجمة", "✅ مهام", "📅 تقويم", "❤️ صحة", "🎮 ألعاب", "🎬 فيديو", "+ أكثر"]
-    : ["🤖 AI Chat", "🎨 Image Gen", "💻 AI Coder", "🎙️ Voice Clone", "🌐 Translation", "✅ Tasks", "📅 Calendar", "❤️ Vitality", "🎮 Games", "🎬 Studio", "+ more"];
-
   return (
     <LandingScene
       id="invitation"
@@ -89,39 +85,6 @@ export function InvitationScene({ language = "en" }: InvitationSceneProps) {
           <div className="flex items-center gap-1">
             {[1,2,3,4,5].map(i => (
               <Star key={i} className="w-2.5 h-2.5 text-[#e9ceb0] fill-[#e9ceb0]" />
-            ))}
-          </div>
-        </motion.div>
-
-        {/* ── Feature chips scroll ── */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.28 }}
-          className="w-full mb-7 overflow-hidden"
-        >
-          <div
-            className="flex gap-2 flex-wrap justify-center"
-            style={{ maxHeight: 72, overflow: "hidden" }}
-          >
-            {featureChips.map((chip, i) => (
-              <motion.span
-                key={i}
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.3 + i * 0.03 }}
-                className="text-[10.5px] font-medium px-2.5 py-1 rounded-full"
-                style={{
-                  background: "rgba(255,255,255,0.07)",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  color: "rgba(255,255,255,0.65)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {chip}
-              </motion.span>
             ))}
           </div>
         </motion.div>
