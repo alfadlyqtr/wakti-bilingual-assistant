@@ -1230,7 +1230,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
       <div className="absolute inset-0" style={{ background: bg, opacity: 0.6 }} />
       {/* Frosted glass shimmer overlay */}
       <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.04) 50%, transparent 100%)' }} />
-      <div className={`${isDark || hasBg ? 'widget-text-glow-dark' : 'widget-text-glow-light'} relative z-10 w-full h-full`}>{children}</div>
+      <div className={`${isDark || hasBg ? 'widget-text-glow-dark' : 'widget-text-glow-light'} relative z-10 w-full h-full flex flex-col`}>{children}</div>
     </div>
   );
 
