@@ -2202,10 +2202,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         style={{
           ...(hasBg ? {
             backgroundColor: '#0c0f14',
-            backgroundImage: `radial-gradient(ellipse at center, transparent 30%, rgba(12,15,20,0.6) 60%, #0c0f14 80%), url(${bgImage})`,
-            backgroundSize: "cover, contain",
-            backgroundPosition: "center center, center center",
-            backgroundRepeat: "no-repeat, no-repeat",
+            backgroundImage: `linear-gradient(to bottom, rgba(12,15,20,0.55) 0%, rgba(12,15,20,0.1) 25%, rgba(12,15,20,0.1) 70%, rgba(12,15,20,0.75) 100%), url(${bgImage})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center center",
+            backgroundRepeat: "no-repeat",
           } : hasCustomBg ? {
             background: customBgStyle,
           } : {}),
