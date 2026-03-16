@@ -49,6 +49,7 @@ import {
   Navigation,
   CalendarDays,
   Bell,
+  Users,
 } from "lucide-react";
 import { WaktiIcon } from "@/components/icons/WaktiIcon";
 import { getQuoteForDisplay, getQuoteText, getQuoteAuthor } from "@/utils/quoteService";
@@ -868,6 +869,126 @@ function JournalWidget({ shell, navigate, language, journalData }: {
   );
 }
 
+// ─── Maw3d Widget ─────────────────────────────────────────────────────────────
+function Maw3dWidget({ shell, navigate, language, events, attendingCounts }: {
+  shell: (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => React.ReactNode;
+  navigate: (p: string) => void;
+  language: string;
+  events: any[];
+  attendingCounts: Record<string, number>;
+}) {
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // Active events = today or future, sorted soonest first
+  const active = events
+    .filter(e => { try { return e.event_date >= todayStr; } catch { return false; } })
+    .sort((a, b) => a.event_date.localeCompare(b.event_date))
+    .slice(0, 3);
+
+  const next = active[0] ?? null;
+  const totalAttending = active.reduce((sum, e) => sum + (attendingCounts[e.id] ?? 0), 0);
+
+  // Background: vibrant blue-purple gradient (event feel)
+  const mBg = active.length > 0
+    ? 'linear-gradient(145deg,rgba(29,14,80,0.97) 0%,rgba(49,29,120,0.97) 40%,rgba(79,42,160,0.97) 100%)'
+    : 'linear-gradient(145deg,rgba(15,10,40,0.97) 0%,rgba(25,18,60,0.97) 100%)';
+  const mGlow = active.length > 0 ? '#7c3aed' : '#4b5563';
+
+  // Format event date for display
+  const fmtDate = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr + 'T00:00:00');
+      const isToday = dateStr === todayStr;
+      if (isToday) return language === 'ar' ? 'اليوم' : 'Today';
+      return d.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { month: 'short', day: 'numeric' });
+    } catch { return dateStr; }
+  };
+
+  const fmtTime = (t?: string) => {
+    if (!t) return '';
+    try {
+      const [h, m] = t.split(':').map(Number);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const hh = h % 12 || 12;
+      return `${hh}:${String(m).padStart(2,'0')} ${ampm}`;
+    } catch { return t; }
+  };
+
+  return shell(mBg, mGlow, () => navigate('/maw3d'),
+    <div className="p-2.5 flex flex-col h-full justify-between">
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: 'rgba(124,58,237,0.5)' }}>
+            <CalendarDays className="w-3 h-3 text-white" strokeWidth={2.5} />
+          </div>
+          <span className="text-[10px] font-black text-white uppercase tracking-wide">
+            {language === 'ar' ? 'مواعيد' : 'Maw3d'}
+          </span>
+        </div>
+        <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border border-purple-400/30" style={{ background: 'rgba(124,58,237,0.25)' }}>
+          <span className="text-[9px] font-black text-purple-200 tabular-nums">{active.length}</span>
+          <span className="text-[7px] text-purple-300/70 uppercase">{language === 'ar' ? ' حدث' : ' event'}{active.length !== 1 ? 's' : ''}</span>
+        </div>
+      </div>
+
+      {/* Active event cards */}
+      {active.length > 0 ? (
+        <div className="flex flex-col gap-1 flex-1 justify-center my-1">
+          {active.map((ev, idx) => {
+            const rsvp = attendingCounts[ev.id] ?? 0;
+            const isToday = ev.event_date === todayStr;
+            return (
+              <div
+                key={ev.id}
+                className="rounded-xl px-2 py-1.5 flex items-center gap-1.5"
+                style={{
+                  background: isToday
+                    ? 'linear-gradient(90deg,rgba(124,58,237,0.45),rgba(167,139,250,0.25))'
+                    : 'rgba(255,255,255,0.08)',
+                  border: isToday ? '1px solid rgba(167,139,250,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                }}
+              >
+                {/* Date pill */}
+                <div className="flex flex-col items-center justify-center rounded-lg px-1.5 py-0.5 flex-shrink-0" style={{ background: 'rgba(124,58,237,0.4)', minWidth: 28 }}>
+                  <span className="text-[8px] font-black text-purple-200 leading-tight">{fmtDate(ev.event_date)}</span>
+                  {ev.start_time && <span className="text-[6px] text-purple-300/70 leading-tight tabular-nums">{fmtTime(ev.start_time)}</span>}
+                </div>
+                {/* Title + RSVP */}
+                <div className="flex flex-col min-w-0 flex-1 gap-0">
+                  <span className="text-[8px] font-bold text-white leading-tight truncate">{ev.title}</span>
+                  <div className="flex items-center gap-0.5">
+                    <Users className="w-2 h-2 text-green-400 flex-shrink-0" strokeWidth={2.5} />
+                    <span className="text-[7px] text-green-300 font-bold tabular-nums">{rsvp}</span>
+                    <span className="text-[6px] text-white/30">{language === 'ar' ? ' قبل' : ' going'}</span>
+                  </div>
+                </div>
+                {isToday && <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0 animate-pulse" />}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center">
+          <span className="text-[9px] text-white/30 uppercase">{language === 'ar' ? 'لا مواعيد قادمة' : 'No upcoming events'}</span>
+        </div>
+      )}
+
+      {/* Footer: total RSVP attending */}
+      <div className="flex items-center justify-between">
+        <span className="text-[7px] text-white/35 uppercase font-bold">
+          {language === 'ar' ? 'إجمالي الحضور' : 'Total attending'}
+        </span>
+        <div className="flex items-center gap-0.5">
+          <Users className="w-2.5 h-2.5 text-purple-300" strokeWidth={2.5} />
+          <span className="text-[9px] font-black text-purple-200 tabular-nums">{totalAttending}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Calendar Widget (swipeable days strip) ───────────────────────────────────
 function CalendarWidget({ shell, navigate, language, upcomingCount }: {
   shell: (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => React.ReactNode;
@@ -962,7 +1083,7 @@ function CalendarWidget({ shell, navigate, language, upcomingCount }: {
 }
 
 // ─── Widget content renderer (no drag logic, just visuals) ────────────────────
-function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, pendingTasks, completedToday, upcomingCount, navigate, quoteText, quoteAuthor, whoopData, journalData, reminders }: {
+function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, pendingTasks, completedToday, upcomingCount, navigate, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts }: {
   wKey: WidgetId; editMode: boolean; language: string; theme: string;
   hasBg: boolean; statCardBase: string;
   pendingTasks: number; completedToday: number; upcomingCount: number;
@@ -971,6 +1092,8 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   whoopData?: any;
   journalData?: any;
   reminders?: any[];
+  maw3dEvents?: any[];
+  attendingCounts?: Record<string, number>;
 }) {
   const isDark = theme === 'dark';
   const total = pendingTasks + completedToday;
@@ -1021,7 +1144,11 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
     return <CalendarWidget shell={shell} navigate={navigate} language={language} upcomingCount={upcomingCount} />;
   }
 
-  if (wKey === 'showMaw3dWidget') return shell(
+  if (wKey === 'showMaw3dWidget') {
+    return <Maw3dWidget shell={shell} navigate={navigate} language={language} events={maw3dEvents ?? []} attendingCounts={attendingCounts ?? {}} />;
+  }
+
+  if (wKey === '__DEAD_showMaw3dWidget__') return shell(
     maw3dAccent === '#22c55e'
       ? 'linear-gradient(145deg,rgba(6,78,59,0.7) 0%,rgba(6,95,70,0.7) 40%,rgba(4,120,87,0.7) 100%)'
       : maw3dAccent === '#f59e0b'
@@ -1202,8 +1329,10 @@ interface UnifiedWidgetCellProps {
   whoopData?: any;
   journalData?: any;
   reminders?: any[];
+  maw3dEvents?: any[];
+  attendingCounts?: Record<string, number>;
 }
-function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData, journalData, reminders }: UnifiedWidgetCellProps) {
+function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts }: UnifiedWidgetCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id, data: { type: 'unified' },
   });
@@ -1231,6 +1360,8 @@ function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCar
         whoopData={whoopData}
         journalData={journalData}
         reminders={reminders}
+        maw3dEvents={maw3dEvents}
+        attendingCounts={attendingCounts}
       />
       {editMode && (
         <div className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full bg-black/70 border border-white/30 flex items-center justify-center">
@@ -1349,7 +1480,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const _hasLoadedFromSupabase = useRef(false);
 
   const { tasks, reminders }  = useOptimizedTRData();
-  const { events } = useOptimizedMaw3dEvents();
+  const { events, attendingCounts } = useOptimizedMaw3dEvents();
   const whoopData = useWhoopData();
   const journalData = useJournalData();
   const pendingTasks  = tasks.filter(t => !t.completed).length;
@@ -2179,6 +2310,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                           whoopData={whoopData}
                           journalData={journalData}
                           reminders={reminders}
+                          maw3dEvents={events}
+                          attendingCounts={attendingCounts}
                         />
                       );
                     }
