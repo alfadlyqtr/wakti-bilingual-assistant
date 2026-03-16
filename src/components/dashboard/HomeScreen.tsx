@@ -191,24 +191,33 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false }: {
       className={`relative flex-shrink-0 ${editMode ? "animate-wiggle" : ""}`}
       style={{ width: px, height: px }}
     >
-      {/* Main gradient body with iOS-style frosted glass */}
+      {/* Main gradient body — 3D glassmorphic tile */}
       <div
         className={`absolute inset-0 rounded-[23%] bg-gradient-to-br ${app.gradient}`}
         style={{
-          opacity: 0.75,
-          backdropFilter: 'blur(20px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+          opacity: 0.82,
+          backdropFilter: 'blur(24px) saturate(200%)',
+          WebkitBackdropFilter: 'blur(24px) saturate(200%)',
           boxShadow: glowEnabled
-            ? `0 0 16px ${app.glow}bb, 0 4px 14px ${app.glow}55, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`
-            : `0 4px 14px ${app.glow}44, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`,
+            ? `0 0 18px ${app.glow}cc, 0 6px 18px ${app.glow}66, 0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.2)`
+            : `0 6px 18px ${app.glow}55, 0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.2)`,
+          outline: '0.5px solid rgba(180,190,200,0.28)',
         }}
       />
-      {/* Liquid glass highlight */}
+      {/* 3D top-left edge highlight */}
       <div
         className="absolute rounded-[23%] pointer-events-none"
         style={{
           inset: 0,
-          background: "linear-gradient(145deg, rgba(255,255,255,0.38) 0%, rgba(255,255,255,0.08) 40%, transparent 70%)",
+          background: "linear-gradient(135deg, rgba(255,255,255,0.52) 0%, rgba(255,255,255,0.12) 30%, transparent 60%)",
+        }}
+      />
+      {/* Soft inner glow at bottom-right (depth) */}
+      <div
+        className="absolute rounded-[23%] pointer-events-none"
+        style={{
+          inset: 0,
+          background: `radial-gradient(ellipse at 80% 80%, ${app.glow}33 0%, transparent 65%)`,
         }}
       />
       {/* Icon */}
@@ -1182,11 +1191,11 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
       className="rounded-3xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-all select-none relative"
       style={{
         background: bg,
-        opacity: 0.82,
-        backdropFilter: 'blur(32px) saturate(200%) brightness(0.9)',
-        WebkitBackdropFilter: 'blur(32px) saturate(200%) brightness(0.9)',
+        opacity: 0.6,
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         boxShadow: `0 4px 22px ${glow}44, 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.18)`,
-        border: '1px solid rgba(255,255,255,0.10)',
+        border: '0.5px solid rgba(180,190,200,0.25)',
       }}
     >
       {/* Frosted glass shimmer overlay */}
@@ -2220,8 +2229,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       >
           <div className="flex-none flex items-center justify-between px-4 pt-3 pb-1">
             <div className="px-3 py-2 rounded-xl bg-black/25 backdrop-blur-md border border-white/10">
-              <p className="text-[12px] font-bold" style={{ color: subColor, textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>{greeting}</p>
-              <p className="text-[17px] font-black leading-tight" style={{ color: headColor, textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>{displayName}</p>
+              <p className="text-[12px] font-extrabold tracking-wide" style={{ color: subColor, textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>{greeting}</p>
+              <p className="text-[17px] font-semibold leading-tight" style={{ color: headColor, textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>{displayName}</p>
             </div>
             {!editMode ? (
               <button onClick={() => setEditMode(true)} title="Edit homescreen" className="p-2 rounded-full bg-white/15 backdrop-blur-md">
@@ -2543,6 +2552,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                 WebkitBackdropFilter: 'blur(20px)',
                 border: '1px solid transparent',
                 backgroundClip: 'padding-box',
+                outline: '0.5px solid rgba(180,190,200,0.35)',
                 boxShadow: '0 34px 70px -16px rgba(0,0,0,0.4), 0 16px 46px rgba(0,0,0,0.18), 0 0 0 1px rgba(192,200,210,0.45), 0 0 0 2px rgba(255,255,255,0.06)',
               }}
             >
