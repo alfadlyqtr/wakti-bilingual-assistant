@@ -577,6 +577,104 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
   );
 }
 
+// ─── T&R Widget (Tasks + Reminders tabs) ──────────────────────────────────────
+function TRWidget({ shell, navigate, language, pendingTasks, completedToday, total, pct, taskAccent, taskIconBg }: {
+  shell: (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => React.ReactNode;
+  navigate: (p: string) => void;
+  language: string;
+  pendingTasks: number;
+  completedToday: number;
+  total: number;
+  pct: number;
+  taskAccent: string;
+  taskIconBg: string;
+}) {
+  const [activeTab, setActiveTab] = useState<'tasks' | 'reminders'>('tasks');
+  const trBg = pct >= 70 || pendingTasks === 0
+    ? 'linear-gradient(145deg,rgba(4,50,32,0.95) 0%,rgba(5,78,50,0.95) 50%,rgba(4,100,65,0.95) 100%)'
+    : pct >= 30
+    ? 'linear-gradient(145deg,rgba(80,30,5,0.95) 0%,rgba(120,50,8,0.95) 50%,rgba(160,70,6,0.95) 100%)'
+    : 'linear-gradient(145deg,rgba(70,10,10,0.95) 0%,rgba(120,15,15,0.95) 50%,rgba(160,20,20,0.95) 100%)';
+  const Rtr = 16; const Ctr = 2 * Math.PI * Rtr;
+
+  return shell(trBg, taskAccent, () => navigate('/tr'),
+    <div className="p-2.5 flex flex-col h-full justify-between">
+      {/* Toggle pill */}
+      <div className="flex justify-center">
+        <button
+          onClick={(e) => { e.stopPropagation(); setActiveTab(t => t === 'tasks' ? 'reminders' : 'tasks'); }}
+          className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 border border-white/25 active:scale-95 transition-all"
+        >
+          <CheckSquare className={`w-3 h-3 ${activeTab === 'tasks' ? 'text-white' : 'text-white/30'}`} strokeWidth={2.5} />
+          <div className="w-px h-2.5 bg-white/25" />
+          <Bell className={`w-3 h-3 ${activeTab === 'reminders' ? 'text-white' : 'text-white/30'}`} strokeWidth={2.5} />
+        </button>
+      </div>
+
+      {/* Header row */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <div className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ background: taskIconBg }}>
+            {activeTab === 'tasks'
+              ? <CheckSquare className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
+              : <Bell className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />}
+          </div>
+          <span className="text-[11px] font-black text-white uppercase tracking-wide">
+            {activeTab === 'tasks' ? (language === 'ar' ? 'المهام' : 'Tasks') : (language === 'ar' ? 'تنبيهات' : 'Alerts')}
+          </span>
+        </div>
+        <svg width="36" height="36" viewBox="0 0 36 36" className="-rotate-90 flex-shrink-0">
+          <circle cx="18" cy="18" r={Rtr} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="3.5" />
+          <circle cx="18" cy="18" r={Rtr} fill="none" stroke={taskAccent} strokeWidth="3.5"
+            strokeDasharray={Ctr} strokeDashoffset={Ctr * (1 - pct / 100)}
+            strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
+        </svg>
+      </div>
+
+      {/* Metric cards */}
+      <div className="grid grid-cols-2 gap-1.5">
+        <div className="bg-white/10 rounded-xl p-2 flex flex-col gap-0.5">
+          <span className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'الكل' : 'Total'}</span>
+          <span className="text-[20px] font-black text-white leading-none tabular-nums">{activeTab === 'tasks' ? total : 0}</span>
+        </div>
+        <div className="bg-white/10 rounded-xl p-2 flex flex-col gap-0.5">
+          <span className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'مكتمل' : 'Done'}</span>
+          <span className="text-[20px] font-black leading-none tabular-nums" style={{ color: taskAccent }}>{activeTab === 'tasks' ? completedToday : 0}</span>
+        </div>
+      </div>
+
+      {/* Mini bar graph */}
+      <div className="flex flex-col gap-1">
+        <div className="flex items-end gap-0.5 h-8">
+          {activeTab === 'tasks' ? (
+            <>
+              {Array.from({ length: Math.min(pendingTasks, 8) }).map((_, i) => (
+                <div key={`p${i}`} className="flex-1 rounded-t-sm bg-white/20" style={{ height: `${40 + (i % 3) * 15}%` }} />
+              ))}
+              {Array.from({ length: Math.min(completedToday, 8) }).map((_, i) => (
+                <div key={`d${i}`} className="flex-1 rounded-t-sm transition-all" style={{ height: `${55 + (i % 4) * 11}%`, background: taskAccent }} />
+              ))}
+              {total === 0 && Array.from({ length: 6 }).map((_, i) => (
+                <div key={`e${i}`} className="flex-1 rounded-t-sm bg-white/10" style={{ height: `${30 + i * 8}%` }} />
+              ))}
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <span className="text-[8px] text-white/30 uppercase">{language === 'ar' ? 'لا تنبيهات' : 'No alerts'}</span>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[7px] text-white/40 font-bold">{language === 'ar' ? 'معلّق' : 'pending'}</span>
+          <span className="text-[7px] font-bold" style={{ color: taskAccent }}>{activeTab === 'tasks' ? pct : 0}%</span>
+          <span className="text-[7px] text-white/40 font-bold">{language === 'ar' ? 'مكتمل' : 'done'}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Calendar Widget (swipeable days strip) ───────────────────────────────────
 function CalendarWidget({ shell, navigate, language, upcomingCount }: {
   shell: (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => React.ReactNode;
   navigate: (p: string) => void;
