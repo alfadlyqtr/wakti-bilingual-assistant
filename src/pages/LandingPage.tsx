@@ -3,14 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/providers/ThemeProvider";
-import { Calendar, Mic, Wand2, NotebookPen, Music, AudioLines, HeartPulse, Sparkles, MessageCircle, Gamepad2, PenTool, Languages, Image as ImageIcon, MonitorPlay } from "lucide-react";
 
 // Landing components
 import { HeroScene } from "@/components/landing/HeroScene";
-import { FeatureShowcase } from "@/components/landing/FeatureShowcase";
 import { PricingScene } from "@/components/landing/PricingScene";
-import { LandingScene } from "@/components/landing/LandingScene";
 import { InvitationScene } from "@/components/landing/InvitationScene";
+import { SectionA, SectionB, SectionC, SectionD, SectionE } from "@/components/landing/BentoFeatureSection";
 
 export default function LandingPage() {
   const navigate = useNavigate();

@@ -635,14 +635,11 @@ function TRWidget({ shell, navigate, language, pendingTasks, completedToday, tot
       return aOverdue ? (a.dueMs! - b.dueMs!) : (a.dueMs! - b.dueMs!);
     })
     .slice(0, 3);
-  const trBg = pct >= 70 || pendingTasks === 0
-    ? 'linear-gradient(145deg,rgba(4,50,32,0.95) 0%,rgba(5,78,50,0.95) 50%,rgba(4,100,65,0.95) 100%)'
-    : pct >= 30
-    ? 'linear-gradient(145deg,rgba(80,30,5,0.95) 0%,rgba(120,50,8,0.95) 50%,rgba(160,70,6,0.95) 100%)'
-    : 'linear-gradient(145deg,rgba(70,10,10,0.95) 0%,rgba(120,15,15,0.95) 50%,rgba(160,20,20,0.95) 100%)';
+  const trBg = 'linear-gradient(145deg,rgba(6,60,80,0.97) 0%,rgba(8,90,115,0.97) 50%,rgba(10,110,140,0.97) 100%)';
+  const trGlow = '#0ea5e9';
   const Rtr = 16; const Ctr = 2 * Math.PI * Rtr;
 
-  return shell(trBg, taskAccent, () => navigate('/tr'),
+  return shell(trBg, trGlow, () => navigate('/tr'),
     <div className="p-2.5 flex flex-col h-full justify-between">
       {/* Toggle pill */}
       <div className="flex justify-center">
@@ -1025,8 +1022,8 @@ function CalendarWidget({ shell, navigate, language, upcomingCount }: {
   };
 
   return shell(
-    'linear-gradient(145deg,rgba(45,8,95,0.95) 0%,rgba(76,20,150,0.95) 50%,rgba(109,30,200,0.95) 100%)',
-    '#a855f7',
+    'linear-gradient(145deg,rgba(120,40,5,0.97) 0%,rgba(160,55,8,0.97) 50%,rgba(194,65,12,0.97) 100%)',
+    '#f97316',
     () => navigate('/calendar'),
     <div className="p-2.5 flex flex-col h-full justify-between"
       onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
@@ -1037,7 +1034,7 @@ function CalendarWidget({ shell, navigate, language, upcomingCount }: {
           <p className="text-[9px] text-white/50 font-bold uppercase tracking-widest">{monthLabel} {today.getFullYear()}</p>
           <p className="text-3xl font-black text-white leading-none tabular-nums">{today.getDate()}</p>
         </div>
-        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-purple-400/30 text-purple-200 self-start mt-1">
+        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-orange-400/30 text-orange-200 self-start mt-1">
           {language === 'ar' ? 'اليوم' : 'Today'}
         </span>
       </div>
