@@ -2307,26 +2307,26 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             return (
               <div className="flex-none flex flex-col gap-1.5 px-4 pb-2">
                 {/* Row 1: Dock / BG / Header color / Restore */}
-                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   {/* Dock */}
                   <button onClick={() => setDockPickerOpen(true)}
-                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-md text-[11px] font-semibold border ${isDark ? 'bg-white/15 border-white/20 text-white' : 'bg-[#060541]/15 border-[#060541]/20 text-[#060541]'}`}>
+                    className={`flex items-center gap-1 px-2 py-1 rounded-full backdrop-blur-md text-[10px] font-semibold border ${isDark ? 'bg-white/15 border-white/20 text-white' : 'bg-[#060541]/15 border-[#060541]/20 text-[#060541]'}`}>
                     <Settings2 className="w-3 h-3" />
                     <span>{language === 'ar' ? 'الدوك' : 'Dock'}</span>
                   </button>
                   {/* BG */}
                   <button onClick={() => setBgPanelOpen(v => !v)}
-                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border ${bgPanelOpen ? 'bg-blue-500/70 border-blue-400/50 text-white' : isDark ? 'bg-white/15 backdrop-blur-md border-white/20 text-white' : 'bg-[#060541]/15 backdrop-blur-md border-[#060541]/20 text-[#060541]'}`}>
+                    className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold border ${bgPanelOpen ? 'bg-blue-500/70 border-blue-400/50 text-white' : isDark ? 'bg-white/15 backdrop-blur-md border-white/20 text-white' : 'bg-[#060541]/15 backdrop-blur-md border-[#060541]/20 text-[#060541]'}`}>
                     <ImageIcon className="w-3 h-3" />
-                    <span>{language === 'ar' ? 'الخلفية' : 'Background'}</span>
+                    <span>{language === 'ar' ? 'خلفية' : 'BG'}</span>
                     {bgImage && bgImage !== DEFAULT_BG && <span className="w-1.5 h-1.5 rounded-full bg-blue-300 ml-0.5" />}
                   </button>
                   {/* Remove BG */}
                   {bgImage && bgImage !== DEFAULT_BG && (
                     <button onClick={removeBg}
-                      className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-red-500/60 text-white text-[11px] font-semibold border border-red-400/40">
+                      className="flex items-center gap-1 px-2 py-1 rounded-full bg-red-500/60 text-white text-[10px] font-semibold border border-red-400/40">
                       <X className="w-3 h-3" />
-                      <span>{language === 'ar' ? 'حذف BG' : 'Remove BG'}</span>
+                      <span>{language === 'ar' ? 'حذف' : 'Rm BG'}</span>
                     </button>
                   )}
                   {/* Restore Default */}
@@ -2360,13 +2360,13 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                       // Sync
                       syncToSupabase({ bgImage: '', headerColor: '', homescreenWidgets: DEFAULT_WIDGETS });
                     }}
-                    className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-semibold transition-all ${isDark ? 'bg-white/10 border border-white/20 text-white/60 hover:bg-red-500/30 hover:text-white' : 'bg-[#060541]/10 border border-[#060541]/20 text-[#060541]/60 hover:bg-red-500/30 hover:text-[#060541]'}`}>
+                    className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold transition-all ${isDark ? 'bg-white/10 border border-white/20 text-white/60 hover:bg-red-500/30 hover:text-white' : 'bg-[#060541]/10 border border-[#060541]/20 text-[#060541]/60 hover:bg-red-500/30 hover:text-[#060541]'}`}>
                     <RotateCcw className="w-2.5 h-2.5" />
                     <span>{language === 'ar' ? 'افتراضي' : 'Default'}</span>
                   </button>
                   {/* Header color */}
-                  <div className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-md border ${isDark ? 'bg-white/15 border-white/20' : 'bg-[#060541]/15 border-[#060541]/20'}`}>
-                    <span className={`text-[10px] font-semibold ${isDark ? 'text-white/70' : 'text-[#060541]/70'}`}>{language === 'ar' ? 'لون العنوان' : 'Header'}</span>
+                  <div className={`flex items-center gap-1 px-2 py-1 rounded-full backdrop-blur-md border ${isDark ? 'bg-white/15 border-white/20' : 'bg-[#060541]/15 border-[#060541]/20'}`}>
+                    <span className={`text-[10px] font-semibold ${isDark ? 'text-white/70' : 'text-[#060541]/70'}`}>{language === 'ar' ? 'عنوان' : 'Head'}</span>
                     <input type="color" title="Header color" value={headerColor || '#ffffff'} onChange={e => saveHeaderColor(e.target.value)}
                       className="w-5 h-5 rounded cursor-pointer border-0 bg-transparent p-0" />
                     {headerColor && (
