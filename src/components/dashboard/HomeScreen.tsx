@@ -1919,6 +1919,34 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     syncToSupabase({ showQuote: next });
   };
 
+  const toggleHsWidget = (key: keyof typeof hsWidgets) => {
+    setHsWidgets(prev => {
+      const VISIBLE: (keyof typeof hsWidgets)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'];
+      const activeCount = VISIBLE.filter(k => prev[k]).length;
+      const isOn = prev[key];
+      // Enforce max 3 — don't allow enabling if already at 3
+      if (!isOn && activeCount >= 3) return prev;
+      const next = { ...prev, [key]: !isOn };
+      localStorage.setItem(LS_WIDGETS_KEY(), JSON.stringify(next));
+      syncToSupabase({ homescreenWidgets: next });
+      // Sync unified grid
+      setUnifiedGrid(grid => {
+        const widgetId = `widget::${key}`;
+        if (!isOn) {
+          if (grid.includes(widgetId)) return grid;
+          const updated = [widgetId, ...grid];
+          localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(updated));
+          return updated;
+        } else {
+          const updated = grid.filter(id => id !== widgetId);
+          localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(updated));
+          return updated;
+        }
+      });
+      return next;
+    });
+  };
+
   const isMobileCallback = typeof window !== 'undefined' && window.innerWidth < 768;
   const maxDockCallback = isMobileCallback ? MAX_DOCK_MOBILE : MAX_DOCK_DESKTOP;
 
@@ -2200,40 +2228,98 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           </div>
 
           {/* ── Edit options bar ── */}
-          {editMode && (
-            <div className="flex-none flex items-center gap-2 px-4 pb-2">
-              <button onClick={() => setDockPickerOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 backdrop-blur-md text-white text-[11px] font-semibold">
-                <Settings2 className="w-3 h-3" /> Dock
-              </button>
-              <button onClick={() => setBgPanelOpen(v => !v)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-[11px] font-semibold ${bgPanelOpen ? 'bg-blue-500/70' : 'bg-white/15 backdrop-blur-md'}`}>
-                <ImageIcon className="w-3 h-3" />
-                {language === "ar" ? "خلفية" : "BG"}
-              </button>
-              {bgImage && (
-                <button onClick={removeBg} title="Remove BG"
-                  className="px-2.5 py-1.5 rounded-full bg-red-500/60 text-white text-[11px] font-semibold">
-                  <X className="w-3 h-3" />
-                </button>
-              )}
-              <button onClick={toggleQuote}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-white text-[11px] font-semibold ${showQuote ? 'bg-purple-500/70' : 'bg-white/15 backdrop-blur-md'}`}>
-                {language === "ar" ? "اقتباس" : "Quote"}
-                {showQuote && <Check className="w-2.5 h-2.5" />}
-              </button>
-              <div className="flex items-center gap-1">
-                <input type="color" title="Header color" value={headerColor || '#ffffff'} onChange={e => saveHeaderColor(e.target.value)}
-                  className="w-7 h-7 rounded-lg cursor-pointer border border-white/30 p-0.5 bg-transparent" />
-                {headerColor && (
-                  <button onClick={removeHeaderColor} title="Reset header color"
-                    className="px-2 py-1.5 rounded-full bg-red-500/60 text-white">
-                    <X className="w-3 h-3" />
+          {editMode && (() => {
+            const WIDGET_OPTIONS: { key: keyof typeof hsWidgets; labelEn: string; labelAr: string }[] = [
+              { key: 'showTRWidget',       labelEn: 'Tasks',    labelAr: 'المهام'   },
+              { key: 'showCalendarWidget', labelEn: 'Calendar', labelAr: 'التقويم' },
+              { key: 'showMaw3dWidget',    labelEn: 'Maw3d',    labelAr: 'موعد'    },
+              { key: 'showVitalityWidget', labelEn: 'Vitality', labelAr: 'نشاطي'   },
+              { key: 'showJournalWidget',  labelEn: 'Journal',  labelAr: 'يومياتي' },
+              { key: 'showQuoteWidget',    labelEn: 'Quote',    labelAr: 'اقتباس'  },
+            ];
+            const activeWidgetCount = WIDGET_OPTIONS.filter(w => hsWidgets[w.key]).length;
+            return (
+              <div className="flex-none flex flex-col gap-1.5 px-4 pb-2">
+                {/* Row 1: Dock / BG / Header color */}
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
+                  {/* Dock */}
+                  <button onClick={() => setDockPickerOpen(true)}
+                    className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 backdrop-blur-md text-white text-[11px] font-semibold border border-white/20">
+                    <Settings2 className="w-3 h-3" />
+                    <span>{language === 'ar' ? 'الدوك' : 'Dock'}</span>
                   </button>
-                )}
+                  {/* BG */}
+                  <button onClick={() => setBgPanelOpen(v => !v)}
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-[11px] font-semibold border ${bgPanelOpen ? 'bg-blue-500/70 border-blue-400/50' : 'bg-white/15 backdrop-blur-md border-white/20'}`}>
+                    <ImageIcon className="w-3 h-3" />
+                    <span>{language === 'ar' ? 'الخلفية' : 'Background'}</span>
+                    {bgImage && bgImage !== DEFAULT_BG && <span className="w-1.5 h-1.5 rounded-full bg-blue-300 ml-0.5" />}
+                  </button>
+                  {/* Remove BG */}
+                  {bgImage && bgImage !== DEFAULT_BG && (
+                    <button onClick={removeBg}
+                      className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-red-500/60 text-white text-[11px] font-semibold border border-red-400/40">
+                      <X className="w-3 h-3" />
+                      <span>{language === 'ar' ? 'حذف BG' : 'Remove BG'}</span>
+                    </button>
+                  )}
+                  {/* Header color */}
+                  <div className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-md border border-white/20">
+                    <span className="text-[10px] text-white/70 font-semibold">{language === 'ar' ? 'لون العنوان' : 'Header'}</span>
+                    <input type="color" title="Header color" value={headerColor || '#ffffff'} onChange={e => saveHeaderColor(e.target.value)}
+                      className="w-5 h-5 rounded cursor-pointer border-0 bg-transparent p-0" />
+                    {headerColor && (
+                      <button onClick={removeHeaderColor} title={language === 'ar' ? 'إعادة تعيين اللون' : 'Reset color'} className="text-white/60 hover:text-white">
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Row 2: Widget toggles */}
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between px-0.5">
+                    <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest">
+                      {language === 'ar' ? 'الودجتات' : 'Widgets'}
+                    </span>
+                    <span className={`text-[9px] font-bold ${activeWidgetCount >= 3 ? 'text-amber-400' : 'text-white/40'}`}>
+                      {activeWidgetCount}/3 {language === 'ar' ? 'نشط' : 'active'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                    {WIDGET_OPTIONS.map(({ key, labelEn, labelAr }) => {
+                      const isOn = hsWidgets[key];
+                      const isDisabled = !isOn && activeWidgetCount >= 3;
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => !isDisabled && toggleHsWidget(key)}
+                          className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-semibold border transition-all ${
+                            isOn
+                              ? 'bg-indigo-500/70 border-indigo-400/50 text-white'
+                              : isDisabled
+                                ? 'bg-white/5 border-white/10 text-white/25 cursor-not-allowed'
+                                : 'bg-white/12 border-white/20 text-white/70 hover:bg-white/20'
+                          }`}
+                        >
+                          {isOn
+                            ? <Check className="w-2.5 h-2.5" />
+                            : <span className="w-2.5 h-2.5 rounded-full border border-current opacity-60" />
+                          }
+                          <span>{language === 'ar' ? labelAr : labelEn}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {activeWidgetCount >= 3 && (
+                    <p className="text-[9px] text-amber-400/80 px-0.5">
+                      {language === 'ar' ? '⚠ الحد الأقصى 3 ودجتات. أزل واحدة لإضافة أخرى.' : '⚠ Max 3 widgets. Remove one to add another.'}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ── BG Style Panel ── */}
           {editMode && bgPanelOpen && (
