@@ -466,6 +466,8 @@ function StatWidgets({ hsWidgets, language, theme, hasBg, pendingTasks, complete
 }
 
 // ─── Combined Vitality widget (WHOOP + HealthKit tabs) ────────────────────────
+const LS_VITALITY_RECOVERY = 'wakti_vitality_recovery_cache';
+
 function VitalityWidget({ shell, language, navigate, whoopData }: {
   shell: (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => React.ReactNode;
   language: string;
@@ -474,8 +476,13 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
 }) {
   const [activeTab, setActiveTab] = useState<'whoop' | 'healthkit'>('whoop');
 
-  // Real live WHOOP data
-  const recovery        = whoopData?.recovery        ?? null;
+  // Real live WHOOP data — use cached value instantly to avoid color flash on reload
+  const liveRecovery = whoopData?.recovery ?? null;
+  useEffect(() => {
+    if (liveRecovery != null) localStorage.setItem(LS_VITALITY_RECOVERY, String(liveRecovery));
+  }, [liveRecovery]);
+  const cachedRecovery = (() => { try { const v = localStorage.getItem(LS_VITALITY_RECOVERY); return v != null ? parseFloat(v) : null; } catch { return null; } })();
+  const recovery        = liveRecovery ?? cachedRecovery;
   const strain          = whoopData?.strain          ?? null;
   const hrv             = whoopData?.hrv             ?? null;
   const rhr             = whoopData?.rhr             ?? null;
@@ -1469,6 +1476,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     syncToSupabase({ showQuote: next });
   };
 
+  const isMobileCallback = typeof window !== 'undefined' && window.innerWidth < 768;
+  const maxDockCallback = isMobileCallback ? MAX_DOCK_MOBILE : MAX_DOCK_DESKTOP;
+
   const toggleDockIcon = useCallback((id: string) => {
     setDockIds(prevDock => {
       let nextDock: string[];
@@ -1482,11 +1492,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           return updated;
         });
       } else {
-        if (prevDock.length < MAX_DOCK_DESKTOP) {
+        if (prevDock.length < maxDockCallback) {
           nextDock = [...prevDock, id];
         } else {
           const evicted = prevDock[prevDock.length - 1];
-          nextDock = [...prevDock.slice(0, MAX_DOCK_DESKTOP - 1), id];
+          nextDock = [...prevDock.slice(0, maxDockCallback - 1), id];
           setUnifiedGrid(prev => {
             if (prev.includes(`app::${evicted}`)) return prev;
             const updated = [...prev, `app::${evicted}`];
@@ -1998,9 +2008,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             <div className="relative z-10 w-full max-w-lg bg-background rounded-t-3xl p-5 pb-8 shadow-2xl max-h-[70dvh] overflow-y-auto">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-bold">
-                  {language === "ar" ? `اختر أيقونات Dock (${MAX_DOCK_DESKTOP} كحد أقصى)` : `Choose Dock Icons (max ${MAX_DOCK_DESKTOP})`}
+                  {language === "ar" ? `اختر أيقونات Dock (${maxDock} كحد أقصى)` : `Choose Dock Icons (max ${maxDock})`}
                 </h3>
-                <span className="text-xs text-muted-foreground">{dockIds.length}/{MAX_DOCK_DESKTOP}</span>
+                <span className="text-xs text-muted-foreground">{dockIds.length}/{maxDock}</span>
               </div>
               <div className="grid grid-cols-4 gap-4">
                 {ALL_APPS.map(app => {
