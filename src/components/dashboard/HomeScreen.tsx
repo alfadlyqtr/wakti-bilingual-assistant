@@ -2286,7 +2286,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                       {activeWidgetCount}/3 {language === 'ar' ? 'نشط' : 'active'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                  <div className="grid grid-cols-3 gap-1.5">
                     {WIDGET_OPTIONS.map(({ key, labelEn, labelAr }) => {
                       const isOn = hsWidgets[key];
                       const isDisabled = !isOn && activeWidgetCount >= 3;
@@ -2294,7 +2294,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         <button
                           key={key}
                           onClick={() => !isDisabled && toggleHsWidget(key)}
-                          className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-semibold border transition-all ${
+                          className={`flex items-center justify-center gap-1 px-2 py-1.5 rounded-full text-[11px] font-semibold border transition-all ${
                             isOn
                               ? 'bg-indigo-500/70 border-indigo-400/50 text-white'
                               : isDisabled
@@ -2303,10 +2303,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                           }`}
                         >
                           {isOn
-                            ? <Check className="w-2.5 h-2.5" />
-                            : <span className="w-2.5 h-2.5 rounded-full border border-current opacity-60" />
+                            ? <Check className="w-2.5 h-2.5 flex-shrink-0" />
+                            : <span className="w-2.5 h-2.5 rounded-full border border-current opacity-60 flex-shrink-0" />
                           }
-                          <span>{language === 'ar' ? labelAr : labelEn}</span>
+                          <span className="truncate">{language === 'ar' ? labelAr : labelEn}</span>
                         </button>
                       );
                     })}

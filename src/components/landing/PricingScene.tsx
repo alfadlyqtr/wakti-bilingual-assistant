@@ -81,25 +81,31 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
               <button
                 type="button"
                 onClick={() => setShowQAR(true)}
-                className="flex items-center gap-1.5 px-4 py-1.5 text-[12px] font-semibold transition-all duration-200"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11.5px] font-bold tracking-wide transition-all duration-200"
                 style={{
-                  background: showQAR ? "rgba(233,206,176,0.18)" : "transparent",
-                  color: showQAR ? "#e9ceb0" : "rgba(255,255,255,0.4)",
+                  background: showQAR ? "rgba(233,206,176,0.22)" : "transparent",
+                  color: showQAR ? "#e9ceb0" : "rgba(255,255,255,0.38)",
+                  boxShadow: showQAR ? "0 0 0 1px rgba(233,206,176,0.35) inset" : "none",
                 }}
               >
-                <span className="text-base">🇶🇦</span> QAR
+                <span className="text-[15px] leading-none">🇶🇦</span>
+                <span>QA</span>
+                <span className="text-[10px] font-semibold opacity-80">QAR</span>
               </button>
-              <div style={{ width: 1, height: 20, background: "rgba(233,206,176,0.2)" }} />
+              <div style={{ width: 1, height: 18, background: "rgba(233,206,176,0.18)", flexShrink: 0 }} />
               <button
                 type="button"
                 onClick={() => setShowQAR(false)}
-                className="flex items-center gap-1.5 px-4 py-1.5 text-[12px] font-semibold transition-all duration-200"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11.5px] font-bold tracking-wide transition-all duration-200"
                 style={{
-                  background: !showQAR ? "rgba(233,206,176,0.18)" : "transparent",
-                  color: !showQAR ? "#e9ceb0" : "rgba(255,255,255,0.4)",
+                  background: !showQAR ? "rgba(233,206,176,0.22)" : "transparent",
+                  color: !showQAR ? "#e9ceb0" : "rgba(255,255,255,0.38)",
+                  boxShadow: !showQAR ? "0 0 0 1px rgba(233,206,176,0.35) inset" : "none",
                 }}
               >
-                <span className="text-base">🇺🇸</span> USD
+                <span className="text-[15px] leading-none">🇺🇸</span>
+                <span>US</span>
+                <span className="text-[10px] font-semibold opacity-80">USD</span>
               </button>
             </motion.div>
 
