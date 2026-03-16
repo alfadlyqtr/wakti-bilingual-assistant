@@ -1575,9 +1575,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const [hsBg, setHsBg] = useState<{ mode: 'solid'|'gradient'; color1: string; color2: string; color3: string; angle: number; glow: boolean }>(() => {
     try {
       const cached = JSON.parse(localStorage.getItem(LS_HSBG_KEY()) || 'null');
-      if (cached && typeof cached === 'object') return { mode: cached.mode || 'solid', color1: cached.color1 || '', color2: cached.color2 || '', color3: cached.color3 || '', angle: cached.angle ?? 180, glow: typeof cached.glow === 'boolean' ? cached.glow : false };
+      if (cached && typeof cached === 'object') return { mode: cached.mode || 'solid', color1: cached.color1 || '#1a1a2e', color2: cached.color2 || '#4a4a8a', color3: cached.color3 || '', angle: cached.angle ?? 180, glow: typeof cached.glow === 'boolean' ? cached.glow : false };
     } catch {}
-    return { mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false };
+    return { mode: 'solid', color1: '#1a1a2e', color2: '#4a4a8a', color3: '', angle: 180, glow: false };
   });
   const [quote,           setQuote]           = useState<any>(null);
   const [greeting,        setGreeting]        = useState(() => {
@@ -2214,7 +2214,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const editBarGlass = "bg-black/40 backdrop-blur-xl border-b border-white/10";
 
   // Custom background from Settings (solid/gradient) — overrides theme default if set
-  const hasCustomBg = !hasBg && !!hsBg.color1;
+  const hasCustomBg = !hasBg && !!hsBg.color1 && hsBg.color1 !== '#1a1a2e';
   const customBgStyle = hasCustomBg
     ? hsBg.mode === 'gradient'
       ? hsBg.color3
