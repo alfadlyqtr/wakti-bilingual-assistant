@@ -1947,6 +1947,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     localStorage.setItem(LS_HSBG_KEY(), JSON.stringify(patch));
     localStorage.setItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE), 'true');
     setHsBgActive(true);
+    // Clear default BG image so custom style shows through
+    if (bgImage === DEFAULT_BG) {
+      setBgImage('');
+      localStorage.removeItem(LS_BG_KEY());
+    }
     syncToSupabase({ homescreenBg: patch });
     window.dispatchEvent(new Event('homescreenBgChanged'));
     setBgPanelOpen(false);
@@ -2182,7 +2187,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   // ── Theme-aware surface colors ──
   const isDark = theme === "dark";
-  const hasBg  = !!bgImage;
+  const hasUserImage = !!bgImage && bgImage !== DEFAULT_BG;
+  const hasBg  = hasUserImage || (!!bgImage && !hsBgActive);
 
   // Greeting text — custom header color overrides, then BG/theme defaults
   const headColor = headerColor || (hasBg ? "#ffffff" : isDark ? "#f2f2f2" : "#060541");
@@ -2218,7 +2224,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const editBarGlass = "bg-black/40 backdrop-blur-xl border-b border-white/10";
 
   // Custom background from Settings (solid/gradient) — only active when user explicitly saved
-  const hasCustomBg = !hasBg && hsBgActive;
+  const hasCustomBg = hsBgActive && !hasUserImage;
   const customBgStyle = hasCustomBg
     ? hsBg.mode === 'gradient'
       ? hsBg.color3
