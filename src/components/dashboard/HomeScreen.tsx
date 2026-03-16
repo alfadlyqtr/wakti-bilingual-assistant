@@ -360,7 +360,7 @@ function StatWidgets({ hsWidgets, language, theme, hasBg, pendingTasks, complete
   const maw3dAccent = upcomingCount === 0 ? '#6b7280' : upcomingCount <= 2 ? '#22c55e' : '#f59e0b';
   const maw3dIconBg = upcomingCount === 0 ? 'linear-gradient(135deg,#374151,#6b7280)' : upcomingCount <= 2 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : 'linear-gradient(135deg,#b45309,#f59e0b)';
 
-  const labelColor  = isDark || hasBg ? '#ffffff' : '#060541';
+  const labelColor  = theme === 'dark' ? '#ffffff' : '#060541';
   const subColor    = statLblColor;
   const base        = `${statCardBase} rounded-2xl overflow-hidden cursor-pointer active:scale-95 transition-transform select-none`;
 
@@ -1202,7 +1202,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   const evMsg       = upcomingCount === 0 ? (language === 'ar' ? 'لا أحداث' : 'Clear') : upcomingCount <= 3 ? `+${upcomingCount} ${language === 'ar' ? 'حدث' : upcomingCount === 1 ? 'event' : 'events'}` : `+${upcomingCount} ${language === 'ar' ? 'أحداث' : 'events'} 🔥`;
   const maw3dAccent = upcomingCount === 0 ? '#6b7280' : upcomingCount <= 2 ? '#22c55e' : '#f59e0b';
   const maw3dBg     = upcomingCount === 0 ? 'linear-gradient(135deg,#374151,#6b7280)' : upcomingCount <= 2 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : 'linear-gradient(135deg,#b45309,#f59e0b)';
-  const labelColor  = isDark || hasBg ? '#ffffff' : '#060541';
+  const labelColor  = theme === 'dark' ? '#ffffff' : '#060541';
   const now         = new Date();
   const dayNum      = now.getDate();
   const dayShort    = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'short' });
@@ -1230,7 +1230,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
       <div className="absolute inset-0" style={{ background: bg, opacity: 0.3 }} />
       {/* Frosted glass shimmer overlay */}
       <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 50%, transparent 100%)' }} />
-      <div className="relative z-10 w-full h-full">{children}</div>
+      <div className={`${isDark || hasBg ? 'widget-text-glow-dark' : 'widget-text-glow-light'} relative z-10 w-full h-full`}>{children}</div>
     </div>
   );
 
@@ -2584,7 +2584,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         app={app}
                         editMode={editMode}
                         language={language}
-                        isDark={isDark || hasBg || hasCustomBg}
+                        isDark={isDark || hasUserImage || hasCustomBg}
                         glowEnabled={hsBg.glow}
                         navigate={navigate}
                         gridArea={gp}
