@@ -1589,8 +1589,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const [dockPickerOpen,  setDockPickerOpen]  = useState(false);
   const [bgPanelOpen,     setBgPanelOpen]     = useState(false);
   const [bgGradPicker,    setBgGradPicker]    = useState(false);
-  const [bgGradLeft,      setBgGradLeft]      = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(),'hs_grad_left')) || '#000000'; } catch { return '#000000'; } });
-  const [bgGradRight,     setBgGradRight]     = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(),'hs_grad_right')) || '#000000'; } catch { return '#000000'; } });
+  const [bgGradLeft,      setBgGradLeft]      = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(),'hs_grad_left')) || ''; } catch { return ''; } });
+  const [bgGradRight,     setBgGradRight]     = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(),'hs_grad_right')) || ''; } catch { return ''; } });
   const [savedImagesOpen, setSavedImagesOpen] = useState(false);
   const bgInputRef    = useRef<HTMLInputElement>(null);
   const _pendingDock  = useRef<string[]>([]);
@@ -2230,6 +2230,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       : "bg-gradient-to-b from-[#fcfefd] via-[#f0f0ff] to-[#e8e4f0]"
     : "";
 
+  // ── Theme-aware BG gradient: fall back to black (dark) or white (light) if no custom saved value ──
+  const gradDefault = isDark ? '#000000' : '#ffffff';
+  const effectiveBgGradLeft  = bgGradLeft  || gradDefault;
+  const effectiveBgGradRight = bgGradRight || gradDefault;
+
   // ── BG input id for label linkage ──
   const bgInputId = "hs-bg-input";
 
@@ -2246,7 +2251,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         className={`relative overflow-hidden overscroll-none hs-root flex flex-col ${pageBg}`}
         style={{
           ...(hasBg ? {
-            backgroundImage: `url(${bgImage}), linear-gradient(to right, ${bgGradLeft} 0%, ${bgGradRight} 100%)`,
+            backgroundImage: `url(${bgImage}), linear-gradient(to right, ${effectiveBgGradLeft} 0%, ${effectiveBgGradRight} 100%)`,
             backgroundSize: "contain, cover",
             backgroundPosition: "center center, center center",
             backgroundRepeat: "no-repeat, no-repeat",
@@ -2328,9 +2333,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                       setHeaderColor('');
                       localStorage.removeItem(LS_HEADER_COLOR_KEY());
                       // Reset BG gradient colors
-                      setBgGradLeft('#050507');
-                      setBgGradRight('#12102e');
-                      try { localStorage.setItem(lsKey(uid,'hs_grad_left'),'#050507'); localStorage.setItem(lsKey(uid,'hs_grad_right'),'#12102e'); } catch {}
+                      setBgGradLeft('');
+                      setBgGradRight('');
+                      try { localStorage.removeItem(lsKey(uid,'hs_grad_left')); localStorage.removeItem(lsKey(uid,'hs_grad_right')); } catch {}
                       // Reset unified grid
                       setUnifiedGrid([]);
                       localStorage.removeItem(LS_UNIFIED_KEY());
