@@ -9,7 +9,10 @@ export function useWhoopData() {
     hrv: number | null;
     rhr: number | null;
     sleepPerformance: number | null;
+    sleepHours: number | null;
+    sleepConsistency: number | null;
     strain: number | null;
+    avgHr: number | null;
     connected: boolean;
     lastUpdated: Date | null;
   }>({
@@ -17,7 +20,10 @@ export function useWhoopData() {
     hrv: null,
     rhr: null,
     sleepPerformance: null,
+    sleepHours: null,
+    sleepConsistency: null,
     strain: null,
+    avgHr: null,
     connected: false,
     lastUpdated: null,
   });
@@ -53,18 +59,32 @@ export function useWhoopData() {
         const strain: number | null =
           m?.cycle?.day_strain ?? m?.cycle?.data?.score?.strain ?? null;
 
-        // HRV from recovery or body max heart rate as fallback
+        // HRV + RHR from recovery record
         const hrv: number | null = m?.recovery?.hrv_ms ?? null;
-
-        // RHR
         const rhr: number | null = m?.recovery?.rhr_bpm ?? null;
+
+        // Sleep hours from latest sleep record
+        const sleepMs: number | null =
+          m?.sleep?.data?.score?.stage_summary?.total_in_bed_time_milli ?? null;
+        const sleepHours: number | null = sleepMs != null ? Math.round((sleepMs / 3600000) * 10) / 10 : null;
+
+        // Sleep consistency %
+        const sleepConsistency: number | null =
+          m?.sleep?.data?.score?.sleep_consistency_percentage ?? null;
+
+        // Average HR from latest cycle
+        const avgHr: number | null =
+          m?.cycle?.avg_hr_bpm ?? m?.cycle?.data?.score?.average_heart_rate ?? null;
 
         setData({
           recovery: recoveryScore ?? (sleepPerf !== null ? sleepPerf : null),
           hrv,
           rhr,
           sleepPerformance: sleepPerf,
+          sleepHours,
+          sleepConsistency,
           strain,
+          avgHr,
           connected,
           lastUpdated: cache.updated_at ? new Date(cache.updated_at) : null,
         });

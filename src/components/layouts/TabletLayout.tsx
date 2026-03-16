@@ -22,10 +22,10 @@ export function TabletLayout({ children }: TabletLayoutProps) {
     return () => window.removeEventListener('dashboardLookChanged', handler as EventListener);
   }, []);
 
-  const isHomescreenMode = location.pathname === '/dashboard' && dashboardLook === 'homescreen';
-  const isHomescreenNav  = location.pathname === '/settings'  && dashboardLook === 'homescreen';
+  const isHomescreenLook = dashboardLook === 'homescreen';
+  const isDashboard       = location.pathname === '/dashboard';
 
-  if (isHomescreenMode) {
+  if (isHomescreenLook && isDashboard) {
     return (
       <ProtectedRoute>
         <div className="h-screen overflow-hidden flex flex-col bg-background w-full" dir="ltr">
@@ -38,7 +38,7 @@ export function TabletLayout({ children }: TabletLayoutProps) {
     );
   }
 
-  if (isHomescreenNav) {
+  if (isHomescreenLook) {
     return (
       <ProtectedRoute>
         <div className="h-screen overflow-hidden flex flex-col bg-background w-full" dir="ltr">
