@@ -2300,12 +2300,6 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                     <RotateCcw className="w-2.5 h-2.5" />
                     <span>{language === 'ar' ? 'افتراضي' : 'Default'}</span>
                   </button>
-                  {/* BG Gradient picker */}
-                  <button onClick={() => setBgGradPicker(v => !v)}
-                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-[11px] font-semibold border transition-all ${bgGradPicker ? 'bg-purple-500/70 border-purple-400/50' : 'bg-white/15 backdrop-blur-md border-white/20'}`}>
-                    <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: `linear-gradient(to right, ${bgGradLeft}, ${bgGradRight})` }} />
-                    <span>{language === 'ar' ? 'تدرج BG' : 'BG Gradient'}</span>
-                  </button>
                   {/* Header color */}
                   <div className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-md border border-white/20">
                     <span className="text-[10px] text-white/70 font-semibold">{language === 'ar' ? 'لون العنوان' : 'Header'}</span>
@@ -2360,38 +2354,6 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               </div>
             );
           })()}
-
-          {/* ── BG Gradient Picker Panel ── */}
-          {editMode && bgGradPicker && (
-            <div className="flex-none mx-3 mb-2 rounded-2xl bg-black/60 backdrop-blur-2xl border border-white/15 p-3 space-y-2">
-              <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest">{language === 'ar' ? 'تدرج خلف الصورة' : 'Gradient behind image'}</p>
-              {/* Preview */}
-              <div className="w-full h-8 rounded-xl" style={{ background: `linear-gradient(to right, ${bgGradLeft}, ${bgGradRight})` }} />
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5 flex-1">
-                  <span className="text-[10px] text-white/60 font-semibold">{language === 'ar' ? 'يسار' : 'Left'}</span>
-                  <input type="color" title={language === 'ar' ? 'لون اليسار' : 'Left color'} value={bgGradLeft} onChange={e => setBgGradLeft(e.target.value)}
-                    className="w-8 h-8 rounded-lg cursor-pointer border border-white/20 bg-transparent p-0.5 flex-shrink-0" />
-                </div>
-                <div className="flex items-center gap-1.5 flex-1">
-                  <span className="text-[10px] text-white/60 font-semibold">{language === 'ar' ? 'يمين' : 'Right'}</span>
-                  <input type="color" title={language === 'ar' ? 'لون اليمين' : 'Right color'} value={bgGradRight} onChange={e => setBgGradRight(e.target.value)}
-                    className="w-8 h-8 rounded-lg cursor-pointer border border-white/20 bg-transparent p-0.5 flex-shrink-0" />
-                </div>
-                <button
-                  onClick={() => {
-                    try {
-                      localStorage.setItem(lsKey(_cachedUid(),'hs_grad_left'), bgGradLeft);
-                      localStorage.setItem(lsKey(_cachedUid(),'hs_grad_right'), bgGradRight);
-                    } catch {}
-                    setBgGradPicker(false);
-                  }}
-                  className="px-3 py-1.5 rounded-full bg-green-500/80 text-white text-[11px] font-bold border border-green-400/40">
-                  {language === 'ar' ? 'حفظ' : 'Save'}
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* ── BG Style Panel ── */}
           {editMode && bgPanelOpen && (
