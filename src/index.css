@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Widget text glow — applied to the content wrapper inside every widget shell */
+.widget-text-glow * {
+  text-shadow: 0 0 8px rgba(0,0,0,0.9), 0 1px 4px rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.95);
+}
+
 /* Premium shimmer animation for task cards */
 @keyframes shimmer {
   0% { transform: translateX(-100%); }
@@ -2671,19 +2676,4 @@ body.homescreen-active .app-main-scroll > .dashboard-container {
 /* Dock bottom: flush to edge + iPhone safe area */
 .hs-dock-bottom {
   padding-bottom: max(4px, env(safe-area-inset-bottom));
-}
-
-/* Widget text glow: makes all text inside widgets readable over frosted glass + BG image */
-.hs-widget-text {
-  text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7), 0 2px 4px rgba(0,0,0,0.8) !important;
-}
-
-/* BG image soft blur overlay */
-.hs-bg-blur-overlay {
-  position: absolute;
-  inset: 0;
-  -webkit-backdrop-filter: blur(0.5px);
-  backdrop-filter: blur(0.5px);
-  pointer-events: none;
-  z-index: 0;
 }

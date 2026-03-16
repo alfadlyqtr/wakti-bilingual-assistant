@@ -4175,14 +4175,16 @@ serve(async (req: Request) => {
         try {
           const { data: profile } = await adminForTrial
             .from('profiles')
-            .select('trial_usage, is_subscribed, payment_method, next_billing_date')
+            .select('trial_usage, is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at')
             .eq('id', userId)
             .single();
           if (!profile) return { allowed: true };
           const isPaid = profile.is_subscribed === true;
+          const isGifted = profile.admin_gifted === true;
           const pm = profile.payment_method;
           const isGift = pm && pm !== 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
-          if (isPaid || isGift) return { allowed: true };
+          if (isPaid || isGift || isGifted) return { allowed: true };
+          if (profile.free_access_start_at == null) return { allowed: true };
           const usage: Record<string, number> = (profile.trial_usage as Record<string, number>) ?? {};
           const current = typeof usage['ai_coder'] === 'number' ? usage['ai_coder'] : 0;
           if (current >= 5) return { allowed: false };

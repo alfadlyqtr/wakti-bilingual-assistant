@@ -1192,7 +1192,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
     >
       {/* Frosted glass shimmer overlay */}
       <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.04) 50%, transparent 100%)' }} />
-      <div className="hs-widget-text relative z-10 w-full h-full">{children}</div>
+      <div className="widget-text-glow relative z-10 w-full h-full">{children}</div>
     </div>
   );
 
@@ -2210,7 +2210,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         className={`relative overflow-hidden overscroll-none hs-root flex flex-col ${pageBg}`}
         style={{
           ...(hasBg ? {
-            backgroundImage: `url(${bgImage}), linear-gradient(to right, ${bgGradLeft} 0%, ${bgGradRight} 100%)`,  
+            backgroundImage: `url(${bgImage}), linear-gradient(to right, ${bgGradLeft} 0%, ${bgGradRight} 100%)`,
             backgroundSize: "contain, cover",
             backgroundPosition: "center center, center center",
             backgroundRepeat: "no-repeat, no-repeat",
@@ -2219,8 +2219,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           } : {}),
         }}
       >
-        {/* Soft blur over BG image so widgets/icons read better */}
-        {(hasBg || hasCustomBg) && <div className="hs-bg-blur-overlay" />}
+          {/* 1px BG image blur overlay — only when a BG image is active */}
+          {(hasBg || hasCustomBg) && (
+            <div className="absolute inset-0 pointer-events-none z-0" style={{ backdropFilter: 'blur(1px)', WebkitBackdropFilter: 'blur(1px)' }} />
+          )}
           <div className="flex-none flex items-center justify-between px-4 pt-3 pb-1">
             <div className="px-3 py-2 rounded-xl bg-black/25 backdrop-blur-md border border-white/10">
               <p className="text-[12px] font-extrabold tracking-wide" style={{ color: subColor, textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>{greeting}</p>
