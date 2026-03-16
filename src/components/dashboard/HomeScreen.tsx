@@ -777,10 +777,11 @@ function JournalWidget({ shell, navigate, language, journalData }: {
     : null;
 
   const jBg = hasEntry
-    ? 'linear-gradient(145deg,rgba(76,29,149,0.95) 0%,rgba(109,40,217,0.95) 50%,rgba(124,58,237,0.95) 100%)'
-    : 'linear-gradient(145deg,rgba(30,10,60,0.95) 0%,rgba(50,20,80,0.95) 50%,rgba(60,25,90,0.95) 100%)';
+    ? 'linear-gradient(145deg,rgba(136,19,55,0.95) 0%,rgba(190,24,93,0.95) 50%,rgba(219,39,119,0.95) 100%)'
+    : 'linear-gradient(145deg,rgba(60,10,30,0.95) 0%,rgba(90,15,45,0.95) 50%,rgba(110,20,55,0.95) 100%)';
+  const jGlow = hasEntry ? '#ec4899' : '#9f1239';
 
-  return shell(jBg, '#8b5cf6', () => navigate('/journal'),
+  return shell(jBg, jGlow, () => navigate('/journal'),
     <div className="p-2.5 flex flex-col h-full justify-between">
       {/* Header: title + streak badges */}
       <div className="flex items-center justify-between">
@@ -1009,7 +1010,7 @@ function CalendarWidget({ shell, navigate, language, upcomingCount }: {
   ];
   const selectedDate = days.find(d => d.num === selectedDay) ?? days[1];
   const monthLabel = today.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { month: 'short' });
-  const evAccent   = upcomingCount === 0 ? '#a78bfa' : upcomingCount <= 3 ? '#34d399' : '#fbbf24';
+  const evAccent   = upcomingCount === 0 ? '#fb923c' : upcomingCount <= 3 ? '#f97316' : '#ea580c';
 
   const handleTouchStart = (e: React.TouchEvent) => setStartX(e.touches[0].clientX);
   const handleTouchEnd   = (e: React.TouchEvent) => {
@@ -1296,21 +1297,40 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   }
 
   if (wKey === 'showQuoteWidget') return shell(
-    'linear-gradient(145deg,rgba(15,23,42,0.7) 0%,rgba(30,41,59,0.7) 40%,rgba(51,65,85,0.7) 100%)',
-    '#94a3b8',
+    'linear-gradient(145deg,rgba(15,23,42,0.97) 0%,rgba(22,32,56,0.97) 40%,rgba(30,41,70,0.97) 100%)',
+    '#6366f1',
     () => {},
-    <div className="p-4 flex flex-col justify-between h-full" key={`${quoteText}-${quoteAuthor}`}>
-      <div className="flex items-start justify-between">
-        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
-          <span className="text-xl">💬</span>
+    <div className="p-2.5 flex flex-col h-full justify-between" key={`${quoteText}-${quoteAuthor}`}>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.4)' }}>
+            <span className="text-[12px] leading-none">💬</span>
+          </div>
+          <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">{language === 'ar' ? 'اقتباس' : 'Quote'}</span>
         </div>
-        <span className="text-[9px] font-bold text-white/40 uppercase tracking-widest pt-1">{language === 'ar' ? 'اقتباس' : 'Quote'}</span>
+        <div className="flex gap-0.5">
+          {[0,1,2].map(i => <div key={i} className="w-1 h-1 rounded-full" style={{ background: `rgba(99,102,241,${0.3 + i * 0.25})` }} />)}
+        </div>
       </div>
-      <div>
-        <p className="text-[11px] italic leading-snug text-white/95 line-clamp-3" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir={language === 'ar' ? 'rtl' : 'ltr'}>
-          {quoteText ? `"${quoteText}"` : '...'}
+      {/* Quote body */}
+      <div className="relative flex-1 flex flex-col justify-center">
+        <span className="absolute top-0 left-0 text-[40px] font-serif leading-none select-none" style={{ color: 'rgba(99,102,241,0.22)', lineHeight: 1 }}>"</span>
+        <p
+          className="text-[10px] italic leading-snug text-white/90 line-clamp-4 px-3 pt-2"
+          style={{ textShadow: '0 1px 6px rgba(0,0,0,0.6)' }}
+          dir={language === 'ar' ? 'rtl' : 'ltr'}
+        >
+          {quoteText || '...'}
         </p>
-        {quoteAuthor && <p className="text-[10px] mt-1 text-white/70 font-medium" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>— {quoteAuthor}</p>}
+      </div>
+      {/* Author pill */}
+      <div className="flex justify-end">
+        {quoteAuthor && (
+          <div className="px-2 py-0.5 rounded-full" style={{ background: 'rgba(99,102,241,0.25)', border: '1px solid rgba(99,102,241,0.4)' }}>
+            <span className="text-[7px] font-bold text-indigo-300">— {quoteAuthor}</span>
+          </div>
+        )}
       </div>
     </div>
   );
