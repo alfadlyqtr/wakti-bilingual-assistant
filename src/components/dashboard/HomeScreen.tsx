@@ -587,24 +587,13 @@ function CalendarWidget({ shell, navigate, language, upcomingCount }: {
   const [selectedDay, setSelectedDay] = useState(today.getDate());
   const [startX, setStartX] = useState<number | null>(null);
 
-  // Build 7-day strip centred on today
-  const days = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(today);
-      d.setDate(today.getDate() - 3 + i);
-      return {
-        num:   d.getDate(),
-        label: d.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'short' }),
-        month: d.getMonth(),
-        year:  d.getFullYear(),
-        isToday: d.toDateString() === today.toDateString(),
-      };
-    });
-  }, [language]);
-
-  const selectedDate = days.find(d => d.num === selectedDay) ?? days[3];
-  const monthLabel = today.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { month: 'long' });
-  const yearLabel  = today.getFullYear();
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  const days = [
+    { num: yesterday.getDate(), label: yesterday.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'long' }), isToday: false },
+    { num: today.getDate(),     label: today.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'long' }),     isToday: true  },
+  ];
+  const selectedDate = days.find(d => d.num === selectedDay) ?? days[1];
+  const monthLabel = today.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { month: 'short' });
   const evAccent   = upcomingCount === 0 ? '#a78bfa' : upcomingCount <= 3 ? '#34d399' : '#fbbf24';
 
   const handleTouchStart = (e: React.TouchEvent) => setStartX(e.touches[0].clientX);
@@ -626,43 +615,39 @@ function CalendarWidget({ shell, navigate, language, upcomingCount }: {
     <div className="p-2.5 flex flex-col h-full justify-between"
       onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
 
-      {/* Header: month + big day number */}
+      {/* Month + today's big number */}
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-[9px] text-white/50 font-bold uppercase tracking-widest">{monthLabel} {yearLabel}</p>
-          <p className="text-3xl font-black text-white leading-none tabular-nums">{selectedDay}</p>
+          <p className="text-[9px] text-white/50 font-bold uppercase tracking-widest">{monthLabel} {today.getFullYear()}</p>
+          <p className="text-3xl font-black text-white leading-none tabular-nums">{today.getDate()}</p>
         </div>
-        <div className="text-right">
-          <p className="text-[11px] font-black text-white">{selectedDate.label}</p>
-          {selectedDate.isToday && (
-            <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-purple-400/30 text-purple-200">
-              {language === 'ar' ? 'اليوم' : 'Today'}
-            </span>
-          )}
-        </div>
+        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-purple-400/30 text-purple-200 self-start mt-1">
+          {language === 'ar' ? 'اليوم' : 'Today'}
+        </span>
       </div>
 
-      {/* Days strip */}
-      <div className="flex justify-between gap-0.5">
+      {/* 2-day strip: yesterday + today */}
+      <div className="flex gap-2">
         {days.map(d => {
           const isSelected = d.num === selectedDay;
           return (
             <button
-              key={`${d.year}-${d.month}-${d.num}`}
+              key={d.num}
               onClick={(e) => { e.stopPropagation(); setSelectedDay(d.num); }}
-              className={`flex flex-col items-center flex-1 py-1 rounded-xl transition-all active:scale-95 ${
+              className={`flex flex-col items-center flex-1 py-2 rounded-2xl transition-all active:scale-95 ${
                 isSelected
-                  ? 'bg-white/25 border border-white/40'
-                  : d.isToday
-                  ? 'bg-white/10 border border-purple-400/40'
-                  : 'bg-white/5'
+                  ? 'bg-white/25 border border-white/45 shadow-lg'
+                  : 'bg-white/8 border border-white/10'
               }`}
             >
-              <span className="text-[7px] font-bold text-white/50 uppercase">{d.label.charAt(0)}</span>
-              <span className={`text-[11px] font-black tabular-nums ${isSelected ? 'text-white' : d.isToday ? 'text-purple-300' : 'text-white/60'}`}>{d.num}</span>
-              {/* Event dot for today */}
+              <span className="text-[8px] font-bold text-white/50 uppercase mb-0.5">{d.label.slice(0,3)}</span>
+              <span className={`text-xl font-black tabular-nums leading-none ${isSelected ? 'text-white' : 'text-white/50'}`}>{d.num}</span>
               {d.isToday && upcomingCount > 0 && (
-                <div className="w-1 h-1 rounded-full mt-0.5" style={{ background: evAccent }} />
+                <div className="flex gap-0.5 mt-1">
+                  {Array.from({ length: Math.min(upcomingCount, 3) }).map((_, i) => (
+                    <div key={i} className="w-1 h-1 rounded-full" style={{ background: evAccent }} />
+                  ))}
+                </div>
               )}
             </button>
           );
@@ -761,29 +746,43 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
           </svg>
         </div>
 
-        {/* Metric cards grid */}
-        <div className="grid grid-cols-2 gap-1 flex-1 my-1.5">
-          <div className="bg-white/10 rounded-xl p-1.5 flex flex-col justify-between">
+        {/* Total + Done cards */}
+        <div className="grid grid-cols-2 gap-1.5">
+          <div className="bg-white/10 rounded-xl p-2 flex flex-col gap-0.5">
             <span className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'الكل' : 'Total'}</span>
-            <span className="text-[15px] font-black text-white leading-none">{total}</span>
+            <span className="text-[20px] font-black text-white leading-none tabular-nums">{total}</span>
           </div>
-          <div className="bg-white/10 rounded-xl p-1.5 flex flex-col justify-between">
+          <div className="bg-white/10 rounded-xl p-2 flex flex-col gap-0.5">
             <span className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'مكتمل' : 'Done'}</span>
-            <span className="text-[15px] font-black leading-none" style={{ color: taskAccent }}>{completedToday}</span>
-          </div>
-          <div className="bg-white/10 rounded-xl p-1.5 flex flex-col justify-between">
-            <span className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'معلّق' : 'Pending'}</span>
-            <span className="text-[15px] font-black text-white leading-none">{pendingTasks}</span>
-          </div>
-          <div className="bg-white/10 rounded-xl p-1.5 flex flex-col justify-between">
-            <span className="text-[7px] text-white/45 uppercase font-bold">{language === 'ar' ? 'نسبة' : 'Rate'}</span>
-            <span className="text-[15px] font-black leading-none" style={{ color: taskAccent }}>{pct}%</span>
+            <span className="text-[20px] font-black leading-none tabular-nums" style={{ color: taskAccent }}>{completedToday}</span>
           </div>
         </div>
 
-        {/* Progress bar */}
-        <div className="w-full h-1 bg-white/15 rounded-full overflow-hidden">
-          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: taskAccent }} />
+        {/* Mini bar graph — shows done vs pending as adjacent bars */}
+        <div className="flex flex-col gap-1">
+          <div className="flex items-end gap-0.5 h-8">
+            {/* Pending bars (dimmed) */}
+            {Array.from({ length: Math.min(pendingTasks, 8) }).map((_, i) => (
+              <div key={`p${i}`} className="flex-1 rounded-t-sm bg-white/20"
+                style={{ height: `${40 + (i % 3) * 15}%` }} />
+            ))}
+            {/* Done bars (colored) */}
+            {Array.from({ length: Math.min(completedToday, 8) }).map((_, i) => (
+              <div key={`d${i}`} className="flex-1 rounded-t-sm transition-all"
+                style={{ height: `${55 + (i % 4) * 11}%`, background: taskAccent }} />
+            ))}
+            {/* Empty state */}
+            {total === 0 && Array.from({ length: 6 }).map((_, i) => (
+              <div key={`e${i}`} className="flex-1 rounded-t-sm bg-white/10"
+                style={{ height: `${30 + i * 8}%` }} />
+            ))}
+          </div>
+          {/* Bar labels */}
+          <div className="flex justify-between">
+            <span className="text-[7px] text-white/40 font-bold">{language === 'ar' ? 'معلّق' : 'pending'}</span>
+            <span className="text-[7px] font-bold" style={{ color: taskAccent }}>{pct}%</span>
+            <span className="text-[7px] text-white/40 font-bold">{language === 'ar' ? 'مكتمل' : 'done'}</span>
+          </div>
         </div>
       </div>
     );
