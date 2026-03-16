@@ -1182,17 +1182,17 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
       onClick={editMode ? undefined : onClick}
       className="rounded-3xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-all select-none relative"
       style={{
-        background: bg,
-        opacity: 0.6,
         backdropFilter: 'blur(20px) saturate(180%)',
         WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         boxShadow: `0 4px 22px ${glow}44, 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.18)`,
         border: '0.5px solid rgba(180,190,200,0.25)',
       }}
     >
+      {/* Background layer at 0.6 opacity — isolated so children stay fully opaque */}
+      <div className="absolute inset-0" style={{ background: bg, opacity: 0.6 }} />
       {/* Frosted glass shimmer overlay */}
       <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.04) 50%, transparent 100%)' }} />
-      <div className="widget-text-glow relative z-10 w-full h-full">{children}</div>
+      <div className="relative z-10 w-full h-full">{children}</div>
     </div>
   );
 
