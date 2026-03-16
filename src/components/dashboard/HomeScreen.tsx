@@ -501,25 +501,16 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
   return shell(bgGradient, glowColor, () => navigate('/fitness'),
     <div className="p-3 flex flex-col justify-between h-full">
 
-      {/* ── Tab buttons: WHOOP top-left, Heart top-right ── */}
-      <div className="flex items-center justify-between">
+      {/* ── Toggle pill: WHOOP ↔ HealthKit ── */}
+      <div className="flex justify-center">
         <button
-          title="WHOOP"
-          onClick={(e) => { e.stopPropagation(); setActiveTab('whoop'); }}
-          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-90 ${
-            activeTab === 'whoop' ? 'bg-white/30 border border-white/50 shadow-lg' : 'bg-white/10 border border-white/15 opacity-55'
-          }`}
+          title={activeTab === 'whoop' ? 'Switch to HealthKit' : 'Switch to WHOOP'}
+          onClick={(e) => { e.stopPropagation(); setActiveTab(t => t === 'whoop' ? 'healthkit' : 'whoop'); }}
+          className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 border border-white/25 active:scale-95 transition-all"
         >
-          <Activity className="w-5 h-5 text-white" strokeWidth={2.2} />
-        </button>
-        <button
-          title="HealthKit"
-          onClick={(e) => { e.stopPropagation(); setActiveTab('healthkit'); }}
-          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-90 ${
-            activeTab === 'healthkit' ? 'bg-white/30 border border-white/50 shadow-lg' : 'bg-white/10 border border-white/15 opacity-55'
-          }`}
-        >
-          <Heart className="w-5 h-5 text-white" strokeWidth={2.5} />
+          <Activity className={`w-3.5 h-3.5 transition-all ${activeTab === 'whoop' ? 'text-white' : 'text-white/35'}`} strokeWidth={2.2} />
+          <div className="w-px h-3 bg-white/30" />
+          <Heart className={`w-3.5 h-3.5 transition-all ${activeTab === 'healthkit' ? 'text-white' : 'text-white/35'}`} strokeWidth={2.5} />
         </button>
       </div>
 

@@ -444,14 +444,24 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
       >
         {/* Top bar: logo | language toggle + X (top-right, step 2 only) */}
         <div className="flex items-center justify-between">
-          <button
-            onClick={async () => { await supabase.auth.signOut(); navigate('/'); }}
-            className="hover:opacity-70 active:scale-95 transition-all duration-150"
-            aria-label="Log out"
-            title={language === 'ar' ? 'تسجيل الخروج' : 'Log out'}
-          >
-            <Logo3D size="sm" className="w-8 h-8" />
-          </button>
+          <div className="flex flex-col items-center gap-1">
+            <button
+              onClick={async () => { await supabase.auth.signOut(); navigate('/'); }}
+              className="hover:opacity-70 active:scale-95 transition-all duration-150"
+              aria-label="Log out"
+              title={language === 'ar' ? 'تسجيل الخروج' : 'Log out'}
+            >
+              <Logo3D size="sm" className="w-8 h-8" />
+            </button>
+            <button
+              onClick={async () => { await supabase.auth.signOut(); navigate('/'); }}
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full border border-foreground/20 text-foreground/50 hover:text-foreground/80 hover:border-foreground/40 hover:bg-foreground/5 active:scale-95 transition-all duration-150"
+              aria-label="Log out"
+            >
+              <LogOut className="w-2.5 h-2.5" />
+              {language === 'ar' ? 'خروج' : 'Log out'}
+            </button>
+          </div>
           <div className="flex items-center gap-2">
             {(() => {
               const other = language === 'ar' ? 'en' : 'ar';
@@ -466,10 +476,10 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
             {showXButton && (
               <button
                 onClick={handleSkip}
-                className="w-7 h-7 rounded-full border border-foreground/20 flex items-center justify-center hover:bg-foreground/10 transition-colors"
+                className="w-7 h-7 rounded-full flex items-center justify-center bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] shadow-[0_0_12px_hsl(200,100%,55%,0.5)] hover:shadow-[0_0_20px_hsl(200,100%,55%,0.7)] active:scale-95 transition-all duration-150"
                 aria-label="Close"
               >
-                <X className="w-4 h-4 text-foreground/60" />
+                <X className="w-3.5 h-3.5 text-white" />
               </button>
             )}
           </div>
