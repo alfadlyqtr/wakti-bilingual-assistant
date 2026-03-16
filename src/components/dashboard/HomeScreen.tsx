@@ -1181,14 +1181,15 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
       className="rounded-3xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-all select-none relative"
       style={{
         background: bg,
-        opacity: 0.75,
-        backdropFilter: 'blur(20px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-        boxShadow: `0 4px 22px ${glow}44, 0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)`,
+        opacity: 0.82,
+        backdropFilter: 'blur(32px) saturate(200%) brightness(0.9)',
+        WebkitBackdropFilter: 'blur(32px) saturate(200%) brightness(0.9)',
+        boxShadow: `0 4px 22px ${glow}44, 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.18)`,
+        border: '1px solid rgba(255,255,255,0.10)',
       }}
     >
-      {/* Glass shimmer overlay */}
-      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.03) 50%, transparent 100%)' }} />
+      {/* Frosted glass shimmer overlay */}
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.04) 50%, transparent 100%)' }} />
       {children}
     </div>
   );
@@ -1549,6 +1550,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const [activeId,        setActiveId]        = useState<string | null>(null);
   const [dockPickerOpen,  setDockPickerOpen]  = useState(false);
   const [bgPanelOpen,     setBgPanelOpen]     = useState(false);
+  const [bgGradPicker,    setBgGradPicker]    = useState(false);
+  const [bgGradLeft,      setBgGradLeft]      = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(),'hs_grad_left')) || '#050507'; } catch { return '#050507'; } });
+  const [bgGradRight,     setBgGradRight]     = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(),'hs_grad_right')) || '#12102e'; } catch { return '#12102e'; } });
   const [savedImagesOpen, setSavedImagesOpen] = useState(false);
   const bgInputRef    = useRef<HTMLInputElement>(null);
   const _pendingDock  = useRef<string[]>([]);
@@ -2204,7 +2208,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         className={`relative overflow-hidden overscroll-none hs-root flex flex-col ${pageBg}`}
         style={{
           ...(hasBg ? {
-            backgroundImage: `url(${bgImage}), linear-gradient(to right, #050507 0%, #07080f 30%, #0a0b16 60%, #0e0f22 85%, #12102e 100%)`,
+            backgroundImage: `url(${bgImage}), linear-gradient(to right, ${bgGradLeft} 0%, ${bgGradRight} 100%)`,  
             backgroundSize: "contain, cover",
             backgroundPosition: "center center, center center",
             backgroundRepeat: "no-repeat, no-repeat",
@@ -2266,6 +2270,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                       <span>{language === 'ar' ? 'حذف BG' : 'Remove BG'}</span>
                     </button>
                   )}
+                  {/* BG Gradient picker */}
+                  <button onClick={() => setBgGradPicker(v => !v)}
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-[11px] font-semibold border transition-all ${bgGradPicker ? 'bg-purple-500/70 border-purple-400/50' : 'bg-white/15 backdrop-blur-md border-white/20'}`}>
+                    <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: `linear-gradient(to right, ${bgGradLeft}, ${bgGradRight})` }} />
+                    <span>{language === 'ar' ? 'تدرج BG' : 'BG Gradient'}</span>
+                  </button>
                   {/* Header color */}
                   <div className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-md border border-white/20">
                     <span className="text-[10px] text-white/70 font-semibold">{language === 'ar' ? 'لون العنوان' : 'Header'}</span>
@@ -2320,6 +2330,38 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               </div>
             );
           })()}
+
+          {/* ── BG Gradient Picker Panel ── */}
+          {editMode && bgGradPicker && (
+            <div className="flex-none mx-3 mb-2 rounded-2xl bg-black/60 backdrop-blur-2xl border border-white/15 p-3 space-y-2">
+              <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest">{language === 'ar' ? 'تدرج خلف الصورة' : 'Gradient behind image'}</p>
+              {/* Preview */}
+              <div className="w-full h-8 rounded-xl" style={{ background: `linear-gradient(to right, ${bgGradLeft}, ${bgGradRight})` }} />
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 flex-1">
+                  <span className="text-[10px] text-white/60 font-semibold">{language === 'ar' ? 'يسار' : 'Left'}</span>
+                  <input type="color" title={language === 'ar' ? 'لون اليسار' : 'Left color'} value={bgGradLeft} onChange={e => setBgGradLeft(e.target.value)}
+                    className="w-8 h-8 rounded-lg cursor-pointer border border-white/20 bg-transparent p-0.5 flex-shrink-0" />
+                </div>
+                <div className="flex items-center gap-1.5 flex-1">
+                  <span className="text-[10px] text-white/60 font-semibold">{language === 'ar' ? 'يمين' : 'Right'}</span>
+                  <input type="color" title={language === 'ar' ? 'لون اليمين' : 'Right color'} value={bgGradRight} onChange={e => setBgGradRight(e.target.value)}
+                    className="w-8 h-8 rounded-lg cursor-pointer border border-white/20 bg-transparent p-0.5 flex-shrink-0" />
+                </div>
+                <button
+                  onClick={() => {
+                    try {
+                      localStorage.setItem(lsKey(_cachedUid(),'hs_grad_left'), bgGradLeft);
+                      localStorage.setItem(lsKey(_cachedUid(),'hs_grad_right'), bgGradRight);
+                    } catch {}
+                    setBgGradPicker(false);
+                  }}
+                  className="px-3 py-1.5 rounded-full bg-green-500/80 text-white text-[11px] font-bold border border-green-400/40">
+                  {language === 'ar' ? 'حفظ' : 'Save'}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* ── BG Style Panel ── */}
           {editMode && bgPanelOpen && (
@@ -2507,8 +2549,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                 background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 100%), var(--gradient-background)',
                 backdropFilter: 'blur(20px)',
                 WebkitBackdropFilter: 'blur(20px)',
-                border: '1px solid rgba(255,255,255,0.28)',
-                boxShadow: '0 34px 70px -16px rgba(0,0,0,0.4), 0 16px 46px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.08)',
+                border: '1px solid transparent',
+                backgroundClip: 'padding-box',
+                boxShadow: '0 34px 70px -16px rgba(0,0,0,0.4), 0 16px 46px rgba(0,0,0,0.18), 0 0 0 1px rgba(192,165,104,0.35), 0 0 0 2px rgba(255,255,255,0.06)',
               }}
             >
               <SortableContext items={dockApps.map(a => `dock::${a.id}`)} strategy={horizontalListSortingStrategy}>
