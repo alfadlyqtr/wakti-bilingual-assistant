@@ -311,14 +311,8 @@ export function DesktopHeader() {
                       style={{
                         boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 6px 18px rgba(0, 0, 0, 0.18)'
                       }}>
-                <span className="relative">
-                  <Avatar 
-                    className="h-full w-full"
-                    key={`${profile?.avatar_url || 'no-avatar'}-${avatarKey}`}
-                  >
-                    <AvatarImage src={avatarUrl} onError={handleAvatarImageError} />
-                    <AvatarFallback className="text-sm">{user?.email ? user.email[0].toUpperCase() : '?'}</AvatarFallback>
-                  </Avatar>
+                <span className="relative flex items-center justify-center w-full h-full">
+                  <Settings className="w-5 h-5 text-foreground/80" />
                   <UnreadBadge count={unreadTotal} size="sm" className="-right-0.5 -top-0.5" />
                 </span>
               </Button>

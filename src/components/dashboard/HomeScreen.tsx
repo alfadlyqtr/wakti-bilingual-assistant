@@ -60,7 +60,6 @@ import { useOptimizedMaw3dEvents } from "@/hooks/useOptimizedMaw3dEvents";
 import { useWhoopData } from "@/hooks/useWhoopData";
 import { useJournalData } from "@/hooks/useJournalData";
 import { useUserProfile } from "@/hooks/useUserProfile";
-import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { SavedImagesPicker } from "@/components/dashboard/SavedImagesPicker";
 
 // ─── App definitions ──────────────────────────────────────────────────────────
@@ -1572,9 +1571,36 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const navigate  = useNavigate();
 
   const { profile } = useUserProfile();
-  const avatarUrl = profile?.avatar_url || '';
-  const { unreadTotal, contactCount } = useUnreadMessages();
-  const connectBadge = unreadTotal + contactCount;
+  const LS_AVATAR_CACHE = user?.id ? `wakti_avatar_${user.id}` : null;
+  const [avatarUrl, setAvatarUrl] = useState<string>(() => {
+    if (!user?.id) return '';
+    return localStorage.getItem(`wakti_avatar_${user.id}`) || '';
+  });
+  useEffect(() => {
+    if (profile?.avatar_url) {
+      setAvatarUrl(profile.avatar_url);
+      if (LS_AVATAR_CACHE) localStorage.setItem(LS_AVATAR_CACHE, profile.avatar_url);
+    }
+  }, [profile?.avatar_url]);
+  const [connectBadge, setConnectBadge] = useState(0);
+  useEffect(() => {
+    if (!user?.id) return;
+    const fetchBadge = async () => {
+      try {
+        const [{ count: msgs }, { count: reqs }] = await Promise.all([
+          supabase.from('messages').select('*', { count: 'exact', head: true }).eq('recipient_id', user.id).eq('is_read', false),
+          supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('contact_id', user.id).eq('status', 'pending'),
+        ]);
+        setConnectBadge((msgs || 0) + (reqs || 0));
+      } catch {}
+    };
+    fetchBadge();
+    const channel = supabase.channel(`hs-connect-badge-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `recipient_id=eq.${user.id}` }, fetchBadge)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'contacts', filter: `contact_id=eq.${user.id}` }, fetchBadge)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id]);
   const [editMode,        setEditMode]        = useState(false);
   const [dockIds,         setDockIds]         = useState<string[]>(() => {
     try {
