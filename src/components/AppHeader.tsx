@@ -246,33 +246,13 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   const IconComponent = pageInfo.icon;
   
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false); // Always starts closed
-  const [logoPosition, setLogoPosition] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const logoRef = useRef<HTMLDivElement>(null);
   const { isMobile } = useIsMobile();
 
   const handleLogoClick = () => {
     if (!isMobile) return;
-
-    // On dashboard/homescreen, logo does nothing (already home)
-    if (location.pathname === '/dashboard') return;
-
-    // In homescreen mode, logo always goes back to dashboard
-    if (isHomescreenMode) {
-      navigate('/dashboard');
-      return;
-    }
-    
-    if (logoRef.current) {
-      const rect = logoRef.current.getBoundingClientRect();
-      setLogoPosition({
-        x: rect.left,
-        y: rect.top,
-        width: rect.width,
-        height: rect.height
-      });
-    }
-    setMobileNavOpen(!mobileNavOpen);
+    // Logo always navigates to homescreen on mobile — never opens slide nav
+    navigate('/dashboard');
   };
 
   const shouldGlowLogo = location.pathname !== '/dashboard';
@@ -528,14 +508,6 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
         </div>
       </div>
       
-      {/* Mobile Slide Down Nav */}
-      {isMobile && (
-        <MobileSlideDownNav 
-          isOpen={mobileNavOpen}
-          onClose={() => setMobileNavOpen(false)}
-          logoPosition={logoPosition}
-        />
-      )}
     </header>
   );
 
