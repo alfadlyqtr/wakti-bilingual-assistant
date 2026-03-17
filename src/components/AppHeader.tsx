@@ -254,6 +254,9 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   const handleLogoClick = () => {
     if (!isMobile) return;
 
+    // On dashboard/homescreen, logo does nothing (already home)
+    if (location.pathname === '/dashboard') return;
+
     // In homescreen mode, logo always goes back to dashboard
     if (isHomescreenMode) {
       navigate('/dashboard');
