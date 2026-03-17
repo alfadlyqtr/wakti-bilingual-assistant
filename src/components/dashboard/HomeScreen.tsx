@@ -76,6 +76,7 @@ const ALL_APPS = [
   { id: "text",      nameEn: "Text",      nameAr: "نص",       path: "/tools/text",         icon: PenTool,         gradient: "from-violet-500 to-violet-700",   glow: "#8b5cf6" },
   { id: "voice",     nameEn: "Voice",     nameAr: "صوت",      path: "/tools/voice-studio", icon: Mic,             gradient: "from-pink-400 to-pink-600",       glow: "#f472b6" },
   { id: "game",      nameEn: "Game",      nameAr: "لعبة",     path: "/tools/game",         icon: Gamepad2,        gradient: "from-red-500 to-red-700",         glow: "#ef4444" },
+  { id: "connect",   nameEn: "Connect",   nameAr: "تواصل",    path: "/contacts",           icon: Users,           gradient: "from-blue-400 to-blue-600",       glow: "#3b82f6", isAvatarIcon: true },
 ];
 
 const DEFAULT_ORDER = ALL_APPS.map(a => a.id);
@@ -182,11 +183,12 @@ function sanitizeDock(raw: string[], maxSlots = MAX_DOCK_DESKTOP): string[] {
 
 // ─── Liquid-glass icon shell ───────────────────────────────────────────────────
 // The shimmer highlight on the top edge + soft inner glow gives real iOS 26 "liquid glass"
-function LiquidIcon({ app, size = 64, editMode, glowEnabled = false }: {
+function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl }: {
   app: typeof ALL_APPS[0];
   size?: number;
   editMode: boolean;
   glowEnabled?: boolean;
+  avatarUrl?: string;
 }) {
   const px = `${size}px`;
   return (
@@ -216,10 +218,12 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false }: {
         }}
       />
       {/* Icon */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        {app.isWaktiIcon
-          ? <WaktiIcon style={{ width: size * 0.5, height: size * 0.5, color: "#fff" }} />
-          : app.icon && <app.icon style={{ width: size * 0.5, height: size * 0.5, color: "#fff" }} strokeWidth={1.8} />
+      <div className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-[23%]">
+        {app.isAvatarIcon && avatarUrl
+          ? <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+          : app.isWaktiIcon
+            ? <WaktiIcon style={{ width: size * 0.5, height: size * 0.5, color: "#fff" }} />
+            : app.icon && <app.icon style={{ width: size * 0.5, height: size * 0.5, color: "#fff" }} strokeWidth={1.8} />
         }
       </div>
       {/* Edit badge */}
@@ -233,13 +237,14 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false }: {
 }
 
 // ─── Sortable grid icon ────────────────────────────────────────────────────────
-function GridIcon({ app, language, editMode, onTap, isDark, glowEnabled = false }: {
+function GridIcon({ app, language, editMode, onTap, isDark, glowEnabled = false, avatarUrl }: {
   app: typeof ALL_APPS[0];
   language: string;
   editMode: boolean;
   onTap: () => void;
   isDark: boolean;
   glowEnabled?: boolean;
+  avatarUrl?: string;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `grid::${app.id}`,
@@ -261,7 +266,7 @@ function GridIcon({ app, language, editMode, onTap, isDark, glowEnabled = false 
       className="flex flex-col items-center gap-1.5 select-none cursor-pointer"
       onClick={editMode ? undefined : onTap}
     >
-      <LiquidIcon app={app} size={64} editMode={editMode} glowEnabled={glowEnabled} />
+      <LiquidIcon app={app} size={64} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} />
       <span
         className="text-[11px] font-semibold text-center leading-tight"
         style={{
@@ -281,11 +286,12 @@ function GridIcon({ app, language, editMode, onTap, isDark, glowEnabled = false 
 }
 
 // ─── Sortable dock icon ────────────────────────────────────────────────────────
-function DockIcon({ app, editMode, onTap, glowEnabled = false }: {
+function DockIcon({ app, editMode, onTap, glowEnabled = false, avatarUrl }: {
   app: typeof ALL_APPS[0];
   editMode: boolean;
   onTap: () => void;
   glowEnabled?: boolean;
+  avatarUrl?: string;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `dock::${app.id}`,
@@ -307,7 +313,7 @@ function DockIcon({ app, editMode, onTap, glowEnabled = false }: {
       className="flex flex-col items-center select-none cursor-pointer"
       onClick={editMode ? undefined : onTap}
     >
-      <LiquidIcon app={app} size={58} editMode={editMode} glowEnabled={glowEnabled} />
+      <LiquidIcon app={app} size={58} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} />
     </div>
   );
 }
@@ -1497,8 +1503,9 @@ interface UnifiedAppCellProps {
   language: string; isDark: boolean; glowEnabled: boolean;
   navigate: (p: string) => void;
   gridArea: string;
+  avatarUrl?: string;
 }
-function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridArea }: UnifiedAppCellProps) {
+function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridArea, avatarUrl }: UnifiedAppCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id, data: { type: 'unified' },
   });
@@ -1519,7 +1526,7 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
       {...listeners}
       onClick={editMode ? undefined : () => navigate(app.path)}
     >
-      <LiquidIcon app={app} size={60} editMode={editMode} glowEnabled={glowEnabled} />
+      <LiquidIcon app={app} size={60} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} />
       <span
         className="text-[11px] font-semibold text-center leading-tight mt-1.5"
         style={{ color: isDark ? '#fff' : '#060541', textShadow: isDark ? '0 1px 4px rgba(0,0,0,0.95)' : 'none', maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
@@ -1552,6 +1559,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const { user }  = useAuth();
   const navigate  = useNavigate();
 
+  const [avatarUrl, setAvatarUrl] = useState<string>('');
   const [editMode,        setEditMode]        = useState(false);
   const [dockIds,         setDockIds]         = useState<string[]>(() => {
     try {
@@ -1662,6 +1670,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   useEffect(() => { setQuote(getQuoteForDisplay()); }, []);
   useEffect(() => { if (user?.id) localStorage.setItem(LS_ORDER_KEY(), JSON.stringify(iconOrder)); }, [iconOrder, user?.id]);
   useEffect(() => { if (user?.id) localStorage.setItem(LS_DOCK_KEY(),  JSON.stringify(dockIds));  }, [dockIds, user?.id]);
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase.from('profiles').select('avatar_url').eq('id', user.id).single()
+      .then(({ data }) => { if (data?.avatar_url) setAvatarUrl(data.avatar_url); });
+  }, [user?.id]);
 
   const syncToSupabase = useCallback(async (patch: Record<string, any>) => {
     if (!user) return;
@@ -2590,6 +2603,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         glowEnabled={hsBg.glow}
                         navigate={navigate}
                         gridArea={gp}
+                        avatarUrl={avatarUrl}
                       />
                     );
                   });
@@ -2616,7 +2630,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             >
               <SortableContext items={dockApps.map(a => `dock::${a.id}`)} strategy={horizontalListSortingStrategy}>
                 {dockApps.map(app => (
-                  <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} />
+                  <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} avatarUrl={avatarUrl} />
                 ))}
                 {Array.from({ length: Math.max(0, maxDock - dockApps.length) }).map((_, i) => (
                   <div key={`slot-${i}`} className="w-14 h-14 rounded-[23%] border-2 border-dashed border-white/25" />
