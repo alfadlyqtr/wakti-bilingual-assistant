@@ -254,7 +254,7 @@ export default function FitnessHealth() {
                     language === 'ar'
                       ? 'تم ربط WHOOP بحسابك، لكن أحدث بياناتك لا تصل إلى واكتي بعد. بمجرد تفعيلها من جانب WHOOP ستظهر بياناتك هنا تلقائيًّا.'
                       : "WHOOP is linked to your account, but your latest data isn’t coming through from their side yet. Once they turn it on for this app, Wakti will update your dashboard.",
-                    { duration: 8000 }
+                    { duration: 5000 }
                   );
                 }
                 
@@ -475,7 +475,7 @@ export default function FitnessHealth() {
           language === 'ar'
             ? 'تم ربط WHOOP بحسابك، لكن لا توجد بيانات جديدة.'
             : "WHOOP is linked to your account, but no new data was synced.",
-          { duration: 8000 }
+          { duration: 5000 }
         );
       }
     } catch (e: any) {
