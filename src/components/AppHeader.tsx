@@ -307,7 +307,14 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
                 <div className="rounded-[0.5rem] overflow-hidden">
                   <Logo3D size="sm" />
                 </div>
-                <span className="text-sm font-semibold ml-0.5 text-[#060541] dark:text-[#f2f2f2]">{language === 'ar' ? 'الرئيسية' : 'Home'}</span>
+                <span
+                  className={cn(
+                    "text-sm font-semibold ml-0.5 transition-colors",
+                    theme === 'dark' ? "text-[hsl(210,100%,82%)]" : "text-[hsl(243,84%,14%)]"
+                  )}
+                >
+                  {language === 'ar' ? 'الرئيسية' : 'Home'}
+                </span>
               </button>
             ) : (
             <div ref={logoRef}>
@@ -414,19 +421,9 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 p-0 rounded-full relative">
                 <span className="relative">
-                  <Avatar 
-                    className="h-7 w-7"
-                    key={`${profile?.avatar_url || 'no-avatar'}-${avatarKey}`}
-                  >
-                    <AvatarImage src={avatarUrl} onError={handleAvatarImageError} />
-                    <AvatarFallback className="text-xs" delayMs={profileLoading ? 0 : 600}>
-                      {profileLoading ? (
-                        <span className="animate-pulse bg-muted-foreground/30 rounded-full w-full h-full" />
-                      ) : (
-                        user?.email ? user.email[0].toUpperCase() : '?'
-                      )}
-                    </AvatarFallback>
-                  </Avatar>
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-background/60 border border-border/60">
+                    <Settings className="h-4 w-4 text-foreground/80" />
+                  </span>
                   <UnreadBadge count={unreadTotal} size="sm" className="-right-0.5 -top-0.5" />
                 </span>
               </Button>
