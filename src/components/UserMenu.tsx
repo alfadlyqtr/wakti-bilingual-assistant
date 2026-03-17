@@ -103,20 +103,8 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-          <Avatar 
-            className="h-8 w-8"
-            key={profile?.avatar_url || 'no-avatar'} // Force re-render when avatar changes
-          >
-            <AvatarImage 
-              src={avatarUrl} 
-              alt={profile?.display_name || user?.user_metadata?.full_name || "User"}
-              onError={handleAvatarImageError}
-            />
-            <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold text-xs">
-              {getUserInitials()}
-            </AvatarFallback>
-          </Avatar>
+        <Button variant="ghost" className="relative h-8 w-8 rounded-full flex items-center justify-center">
+          <Settings className="h-5 w-5 text-foreground/80" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
