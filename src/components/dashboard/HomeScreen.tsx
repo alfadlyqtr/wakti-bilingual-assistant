@@ -59,6 +59,8 @@ import { useOptimizedTRData } from "@/hooks/useOptimizedTRData";
 import { useOptimizedMaw3dEvents } from "@/hooks/useOptimizedMaw3dEvents";
 import { useWhoopData } from "@/hooks/useWhoopData";
 import { useJournalData } from "@/hooks/useJournalData";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { SavedImagesPicker } from "@/components/dashboard/SavedImagesPicker";
 
 // ─── App definitions ──────────────────────────────────────────────────────────
@@ -183,12 +185,13 @@ function sanitizeDock(raw: string[], maxSlots = MAX_DOCK_DESKTOP): string[] {
 
 // ─── Liquid-glass icon shell ───────────────────────────────────────────────────
 // The shimmer highlight on the top edge + soft inner glow gives real iOS 26 "liquid glass"
-function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl }: {
+function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, badgeCount = 0 }: {
   app: typeof ALL_APPS[0];
   size?: number;
   editMode: boolean;
   glowEnabled?: boolean;
   avatarUrl?: string;
+  badgeCount?: number;
 }) {
   const px = `${size}px`;
   return (
@@ -226,6 +229,12 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl }
             : app.icon && <app.icon style={{ width: size * 0.5, height: size * 0.5, color: "#fff" }} strokeWidth={1.8} />
         }
       </div>
+      {/* Notification badge */}
+      {!editMode && badgeCount > 0 && (
+        <div className="absolute -top-1 -right-1 z-20 min-w-[18px] h-[18px] rounded-full bg-red-500 border-2 border-white flex items-center justify-center shadow-lg">
+          <span className="text-white font-bold leading-none" style={{ fontSize: 10 }}>{badgeCount > 99 ? '99+' : badgeCount}</span>
+        </div>
+      )}
       {/* Edit badge */}
       {editMode && (
         <div className="absolute -top-1 -left-1 z-10 w-5 h-5 rounded-full bg-black/80 border border-white/40 flex items-center justify-center shadow">
@@ -237,7 +246,7 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl }
 }
 
 // ─── Sortable grid icon ────────────────────────────────────────────────────────
-function GridIcon({ app, language, editMode, onTap, isDark, glowEnabled = false, avatarUrl }: {
+function GridIcon({ app, language, editMode, onTap, isDark, glowEnabled = false, avatarUrl, badgeCount = 0 }: {
   app: typeof ALL_APPS[0];
   language: string;
   editMode: boolean;
@@ -245,6 +254,7 @@ function GridIcon({ app, language, editMode, onTap, isDark, glowEnabled = false,
   isDark: boolean;
   glowEnabled?: boolean;
   avatarUrl?: string;
+  badgeCount?: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `grid::${app.id}`,
@@ -266,7 +276,7 @@ function GridIcon({ app, language, editMode, onTap, isDark, glowEnabled = false,
       className="flex flex-col items-center gap-1.5 select-none cursor-pointer"
       onClick={editMode ? undefined : onTap}
     >
-      <LiquidIcon app={app} size={64} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} />
+      <LiquidIcon app={app} size={64} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} badgeCount={badgeCount} />
       <span
         className="text-[11px] font-semibold text-center leading-tight"
         style={{
@@ -286,12 +296,13 @@ function GridIcon({ app, language, editMode, onTap, isDark, glowEnabled = false,
 }
 
 // ─── Sortable dock icon ────────────────────────────────────────────────────────
-function DockIcon({ app, editMode, onTap, glowEnabled = false, avatarUrl }: {
+function DockIcon({ app, editMode, onTap, glowEnabled = false, avatarUrl, badgeCount = 0 }: {
   app: typeof ALL_APPS[0];
   editMode: boolean;
   onTap: () => void;
   glowEnabled?: boolean;
   avatarUrl?: string;
+  badgeCount?: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `dock::${app.id}`,
@@ -313,7 +324,7 @@ function DockIcon({ app, editMode, onTap, glowEnabled = false, avatarUrl }: {
       className="flex flex-col items-center select-none cursor-pointer"
       onClick={editMode ? undefined : onTap}
     >
-      <LiquidIcon app={app} size={58} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} />
+      <LiquidIcon app={app} size={58} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} badgeCount={badgeCount} />
     </div>
   );
 }
@@ -1504,8 +1515,9 @@ interface UnifiedAppCellProps {
   navigate: (p: string) => void;
   gridArea: string;
   avatarUrl?: string;
+  badgeCount?: number;
 }
-function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridArea, avatarUrl }: UnifiedAppCellProps) {
+function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridArea, avatarUrl, badgeCount = 0 }: UnifiedAppCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id, data: { type: 'unified' },
   });
@@ -1526,7 +1538,7 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
       {...listeners}
       onClick={editMode ? undefined : () => navigate(app.path)}
     >
-      <LiquidIcon app={app} size={60} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} />
+      <LiquidIcon app={app} size={60} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} badgeCount={badgeCount} />
       <span
         className="text-[11px] font-semibold text-center leading-tight mt-1.5"
         style={{ color: isDark ? '#fff' : '#060541', textShadow: isDark ? '0 1px 4px rgba(0,0,0,0.95)' : 'none', maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
@@ -1559,7 +1571,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const { user }  = useAuth();
   const navigate  = useNavigate();
 
-  const [avatarUrl, setAvatarUrl] = useState<string>('');
+  const { profile } = useUserProfile();
+  const avatarUrl = profile?.avatar_url || '';
+  const { unreadTotal, contactCount } = useUnreadMessages();
+  const connectBadge = unreadTotal + contactCount;
   const [editMode,        setEditMode]        = useState(false);
   const [dockIds,         setDockIds]         = useState<string[]>(() => {
     try {
@@ -1670,11 +1685,6 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   useEffect(() => { setQuote(getQuoteForDisplay()); }, []);
   useEffect(() => { if (user?.id) localStorage.setItem(LS_ORDER_KEY(), JSON.stringify(iconOrder)); }, [iconOrder, user?.id]);
   useEffect(() => { if (user?.id) localStorage.setItem(LS_DOCK_KEY(),  JSON.stringify(dockIds));  }, [dockIds, user?.id]);
-  useEffect(() => {
-    if (!user?.id) return;
-    supabase.from('profiles').select('avatar_url').eq('id', user.id).single()
-      .then(({ data }) => { if (data?.avatar_url) setAvatarUrl(data.avatar_url); });
-  }, [user?.id]);
 
   const syncToSupabase = useCallback(async (patch: Record<string, any>) => {
     if (!user) return;
@@ -2604,6 +2614,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         navigate={navigate}
                         gridArea={gp}
                         avatarUrl={avatarUrl}
+                        badgeCount={app.id === 'connect' ? connectBadge : 0}
                       />
                     );
                   });
@@ -2630,7 +2641,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             >
               <SortableContext items={dockApps.map(a => `dock::${a.id}`)} strategy={horizontalListSortingStrategy}>
                 {dockApps.map(app => (
-                  <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} avatarUrl={avatarUrl} />
+                  <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} avatarUrl={avatarUrl} badgeCount={app.id === 'connect' ? connectBadge : 0} />
                 ))}
                 {Array.from({ length: Math.max(0, maxDock - dockApps.length) }).map((_, i) => (
                   <div key={`slot-${i}`} className="w-14 h-14 rounded-[23%] border-2 border-dashed border-white/25" />
