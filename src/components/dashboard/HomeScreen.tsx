@@ -481,7 +481,9 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
   navigate: (p: string) => void;
   whoopData?: any;
 }) {
-  const [activeTab, setActiveTab] = useState<'whoop' | 'healthkit'>('whoop');
+  const [activeTab, setActiveTab] = useState<'whoop' | 'healthkit'>(
+    () => (localStorage.getItem('vitality_widget_tab') as 'whoop' | 'healthkit') || 'whoop'
+  );
 
   // Real HealthKit data state
   const [hkData, setHkData] = useState<{ steps: number; avgHr: number | null; rhr: number | null; sleepHours: number | null; } | null>(null);
@@ -547,7 +549,7 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
       <div className="flex justify-center">
         <button
           title={activeTab === 'whoop' ? 'Switch to HealthKit' : 'Switch to WHOOP'}
-          onClick={(e) => { e.stopPropagation(); setActiveTab(t => t === 'whoop' ? 'healthkit' : 'whoop'); }}
+          onClick={(e) => { e.stopPropagation(); setActiveTab(t => { const next = t === 'whoop' ? 'healthkit' : 'whoop'; localStorage.setItem('vitality_widget_tab', next); return next; }); }}
           className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 border border-white/25 active:scale-95 transition-all"
         >
           <Activity className={`w-3 h-3 ${activeTab === 'whoop' ? 'text-white' : 'text-white/70'}`} strokeWidth={2.5} />
