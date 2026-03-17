@@ -307,7 +307,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
                 <div className="rounded-[0.5rem] overflow-hidden">
                   <Logo3D size="sm" />
                 </div>
-                <span className="text-sm font-semibold ml-0.5">{language === 'ar' ? 'الرئيسية' : 'Home'}</span>
+                <span className="text-sm font-semibold ml-0.5 text-[#060541] dark:text-[#f2f2f2]">{language === 'ar' ? 'الرئيسية' : 'Home'}</span>
               </button>
             ) : (
             <div ref={logoRef}>
