@@ -2,21 +2,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Camera, Upload, X, Loader2 } from 'lucide-react';
+import { Camera, X, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
 
-export function ProfileImageUpload() {
+export function ProfileImageUpload({ showPreview = true }: { showPreview?: boolean }) {
   const { user } = useAuth();
   const { profile, refetch, createProfileIfMissing } = useUserProfile();
   const { language } = useTheme();
   const [isUploading, setIsUploading] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const hasTriedSignedFallbackRef = useRef(false);
   const [optimisticPreviewUrl, setOptimisticPreviewUrl] = useState<string | null>(null);
 
@@ -257,9 +256,6 @@ export function ProfileImageUpload() {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-      if (cameraInputRef.current) {
-        cameraInputRef.current.value = '';
-      }
     }
   };
 
@@ -408,57 +404,44 @@ export function ProfileImageUpload() {
 
   return (
     <div className="flex flex-col items-center space-y-4">
-      <div className="relative">
-        <Avatar 
-          className="h-24 w-24 ring-2 ring-border"
-          key={`${profile?.avatar_url || 'no-avatar'}-${avatarKey}`} // Force re-render when avatar changes
-        >
-          <AvatarImage 
-            src={resolvedAvatarSrc || undefined} 
-            alt={language === 'ar' ? 'الصورة الشخصية' : 'Profile picture'}
-            onError={handleAvatarError}
-          />
-          <AvatarFallback className="text-lg font-semibold" delayMs={600}>
-            {getInitials()}
-          </AvatarFallback>
-        </Avatar>
-        
-        {isUploading && (
-          <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
-            <Loader2 className="h-6 w-6 text-white animate-spin" />
-          </div>
-        )}
-      </div>
+      {showPreview && (
+        <div className="relative">
+          <Avatar 
+            className="h-24 w-24 ring-2 ring-border"
+            key={`${profile?.avatar_url || 'no-avatar'}-${avatarKey}`}
+          >
+            <AvatarImage 
+              src={resolvedAvatarSrc || undefined} 
+              alt={language === 'ar' ? 'الصورة الشخصية' : 'Profile picture'}
+              onError={handleAvatarError}
+            />
+            <AvatarFallback className="text-lg font-semibold" delayMs={600}>
+              {getInitials()}
+            </AvatarFallback>
+          </Avatar>
+          
+          {isUploading && (
+            <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+              <Loader2 className="h-6 w-6 text-white animate-spin" />
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row gap-2 w-full">
         <Button
           variant="outline"
           size="sm"
-          onClick={() => cameraInputRef.current?.click()}
+          onClick={() => fileInputRef.current?.click()}
           disabled={isUploading}
-          className="flex items-center justify-center gap-2 w-full sm:w-auto"
+          className="flex items-center justify-center gap-2 w-full"
         >
           {isUploading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Camera className="h-4 w-4" />
           )}
-          {language === 'ar' ? 'التقاط صورة' : 'Take Photo'}
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isUploading}
-          className="flex items-center justify-center gap-2 w-full sm:w-auto"
-        >
-          {isUploading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Upload className="h-4 w-4" />
-          )}
-          {language === 'ar' ? 'رفع من الملفات' : 'Upload from Files'}
+          {language === 'ar' ? 'تغيير الصورة' : 'Change Photo'}
         </Button>
 
         {avatarUrl && !avatarError && (
@@ -467,7 +450,7 @@ export function ProfileImageUpload() {
             size="sm"
             onClick={handleRemoveAvatar}
             disabled={isUploading}
-            className="flex items-center justify-center gap-2 w-full sm:w-auto text-destructive hover:text-destructive"
+            className="flex items-center justify-center gap-2 w-full text-destructive hover:text-destructive"
           >
             <X className="h-4 w-4" />
             {language === 'ar' ? 'حذف' : 'Remove'}
@@ -476,25 +459,13 @@ export function ProfileImageUpload() {
       </div>
 
       <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
-        capture="environment"
-        onChange={handleImageUpload}
-        className="hidden"
-        aria-label={language === 'ar' ? 'التقاط صورة للملف الشخصي' : 'Take profile picture'}
-        title={language === 'ar' ? 'التقاط صورة للملف الشخصي' : 'Take profile picture'}
-        disabled={isUploading}
-      />
-
-      <input
         ref={fileInputRef}
         type="file"
         accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
         onChange={handleImageUpload}
         className="hidden"
-        aria-label={language === 'ar' ? 'رفع صورة للملف الشخصي' : 'Upload profile picture'}
-        title={language === 'ar' ? 'رفع صورة للملف الشخصي' : 'Upload profile picture'}
+        aria-label={language === 'ar' ? 'تغيير الصورة الشخصية' : 'Change profile picture'}
+        title={language === 'ar' ? 'تغيير الصورة الشخصية' : 'Change profile picture'}
         disabled={isUploading}
       />
 

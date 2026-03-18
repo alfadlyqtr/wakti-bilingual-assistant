@@ -27,15 +27,29 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User, CreditCard, CheckCircle, XCircle, Clock, RefreshCw, Sparkles, Sun } from "lucide-react";
+import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User, CreditCard, CheckCircle, XCircle, Clock, RefreshCw, Sparkles, Sun, Users, Gift, Globe, Lock, GiftIcon, ChevronRight } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { restorePurchases } from "@/integrations/natively/purchasesBridge";
+import { MyGallery } from "@/components/social/MyGallery";
+import { ContactsContent } from "@/pages/Contacts";
+
+function ContactsEmbedded({ language }: { language: string }) {
+  const [activeTab, setActiveTab] = React.useState('contacts');
+  return (
+    <ContactsContent
+      language={language}
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+    />
+  );
+}
 
 // TrialCountdown Component - Shows remaining time of 24-hour trial
 // When trial ends, shows friendly message with subscribe CTA
@@ -134,17 +148,23 @@ export default function Account() {
   const location = useLocation();
   const { language } = useTheme();
   const queryClient = useQueryClient();
-  // Active tab synced with URL (?tab=profile|billing) without loops/flicker
+  // Active tab synced with URL (?tab=profile|billing|social|wishes) without loops/flicker
   const initialTab = (() => {
     const params = new URLSearchParams(location.search || '');
     const tab = (params.get('tab') || '').toLowerCase();
-    return tab === 'billing' ? 'billing' : 'profile';
+    if (tab === 'billing') return 'billing';
+    if (tab === 'social') return 'social';
+    if (tab === 'wishes') return 'wishes';
+    return 'profile';
   })();
-  const [activeTab, setActiveTab] = useState<'profile' | 'billing'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'profile' | 'billing' | 'social' | 'wishes'>(initialTab);
   useEffect(() => {
     const params = new URLSearchParams(location.search || '');
     const tab = (params.get('tab') || '').toLowerCase();
-    const urlTab: 'profile' | 'billing' = tab === 'billing' ? 'billing' : 'profile';
+    let urlTab: 'profile' | 'billing' | 'social' | 'wishes' = 'profile';
+    if (tab === 'billing') urlTab = 'billing';
+    else if (tab === 'social') urlTab = 'social';
+    else if (tab === 'wishes') urlTab = 'wishes';
     if (urlTab !== activeTab) setActiveTab(urlTab);
   }, [location.search]);
 
@@ -155,6 +175,60 @@ export default function Account() {
       navigate(`${location.pathname}?${params.toString()}`, { replace: true });
     }
   }, [activeTab]);
+
+  // Social tab state
+  const [socialSubTab, setSocialSubTab] = useState("contacts");
+  const [wishesPrivacy, setWishesPrivacy] = useState("contacts");
+  const [wishesAllowClaims, setWishesAllowClaims] = useState(true);
+  const [wishesAutoApprove, setWishesAutoApprove] = useState(false);
+  const [wishesAllowSharing, setWishesAllowSharing] = useState(true);
+  const [savingWishesSettings, setSavingWishesSettings] = useState(false);
+  // Fetch wishlist privacy settings
+  const { data: wishlistSettings } = useQuery({
+    queryKey: ['wishlist-settings', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data } = await supabase
+        .from('profiles')
+        .select('wishlist_allow_claims, wishlist_auto_approve_claims, wishlist_allow_sharing, wishlist_default_privacy')
+        .eq('id', user.id)
+        .single();
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
+  useEffect(() => {
+    if (wishlistSettings) {
+      setWishesPrivacy(wishlistSettings.wishlist_default_privacy || 'contacts');
+      setWishesAllowClaims(wishlistSettings.wishlist_allow_claims ?? true);
+      setWishesAutoApprove(wishlistSettings.wishlist_auto_approve_claims ?? false);
+      setWishesAllowSharing(wishlistSettings.wishlist_allow_sharing ?? true);
+    }
+  }, [wishlistSettings]);
+
+  const handleSaveWishesSettings = async () => {
+    if (!user?.id) return;
+    setSavingWishesSettings(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          wishlist_default_privacy: wishesPrivacy,
+          wishlist_allow_claims: wishesAllowClaims,
+          wishlist_auto_approve_claims: wishesAutoApprove,
+          wishlist_allow_sharing: wishesAllowSharing,
+        })
+        .eq('id', user.id);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ['wishlist-settings'] });
+      toast.success(language === 'ar' ? 'تم حفظ الإعدادات' : 'Settings saved');
+    } catch {
+      toast.error(language === 'ar' ? 'حدث خطأ' : 'Failed to save');
+    } finally {
+      setSavingWishesSettings(false);
+    }
+  };
 
   // Account states
   const [name, setName] = useState("");
@@ -180,7 +254,7 @@ export default function Account() {
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   
   // Detect correct paywall variant using same logic as ProtectedRoute (priority: trial_expired > cancelled > new_user)
-  const { isNewUser, wasSubscribed, isAccessExpired } = useUserProfile();
+  const { isNewUser, wasSubscribed, isAccessExpired, profile } = useUserProfile();
   const paywallVariant: PaywallVariant = isAccessExpired ? 'trial_expired' : wasSubscribed ? 'cancelled' : 'new_user';
   
   // Restore purchases state
@@ -214,7 +288,7 @@ export default function Account() {
       
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('is_subscribed, subscription_status, plan_name, next_billing_date, billing_start_date, payment_method, free_access_start_at')
+        .select('is_subscribed, subscription_status, plan_name, next_billing_date, billing_start_date, payment_method, free_access_start_at, admin_gifted')
         .eq('id', user.id)
         .single();
 
@@ -249,11 +323,24 @@ export default function Account() {
     };
   }, [queryClient]);
 
+  const billingProfile = subscriptionData?.profile;
+  const hasActiveBillingAccess = !!billingProfile && (
+    billingProfile.is_subscribed ||
+    billingProfile.admin_gifted === true ||
+    (
+      !!billingProfile.payment_method &&
+      billingProfile.payment_method !== 'manual' &&
+      !!billingProfile.next_billing_date &&
+      new Date(billingProfile.next_billing_date).getTime() > Date.now()
+    )
+  );
+  const hasBillingTrialStarted = !!billingProfile?.free_access_start_at;
+
   // Load user data
   useEffect(() => {
     if (user) {
-      // Name: prefer profile display_name, then full_name from metadata
-      const displayName = userProfile?.display_name || user.user_metadata?.full_name || '';
+      // Name: prefer profile display_name, then display_name/full_name/name from metadata
+      const displayName = userProfile?.display_name || user.user_metadata?.display_name || user.user_metadata?.full_name || user.user_metadata?.name || '';
       // Don't show email as display name
       setName(displayName && !displayName.includes('@') ? displayName : '');
 
@@ -272,6 +359,101 @@ export default function Account() {
       setLoadingUserData(false);
     }
   }, [user, userProfile]);
+
+  const originalDisplayName = userProfile?.display_name || user?.user_metadata?.display_name || user?.user_metadata?.full_name || user?.user_metadata?.name || '';
+  const normalizedOriginalDisplayName = originalDisplayName && !originalDisplayName.includes('@') ? originalDisplayName.trim() : '';
+  const originalRawUsername = userProfile?.username || user?.user_metadata?.username || '';
+  const originalUsernameIsAutoGenerated = /^user[0-9a-f]{8}$/i.test(originalRawUsername);
+  const normalizedOriginalUsername = originalUsernameIsAutoGenerated ? '' : originalRawUsername.trim();
+  const canSetNameOnce = !normalizedOriginalDisplayName;
+  const canSetUsernameOnce = !normalizedOriginalUsername;
+  const needsOneTimeProfileSetup = canSetNameOnce || canSetUsernameOnce;
+  const setupTitle = canSetNameOnce && canSetUsernameOnce
+    ? (language === 'ar' ? 'أكمل ملفك الشخصي' : 'Complete your profile')
+    : canSetNameOnce
+      ? (language === 'ar' ? 'أضف اسمك' : 'Add your name')
+      : (language === 'ar' ? 'أضف اسم المستخدم' : 'Add your username');
+  const setupDescription = canSetNameOnce && canSetUsernameOnce
+    ? (language === 'ar' ? 'أضف اسمك واسم المستخدم مرة واحدة.' : 'Set your name and username once.')
+    : canSetNameOnce
+      ? (language === 'ar' ? 'أضف اسمك مرة واحدة.' : 'Set your name once.')
+      : (language === 'ar' ? 'أضف اسم المستخدم مرة واحدة.' : 'Set your username once.');
+  const setupButtonLabel = canSetNameOnce && canSetUsernameOnce
+    ? (language === 'ar' ? 'حفظ الاسم واسم المستخدم' : 'Save Name and Username')
+    : canSetNameOnce
+      ? (language === 'ar' ? 'حفظ الاسم' : 'Save Name')
+      : (language === 'ar' ? 'حفظ اسم المستخدم' : 'Save Username');
+
+  const handleSaveOneTimeProfileSetup = async () => {
+    if (!user?.id) return;
+
+    const trimmedName = name.trim();
+    const trimmedUsername = username.trim().toLowerCase();
+
+    if (canSetNameOnce && !trimmedName) {
+      toast.error(language === 'ar' ? 'يرجى إدخال الاسم' : 'Please enter your name');
+      return;
+    }
+
+    if (canSetUsernameOnce && !trimmedUsername) {
+      toast.error(language === 'ar' ? 'يرجى إدخال اسم المستخدم' : 'Please enter a username');
+      return;
+    }
+
+    if (canSetUsernameOnce && !/^[a-zA-Z0-9._]{3,20}$/.test(trimmedUsername)) {
+      toast.error(language === 'ar'
+        ? 'اسم المستخدم يجب أن يكون من 3 إلى 20 حرفاً ويحتوي فقط على أحرف أو أرقام أو نقطة أو شرطة سفلية'
+        : 'Username must be 3-20 characters and can only use letters, numbers, dots, or underscores');
+      return;
+    }
+
+    setIsUpdatingProfile(true);
+
+    try {
+      const profileUpdates: { display_name?: string; username?: string } = {};
+      const authUpdates: { full_name?: string; username?: string } = {};
+
+      if (canSetNameOnce) {
+        profileUpdates.display_name = trimmedName;
+        authUpdates.full_name = trimmedName;
+      }
+
+      if (canSetUsernameOnce) {
+        profileUpdates.username = trimmedUsername;
+        authUpdates.username = trimmedUsername;
+      }
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update(profileUpdates)
+        .eq('id', user.id);
+
+      if (profileError) throw profileError;
+
+      const { error: authError } = await supabase.auth.updateUser({ data: authUpdates });
+      if (authError) throw authError;
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['userProfile'] }),
+        queryClient.invalidateQueries({ queryKey: ['profile'] }),
+      ]);
+
+      window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+
+      toast.success(language === 'ar'
+        ? 'تم حفظ بيانات الملف الشخصي مرة واحدة بنجاح'
+        : 'Your one-time profile setup was saved successfully');
+    } catch (error: any) {
+      const message = error?.message || '';
+      if (message.toLowerCase().includes('duplicate') || message.toLowerCase().includes('unique')) {
+        toast.error(language === 'ar' ? 'اسم المستخدم مستخدم بالفعل' : 'That username is already taken');
+      } else {
+        toast.error(language === 'ar' ? 'تعذر حفظ بيانات الملف الشخصي' : 'Failed to save profile setup');
+      }
+    } finally {
+      setIsUpdatingProfile(false);
+    }
+  };
   
   // Handle date input change
   const handleDobInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -592,33 +774,71 @@ export default function Account() {
   
   return (
     <PageContainer showHeader={false}>
-      <div className="container mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold mb-6">
-          {t("account", language)}
-        </h1>
-        
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'profile' | 'billing')} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 h-auto p-1">
-            <TabsTrigger value="profile" className="flex flex-col items-center gap-1 p-3">
-              <User className="h-4 w-4" />
-              <span className="text-xs">{t("profile", language)}</span>
+      <div className="min-h-screen">
+
+        {/* ── HERO HEADER ─────────────────────────────────────────────────── */}
+        <div className="relative overflow-hidden bg-[#060541] pb-6 pt-8 px-4">
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute -top-10 -right-10 w-64 h-64 rounded-full bg-[hsl(210,100%,65%)] opacity-[0.07] blur-3xl" />
+            <div className="absolute -bottom-10 -left-10 w-56 h-56 rounded-full bg-[hsl(142,76%,55%)] opacity-[0.06] blur-3xl" />
+          </div>
+          <div className="relative z-10 flex flex-col items-center gap-3">
+            <div className="w-20 h-20 rounded-full ring-2 ring-white/20 overflow-hidden bg-gradient-to-br from-[hsl(210,100%,55%)] to-[hsl(180,85%,50%)] flex items-center justify-center">
+              {profile?.avatar_url
+                ? <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                : <span className="text-2xl font-bold text-white">{(name || email || '?').substring(0, 2).toUpperCase()}</span>
+              }
+            </div>
+            <div className="text-center">
+              <h1 className="text-xl font-bold text-white">{name || t("account", language)}</h1>
+              {email && <p className="text-sm text-white/40 mt-0.5">{email}</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* ── TAB BAR — below hero, on page background ─────────────────────── */}
+        <div className="sticky top-0 z-20 px-4 py-3 bg-background border-b border-border">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'profile' | 'billing' | 'social' | 'wishes')} className="w-full">
+          <TabsList className="grid w-full grid-cols-4 h-10 bg-muted rounded-2xl p-1 border-0 shadow-none">
+            <TabsTrigger value="profile" className="rounded-xl text-[11px] font-bold data-[state=active]:bg-[#060541] data-[state=active]:text-white dark:data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:shadow-none transition-all flex items-center gap-1">
+              <User className="h-3 w-3 shrink-0" />
+              {language === 'ar' ? 'الملف' : 'Profile'}
             </TabsTrigger>
-            <TabsTrigger value="billing" className="flex flex-col items-center gap-1 p-3">
-              <CreditCard className="h-4 w-4" />
-              <span className="text-xs">{t("billing", language)}</span>
+            <TabsTrigger value="social" className="rounded-xl text-[11px] font-bold data-[state=active]:bg-[hsl(142,76%,42%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all flex items-center gap-1">
+              <Users className="h-3 w-3 shrink-0" />
+              {language === 'ar' ? 'التواصل' : 'Social'}
+            </TabsTrigger>
+            <TabsTrigger value="wishes" className="rounded-xl text-[11px] font-bold data-[state=active]:bg-[hsl(320,70%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all flex items-center gap-1">
+              <Gift className="h-3 w-3 shrink-0" />
+              {language === 'ar' ? 'الرغبات' : 'Wishes'}
+            </TabsTrigger>
+            <TabsTrigger value="billing" className="rounded-xl text-[11px] font-bold data-[state=active]:bg-[hsl(45,95%,45%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all flex items-center gap-1">
+              <CreditCard className="h-3 w-3 shrink-0" />
+              {language === 'ar' ? 'الفاتورة' : 'Billing'}
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="profile" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("profile", language)}</CardTitle>
+          <TabsContent value="profile" className="space-y-4 px-4 pt-4 pb-24">
+            <Card className="border border-border bg-card">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">{t("profile", language)}</CardTitle>
                 <CardDescription>
                   {t("profileManagement", language)}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <ProfileImageUpload />
+                <ProfileImageUpload showPreview={false} />
+
+                {needsOneTimeProfileSetup && (
+                  <div className="rounded-2xl border border-amber-400/30 bg-gradient-to-r from-amber-500/10 to-orange-500/10 p-4 space-y-2">
+                    <p className="text-sm font-semibold text-foreground">
+                      {setupTitle}
+                    </p>
+                    <p className="text-xs text-muted-foreground leading-6">
+                      {setupDescription}
+                    </p>
+                  </div>
+                )}
                 
                 {/* Username - Read-only */}
                 <div className="grid gap-2">
@@ -627,11 +847,18 @@ export default function Account() {
                     id="username"
                     type="text"
                     value={username}
-                    readOnly
-                    className="bg-muted cursor-not-allowed"
+                    onChange={(e) => setUsername(e.target.value)}
+                    readOnly={!canSetUsernameOnce}
+                    disabled={loadingUserData || isUpdatingProfile}
+                    placeholder={canSetUsernameOnce ? (language === 'ar' ? 'اختر اسم المستخدم مرة واحدة' : 'Choose your username once') : ''}
+                    className={!canSetUsernameOnce ? "bg-muted cursor-not-allowed" : ""}
                   />
                   <p className="text-xs text-muted-foreground">
-                    {t("usernameHelpText", language)}
+                    {canSetUsernameOnce
+                      ? (language === 'ar'
+                          ? 'يمكنك اختيار اسم المستخدم الآن مرة واحدة فقط.'
+                          : 'You can choose your username now one time only.')
+                      : t("usernameHelpText", language)}
                   </p>
                 </div>
                 
@@ -642,10 +869,34 @@ export default function Account() {
                     id="name"
                     type="text"
                     value={name}
-                    readOnly
-                    className="bg-muted cursor-not-allowed"
+                    onChange={(e) => setName(e.target.value)}
+                    readOnly={!canSetNameOnce}
+                    disabled={loadingUserData || isUpdatingProfile}
+                    placeholder={canSetNameOnce ? (language === 'ar' ? 'أدخل اسمك مرة واحدة' : 'Enter your name once') : ''}
+                    className={!canSetNameOnce ? "bg-muted cursor-not-allowed" : ""}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    {canSetNameOnce
+                      ? (language === 'ar'
+                          ? 'يمكنك إدخال اسمك الآن مرة واحدة فقط.'
+                          : 'You can enter your name now one time only.')
+                      : (language === 'ar'
+                          ? 'تم حفظ الاسم بالفعل ولا يمكن تعديله من هنا.'
+                          : 'Your name is already set and cannot be edited here.')} 
+                  </p>
                 </div>
+
+                {needsOneTimeProfileSetup && (
+                  <Button
+                    onClick={handleSaveOneTimeProfileSetup}
+                    disabled={isUpdatingProfile || (canSetNameOnce && !name.trim()) || (canSetUsernameOnce && !username.trim())}
+                    className="w-full bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(280,70%,65%)] text-white shadow-[0_0_24px_hsla(210,100%,65%,0.25)]"
+                  >
+                    {isUpdatingProfile
+                      ? (language === 'ar' ? 'جارٍ الحفظ...' : 'Saving...')
+                      : setupButtonLabel}
+                  </Button>
+                )}
 
                 {/* Date of Birth - Enhanced with proper Arabic support */}
                 <div className="grid gap-2">
@@ -882,7 +1133,145 @@ export default function Account() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="billing" className="space-y-6">
+          {/* ── SOCIAL TAB ─────────────────────────────────────────────────── */}
+          <TabsContent value="social" className="px-4 pt-4 pb-24">
+            <Tabs defaultValue="contacts">
+              <TabsList className="w-full grid grid-cols-2 mb-4 h-10 rounded-2xl bg-black/5 dark:bg-white/5 p-1 border-0">
+                <TabsTrigger value="contacts" className="rounded-xl text-xs font-bold text-foreground/50 data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all">
+                  {language === 'ar' ? 'جهات الاتصال' : 'Contacts'}
+                </TabsTrigger>
+                <TabsTrigger value="gallery" className="rounded-xl text-xs font-bold text-foreground/50 data-[state=active]:bg-[hsl(25,95%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all">
+                  {language === 'ar' ? 'معرضي' : 'My Gallery'}
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="contacts" className="mt-0 -mx-4">
+                <ContactsEmbedded language={language} />
+              </TabsContent>
+
+              <TabsContent value="gallery" className="mt-0">
+                <MyGallery />
+              </TabsContent>
+            </Tabs>
+          </TabsContent>
+
+          {/* ── WISHES SETTINGS TAB ────────────────────────────────────────── */}
+          <TabsContent value="wishes" className="space-y-4 px-4 pt-4 pb-24">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Gift className="h-5 w-5 text-pink-500" />
+                  {language === 'ar' ? 'إعدادات قوائم الرغبات' : 'Wishlist Settings'}
+                </CardTitle>
+                <CardDescription>
+                  {language === 'ar'
+                    ? 'تحكم في كيفية مشاركة رغباتك مع أصدقائك'
+                    : 'Control how your wishlists are shared with friends'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Default privacy */}
+                <div className="space-y-2">
+                  <Label>{language === 'ar' ? 'الخصوصية الافتراضية' : 'Default Privacy'}</Label>
+                  <Select value={wishesPrivacy} onValueChange={setWishesPrivacy}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="contacts">
+                        <span className="flex items-center gap-2">
+                          <Users className="h-3.5 w-3.5 text-green-500" />
+                          {language === 'ar' ? 'جهات الاتصال فقط' : 'Contacts only'}
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="public">
+                        <span className="flex items-center gap-2">
+                          <Globe className="h-3.5 w-3.5 text-blue-500" />
+                          {language === 'ar' ? 'عام' : 'Public'}
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="private">
+                        <span className="flex items-center gap-2">
+                          <Lock className="h-3.5 w-3.5 text-gray-500" />
+                          {language === 'ar' ? 'خاص' : 'Private'}
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Allow claims */}
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div>
+                    <p className="text-sm font-medium">{language === 'ar' ? 'السماح بالحجز' : 'Allow Claims'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {language === 'ar' ? 'يسمح للأصدقاء بحجز هداياك' : 'Let friends reserve items from your lists'}
+                    </p>
+                  </div>
+                  <Switch checked={wishesAllowClaims} onCheckedChange={setWishesAllowClaims} />
+                </div>
+
+                {/* Auto approve */}
+                {wishesAllowClaims && (
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div>
+                      <p className="text-sm font-medium">{language === 'ar' ? 'الموافقة التلقائية' : 'Auto-Approve Claims'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {language === 'ar' ? 'قبول الحجوزات تلقائياً دون مراجعة' : 'Approve friend claims automatically'}
+                      </p>
+                    </div>
+                    <Switch checked={wishesAutoApprove} onCheckedChange={setWishesAutoApprove} />
+                  </div>
+                )}
+
+                {/* Allow sharing */}
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div>
+                    <p className="text-sm font-medium">{language === 'ar' ? 'السماح بالمشاركة' : 'Allow Sharing'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {language === 'ar' ? 'يسمح لأصدقائك بمشاركة قوائمك' : 'Let friends share your wishlists'}
+                    </p>
+                  </div>
+                  <Switch checked={wishesAllowSharing} onCheckedChange={setWishesAllowSharing} />
+                </div>
+
+                <Button
+                  onClick={handleSaveWishesSettings}
+                  disabled={savingWishesSettings}
+                  className="w-full"
+                >
+                  {savingWishesSettings
+                    ? (language === 'ar' ? 'جارٍ الحفظ...' : 'Saving...')
+                    : (language === 'ar' ? 'حفظ الإعدادات' : 'Save Settings')}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Quick link to My Wishlists page */}
+            <Card
+              className="cursor-pointer active:scale-[0.98] transition-all border border-pink-500/20 bg-gradient-to-r from-pink-500/8 to-[hsl(320,70%,55%)]/8"
+              onClick={() => navigate('/wishlists')}
+            >
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[hsl(320,70%,55%)] to-pink-500 flex items-center justify-center">
+                    <GiftIcon className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">
+                      {language === 'ar' ? 'إدارة قوائمي' : 'Manage My Wishlists'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {language === 'ar' ? 'إنشاء وتعديل قوائم رغباتك' : 'Create and manage your wishlist items'}
+                    </p>
+                  </div>
+                </div>
+                <Gift className="h-5 w-5 text-pink-500" />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="billing" className="space-y-4 px-4 pt-4 pb-24">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -923,16 +1312,16 @@ export default function Account() {
                   /* DATA STATES: Show appropriate content based on subscription status */
                   <>
                     {/* STATE 1: Trial (Active or Expired) - TrialCountdown handles both states */}
-                    {subscriptionData?.profile && !subscriptionData.profile.is_subscribed && subscriptionData.profile.free_access_start_at && (() => {
+                    {billingProfile && !hasActiveBillingAccess && hasBillingTrialStarted && (() => {
                       // Calculate if trial is still active
-                      const start = new Date(subscriptionData.profile.free_access_start_at).getTime();
+                      const start = new Date(billingProfile.free_access_start_at!).getTime();
                       const trialEnd = start + (24 * 60 * 60 * 1000); // 24 hours
                       const isTrialActive = Date.now() < trialEnd;
                       
                       return (
                         <>
                           <TrialCountdown 
-                            startAt={subscriptionData.profile.free_access_start_at} 
+                            startAt={billingProfile.free_access_start_at!} 
                             language={language} 
                             onSubscribeClick={() => setShowPaywallModal(true)}
                           />
@@ -987,7 +1376,7 @@ export default function Account() {
                     })()}
                     
                     {/* STATE 2: Subscribed - Show Status + Manage Button */}
-                    {subscriptionData?.profile?.is_subscribed && (
+                    {hasActiveBillingAccess && (
                       <div className="text-center space-y-4 py-4">
                         <div className="flex items-center justify-center gap-2 text-green-500">
                           <CheckCircle className="h-5 w-5" />
@@ -1020,7 +1409,7 @@ export default function Account() {
                     )}
                     
                     {/* STATE 3: No Subscription, No Trial (new_user) */}
-                    {subscriptionData?.profile && !subscriptionData.profile.is_subscribed && !subscriptionData.profile.free_access_start_at && (
+                    {billingProfile && !hasActiveBillingAccess && !hasBillingTrialStarted && (
                       <div className="text-center space-y-4 py-4">
                         <p className="text-muted-foreground">
                           {language === 'en' 
@@ -1066,7 +1455,8 @@ export default function Account() {
             </Card>
           </TabsContent>
         </Tabs>
-      </div>
+        </div>{/* end sticky tab bar div */}
+      </div>{/* end min-h-screen */}
       
       {/* Submit Feedback Dialog */}
       <Dialog open={isFeedbackDialogOpen} onOpenChange={setIsFeedbackDialogOpen}>

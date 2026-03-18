@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { MessageSquare, Star, UserX, Trash2 } from "lucide-react";
+import { MessageSquare, Star, UserX, Trash2, Gift, Images, User, LayoutList, LayoutGrid } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getContacts, blockContact, deleteContact, toggleContactFavorite } from "@/services/contactsService";
 import { LoadingSpinner } from "@/components/ui/loading";
@@ -67,6 +67,7 @@ export function ContactList({
   const [chatOpen, setChatOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState<{id: string, name: string, avatar?: string} | null>(null);
   const [avatarErrors, setAvatarErrors] = useState<Record<string, boolean>>({});
+  const [compactView, setCompactView] = useState(false);
   
   // Debug logging for user and unread data
   useEffect(() => {
@@ -240,9 +241,35 @@ export function ContactList({
     );
   }
 
+  // Sort: favorites first, then by display name
+  const sortedContacts = contacts
+    ? [...contacts].sort((a: any, b: any) => {
+        if (a.is_favorite && !b.is_favorite) return -1;
+        if (!a.is_favorite && b.is_favorite) return 1;
+        const aName = (a.profile?.display_name || a.profile?.username || '').toLowerCase();
+        const bName = (b.profile?.display_name || b.profile?.username || '').toLowerCase();
+        return aName.localeCompare(bName);
+      })
+    : [];
+
   return (
     <>
-      <div className="space-y-3">
+      {/* View toggle */}
+      {sortedContacts.length > 0 && (
+        <div className="flex justify-end pb-2">
+          <button
+            onClick={() => setCompactView(v => !v)}
+            aria-label={compactView ? 'Switch to card view' : 'Switch to compact view'}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-muted-foreground bg-muted active:scale-95 transition-transform"
+          >
+            {compactView
+              ? <><LayoutGrid className="h-3.5 w-3.5" />{language === 'ar' ? 'بطاقات' : 'Cards'}</>
+              : <><LayoutList className="h-3.5 w-3.5" />{language === 'ar' ? 'مضغوط' : 'Compact'}</>}
+          </button>
+        </div>
+      )}
+
+      <div className={compactView ? 'space-y-1' : 'space-y-3'}>
         {!contacts || contacts.length === 0 ? (
           <Card className="p-6">
             <div className="text-center flex flex-col items-center gap-3 text-muted-foreground">
@@ -252,7 +279,7 @@ export function ContactList({
             </div>
           </Card>
         ) : (
-          contacts.map((contact: any) => {
+          sortedContacts.map((contact: any) => {
             const contactProfile = contact.profile || {};
             const displayName = contactProfile.username || "unknown";
             const emailOrName = contactProfile.display_name || contactProfile.email || "";
@@ -261,104 +288,183 @@ export function ContactList({
             const isFavorite = contact.is_favorite === true;
             const relationshipStatus: "mutual" | "you-added-them" | "they-added-you" = contact.relationshipStatus || "you-added-them";
 
-            // Debug logging for each contact (moved outside JSX)
-            console.log(`🔍 DETAILED ContactList - Rendering contact ${displayName}:`, {
-              contact_id: contact.contact_id,
-              unreadCount,
-              shouldShowBadge: unreadCount > 0,
-              perContactUnread: perContactUnread,
-              contactData: contact
-            });
+            const isSupport = contact.contact_id === '00000000-0000-0000-0000-000000000001';
+
+            // ── COMPACT VIEW ──
+            if (compactView) {
+              return (
+                <div
+                  key={contact.id}
+                  className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border active:scale-[0.98] transition-transform"
+                >
+                  {/* Avatar */}
+                  <div className={`relative shrink-0 rounded-full ${unreadCount > 0 ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-background' : ''}`}>
+                    <Avatar className="h-10 w-10">
+                      {shouldShowAvatar(contact.contact_id, avatarUrl) ? (
+                        <AvatarImage src={avatarUrl} alt={displayName} onError={() => handleAvatarError(contact.contact_id)} />
+                      ) : null}
+                      <AvatarFallback className="text-sm font-bold bg-gradient-to-br from-blue-500 to-purple-500 text-white">
+                        {getInitials(displayName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-0.5 rounded-full bg-blue-500 text-white text-[9px] font-bold flex items-center justify-center">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Name */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm truncate leading-tight">{emailOrName || `@${displayName}`}</p>
+                    {emailOrName && <p className="text-[11px] text-muted-foreground truncate">@{displayName}</p>}
+                  </div>
+
+                  {/* Compact actions */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {!isSupport && (
+                      <button onClick={() => handleToggleFavorite(contact.id, isFavorite)} aria-label="Favorite" className="active:scale-90 transition-transform">
+                        <Star className={`h-4 w-4 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground/30'}`} />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleOpenChat(contact.contact_id, displayName, avatarUrl)}
+                      aria-label="Chat"
+                      className={`w-8 h-8 rounded-xl flex items-center justify-center active:scale-90 transition-transform ${unreadCount > 0 ? 'bg-blue-500' : 'bg-blue-500/20 dark:bg-blue-500/15'}`}
+                    >
+                      <MessageSquare className={`h-4 w-4 ${unreadCount > 0 ? 'text-white' : 'text-blue-500 dark:text-blue-400'}`} />
+                    </button>
+                    {!isSupport && (
+                      <>
+                        <button onClick={() => navigate(`/gallery/${contact.contact_id}`)} aria-label="Gallery" className="w-8 h-8 rounded-xl bg-orange-500/20 dark:bg-orange-500/15 flex items-center justify-center active:scale-90 transition-transform">
+                          <Images className="h-4 w-4 text-orange-500 dark:text-orange-400" />
+                        </button>
+                        <button onClick={() => navigate(`/wishlists?contact=${contact.contact_id}`)} aria-label="Wishlist" className="w-8 h-8 rounded-xl bg-pink-500/20 dark:bg-pink-500/15 flex items-center justify-center active:scale-90 transition-transform">
+                          <Gift className="h-4 w-4 text-pink-500 dark:text-pink-400" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            }
             
             return (
-              <Card key={contact.id} className="overflow-hidden">
-                <CardContent className="p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <Avatar className="h-10 w-10 flex-shrink-0">
+              <div key={contact.id} className="rounded-2xl bg-muted/50 dark:bg-muted/30">
+                  {/* Top: avatar + name + relationship */}
+                  <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+                    {/* Avatar — bigger, with unread ring */}
+                    <div className={`relative shrink-0 rounded-full ${unreadCount > 0 ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-background' : ''}`}>
+                      <Avatar className="h-14 w-14">
                         {shouldShowAvatar(contact.contact_id, avatarUrl) ? (
-                          <AvatarImage 
-                            src={avatarUrl} 
+                          <AvatarImage
+                            src={avatarUrl}
                             alt={displayName}
                             onError={() => handleAvatarError(contact.contact_id)}
                           />
                         ) : null}
-                        <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold">
+                        <AvatarFallback className="text-lg font-bold bg-gradient-to-br from-[hsl(210,100%,55%)] to-[hsl(180,85%,50%)] text-white">
                           {getInitials(displayName)}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-base truncate">@{displayName}</p>
-                        <p className="text-xs text-muted-foreground truncate">{emailOrName}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-0.5 flex-shrink-0">
-                      {contact.contact_id === '00000000-0000-0000-0000-000000000001' ? (
-                        // WAKTI SUPPORT - only show message button with special styling
-                        <div className="relative">
-                          <Button 
-                            size="icon" 
-                            variant="ghost"
-                            onClick={() => handleOpenChat(contact.contact_id, displayName, avatarUrl)}
-                            className={`h-8 w-8 relative transition-colors bg-primary text-primary-foreground hover:bg-primary/90`}
-                          >
-                            <MessageSquare className="h-4 w-4 text-white" />
-                            <UnreadBadge count={unreadCount} blink={!!unreadCount} />
-                          </Button>
-                        </div>
-                      ) : (
-                        // Regular contacts - show all actions
-                        <>
-                          <Button 
-                            size="icon" 
-                            variant="ghost"
-                            onClick={() => handleToggleFavorite(contact.id, isFavorite)}
-                            disabled={favoriteMutation.isPending}
-                            className="h-8 w-8 hover:bg-yellow-50 hover:text-yellow-600 transition-colors"
-                            aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                          >
-                            <Star className={`h-4 w-4 ${isFavorite ? 'text-yellow-500 fill-yellow-500' : 'text-gray-600'}`} />
-                          </Button>
-                          <ContactRelationshipIndicator status={relationshipStatus} />
-                          <div className="relative">
-                            <Button 
-                              size="icon" 
-                              variant="ghost"
-                              onClick={() => handleOpenChat(contact.contact_id, displayName, avatarUrl)}
-                              className={`h-8 w-8 relative transition-colors ${
-                                unreadCount > 0 
-                                  ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                                  : 'hover:bg-blue-50 hover:text-blue-600'
-                              }`}
-                            >
-                              <MessageSquare className={`h-4 w-4 ${unreadCount > 0 ? 'text-white' : 'text-blue-600'} ${unreadCount ? 'animate-blink' : ''}`} />
-                              <UnreadBadge count={unreadCount} blink={!!unreadCount} />
-                            </Button>
-                          </div>
-                          <Button 
-                            size="icon" 
-                            variant="ghost"
-                            onClick={() => handleBlock(contact.contact_id)}
-                            disabled={blockContactMutation.isPending}
-                            className="h-8 w-8 hover:bg-orange-50 hover:text-orange-600 transition-colors"
-                          >
-                            <UserX className="h-4 w-4 text-orange-600" />
-                          </Button>
-                          <Button 
-                            size="icon" 
-                            variant="ghost"
-                            onClick={() => handleDeleteClick(contact, displayName)}
-                            disabled={deleteContactMutation.isPending}
-                            className="h-8 w-8 hover:bg-red-50 hover:text-red-600 transition-colors"
-                          >
-                            <Trash2 className="h-4 w-4 text-red-600" />
-                          </Button>
-                        </>
+                      {unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">
+                          {unreadCount}
+                        </span>
                       )}
                     </div>
+
+                    {/* Name + username + relationship */}
+                    <div className="flex-1 min-w-0">
+                      {emailOrName && (
+                        <p className="font-semibold text-sm truncate leading-tight">{emailOrName}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground truncate">@{displayName}</p>
+                      {!isSupport && (
+                        <div className="mt-1">
+                          <ContactRelationshipIndicator status={relationshipStatus} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Favorite star — top right */}
+                    {!isSupport && (
+                      <button
+                        onClick={() => handleToggleFavorite(contact.id, isFavorite)}
+                        disabled={favoriteMutation.isPending}
+                        aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                        className="shrink-0 active:scale-90 transition-transform"
+                      >
+                        <Star className={`h-5 w-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground/40'}`} />
+                      </button>
+                    )}
                   </div>
-                </CardContent>
-              </Card>
+
+                  {/* Action pill buttons row */}
+                  <div className="px-4 pb-3 pt-2 flex items-center gap-2 flex-wrap">
+                    {isSupport ? (
+                      <button
+                        onClick={() => handleOpenChat(contact.contact_id, displayName, avatarUrl)}
+                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-[hsl(210,100%,55%)] text-white active:scale-95 transition-transform"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        {language === 'ar' ? 'رسالة' : 'Message'}
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleOpenChat(contact.contact_id, displayName, avatarUrl)}
+                          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold active:scale-95 transition-transform ${
+                            unreadCount > 0
+                              ? 'bg-[#060541] dark:bg-[hsl(210,100%,55%)] text-white'
+                              : 'bg-[#060541]/10 dark:bg-white/10 text-[#060541] dark:text-white/80'
+                          }`}
+                        >
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          {language === 'ar' ? 'رسالة' : 'Chat'}
+                          {unreadCount > 0 && (
+                            <span className="ml-1 bg-white/30 text-white text-[10px] font-bold px-1 rounded-full">{unreadCount}</span>
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => navigate(`/gallery/${contact.contact_id}`)}
+                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-[hsl(25,95%,53%)]/15 dark:bg-[hsl(25,95%,55%)]/20 text-[hsl(25,95%,38%)] dark:text-[hsl(25,95%,70%)] active:scale-95 transition-transform"
+                        >
+                          <Images className="h-3.5 w-3.5" />
+                          {language === 'ar' ? 'معرض' : 'Gallery'}
+                        </button>
+
+                        <button
+                          onClick={() => navigate(`/wishlists?contact=${contact.contact_id}`)}
+                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-[hsl(320,70%,55%)]/15 dark:bg-[hsl(320,70%,55%)]/20 text-[hsl(320,70%,42%)] dark:text-[hsl(320,70%,75%)] active:scale-95 transition-transform"
+                        >
+                          <Gift className="h-3.5 w-3.5" />
+                          {language === 'ar' ? 'رغبات' : 'Wishlist'}
+                        </button>
+
+                        <div className="ml-auto flex items-center gap-1">
+                          <button
+                            onClick={() => handleBlock(contact.contact_id)}
+                            disabled={blockContactMutation.isPending}
+                            aria-label="Block"
+                            className="p-1.5 rounded-full text-muted-foreground/40 hover:text-orange-500 active:scale-90 transition-all"
+                          >
+                            <UserX className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(contact, displayName)}
+                            disabled={deleteContactMutation.isPending}
+                            aria-label="Remove"
+                            className="p-1.5 rounded-full text-muted-foreground/40 hover:text-red-500 active:scale-90 transition-all"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+              </div>
             );
           })
         )}

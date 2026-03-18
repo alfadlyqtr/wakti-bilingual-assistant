@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
-import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2, NotebookPen, Music, Aperture, AudioLines, Shield, Code2, FolderOpen } from "lucide-react";
+import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2, NotebookPen, Music, Aperture, AudioLines, Shield, Code2, FolderOpen, Gift } from "lucide-react";
 import { WaktiIcon } from "@/components/icons/WaktiIcon";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { waktiBadges } from "@/services/waktiBadges";
@@ -140,6 +140,12 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       path: '/projects',
       icon: 'code2',
       colorClass: 'text-indigo-500',
+    },
+    {
+      name: language === 'ar' ? 'رغباتي' : 'Wishlists',
+      path: '/wishlists',
+      icon: 'gift',
+      colorClass: 'text-pink-400',
     }
   ];
 
@@ -182,6 +188,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
     'shield': Shield,
     'folder-open': FolderOpen,
     'code2': Code2,
+    'gift': Gift,
   };
 
   const handleNavigation = (path: string, badgeType?: string) => {
@@ -322,6 +329,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                     isActive && item.path === '/music' && "from-fuchsia-500/20 to-fuchsia-600/20 shadow-fuchsia-500/40 border border-fuchsia-500/30",
                     isActive && item.path === '/fitness' && "from-rose-500/20 to-rose-600/20 shadow-rose-500/40 border border-rose-500/30",
                     isActive && item.path === '/projects' && "from-indigo-500/20 to-indigo-600/20 shadow-indigo-500/40 border border-indigo-500/30",
+                    isActive && item.path === '/wishlists' && "from-pink-400/20 to-pink-500/20 shadow-pink-400/40 border border-pink-400/30",
                     // Initial off-screen state until icons stage
                     animationStage === 'icons' ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-3 scale-[0.98]"
                   )}

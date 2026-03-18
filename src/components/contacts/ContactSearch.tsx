@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { toast } from "sonner";
@@ -143,13 +142,13 @@ export function ContactSearch() {
   };
 
   return (
-    <Card className="p-4">
+    <div className="px-1 pb-2">
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder={t("searchContacts", language)}
-            className="pl-9"
+            className="pl-9 bg-muted border-0 rounded-2xl h-10 focus-visible:ring-1 focus-visible:ring-[hsl(210,100%,55%)]"
             value={searchQuery}
             onChange={handleSearch}
             onKeyPress={handleKeyPress}
@@ -160,13 +159,13 @@ export function ContactSearch() {
           onClick={handleSearchSubmit}
           disabled={searchQuery.length < 1}
           size="sm"
+          className="rounded-2xl h-10 px-4 bg-[#060541] hover:bg-[hsl(243,84%,22%)] dark:bg-[hsl(210,100%,55%)] dark:hover:bg-[hsl(210,100%,48%)] text-white border-0 shrink-0"
         >
           {t("search", language)}
         </Button>
       </div>
 
-      {/* Informational note */}
-      <p className="text-xs text-muted-foreground mt-2 text-center">
+      <p className="text-xs text-muted-foreground mt-2 px-1">
         {language === 'ar' 
           ? 'يجب أن يكون كلا المستخدمين في قائمة جهات الاتصال لدى الآخر لتبادل الرسائل'
           : 'Both users must be in each other\'s contact list to exchange messages'
@@ -229,7 +228,7 @@ export function ContactSearch() {
                         onClick={() => handleSendRequest(user.id)}
                         disabled={sendRequestMutation.isPending && sendRequestMutation.variables === user.id}
                         size="sm"
-                        className="whitespace-nowrap"
+                        className="whitespace-nowrap bg-[hsl(210,100%,65%)] hover:bg-[hsl(210,100%,58%)] text-white border-0"
                       >
                         {(sendRequestMutation.isPending && sendRequestMutation.variables === user.id) ? (
                           <LoadingSpinner size="sm" className="mr-2" />
@@ -250,6 +249,6 @@ export function ContactSearch() {
           <p>{t("noUsersFound", language)}</p>
         </div>
       )}
-    </Card>
+    </div>
   );
 }

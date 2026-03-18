@@ -160,7 +160,10 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
       colorClass: 'text-red-500',
       hoverClass: 'hover:bg-red-500/10'
     }
-  ];
+  ].filter((item) => {
+    if (!isHomescreenMode) return true;
+    return item.href !== '/account' && item.href !== '/contacts';
+  });
   
   // Function to get page title and icon with matching colors from MobileNav
   const getPageTitleWithIcon = () => {
@@ -246,13 +249,32 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   const IconComponent = pageInfo.icon;
   
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [logoPosition, setLogoPosition] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const logoRef = useRef<HTMLDivElement>(null);
   const { isMobile } = useIsMobile();
 
   const handleLogoClick = () => {
     if (!isMobile) return;
-    // Logo always navigates to homescreen on mobile — never opens slide nav
-    navigate('/dashboard');
+
+    if (location.pathname !== '/dashboard') {
+      navigate('/dashboard');
+      return;
+    }
+
+    if (isHomescreenMode) return;
+
+    if (logoRef.current) {
+      const rect = logoRef.current.getBoundingClientRect();
+      setLogoPosition({
+        x: rect.left,
+        y: rect.top,
+        width: rect.width,
+        height: rect.height
+      });
+    }
+
+    setMobileNavOpen((prev) => !prev);
   };
 
   const shouldGlowLogo = location.pathname !== '/dashboard';
@@ -494,6 +516,13 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
           </DropdownMenu>
         </div>
       </div>
+      {isMobile && !isHomescreenMode && location.pathname === '/dashboard' && (
+        <MobileSlideDownNav
+          isOpen={mobileNavOpen}
+          onClose={() => setMobileNavOpen(false)}
+          logoPosition={logoPosition}
+        />
+      )}
       
     </header>
   );

@@ -122,6 +122,8 @@ import ProjectSlugRedirect from "./pages/ProjectSlugRedirect";
 import ProjectPreview from './pages/ProjectPreview';
 import ChatbotPage from './pages/ChatbotPage';
 import InstagramConnectCallback from './pages/InstagramConnectCallback';
+import MyWishlists from './pages/MyWishlists';
+import ContactGallery from './pages/ContactGallery';
 
 import "./App.css";
 
@@ -272,6 +274,8 @@ function App() {
                   <Route path="/fitness" element={<Vitality />} />
                   <Route path="/fitness/callback" element={<FitnessWhoopCallback />} />
                   <Route path="/whoop/callback" element={<FitnessWhoopCallback />} />
+                  <Route path="/wishlists" element={<MyWishlists />} />
+                  <Route path="/gallery/:userId" element={<ContactGallery />} />
                 </Route>
                 
                 {/* Public preview route for published projects (subdomain rewrite target) */}

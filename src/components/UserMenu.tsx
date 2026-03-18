@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Settings, MessageSquare, Users, User } from "lucide-react";
+import { LogOut, Settings, MessageSquare, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -132,10 +132,6 @@ export function UserMenu() {
         <DropdownMenuItem onClick={() => navigate("/contacts")}>
           <Users className="mr-2 h-4 w-4" />
           <span>{t("contacts", language)}</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => navigate("/account")}>
-          <User className="mr-2 h-4 w-4" />
-          <span>{t("account", language)}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleSignOut} disabled={isLoggingOut}>

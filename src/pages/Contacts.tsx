@@ -40,19 +40,19 @@ export default function Contacts() {
   );
 }
 
-// Separate component to use React Query hooks
-function ContactsContent({ 
+// Separate component to use React Query hooks — also exported for embedding
+export function ContactsContent({ 
   language, 
   activeTab, 
   setActiveTab,
-  openChatUserId,
-  clearOpenChat
+  openChatUserId = null,
+  clearOpenChat = () => {}
 }: { 
   language: string; 
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  openChatUserId: string | null;
-  clearOpenChat: () => void;
+  openChatUserId?: string | null;
+  clearOpenChat?: () => void;
 }) {
   // Fetch pending requests count for the badge
   const { data: pendingRequestsCount = 0 } = useQuery({
@@ -79,35 +79,34 @@ function ContactsContent({
 
   return (
     <div className="flex flex-col p-4 pb-24">
-      <ContactSearch />
-      
       <Tabs 
         defaultValue={activeTab} 
         value={activeTab}
-        className="mt-6"
         onValueChange={setActiveTab}
       >
-        <TabsList className="grid grid-cols-3 mb-6">
-          <TabsTrigger value="contacts" className="flex gap-2 items-center">
-            <Contact className="h-4 w-4" />
+        <TabsList className="grid grid-cols-3 mb-4 h-10 rounded-2xl bg-black/5 dark:bg-white/5 p-1 border-0">
+          <TabsTrigger value="contacts" className="rounded-xl text-xs font-bold text-foreground/50 data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all flex gap-1.5 items-center">
+            <Contact className="h-3.5 w-3.5" />
             <span>{t("contacts", language)}</span>
           </TabsTrigger>
-          <TabsTrigger value="requests" className="flex gap-2 items-center">
-            <Bell className="h-4 w-4" />
+          <TabsTrigger value="requests" className="rounded-xl text-xs font-bold text-foreground/50 data-[state=active]:bg-[hsl(142,76%,45%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all flex gap-1.5 items-center">
+            <Bell className="h-3.5 w-3.5" />
             <span>{t("requests", language)}</span>
             {pendingRequestsCount > 0 && (
-              <Badge variant="destructive" className="h-5 w-5 p-0 flex items-center justify-center text-xs">
+              <span className="bg-red-500 text-white text-[10px] font-bold rounded-full h-4 min-w-4 px-0.5 flex items-center justify-center">
                 {pendingRequestsCount}
-              </Badge>
+              </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="blocked" className="flex gap-2 items-center">
-            <ShieldCheck className="h-4 w-4" />
+          <TabsTrigger value="blocked" className="rounded-xl text-xs font-bold text-foreground/50 data-[state=active]:bg-[hsl(25,95%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all flex gap-1.5 items-center">
+            <ShieldCheck className="h-3.5 w-3.5" />
             <span>{t("blocked", language)}</span>
           </TabsTrigger>
         </TabsList>
+
+        <ContactSearch />
         
-        <TabsContent value="contacts" className="space-y-4 animate-fade-in">
+        <TabsContent value="contacts" className="space-y-4 mt-4 animate-fade-in">
           <ContactList 
             perContactUnread={perContactUnread}
             refetchUnreadCounts={refetchUnreadCounts}

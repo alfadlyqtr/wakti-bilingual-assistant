@@ -77,7 +77,7 @@ const ALL_APPS = [
   { id: "text",      nameEn: "Text",      nameAr: "نص",       path: "/tools/text",         icon: PenTool,         gradient: "from-violet-500 to-violet-700",   glow: "#8b5cf6" },
   { id: "voice",     nameEn: "Voice",     nameAr: "صوت",      path: "/tools/voice-studio", icon: Mic,             gradient: "from-pink-400 to-pink-600",       glow: "#f472b6" },
   { id: "game",      nameEn: "Game",      nameAr: "لعبة",     path: "/tools/game",         icon: Gamepad2,        gradient: "from-red-500 to-red-700",         glow: "#ef4444" },
-  { id: "connect",   nameEn: "Connect",   nameAr: "تواصل",    path: "/contacts",           icon: Users,           gradient: "from-blue-400 to-blue-600",       glow: "#3b82f6", isAvatarIcon: true },
+  { id: "account",   nameEn: "Account",   nameAr: "حسابي",    path: "/account",            icon: Users,           gradient: "from-slate-500 to-slate-700",     glow: "#94a3b8", isAvatarIcon: true },
 ];
 
 const DEFAULT_ORDER = ALL_APPS.map(a => a.id);
@@ -1198,7 +1198,7 @@ function CalendarWidget({ shell, navigate, language, upcomingCount }: {
 }
 
 // ─── Widget content renderer (no drag logic, just visuals) ────────────────────
-function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, pendingTasks, completedToday, upcomingCount, navigate, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts }: {
+function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, pendingTasks, completedToday, upcomingCount, navigate, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts, onExpandQuote }: {
   wKey: WidgetId; editMode: boolean; language: string; theme: string;
   hasBg: boolean; statCardBase: string;
   pendingTasks: number; completedToday: number; upcomingCount: number;
@@ -1209,6 +1209,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   reminders?: any[];
   maw3dEvents?: any[];
   attendingCounts?: Record<string, number>;
+  onExpandQuote?: () => void;
 }) {
   const isDark = theme === 'dark';
   const total = pendingTasks + completedToday;
@@ -1414,7 +1415,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   if (wKey === 'showQuoteWidget') return shell(
     'linear-gradient(145deg,rgba(15,23,42,0.97) 0%,rgba(22,32,56,0.97) 40%,rgba(30,41,70,0.97) 100%)',
     '#6366f1',
-    () => {},
+    () => { if (onExpandQuote) onExpandQuote(); },
     <div className="p-2.5 flex flex-col h-full justify-between" key={`${quoteText}-${quoteAuthor}`}>
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -1466,8 +1467,9 @@ interface UnifiedWidgetCellProps {
   reminders?: any[];
   maw3dEvents?: any[];
   attendingCounts?: Record<string, number>;
+  onExpandQuote?: () => void;
 }
-function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts }: UnifiedWidgetCellProps) {
+function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts, onExpandQuote }: UnifiedWidgetCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id, data: { type: 'unified' },
   });
@@ -1497,6 +1499,7 @@ function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCar
         reminders={reminders}
         maw3dEvents={maw3dEvents}
         attendingCounts={attendingCounts}
+        onExpandQuote={onExpandQuote}
       />
       {editMode && (
         <div className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full bg-black/70 border border-white/30 flex items-center justify-center">
@@ -1559,6 +1562,179 @@ function EmptySlotCell({ id, gridArea, isWidget, editMode }: { id: string; gridA
         isOver ? 'bg-white/20 border-2 border-white/60' : ''
       } ${editMode ? '' : 'pointer-events-none'}`}
     />
+  );
+}
+
+// ─── Quote Overlay with per-character smoke reveal ────────────────────────────
+function QuoteOverlay({ quoteText, quoteAuthor, language, onClose, exiting }: {
+  quoteText: string; quoteAuthor: string; language: string;
+  onClose: () => void; exiting: boolean;
+}) {
+  const [visibleCount, setVisibleCount] = React.useState(0);
+  const [authorVisible, setAuthorVisible] = React.useState(false);
+  const chars = quoteText.split('');
+  const CHAR_DELAY = 22; // ms per character
+
+  React.useEffect(() => {
+    if (exiting) return;
+    setVisibleCount(0);
+    setAuthorVisible(false);
+    let i = 0;
+    const tick = () => {
+      i++;
+      setVisibleCount(i);
+      if (i < chars.length) {
+        setTimeout(tick, CHAR_DELAY);
+      } else {
+        setTimeout(() => setAuthorVisible(true), 320);
+      }
+    };
+    const startDelay = setTimeout(tick, 180);
+    return () => clearTimeout(startDelay);
+  }, [quoteText, exiting]);
+
+  return (
+    <>
+      <style>{`
+        @keyframes qo-bg-in  { from { opacity:0 } to { opacity:1 } }
+        @keyframes qo-bg-out { from { opacity:1 } to { opacity:0 } }
+        @keyframes qo-char   {
+          0%   { opacity:0; filter:blur(18px) brightness(2.2); transform:scale(1.35) translateY(6px); }
+          45%  { opacity:1; filter:blur(3px)  brightness(1.4); transform:scale(1.06) translateY(-1px); }
+          100% { opacity:1; filter:blur(0)    brightness(1);   transform:scale(1)    translateY(0); }
+        }
+        @keyframes qo-author {
+          0%   { opacity:0; filter:blur(10px); transform:translateY(14px) scale(0.92); }
+          60%  { opacity:1; filter:blur(1px);  transform:translateY(-2px) scale(1.02); }
+          100% { opacity:1; filter:blur(0);    transform:translateY(0)    scale(1); }
+        }
+        @keyframes qo-out {
+          0%   { opacity:1; filter:blur(0); }
+          100% { opacity:0; filter:blur(22px); transform:scale(1.06); }
+        }
+        @keyframes qo-mark {
+          0%   { opacity:0; transform:scale(4) translateY(-20px); filter:blur(28px); }
+          65%  { opacity:0.09; transform:scale(1.04); filter:blur(0); }
+          100% { opacity:0.055; transform:scale(1) translateY(0); filter:blur(0); }
+        }
+      `}</style>
+
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position:'fixed', inset:0, zIndex:200,
+          background:'rgba(3,3,6,0.88)',
+          backdropFilter:'blur(40px) saturate(140%)',
+          WebkitBackdropFilter:'blur(40px) saturate(140%)',
+          animation:`${exiting ? 'qo-bg-out' : 'qo-bg-in'} 0.4s ease forwards`,
+        }}
+      />
+
+      {/* Ghost " watermark */}
+      <div style={{
+        position:'fixed', zIndex:201,
+        top:'50%', left:'50%',
+        transform:'translate(-40%, -60%)',
+        fontSize:220, lineHeight:0.75,
+        color:'rgba(255,255,255,0.055)',
+        fontFamily:'Georgia, serif',
+        userSelect:'none', pointerEvents:'none',
+        animation: exiting ? 'qo-out 0.35s ease forwards' : 'qo-mark 1s cubic-bezier(0.34,1.2,0.64,1) 0.08s both',
+      }}>"</div>
+
+      {/* Centered text container */}
+      <div
+        onClick={onClose}
+        style={{
+          position:'fixed', inset:0, zIndex:202,
+          display:'flex', flexDirection:'column',
+          alignItems:'center', justifyContent:'center',
+          padding:'0 2.25rem',
+          pointerEvents:'all',
+        }}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          aria-label={language === 'ar' ? 'إغلاق' : 'Close'}
+          style={{
+            position: 'fixed',
+            top: 18,
+            right: 18,
+            width: 30,
+            height: 30,
+            borderRadius: '999px',
+            border: '1px solid rgba(255,255,255,0.12)',
+            background: 'rgba(255,255,255,0.05)',
+            color: 'rgba(255,255,255,0.78)',
+            backdropFilter: 'blur(14px) saturate(140%)',
+            WebkitBackdropFilter: 'blur(14px) saturate(140%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 14,
+            fontWeight: 600,
+            lineHeight: 1,
+            cursor: 'pointer',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06)',
+            zIndex: 203,
+          }}
+        >
+          ×
+        </button>
+
+        {/* Per-character smoke reveal */}
+        <p
+          dir={language === 'ar' ? 'rtl' : 'ltr'}
+          style={{
+            fontSize:'clamp(19px, 5.2vw, 27px)',
+            fontStyle:'italic',
+            fontWeight:300,
+            lineHeight:1.72,
+            textAlign:'center',
+            maxWidth:460,
+            margin:0,
+            animation: exiting ? 'qo-out 0.38s ease forwards' : undefined,
+          }}
+        >
+          {chars.map((ch, i) => (
+            <span
+              key={i}
+              style={{
+                display: 'inline',
+                whiteSpace: ch === ' ' ? 'pre' : undefined,
+                color: 'rgba(255,255,255,0.95)',
+                textShadow: '0 0 40px rgba(255,255,255,0.35), 0 2px 16px rgba(0,0,0,0.9)',
+                opacity: i < visibleCount ? 1 : 0,
+                animation: i < visibleCount
+                  ? `qo-char 0.55s cubic-bezier(0.22,1,0.36,1) both`
+                  : undefined,
+              }}
+            >
+              {ch}
+            </span>
+          ))}
+        </p>
+
+        {/* Author — appears after all chars */}
+        {quoteAuthor && authorVisible && (
+          <p style={{
+            marginTop:'2.2rem',
+            fontSize:12,
+            fontWeight:600,
+            color:'rgba(255,255,255,0.32)',
+            letterSpacing:'0.14em',
+            textTransform:'uppercase',
+            animation: exiting ? 'qo-out 0.25s ease forwards' : 'qo-author 0.7s cubic-bezier(0.34,1.3,0.64,1) both',
+          }}>
+            — {quoteAuthor}
+          </p>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -1634,6 +1810,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     return { mode: 'solid', color1: '#1a1a2e', color2: '#4a4a8a', color3: '', angle: 180, glow: false };
   });
   const [quote,           setQuote]           = useState<any>(null);
+  const [quoteExpanded,   setQuoteExpanded]   = useState(false);
+  const [quoteExiting,    setQuoteExiting]    = useState(false);
   const [greeting,        setGreeting]        = useState(() => {
     const h = new Date().getHours();
     if (language === "ar") return h < 12 ? "صباح الخير" : h < 17 ? "مساء الخير" : "مساء النور";
@@ -2329,8 +2507,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           )}
           <div className="flex-none flex items-center justify-between px-4 pt-3 pb-1">
             <div className="px-3 py-2 rounded-xl bg-black/25 backdrop-blur-md border border-white/10">
-              <p className="text-[12px] font-extrabold tracking-wide" style={{ color: subColor, textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>{greeting}</p>
-              <p className="text-[17px] font-semibold leading-tight" style={{ color: headColor, textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>{displayName}</p>
+              <p
+                className="text-[17px] font-semibold leading-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[68vw]"
+                style={{ color: headColor, textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}
+              >
+                {displayName ? `${greeting}, ${displayName}` : greeting}
+              </p>
             </div>
             {!editMode ? (
               <button onClick={() => setEditMode(true)} title="Edit homescreen" className={`p-2 rounded-full backdrop-blur-md border ${isDark ? 'bg-white/15 border-white/20 text-white' : 'bg-[#060541]/15 border-[#060541]/20 text-[#060541]'}`}>
@@ -2622,6 +2804,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                           reminders={reminders}
                           maw3dEvents={events}
                           attendingCounts={attendingCounts}
+                          onExpandQuote={() => { setQuoteExpanded(true); setQuoteExiting(false); }}
                         />
                       );
                     }
@@ -2640,7 +2823,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         navigate={navigate}
                         gridArea={gp}
                         avatarUrl={avatarUrl}
-                        badgeCount={app.id === 'connect' ? connectBadge : 0}
+                        badgeCount={app.id === 'account' ? connectBadge : 0}
                       />
                     );
                   });
@@ -2667,7 +2850,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             >
               <SortableContext items={dockApps.map(a => `dock::${a.id}`)} strategy={horizontalListSortingStrategy}>
                 {dockApps.map(app => (
-                  <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} avatarUrl={avatarUrl} badgeCount={app.id === 'connect' ? connectBadge : 0} />
+                  <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} avatarUrl={avatarUrl} badgeCount={app.id === 'account' ? connectBadge : 0} />
                 ))}
                 {Array.from({ length: Math.max(0, maxDock - dockApps.length) }).map((_, i) => (
                   <div key={`slot-${i}`} className="w-14 h-14 rounded-[23%] border-2 border-dashed border-white/25" />
@@ -2745,6 +2928,20 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               syncToSupabase({ bgImage: imageUrl });
             }}
             onClose={() => setSavedImagesOpen(false)}
+          />
+        )}
+
+        {/* ── Quote Expand Overlay ── */}
+        {quoteExpanded && (
+          <QuoteOverlay
+            quoteText={quoteText || ''}
+            quoteAuthor={quoteAuthor || ''}
+            language={language}
+            onClose={() => {
+              setQuoteExiting(true);
+              setTimeout(() => { setQuoteExpanded(false); setQuoteExiting(false); }, 420);
+            }}
+            exiting={quoteExiting}
           />
         )}
       </>
