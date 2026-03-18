@@ -1643,6 +1643,34 @@ function QuoteOverlay({ quoteText, quoteAuthor, language, onClose, exiting }: {
         animation: exiting ? 'qo-out 0.35s ease forwards' : 'qo-mark 1s cubic-bezier(0.34,1.2,0.64,1) 0.08s both',
       }}>"</div>
 
+      {/* Close button — standalone fixed, outside all other layers */}
+      <button
+        onClick={onClose}
+        aria-label={language === 'ar' ? 'إغلاق' : 'Close'}
+        style={{
+          position: 'fixed',
+          top: 18,
+          right: 18,
+          width: 36,
+          height: 36,
+          borderRadius: '50%',
+          border: '1.5px solid rgba(255,255,255,0.3)',
+          background: 'rgba(255,255,255,0.12)',
+          color: '#ffffff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 18,
+          fontWeight: 400,
+          lineHeight: 1,
+          cursor: 'pointer',
+          zIndex: 9999,
+          padding: 0,
+        }}
+      >
+        ✕
+      </button>
+
       {/* Centered text container */}
       <div
         onClick={onClose}
@@ -1654,38 +1682,6 @@ function QuoteOverlay({ quoteText, quoteAuthor, language, onClose, exiting }: {
           pointerEvents:'all',
         }}
       >
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-          aria-label={language === 'ar' ? 'إغلاق' : 'Close'}
-          style={{
-            position: 'fixed',
-            top: 'calc(env(safe-area-inset-top, 0px) + 18px)',
-            right: 'calc(env(safe-area-inset-right, 0px) + 18px)',
-            width: 34,
-            height: 34,
-            borderRadius: '999px',
-            border: '1px solid rgba(255,255,255,0.22)',
-            background: 'rgba(10,10,14,0.62)',
-            color: 'rgba(255,255,255,0.96)',
-            backdropFilter: 'blur(18px) saturate(150%)',
-            WebkitBackdropFilter: 'blur(18px) saturate(150%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 16,
-            fontWeight: 700,
-            lineHeight: 1,
-            cursor: 'pointer',
-            boxShadow: '0 12px 28px rgba(0,0,0,0.42), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.12)',
-            zIndex: 999,
-          }}
-        >
-          ×
-        </button>
-
         {/* Per-character smoke reveal */}
         <p
           dir={language === 'ar' ? 'rtl' : 'ltr'}
