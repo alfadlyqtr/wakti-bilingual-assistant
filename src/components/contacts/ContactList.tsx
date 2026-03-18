@@ -350,7 +350,7 @@ export function ContactList({
             }
             
             return (
-              <Card key={contact.id} className="overflow-hidden border border-border bg-card">
+              <Card key={contact.id} className="overflow-hidden border border-border bg-card shadow-[inset_0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_2px_8px_rgba(0,0,0,0.15)]">
                 <CardContent className="p-0">
                   {/* Top: avatar + name + relationship */}
                   <div className="flex items-center gap-3 px-4 pt-4 pb-3">
