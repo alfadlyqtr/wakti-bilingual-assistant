@@ -777,21 +777,17 @@ export default function Account() {
       <div className="min-h-screen">
 
         {/* ── HERO HEADER ─────────────────────────────────────────────────── */}
-        <div className="relative overflow-hidden bg-[#060541] pb-6 pt-8 px-4">
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute -top-10 -right-10 w-64 h-64 rounded-full bg-[hsl(210,100%,65%)] opacity-[0.07] blur-3xl" />
-            <div className="absolute -bottom-10 -left-10 w-56 h-56 rounded-full bg-[hsl(142,76%,55%)] opacity-[0.06] blur-3xl" />
-          </div>
+        <div className="relative overflow-hidden bg-gradient-to-br from-[hsl(36,67%,92%)] via-[hsl(36,67%,88%)] to-[hsl(36,67%,85%)] dark:from-[#060541] dark:via-[hsl(243,84%,14%)] dark:to-[#060541] pb-6 pt-8 px-4">
           <div className="relative z-10 flex flex-col items-center gap-3">
-            <div className="w-20 h-20 rounded-full ring-2 ring-white/20 overflow-hidden bg-gradient-to-br from-[hsl(210,100%,55%)] to-[hsl(180,85%,50%)] flex items-center justify-center">
+            <div className="w-20 h-20 rounded-full ring-2 ring-[#060541]/10 dark:ring-white/20 overflow-hidden bg-gradient-to-br from-[hsl(210,100%,55%)] to-[hsl(180,85%,50%)] flex items-center justify-center">
               {profile?.avatar_url
                 ? <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
                 : <span className="text-2xl font-bold text-white">{(name || email || '?').substring(0, 2).toUpperCase()}</span>
               }
             </div>
             <div className="text-center">
-              <h1 className="text-xl font-bold text-white">{name || t("account", language)}</h1>
-              {email && <p className="text-sm text-white/40 mt-0.5">{email}</p>}
+              <h1 className="text-xl font-bold text-[#060541] dark:text-white">{name || t("account", language)}</h1>
+              {email && <p className="text-sm text-[#060541]/50 dark:text-white/40 mt-0.5">{email}</p>}
             </div>
           </div>
         </div>

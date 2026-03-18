@@ -350,7 +350,8 @@ export function ContactList({
             }
             
             return (
-              <div key={contact.id} className="rounded-2xl bg-muted/50 dark:bg-muted/30">
+              <Card key={contact.id} className="overflow-hidden border border-border bg-card">
+                <CardContent className="p-0">
                   {/* Top: avatar + name + relationship */}
                   <div className="flex items-center gap-3 px-4 pt-4 pb-3">
                     {/* Avatar — bigger, with unread ring */}
@@ -464,7 +465,8 @@ export function ContactList({
                       </>
                     )}
                   </div>
-              </div>
+                </CardContent>
+              </Card>
             );
           })
         )}
