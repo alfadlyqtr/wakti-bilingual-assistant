@@ -403,10 +403,10 @@ export function ContactList({
                           </div>
                         ) : (
                           <>
-                            <div className={`flex items-center gap-2 flex-nowrap ${language === 'ar' ? 'justify-end' : ''}`}>
+                            <div className={`flex items-center gap-2 flex-wrap ${language === 'ar' ? 'justify-end' : ''}`}>
                               <button
                                 onClick={() => handleOpenChat(contact.contact_id, displayName, avatarUrl)}
-                                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold active:scale-95 transition-transform shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] ${
+                                className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold active:scale-95 transition-transform shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] ${
                                   unreadCount > 0
                                     ? 'bg-[linear-gradient(135deg,#060541_0%,hsl(243,45%,34%)_100%)] dark:bg-[linear-gradient(135deg,hsl(210,100%,62%)_0%,hsl(260,70%,62%)_100%)] text-white shadow-[0_10px_22px_rgba(6,5,65,0.2)]'
                                     : 'bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(243,246,251,0.88))] dark:bg-[linear-gradient(180deg,rgba(33,39,55,0.96),rgba(24,29,41,0.96))] text-[#060541] dark:text-white/90 border border-[#cfd8e6] dark:border-white/10'
@@ -421,7 +421,7 @@ export function ContactList({
                               
                               <button
                                 onClick={() => navigate(`/gallery/${contact.contact_id}`)}
-                                className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold bg-[linear-gradient(180deg,rgba(255,248,239,0.98),rgba(254,244,232,0.94))] dark:bg-[linear-gradient(180deg,rgba(52,36,22,0.78),rgba(36,24,14,0.76))] text-[hsl(25,95%,40%)] dark:text-[hsl(25,95%,72%)] border border-[rgba(251,146,60,0.32)] dark:border-[rgba(249,201,168,0.22)] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_8px_18px_rgba(249,115,22,0.08)] active:scale-95 transition-transform"
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold bg-[linear-gradient(180deg,rgba(255,248,239,0.98),rgba(254,244,232,0.94))] dark:bg-[linear-gradient(180deg,rgba(52,36,22,0.78),rgba(36,24,14,0.76))] text-[hsl(25,95%,40%)] dark:text-[hsl(25,95%,72%)] border border-[rgba(251,146,60,0.32)] dark:border-[rgba(249,201,168,0.22)] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_8px_18px_rgba(249,115,22,0.08)] active:scale-95 transition-transform"
                               >
                                 <Images className="h-3.5 w-3.5" />
                                 {language === 'ar' ? 'المعرض' : 'Gallery'}
@@ -429,7 +429,7 @@ export function ContactList({
                               
                               <button
                                 onClick={() => navigate(`/wishlists?contact=${contact.contact_id}`)}
-                                className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold bg-[linear-gradient(180deg,rgba(253,242,248,0.98),rgba(252,231,243,0.94))] dark:bg-[linear-gradient(180deg,rgba(68,28,54,0.8),rgba(46,18,38,0.78))] text-[hsl(320,70%,45%)] dark:text-[hsl(320,70%,78%)] border border-[rgba(236,72,153,0.28)] dark:border-[rgba(240,182,220,0.22)] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_8px_18px_rgba(219,39,119,0.06)] active:scale-95 transition-transform"
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold bg-[linear-gradient(180deg,rgba(253,242,248,0.98),rgba(252,231,243,0.94))] dark:bg-[linear-gradient(180deg,rgba(68,28,54,0.8),rgba(46,18,38,0.78))] text-[hsl(320,70%,45%)] dark:text-[hsl(320,70%,78%)] border border-[rgba(236,72,153,0.28)] dark:border-[rgba(240,182,220,0.22)] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_8px_18px_rgba(219,39,119,0.06)] active:scale-95 transition-transform"
                               >
                                 <Gift className="h-3.5 w-3.5" />
                                 {language === 'ar' ? 'الهدايا' : 'Wishlist'}

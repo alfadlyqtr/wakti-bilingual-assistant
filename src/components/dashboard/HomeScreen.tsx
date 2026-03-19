@@ -2999,7 +2999,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         navigate={navigate}
                         gridArea={gp}
                         avatarUrl={avatarUrl}
-                        badgeCount={app.id === 'account' ? connectBadge : 0}
+                        badgeCount={0}
                       />
                     );
                   });
@@ -3026,7 +3026,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             >
               <SortableContext items={dockApps.map(a => `dock::${a.id}`)} strategy={horizontalListSortingStrategy}>
                 {dockApps.map(app => (
-                  <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} avatarUrl={avatarUrl} badgeCount={app.id === 'account' ? connectBadge : 0} />
+                  <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} avatarUrl={avatarUrl} badgeCount={0} />
                 ))}
                 {Array.from({ length: Math.max(0, maxDock - dockApps.length) }).map((_, i) => (
                   <div key={`slot-${i}`} className="w-14 h-14 rounded-[23%] border-2 border-dashed border-white/25" />

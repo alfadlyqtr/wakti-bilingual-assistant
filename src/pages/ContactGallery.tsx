@@ -39,6 +39,8 @@ interface ContactProfile {
   avatar_url: string | null;
 }
 
+const COMMENTS_PAGE_SIZE = 15;
+
 export default function ContactGallery() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
@@ -54,6 +56,9 @@ export default function ContactGallery() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentsOffset, setCommentsOffset] = useState(0);
+  const [hasMoreComments, setHasMoreComments] = useState(false);
+  const [replyTarget, setReplyTarget] = useState<string | null>(null);
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
 
@@ -141,16 +146,22 @@ export default function ContactGallery() {
     }
   };
 
-  const loadComments = async (postId: string) => {
+  const loadComments = async (postId: string, reset = false) => {
     setCommentsLoading(true);
     try {
+      const from = reset ? 0 : commentsOffset;
+      const to = from + COMMENTS_PAGE_SIZE - 1;
       const { data, error } = await (supabase as any)
         .from('post_comments')
         .select('id, content, created_at, user_id, profiles:user_id(display_name, username, avatar_url)')
         .eq('post_id', postId)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: true })
+        .range(from, to);
       if (error) throw error;
-      setComments(data || []);
+      const nextComments = data || [];
+      setComments(prev => reset ? nextComments : [...prev, ...nextComments]);
+      setCommentsOffset(from + nextComments.length);
+      setHasMoreComments(nextComments.length === COMMENTS_PAGE_SIZE);
     } catch {
       toast.error('Failed to load comments');
     } finally {
@@ -160,15 +171,31 @@ export default function ContactGallery() {
 
   const openLightbox = (img: GalleryImage) => {
     setLightbox(img);
-    setCommentsOpen(false);
+    setCommentsOpen(true);
     setComments([]);
+    setCommentsOffset(0);
+    setHasMoreComments(false);
+    setReplyTarget(null);
     setNewComment('');
+    loadComments(img.id, true);
   };
 
   const handleCommentsToggle = () => {
     if (!lightbox) return;
-    if (!commentsOpen) { setCommentsOpen(true); loadComments(lightbox.id); }
+    if (!commentsOpen) { setCommentsOpen(true); loadComments(lightbox.id, comments.length === 0); }
     else setCommentsOpen(false);
+  };
+
+  const handleReplyToComment = (comment: Comment) => {
+    const replyName = comment.profiles?.username || comment.profiles?.display_name || 'user';
+    const mention = `@${replyName} `;
+    setReplyTarget(replyName);
+    setNewComment(prev => prev.startsWith(mention) ? prev : `${mention}${prev}`.trimStart());
+  };
+
+  const handleLoadMoreComments = () => {
+    if (!lightbox || commentsLoading || !hasMoreComments) return;
+    loadComments(lightbox.id, false);
   };
 
   const submitComment = async () => {
@@ -182,8 +209,10 @@ export default function ContactGallery() {
         .single();
       if (error) throw error;
       setComments(prev => [...prev, data]);
+      setCommentsOffset(prev => prev + 1);
       setImages(prev => prev.map(i => i.id === lightbox.id ? { ...i, comment_count: i.comment_count + 1 } : i));
       setLightbox(lb => lb ? { ...lb, comment_count: lb.comment_count + 1 } : lb);
+      setReplyTarget(null);
       setNewComment('');
     } catch {
       toast.error('Failed to post comment');
@@ -257,17 +286,17 @@ export default function ContactGallery() {
             {images.map(img => (
               <div
                 key={img.id}
-                className={`relative aspect-square rounded-2xl overflow-hidden cursor-pointer group border ${isDark ? 'border-white/10' : 'border-black/5'}`}
+                className={`relative aspect-square rounded-2xl overflow-hidden cursor-pointer active:scale-[0.98] transition-transform border ${isDark ? 'border-white/10' : 'border-black/5'}`}
                 onClick={() => openLightbox(img)}
               >
                 <img
                   src={img.image_url}
                   alt={img.prompt || 'Image'}
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  className="w-full h-full object-cover"
                   loading="lazy"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="absolute bottom-2 right-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                <div className="absolute bottom-2 right-2 flex items-center gap-2">
                   <span className="flex items-center gap-1 text-white text-[10px]">
                     <Heart className={`w-3 h-3 ${img.liked_by_me ? 'fill-red-400 text-red-400' : ''}`} />
                     {img.like_count}
@@ -285,102 +314,128 @@ export default function ContactGallery() {
 
       {/* Lightbox */}
       {lightbox && createPortal(
-        <div className="fixed inset-0 z-[9999] flex flex-col bg-black/95 backdrop-blur-sm">
-          {/* Top */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
-            <div className="flex items-center gap-2">
+        <div className="fixed inset-0 z-[9999] flex flex-col bg-black" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          {/* Top bar — avatar + name + close */}
+          <div className="flex items-center justify-between px-4 py-3 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <button aria-label="Close" onClick={() => setLightbox(null)} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center active:scale-90 transition-transform">
+                <X className="h-5 w-5 text-white" />
+              </button>
               <Avatar className="w-8 h-8">
                 <AvatarImage src={profile?.avatar_url || ''} />
-                <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+                <AvatarFallback className="text-xs bg-white/10 text-white">{initials}</AvatarFallback>
               </Avatar>
               <p className="text-white text-sm font-semibold">{displayName}</p>
             </div>
-            <button onClick={() => setLightbox(null)} aria-label="Close" className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
-              <X className="h-5 w-5 text-white" />
-            </button>
           </div>
 
-          {/* Image */}
-          <div className="flex-1 flex items-center justify-center p-4 min-h-0">
+          {/* Image — full width, capped height */}
+          <div className="shrink-0">
             <img
               src={lightbox.image_url}
               alt={lightbox.prompt || 'Image'}
-              className="max-w-full max-h-full object-contain rounded-2xl"
+              className="w-full object-cover"
+              style={{ maxHeight: '52vh' }}
             />
           </div>
 
-          {/* Bottom */}
-          <div className="shrink-0 border-t border-white/10 px-4 py-3 space-y-3">
-            <div className="flex items-center justify-start">
-              <div className="flex items-center gap-4">
-                <button onClick={() => toggleLike(lightbox)} className="flex items-center gap-1.5 text-white/80 active:scale-90 transition-transform">
-                  <Heart className={`w-5 h-5 transition-colors ${lightbox.liked_by_me ? 'fill-red-400 text-red-400' : ''}`} />
-                  <span className="text-sm">{lightbox.like_count}</span>
-                </button>
-                <button onClick={handleCommentsToggle} className="flex items-center gap-1.5 text-white/80 active:scale-90 transition-transform">
-                  <MessageCircle className="w-5 h-5" />
-                  <span className="text-sm">{lightbox.comment_count}</span>
-                  {commentsOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                </button>
-              </div>
+          {/* Post info — fixed */}
+          <div className="shrink-0">
+            {/* Action row */}
+            <div className="flex items-center gap-5 px-4 pt-3 pb-1">
+              <button aria-label="Like" onClick={() => toggleLike(lightbox)} className="active:scale-90 transition-transform">
+                <Heart className={`w-6 h-6 transition-colors ${lightbox.liked_by_me ? 'fill-red-500 text-red-500' : 'text-white'}`} />
+              </button>
+              <button aria-label="Comments" onClick={handleCommentsToggle} className="active:scale-90 transition-transform">
+                <MessageCircle className="w-6 h-6 text-white" />
+              </button>
             </div>
 
-            {lightbox.prompt && (
-              <p className="text-white/50 text-xs line-clamp-2">{lightbox.prompt}</p>
+            {/* Likes count */}
+            {lightbox.like_count > 0 && (
+              <p className="px-4 text-white text-sm font-bold">
+                {lightbox.like_count} {language === 'ar' ? 'إعجاب' : (lightbox.like_count === 1 ? 'like' : 'likes')}
+              </p>
             )}
 
-            {/* Comments */}
-            {commentsOpen && (
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {commentsLoading ? (
-                  <div className="flex justify-center py-3">
-                    <Loader2 className="w-5 h-5 animate-spin text-white/50" />
-                  </div>
-                ) : comments.length === 0 ? (
-                  <p className="text-white/40 text-xs text-center py-2">
-                    {language === 'ar' ? 'لا توجد تعليقات بعد' : 'No comments yet'}
-                  </p>
-                ) : (
-                  comments.map(c => (
-                    <div key={c.id} className="flex items-start gap-2">
-                      <Avatar className="w-7 h-7 shrink-0">
-                        <AvatarImage src={c.profiles?.avatar_url || ''} />
-                        <AvatarFallback className="text-[10px]">
-                          {(c.profiles?.display_name || c.profiles?.username || '?').substring(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 bg-white/10 rounded-xl px-3 py-1.5">
-                        <p className="text-white/90 text-xs font-semibold">
-                          {c.profiles?.display_name || c.profiles?.username || 'User'}
-                        </p>
-                        <p className="text-white/70 text-xs">{c.content}</p>
-                        <p className="text-white/30 text-[10px] mt-0.5">
-                          {formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}
-                        </p>
-                      </div>
-                    </div>
-                  ))
-                )}
+            {/* Divider */}
+            <div className="mx-4 border-t border-white/10 my-2" />
+          </div>
 
-                <div className="flex items-center gap-2 pt-1">
-                  <Textarea
-                    value={newComment}
-                    onChange={e => setNewComment(e.target.value)}
-                    placeholder={language === 'ar' ? 'اكتب تعليقاً...' : 'Write a comment…'}
-                    className="min-h-0 h-9 py-1.5 text-xs resize-none bg-white/10 border-white/20 text-white placeholder:text-white/30 rounded-xl"
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitComment(); } }}
-                  />
-                  <Button
-                    size="icon"
-                    disabled={submittingComment || !newComment.trim()}
-                    onClick={submitComment}
-                    className="h-9 w-9 shrink-0 bg-blue-500 hover:bg-blue-600 rounded-xl"
-                  >
-                    {submittingComment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  </Button>
+          {/* Comments — scrollable only */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 space-y-3 pb-4">
+              {hasMoreComments && (
+                <button
+                  onClick={handleLoadMoreComments}
+                  disabled={commentsLoading}
+                  className="text-xs font-semibold text-blue-400 active:scale-95 transition-transform disabled:opacity-50"
+                >
+                  {commentsLoading
+                    ? (language === 'ar' ? 'جارٍ التحميل...' : 'Loading...')
+                    : (language === 'ar' ? 'عرض المزيد من التعليقات' : 'Show more comments')}
+                </button>
+              )}
+              {commentsLoading ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="w-5 h-5 animate-spin text-white/40" />
                 </div>
+              ) : comments.length === 0 ? (
+                <p className="text-white/30 text-xs text-center py-3">
+                  {language === 'ar' ? 'كن أول من يعلّق' : 'Be the first to comment'}
+                </p>
+              ) : (
+                comments.map(c => (
+                  <div key={c.id} className="flex items-start gap-2.5">
+                    <Avatar className="w-7 h-7 shrink-0">
+                      <AvatarImage src={c.profiles?.avatar_url || ''} />
+                      <AvatarFallback className="text-[10px] bg-white/10 text-white">
+                        {(c.profiles?.display_name || c.profiles?.username || '?').substring(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-white text-xs font-semibold mr-1.5">
+                        {c.profiles?.display_name || c.profiles?.username || 'User'}
+                      </span>
+                      <span className="text-white/80 text-xs">{c.content}</span>
+                      <p className="text-white/30 text-[10px] mt-0.5">
+                        {formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}
+                      </p>
+                      <button
+                        onClick={() => handleReplyToComment(c)}
+                        className="mt-1 text-[10px] font-semibold text-blue-400 active:scale-95 transition-transform"
+                      >
+                        {language === 'ar' ? 'رد' : 'Reply'}
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+          </div>
+
+          {/* Comment input — always pinned at bottom */}
+          <div className="relative shrink-0 border-t border-white/10 px-4 py-2.5 flex items-center gap-3 bg-black">
+            {replyTarget && (
+              <div className="absolute left-4 right-16 -top-7 text-[10px] text-blue-300/90 truncate">
+                {language === 'ar' ? `رد على @${replyTarget}` : `Replying to @${replyTarget}`}
               </div>
             )}
+            <Textarea
+              value={newComment}
+              onChange={e => setNewComment(e.target.value)}
+              placeholder={language === 'ar' ? 'أضف تعليقاً...' : 'Add a comment…'}
+              rows={1}
+              className="flex-1 min-h-0 h-9 py-2 text-sm resize-none bg-white/8 border-white/15 text-white placeholder:text-white/35 rounded-full px-4"
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitComment(); } }}
+              dir={language === 'ar' ? 'rtl' : 'ltr'}
+            />
+            <Button
+              size="icon"
+              disabled={submittingComment || !newComment.trim()}
+              onClick={submitComment}
+              className="h-9 w-9 shrink-0 rounded-full bg-blue-500 hover:bg-blue-600 disabled:opacity-40"
+            >
+              {submittingComment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            </Button>
           </div>
         </div>,
         document.body
