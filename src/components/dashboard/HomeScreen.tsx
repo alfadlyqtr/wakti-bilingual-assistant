@@ -1552,7 +1552,7 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
   );
 }
 
-// ─── Empty slot (sortable target in edit mode) ─────────────────────────────
+// ─── Empty slot (sortable target in edit mode / active drag) ─────────────────
 function EmptySlotCell({ id, gridArea, isWidget, editMode }: { id: string; gridArea: string; isWidget: boolean; editMode: boolean }) {
   const { setNodeRef, isOver } = useSortable({ id, data: { type: 'unified' } });
   return (
@@ -1644,34 +1644,6 @@ function QuoteOverlay({ quoteText, quoteAuthor, language, onClose, exiting }: {
         animation: exiting ? 'qo-out 0.35s ease forwards' : 'qo-mark 1s cubic-bezier(0.34,1.2,0.64,1) 0.08s both',
       }}>"</div>
 
-      {/* Close button — standalone fixed, outside all other layers */}
-      <button
-        onClick={onClose}
-        aria-label={language === 'ar' ? 'إغلاق' : 'Close'}
-        style={{
-          position: 'fixed',
-          top: 18,
-          right: 18,
-          width: 36,
-          height: 36,
-          borderRadius: '50%',
-          border: '1.5px solid rgba(255,255,255,0.3)',
-          background: 'rgba(255,255,255,0.12)',
-          color: '#ffffff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 18,
-          fontWeight: 400,
-          lineHeight: 1,
-          cursor: 'pointer',
-          zIndex: 9999,
-          padding: 0,
-        }}
-      >
-        ✕
-      </button>
-
       {/* Centered text container */}
       <div
         onClick={onClose}
@@ -1694,6 +1666,7 @@ function QuoteOverlay({ quoteText, quoteAuthor, language, onClose, exiting }: {
             textAlign:'center',
             maxWidth:460,
             margin:0,
+            wordBreak:'break-word',
             animation: exiting ? 'qo-out 0.38s ease forwards' : undefined,
           }}
         >
@@ -1730,6 +1703,32 @@ function QuoteOverlay({ quoteText, quoteAuthor, language, onClose, exiting }: {
             — {quoteAuthor}
           </p>
         )}
+
+        {/* Close button — below the quote */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          aria-label={language === 'ar' ? 'إغلاق' : 'Close'}
+          style={{
+            marginTop: '2.8rem',
+            width: 38,
+            height: 38,
+            borderRadius: '50%',
+            border: '1.5px solid rgba(255,255,255,0.28)',
+            background: 'rgba(255,255,255,0.1)',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 18,
+            cursor: 'pointer',
+            flexShrink: 0,
+            zIndex: 9999,
+            padding: 0,
+            animation: exiting ? 'qo-out 0.2s ease forwards' : 'qo-author 0.6s ease 0.8s both',
+          }}
+        >
+          ✕
+        </button>
       </div>
     </>
   );
@@ -1981,6 +1980,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           const newBgJson = JSON.stringify(newBg);
           setHsBg(prev => JSON.stringify(prev) === newBgJson ? prev : newBg);
           localStorage.setItem(LS_HSBG_KEY(), newBgJson);
+          setHsBgActive(true);
+          localStorage.setItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE), 'true');
         }
         const hs = s?.homescreen;
         if (!hs) return;
@@ -2075,7 +2076,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   );
 
   // ── Unified drag handler ──
-  const handleDragStart = (e: any) => { setActiveId(e.active.id); setEditMode(true); };
+  const handleDragStart = (e: any) => { setActiveId(e.active.id); };
   const handleDragEnd   = useCallback((e: any) => {
     setActiveId(null);
     const { active, over } = e;
@@ -2104,7 +2105,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         next[to] = current[from];
 
         setUnifiedGrid(next);
-        localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(next));
+        localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(next));
         syncToSupabase({ unifiedGrid: next });
         return;
       } else {
@@ -2145,7 +2146,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           
           const nextFlat = blocks.flatMap(b => b.items);
           setUnifiedGrid(nextFlat);
-          localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(nextFlat));
+          localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(nextFlat));
           syncToSupabase({ unifiedGrid: nextFlat });
         }
         return;
@@ -2205,7 +2206,27 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       setBgImage('');
       localStorage.removeItem(LS_BG_KEY());
     }
-    syncToSupabase({ homescreenBg: patch });
+    if (user) {
+      (async () => {
+        try {
+          const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
+          const cur = (data?.settings as any) || {};
+          await supabase
+            .from("profiles")
+            .update({
+              settings: {
+                ...cur,
+                homescreenBg: patch,
+                homescreen: {
+                  ...(cur.homescreen || {}),
+                  bgImage: bgImage === DEFAULT_BG ? '' : bgImage,
+                },
+              },
+            })
+            .eq("id", user.id);
+        } catch {}
+      })();
+    }
     window.dispatchEvent(new Event('homescreenBgChanged'));
     setBgPanelOpen(false);
   };
@@ -2266,7 +2287,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         setUnifiedGrid(prev => {
           if (prev.includes(`app::${id}`)) return prev;
           const updated = [...prev, `app::${id}`];
-          localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(updated));
+          localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(updated));
           return updated;
         });
       } else {
@@ -2278,18 +2299,18 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           setUnifiedGrid(prev => {
             if (prev.includes(`app::${evicted}`)) return prev;
             const updated = [...prev, `app::${evicted}`];
-            localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(updated));
+            localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(updated));
             return updated;
           });
         }
         // Remove from unified grid
         setUnifiedGrid(prev => {
           const updated = prev.filter(x => x !== `app::${id}`);
-          localStorage.setItem(LS_UNIFIED_KEY, JSON.stringify(updated));
+          localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(updated));
           return updated;
         });
       }
-      localStorage.setItem(LS_DOCK_KEY, JSON.stringify(nextDock));
+      localStorage.setItem(LS_DOCK_KEY(), JSON.stringify(nextDock));
       syncToSupabase({ dockIds: nextDock });
       _pendingDock.current = nextDock;
       return nextDock;
@@ -2316,6 +2337,13 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       } else if (id.startsWith('app::')) {
         const appId = id.replace('app::', '');
         if (VALID_IDS.has(appId) && !dockSet.has(appId)) icons.push(id);
+      }
+    }
+
+    // Append any enabled widgets missing from the saved grid so selected widgets always render
+    for (const widgetId of Array.from(enabledWidgetIds)) {
+      if (!widgets.includes(widgetId) && widgets.length < 3) {
+        widgets.push(widgetId);
       }
     }
     
@@ -2434,6 +2462,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   const activeApp    = activeId ? (activeId.startsWith('dock::') ? ALL_APPS.find(a => `dock::${a.id}` === activeId) : ALL_APPS.find(a => `app::${a.id}` === activeId)) : null;
   const activeInDock = activeId?.startsWith("dock::");
+  const isDraggingLayout = activeId !== null;
+  const showLayoutGuides = editMode || isDraggingLayout;
 
   const quoteText   = useMemo(() => quote ? getQuoteText(quote, language) : "", [quote, language]);
   const quoteAuthor = useMemo(() => quote ? getQuoteAuthor(quote) : "", [quote]);
@@ -2512,6 +2542,16 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       onDragEnd={handleDragEnd}
     >
       <>
+      <style>{`
+        @keyframes hs-edit-sheet-in {
+          0% { opacity: 0; transform: translateY(-18px) scale(0.98); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes hs-edit-backdrop-in {
+          0% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+      `}</style>
       {/* Root — fills parent via flex, dock always at very bottom */}
       <div
         className={`relative overflow-hidden overscroll-none hs-root flex flex-col ${pageBg}`}
@@ -2559,9 +2599,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           )}
           {editMode && (
             <div
-              className="absolute inset-0 pointer-events-none z-0"
+              className="absolute inset-0 pointer-events-none z-30"
               style={{
-                background: 'linear-gradient(to bottom, rgba(3,8,20,0.58) 0%, rgba(3,8,20,0.42) 24%, rgba(3,8,20,0.22) 48%, rgba(3,8,20,0.38) 100%)',
+                background: 'rgba(3,8,20,0.38)',
+                backdropFilter: 'blur(18px) saturate(120%)',
+                WebkitBackdropFilter: 'blur(18px) saturate(120%)',
+                animation: 'hs-edit-backdrop-in 0.22s ease forwards',
               }}
             />
           )}
@@ -2569,7 +2612,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           {(hasBg || hasCustomBg) && (
             <div className="absolute inset-0 pointer-events-none z-0" style={{ backdropFilter: 'blur(0.5px)', WebkitBackdropFilter: 'blur(0.5px)' }} />
           )}
-          <div className="flex-none flex items-center justify-between px-4 pt-3 pb-1 relative z-20">
+          <div className="flex-none flex items-center justify-between px-4 pt-3 pb-1 relative z-40">
             <div className="px-3 py-2 rounded-xl bg-black/25 backdrop-blur-md border border-white/10">
               <p
                 className="text-[17px] font-semibold leading-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[68vw]"
@@ -2614,8 +2657,13 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             ];
             const activeWidgetCount = WIDGET_OPTIONS.filter(w => hsWidgets[w.key]).length;
             return (
-              <div style={{ position: 'relative', zIndex: 40, isolation: 'isolate', pointerEvents: 'auto', backgroundColor: '#1e293b', border: '2px solid #475569', borderRadius: '16px', padding: '12px', margin: '0 12px 8px 12px', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
-                {/* Row 1: Dock / BG / Header color / Restore */}
+              <div style={{ position: 'fixed', top: 76, left: 12, right: 12, zIndex: 60, isolation: 'isolate', pointerEvents: 'auto', backgroundColor: 'rgba(30,41,59,0.96)', border: '2px solid #64748b', borderRadius: '18px', padding: '12px', boxShadow: '0 22px 80px rgba(0,0,0,0.62)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', animation: 'hs-edit-sheet-in 0.24s cubic-bezier(0.22,1,0.36,1) forwards', maxHeight: 'calc(100vh - 108px)', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+                  <button onClick={() => setEditMode(false)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '999px', backgroundColor: '#16a34a', border: '2px solid #22c55e', color: '#ffffff', fontSize: '12px', fontWeight: 700 }}>
+                    <Check style={{ width: '14px', height: '14px' }} />
+                    <span>{language === 'ar' ? 'تم' : 'Done'}</span>
+                  </button>
+                </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
                   {/* Dock */}
                   <button onClick={() => setDockPickerOpen(true)}
@@ -2737,7 +2785,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
           {/* ── BG Style Panel ── */}
           {editMode && bgPanelOpen && (
-            <div style={{ position: 'relative', zIndex: 40, isolation: 'isolate', pointerEvents: 'auto', backgroundColor: '#1e293b', border: '2px solid #475569', borderRadius: '16px', padding: '16px', margin: '0 12px 8px 12px', boxShadow: '0 10px 40px rgba(0,0,0,0.5)', maxHeight: '50vh', overflowY: 'auto' }}>
+            <div style={{ position: 'fixed', top: 386, left: 12, right: 12, zIndex: 61, isolation: 'isolate', pointerEvents: 'auto', backgroundColor: 'rgba(30,41,59,0.98)', border: '2px solid #64748b', borderRadius: '16px', padding: '16px', boxShadow: '0 10px 40px rgba(0,0,0,0.5)', maxHeight: 'calc(100vh - 406px)', overflowY: 'auto', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', animation: 'hs-edit-sheet-in 0.24s cubic-bezier(0.22,1,0.36,1) forwards' }}>
               {/* Upload photo */}
               <label htmlFor={bgInputId}
                 style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '12px 16px', borderRadius: '10px', backgroundColor: '#334155', border: '2px solid #64748b', color: '#ffffff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px' }}>
@@ -2866,10 +2914,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           )}
 
           {/* ── Unified iPhone-style grid: 3 big rows × 2 big cols = 6 rows × 4 cols ── */}
-          <div className="flex-1 min-h-0 px-3 pb-2 overflow-hidden relative">
+          <div className="flex-1 min-h-0 px-3 pb-2 overflow-hidden relative" style={{ opacity: editMode ? 0.08 : 1, transition: 'opacity 0.2s ease' }}>
             
             {/* Visual Guide exactly matching the user's diagram in edit mode */}
-            {editMode && (
+            {showLayoutGuides && (
               <div className="absolute inset-0 px-3 pt-2 grid gap-x-1 gap-y-2 pointer-events-none" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', gridTemplateAreas: gridTemplateAreas, zIndex: 0 }}>
                 {/* Visual grid is dynamically rendered based on gridTemplateAreas now to match real positions */}
                 {effectiveUnified.map(itemId => {
@@ -2900,7 +2948,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                           id={itemId}
                           gridArea={gp}
                           isWidget={itemId.startsWith('empty-w::')}
-                          editMode={editMode}
+                          editMode={showLayoutGuides}
                         />
                       );
                     }

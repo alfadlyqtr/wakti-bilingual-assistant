@@ -256,7 +256,7 @@ export function ContactList({
     <>
       {/* View toggle */}
       {sortedContacts.length > 0 && (
-        <div className="flex justify-end pb-2">
+        <div className={`flex pb-2 ${language === 'ar' ? 'justify-start' : 'justify-end'}`}>
           <button
             onClick={() => setCompactView(v => !v)}
             aria-label={compactView ? 'Switch to card view' : 'Switch to compact view'}
@@ -264,7 +264,7 @@ export function ContactList({
           >
             {compactView
               ? <><LayoutGrid className="h-3.5 w-3.5" />{language === 'ar' ? 'بطاقات' : 'Cards'}</>
-              : <><LayoutList className="h-3.5 w-3.5" />{language === 'ar' ? 'مضغوط' : 'Compact'}</>}
+              : <><LayoutList className="h-3.5 w-3.5" />{language === 'ar' ? 'مختصر' : 'Compact'}</>}
           </button>
         </div>
       )}
@@ -293,7 +293,7 @@ export function ContactList({
               return (
                 <div
                   key={contact.id}
-                  className="flex items-center gap-3 px-3 py-2 rounded-xl border border-[#d9dee9] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,244,240,0.98))] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(15,18,27,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_-18px_38px_rgba(233,206,176,0.12),0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-20px_40px_rgba(0,0,0,0.28),0_18px_40px_rgba(0,0,0,0.34)]"
+                  className={`flex items-center gap-3 px-3 py-2 rounded-xl border border-[#d9dee9] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,244,240,0.98))] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(15,18,27,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_-18px_38px_rgba(233,206,176,0.12),0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-20px_40px_rgba(0,0,0,0.28),0_18px_40px_rgba(0,0,0,0.34)] ${language === 'ar' ? 'flex-row-reverse text-right' : ''}`}
                 >
                   <div className={`relative shrink-0 rounded-full ${unreadCount > 0 ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-background' : ''}`}>
                     <Avatar className="h-10 w-10">
@@ -345,10 +345,10 @@ export function ContactList({
             }
 
             return (
-              <Card key={contact.id} className="overflow-hidden rounded-[2rem] border border-[#e2e8f0] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(250,250,252,0.98))] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(15,18,27,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,1),inset_0_-20px_40px_rgba(148,163,184,0.08),0_20px_40px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-20px_40px_rgba(0,0,0,0.28),0_18px_40px_rgba(0,0,0,0.34)]">
+              <Card key={contact.id} dir={language === 'ar' ? 'rtl' : 'ltr'} className="overflow-hidden rounded-[2rem] border border-[#e2e8f0] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(250,250,252,0.98))] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(15,18,27,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,1),inset_0_-20px_40px_rgba(148,163,184,0.08),0_20px_40px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-20px_40px_rgba(0,0,0,0.28),0_18px_40px_rgba(0,0,0,0.34)]">
                 <CardContent className="p-4 md:p-5">
                   <div className="rounded-[1.6rem] border border-[#dbe2ec] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(249,251,253,0.94))] dark:bg-[linear-gradient(180deg,rgba(24,28,38,0.95),rgba(16,19,27,0.94))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_12px_24px_rgba(255,255,255,0.16),inset_0_-10px_24px_rgba(148,163,184,0.05),0_10px_24px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-14px_28px_rgba(0,0,0,0.24)]">
-                    <div className="flex items-start gap-3">
+                    <div className={`flex items-start gap-3 ${language === 'ar' ? 'flex-row-reverse text-right' : ''}`}>
                       <div className={`relative shrink-0 rounded-full ${unreadCount > 0 ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-background' : ''}`}>
                         <Avatar className="h-16 w-16 ring-1 ring-[#dbe2ec] dark:ring-white/10 shadow-[0_8px_20px_rgba(15,23,42,0.12)]">
                           {shouldShowAvatar(contact.contact_id, avatarUrl) ? (
@@ -372,7 +372,7 @@ export function ContactList({
                         <p className="mt-1 text-sm text-muted-foreground truncate">@{displayName}</p>
                         {!isSupport && unreadCount > 0 && (
                           <div className="mt-3 inline-flex rounded-full border border-blue-200 dark:border-blue-400/20 bg-blue-500/10 dark:bg-blue-500/15 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:text-blue-300">
-                            {language === 'ar' ? `${unreadCount} غير مقروءة` : `${unreadCount} unread`}
+                            {language === 'ar' ? `${unreadCount} غير مقروء` : `${unreadCount} unread`}
                           </div>
                         )}
                       </div>
@@ -402,7 +402,7 @@ export function ContactList({
                         </div>
                       ) : (
                         <>
-                          <div className="flex items-center gap-2 flex-nowrap">
+                          <div className={`flex items-center gap-2 flex-nowrap ${language === 'ar' ? 'justify-end' : ''}`}>
                             <button
                               onClick={() => handleOpenChat(contact.contact_id, displayName, avatarUrl)}
                               className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold active:scale-95 transition-transform shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] ${
@@ -412,7 +412,7 @@ export function ContactList({
                               }`}
                             >
                               <MessageSquare className="h-3.5 w-3.5" />
-                              {language === 'ar' ? 'رسالة' : 'Chat'}
+                              {language === 'ar' ? 'دردشة' : 'Chat'}
                               {unreadCount > 0 && (
                                 <span className="ml-1 bg-white/25 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{unreadCount}</span>
                               )}
@@ -423,7 +423,7 @@ export function ContactList({
                               className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold bg-[linear-gradient(180deg,rgba(255,248,239,0.98),rgba(254,244,232,0.94))] dark:bg-[linear-gradient(180deg,rgba(52,36,22,0.78),rgba(36,24,14,0.76))] text-[hsl(25,95%,40%)] dark:text-[hsl(25,95%,72%)] border border-[rgba(251,146,60,0.32)] dark:border-[rgba(249,201,168,0.22)] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_8px_18px_rgba(249,115,22,0.08)] active:scale-95 transition-transform"
                             >
                               <Images className="h-3.5 w-3.5" />
-                              {language === 'ar' ? 'معرض' : 'Gallery'}
+                              {language === 'ar' ? 'المعرض' : 'Gallery'}
                             </button>
 
                             <button
@@ -431,12 +431,12 @@ export function ContactList({
                               className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold bg-[linear-gradient(180deg,rgba(253,242,248,0.98),rgba(252,231,243,0.94))] dark:bg-[linear-gradient(180deg,rgba(68,28,54,0.8),rgba(46,18,38,0.78))] text-[hsl(320,70%,45%)] dark:text-[hsl(320,70%,78%)] border border-[rgba(236,72,153,0.28)] dark:border-[rgba(240,182,220,0.22)] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_8px_18px_rgba(219,39,119,0.06)] active:scale-95 transition-transform"
                             >
                               <Gift className="h-3.5 w-3.5" />
-                              {language === 'ar' ? 'رغبات' : 'Wishlist'}
+                              {language === 'ar' ? 'الهدايا' : 'Wishlist'}
                             </button>
                           </div>
 
-                          <div className="mt-2 flex items-center gap-2 flex-wrap">
-                            <div className="ml-auto flex items-center gap-2 rounded-full border border-[#dbe2ec] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,253,0.92))] dark:bg-[linear-gradient(180deg,rgba(20,24,35,0.98),rgba(14,17,26,0.98))] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.96),0_4px_14px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_6px_16px_rgba(0,0,0,0.16)]">
+                          <div className={`mt-2 flex items-center gap-2 flex-wrap ${language === 'ar' ? 'justify-start' : ''}`}>
+                            <div className={`flex items-center gap-2 rounded-full border border-[#dbe2ec] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,253,0.92))] dark:bg-[linear-gradient(180deg,rgba(20,24,35,0.98),rgba(14,17,26,0.98))] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.96),0_4px_14px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_6px_16px_rgba(0,0,0,0.16)] ${language === 'ar' ? '' : 'ml-auto'}`}>
                               <div className="text-[hsl(243,30%,55%)] dark:text-white/55 [&_svg]:h-4 [&_svg]:w-4">
                                 <ContactRelationshipIndicator status={relationshipStatus} />
                               </div>

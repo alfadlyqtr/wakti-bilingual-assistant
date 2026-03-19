@@ -6,7 +6,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import {
-  ChevronLeft, ImageIcon, Heart, MessageCircle, Download,
+  ChevronLeft, ImageIcon, Heart, MessageCircle,
   X, Loader2, Sparkles, ChevronDown, ChevronUp, Send, Lock
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -88,7 +88,6 @@ export default function ContactGallery() {
         .select('id, image_url, prompt, created_at')
         .eq('user_id', userId)
         .eq('visibility', 'contacts')
-        .eq('is_profile_visible', true)
         .order('created_at', { ascending: false });
       if (imgsErr) throw imgsErr;
 
@@ -191,17 +190,6 @@ export default function ContactGallery() {
     } finally {
       setSubmittingComment(false);
     }
-  };
-
-  const handleDownload = async (url: string) => {
-    try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `wakti-image-${Date.now()}.jpg`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    } catch { window.open(url, '_blank'); }
   };
 
   const displayName = profile?.display_name || profile?.username || 'User';
@@ -323,7 +311,7 @@ export default function ContactGallery() {
 
           {/* Bottom */}
           <div className="shrink-0 border-t border-white/10 px-4 py-3 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-start">
               <div className="flex items-center gap-4">
                 <button onClick={() => toggleLike(lightbox)} className="flex items-center gap-1.5 text-white/80 active:scale-90 transition-transform">
                   <Heart className={`w-5 h-5 transition-colors ${lightbox.liked_by_me ? 'fill-red-400 text-red-400' : ''}`} />
@@ -335,9 +323,6 @@ export default function ContactGallery() {
                   {commentsOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
                 </button>
               </div>
-              <button onClick={() => handleDownload(lightbox.image_url)} aria-label="Download image" className="text-white/70 active:scale-90 transition-transform">
-                <Download className="w-4 h-4" />
-              </button>
             </div>
 
             {lightbox.prompt && (

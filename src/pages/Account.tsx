@@ -1147,10 +1147,10 @@ export default function Account() {
             <Tabs defaultValue="contacts">
               <TabsList className="w-full grid grid-cols-2 mb-4 h-10 rounded-2xl bg-black/5 dark:bg-white/5 p-1 border-0">
                 <TabsTrigger value="contacts" className="rounded-xl text-xs font-bold text-foreground/50 data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all">
-                  {language === 'ar' ? 'جهات الاتصال' : 'Contacts'}
+                  {language === 'ar' ? 'الأصدقاء' : 'Contacts'}
                 </TabsTrigger>
                 <TabsTrigger value="gallery" className="rounded-xl text-xs font-bold text-foreground/50 data-[state=active]:bg-[hsl(25,95%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all">
-                  {language === 'ar' ? 'معرضي' : 'My Gallery'}
+                  {language === 'ar' ? 'المعرض' : 'My Gallery'}
                 </TabsTrigger>
               </TabsList>
 

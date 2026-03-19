@@ -387,11 +387,6 @@ export function MyGallery() {
               </div>
             </div>
 
-            {/* Prompt */}
-            {lightbox.prompt && (
-              <p className="text-white/50 text-xs line-clamp-2">{lightbox.prompt}</p>
-            )}
-
             {/* Comments section */}
             {commentsOpen && (
               <div className="space-y-2 max-h-48 overflow-y-auto">

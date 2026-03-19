@@ -142,15 +142,15 @@ export function ContactSearch() {
   };
 
   return (
-    <div className="px-1 pb-3">
+    <div dir={language === 'ar' ? 'rtl' : 'ltr'} className="px-1 pb-3">
       <div className="rounded-[1.75rem] border border-[#d7dbe5] dark:border-border bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(247,242,236,0.96))] dark:bg-[linear-gradient(180deg,rgba(12,15,20,0.96),rgba(18,22,30,0.94))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_16px_32px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_16px_32px_rgba(0,0,0,0.35)]">
         <div className="rounded-[1.5rem] border border-[#e4d9cd] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.88),rgba(244,238,232,0.92))] dark:bg-[linear-gradient(180deg,rgba(24,28,38,0.95),rgba(16,19,27,0.95))] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),inset_0_-8px_20px_rgba(233,206,176,0.18)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-8px_20px_rgba(0,0,0,0.28)]">
           <div className="flex items-center gap-2">
             <div className="relative flex-1 rounded-[1.25rem] border border-[#d8d2ca] dark:border-white/10 bg-white/80 dark:bg-white/5 shadow-[inset_0_2px_8px_rgba(15,23,42,0.06)] dark:shadow-[inset_0_2px_10px_rgba(0,0,0,0.35)]">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className={`absolute top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground ${language === 'ar' ? 'right-4' : 'left-4'}`} />
               <Input
-                placeholder={t("searchContacts", language)}
-                className="pl-11 pr-4 bg-transparent border-0 rounded-[1.25rem] h-12 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                placeholder={language === 'ar' ? 'ابحث عن جهة اتصال' : t("searchContacts", language)}
+                className={`bg-transparent border-0 rounded-[1.25rem] h-12 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 ${language === 'ar' ? 'pr-11 pl-4 text-right' : 'pl-11 pr-4 text-left'}`}
                 value={searchQuery}
                 onChange={handleSearch}
                 onKeyPress={handleKeyPress}
@@ -171,7 +171,7 @@ export function ContactSearch() {
         <div className="px-1 pt-3 text-center">
           <p className="text-xs leading-5 text-muted-foreground/90">
             {language === 'ar' 
-              ? 'يجب أن يكون كلا المستخدمين في قائمة جهات الاتصال لدى الآخر لتبادل الرسائل'
+              ? 'يجب أن يكون كل منكما ضمن جهات اتصال الآخر لتبادل الرسائل'
               : 'Both users must be in each other\'s contact list to exchange messages'
             }
           </p>
