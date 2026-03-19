@@ -287,17 +287,14 @@ export function ContactList({
             const avatarUrl = contactProfile.avatar_url;
             const isFavorite = contact.is_favorite === true;
             const relationshipStatus: "mutual" | "you-added-them" | "they-added-you" = contact.relationshipStatus || "you-added-them";
-
             const isSupport = contact.contact_id === '00000000-0000-0000-0000-000000000001';
 
-            // ── COMPACT VIEW ──
             if (compactView) {
               return (
                 <div
                   key={contact.id}
                   className="flex items-center gap-3 px-3 py-2 rounded-xl border border-[#d9dee9] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,244,240,0.98))] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(15,18,27,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_-18px_38px_rgba(233,206,176,0.12),0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-20px_40px_rgba(0,0,0,0.28),0_18px_40px_rgba(0,0,0,0.34)]"
                 >
-                  {/* Avatar */}
                   <div className={`relative shrink-0 rounded-full ${unreadCount > 0 ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-background' : ''}`}>
                     <Avatar className="h-10 w-10">
                       {shouldShowAvatar(contact.contact_id, avatarUrl) ? (
@@ -314,13 +311,11 @@ export function ContactList({
                     )}
                   </div>
 
-                  {/* Name */}
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm truncate leading-tight">{emailOrName || `@${displayName}`}</p>
                     {emailOrName && <p className="text-[11px] text-muted-foreground truncate">@{displayName}</p>}
                   </div>
 
-                  {/* Compact actions */}
                   <div className="flex items-center gap-1 shrink-0">
                     {!isSupport && (
                       <button onClick={() => handleToggleFavorite(contact.id, isFavorite)} aria-label="Favorite" className="active:scale-90 transition-transform">
@@ -348,6 +343,7 @@ export function ContactList({
                 </div>
               );
             }
+
             return (
               <Card key={contact.id} className="overflow-hidden rounded-[2rem] border border-[#e2e8f0] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(250,250,252,0.98))] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(15,18,27,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,1),inset_0_-20px_40px_rgba(148,163,184,0.08),0_20px_40px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-20px_40px_rgba(0,0,0,0.28),0_18px_40px_rgba(0,0,0,0.34)]">
                 <CardContent className="p-4 md:p-5">
@@ -386,9 +382,9 @@ export function ContactList({
                           onClick={() => handleToggleFavorite(contact.id, isFavorite)}
                           disabled={favoriteMutation.isPending}
                           aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                          className="shrink-0 rounded-full p-2.5 border border-[#dbe2ec] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] dark:bg-white/5 shadow-[inset_0_1px_0_rgba(255,255,255,1),0_6px_16px_rgba(15,23,42,0.06)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_6px_14px_rgba(0,0,0,0.18)] active:scale-90 transition-transform"
+                          className="shrink-0 rounded-full p-2.5 border border-[#c8d2e1] dark:border-white/15 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(245,248,252,0.94))] dark:bg-[linear-gradient(180deg,rgba(34,39,52,0.96),rgba(25,29,40,0.96))] shadow-[inset_0_1px_0_rgba(255,255,255,1),0_8px_18px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_8px_18px_rgba(0,0,0,0.24)] active:scale-90 transition-transform"
                         >
-                          <Star className={`h-5 w-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground/40'}`} />
+                          <Star className={`h-5 w-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground/55 dark:text-white/55'}`} />
                         </button>
                       )}
                     </div>
@@ -406,7 +402,7 @@ export function ContactList({
                         </div>
                       ) : (
                         <>
-                          <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-2 flex-nowrap">
                             <button
                               onClick={() => handleOpenChat(contact.contact_id, displayName, avatarUrl)}
                               className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold active:scale-95 transition-transform shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] ${
@@ -429,9 +425,7 @@ export function ContactList({
                               <Images className="h-3.5 w-3.5" />
                               {language === 'ar' ? 'معرض' : 'Gallery'}
                             </button>
-                          </div>
 
-                          <div className="mt-2 flex items-center gap-2 flex-wrap">
                             <button
                               onClick={() => navigate(`/wishlists?contact=${contact.contact_id}`)}
                               className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold bg-[linear-gradient(180deg,rgba(253,242,248,0.98),rgba(252,231,243,0.94))] dark:bg-[linear-gradient(180deg,rgba(68,28,54,0.8),rgba(46,18,38,0.78))] text-[hsl(320,70%,45%)] dark:text-[hsl(320,70%,78%)] border border-[rgba(236,72,153,0.28)] dark:border-[rgba(240,182,220,0.22)] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_8px_18px_rgba(219,39,119,0.06)] active:scale-95 transition-transform"
@@ -439,7 +433,9 @@ export function ContactList({
                               <Gift className="h-3.5 w-3.5" />
                               {language === 'ar' ? 'رغبات' : 'Wishlist'}
                             </button>
+                          </div>
 
+                          <div className="mt-2 flex items-center gap-2 flex-wrap">
                             <div className="ml-auto flex items-center gap-2 rounded-full border border-[#dbe2ec] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,253,0.92))] dark:bg-[linear-gradient(180deg,rgba(20,24,35,0.98),rgba(14,17,26,0.98))] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.96),0_4px_14px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_6px_16px_rgba(0,0,0,0.16)]">
                               <div className="text-[hsl(243,30%,55%)] dark:text-white/55 [&_svg]:h-4 [&_svg]:w-4">
                                 <ContactRelationshipIndicator status={relationshipStatus} />
@@ -469,7 +465,7 @@ export function ContactList({
                 </CardContent>
               </Card>
             );
-            })
+          })
         )}
       </div>
 

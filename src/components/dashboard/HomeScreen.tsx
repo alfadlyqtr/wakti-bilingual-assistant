@@ -308,7 +308,6 @@ function DockIcon({ app, editMode, onTap, glowEnabled = false, avatarUrl, badgeC
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `dock::${app.id}`,
     data: { type: "dock", appId: app.id },
-    disabled: !editMode,
   });
 
   return (
@@ -321,7 +320,7 @@ function DockIcon({ app, editMode, onTap, glowEnabled = false, avatarUrl, badgeC
         touchAction: "none",
       }}
       {...attributes}
-      {...(editMode ? listeners : {})}
+      {...listeners}
       className="flex flex-col items-center select-none cursor-pointer"
       onClick={editMode ? undefined : onTap}
     >
@@ -2072,7 +2071,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   // ── Sensors ──
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 10 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 5 } })
   );
 
   // ── Unified drag handler ──
