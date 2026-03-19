@@ -1240,16 +1240,16 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
       onClick={editMode ? undefined : onClick}
       className="rounded-3xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-all select-none relative"
       style={{
-        backdropFilter: 'blur(20px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-        boxShadow: `0 4px 22px ${glow}44, 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.18)`,
-        border: '0.5px solid rgba(180,190,200,0.25)',
+        backdropFilter: 'blur(12px) saturate(140%)',
+        WebkitBackdropFilter: 'blur(12px) saturate(140%)',
+        boxShadow: `0 2px 12px ${glow}18, 0 1px 4px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)`,
+        border: '0.5px solid rgba(180,190,200,0.12)',
       }}
     >
-      {/* Background layer — low opacity for see-through liquid glass */}
-      <div className="absolute inset-0" style={{ background: bg, opacity: 0.3 }} />
-      {/* Frosted glass shimmer overlay */}
-      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 50%, transparent 100%)' }} />
+      {/* Background layer — very low opacity for high see-through */}
+      <div className="absolute inset-0" style={{ background: bg, opacity: 0.06 }} />
+      {/* Frosted glass shimmer overlay — minimal */}
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.02) 0%, transparent 60%)' }} />
       <div className="relative z-10 w-full h-full">{children}</div>
     </div>
   );
@@ -2177,8 +2177,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       const url = ev.target?.result as string;
       setBgImage(url);
       setBgPositionY(50);
+      setHsBgActive(false);
       localStorage.setItem(LS_BG_KEY(), url);
       localStorage.setItem(LS_BG_POS_Y_KEY(), '50');
+      localStorage.setItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE), 'false');
       syncToSupabase({ bgImage: url, bgPositionY: 50 });
     };
     reader.readAsDataURL(file);
@@ -3098,8 +3100,13 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           <SavedImagesPicker
             onSelect={(imageUrl) => {
               setBgImage(imageUrl);
+              setBgPositionY(50);
+              setHsBgActive(false);
               localStorage.setItem(LS_BG_KEY(), imageUrl);
-              syncToSupabase({ bgImage: imageUrl });
+              localStorage.setItem(LS_BG_POS_Y_KEY(), '50');
+              localStorage.setItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE), 'false');
+              syncToSupabase({ bgImage: imageUrl, bgPositionY: 50 });
+              setSavedImagesOpen(false);
             }}
             onClose={() => setSavedImagesOpen(false)}
           />

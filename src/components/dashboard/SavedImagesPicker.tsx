@@ -52,7 +52,7 @@ export function SavedImagesPicker({ onSelect, onClose }: SavedImagesPickerProps)
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
       <div className="bg-[#0c0f14] rounded-3xl w-full max-w-2xl max-h-[80vh] overflow-hidden border border-white/10">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-white/10">

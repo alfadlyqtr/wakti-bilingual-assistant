@@ -653,7 +653,7 @@ export default function ChatPage() {
         <Button 
           variant="ghost" 
           size="icon"
-          onClick={() => navigate('/contacts')}
+          onClick={() => navigate('/account?tab=social')}
           className={`h-10 w-10 rounded-xl ${isDark ? 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-400' : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-600'} transition-all active:scale-95`}
         >
           <ChevronLeft className="h-6 w-6" />

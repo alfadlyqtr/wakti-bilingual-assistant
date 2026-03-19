@@ -162,6 +162,27 @@ export async function getAllUnreadCounts(): Promise<Record<string, number>> {
   return counts;
 }
 
+// Get count of unread gallery notifications (likes + comments) for the current user
+export async function getUnreadGalleryNotifCount(): Promise<number> {
+  const userId = await getCurrentUserId();
+  if (!userId) return 0;
+  await ensurePassport();
+
+  const { count, error } = await supabase
+    .from('notification_history')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('is_read', false)
+    .in('type', ['gallery_like', 'gallery_comment']);
+
+  if (error) {
+    console.error('Error fetching gallery notification count:', error);
+    return 0;
+  }
+
+  return count || 0;
+}
+
 // Mark messages as read
 export async function markAsRead(senderId: string): Promise<void> {
   try {

@@ -78,13 +78,13 @@ export function ContactsContent({
   };
 
   return (
-    <div dir={language === 'ar' ? 'rtl' : 'ltr'} className="flex flex-col p-4 pb-24">
+    <div dir={language === 'ar' ? 'rtl' : 'ltr'} className="flex flex-col px-2.5 sm:px-4 pb-24 pt-4">
       <Tabs 
         defaultValue={activeTab} 
         value={activeTab}
         onValueChange={setActiveTab}
       >
-        <TabsList className="grid grid-cols-3 mb-4 h-10 rounded-2xl bg-black/5 dark:bg-white/5 p-1 border-0">
+        <TabsList className="grid grid-cols-3 mb-4 h-10 rounded-2xl bg-black/5 dark:bg-white/5 p-1 border-0 w-[calc(100%+0.5rem)] -mx-1 sm:w-full sm:mx-0">
           <TabsTrigger value="contacts" className="rounded-xl text-xs font-bold text-foreground/50 data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all flex gap-1.5 items-center justify-center">
             <Contact className="h-3.5 w-3.5" />
             <span>{language === 'ar' ? 'الأصدقاء' : t("contacts", language)}</span>
