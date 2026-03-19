@@ -434,7 +434,7 @@ export function ProfileImageUpload({ showPreview = true }: { showPreview?: boole
           size="sm"
           onClick={() => fileInputRef.current?.click()}
           disabled={isUploading}
-          className="flex items-center justify-center gap-2 w-full"
+          className="flex items-center justify-center gap-2 w-full border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.06)]"
         >
           {isUploading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -450,7 +450,7 @@ export function ProfileImageUpload({ showPreview = true }: { showPreview?: boole
             size="sm"
             onClick={handleRemoveAvatar}
             disabled={isUploading}
-            className="flex items-center justify-center gap-2 w-full text-destructive hover:text-destructive"
+            className="flex items-center justify-center gap-2 w-full border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.06)] text-destructive hover:text-destructive"
           >
             <X className="h-4 w-4" />
             {language === 'ar' ? 'حذف' : 'Remove'}

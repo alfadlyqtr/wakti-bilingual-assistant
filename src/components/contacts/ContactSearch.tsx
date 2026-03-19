@@ -142,35 +142,41 @@ export function ContactSearch() {
   };
 
   return (
-    <div className="px-1 pb-2">
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder={t("searchContacts", language)}
-            className="pl-9 bg-muted border-0 rounded-2xl h-10 focus-visible:ring-1 focus-visible:ring-[hsl(210,100%,55%)]"
-            value={searchQuery}
-            onChange={handleSearch}
-            onKeyPress={handleKeyPress}
-            ref={inputRef}
-          />
+    <div className="px-1 pb-3">
+      <div className="rounded-[1.75rem] border border-[#d7dbe5] dark:border-border bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(247,242,236,0.96))] dark:bg-[linear-gradient(180deg,rgba(12,15,20,0.96),rgba(18,22,30,0.94))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_16px_32px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_16px_32px_rgba(0,0,0,0.35)]">
+        <div className="rounded-[1.5rem] border border-[#e4d9cd] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.88),rgba(244,238,232,0.92))] dark:bg-[linear-gradient(180deg,rgba(24,28,38,0.95),rgba(16,19,27,0.95))] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),inset_0_-8px_20px_rgba(233,206,176,0.18)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-8px_20px_rgba(0,0,0,0.28)]">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 rounded-[1.25rem] border border-[#d8d2ca] dark:border-white/10 bg-white/80 dark:bg-white/5 shadow-[inset_0_2px_8px_rgba(15,23,42,0.06)] dark:shadow-[inset_0_2px_10px_rgba(0,0,0,0.35)]">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={t("searchContacts", language)}
+                className="pl-11 pr-4 bg-transparent border-0 rounded-[1.25rem] h-12 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                value={searchQuery}
+                onChange={handleSearch}
+                onKeyPress={handleKeyPress}
+                ref={inputRef}
+              />
+            </div>
+            <Button 
+              onClick={handleSearchSubmit}
+              disabled={searchQuery.length < 1}
+              size="sm"
+              className="rounded-[1.25rem] h-12 px-5 bg-[linear-gradient(135deg,#060541_0%,hsl(243_40%_40%)_100%)] hover:opacity-95 dark:bg-[linear-gradient(135deg,hsl(210_100%_65%)_0%,hsl(260_70%_65%)_100%)] text-white border border-transparent shadow-[0_10px_24px_rgba(6,5,65,0.22)] dark:shadow-[0_10px_24px_rgba(33,150,243,0.18)] shrink-0"
+            >
+              {t("search", language)}
+            </Button>
+          </div>
         </div>
-        <Button 
-          onClick={handleSearchSubmit}
-          disabled={searchQuery.length < 1}
-          size="sm"
-          className="rounded-2xl h-10 px-4 bg-[#060541] hover:bg-[hsl(243,84%,22%)] dark:bg-[hsl(210,100%,55%)] dark:hover:bg-[hsl(210,100%,48%)] text-white border-0 shrink-0"
-        >
-          {t("search", language)}
-        </Button>
-      </div>
 
-      <p className="text-xs text-muted-foreground mt-2 px-1">
-        {language === 'ar' 
-          ? 'يجب أن يكون كلا المستخدمين في قائمة جهات الاتصال لدى الآخر لتبادل الرسائل'
-          : 'Both users must be in each other\'s contact list to exchange messages'
-        }
-      </p>
+        <div className="px-1 pt-3 text-center">
+          <p className="text-xs leading-5 text-muted-foreground/90">
+            {language === 'ar' 
+              ? 'يجب أن يكون كلا المستخدمين في قائمة جهات الاتصال لدى الآخر لتبادل الرسائل'
+              : 'Both users must be in each other\'s contact list to exchange messages'
+            }
+          </p>
+        </div>
+      </div>
 
       {isSearching && isSearchLoading && (
         <div className="flex justify-center items-center py-8">
@@ -179,21 +185,22 @@ export function ContactSearch() {
       )}
 
       {isSearching && !isSearchLoading && searchResults && searchResults.length > 0 && (
-        <div className="mt-4">
-          <Separator className="my-2" />
-          <p className="text-sm text-muted-foreground mb-2">{t("searchResults", language)}</p>
+        <div className="mt-4 rounded-[1.5rem] border border-[#d7dbe5] dark:border-border bg-card/80 dark:bg-card/90 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_14px_28px_rgba(15,23,42,0.06)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_14px_28px_rgba(0,0,0,0.28)]">
+          <div className="px-1 pb-2">
+            <Separator className="mb-3 opacity-60" />
+            <p className="text-sm font-medium text-muted-foreground">{t("searchResults", language)}</p>
+          </div>
           <div className="space-y-2">
             {searchResults.map((user) => (
-              <div key={user.id} className="flex items-center justify-between gap-3 p-2 hover:bg-muted rounded-md">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <Avatar className="flex-shrink-0">
+              <div key={user.id} className="flex items-center justify-between gap-3 rounded-[1.25rem] border border-[#e1e5ee] dark:border-white/10 bg-white/70 dark:bg-white/5 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_6px_16px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_6px_16px_rgba(0,0,0,0.22)]">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <Avatar className="h-11 w-11 flex-shrink-0 ring-1 ring-[#d7dbe5] dark:ring-white/10 shadow-[0_4px_12px_rgba(15,23,42,0.08)]">
                     <AvatarImage src={user.avatar_url || ""} />
-                    <AvatarFallback>{getInitials(user.display_name || user.username)}</AvatarFallback>
+                    <AvatarFallback className="bg-[linear-gradient(135deg,#060541_0%,hsl(210_100%_65%)_100%)] text-white">{getInitials(user.display_name || user.username)}</AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
-                    <p className="font-medium truncate">{user.display_name}</p>
+                    <p className="font-semibold truncate text-foreground">{user.display_name}</p>
                     <p className="text-xs text-muted-foreground truncate">@{user.username}</p>
-                    {/* Check if email exists before rendering it */}
                     {user.email && (
                       <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                     )}
@@ -204,21 +211,21 @@ export function ContactSearch() {
                     const status = contactStatus[user.id];
                     if (status === 'approved') {
                       return (
-                        <Badge variant="secondary" className="px-3 py-1 whitespace-nowrap">
+                        <Badge variant="secondary" className="px-3 py-1 whitespace-nowrap rounded-full border border-[#d7dbe5] dark:border-white/10 bg-white/80 dark:bg-white/10">
                           {t("alreadyInContacts", language)}
                         </Badge>
                       );
                     }
                     if (status === 'pending') {
                       return (
-                        <Badge variant="outline" className="px-3 py-1 text-xs whitespace-nowrap">
+                        <Badge variant="outline" className="px-3 py-1 text-xs whitespace-nowrap rounded-full border-[#d7dbe5] dark:border-white/10 bg-white/70 dark:bg-white/5">
                           {t("requestSent", language)}
                         </Badge>
                       );
                     }
                     if (status === 'blocked') {
                       return (
-                        <Badge variant="destructive" className="px-3 py-1 text-xs whitespace-nowrap">
+                        <Badge variant="destructive" className="px-3 py-1 text-xs whitespace-nowrap rounded-full">
                           {t("blocked", language)}
                         </Badge>
                       );
@@ -228,7 +235,7 @@ export function ContactSearch() {
                         onClick={() => handleSendRequest(user.id)}
                         disabled={sendRequestMutation.isPending && sendRequestMutation.variables === user.id}
                         size="sm"
-                        className="whitespace-nowrap bg-[hsl(210,100%,65%)] hover:bg-[hsl(210,100%,58%)] text-white border-0"
+                        className="whitespace-nowrap rounded-full px-4 bg-[linear-gradient(135deg,hsl(210_100%_65%)_0%,hsl(260_70%_65%)_100%)] hover:opacity-95 text-white border border-transparent shadow-[0_8px_18px_rgba(33,150,243,0.18)]"
                       >
                         {(sendRequestMutation.isPending && sendRequestMutation.variables === user.id) ? (
                           <LoadingSpinner size="sm" className="mr-2" />
@@ -245,7 +252,7 @@ export function ContactSearch() {
       )}
 
       {isSearching && !isSearchLoading && searchResults && searchResults.length === 0 && (
-        <div className="mt-4 text-center text-muted-foreground p-4">
+        <div className="mt-4 rounded-[1.5rem] border border-[#d7dbe5] dark:border-border bg-card/80 dark:bg-card/90 p-6 text-center text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_14px_28px_rgba(15,23,42,0.06)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_14px_28px_rgba(0,0,0,0.28)]">
           <p>{t("noUsersFound", language)}</p>
         </div>
       )}

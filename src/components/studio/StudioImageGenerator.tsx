@@ -350,12 +350,102 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     return outUrl as string;
   };
 
+  const persistGeneratedImage = useCallback(async (
+    imageUrl: string,
+    options?: {
+      showSuccessToast?: boolean;
+      showAlreadySavedToast?: boolean;
+      triggerSaveSuccess?: boolean;
+    }
+  ) => {
+    if (!imageUrl || !user?.id) return false;
+
+    const {
+      showSuccessToast = true,
+      showAlreadySavedToast = true,
+      triggerSaveSuccess = true,
+    } = options || {};
+
+    if (isSaved && savedImageId) {
+      if (showAlreadySavedToast) {
+        toast.success(language === 'ar' ? 'تم الحفظ بالفعل' : 'Already saved');
+      }
+      if (triggerSaveSuccess) {
+        onSaveSuccess?.();
+      }
+      return true;
+    }
+
+    setIsSaving(true);
+    try {
+      let bucketUrl = savedBucketUrl;
+      let storagePath = '';
+
+      if (!bucketUrl) {
+        const res = await fetch(imageUrl);
+        const blob = await res.blob();
+        const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+        const fileName = `${user.id}/${submode}-${Date.now()}.${ext}`;
+        const { error: uploadErr } = await supabase.storage
+          .from('generated-images')
+          .upload(fileName, blob, { contentType: blob.type, upsert: false });
+        if (uploadErr) throw uploadErr;
+
+        const { data: urlData } = supabase.storage
+          .from('generated-images')
+          .getPublicUrl(fileName);
+        bucketUrl = sanitizeImageUrl(urlData?.publicUrl || '');
+        if (!bucketUrl) throw new Error('Failed to get public URL');
+        storagePath = fileName;
+        setSavedBucketUrl(bucketUrl);
+      } else {
+        const parts = bucketUrl.split('/generated-images/');
+        if (parts[1]) storagePath = decodeURIComponent(parts[1]);
+      }
+
+      if (!savedImageId) {
+        const { data: row, error: dbErr } = await (supabase as any)
+          .from('user_generated_images')
+          .insert({
+            user_id: user.id,
+            image_url: bucketUrl,
+            prompt: prompt || null,
+            submode,
+            quality: submode === 'text2image' || submode === 'image2image' ? quality : null,
+            meta: { storage_path: storagePath },
+          })
+          .select('id')
+          .single();
+        if (dbErr) throw dbErr;
+        if (row?.id) setSavedImageId(row.id);
+      }
+
+      setIsSaved(true);
+      if (showSuccessToast) {
+        toast.success(language === 'ar' ? 'تم الحفظ' : 'Saved');
+      }
+      if (triggerSaveSuccess) {
+        onSaveSuccess?.();
+      }
+      return true;
+    } catch (err: any) {
+      console.error('Save failed:', err);
+      if (showSuccessToast) {
+        toast.error(language === 'ar' ? 'فشل الحفظ' : 'Save failed');
+      }
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [user?.id, isSaved, savedImageId, savedBucketUrl, submode, prompt, quality, language, onSaveSuccess]);
+
   // ─── Main generate handler ───
   const handleGenerate = useCallback(async () => {
     if (submode === 'draw') {
       drawCanvasRef.current?.triggerManualGeneration();
       return;
     }
+
     if (!prompt.trim() && submode === 'text2image') {
       toast.error(language === 'ar' ? 'اكتب وصفاً للصورة' : 'Enter an image description');
       return;
@@ -387,45 +477,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       }
       stopProgress();
       setResultImageUrl(url);
-
-      // Auto-upload to our bucket + insert DB row so share URL is always branded
-      if (user?.id && url && !url.includes('supabase.co')) {
-        (async () => {
-          try {
-            const r = await fetch(url);
-            const b = await r.blob();
-            const ext = b.type === 'image/png' ? 'png' : b.type === 'image/webp' ? 'webp' : 'jpg';
-            const fn = `${user.id}/${submode}-${Date.now()}.${ext}`;
-            const { error: ue } = await supabase.storage
-              .from('generated-images')
-              .upload(fn, b, { contentType: b.type, upsert: false });
-            if (!ue) {
-              const { data: ud } = supabase.storage.from('generated-images').getPublicUrl(fn);
-              const publicUrl = sanitizeImageUrl(ud?.publicUrl || '');
-              if (publicUrl) {
-                setSavedBucketUrl(publicUrl);
-                // Insert DB row to get an ID for the branded share page
-                const { data: row } = await (supabase as any)
-                  .from('user_generated_images')
-                  .insert({
-                    user_id: user.id,
-                    image_url: publicUrl,
-                    prompt: prompt || null,
-                    submode,
-                    quality: submode === 'text2image' || submode === 'image2image' ? quality : null,
-                    meta: { storage_path: fn },
-                  })
-                  .select('id')
-                  .single();
-                if (row?.id) {
-                  setSavedImageId(row.id);
-                  setIsSaved(true);
-                }
-              }
-            }
-          } catch { /* silent */ }
-        })();
-      }
+      await persistGeneratedImage(url, {
+        showSuccessToast: false,
+        showAlreadySavedToast: false,
+        triggerSaveSuccess: false,
+      });
     } catch (err: any) {
       stopProgress();
       const msg = err?.message || (language === 'ar' ? 'فشل إنشاء الصورة' : 'Image generation failed');
@@ -434,7 +490,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     } finally {
       setIsGenerating(false);
     }
-  }, [submode, prompt, quality, uploadedFile, user?.id, language]);
+  }, [submode, prompt, quality, uploadedFile, language, persistGeneratedImage]);
 
   // ─── Amp prompt ───
   const handleAmp = async () => {
@@ -488,69 +544,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   // ─── Save to DB (reuses auto-uploaded bucket URL or uploads fresh) ───
   const handleSave = async () => {
     if (!resultImageUrl || !user?.id) return;
-
-    // If auto-save already completed, just show success
-    if (isSaved && savedImageId) {
-      toast.success(language === 'ar' ? 'تم الحفظ بالفعل' : 'Already saved');
-      onSaveSuccess?.();
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      let bucketUrl = savedBucketUrl;
-      let storagePath = '';
-
-      // If auto-upload already completed, reuse it; otherwise upload now
-      if (!bucketUrl) {
-        const res = await fetch(resultImageUrl);
-        const blob = await res.blob();
-        const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
-        const fileName = `${user.id}/${submode}-${Date.now()}.${ext}`;
-        const { error: uploadErr } = await supabase.storage
-          .from('generated-images')
-          .upload(fileName, blob, { contentType: blob.type, upsert: false });
-        if (uploadErr) throw uploadErr;
-
-        const { data: urlData } = supabase.storage
-          .from('generated-images')
-          .getPublicUrl(fileName);
-        bucketUrl = sanitizeImageUrl(urlData?.publicUrl || '');
-        if (!bucketUrl) throw new Error('Failed to get public URL');
-        storagePath = fileName;
-        setSavedBucketUrl(bucketUrl);
-      } else {
-        const parts = bucketUrl.split('/generated-images/');
-        if (parts[1]) storagePath = decodeURIComponent(parts[1]);
-      }
-
-      // Insert into DB if not already auto-inserted
-      if (!savedImageId) {
-        const { data: row, error: dbErr } = await (supabase as any)
-          .from('user_generated_images')
-          .insert({
-            user_id: user.id,
-            image_url: bucketUrl,
-            prompt: prompt || null,
-            submode,
-            quality: submode === 'text2image' || submode === 'image2image' ? quality : null,
-            meta: { storage_path: storagePath },
-          })
-          .select('id')
-          .single();
-        if (dbErr) throw dbErr;
-        if (row?.id) setSavedImageId(row.id);
-      }
-
-      setIsSaved(true);
-      toast.success(language === 'ar' ? 'تم الحفظ' : 'Saved');
-      onSaveSuccess?.();
-    } catch (err: any) {
-      console.error('Save failed:', err);
-      toast.error(language === 'ar' ? 'فشل الحفظ' : 'Save failed');
-    } finally {
-      setIsSaving(false);
-    }
+    await persistGeneratedImage(resultImageUrl, {
+      showSuccessToast: true,
+      showAlreadySavedToast: true,
+      triggerSaveSuccess: true,
+    });
   };
 
   // ─── Submode config ───

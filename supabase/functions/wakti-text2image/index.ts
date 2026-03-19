@@ -75,8 +75,8 @@ const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 
 const MODEL_FAST = Deno.env.get("RUNWARE_FAST_MODEL") || "google:4@1";
 const MODEL_BEST = Deno.env.get("RUNWARE_BEST_FAST_MODEL") || "google:4@3";
-const DEFAULT_WIDTH = parseInt(Deno.env.get("WAKTI_T2I_WIDTH") ?? "1024", 10);
-const DEFAULT_HEIGHT = parseInt(Deno.env.get("WAKTI_T2I_HEIGHT") ?? "1024", 10);
+const DEFAULT_WIDTH = parseInt(Deno.env.get("WAKTI_T2I_WIDTH") ?? "1280", 10);
+const DEFAULT_HEIGHT = parseInt(Deno.env.get("WAKTI_T2I_HEIGHT") ?? "2752", 10);
 const STEPS = parseInt(Deno.env.get("WAKTI_T2I_STEPS") ?? "28", 10);
 const CFG = parseFloat(Deno.env.get("WAKTI_T2I_CFG") ?? "5.5");
 const TIMEOUT_MS = parseInt(Deno.env.get("WAKTI_T2I_TIMEOUT_MS") ?? "180000", 10);

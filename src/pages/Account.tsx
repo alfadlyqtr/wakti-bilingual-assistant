@@ -735,7 +735,7 @@ export default function Account() {
       setIsSubmittingFeedback(false);
     }
   };
-  
+
   // Abuse report handlers
   const handleSubmitAbuse = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -770,32 +770,30 @@ export default function Account() {
     }
   };
 
-  
-  
   return (
     <PageContainer showHeader={false}>
       <div className="min-h-screen">
 
         {/* ── HERO HEADER ─────────────────────────────────────────────────── */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-[hsl(36,67%,92%)] via-[hsl(36,67%,88%)] to-[hsl(36,67%,85%)] dark:from-[#060541] dark:via-[hsl(243,84%,14%)] dark:to-[#060541] pb-6 pt-8 px-4">
-          <div className="relative z-10 flex flex-col items-center gap-3">
-            <div className="w-20 h-20 rounded-full ring-2 ring-[#060541]/10 dark:ring-white/20 overflow-hidden bg-gradient-to-br from-[hsl(210,100%,55%)] to-[hsl(180,85%,50%)] flex items-center justify-center">
+        <div className="relative overflow-hidden bg-background px-4 pt-5 pb-3">
+          <div className="relative z-10 rounded-2xl border border-[#060541] dark:border-border bg-card/60 shadow-[0_1px_3px_rgba(15,23,42,0.08)] backdrop-blur-sm px-4 py-3 flex items-center gap-3">
+            <div className="w-16 h-16 shrink-0 rounded-full ring-2 ring-[#060541]/10 dark:ring-white/20 overflow-hidden bg-gradient-to-br from-[hsl(210,100%,55%)] to-[hsl(180,85%,50%)] flex items-center justify-center">
               {profile?.avatar_url
                 ? <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
-                : <span className="text-2xl font-bold text-white">{(name || email || '?').substring(0, 2).toUpperCase()}</span>
+                : <span className="text-lg font-bold text-white">{(name || email || '?').substring(0, 2).toUpperCase()}</span>
               }
             </div>
-            <div className="text-center">
-              <h1 className="text-xl font-bold text-[#060541] dark:text-white">{name || t("account", language)}</h1>
-              {email && <p className="text-sm text-[#060541]/50 dark:text-white/40 mt-0.5">{email}</p>}
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-lg font-bold text-[#060541] dark:text-white">{name || t("account", language)}</h1>
+              {email && <p className="truncate text-sm text-[#060541]/50 dark:text-white/40 mt-0.5">{email}</p>}
             </div>
           </div>
         </div>
 
         {/* ── TAB BAR — below hero, on page background ─────────────────────── */}
-        <div className="sticky top-0 z-20 px-4 py-3 bg-background border-b border-border">
+        <div className="sticky top-0 z-20 px-4 pt-1 pb-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 border-b border-[#d7dbe5] dark:border-border">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'profile' | 'billing' | 'social' | 'wishes')} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 h-10 bg-muted rounded-2xl p-1 border-0 shadow-none">
+          <TabsList className="grid w-full grid-cols-4 h-10 bg-muted rounded-2xl p-1 border border-[#d7dbe5] dark:border-border shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
             <TabsTrigger value="profile" className="rounded-xl text-[11px] font-bold data-[state=active]:bg-[#060541] data-[state=active]:text-white dark:data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:shadow-none transition-all flex items-center gap-1">
               <User className="h-3 w-3 shrink-0" />
               {language === 'ar' ? 'الملف' : 'Profile'}
@@ -814,215 +812,230 @@ export default function Account() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="profile" className="space-y-4 px-4 pt-4 pb-24">
-            <Card className="border border-border bg-card">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">{t("profile", language)}</CardTitle>
-                <CardDescription>
-                  {t("profileManagement", language)}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <ProfileImageUpload showPreview={false} />
+          <TabsContent value="profile" className="space-y-4 px-3 pt-3 pb-24 sm:px-4">
+            <div className="mx-auto w-full max-w-4xl space-y-4">
+              <Card className="border border-[#d7dbe5] dark:border-border bg-card rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
+                <CardHeader className="pb-2 pt-5 text-center">
+                  <CardTitle className="text-base">{t("profile", language)}</CardTitle>
+                  <CardDescription>
+                    {t("profileManagement", language)}
+                  </CardDescription>
+                </CardHeader>
+              </Card>
 
-                {needsOneTimeProfileSetup && (
-                  <div className="rounded-2xl border border-amber-400/30 bg-gradient-to-r from-amber-500/10 to-orange-500/10 p-4 space-y-2">
-                    <p className="text-sm font-semibold text-foreground">
-                      {setupTitle}
-                    </p>
-                    <p className="text-xs text-muted-foreground leading-6">
-                      {setupDescription}
-                    </p>
+              <Card className="border border-[#d7dbe5] dark:border-border bg-card rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
+                <CardContent className="pt-5 pb-5">
+                  <ProfileImageUpload showPreview={false} />
+                </CardContent>
+              </Card>
+
+              <Card className="border border-[#d7dbe5] dark:border-border bg-card rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
+                <CardContent className="space-y-5 pt-5 pb-5">
+                  {needsOneTimeProfileSetup && (
+                    <div className="rounded-2xl border border-amber-400/80 bg-gradient-to-r from-amber-500/10 to-orange-500/10 p-4 space-y-2 shadow-[0_1px_3px_rgba(245,158,11,0.12)]">
+                      <p className="text-sm font-semibold text-foreground">
+                        {setupTitle}
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-6">
+                        {setupDescription}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="grid gap-5 md:grid-cols-2 md:gap-6">
+                    <div className="grid gap-2">
+                      <Label htmlFor="username">{t("username", language)}</Label>
+                      <Input
+                        id="username"
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        readOnly={!canSetUsernameOnce}
+                        disabled={loadingUserData || isUpdatingProfile}
+                        placeholder={canSetUsernameOnce ? (language === 'ar' ? 'اختر اسم المستخدم مرة واحدة' : 'Choose your username once') : ''}
+                        className={!canSetUsernameOnce ? "border-[#d7dbe5] dark:border-border bg-muted cursor-not-allowed" : "border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]"}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {canSetUsernameOnce
+                          ? (language === 'ar'
+                              ? 'يمكنك اختيار اسم المستخدم الآن مرة واحدة فقط.'
+                              : 'You can choose your username now one time only.')
+                          : t("usernameHelpText", language)}
+                      </p>
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="name">{t("name", language)}</Label>
+                      <Input
+                        id="name"
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        readOnly={!canSetNameOnce}
+                        disabled={loadingUserData || isUpdatingProfile}
+                        placeholder={canSetNameOnce ? (language === 'ar' ? 'أدخل اسمك مرة واحدة' : 'Enter your name once') : ''}
+                        className={!canSetNameOnce ? "border-[#d7dbe5] dark:border-border bg-muted cursor-not-allowed" : "border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]"}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {canSetNameOnce
+                          ? (language === 'ar'
+                              ? 'يمكنك إدخال اسمك الآن مرة واحدة فقط.'
+                              : 'You can enter your name now one time only.')
+                          : (language === 'ar'
+                              ? 'تم حفظ الاسم بالفعل ولا يمكن تعديله من هنا.'
+                              : 'Your name is already set and cannot be edited here.')}
+                      </p>
+                    </div>
                   </div>
-                )}
-                
-                {/* Username - Read-only */}
-                <div className="grid gap-2">
-                  <Label htmlFor="username">{t("username", language)}</Label>
-                  <Input
-                    id="username"
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    readOnly={!canSetUsernameOnce}
-                    disabled={loadingUserData || isUpdatingProfile}
-                    placeholder={canSetUsernameOnce ? (language === 'ar' ? 'اختر اسم المستخدم مرة واحدة' : 'Choose your username once') : ''}
-                    className={!canSetUsernameOnce ? "bg-muted cursor-not-allowed" : ""}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {canSetUsernameOnce
-                      ? (language === 'ar'
-                          ? 'يمكنك اختيار اسم المستخدم الآن مرة واحدة فقط.'
-                          : 'You can choose your username now one time only.')
-                      : t("usernameHelpText", language)}
-                  </p>
-                </div>
-                
-                {/* Name - Now read-only */}
-                <div className="grid gap-2">
-                  <Label htmlFor="name">{t("name", language)}</Label>
-                  <Input
-                    id="name"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    readOnly={!canSetNameOnce}
-                    disabled={loadingUserData || isUpdatingProfile}
-                    placeholder={canSetNameOnce ? (language === 'ar' ? 'أدخل اسمك مرة واحدة' : 'Enter your name once') : ''}
-                    className={!canSetNameOnce ? "bg-muted cursor-not-allowed" : ""}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {canSetNameOnce
-                      ? (language === 'ar'
-                          ? 'يمكنك إدخال اسمك الآن مرة واحدة فقط.'
-                          : 'You can enter your name now one time only.')
-                      : (language === 'ar'
-                          ? 'تم حفظ الاسم بالفعل ولا يمكن تعديله من هنا.'
-                          : 'Your name is already set and cannot be edited here.')} 
-                  </p>
-                </div>
 
-                {needsOneTimeProfileSetup && (
-                  <Button
-                    onClick={handleSaveOneTimeProfileSetup}
-                    disabled={isUpdatingProfile || (canSetNameOnce && !name.trim()) || (canSetUsernameOnce && !username.trim())}
-                    className="w-full bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(280,70%,65%)] text-white shadow-[0_0_24px_hsla(210,100%,65%,0.25)]"
-                  >
-                    {isUpdatingProfile
-                      ? (language === 'ar' ? 'جارٍ الحفظ...' : 'Saving...')
-                      : setupButtonLabel}
-                  </Button>
-                )}
-
-                {/* Date of Birth - Enhanced with proper Arabic support */}
-                <div className="grid gap-2">
-                  <Label htmlFor="dob" className="text-base font-medium">
-                    {t("dateOfBirth", language)}
-                  </Label>
-                  
-                  <div className="space-y-3">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal py-6 text-base shadow-sm",
-                            !dateOfBirth && "text-muted-foreground",
-                            language === 'ar' && "text-right"
-                          )}
-                          disabled={isUpdatingDob}
-                        >
-                          <CalendarIcon className={cn("h-5 w-5", language === 'ar' ? "ml-2" : "mr-2")} />
-                          {dateOfBirth ? (
-                            format(dateOfBirth, language === 'ar' ? "dd/MM/yyyy" : "MMM dd, yyyy")
-                          ) : (
-                            t("pickDate", language)
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0 max-w-[calc(100vw-2rem)]" align="center">
-                        <Calendar
-                          mode="single"
-                          selected={dateOfBirth}
-                          onSelect={handleCalendarDateSelect}
-                          disabled={(date) =>
-                            date > new Date() || date < new Date("1900-01-01")
-                          }
-                          initialFocus
-                          className="p-3 pointer-events-auto"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    
-                    <p className="text-xs text-muted-foreground">
-                      {t("dobHelpText", language)}
-                    </p>
-                  </div>
-                  
-                  <div className="mt-2">
-                    <Button 
-                      onClick={handleUpdateDateOfBirth}
-                      disabled={isUpdatingDob || !dateOfBirth}
-                      className="w-full bg-primary/80 hover:bg-primary text-white font-semibold py-6"
+                  {needsOneTimeProfileSetup && (
+                    <Button
+                      onClick={handleSaveOneTimeProfileSetup}
+                      disabled={isUpdatingProfile || (canSetNameOnce && !name.trim()) || (canSetUsernameOnce && !username.trim())}
+                      className="w-full bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(280,70%,65%)] text-white shadow-[0_0_24px_hsla(210,100%,65%,0.25)]"
                     >
-                      {isUpdatingDob
-                        ? t("updating", language)
-                        : t("updateDateOfBirth", language)}
+                      {isUpdatingProfile
+                        ? (language === 'ar' ? 'جارٍ الحفظ...' : 'Saving...')
+                        : setupButtonLabel}
                     </Button>
-                  </div>
-                </div>
+                  )}
+                </CardContent>
+              </Card>
 
-                {/* Email */}
-                <form onSubmit={handleUpdateEmail} className="pt-4 border-t border-border">
+              <Card className="border border-[#d7dbe5] dark:border-border bg-card rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
+                <CardContent className="space-y-6 pt-5 pb-5">
                   <div className="grid gap-2">
-                    <Label htmlFor="email">{t("email", language)}</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      disabled={loadingUserData || isUpdatingEmail}
-                    />
-                  </div>
-                  <div className="mt-4">
-                    <Button 
-                      disabled={isUpdatingEmail || loadingUserData} 
-                      type="submit"
-                    >
-                      {isUpdatingEmail
-                        ? t("updating", language)
-                        : t("updateEmail", language)}
-                    </Button>
-                  </div>
-                </form>
+                    <Label htmlFor="dob" className="text-base font-medium">
+                      {t("dateOfBirth", language)}
+                    </Label>
+                    <div className="space-y-3">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal py-6 text-base border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]",
+                              !dateOfBirth && "text-muted-foreground",
+                              language === 'ar' && "text-right"
+                            )}
+                            disabled={isUpdatingDob}
+                          >
+                            <CalendarIcon className={cn("h-5 w-5", language === 'ar' ? "ml-2" : "mr-2")} />
+                            {dateOfBirth ? (
+                              format(dateOfBirth, language === 'ar' ? "dd/MM/yyyy" : "MMM dd, yyyy")
+                            ) : (
+                              t("pickDate", language)
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0 max-w-[calc(100vw-2rem)]" align="center">
+                          <Calendar
+                            mode="single"
+                            selected={dateOfBirth}
+                            onSelect={handleCalendarDateSelect}
+                            disabled={(date) =>
+                              date > new Date() || date < new Date("1900-01-01")
+                            }
+                            initialFocus
+                            className="p-3 pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
 
-                {/* Password */}
-                <form onSubmit={handleUpdatePassword} className="pt-4 border-t border-border">
-                  <div className="space-y-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="current-password">{t("currentPassword", language)}</Label>
-                      <Input
-                        id="current-password"
-                        type="password"
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        disabled={isUpdatingPassword}
-                      />
+                      <p className="text-xs text-muted-foreground">
+                        {t("dobHelpText", language)}
+                      </p>
                     </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="password">{t("newPassword", language)}</Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        disabled={isUpdatingPassword}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="confirm-password">{t("confirmPassword", language)}</Label>
-                      <Input
-                        id="confirm-password"
-                        type="password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        disabled={isUpdatingPassword}
-                      />
+
+                    <div className="mt-2">
+                      <Button
+                        onClick={handleUpdateDateOfBirth}
+                        disabled={isUpdatingDob || !dateOfBirth}
+                        className="w-full bg-primary/80 hover:bg-primary text-white font-semibold py-6"
+                      >
+                        {isUpdatingDob
+                          ? t("updating", language)
+                          : t("updateDateOfBirth", language)}
+                      </Button>
                     </div>
                   </div>
-                  <div className="mt-4">
-                    <Button 
-                      disabled={isUpdatingPassword || !currentPassword || !password || !confirmPassword}
-                      type="submit"
-                    >
-                      {isUpdatingPassword
-                        ? t("updating", language)
-                        : t("updatePassword", language)}
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
+
+                  <form onSubmit={handleUpdateEmail} className="pt-4 border-t border-[#d7dbe5] dark:border-border">
+                    <div className="grid gap-2">
+                      <Label htmlFor="email">{t("email", language)}</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        disabled={loadingUserData || isUpdatingEmail}
+                        className="border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
+                      />
+                    </div>
+                    <div className="mt-4">
+                      <Button
+                        disabled={isUpdatingEmail || loadingUserData}
+                        type="submit"
+                      >
+                        {isUpdatingEmail
+                          ? t("updating", language)
+                          : t("updateEmail", language)}
+                      </Button>
+                    </div>
+                  </form>
+
+                  <form onSubmit={handleUpdatePassword} className="pt-4 border-t border-[#d7dbe5] dark:border-border">
+                    <div className="space-y-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="current-password">{t("currentPassword", language)}</Label>
+                        <Input
+                          id="current-password"
+                          type="password"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          disabled={isUpdatingPassword}
+                          className="border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
+                        />
+                      </div>
+                      <div className="grid gap-2 md:grid-cols-2 md:gap-6">
+                        <div className="grid gap-2">
+                          <Label htmlFor="password">{t("newPassword", language)}</Label>
+                          <Input
+                            id="password"
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            disabled={isUpdatingPassword}
+                            className="border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="confirm-password">{t("confirmPassword", language)}</Label>
+                          <Input
+                            id="confirm-password"
+                            type="password"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            disabled={isUpdatingPassword}
+                            className="border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <Button
+                        disabled={isUpdatingPassword || !currentPassword || !password || !confirmPassword}
+                        type="submit"
+                      >
+                        {isUpdatingPassword
+                          ? t("updating", language)
+                          : t("updatePassword", language)}
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            </div>
 
             {/* Country + City in one row */}
             <div id="location" className="scroll-mt-24">
