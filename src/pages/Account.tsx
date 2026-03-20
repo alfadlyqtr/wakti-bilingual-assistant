@@ -832,7 +832,14 @@ export default function Account() {
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="wishes" className="rounded-xl text-[11px] font-bold data-[state=active]:bg-[hsl(320,70%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all flex items-center gap-1">
+            <TabsTrigger 
+              value="wishes" 
+              className="rounded-xl text-[11px] font-bold data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all flex items-center gap-1"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate('/wishlists');
+              }}
+            >
               <Gift className="h-3 w-3 shrink-0" />
               {language === 'ar' ? 'الرغبات' : 'Wishes'}
             </TabsTrigger>
@@ -922,7 +929,7 @@ export default function Account() {
                     <Button
                       onClick={handleSaveOneTimeProfileSetup}
                       disabled={isUpdatingProfile || (canSetNameOnce && !name.trim()) || (canSetUsernameOnce && !username.trim())}
-                      className="w-full bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(280,70%,65%)] text-white shadow-[0_0_24px_hsla(210,100%,65%,0.25)]"
+                      className="w-full bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(195,100%,60%)] text-white shadow-[0_0_24px_hsla(210,100%,65%,0.25)]"
                     >
                       {isUpdatingProfile
                         ? (language === 'ar' ? 'جارٍ الحفظ...' : 'Saving...')
@@ -1175,11 +1182,11 @@ export default function Account() {
           {/* ── SOCIAL TAB ─────────────────────────────────────────────────── */}
           <TabsContent value="social" className="pt-4 pb-24">
             <Tabs defaultValue="contacts">
-              <TabsList className="w-full grid grid-cols-2 mb-4 h-10 rounded-2xl bg-black/5 dark:bg-white/5 p-1 border-0">
-                <TabsTrigger value="contacts" className="rounded-xl text-xs font-bold text-foreground/50 data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all">
+              <TabsList className="w-full grid grid-cols-2 mb-4 min-h-12 rounded-2xl bg-black/5 dark:bg-white/5 p-1.5 border-0">
+                <TabsTrigger value="contacts" className="rounded-xl text-sm font-bold text-foreground/50 data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all py-2.5">
                   {language === 'ar' ? 'الأصدقاء' : 'Contacts'}
                 </TabsTrigger>
-                <TabsTrigger value="gallery" className="rounded-xl text-xs font-bold text-foreground/50 data-[state=active]:bg-[hsl(25,95%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all">
+                <TabsTrigger value="gallery" className="rounded-xl text-sm font-bold text-foreground/50 data-[state=active]:bg-[hsl(25,95%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all py-2.5">
                   {language === 'ar' ? 'المعرض' : 'My Gallery'}
                 </TabsTrigger>
               </TabsList>
@@ -1194,110 +1201,19 @@ export default function Account() {
             </Tabs>
           </TabsContent>
 
-          {/* ── WISHES SETTINGS TAB ────────────────────────────────────────── */}
+          {/* ── WISHES TAB ─────────────────────────────────────────────── */}
           <TabsContent value="wishes" className="space-y-4 px-4 pt-4 pb-24">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Gift className="h-5 w-5 text-pink-500" />
-                  {language === 'ar' ? 'إعدادات قوائم الرغبات' : 'Wishlist Settings'}
-                </CardTitle>
-                <CardDescription>
-                  {language === 'ar'
-                    ? 'تحكم في كيفية مشاركة رغباتك مع أصدقائك'
-                    : 'Control how your wishlists are shared with friends'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Default privacy */}
-                <div className="space-y-2">
-                  <Label>{language === 'ar' ? 'الخصوصية الافتراضية' : 'Default Privacy'}</Label>
-                  <Select value={wishesPrivacy} onValueChange={setWishesPrivacy}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="contacts">
-                        <span className="flex items-center gap-2">
-                          <Users className="h-3.5 w-3.5 text-green-500" />
-                          {language === 'ar' ? 'جهات الاتصال فقط' : 'Contacts only'}
-                        </span>
-                      </SelectItem>
-                      <SelectItem value="public">
-                        <span className="flex items-center gap-2">
-                          <Globe className="h-3.5 w-3.5 text-blue-500" />
-                          {language === 'ar' ? 'عام' : 'Public'}
-                        </span>
-                      </SelectItem>
-                      <SelectItem value="private">
-                        <span className="flex items-center gap-2">
-                          <Lock className="h-3.5 w-3.5 text-gray-500" />
-                          {language === 'ar' ? 'خاص' : 'Private'}
-                        </span>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Allow claims */}
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                  <div>
-                    <p className="text-sm font-medium">{language === 'ar' ? 'السماح بالحجز' : 'Allow Claims'}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {language === 'ar' ? 'يسمح للأصدقاء بحجز هداياك' : 'Let friends reserve items from your lists'}
-                    </p>
-                  </div>
-                  <Switch checked={wishesAllowClaims} onCheckedChange={setWishesAllowClaims} />
-                </div>
-
-                {/* Auto approve */}
-                {wishesAllowClaims && (
-                  <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                      <p className="text-sm font-medium">{language === 'ar' ? 'الموافقة التلقائية' : 'Auto-Approve Claims'}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {language === 'ar' ? 'قبول الحجوزات تلقائياً دون مراجعة' : 'Approve friend claims automatically'}
-                      </p>
-                    </div>
-                    <Switch checked={wishesAutoApprove} onCheckedChange={setWishesAutoApprove} />
-                  </div>
-                )}
-
-                {/* Allow sharing */}
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                  <div>
-                    <p className="text-sm font-medium">{language === 'ar' ? 'السماح بالمشاركة' : 'Allow Sharing'}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {language === 'ar' ? 'يسمح لأصدقائك بمشاركة قوائمك' : 'Let friends share your wishlists'}
-                    </p>
-                  </div>
-                  <Switch checked={wishesAllowSharing} onCheckedChange={setWishesAllowSharing} />
-                </div>
-
-                <Button
-                  onClick={handleSaveWishesSettings}
-                  disabled={savingWishesSettings}
-                  className="w-full"
-                >
-                  {savingWishesSettings
-                    ? (language === 'ar' ? 'جارٍ الحفظ...' : 'Saving...')
-                    : (language === 'ar' ? 'حفظ الإعدادات' : 'Save Settings')}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Quick link to My Wishlists page */}
             <Card
-              className="cursor-pointer active:scale-[0.98] transition-all border border-pink-500/20 bg-gradient-to-r from-pink-500/8 to-[hsl(320,70%,55%)]/8"
+              className="cursor-pointer active:scale-[0.98] transition-all border border-blue-500/20 bg-gradient-to-r from-blue-500/8 to-[hsl(210,100%,55%)]/8 min-h-20"
               onClick={() => navigate('/wishlists')}
             >
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[hsl(320,70%,55%)] to-pink-500 flex items-center justify-center">
-                    <GiftIcon className="h-5 w-5 text-white" />
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[hsl(210,100%,55%)] to-blue-500 flex items-center justify-center">
+                    <GiftIcon className="h-6 w-6 text-white" />
                   </div>
                   <div>
-                    <p className="font-semibold text-sm">
+                    <p className="font-semibold text-base">
                       {language === 'ar' ? 'إدارة قوائمي' : 'Manage My Wishlists'}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -1305,7 +1221,7 @@ export default function Account() {
                     </p>
                   </div>
                 </div>
-                <Gift className="h-5 w-5 text-pink-500" />
+                <ChevronRight className="h-6 w-6 text-blue-500" />
               </CardContent>
             </Card>
           </TabsContent>

@@ -447,10 +447,10 @@ export default function MyWishlists() {
       <button
         onClick={() => { setView("my"); setSelectedListId(null); }}
         className={cn(
-          "flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all",
+          "flex-1 min-h-11 px-3 py-3 rounded-xl text-sm font-semibold transition-all active:scale-[0.98]",
           view === "my" || view === "list-detail"
-            ? "bg-gradient-to-r from-[hsl(280,60%,65%)] to-[hsl(320,75%,70%)] text-white shadow-lg"
-            : "bg-muted text-muted-foreground hover:bg-muted/80"
+            ? "bg-[hsl(210,100%,55%)] text-white shadow"
+            : "bg-muted text-muted-foreground"
         )}
       >
         <Gift className="h-4 w-4 inline mr-1.5" />
@@ -459,10 +459,10 @@ export default function MyWishlists() {
       <button
         onClick={() => { setView("friends"); setSelectedFriendListId(null); }}
         className={cn(
-          "flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all",
+          "flex-1 min-h-11 px-3 py-3 rounded-xl text-sm font-semibold transition-all active:scale-[0.98]",
           view === "friends" || view === "friend-list-detail"
-            ? "bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(180,85%,60%)] text-white shadow-lg"
-            : "bg-muted text-muted-foreground hover:bg-muted/80"
+            ? "bg-[hsl(210,100%,55%)] text-white shadow"
+            : "bg-muted text-muted-foreground"
         )}
       >
         <HandHeart className="h-4 w-4 inline mr-1.5" />
@@ -499,33 +499,31 @@ export default function MyWishlists() {
             return (
               <Card
                 key={list.id}
-                className="cursor-pointer hover:shadow-md transition-all active:scale-[0.99] border border-border/60"
+                className="cursor-pointer transition-all active:scale-[0.98] border border-border/60 min-h-24 p-3"
                 onClick={() => { setSelectedListId(list.id); setView("list-detail"); }}
               >
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-base truncate">{list.title}</h3>
-                        <PrivacyIcon className={cn("h-3.5 w-3.5 flex-shrink-0", privacyConfig[list.privacy].color)} />
-                      </div>
-                      {list.description && (
-                        <p className="text-xs text-muted-foreground truncate">{list.description}</p>
-                      )}
-                      <div className="flex items-center gap-3 mt-2">
-                        <span className="text-xs text-muted-foreground">
-                          {list.item_count} {isAr ? "عنصر" : "items"}
-                        </span>
-                        {list.event_date && (
-                          <span className="text-xs text-muted-foreground">
-                            📅 {new Date(list.event_date).toLocaleDateString()}
-                          </span>
-                        )}
-                      </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-base truncate">{list.title}</h3>
+                      <PrivacyIcon className={cn("h-3.5 w-3.5 flex-shrink-0", privacyConfig[list.privacy].color)} />
                     </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0 ml-2" />
+                    {list.description && (
+                      <p className="text-xs text-muted-foreground truncate">{list.description}</p>
+                    )}
+                    <div className="flex items-center gap-3 mt-2">
+                      <span className="text-xs text-muted-foreground">
+                        {list.item_count} {isAr ? "عنصر" : "items"}
+                      </span>
+                      {list.event_date && (
+                        <span className="text-xs text-muted-foreground">
+                          📅 {new Date(list.event_date).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </CardContent>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                </div>
               </Card>
             );
           })}
@@ -576,7 +574,7 @@ export default function MyWishlists() {
         {/* Add Item Button */}
         <Button
           onClick={() => setShowAddItemSheet(true)}
-          className="w-full mb-4 bg-gradient-to-r from-[hsl(280,60%,65%)] to-[hsl(320,75%,70%)] text-white"
+          className="w-full mb-4 bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(195,100%,60%)] text-white"
         >
           <Plus className="h-4 w-4 mr-2" />
           {isAr ? "إضافة رغبة" : "Add a Wish"}
@@ -632,37 +630,35 @@ export default function MyWishlists() {
             return (
               <Card
                 key={list.id}
-                className="cursor-pointer hover:shadow-md transition-all active:scale-[0.99] border border-border/60"
+                className="cursor-pointer transition-all active:scale-[0.98] border border-border/60 min-h-24 p-3"
                 onClick={() => { setSelectedFriendListId(list.id); setView("friend-list-detail"); }}
               >
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-9 w-9 flex-shrink-0">
-                      {fl.owner?.avatar_url && <AvatarImage src={fl.owner.avatar_url} />}
-                      <AvatarFallback>{(fl.owner?.username || "?").slice(0, 2).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className="text-xs text-muted-foreground">@{fl.owner?.username}</span>
-                      </div>
-                      <h3 className="font-semibold text-base truncate">{list.title}</h3>
-                      {list.description && (
-                        <p className="text-xs text-muted-foreground truncate">{list.description}</p>
-                      )}
-                      <div className="flex items-center gap-3 mt-1">
-                        {list.event_date && (
-                          <span className="text-xs text-muted-foreground">
-                            📅 {new Date(list.event_date).toLocaleDateString()}
-                          </span>
-                        )}
-                        {list.allow_claims && (
-                          <span className="text-xs text-green-500">🎁 {isAr ? "يقبل الحجز" : "Claims open"}</span>
-                        )}
-                      </div>
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-9 w-9 flex-shrink-0">
+                    {fl.owner?.avatar_url && <AvatarImage src={fl.owner.avatar_url} />}
+                    <AvatarFallback>{(fl.owner?.username || "?").slice(0, 2).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-xs text-muted-foreground">@{fl.owner?.username}</span>
                     </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                    <h3 className="font-semibold text-base truncate">{list.title}</h3>
+                    {list.description && (
+                      <p className="text-xs text-muted-foreground truncate">{list.description}</p>
+                    )}
+                    <div className="flex items-center gap-3 mt-1">
+                      {list.event_date && (
+                        <span className="text-xs text-muted-foreground">
+                          📅 {new Date(list.event_date).toLocaleDateString()}
+                        </span>
+                      )}
+                      {list.allow_claims && (
+                        <span className="text-xs text-green-500">🎁 {isAr ? "يقبل الحجز" : "Claims open"}</span>
+                      )}
+                    </div>
                   </div>
-                </CardContent>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                </div>
               </Card>
             );
           })}
@@ -726,18 +722,219 @@ export default function MyWishlists() {
     );
   };
 
+  // ─── WishlistItemCard Sub-component ───────────────────────────────────────────
+  interface WishlistItemCardProps {
+    item: WishlistItem;
+    isOwner: boolean;
+    isAr: boolean;
+    allowClaims?: boolean;
+    currentUserId?: string;
+    onDelete?: () => void;
+    onMarkReceived?: () => void;
+    onClaim?: () => void;
+    onUnclaim?: () => void;
+    onGenerateThankYou?: () => Promise<string>;
+  }
+
+  function WishlistItemCard({
+    item, isOwner, isAr, allowClaims = false,
+    currentUserId, onDelete, onMarkReceived, onClaim, onUnclaim, onGenerateThankYou
+  }: WishlistItemCardProps) {
+    const [showThankYou, setShowThankYou] = useState(false);
+    const [thankYouMsg, setThankYouMsg] = useState("");
+    const [generatingTY, setGeneratingTY] = useState(false);
+
+    const isMyClaim = item.claim?.claimer_id === currentUserId;
+    const isClaimedByOther = item.claim && !isMyClaim && item.claim.status !== "unclaimed";
+    const isClaimedByMe = isMyClaim && item.claim?.status !== "unclaimed";
+    const pConfig = priorityConfig[item.priority as keyof typeof priorityConfig] || priorityConfig[2];
+
+    const handleGenerateTY = async () => {
+      if (!onGenerateThankYou) return;
+      setGeneratingTY(true);
+      const msg = await onGenerateThankYou();
+      setThankYouMsg(msg);
+      setGeneratingTY(false);
+      setShowThankYou(true);
+    };
+
+    return (
+      <Card className={cn(
+        "border transition-all",
+        item.is_received && "opacity-60",
+        isClaimedByOther && "border-orange-400/40 bg-orange-500/5"
+      )}>
+        <CardContent className="p-3">
+          <div className="flex gap-3">
+            {/* Image */}
+            {item.image_url && (
+              <img
+                src={item.image_url}
+                alt={item.title}
+                className="w-16 h-16 object-cover rounded-lg flex-shrink-0 border"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className={cn(
+                    "font-semibold text-sm truncate",
+                    item.is_received && "line-through text-muted-foreground"
+                  )}>
+                    {item.title}
+                    {item.ai_extracted && (
+                      <Sparkles className="h-3 w-3 inline ml-1 text-purple-500" />
+                    )}
+                  </p>
+                  {item.description && (
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">{item.description}</p>
+                  )}
+                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    <span className={cn("text-xs font-medium", pConfig.color)}>
+                      {"⭐".repeat(pConfig.stars)}
+                    </span>
+                    {item.price && (
+                      <span className="text-xs text-muted-foreground">{item.price} {item.currency || "USD"}</span>
+                    )}
+                    {item.product_url && (
+                      <a
+                        href={item.product_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-500 flex items-center gap-0.5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        {isAr ? "الرابط" : "Link"}
+                      </a>
+                    )}
+                  </div>
+                </div>
+                {/* Owner actions */}
+                {isOwner && (
+                  <div className="flex gap-1 flex-shrink-0">
+                    {!item.is_received && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-10 w-10 text-green-500"
+                        onClick={onMarkReceived}
+                        title={isAr ? "تم الاستلام" : "Mark received"}
+                      >
+                        <Check className="h-4.5 w-4.5" />
+                      </Button>
+                    )}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-10 w-10 text-red-500"
+                      onClick={onDelete}
+                      title={isAr ? "حذف" : "Delete"}
+                    >
+                      <Trash2 className="h-4.5 w-4.5" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Friend claim status */}
+              {!isOwner && (
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  {item.is_received ? (
+                    <Badge variant="secondary" className="text-xs">
+                      🎁 {isAr ? "تم استلامه" : "Received"}
+                    </Badge>
+                  ) : isClaimedByOther ? (
+                    <Badge className="text-xs bg-orange-500/20 text-orange-600 border-orange-400/30">
+                      🔒 {isAr ? "محجوز من شخص آخر" : "Claimed by someone"}
+                    </Badge>
+                  ) : isClaimedByMe ? (
+                    <div className="flex items-center gap-2">
+                      <Badge className="text-xs bg-green-500/20 text-green-600 border-green-400/30">
+                        ✅ {isAr ? "حجزته أنت" : "Claimed by you"}
+                        {item.claim?.status === "pending" && ` (${isAr ? "في الانتظار" : "pending"})`}
+                      </Badge>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="min-h-10 px-3 text-xs text-muted-foreground"
+                        onClick={onUnclaim}
+                      >
+                        <X className="h-3 w-3 mr-1" />{isAr ? "إلغاء" : "Unclaim"}
+                      </Button>
+                      {item.is_received && !item.claim?.["thank_you_sent"] && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="min-h-10 px-3 text-xs text-blue-500"
+                          onClick={handleGenerateTY}
+                          disabled={generatingTY}
+                        >
+                          {generatingTY ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Heart className="h-3 w-3 mr-1" />}
+                          {isAr ? "شكر AI" : "AI Thank You"}
+                        </Button>
+                      )}
+                    </div>
+                  ) : allowClaims ? (
+                    <Button
+                      size="sm"
+                      className="min-h-11 px-4 text-xs bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(180,85%,60%)] text-white"
+                      onClick={onClaim}
+                    >
+                      <GiftIcon className="h-3.5 w-3.5 mr-1" />
+                      {isAr ? "سأشتريه" : "I'll get this!"}
+                    </Button>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+
+        {/* AI Thank You message popup */}
+        {showThankYou && thankYouMsg && (
+          <div className="mx-3 mb-3 p-3 bg-blue-500/10 border border-blue-400/30 rounded-lg">
+            <div className="flex items-start gap-2">
+              <Heart className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-foreground flex-1">{thankYouMsg}</p>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-5 w-5"
+                onClick={() => setShowThankYou(false)}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
+    );
+  };
+
   // ─── PAGE LAYOUT ─────────────────────────────────────────────────────────────
   return (
     <div className={cn("flex flex-col p-4 pb-28 min-h-screen", isAr && "rtl")}>
       {/* Page Header */}
       <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-[hsl(280,60%,65%)] to-[hsl(320,75%,70%)] bg-clip-text text-transparent">
-            {isAr ? "رغباتي 🎁" : "Wishlists 🎁"}
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {isAr ? "شارك رغباتك مع أصدقائك" : "Share your wishes with friends"}
-          </p>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => window.history.back()}
+            className="h-9 w-9"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(195,100%,60%)] bg-clip-text text-transparent">
+              {isAr ? "رغباتي 🎁" : "Wishlists 🎁"}
+            </h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {isAr ? "شارك رغباتك مع أصدقائك" : "Share your wishes with friends"}
+            </p>
+          </div>
         </div>
         {(view === "my" || view === "list-detail") && view !== "list-detail" && (
           <Button size="sm" onClick={() => setShowNewListDialog(true)}>
@@ -799,28 +996,55 @@ export default function MyWishlists() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="contacts">{isAr ? "جهات الاتصال" : "Contacts"}</SelectItem>
-                    <SelectItem value="public">{isAr ? "عام" : "Public"}</SelectItem>
-                    <SelectItem value="private">{isAr ? "خاص" : "Private"}</SelectItem>
+                    <SelectItem value="contacts">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium">{isAr ? "جهات الاتصال" : "Contacts"}</span>
+                        <span className="text-xs text-muted-foreground">{isAr ? "جميع جهات الاتصال" : "All contacts"}</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="public">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium">{isAr ? "عام" : "Public"}</span>
+                        <span className="text-xs text-muted-foreground">{isAr ? "جميع جهات الاتصال + رابط" : "All contacts + URL"}</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="private">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium">{isAr ? "خاص" : "Private"}</span>
+                        <span className="text-xs text-muted-foreground">{isAr ? "إرسال لجهات اتصال محددة" : "Send to hand-picked contacts"}</span>
+                      </div>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            <div className="flex items-center justify-between rounded-lg border p-3">
+            <button
+              type="button"
+              onClick={() => setNewListAllowClaims((prev) => !prev)}
+              className="flex w-full items-center justify-between rounded-lg border p-4 min-h-16 text-left active:scale-[0.98] transition-transform"
+            >
               <div>
                 <p className="text-sm font-medium">{isAr ? "السماح بالحجز" : "Allow Claims"}</p>
                 <p className="text-xs text-muted-foreground">{isAr ? "يسمح للأصدقاء بحجز عناصر" : "Friends can reserve items"}</p>
               </div>
-              <Switch checked={newListAllowClaims} onCheckedChange={setNewListAllowClaims} />
-            </div>
+              <div onClick={(e) => e.stopPropagation()}>
+                <Switch checked={newListAllowClaims} onCheckedChange={setNewListAllowClaims} />
+              </div>
+            </button>
             {newListAllowClaims && (
-              <div className="flex items-center justify-between rounded-lg border p-3">
+              <button
+                type="button"
+                onClick={() => setNewListAutoApprove((prev) => !prev)}
+                className="flex w-full items-center justify-between rounded-lg border p-4 min-h-16 text-left active:scale-[0.98] transition-transform"
+              >
                 <div>
                   <p className="text-sm font-medium">{isAr ? "الموافقة التلقائية" : "Auto-approve"}</p>
                   <p className="text-xs text-muted-foreground">{isAr ? "قبول الحجوزات تلقائياً" : "Approve claims automatically"}</p>
                 </div>
-                <Switch checked={newListAutoApprove} onCheckedChange={setNewListAutoApprove} />
-              </div>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <Switch checked={newListAutoApprove} onCheckedChange={setNewListAutoApprove} />
+                </div>
+              </button>
             )}
           </div>
           <DialogFooter>
@@ -879,7 +1103,7 @@ export default function MyWishlists() {
                     size="sm"
                     onClick={handleAIExtractURL}
                     disabled={isExtractingAI || !itemUrl.trim()}
-                    className="bg-gradient-to-r from-[hsl(280,60%,65%)] to-[hsl(320,75%,70%)] text-white"
+                    className="bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(195,100%,60%)] text-white"
                   >
                     {isExtractingAI ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                   </Button>
@@ -981,196 +1205,5 @@ export default function MyWishlists() {
         </SheetContent>
       </Sheet>
     </div>
-  );
-}
-
-// ─── WishlistItemCard Sub-component ───────────────────────────────────────────
-interface WishlistItemCardProps {
-  item: WishlistItem;
-  isOwner: boolean;
-  isAr: boolean;
-  allowClaims?: boolean;
-  currentUserId?: string;
-  onDelete?: () => void;
-  onMarkReceived?: () => void;
-  onClaim?: () => void;
-  onUnclaim?: () => void;
-  onGenerateThankYou?: () => Promise<string>;
-}
-
-function WishlistItemCard({
-  item, isOwner, isAr, allowClaims = false,
-  currentUserId, onDelete, onMarkReceived, onClaim, onUnclaim, onGenerateThankYou
-}: WishlistItemCardProps) {
-  const [showThankYou, setShowThankYou] = useState(false);
-  const [thankYouMsg, setThankYouMsg] = useState("");
-  const [generatingTY, setGeneratingTY] = useState(false);
-
-  const isMyClaim = item.claim?.claimer_id === currentUserId;
-  const isClaimedByOther = item.claim && !isMyClaim && item.claim.status !== "unclaimed";
-  const isClaimedByMe = isMyClaim && item.claim?.status !== "unclaimed";
-  const pConfig = priorityConfig[item.priority as keyof typeof priorityConfig] || priorityConfig[2];
-
-  const handleGenerateTY = async () => {
-    if (!onGenerateThankYou) return;
-    setGeneratingTY(true);
-    const msg = await onGenerateThankYou();
-    setThankYouMsg(msg);
-    setGeneratingTY(false);
-    setShowThankYou(true);
-  };
-
-  return (
-    <Card className={cn(
-      "border transition-all",
-      item.is_received && "opacity-60",
-      isClaimedByOther && "border-orange-400/40 bg-orange-500/5"
-    )}>
-      <CardContent className="p-3">
-        <div className="flex gap-3">
-          {/* Image */}
-          {item.image_url && (
-            <img
-              src={item.image_url}
-              alt={item.title}
-              className="w-16 h-16 object-cover rounded-lg flex-shrink-0 border"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-            />
-          )}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <p className={cn(
-                  "font-semibold text-sm truncate",
-                  item.is_received && "line-through text-muted-foreground"
-                )}>
-                  {item.title}
-                  {item.ai_extracted && (
-                    <Sparkles className="h-3 w-3 inline ml-1 text-purple-500" />
-                  )}
-                </p>
-                {item.description && (
-                  <p className="text-xs text-muted-foreground truncate mt-0.5">{item.description}</p>
-                )}
-                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                  <span className={cn("text-xs font-medium", pConfig.color)}>
-                    {"⭐".repeat(pConfig.stars)}
-                  </span>
-                  {item.price && (
-                    <span className="text-xs text-muted-foreground">{item.price} {item.currency || "USD"}</span>
-                  )}
-                  {item.product_url && (
-                    <a
-                      href={item.product_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-500 flex items-center gap-0.5"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      {isAr ? "الرابط" : "Link"}
-                    </a>
-                  )}
-                </div>
-              </div>
-              {/* Owner actions */}
-              {isOwner && (
-                <div className="flex gap-1 flex-shrink-0">
-                  {!item.is_received && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-green-500 hover:bg-green-500/10"
-                      onClick={onMarkReceived}
-                      title={isAr ? "تم الاستلام" : "Mark received"}
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 text-red-500 hover:bg-red-500/10"
-                    onClick={onDelete}
-                    title={isAr ? "حذف" : "Delete"}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {/* Friend claim status */}
-            {!isOwner && (
-              <div className="mt-2 flex items-center gap-2 flex-wrap">
-                {item.is_received ? (
-                  <Badge variant="secondary" className="text-xs">
-                    🎁 {isAr ? "تم استلامه" : "Received"}
-                  </Badge>
-                ) : isClaimedByOther ? (
-                  <Badge className="text-xs bg-orange-500/20 text-orange-600 border-orange-400/30">
-                    🔒 {isAr ? "محجوز من شخص آخر" : "Claimed by someone"}
-                  </Badge>
-                ) : isClaimedByMe ? (
-                  <div className="flex items-center gap-2">
-                    <Badge className="text-xs bg-green-500/20 text-green-600 border-green-400/30">
-                      ✅ {isAr ? "حجزته أنت" : "Claimed by you"}
-                      {item.claim?.status === "pending" && ` (${isAr ? "في الانتظار" : "pending"})`}
-                    </Badge>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 text-xs text-muted-foreground"
-                      onClick={onUnclaim}
-                    >
-                      <X className="h-3 w-3 mr-1" />{isAr ? "إلغاء" : "Unclaim"}
-                    </Button>
-                    {item.is_received && !item.claim?.["thank_you_sent"] && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 text-xs text-pink-500"
-                        onClick={handleGenerateTY}
-                        disabled={generatingTY}
-                      >
-                        {generatingTY ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Heart className="h-3 w-3 mr-1" />}
-                        {isAr ? "شكر AI" : "AI Thank You"}
-                      </Button>
-                    )}
-                  </div>
-                ) : allowClaims ? (
-                  <Button
-                    size="sm"
-                    className="h-7 text-xs bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(180,85%,60%)] text-white"
-                    onClick={onClaim}
-                  >
-                    <GiftIcon className="h-3.5 w-3.5 mr-1" />
-                    {isAr ? "سأشتريه" : "I'll get this!"}
-                  </Button>
-                ) : null}
-              </div>
-            )}
-          </div>
-        </div>
-      </CardContent>
-
-      {/* AI Thank You message popup */}
-      {showThankYou && thankYouMsg && (
-        <div className="mx-3 mb-3 p-3 bg-pink-500/10 border border-pink-400/30 rounded-lg">
-          <div className="flex items-start gap-2">
-            <Heart className="h-4 w-4 text-pink-500 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-foreground flex-1">{thankYouMsg}</p>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-5 w-5"
-              onClick={() => setShowThankYou(false)}
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
-      )}
-    </Card>
   );
 }
