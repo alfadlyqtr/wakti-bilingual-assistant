@@ -27,7 +27,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User, CreditCard, CheckCircle, XCircle, Clock, RefreshCw, Sparkles, Sun, Users, Gift, Globe, Lock, GiftIcon, ChevronRight } from "lucide-react";
+import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User, CreditCard, CheckCircle, XCircle, Clock, RefreshCw, Sparkles, Sun, Users, Gift, Globe, Lock, GiftIcon, ChevronRight, Plus } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -50,6 +50,97 @@ function ContactsEmbedded({ language }: { language: string }) {
       activeTab={activeTab}
       setActiveTab={setActiveTab}
     />
+  );
+}
+
+function WishlistsEmbedded({ language, userId, navigate }: { language: string; userId?: string; navigate: any }) {
+  const { data: wishlists = [], isLoading } = useQuery({
+    queryKey: ["wishlists", userId],
+    queryFn: async () => {
+      if (!userId) return [];
+      const { data, error } = await supabase
+        .from("wishlists")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!userId,
+  });
+
+  const privacyConfig = {
+    public: { icon: Globe, label: { en: "Public", ar: "عام" }, color: "text-blue-500" },
+    contacts: { icon: Users, label: { en: "Contacts", ar: "جهات الاتصال" }, color: "text-green-500" },
+    private: { icon: Lock, label: { en: "Private", ar: "خاص" }, color: "text-gray-500" },
+  };
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold">{language === 'ar' ? 'قوائم الرغبات' : 'My Wishlists'}</h2>
+        <Button size="sm" onClick={() => navigate('/wishlists')}>
+          <Plus className="h-4 w-4 mr-1" />
+          {language === 'ar' ? 'جديد' : 'New'}
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : wishlists.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+            <GiftIcon className="h-12 w-12 text-muted-foreground mb-3" />
+            <p className="text-sm font-medium mb-1">
+              {language === 'ar' ? 'لا توجد قوائم بعد' : 'No wishlists yet'}
+            </p>
+            <p className="text-xs text-muted-foreground mb-4">
+              {language === 'ar' ? 'أنشئ قائمتك الأولى وشاركها مع أصدقائك' : 'Create your first list and share it with friends'}
+            </p>
+            <Button size="sm" onClick={() => navigate('/wishlists')}>
+              <Plus className="h-4 w-4 mr-1" />
+              {language === 'ar' ? 'إنشاء قائمة' : 'Create Wishlist'}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {wishlists.map((list: any) => {
+            const PrivacyIcon = privacyConfig[list.privacy as keyof typeof privacyConfig].icon;
+            return (
+              <Card
+                key={list.id}
+                className="cursor-pointer transition-all active:scale-[0.99] border border-border/60"
+                onClick={() => navigate(`/wishlists?list=${list.id}`)}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-base truncate">{list.title}</h3>
+                        <PrivacyIcon className={cn("h-3.5 w-3.5 flex-shrink-0", privacyConfig[list.privacy as keyof typeof privacyConfig].color)} />
+                      </div>
+                      {list.description && (
+                        <p className="text-xs text-muted-foreground truncate mb-2">{list.description}</p>
+                      )}
+                      {list.event_date && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <CalendarIcon className="h-3 w-3" />
+                          {new Date(list.event_date).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US')}
+                        </p>
+                      )}
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -832,14 +923,7 @@ export default function Account() {
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger 
-              value="wishes" 
-              className="rounded-xl text-[11px] font-bold data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all flex items-center gap-1"
-              onClick={(e) => {
-                e.preventDefault();
-                navigate('/wishlists');
-              }}
-            >
+            <TabsTrigger value="wishes" className="rounded-xl text-[11px] font-bold data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all flex items-center gap-1">
               <Gift className="h-3 w-3 shrink-0" />
               {language === 'ar' ? 'الرغبات' : 'Wishes'}
             </TabsTrigger>
@@ -1203,27 +1287,7 @@ export default function Account() {
 
           {/* ── WISHES TAB ─────────────────────────────────────────────── */}
           <TabsContent value="wishes" className="space-y-4 px-4 pt-4 pb-24">
-            <Card
-              className="cursor-pointer active:scale-[0.98] transition-all border border-blue-500/20 bg-gradient-to-r from-blue-500/8 to-[hsl(210,100%,55%)]/8 min-h-20"
-              onClick={() => navigate('/wishlists')}
-            >
-              <CardContent className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[hsl(210,100%,55%)] to-blue-500 flex items-center justify-center">
-                    <GiftIcon className="h-6 w-6 text-white" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-base">
-                      {language === 'ar' ? 'إدارة قوائمي' : 'Manage My Wishlists'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {language === 'ar' ? 'إنشاء وتعديل قوائم رغباتك' : 'Create and manage your wishlist items'}
-                    </p>
-                  </div>
-                </div>
-                <ChevronRight className="h-6 w-6 text-blue-500" />
-              </CardContent>
-            </Card>
+            <WishlistsEmbedded language={language} userId={user?.id} navigate={navigate} />
           </TabsContent>
 
           <TabsContent value="billing" className="space-y-4 px-4 pt-4 pb-24">

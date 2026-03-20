@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -102,11 +102,21 @@ export default function MyWishlists() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isAr = language === "ar";
+  const [searchParams] = useSearchParams();
 
   // View state: "my" | "friends" | "list-detail" | "friend-list-detail"
   const [view, setView] = useState<"my" | "friends" | "list-detail" | "friend-list-detail">("my");
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [selectedFriendListId, setSelectedFriendListId] = useState<string | null>(null);
+
+  // Check for list query parameter and auto-open that list
+  useEffect(() => {
+    const listId = searchParams.get('list');
+    if (listId) {
+      setSelectedListId(listId);
+      setView('list-detail');
+    }
+  }, [searchParams]);
 
   // Dialogs
   const [showNewListDialog, setShowNewListDialog] = useState(false);
@@ -548,9 +558,14 @@ export default function MyWishlists() {
       <div>
         {/* Back + Header */}
         <div className="flex items-center gap-3 mb-4">
-          <Button variant="ghost" size="icon" onClick={() => { setView("my"); setSelectedListId(null); }}>
+          <button 
+            onClick={() => navigate('/account?tab=wishes')}
+            className="flex items-center justify-center h-10 w-10 rounded-full bg-gradient-to-br from-[hsl(210,100%,55%)] to-[hsl(195,100%,50%)] text-white shadow-lg active:scale-95 transition-transform"
+            aria-label={isAr ? "رجوع" : "Back"}
+            title={isAr ? "رجوع" : "Back"}
+          >
             <ArrowLeft className="h-5 w-5" />
-          </Button>
+          </button>
           <div className="flex-1 min-w-0">
             <h2 className="font-bold text-lg truncate">{selectedList.title}</h2>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -918,23 +933,13 @@ export default function MyWishlists() {
     <div className={cn("flex flex-col p-4 pb-28 min-h-screen", isAr && "rtl")}>
       {/* Page Header */}
       <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => window.history.back()}
-            className="h-9 w-9"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(195,100%,60%)] bg-clip-text text-transparent">
-              {isAr ? "رغباتي 🎁" : "Wishlists 🎁"}
-            </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {isAr ? "شارك رغباتك مع أصدقائك" : "Share your wishes with friends"}
-            </p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(195,100%,60%)] bg-clip-text text-transparent">
+            {isAr ? "رغباتي" : "Wishlists"}
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {isAr ? "شارك رغباتك مع أصدقائك" : "Share your wishes with friends"}
+          </p>
         </div>
         {(view === "my" || view === "list-detail") && view !== "list-detail" && (
           <Button size="sm" onClick={() => setShowNewListDialog(true)}>
