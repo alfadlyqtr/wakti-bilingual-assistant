@@ -43,6 +43,7 @@ export default function Signup() {
   const [countdown, setCountdown] = useState(10);
   const [emailCaptured, setEmailCaptured] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -54,23 +55,74 @@ export default function Signup() {
   const passwordRef = useRef<HTMLInputElement | null>(null);
   const MAX_RECORD_SECONDS = 10;
 
-  // Auto-Greeting Logic
+  // Auto-Greeting Logic - Play welcome audio on page load with word highlighting
   useEffect(() => {
     const playGreeting = async () => {
       if (audioRef.current) {
         audioRef.current.src = language === 'ar' ? '/welcome to wakti arabic.mp3' : '/welcome to wakti english.mp3';
-        audioRef.current.onplay  = () => setIsPlayingAudio(true);
-        audioRef.current.onended = () => setIsPlayingAudio(false);
-        audioRef.current.onpause = () => setIsPlayingAudio(false);
+        audioRef.current.onplay = () => {
+          setIsPlayingAudio(true);
+          setCurrentWordIndex(0);
+        };
+        audioRef.current.onended = () => {
+          setIsPlayingAudio(false);
+          setCurrentWordIndex(-1);
+        };
+        audioRef.current.onpause = () => {
+          setIsPlayingAudio(false);
+          setCurrentWordIndex(-1);
+        };
+        
+        // Word highlighting timing (approximate based on typical speech pace)
+        const words = language === 'ar' 
+          ? ['أهلاً', '!', 'شكراً', 'لانضمامك', 'إلينا', '،', 'يرجى', 'إدخال', 'بريدك', 'الإلكتروني', 'وكلمة', 'المرور', 'للبدء', '.']
+          : ['Hi', '!', 'Thanks', 'for', 'joining', 'us', '.', 'Please', 'enter', 'your', 'email', 'and', 'password', 'to', 'get', 'started', '.'];
+        
+        const wordTimings = language === 'ar'
+          ? [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5] // Arabic - 7 seconds (14 words)
+          : [0, 0.28, 0.56, 0.84, 1.12, 1.4, 1.68, 1.96, 2.24, 2.52, 2.8, 3.08, 3.36, 3.64, 3.92, 4.2, 4.48, 4.8]; // English - 5 seconds (18 words)
+        
+        // Set up word highlighting intervals
+        const highlightIntervals: NodeJS.Timeout[] = [];
+        
+        words.forEach((_, index) => {
+          if (wordTimings[index] !== undefined) {
+            const timeout = setTimeout(() => {
+              setCurrentWordIndex(index);
+            }, wordTimings[index] * 1000);
+            highlightIntervals.push(timeout);
+          }
+        });
+        
+        // Clear intervals on audio end
+        const clearHighlights = () => {
+          highlightIntervals.forEach(clearTimeout);
+          setCurrentWordIndex(-1);
+        };
+        
+        audioRef.current.addEventListener('ended', clearHighlights);
+        audioRef.current.addEventListener('pause', clearHighlights);
+        
         try {
           await audioRef.current.play();
           setAudioUnlocked(true);
         } catch (e) {
           console.warn('Auto-play blocked, waiting for interaction', e);
+          clearHighlights();
         }
       }
     };
+    
+    // Auto-play on page load
     playGreeting();
+    
+    // Cleanup
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.removeEventListener('ended', () => {});
+        audioRef.current.removeEventListener('pause', () => {});
+      }
+    };
   }, [language]);
 
   // Clean up email from transcription
@@ -803,112 +855,84 @@ export default function Signup() {
         </div>
 
         {/* ── Main layout: everything fits in remaining height ── */}
-        <div className="relative z-10 flex flex-col items-center justify-center flex-1 overflow-hidden px-5 pb-3 gap-3">
+        <div className="relative z-10 flex flex-col items-center justify-center flex-1 overflow-hidden px-5 pb-3">
 
           {/* ── Logo ── */}
-          <div className="flex-shrink-0 cursor-pointer" onClick={() => navigate("/")}>
-            <Logo3D size="lg" />
-          </div>
-
-          {/* ── Siri Orb ── */}
-          <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
-            <button
-              onMouseDown={handleHoldStart}
-              onMouseUp={handleHoldEnd}
-              onMouseLeave={handleHoldEnd}
-              onTouchStart={handleHoldStart}
-              onTouchEnd={handleHoldEnd}
-              onContextMenu={(e) => e.preventDefault()}
-              className={cn("siri-wrap focus:outline-none", (isRecording || isPlayingAudio) && "siri-active")}
-              aria-label={language === 'ar' ? 'اضغط وتحدث' : 'Hold to speak your email'}
-            >
-              <div className="siri-ripple" />
-              <div className="siri-ripple siri-ripple-2" />
-              <div className="siri-ripple siri-ripple-3" />
-              <div className="siri-shell" />
-              <div className="siri-lobe1" />
-              <div className="siri-lobe2" />
-              <div className="siri-lobe3" />
-              <div className="siri-lobe4" />
-              <div className="siri-specular" />
-            </button>
-
-            {/* Status hint */}
-            <motion.p
-              key={isRecording ? 'rec' : 'idle'}
-              initial={{ opacity: 0, y: 3 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-[10px] font-semibold tracking-[0.18em] uppercase"
-              style={{ color: isRecording ? 'hsl(180,85%,60%)' : fgHi('0.3') }}
-            >
-              {isRecording
-                ? (language === 'ar' ? `جارٍ الاستماع · ${countdown}` : `Listening · ${countdown}s`)
-                : (language === 'ar' ? 'اضغط باستمرار للتحدث' : 'Hold to speak your email')}
-            </motion.p>
-
-            {/* Audio mini player */}
-            <AnimatePresence>
-              {isPlayingAudio && (
-                <motion.button
-                  type="button"
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  transition={{ duration: 0.2 }}
-                  onClick={() => {
-                    if (audioRef.current) {
-                      audioRef.current.pause();
-                      setIsPlayingAudio(false);
-                    }
-                  }}
-                  className="su-audio-btn"
-                  aria-label="Pause"
-                >
-                  <Pause className="w-3 h-3" />
-                </motion.button>
-              )}
-              {!isPlayingAudio && audioUnlocked && (
-                <motion.button
-                  type="button"
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  transition={{ duration: 0.2 }}
-                  onClick={() => {
-                    if (audioRef.current) {
-                      audioRef.current.currentTime = 0;
-                      audioRef.current.play();
-                    }
-                  }}
-                  className="su-audio-btn"
-                  aria-label="Play"
-                >
-                  <Play className="w-3 h-3" />
-                </motion.button>
-              )}
-            </AnimatePresence>
-
-            {/* Email captured banner */}
-            <AnimatePresence>
-              {emailCaptured && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.92, y: 6 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.3 }}
-                  className="px-4 py-2 rounded-2xl text-xs font-medium text-center"
-                  style={{
-                    background: dk ? 'hsla(142,76%,55%,0.1)' : 'hsla(142,60%,45%,0.08)',
-                    border: '1px solid hsla(142,76%,55%,0.22)',
-                    color: dk ? 'hsl(142,76%,62%)' : 'hsl(142,55%,32%)',
-                  }}
-                >
-                  {language === 'ar'
-                    ? '✓ شكراً! اكتب كلمة المرور لخصوصيتك — لا تقلها بصوت.'
-                    : '✓ Thank you! Now type your password for privacy — don\u2019t say it.'}
-                </motion.div>
-              )}
-            </AnimatePresence>
+          <div className="flex flex-col items-center gap-6 mb-4">
+            <div className="cursor-pointer" onClick={() => navigate("/")}>
+              <Logo3D size="lg" />
+            </div>
+            
+            {/* Welcome message with word highlighting */}
+            <div className="text-center space-y-2">
+              <h1
+                className="text-3xl font-bold tracking-tight"
+                style={{
+                  background: 'linear-gradient(135deg, var(--foreground) 0%, hsl(210, 60%, 55%) 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}
+              >
+                {language === 'en' ? 'Create Account' : 'إنشاء حساب'}
+              </h1>
+              <p className="text-sm text-muted-foreground max-w-[320px] mx-auto leading-relaxed">
+                {language === 'ar' ? (
+                  <span className="inline-block">
+                    {['أهلاً', '!', 'شكراً', 'لانضمامك', 'إلينا', '،', 'يرجى', 'إدخال', 'بريدك', 'الإلكتروني', 'وكلمة', 'المرور', 'للبدء', '.'].map((word, index) => (
+                      <motion.span
+                        key={index}
+                        initial={{ color: 'hsl(var(--muted-foreground))' }}
+                        animate={{
+                          color: currentWordIndex === index && isPlayingAudio 
+                            ? 'hsl(142, 76%, 55%)' // GREEN color for highlighted words
+                            : 'hsl(var(--muted-foreground))',
+                          scale: currentWordIndex === index && isPlayingAudio ? 1.1 : 1,
+                          fontWeight: currentWordIndex === index && isPlayingAudio ? 600 : 400
+                        }}
+                        transition={{ duration: 0.2 }}
+                        className="inline-block"
+                        style={{
+                          marginRight: word === '،' || word === '.' ? '0.2rem' : '0.3rem',
+                          marginLeft: word === '،' || word === '.' ? '0.2rem' : '0',
+                          textShadow: currentWordIndex === index && isPlayingAudio 
+                            ? '0 0 15px hsla(142, 76%, 55%, 0.4)' // GREEN glow - reduced to prevent flickering
+                            : 'none'
+                        }}
+                      >
+                        {word}
+                      </motion.span>
+                    ))}
+                  </span>
+                ) : (
+                  <span className="inline-block">
+                    {['Hi', '!', 'Thanks', 'for', 'joining', 'us', '.', 'Please', 'enter', 'your', 'email', 'and', 'password', 'to', 'get', 'started', '.'].map((word, index) => (
+                      <motion.span
+                        key={index}
+                        initial={{ color: 'hsl(var(--muted-foreground))' }}
+                        animate={{
+                          color: currentWordIndex === index && isPlayingAudio 
+                            ? 'hsl(142, 76%, 55%)' // GREEN color for highlighted words
+                            : 'hsl(var(--muted-foreground))',
+                          scale: currentWordIndex === index && isPlayingAudio ? 1.1 : 1,
+                          fontWeight: currentWordIndex === index && isPlayingAudio ? 600 : 400
+                        }}
+                        transition={{ duration: 0.2 }}
+                        className="inline-block"
+                        style={{
+                          marginRight: word === '.' || word === '!' ? '0.4rem' : '0.25rem',
+                          textShadow: currentWordIndex === index && isPlayingAudio 
+                            ? '0 0 15px hsla(142, 76%, 55%, 0.4)' // GREEN glow - reduced to prevent flickering
+                            : 'none'
+                        }}
+                      >
+                        {word}
+                      </motion.span>
+                    ))}
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
 
           {/* ── Glass form panel ── */}

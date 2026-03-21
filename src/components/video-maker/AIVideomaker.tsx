@@ -1220,7 +1220,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           </div>
 
           {/* Unified content area */}
-          <div className={`grid grid-cols-1 ${generationMode === 'image_to_video' ? 'xl:grid-cols-[280px_1fr]' : generationMode === '2images_to_video' ? 'xl:grid-cols-[560px_1fr]' : ''} gap-4 items-start`}>
+          <div className={`grid grid-cols-1 ${generationMode === 'image_to_video' ? 'xl:grid-cols-[280px_1fr]' : ''} gap-5 items-start`}>
             {/* Single image upload - only shown in image_to_video mode */}
             {generationMode === 'image_to_video' && (
               <div className="relative">
@@ -1307,31 +1307,29 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
             {/* Dual image upload - only shown in 2images_to_video mode */}
             {generationMode === '2images_to_video' && (
-              <div className="relative grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="relative grid grid-cols-2 gap-2 sm:gap-3">
                 {/* First Image */}
                 <div className="relative">
                   <div className="mb-1.5 flex items-center gap-1.5">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-[hsl(210,100%,65%)]/20 to-[hsl(180,85%,60%)]/20 border border-[hsl(210,100%,65%)]/30 text-[hsl(210,100%,65%)]">
-                      <span>▶</span> {language === 'ar' ? 'إطار البداية' : 'Start Frame'}
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-[hsl(210,100%,65%)]/20 to-[hsl(180,85%,60%)]/20 border border-[hsl(210,100%,65%)]/30 text-[hsl(210,100%,65%)] truncate max-w-full">
+                      <span>▶</span> <span className="truncate">{language === 'ar' ? 'البداية' : 'Start'}</span>
                     </span>
                   </div>
                   {!imagePreview ? (
-                    <div className="h-full min-h-[180px] flex flex-col gap-2">
+                    <div className="h-full min-h-[140px] sm:min-h-[180px] flex flex-col gap-1.5 sm:gap-2">
                       <div
                         onClick={() => fileInputRef.current?.click()}
                         className="relative cursor-pointer group flex-1"
                       >
-                        <div className="h-full rounded-2xl border-2 border-dashed border-primary/40 bg-gradient-to-br from-[hsl(210,100%,65%)]/5 via-[hsl(180,85%,60%)]/5 to-[hsl(160,80%,55%)]/5 flex flex-col items-center justify-center gap-2 transition-all hover:border-primary hover:shadow-[0_0_30px_hsla(210,100%,65%,0.3)] active:scale-[0.98]">
-                          <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#060541] to-[hsl(210,100%,35%)] shadow-lg shadow-primary/40 group-hover:shadow-xl group-hover:shadow-primary/50 transition-all group-hover:scale-105">
-                            <Upload className="h-5 w-5 text-white" />
+                        <div className="h-full rounded-xl sm:rounded-2xl border-2 border-dashed border-primary/40 bg-gradient-to-br from-[hsl(210,100%,65%)]/5 via-[hsl(180,85%,60%)]/5 to-[hsl(160,80%,55%)]/5 flex flex-col items-center justify-center gap-1.5 sm:gap-2 transition-all hover:border-primary hover:shadow-[0_0_30px_hsla(210,100%,65%,0.3)] active:scale-[0.98] py-2">
+                          <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-[#060541] to-[hsl(210,100%,35%)] shadow-lg shadow-primary/40 group-hover:shadow-xl group-hover:shadow-primary/50 transition-all group-hover:scale-105">
+                            <Upload className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                           </div>
-                          <div className="text-center px-2">
-                            <p className="font-semibold text-xs">
+                          <div className="text-center px-1">
+                            <p className="font-semibold text-[10px] sm:text-xs">
                               {language === 'ar' ? 'صورة البداية' : 'Start Image'}
                             </p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">
-                              {language === 'ar' ? 'PNG, JPG' : 'PNG, JPG'}
-                            </p>
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5">PNG, JPG</p>
                           </div>
                         </div>
                       </div>
@@ -1339,19 +1337,19 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         onClick={() => { setPickingForSlot(1); setShowSavedPicker(true); fetchSavedImages(); }}
                         className="relative cursor-pointer group"
                       >
-                        <div className="rounded-xl border-2 border-dashed border-orange-400/40 bg-gradient-to-br from-orange-500/5 via-amber-500/5 to-orange-400/5 flex items-center justify-center gap-2 py-2 px-3 transition-all hover:border-orange-500 hover:shadow-[0_0_20px_hsla(25,95%,60%,0.3)] active:scale-[0.98]">
-                          <div className="p-1.5 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 shadow-lg shadow-orange-500/30 group-hover:shadow-xl group-hover:shadow-orange-500/40 transition-all group-hover:scale-105">
-                            <GalleryHorizontalEnd className="h-3 w-3 text-white" />
+                        <div className="rounded-lg sm:rounded-xl border-2 border-dashed border-orange-400/40 bg-gradient-to-br from-orange-500/5 via-amber-500/5 to-orange-400/5 flex items-center justify-center gap-1.5 py-1.5 px-2 sm:py-2 sm:px-3 transition-all hover:border-orange-500 active:scale-[0.98]">
+                          <div className="p-1 sm:p-1.5 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 shadow-lg shadow-orange-500/30 transition-all group-hover:scale-105">
+                            <GalleryHorizontalEnd className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-white" />
                           </div>
-                          <p className="font-semibold text-xs">
+                          <p className="font-semibold text-[10px] sm:text-xs">
                             {language === 'ar' ? 'من المحفوظات' : 'From Saved'}
                           </p>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="relative h-full min-h-[180px]">
-                      <div className="h-full rounded-2xl overflow-hidden bg-black/90 shadow-2xl shadow-black/50 ring-2 ring-primary/30">
+                    <div className="relative h-full min-h-[140px] sm:min-h-[180px]">
+                      <div className="h-full rounded-xl sm:rounded-2xl overflow-hidden bg-black/90 shadow-2xl shadow-black/50 ring-2 ring-primary/30">
                         <img
                           src={imagePreview}
                           alt="First"
@@ -1361,17 +1359,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       <Button
                         variant="destructive"
                         size="icon"
-                        className="absolute top-2 right-2 h-7 w-7 rounded-full shadow-lg bg-red-500 hover:bg-red-600"
+                        className="absolute top-1.5 right-1.5 h-6 w-6 sm:h-7 sm:w-7 rounded-full shadow-lg bg-red-500 hover:bg-red-600"
                         onClick={clearImage}
                         disabled={isGenerating}
                       >
-                        <X className="h-3.5 w-3.5" />
+                        <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                       </Button>
-                      <div className="absolute bottom-2 left-2 right-2">
+                      <div className="absolute bottom-1.5 left-1.5 right-1.5">
                         <Button
                           variant="secondary"
                           size="sm"
-                          className="w-full h-7 text-xs bg-white/90 hover:bg-white text-black rounded-lg shadow-lg"
+                          className="w-full h-6 sm:h-7 text-[10px] sm:text-xs bg-white/90 hover:bg-white text-black rounded-lg shadow-lg"
                           onClick={() => fileInputRef.current?.click()}
                           disabled={isGenerating}
                         >
@@ -1393,27 +1391,25 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 {/* Second Image */}
                 <div className="relative">
                   <div className="mb-1.5 flex items-center gap-1.5">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-[hsl(280,70%,65%)]/20 to-[hsl(320,75%,70%)]/20 border border-[hsl(280,70%,65%)]/30 text-[hsl(280,70%,65%)]">
-                      <span>⏹</span> {language === 'ar' ? 'إطار النهاية (اختياري)' : 'End Frame (optional)'}
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-[hsl(280,70%,65%)]/20 to-[hsl(320,75%,70%)]/20 border border-[hsl(280,70%,65%)]/30 text-[hsl(280,70%,65%)] truncate max-w-full">
+                      <span>⏹</span> <span className="truncate">{language === 'ar' ? 'النهاية' : 'End'}</span>
                     </span>
                   </div>
                   {!imagePreview2 ? (
-                    <div className="h-full min-h-[180px] flex flex-col gap-2">
+                    <div className="h-full min-h-[140px] sm:min-h-[180px] flex flex-col gap-1.5 sm:gap-2">
                       <div
                         onClick={() => fileInputRef2.current?.click()}
                         className="relative cursor-pointer group flex-1"
                       >
-                        <div className="h-full rounded-2xl border-2 border-dashed border-purple-400/40 bg-gradient-to-br from-[hsl(280,70%,65%)]/5 via-[hsl(320,75%,70%)]/5 to-[hsl(280,60%,75%)]/5 flex flex-col items-center justify-center gap-2 transition-all hover:border-purple-500 hover:shadow-[0_0_30px_hsla(280,70%,65%,0.3)] active:scale-[0.98]">
-                          <div className="p-2.5 rounded-xl bg-gradient-to-br from-purple-600 to-pink-500 shadow-lg shadow-purple-500/40 group-hover:shadow-xl group-hover:shadow-purple-500/50 transition-all group-hover:scale-105">
-                            <Upload className="h-5 w-5 text-white" />
+                        <div className="h-full rounded-xl sm:rounded-2xl border-2 border-dashed border-purple-400/40 bg-gradient-to-br from-[hsl(280,70%,65%)]/5 via-[hsl(320,75%,70%)]/5 to-[hsl(280,60%,75%)]/5 flex flex-col items-center justify-center gap-1.5 sm:gap-2 transition-all hover:border-purple-500 hover:shadow-[0_0_30px_hsla(280,70%,65%,0.3)] active:scale-[0.98] py-2">
+                          <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-purple-600 to-pink-500 shadow-lg shadow-purple-500/40 group-hover:shadow-xl group-hover:shadow-purple-500/50 transition-all group-hover:scale-105">
+                            <Upload className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                           </div>
-                          <div className="text-center px-2">
-                            <p className="font-semibold text-xs">
+                          <div className="text-center px-1">
+                            <p className="font-semibold text-[10px] sm:text-xs">
                               {language === 'ar' ? 'صورة النهاية' : 'End Image'}
                             </p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">
-                              {language === 'ar' ? 'PNG, JPG' : 'PNG, JPG'}
-                            </p>
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5">PNG, JPG</p>
                           </div>
                         </div>
                       </div>
@@ -1421,19 +1417,19 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         onClick={() => { setPickingForSlot(2); setShowSavedPicker(true); fetchSavedImages(); }}
                         className="relative cursor-pointer group"
                       >
-                        <div className="rounded-xl border-2 border-dashed border-orange-400/40 bg-gradient-to-br from-orange-500/5 via-amber-500/5 to-orange-400/5 flex items-center justify-center gap-2 py-2 px-3 transition-all hover:border-orange-500 hover:shadow-[0_0_20px_hsla(25,95%,60%,0.3)] active:scale-[0.98]">
-                          <div className="p-1.5 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 shadow-lg shadow-orange-500/30 group-hover:shadow-xl group-hover:shadow-orange-500/40 transition-all group-hover:scale-105">
-                            <GalleryHorizontalEnd className="h-3 w-3 text-white" />
+                        <div className="rounded-lg sm:rounded-xl border-2 border-dashed border-orange-400/40 bg-gradient-to-br from-orange-500/5 via-amber-500/5 to-orange-400/5 flex items-center justify-center gap-1.5 py-1.5 px-2 sm:py-2 sm:px-3 transition-all hover:border-orange-500 active:scale-[0.98]">
+                          <div className="p-1 sm:p-1.5 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 shadow-lg shadow-orange-500/30 transition-all group-hover:scale-105">
+                            <GalleryHorizontalEnd className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-white" />
                           </div>
-                          <p className="font-semibold text-xs">
+                          <p className="font-semibold text-[10px] sm:text-xs">
                             {language === 'ar' ? 'من المحفوظات' : 'From Saved'}
                           </p>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="relative h-full min-h-[180px]">
-                      <div className="h-full rounded-2xl overflow-hidden bg-black/90 shadow-2xl shadow-black/50 ring-2 ring-purple-500/30">
+                    <div className="relative h-full min-h-[140px] sm:min-h-[180px]">
+                      <div className="h-full rounded-xl sm:rounded-2xl overflow-hidden bg-black/90 shadow-2xl shadow-black/50 ring-2 ring-purple-500/30">
                         <img
                           src={imagePreview2}
                           alt="Second"
@@ -1443,17 +1439,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       <Button
                         variant="destructive"
                         size="icon"
-                        className="absolute top-2 right-2 h-7 w-7 rounded-full shadow-lg bg-red-500 hover:bg-red-600"
+                        className="absolute top-1.5 right-1.5 h-6 w-6 sm:h-7 sm:w-7 rounded-full shadow-lg bg-red-500 hover:bg-red-600"
                         onClick={clearImage2}
                         disabled={isGenerating}
                       >
-                        <X className="h-3.5 w-3.5" />
+                        <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                       </Button>
-                      <div className="absolute bottom-2 left-2 right-2">
+                      <div className="absolute bottom-1.5 left-1.5 right-1.5">
                         <Button
                           variant="secondary"
                           size="sm"
-                          className="w-full h-7 text-xs bg-white/90 hover:bg-white text-black rounded-lg shadow-lg"
+                          className="w-full h-6 sm:h-7 text-[10px] sm:text-xs bg-white/90 hover:bg-white text-black rounded-lg shadow-lg"
                           onClick={() => fileInputRef2.current?.click()}
                           disabled={isGenerating}
                         >
@@ -1475,7 +1471,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             )}
 
             {/* Prompt & Generate */}
-            <div className="flex flex-col gap-3 relative">
+            <div className="flex flex-col gap-3 pt-2 border-t border-border/30">
               {/* Limit reached overlay */}
               {limitReached && (
                 <div className="absolute inset-0 z-10 rounded-xl bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
@@ -1491,8 +1487,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 </div>
               )}
 
-              {/* Prompt textarea */}
-              <div className="flex flex-col gap-2 px-1 sm:flex-row sm:items-center sm:justify-between">
+              {/* Amp row */}
+              <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   {needsArabicTranslation && (
                     <div className="flex items-center gap-1 text-[11px] font-semibold text-[#060541]">
@@ -1508,12 +1504,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     onClick={handleAmp}
                     disabled={isAmping || isGenerating || !(
                       generationMode === 'image_to_video' ? imagePreview :
-                      generationMode === '2images_to_video' ? (imagePreview && imagePreview2) :
+                      generationMode === '2images_to_video' ? imagePreview :
                       prompt.trim()
                     )}
                     style={(!isAmping && !isGenerating && (
                       generationMode === 'image_to_video' ? !!imagePreview :
-                      generationMode === '2images_to_video' ? !!(imagePreview && imagePreview2) :
+                      generationMode === '2images_to_video' ? !!imagePreview :
                       !!prompt.trim()
                     )) ? {
                       animation: 'amp-alive 1.4s ease-in-out infinite',
@@ -1534,19 +1530,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     <Wand2 className={`h-3.5 w-3.5 ${isAmping ? 'animate-spin' : ''}`} />
                     <span>{isAmping ? (language === 'ar' ? 'جاري التعزيز...' : 'Amping...') : (language === 'ar' ? '✦ تعزيز' : '✦ Amp')}</span>
                   </button>
-                  {/* Small tag appears when button is active */}
-                  {!isAmping && !isGenerating && (
-                    generationMode === 'image_to_video' ? !!imagePreview :
-                    generationMode === '2images_to_video' ? !!(imagePreview && imagePreview2) :
-                    !!prompt.trim()
-                  ) && (
-                    <span className="text-[9px] text-muted-foreground/60 px-1">
-                      {language === 'ar' ? 'اضغط لتحسين الوصف' : 'press to improve prompt'}
-                    </span>
-                  )}
                 </div>
-                <span className="text-[10px] text-muted-foreground/50 sm:self-auto">{prompt.length}/2500</span>
+                <span className="text-[10px] text-muted-foreground/50">{prompt.length}/2500</span>
               </div>
+
+              {/* Prompt textarea */}
               <div className="relative flex-1">
                 <Textarea
                   value={prompt}
