@@ -61,8 +61,41 @@ const SIGNED_URL_EXPIRES_SECONDS = 10 * 60;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY")!;
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const MODEL_FAST = Deno.env.get("RUNWARE_FAST_MODEL") || "google:4@1";
 const MODEL_BEST = Deno.env.get("RUNWARE_BEST_FAST_MODEL") || "google:4@3";
+
+const isArabic = (s: string) => /[\u0600-\u06FF]/.test(s || "");
+
+async function translateToEnglishIfArabic(prompt: string): Promise<string> {
+  try {
+    if (!isArabic(prompt)) return prompt;
+    if (!OPENAI_API_KEY) return prompt;
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 10000);
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "You are an expert image prompt translator. Translate Arabic image prompts to English for image generation models. Return ONLY the English translation, nothing else." },
+          { role: "user", content: `Translate this image prompt to English: ${prompt}` }
+        ],
+        max_tokens: 300,
+        temperature: 0.1
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(tid);
+    if (!resp.ok) return prompt;
+    const json = await resp.json().catch(() => null);
+    const txt = json?.choices?.[0]?.message?.content?.trim();
+    return txt || prompt;
+  } catch {
+    return prompt;
+  }
+}
 
 function genUUID(): string {
   try { return crypto.randomUUID(); } catch { return `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
@@ -137,7 +170,8 @@ async function uploadAndSignReferenceImage(params: {
 }
 
 async function callRunwareI2I(finalPrompt: string, referenceImages: string[], model: string): Promise<unknown> {
-  // google models require the WebSocket-style /v1 endpoint (same as text2image), not /v1/tasks
+  // For google:4@1 and google:4@3 in i2i mode, omit width/height so the model
+  // automatically matches the reference image aspect ratio.
   const payload = [
     { taskType: "authentication", apiKey: RUNWARE_API_KEY },
     {
@@ -145,8 +179,6 @@ async function callRunwareI2I(finalPrompt: string, referenceImages: string[], mo
       taskUUID: genUUID(),
       model,
       positivePrompt: finalPrompt,
-      height: 2752,
-      width: 1280,
       numberResults: 1,
       outputType: ["dataURI", "URL"],
       includeCost: true,
@@ -214,8 +246,9 @@ serve(async (req: Request) => {
       referenceUrl2 = await uploadAndSignReferenceImage({ base64: b2, mime: mime2, ext: ext2, userId: user_id });
     }
 
+    const finalPrompt = await translateToEnglishIfArabic(user_prompt);
     const referenceUrls = referenceUrl2 ? [referenceUrl, referenceUrl2] : [referenceUrl];
-    const rw = await callRunwareI2I(user_prompt, referenceUrls, selectedModel);
+    const rw = await callRunwareI2I(finalPrompt, referenceUrls, selectedModel);
     const node = (pickFirstResultNode(rw) || rw) as Record<string, unknown>;
 
     // Extract the Runware output — prefer dataURI (stable), fallback to URL

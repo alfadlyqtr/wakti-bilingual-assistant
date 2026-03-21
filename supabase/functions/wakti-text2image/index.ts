@@ -71,32 +71,38 @@ const cors = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
 };
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY");
-const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
 const MODEL_FAST = Deno.env.get("RUNWARE_FAST_MODEL") || "google:4@1";
 const MODEL_BEST = Deno.env.get("RUNWARE_BEST_FAST_MODEL") || "google:4@3";
-const DEFAULT_WIDTH = parseInt(Deno.env.get("WAKTI_T2I_WIDTH") ?? "1280", 10);
-const DEFAULT_HEIGHT = parseInt(Deno.env.get("WAKTI_T2I_HEIGHT") ?? "2752", 10);
+// google:4@1 valid 9:16 = 768x1344 | google:4@3 valid 9:16 = 1536x2752
 const STEPS = parseInt(Deno.env.get("WAKTI_T2I_STEPS") ?? "28", 10);
 const CFG = parseFloat(Deno.env.get("WAKTI_T2I_CFG") ?? "5.5");
 const TIMEOUT_MS = parseInt(Deno.env.get("WAKTI_T2I_TIMEOUT_MS") ?? "180000", 10);
+
+function getDimensionsForModel(model: string): { width: number; height: number } {
+  if (model === "google:4@3") return { width: 1536, height: 2752 };
+  if (model === "google:4@2") return { width: 768, height: 1376 };
+  // google:4@1 and fallback: 768x1344 (9:16)
+  return { width: 768, height: 1344 };
+}
 
 const isArabic = (s: string)=>/[\u0600-\u06FF]/.test(s || "");
 
 async function translateIfArabic(prompt: string) {
   try {
     if (!isArabic(prompt)) return prompt;
-    if (!DEEPSEEK_API_KEY) return prompt;
+    if (!OPENAI_API_KEY) return prompt;
     const controller = new AbortController();
     const tid = setTimeout(()=>controller.abort(), 10000);
-    const resp = await fetch("https://api.deepseek.com/chat/completions", {
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: "Translate Arabic image prompts to English. Return ONLY the English translation." },
           { role: "user", content: `Translate this to English: ${prompt}` }
@@ -116,9 +122,6 @@ async function translateIfArabic(prompt: string) {
   }
 }
 
-function snap64(n: number) {
-  return Math.max(64, Math.round(n / 64) * 64);
-}
 
 const IMAGE_URL_KEYS = ["imageURL","URL","url","outputUrl","outputURL"] as const;
 const IMAGE_DATAURI_KEYS = ["imageDataURI","dataURI","dataUrl","data_uri"] as const;
@@ -138,8 +141,7 @@ function findFirstImage(node: unknown): { url?: string; dataURI?: string } | nul
 }
 
 async function runwareGenerate(positivePrompt: string, model: string, signal?: AbortSignal) {
-  const width = snap64(DEFAULT_WIDTH);
-  const height = snap64(DEFAULT_HEIGHT);
+  const { width, height } = getDimensionsForModel(model);
   const isGoogleModel = model.startsWith("google:");
   const inferenceTask: Record<string, unknown> = {
     taskType: "imageInference",
