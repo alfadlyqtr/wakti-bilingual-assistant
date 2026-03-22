@@ -1084,11 +1084,16 @@ async function interceptAndScheduleReminder(
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder
 ): Promise<string> {
-  const triggerIdx = responseText.indexOf('{"action"');
+  // Use lastIndexOf to find the TRAILING action block — not a mid-response mention
+  const triggerIdx = responseText.lastIndexOf('{"action"');
   if (triggerIdx === -1) return responseText;
 
+  // Only strip if the block runs to the END of the string (trailing JSON, not mid-content)
+  const tail = responseText.substring(triggerIdx).trim();
+  if (!/^\{"action"[\s\S]*\}\s*$/.test(tail)) return responseText;
+
   try {
-    const jsonStr = responseText.substring(triggerIdx).trim();
+    const jsonStr = tail;
     const cleanText = responseText.substring(0, triggerIdx).trim();
 
     const data = JSON.parse(jsonStr);

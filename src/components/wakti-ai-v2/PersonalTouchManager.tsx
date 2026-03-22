@@ -109,19 +109,19 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
           let existing: any = null;
           try { existing = existingRaw ? JSON.parse(existingRaw) : null; } catch {}
           const nextVersion = typeof existing?.pt_version === 'number' ? existing.pt_version : 1;
-          await supabase.from('user_personal_touch').upsert({
+          const { error } = await supabase.from('user_personal_touch').upsert({
             user_id: user.id,
             nickname: formData.nickname || '',
             ai_nickname: formData.aiNickname || '',
             tone: formData.tone || 'neutral',
             style: formData.style || 'short answers',
             instruction: formData.instruction || '',
-            engine_tier: formData.engineTier || 'speed',
             pt_version: nextVersion,
             updated_at: new Date().toISOString()
           });
+          if (error) console.error('❌ PT DB SAVE ERROR:', error.message, error.code);
         }
-      } catch {}
+      } catch (e) { console.error('❌ PT SAVE EXCEPTION:', e); }
     })();
     
     showSuccess(language === 'ar' ? 'تم حفظ الإعدادات!' : 'Settings saved!');
