@@ -56,4 +56,8 @@ const StreamingBubble = forwardRef<StreamingBubbleHandle, StreamingBubbleProps>(
 
 StreamingBubble.displayName = 'StreamingBubble';
 
-export { StreamingBubble };
+// Memoized: parent re-renders with the same language prop won't re-render or remount this
+// component, preserving its DOM content (spanRef.textContent) during active streaming.
+const MemoizedStreamingBubble = React.memo(StreamingBubble);
+
+export { MemoizedStreamingBubble as StreamingBubble };

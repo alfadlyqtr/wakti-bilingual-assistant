@@ -233,10 +233,8 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     const loadPT = () => {
       try {
         const raw = localStorage.getItem('wakti_personal_touch');
-        console.log('[Talk] Loading Personal Touch from localStorage:', raw);
         const parsed = raw ? JSON.parse(raw) : null;
         const pt = parsed && typeof parsed === 'object' ? parsed : null;
-        console.log('[Talk] Parsed Personal Touch:', pt);
         personalTouchRef.current = pt;
         setPersonalTouch(pt);
       } catch (e) {
