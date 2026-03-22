@@ -19,11 +19,15 @@ import { useIsDesktop } from '@/hooks/use-mobile';
 function stripTrailingActionJSON(text: string): string {
   const idx = text.lastIndexOf('{"action"');
   if (idx === -1) return text.trim();
-  // Only strip if the block runs to the end of the string (possibly with trailing whitespace)
-  const after = text.slice(idx);
-  // Quick sanity: the block should look like JSON to the end
-  if (/^\{"action"[\s\S]*\}\s*$/.test(after)) {
-    return text.slice(0, idx).trim();
+  const after = text.slice(idx).trim();
+  // Only strip if the tail is actually a valid JSON object with an "action" key
+  try {
+    const parsed = JSON.parse(after);
+    if (parsed && typeof parsed === 'object' && 'action' in parsed) {
+      return text.slice(0, idx).trim();
+    }
+  } catch {
+    // Not valid JSON — leave content intact
   }
   return text.trim();
 }

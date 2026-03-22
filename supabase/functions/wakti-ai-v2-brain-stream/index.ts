@@ -1088,15 +1088,13 @@ async function interceptAndScheduleReminder(
   const triggerIdx = responseText.lastIndexOf('{"action"');
   if (triggerIdx === -1) return responseText;
 
-  // Only strip if the block runs to the END of the string (trailing JSON, not mid-content)
   const tail = responseText.substring(triggerIdx).trim();
-  if (!/^\{"action"[\s\S]*\}\s*$/.test(tail)) return responseText;
 
   try {
-    const jsonStr = tail;
+    const data = JSON.parse(tail);
+    // Only proceed if it's actually a valid action JSON object
+    if (!data || typeof data !== 'object' || !('action' in data)) return responseText;
     const cleanText = responseText.substring(0, triggerIdx).trim();
-
-    const data = JSON.parse(jsonStr);
     if (data.action === 'set_reminder') {
       const timeStr = data.time as string;
       const reminderText = data.text as string;

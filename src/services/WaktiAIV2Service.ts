@@ -1003,7 +1003,6 @@ class WaktiAIV2ServiceClass {
 
         // Removed client-side idle timeout to avoid false timeouts on Safari/iOS
         let firstTokenReceived = false;
-
         try {
           while (true) {
             const { done, value } = await reader.read();
@@ -1211,8 +1210,11 @@ class WaktiAIV2ServiceClass {
         const stripTrailing = (t: string) => {
           const idx = t.lastIndexOf('{"action"');
           if (idx === -1) return t.trim();
-          const after = t.slice(idx);
-          if (/^\{"action"[\s\S]*\}\s*$/.test(after)) return t.slice(0, idx).trim();
+          const after = t.slice(idx).trim();
+          try {
+            const parsed = JSON.parse(after);
+            if (parsed && typeof parsed === 'object' && 'action' in parsed) return t.slice(0, idx).trim();
+          } catch {}
           return t.trim();
         };
         const cleanResponse = stripTrailing(fullResponse);
