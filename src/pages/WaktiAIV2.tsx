@@ -14,6 +14,20 @@ import { cn } from '@/lib/utils';
 import { createPortal } from 'react-dom';
 import { useIsDesktop } from '@/hooks/use-mobile';
 
+/** Strip trailing action JSON block (e.g. {"action":"schedule_reminder",...}) from AI responses.
+ *  Only removes the LAST occurrence so mid-response mentions of '{"action"' don't nuke content. */
+function stripTrailingActionJSON(text: string): string {
+  const idx = text.lastIndexOf('{"action"');
+  if (idx === -1) return text.trim();
+  // Only strip if the block runs to the end of the string (possibly with trailing whitespace)
+  const after = text.slice(idx);
+  // Quick sanity: the block should look like JSON to the end
+  if (/^\{"action"[\s\S]*\}\s*$/.test(after)) {
+    return text.slice(0, idx).trim();
+  }
+  return text.trim();
+}
+
 const WaktiAIV2 = () => {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -443,8 +457,8 @@ const WaktiAIV2 = () => {
               setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, metadata: { ...(m.metadata || {}), loading: false } } : m));
             }
             // ZERO React re-renders: write accumulated text directly to DOM via ref
-            // Invisibility cloak: strip any reminder JSON before it hits the screen
-            const displayContent = streamed.split('{"action"')[0].trim();
+            // Invisibility cloak: strip any trailing reminder JSON before it hits the screen
+            const displayContent = stripTrailingActionJSON(streamed);
             if (!rafPending) {
               rafPending = true;
               requestAnimationFrame(() => {
@@ -476,7 +490,7 @@ const WaktiAIV2 = () => {
 
         const visionEndTime = Date.now();
         const visionThinkingDuration = Math.round((visionEndTime - startTime) / 1000);
-        const cleanedStreamed = streamed.split('{"action"')[0].trim();
+        const cleanedStreamed = stripTrailingActionJSON(streamed);
         const finalAssistantMessage: AIMessage = {
           ...assistantPlaceholder,
           content: streamedResp?.response ?? cleanedStreamed,
@@ -588,7 +602,7 @@ const WaktiAIV2 = () => {
               rafPending = true;
               requestAnimationFrame(() => {
                 rafPending = false;
-                const latest = streamedContentRef.current.split('{"action"')[0].trim();
+                const latest = stripTrailingActionJSON(streamedContentRef.current);
                 streamingBubbleRef.current?.setContent(latest);
               });
             }
@@ -650,7 +664,7 @@ const WaktiAIV2 = () => {
           }
         };
         
-        const cleanedStreamed = streamed.split('{"action"')[0].trim();
+        const cleanedStreamed = stripTrailingActionJSON(streamed);
         const finalAssistantMessage: AIMessage = {
           ...assistantPlaceholder,
           content: streamedResp?.response ?? cleanedStreamed,

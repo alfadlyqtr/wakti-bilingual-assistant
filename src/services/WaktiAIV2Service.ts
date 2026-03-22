@@ -1207,8 +1207,15 @@ class WaktiAIV2ServiceClass {
         }
 
         console.log(`✅ FRONTEND BOSS: Streaming completed successfully [${requestId}] (primary=${primary})`);
-        // Invisibility cloak: strip any reminder JSON before returning to the UI layer
-        const cleanResponse = fullResponse.split('{"action"')[0].trim();
+        // Invisibility cloak: strip only a TRAILING action JSON block (not mid-response)
+        const stripTrailing = (t: string) => {
+          const idx = t.lastIndexOf('{"action"');
+          if (idx === -1) return t.trim();
+          const after = t.slice(idx);
+          if (/^\{"action"[\s\S]*\}\s*$/.test(after)) return t.slice(0, idx).trim();
+          return t.trim();
+        };
+        const cleanResponse = stripTrailing(fullResponse);
         return { response: cleanResponse, metadata };
       };
 
