@@ -796,7 +796,7 @@ async function streamGemini3FlashChat(
   const body: Record<string, unknown> = {
     contents,
     // When grounding: limit to 3 snippets + 2000 tokens for a fast fact-check, not a research paper
-    generationConfig: { temperature: 0.4, maxOutputTokens: useSearch ? 2000 : 4000 },
+    generationConfig: { temperature: 0.4, maxOutputTokens: useSearch ? 4000 : 8000 },
   };
   if (useSearch) {
     body.tools = [{ google_search: {} }];
