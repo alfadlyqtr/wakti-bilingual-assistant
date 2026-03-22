@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase, ensurePassport } from "@/integrations/supabase/client";
@@ -520,15 +520,10 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   }
 
   // ── ZERO-TRUST WHITELIST ──
-  // Memoized so these don't produce new values (and downstream re-renders) on every parent render
-  const isVerifiedSubscriber = useMemo(
-    () => !!(isSubscribed || subscriptionStatus.isSubscribed || isAdminGifted || isGracePeriod),
-    [isSubscribed, subscriptionStatus.isSubscribed, isAdminGifted, isGracePeriod]
-  );
-  const shouldSeeDashboard = useMemo(
-    () => !isLoading && !isProfileLoading && !subscriptionStatus.isLoading && isVerifiedSubscriber && !isNewUser,
-    [isLoading, isProfileLoading, subscriptionStatus.isLoading, isVerifiedSubscriber, isNewUser]
-  );
+  // Plain booleans (primitives compare by value — useMemo is unnecessary and would
+  // violate Rules of Hooks here since we're after early returns).
+  const isVerifiedSubscriber = !!(isSubscribed || subscriptionStatus.isSubscribed || isAdminGifted || isGracePeriod);
+  const shouldSeeDashboard = !isLoading && !isProfileLoading && !subscriptionStatus.isLoading && isVerifiedSubscriber && !isNewUser;
 
   // Log access decision only when values actually change (not on every render)
   const accessDecisionSnapshot = DEV ? JSON.stringify({ email: user?.email, shouldSeeDashboard, isVerifiedSubscriber, isNewUser, isSubscribed, isAdminGifted, isGracePeriod, showPaywall, paywallVariant }) : '';
