@@ -60,6 +60,7 @@ export default function Signup() {
     const playGreeting = async () => {
       if (audioRef.current) {
         audioRef.current.src = language === 'ar' ? '/welcome to wakti arabic.mp3' : '/welcome to wakti english.mp3';
+        audioRef.current.volume = 0.5;
         audioRef.current.onplay = () => {
           setIsPlayingAudio(true);
           setCurrentWordIndex(0);
@@ -932,6 +933,46 @@ export default function Signup() {
                   </span>
                 )}
               </p>
+            </div>
+
+            {/* Audio pause/play control */}
+            <div className="flex justify-center mt-1">
+              <AnimatePresence mode="wait">
+                {isPlayingAudio ? (
+                  <motion.button
+                    key="pause"
+                    type="button"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ duration: 0.15 }}
+                    onClick={() => { if (audioRef.current) { audioRef.current.pause(); } }}
+                    className="su-audio-btn"
+                    aria-label="Pause"
+                  >
+                    <Pause className="w-3 h-3" />
+                  </motion.button>
+                ) : audioUnlocked ? (
+                  <motion.button
+                    key="play"
+                    type="button"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ duration: 0.15 }}
+                    onClick={() => {
+                      if (audioRef.current) {
+                        audioRef.current.currentTime = 0;
+                        audioRef.current.play();
+                      }
+                    }}
+                    className="su-audio-btn"
+                    aria-label="Play"
+                  >
+                    <Play className="w-3 h-3" />
+                  </motion.button>
+                ) : null}
+              </AnimatePresence>
             </div>
           </div>
 

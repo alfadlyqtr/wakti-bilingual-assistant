@@ -582,13 +582,14 @@ const WaktiAIV2 = () => {
               setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, metadata: { ...(m.metadata || {}), loading: false } } : m));
             }
             // ZERO React re-renders: write accumulated text directly to DOM via ref
-            // Invisibility cloak: strip any reminder JSON before it hits the screen
-            const displayContent = streamed.split('{"action"')[0].trim();
+            // Read streamedContentRef.current INSIDE the RAF so it always gets the
+            // latest token batch, not the stale closure value from when RAF was scheduled.
             if (!rafPending) {
               rafPending = true;
               requestAnimationFrame(() => {
                 rafPending = false;
-                streamingBubbleRef.current?.setContent(displayContent);
+                const latest = streamedContentRef.current.split('{"action"')[0].trim();
+                streamingBubbleRef.current?.setContent(latest);
               });
             }
           },

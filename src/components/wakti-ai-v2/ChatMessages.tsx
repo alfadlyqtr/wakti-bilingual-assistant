@@ -1715,10 +1715,8 @@ export function ChatMessages({
             rehypePlugins={[rehypeRaw]}
             components={{
               table: ({ node, ...props }) => (
-                <div className="my-3 overflow-hidden rounded-xl border border-border/60 bg-white/70 shadow-sm dark:bg-black/20">
-                  <div className="max-w-full overflow-x-auto">
-                    <table className="w-full min-w-[720px] border-separate border-spacing-0 text-sm" {...props} />
-                  </div>
+                <div className="my-3 overflow-x-auto rounded-xl border border-border/60 bg-white/70 shadow-sm dark:bg-black/20">
+                  <table className="w-full min-w-[400px] border-separate border-spacing-0 text-sm" {...props} />
                 </div>
               ),
               th: ({ node, ...props }) => (

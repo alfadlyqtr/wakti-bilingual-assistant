@@ -45,6 +45,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   const retriedRef = useRef(false); // allow at most one background retry per user
   const lastUserIdRef = useRef<string | null>(null);
   const trialJustStartedRef = useRef(false); // suppress paywall bounce-back after skip/X
+  const accessDecisionRef = useRef<string>(''); // dedup access decision logs
 
   // Owner accounts that bypass all restrictions
   const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
@@ -433,7 +434,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
 
     // Still in grace period
     setShowPaywall(false);
-  }, [user?.id, isSubscribed, subscriptionStatus.isSubscribed, isAccessExpired, isNewUser, wasSubscribed, hasTrialStarted, location.pathname, location.search, TEMP_DISABLE_SUBSCRIPTION_CHECKS, DEV, accessCheckTick, isProfileLoading]);
+  }, [user?.id, isSubscribed, subscriptionStatus.isSubscribed, isAccessExpired, isNewUser, wasSubscribed, location.pathname, accessCheckTick, isProfileLoading]);
 
   let effectiveHasSession = hasAnySession;
   
@@ -524,18 +525,11 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   // Step 2: Can they see the dashboard? NEVER if isNewUser is true.
   const shouldSeeDashboard = !isLoading && !isProfileLoading && !subscriptionStatus.isLoading && isVerifiedSubscriber && !isNewUser;
 
-  if (DEV) {
-    console.log("ProtectedRoute: Access decision:", {
-      email: user?.email,
-      shouldSeeDashboard,
-      isVerifiedSubscriber,
-      isNewUser,
-      isSubscribed,
-      isAdminGifted,
-      isGracePeriod,
-      showPaywall,
-      paywallVariant
-    });
+  // Log access decision only when values actually change (not on every render)
+  const accessDecisionSnapshot = DEV ? JSON.stringify({ email: user?.email, shouldSeeDashboard, isVerifiedSubscriber, isNewUser, isSubscribed, isAdminGifted, isGracePeriod, showPaywall, paywallVariant }) : '';
+  if (DEV && accessDecisionSnapshot !== accessDecisionRef.current) {
+    accessDecisionRef.current = accessDecisionSnapshot;
+    console.log('ProtectedRoute: Access decision:', JSON.parse(accessDecisionSnapshot));
   }
 
   return (
