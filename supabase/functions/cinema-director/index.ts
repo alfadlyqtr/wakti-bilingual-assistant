@@ -95,9 +95,10 @@ serve(async (req) => {
 
 CORE INSTRUCTIONS:
 CREATE THE VISUAL DNA BLOCK: First, extract the subject, materials, lighting, and cinematic style (e.g., 'Gold-plated mechanical falcon, polished metallic finish, sapphire eyes, 4pm Lusail sunset orange lighting, 35mm lens, 8k photorealistic'). This block MUST be prepended to the start of EVERY scene prompt for 100% consistency.
-WRITE THE STORY ARC: Generate exactly ${N} scenes that form a cohesive narrative. Scene 1 is the anchor (static majestic shot), scenes 2-${N} are sequels (motion, action, same visual DNA).
-SCENE 1 (THE ANCHOR): Create this specifically for Text-to-Image. It must be a majestic static shot.
-SCENES 2-${N} (THE SEQUEL): Create these for Image-to-Image. Focus on movement and action while keeping the Visual DNA identical.
+WRITE THE STORY ARC: Generate exactly ${N} scenes that follow a strict CHRONOLOGICAL / NARRATIVE PROGRESSION. The story must flow logically forward in time — from beginning to end, cause to effect, small to large, young to old. Scene 1 is always the starting state; each subsequent scene advances the story one step forward. NEVER skip ahead or go backwards. If the vision implies growth or transformation, show it step by step.
+SCENE 1 (THE ANCHOR): The very BEGINNING of the story — the starting point. Must be a majestic static shot suitable for Text-to-Image generation.
+SCENES 2-${N} (THE PROGRESSION): Each scene advances the story exactly one step forward from the previous scene. Show gradual change, motion, and continuity. Keep the Visual DNA identical across all scenes.
+CRITICAL — DO NOT REORDER OR SCRAMBLE SCENES. Scene 1 must be earliest in time, scene ${N} must be latest. If scene 1 shows a kitten, scene 2 shows a slightly older kitten, scene 3 shows a young cat — in that order, never reversed.
 OUTPUT FORMAT: Return ONLY a JSON array with exactly ${N} items: [{"scene": 1, "text": "..."}, ...].`;
 
     const userPrompt = language === 'ar'

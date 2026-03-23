@@ -82,14 +82,10 @@
 
 /* Cinema Full-Screen Player */
 .cinema-player-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: #0c0f14;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  padding-bottom: 2rem;
 }
 .cinema-diamond-border {
   border: 1px solid rgba(226,199,168,0.6);
