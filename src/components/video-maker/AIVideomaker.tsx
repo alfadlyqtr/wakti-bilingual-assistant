@@ -2519,7 +2519,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 })()}
 
                 {cinemaStep === 'storyboard' && (
-                  <div className="flex flex-col gap-4 pb-28">
+                  <div className="flex flex-col gap-4 pb-4">
                     {/* Header + Format Toggle */}
                     <div className="flex items-center justify-between px-1">
                       <div>
@@ -2722,7 +2722,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 )}
 
                 {cinemaStep === 'casting' && (
-                  <div className="flex flex-col gap-4 pb-28">
+                  <div className="flex flex-col gap-4 pb-4">
                     {/* Header */}
                     <div className="text-center space-y-1 px-1">
                       <h3 className="text-lg font-bold text-white">{language === 'ar' ? 'تصوير المشاهد' : 'Casting the Movie'}</h3>
@@ -2799,7 +2799,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 )}
 
                 {cinemaStep === 'filming' && (
-                  <div className="flex flex-col gap-5 pb-28">
+                  <div className="flex flex-col gap-5 pb-4">
                     {/* Header */}
                     <div className="text-center space-y-1">
                       <h3 className="text-lg font-bold text-white">{language === 'ar' ? 'الإنتاج جارٍ...' : 'Production in Progress'}</h3>
