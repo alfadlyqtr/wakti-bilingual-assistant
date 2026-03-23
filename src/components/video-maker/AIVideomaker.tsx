@@ -2761,7 +2761,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         <div className="grid gap-2" style={{gridTemplateColumns: `repeat(${Math.min(totalSlots, 4)}, 1fr)`}}>
                           {Array.from({length: totalSlots}, (_, slotIdx) => {
                             const refUrl = cinemaReferenceImages[slotIdx];
-                            const tag = cinemaRefTags[slotIdx] || (slotIdx < cinemaSceneCount ? `scene${slotIdx + 1}` : 'logo');
+                            const tag = cinemaRefTags[slotIdx] || 'ref'; // default: always visual ref until user picks
                             const tagLabel = tagOptions.find(t => t.value === tag)?.label || tag;
                             const isLogoSlot = slotIdx === cinemaSceneCount; // last slot = logo/brand
                             return (
@@ -2793,35 +2793,41 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                       {isUploadingRef ? (
                                         <Loader2 className="h-4 w-4 animate-spin text-white/30" />
                                       ) : (
-                                        <>
-                                          <span className="text-white/25 text-xl leading-none">+</span>
-                                          <span className="text-[8px] text-white/20">{isLogoSlot ? (language === 'ar' ? 'شعار' : 'Logo') : `S${slotIdx+1}`}</span>
-                                        </>
+                                        <span className="text-white/25 text-xl leading-none">+</span>
                                       )}
                                     </label>
                                   )}
                                 </div>
 
-                                {/* Tag selector — always visible so user can pre-select before upload OR change after */}
-                                <select
-                                  value={tag}
-                                  title={language === 'ar' ? 'نوع الصورة' : 'Image tag'}
-                                  onChange={(e) => {
-                                    const newTag = e.target.value;
-                                    setCinemaRefTags(prev => { const n = [...prev]; n[slotIdx] = newTag; return n; });
-                                  }}
-                                  className="w-full text-[9px] font-semibold rounded-lg px-1.5 py-1 outline-none appearance-none text-center cursor-pointer transition-all"
-                                  style={{
-                                    background: refUrl ? 'rgba(226,199,168,0.15)' : 'rgba(255,255,255,0.05)',
-                                    border: refUrl ? '1px solid rgba(226,199,168,0.3)' : '1px solid rgba(255,255,255,0.08)',
-                                    color: refUrl ? '#E2C7A8' : 'rgba(255,255,255,0.3)',
-                                    colorScheme: 'dark',
-                                  }}
-                                >
-                                  {tagOptions.map(opt => (
-                                    <option key={opt.value} value={opt.value} className="bg-[#0c0f14] text-white">{opt.label}</option>
-                                  ))}
-                                </select>
+                                {/* Tag selector — custom styled to look like a real dropdown */}
+                                <div className="relative w-full">
+                                  <select
+                                    value={tag}
+                                    title={language === 'ar' ? 'نوع الصورة' : 'Image tag'}
+                                    aria-label={language === 'ar' ? 'نوع الصورة' : 'Image tag'}
+                                    onChange={(e) => {
+                                      const newTag = e.target.value;
+                                      setCinemaRefTags(prev => { const n = [...prev]; n[slotIdx] = newTag; return n; });
+                                    }}
+                                    className="w-full text-[9px] font-semibold rounded-lg pl-2 pr-5 py-1.5 outline-none appearance-none cursor-pointer transition-all"
+                                    style={{
+                                      background: refUrl ? 'rgba(226,199,168,0.15)' : 'rgba(255,255,255,0.06)',
+                                      border: refUrl ? '1px solid rgba(226,199,168,0.4)' : '1px solid rgba(255,255,255,0.12)',
+                                      color: refUrl ? '#E2C7A8' : 'rgba(255,255,255,0.45)',
+                                      colorScheme: 'dark',
+                                    }}
+                                  >
+                                    {tagOptions.map(opt => (
+                                      <option key={opt.value} value={opt.value} className="bg-[#0c0f14] text-white">{opt.label}</option>
+                                    ))}
+                                  </select>
+                                  {/* Chevron overlay */}
+                                  <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center">
+                                    <svg width="8" height="5" viewBox="0 0 8 5" fill="none">
+                                      <path d="M1 1l3 3 3-3" stroke={refUrl ? '#E2C7A8' : 'rgba(255,255,255,0.35)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                    </svg>
+                                  </div>
+                                </div>
                               </div>
                             );
                           })}
