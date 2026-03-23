@@ -210,6 +210,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
   // Role 5 — Premiere
   const [isStitching, setIsStitching] = useState(false);
+  const [stitchStatus, setStitchStatus] = useState(''); // e.g. "Waking up server..."
   const [premiereVideoUrl, setPremiereVideoUrl] = useState<string | null>(null);
   const [isCinemaSaving, setIsCinemaSaving] = useState(false);
   const [isCinemaSaved, setIsCinemaSaved] = useState(false);
@@ -1134,7 +1135,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
       cinemaReferenceImages.forEach((url, slotIdx) => {
         if (!url) return;
-        const tag = cinemaRefTags[slotIdx] || `scene${slotIdx + 1}`;
+        const tag = cinemaRefTags[slotIdx] || 'ref'; // default: treat untagged images as visual reference
         if (tag === 'logo' || tag === 'ref') {
           logoAnchor = url; // use as style anchor for AI-generated scenes
         } else {
@@ -1305,10 +1306,23 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     const readyClips = videoClips.filter(Boolean) as string[];
     if (readyClips.length < 2 || isStitching) return;
     setIsStitching(true);
+    setStitchStatus(language === 'ar' ? 'جاري تشغيل الخادم...' : 'Waking up server...');
     try {
       const serverBase = import.meta.env.VITE_VISION_SERVER_URL || 'https://wakti-vision-proxy.onrender.com';
-      // Wake up Render server (free tier sleeps — ping first, ignore errors)
-      try { await fetch(`${serverBase}/healthz`, { method: 'GET', signal: AbortSignal.timeout(8000) }); } catch {}
+      // Wake up Render free-tier server — retry ping up to 4x with 10s gaps (cold start can take 30-50s)
+      let awake = false;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          const ping = await fetch(`${serverBase}/healthz`, { method: 'GET', signal: AbortSignal.timeout(12000) });
+          if (ping.ok) { awake = true; break; }
+        } catch { /* server still waking */ }
+        if (attempt < 3) {
+          setStitchStatus(language === 'ar' ? `جاري تشغيل الخادم... (${attempt + 2}/4)` : `Waking up server... (${attempt + 2}/4)`);
+          await new Promise(r => setTimeout(r, 10000)); // wait 10s then retry
+        }
+      }
+      if (!awake) throw new Error(language === 'ar' ? 'خادم التجميع لا يستجيب — حاول مجدداً' : 'Stitch server not responding — please try again in a moment');
+      setStitchStatus(language === 'ar' ? 'جاري التجميع...' : 'Stitching...');
       const resp = await fetch(`${serverBase}/api/cinema/stitch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1332,6 +1346,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       toast.error(msg);
     } finally {
       setIsStitching(false);
+      setStitchStatus('');
     }
   }, [videoClips, isStitching, language]);
 
@@ -3001,7 +3016,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         {isStitching ? (
                           <div className="flex items-center justify-center gap-2">
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            <span>{language === 'ar' ? 'جاري التجميع...' : 'Stitching...'}</span>
+                            <span>{stitchStatus || (language === 'ar' ? 'جاري التجميع...' : 'Stitching...')}</span>
                           </div>
                         ) : (
                           <div className="flex items-center justify-center gap-2">

@@ -13,13 +13,16 @@ const execFileAsync = promisify(execFile);
 
 const app = express();
 app.set('trust proxy', 1);
-const allowed = (process.env.ALLOWED_ORIGINS || 'http://localhost,http://127.0.0.1')
+const allowed = (process.env.ALLOWED_ORIGINS || '')
   .split(',').map(s => s.trim()).filter(Boolean);
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
     // Allow any localhost / 127.0.0.1 port (dev servers on any port)
     if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return callback(null, true);
+    // Allow any HTTPS origin (Netlify, custom domains like wakti.qa)
+    if (origin.startsWith('https://')) return callback(null, true);
+    // Allow explicitly listed origins
     const ok = allowed.some(a => origin.startsWith(a));
     return callback(null, ok);
   },

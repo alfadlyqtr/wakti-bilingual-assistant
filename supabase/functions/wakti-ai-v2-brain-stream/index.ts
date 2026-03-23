@@ -2836,8 +2836,12 @@ If you are running out of space, keep this order and drop the rest:
               modelUsedOuter = chatEngineLabel;
               console.log(` ENGINE: ${chatEngineLabel} selected (tier=${engineTier}, chat path)`);
               let fullResponseText = '';
+              // Force reminder JSON compliance: append instruction to user turn (Gemini ignores system_instruction alone)
+              const reminderAugmentedMessage = messageHasReminderKeyword
+                ? `${effectiveMessage}\n\n[SYSTEM OVERRIDE — MUST COMPLY]: Append this exact JSON on its own line at the very end of your response, no code fences, no extra text after it:\n{"action":"set_reminder","time":"REPLACE_WITH_ISO8601_DATETIME${formattedOffset}","text":"REPLACE_WITH_REMINDER_TEXT"}`
+                : effectiveMessage;
               await streamGemini3FlashChat(
-                effectiveMessage,
+                reminderAugmentedMessage,
                 systemPrompt,
                 recentMessages,
                 (token: string) => {
