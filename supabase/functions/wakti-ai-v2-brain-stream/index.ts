@@ -1115,14 +1115,23 @@ async function interceptAndScheduleReminder(
         );
         const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
+        // Validate the scheduled time before inserting
+        const parsedDate = new Date(timeStr);
+        if (isNaN(parsedDate.getTime())) {
+          console.warn(`⚠️ REMINDER INTERCEPT: Invalid scheduled_for date: "${timeStr}" — aborting`);
+          return cleanText;
+        }
+        const validTimeStr = parsedDate.toISOString();
+
         // INSERT notification_history row first so process-scheduled-reminders can pick it up
         const { data: inserted, error: insertError } = await supabaseAdmin
           .from('notification_history')
           .insert({
             user_id: userId,
-            type: 'reminder',
+            type: 'ai_reminder',
+            title: 'Wakti AI Reminder',
             reminder_content: reminderText,
-            scheduled_for: timeStr,
+            scheduled_for: validTimeStr,
             push_sent: false,
           })
           .select('id')
@@ -1145,8 +1154,9 @@ async function interceptAndScheduleReminder(
           },
           body: JSON.stringify({
             user_id: userId,
-            scheduled_for: timeStr,
+            scheduled_for: validTimeStr,
             reminder_text: reminderText,
+            title: 'Wakti AI Reminder',
             timezone,
             notification_id: notificationId,
           }),
