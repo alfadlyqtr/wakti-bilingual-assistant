@@ -33,6 +33,7 @@ import {
   GalleryHorizontalEnd,
   Images,
   Film,
+  Pencil,
 } from 'lucide-react';
 
 interface QuotaInfo {
@@ -218,6 +219,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [cinemaReferenceImages, setCinemaReferenceImages] = useState<(string | null)[]>([]);
   const [cinemaRefTags, setCinemaRefTags] = useState<string[]>([]); // 'scene1'..'scene6', 'logo', 'ref'
   const [isUploadingRef, setIsUploadingRef] = useState(false);
+
+  // Storyboard scene editing state
+  const [editingSceneNum, setEditingSceneNum] = useState<number | null>(null); // which scene is being edited
+  const [editingSceneText, setEditingSceneText] = useState('');
+  const [regenSceneNum, setRegenSceneNum] = useState<number | null>(null); // which scene is regenerating
 
   // Cinema Visionnaire form state
   const [cinemaSubject, setCinemaSubject] = useState('');
@@ -1360,7 +1366,56 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setIsCinemaSaving(false);
     setCinemaReferenceImages([]);
     setCinemaRefTags([]);
+    setEditingSceneNum(null);
+    setRegenSceneNum(null);
     if (animPollRef.current) clearInterval(animPollRef.current);
+  }, []);
+
+  // ── Storyboard: regenerate a single scene ──
+  const handleRegenScene = useCallback(async (sceneNum: number) => {
+    if (!user || regenSceneNum !== null) return;
+    setRegenSceneNum(sceneNum);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) throw new Error('Not authenticated');
+      const effectiveSetting = cinemaSetting === 'Custom' ? cinemaSettingCustom : cinemaSetting;
+      const effectiveAction = cinemaAction === 'Custom' ? cinemaActionCustom : cinemaAction;
+      const effectiveVibe = cinemaVibe === 'Custom' ? cinemaVibeCustom : cinemaVibe;
+      const effectiveCTA = cinemaCTA === 'Custom' ? cinemaCTACustom : cinemaCTA;
+      const builtVision = [
+        cinemaSubject && `Subject: ${cinemaSubject}`,
+        effectiveSetting && `Setting: ${effectiveSetting}`,
+        effectiveAction && `Action: ${effectiveAction}`,
+        effectiveVibe && `Vibe: ${effectiveVibe}`,
+        effectiveCTA && `Purpose: ${effectiveCTA}`,
+      ].filter(Boolean).join('. ');
+      const visionToSend = builtVision || cinemaVision.trim();
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/cinema-director`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${accessToken}`, apikey: SUPABASE_ANON_KEY },
+        body: JSON.stringify({ vision: visionToSend, language, scene_count: cinemaSceneCount }),
+      });
+      const result = await resp.json().catch(() => ({}));
+      if (result?.success && Array.isArray(result.scenes)) {
+        const newScene = result.scenes.find((s: { scene: number; text: string }) => s.scene === sceneNum);
+        if (newScene) {
+          setCinemaScenes(prev => prev.map(s => s.scene === sceneNum ? { ...s, text: newScene.text } : s));
+          toast.success(language === 'ar' ? `تم إعادة كتابة المشهد ${sceneNum}` : `Scene ${sceneNum} rewritten!`);
+        }
+      } else throw new Error(result?.error || 'No scene returned');
+    } catch (err: any) {
+      toast.error(language === 'ar' ? 'فشل إعادة الكتابة' : 'Regen failed: ' + err.message);
+    } finally {
+      setRegenSceneNum(null);
+    }
+  }, [user, regenSceneNum, cinemaSubject, cinemaSetting, cinemaSettingCustom, cinemaAction, cinemaActionCustom, cinemaVibe, cinemaVibeCustom, cinemaCTA, cinemaCTACustom, cinemaVision, language, cinemaSceneCount]);
+
+  // ── Storyboard: save inline scene text edit ──
+  const handleSaveSceneEdit = useCallback((sceneNum: number, newText: string) => {
+    setCinemaScenes(prev => prev.map(s => s.scene === sceneNum ? { ...s, text: newText } : s));
+    setEditingSceneNum(null);
+    setEditingSceneText('');
   }, []);
 
   const handleCinemaSave = async () => {
@@ -2520,24 +2575,39 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                 {cinemaStep === 'storyboard' && (
                   <div className="flex flex-col gap-4 pb-4">
-                    {/* Header + Format Toggle */}
-                    <div className="flex items-center justify-between px-1">
-                      <div>
+                    {/* Header + controls row */}
+                    <div className="flex items-center justify-between px-1 gap-2">
+                      <div className="min-w-0">
                         <h3 className="text-lg font-bold text-white">{language === 'ar' ? 'اللوحة الإخراجية' : 'The Storyboard'}</h3>
-                        <p className="text-xs text-white/50 mt-0.5">{language === 'ar' ? 'اسحب للتنقل بين المشاهد' : 'Swipe through scenes'}</p>
+                        <p className="text-xs text-white/50 mt-0.5">{language === 'ar' ? 'حرر أو أعد كتابة أي مشهد' : 'Edit or rewrite any scene'}</p>
                       </div>
-                      {/* Format Toggle */}
-                      <div className="flex items-center rounded-full p-0.5" style={{background:'rgba(226,199,168,0.1)',border:'1px solid rgba(226,199,168,0.25)'}}>
-                        <button
-                          onClick={() => setCinemaFormat('16:9')}
-                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${cinemaFormat === '16:9' ? 'text-[#0c0f14]' : 'text-[#E2C7A8]/60'}`}
-                          style={cinemaFormat === '16:9' ? {background:'linear-gradient(135deg,#E2C7A8,#C5A47E)'} : {}}
-                        >16:9</button>
-                        <button
-                          onClick={() => setCinemaFormat('9:16')}
-                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${cinemaFormat === '9:16' ? 'text-[#0c0f14]' : 'text-[#E2C7A8]/60'}`}
-                          style={cinemaFormat === '9:16' ? {background:'linear-gradient(135deg,#E2C7A8,#C5A47E)'} : {}}
-                        >9:16</button>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {/* Regen All */}
+                        {cinemaScenes.length >= cinemaSceneCount && (
+                          <button
+                            onClick={() => { setCinemaScenes([]); setIsDirecting(true); handleDirect(); }}
+                            disabled={isDirecting || regenSceneNum !== null}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-bold transition-all active:scale-95 disabled:opacity-40"
+                            style={{background:'rgba(226,199,168,0.12)',border:'1px solid rgba(226,199,168,0.3)',color:'#E2C7A8'}}
+                            title={language === 'ar' ? 'إعادة كتابة كل المشاهد' : 'Rewrite all scenes'}
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                            <span>{language === 'ar' ? 'إعادة الكل' : 'Regen All'}</span>
+                          </button>
+                        )}
+                        {/* Format Toggle */}
+                        <div className="flex items-center rounded-full p-0.5" style={{background:'rgba(226,199,168,0.1)',border:'1px solid rgba(226,199,168,0.25)'}}>
+                          <button
+                            onClick={() => setCinemaFormat('16:9')}
+                            className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${cinemaFormat === '16:9' ? 'text-[#0c0f14]' : 'text-[#E2C7A8]/60'}`}
+                            style={cinemaFormat === '16:9' ? {background:'linear-gradient(135deg,#E2C7A8,#C5A47E)'} : {}}
+                          >16:9</button>
+                          <button
+                            onClick={() => setCinemaFormat('9:16')}
+                            className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${cinemaFormat === '9:16' ? 'text-[#0c0f14]' : 'text-[#E2C7A8]/60'}`}
+                            style={cinemaFormat === '9:16' ? {background:'linear-gradient(135deg,#E2C7A8,#C5A47E)'} : {}}
+                          >9:16</button>
+                        </div>
                       </div>
                     </div>
 
@@ -2545,6 +2615,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     <div className="flex flex-col gap-3">
                       {Array.from({length: cinemaSceneCount}, (_, i) => i + 1).map((sceneNum) => {
                         const scene = cinemaScenes.find(s => s.scene === sceneNum);
+                        const isEditing = editingSceneNum === sceneNum;
+                        const isRegening = regenSceneNum === sceneNum;
                         return (
                           <div
                             key={sceneNum}
@@ -2552,22 +2624,79 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             style={{
                               backdropFilter: 'blur(12px)',
                               background: scene ? 'rgba(226,199,168,0.08)' : 'rgba(255,255,255,0.02)',
-                              border: scene ? '1px solid rgba(226,199,168,0.35)' : '1px solid rgba(255,255,255,0.06)',
+                              border: isEditing ? '1px solid rgba(226,199,168,0.7)' : scene ? '1px solid rgba(226,199,168,0.35)' : '1px solid rgba(255,255,255,0.06)',
                             }}
                           >
-                            {/* Scene badge */}
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                                style={{background: scene ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : 'rgba(255,255,255,0.08)', color: scene ? '#0c0f14' : 'rgba(255,255,255,0.4)'}}>
-                                {sceneNum}
+                            {/* Scene badge + action buttons */}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                                  style={{background: scene ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : 'rgba(255,255,255,0.08)', color: scene ? '#0c0f14' : 'rgba(255,255,255,0.4)'}}>
+                                  {sceneNum}
+                                </div>
+                                <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">
+                                  {language === 'ar' ? `مشهد ${sceneNum} • ١٠ث` : `Scene ${sceneNum} • 10s`}
+                                </span>
                               </div>
-                              <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">
-                                {language === 'ar' ? `مشهد ${sceneNum} • ١٠ث` : `Scene ${sceneNum} • 10s`}
-                              </span>
+                              {scene && !isEditing && (
+                                <div className="flex items-center gap-1.5">
+                                  {/* Edit */}
+                                  <button
+                                    onClick={() => { setEditingSceneNum(sceneNum); setEditingSceneText(scene.text); }}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-semibold transition-all active:scale-95"
+                                    style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',color:'rgba(255,255,255,0.5)'}}
+                                    title={language === 'ar' ? 'تحرير' : 'Edit scene'}
+                                  >
+                                    <Pencil className="h-2.5 w-2.5" />
+                                    <span>{language === 'ar' ? 'تحرير' : 'Edit'}</span>
+                                  </button>
+                                  {/* Regen this scene */}
+                                  <button
+                                    onClick={() => handleRegenScene(sceneNum)}
+                                    disabled={regenSceneNum !== null}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-semibold transition-all active:scale-95 disabled:opacity-40"
+                                    style={{background:'rgba(226,199,168,0.1)',border:'1px solid rgba(226,199,168,0.25)',color:'#E2C7A8'}}
+                                    title={language === 'ar' ? 'إعادة كتابة هذا المشهد' : 'Rewrite this scene'}
+                                  >
+                                    {isRegening ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
+                                    <span>{language === 'ar' ? 'إعادة' : 'Regen'}</span>
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                            {/* Scene text */}
+
+                            {/* Scene text — view or edit */}
                             <div className="flex-1 min-h-[40px]">
-                              {scene ? (
+                              {isEditing ? (
+                                <div className="flex flex-col gap-2">
+                                  <textarea
+                                    value={editingSceneText}
+                                    onChange={(e) => setEditingSceneText(e.target.value)}
+                                    className="w-full text-xs leading-relaxed text-[#E2C7A8]/90 bg-transparent resize-none outline-none rounded-lg p-2"
+                                    rows={5}
+                                    style={{border:'1px solid rgba(226,199,168,0.3)',background:'rgba(0,0,0,0.3)'}}
+                                    aria-label={language === 'ar' ? 'تحرير نص المشهد' : 'Edit scene text'}
+                                    autoFocus
+                                  />
+                                  <div className="flex gap-2 justify-end">
+                                    <button
+                                      onClick={() => { setEditingSceneNum(null); setEditingSceneText(''); }}
+                                      className="px-3 py-1 rounded-lg text-[10px] font-semibold transition-all"
+                                      style={{background:'rgba(255,255,255,0.06)',color:'rgba(255,255,255,0.5)'}}
+                                    >{language === 'ar' ? 'إلغاء' : 'Cancel'}</button>
+                                    <button
+                                      onClick={() => handleSaveSceneEdit(sceneNum, editingSceneText)}
+                                      className="px-3 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-95"
+                                      style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14'}}
+                                    >{language === 'ar' ? 'حفظ' : 'Save'}</button>
+                                  </div>
+                                </div>
+                              ) : isRegening ? (
+                                <div className="flex items-center gap-2 text-[#E2C7A8]/50">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  <span className="text-xs">{language === 'ar' ? 'يعيد الكتابة...' : 'Rewriting...'}</span>
+                                </div>
+                              ) : scene ? (
                                 <p className="text-xs leading-relaxed text-[#E2C7A8]/90">
                                   <TypewriterText text={scene.text} delay={sceneNum * 200} />
                                 </p>
