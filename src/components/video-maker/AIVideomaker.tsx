@@ -1301,54 +1301,106 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
   }, [user, isFilming, sceneImages, cinemaScenes, language, loadQuota]);
 
-  // ── Role 5: Premiere ──
+  // ── Role 5: Premiere — browser-side stitch via canvas + MediaRecorder ──
+  // No external server needed. Each clip is fetched as a blob, played into a hidden
+  // <video> element, drawn frame-by-frame onto a <canvas>, and recorded by MediaRecorder.
   const handleStitch = useCallback(async () => {
     const readyClips = videoClips.filter(Boolean) as string[];
     if (readyClips.length < 2 || isStitching) return;
     setIsStitching(true);
-    setStitchStatus(language === 'ar' ? 'جاري تشغيل الخادم...' : 'Waking up server...');
+    setStitchStatus(language === 'ar' ? 'جاري تحميل المقاطع...' : 'Loading clips...');
+
     try {
-      const serverBase = import.meta.env.VITE_VISION_SERVER_URL || 'https://wakti-vision-proxy.onrender.com';
-      // Wake up Render free-tier server — retry ping up to 4x with 10s gaps (cold start can take 30-50s)
-      let awake = false;
-      for (let attempt = 0; attempt < 4; attempt++) {
-        try {
-          const ping = await fetch(`${serverBase}/healthz`, { method: 'GET', signal: AbortSignal.timeout(12000) });
-          if (ping.ok) { awake = true; break; }
-        } catch { /* server still waking */ }
-        if (attempt < 3) {
-          setStitchStatus(language === 'ar' ? `جاري تشغيل الخادم... (${attempt + 2}/4)` : `Waking up server... (${attempt + 2}/4)`);
-          await new Promise(r => setTimeout(r, 10000)); // wait 10s then retry
-        }
+      // Step 1: Fetch all clips as object URLs (bypass CORS by going through blob)
+      const blobUrls: string[] = [];
+      for (let i = 0; i < readyClips.length; i++) {
+        setStitchStatus(language === 'ar' ? `جاري التحميل ${i + 1}/${readyClips.length}...` : `Downloading ${i + 1}/${readyClips.length}...`);
+        const resp = await fetch(readyClips[i]);
+        if (!resp.ok) throw new Error(`Clip ${i + 1} download failed: ${resp.status}`);
+        const blob = await resp.blob();
+        blobUrls.push(URL.createObjectURL(blob));
       }
-      if (!awake) throw new Error(language === 'ar' ? 'خادم التجميع لا يستجيب — حاول مجدداً' : 'Stitch server not responding — please try again in a moment');
-      setStitchStatus(language === 'ar' ? 'جاري التجميع...' : 'Stitching...');
-      const resp = await fetch(`${serverBase}/api/cinema/stitch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clip_urls: readyClips }),
-        signal: AbortSignal.timeout(5 * 60 * 1000), // 5 min timeout for FFmpeg
+
+      setStitchStatus(language === 'ar' ? 'جاري تجميع الفيديو...' : 'Stitching video...');
+
+      // Step 2: Set up canvas + hidden video element
+      const canvas = document.createElement('canvas');
+      canvas.width = cinemaFormat === '16:9' ? 1280 : 720;
+      canvas.height = cinemaFormat === '16:9' ? 720 : 1280;
+      const ctx = canvas.getContext('2d')!;
+
+      const videoEl = document.createElement('video');
+      videoEl.muted = true;
+      videoEl.playsInline = true;
+      videoEl.crossOrigin = 'anonymous';
+      videoEl.style.display = 'none';
+      document.body.appendChild(videoEl);
+
+      // Step 3: Set up MediaRecorder on canvas stream
+      const stream = canvas.captureStream(30);
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+        ? 'video/webm;codecs=vp9'
+        : MediaRecorder.isTypeSupported('video/webm')
+        ? 'video/webm'
+        : 'video/mp4';
+
+      const chunks: Blob[] = [];
+      const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 4_000_000 });
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+      const recordingDone = new Promise<Blob>((resolve) => {
+        recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
       });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err.error || `Stitch server ${resp.status}`);
+
+      recorder.start(100); // collect in 100ms chunks
+
+      // Step 4: Play each clip sequentially, drawing each frame to canvas
+      for (let i = 0; i < blobUrls.length; i++) {
+        setStitchStatus(language === 'ar' ? `جاري الدمج ${i + 1}/${blobUrls.length}...` : `Merging ${i + 1}/${blobUrls.length}...`);
+        await new Promise<void>((resolve, reject) => {
+          videoEl.src = blobUrls[i];
+          videoEl.onloadeddata = () => {
+            videoEl.play().catch(reject);
+          };
+          videoEl.onerror = () => reject(new Error(`Video ${i + 1} failed to load`));
+
+          let rafId: number;
+          const drawFrame = () => {
+            if (videoEl.ended || videoEl.paused) {
+              cancelAnimationFrame(rafId);
+              resolve();
+              return;
+            }
+            ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+            rafId = requestAnimationFrame(drawFrame);
+          };
+          videoEl.onplaying = () => { rafId = requestAnimationFrame(drawFrame); };
+          videoEl.onended = () => { cancelAnimationFrame(rafId); resolve(); };
+        });
+        // Small pause between clips
+        await new Promise(r => setTimeout(r, 100));
       }
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
+
+      recorder.stop();
+      document.body.removeChild(videoEl);
+
+      // Revoke blob URLs
+      blobUrls.forEach(u => URL.revokeObjectURL(u));
+
+      setStitchStatus(language === 'ar' ? 'جاري المعالجة النهائية...' : 'Finalizing...');
+      const finalBlob = await recordingDone;
+      const url = URL.createObjectURL(finalBlob);
       setPremiereVideoUrl(url);
       setCinemaStep('premiere');
       toast.success(language === 'ar' ? 'العرض الأول جاهز! 🎬' : 'Premiere ready! 🎬');
     } catch (err: any) {
       console.error('[cinema] Stitch error:', err);
-      const msg = err?.name === 'TimeoutError'
-        ? (language === 'ar' ? 'انتهت مهلة التجميع — حاول مجدداً' : 'Stitch timed out — please try again')
-        : (language === 'ar' ? 'فشل تجميع الفيديو: ' + err.message : 'Stitch failed: ' + err.message);
-      toast.error(msg);
+      toast.error(language === 'ar' ? 'فشل تجميع الفيديو: ' + err.message : 'Stitch failed: ' + err.message);
     } finally {
       setIsStitching(false);
       setStitchStatus('');
     }
-  }, [videoClips, isStitching, language]);
+  }, [videoClips, isStitching, language, cinemaFormat]);
 
   // ── Cinema full reset ──
   const handleCinemaReset = useCallback(() => {
