@@ -214,7 +214,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [isCinemaSaved, setIsCinemaSaved] = useState(false);
 
   // Reference images — user-uploaded assets for Cinema
+  // Index 0-5 = scene slots, index 6 = brand logo/reference anchor
   const [cinemaReferenceImages, setCinemaReferenceImages] = useState<(string | null)[]>([]);
+  const [cinemaRefTags, setCinemaRefTags] = useState<string[]>([]); // 'scene1'..'scene6', 'logo', 'ref'
   const [isUploadingRef, setIsUploadingRef] = useState(false);
 
   // Cinema Visionnaire form state
@@ -1115,14 +1117,37 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     };
 
     try {
-      // ── Scene 1: use ref image OR T2I ──
       const scene1 = cinemaScenes.find(s => s.scene === 1);
       if (!scene1) throw new Error('Scene 1 not found');
 
+      // ── Build scene-slot map from tags ──
+      // logo/ref tagged images are used as visual anchor (style reference) for all AI scenes
+      // scene-tagged images (scene1..scene6) go directly to that slot index
+      const sceneSlotMap: Record<number, string> = {}; // idx → url for direct-use
+      let logoAnchor: string | null = null; // brand logo or reference image
+
+      cinemaReferenceImages.forEach((url, slotIdx) => {
+        if (!url) return;
+        const tag = cinemaRefTags[slotIdx] || `scene${slotIdx + 1}`;
+        if (tag === 'logo' || tag === 'ref') {
+          logoAnchor = url; // use as style anchor for AI-generated scenes
+        } else {
+          // tag is 'scene1'..'scene6' — extract scene number
+          const sceneNum = parseInt(tag.replace('scene', ''), 10);
+          if (!isNaN(sceneNum) && sceneNum >= 1 && sceneNum <= 6) {
+            sceneSlotMap[sceneNum - 1] = url; // 0-indexed
+          }
+        }
+      });
+
+      // ── Scene 1: use tagged scene image OR T2I (with logo as anchor if available) ──
       let anchor: string;
-      if (cinemaReferenceImages[0]) {
-        // User provided their own image — skip T2I entirely
-        anchor = cinemaReferenceImages[0];
+      if (sceneSlotMap[0]) {
+        anchor = sceneSlotMap[0];
+      } else if (logoAnchor) {
+        // I2I from logo anchor to get scene 1 in brand style
+        const t2iCreate = await artistCall({ mode: 'i2i_create', prompt: scene1.text, anchor_url: logoAnchor, scene_index: 0, visual_dna: scene1.text });
+        anchor = await pollTask(t2iCreate.task_id, 0);
       } else {
         const t2iCreate = await artistCall({ mode: 't2i_create', prompt: scene1.text, aspect_ratio: cinemaFormat });
         anchor = await pollTask(t2iCreate.task_id, 0);
@@ -1131,30 +1156,28 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setSceneImages(prev => { const n = [...prev]; n[0] = anchor; return n; });
       setCastingProgress(prev => { const n = [...prev]; n[0] = 'done'; for (let i = 1; i < cinemaSceneCount; i++) n[i] = 'loading'; return n; });
 
-      // ── Scenes 2-N: sequential so each scene chains from the PREVIOUS scene's result ──
-      // This guarantees style consistency: S3 I2I uses S2's image, not S1
-      let prevAnchor = anchor; // starts as S1 (uploaded ref or T2I result)
+      // ── Scenes 2-N: sequential chain — each scene uses previous result as anchor ──
+      let prevAnchor = anchor;
 
       for (const scene of cinemaScenes.filter(s => s.scene >= 2 && s.scene <= cinemaSceneCount).sort((a, b) => a.scene - b.scene)) {
         const idx = scene.scene - 1;
-        if (cinemaReferenceImages[idx]) {
-          // User provided image for this slot — use directly, update chain anchor
-          setSceneImages(prev => { const n = [...prev]; n[idx] = cinemaReferenceImages[idx]!; return n; });
+        if (sceneSlotMap[idx]) {
+          // User tagged this exact scene — use directly
+          setSceneImages(prev => { const n = [...prev]; n[idx] = sceneSlotMap[idx]; return n; });
           setCastingProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
-          prevAnchor = cinemaReferenceImages[idx]!;
+          prevAnchor = sceneSlotMap[idx];
           continue;
         }
-        // I2I from previous scene's result — ensures visual chain continuity
+        // I2I from previous scene result — ensures visual chain continuity
         try {
           const created = await artistCall({ mode: 'i2i_create', prompt: scene.text, anchor_url: prevAnchor, scene_index: idx, visual_dna: scene1!.text });
           const imgUrl = await pollTask(created.task_id, idx);
           setSceneImages(prev => { const n = [...prev]; n[idx] = imgUrl; return n; });
           setCastingProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
-          prevAnchor = imgUrl; // next scene chains from THIS scene's result
+          prevAnchor = imgUrl;
         } catch (err: any) {
           console.error(`[cinema] I2I scene ${idx + 1} failed:`, err);
           setCastingProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
-          // keep prevAnchor unchanged so next scene still has something to chain from
         }
       }
 
@@ -1336,6 +1359,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setIsCinemaSaved(false);
     setIsCinemaSaving(false);
     setCinemaReferenceImages([]);
+    setCinemaRefTags([]);
     if (animPollRef.current) clearInterval(animPollRef.current);
   }, []);
 
@@ -1378,7 +1402,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
   };
 
-  const handleCinemaRefUpload = async (file: File, slotIdx: number) => {
+  const handleCinemaRefUpload = async (file: File, slotIdx: number, tag: string) => {
     if (!user) return;
     setIsUploadingRef(true);
     try {
@@ -1392,6 +1416,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setCinemaReferenceImages(prev => {
         const updated = [...prev];
         updated[slotIdx] = publicUrl;
+        return updated;
+      });
+      setCinemaRefTags(prev => {
+        const updated = [...prev];
+        updated[slotIdx] = tag;
         return updated;
       });
     } catch (e: any) {
@@ -2554,7 +2583,16 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     </div>
 
                     {/* Reference image upload section */}
-                    {cinemaScenes.length >= cinemaSceneCount && (
+                    {cinemaScenes.length >= cinemaSceneCount && (() => {
+                      // Slot definitions: N scene slots + 1 logo/brand slot
+                      const totalSlots = cinemaSceneCount + 1;
+                      const tagOptions = [
+                        ...Array.from({length: cinemaSceneCount}, (_, i) => ({ value: `scene${i+1}`, label: language === 'ar' ? `مشهد ${i+1}` : `Scene ${i+1}` })),
+                        { value: 'logo', label: language === 'ar' ? 'شعار العلامة' : 'Brand Logo' },
+                        { value: 'ref', label: language === 'ar' ? 'مرجع بصري' : 'Visual Ref' },
+                      ];
+                      const uploadedCount = cinemaReferenceImages.filter(Boolean).length;
+                      return (
                       <div className="rounded-2xl p-4 flex flex-col gap-3" style={{background:'rgba(226,199,168,0.05)', border:'1px solid rgba(226,199,168,0.15)'}}>
                         <div className="flex items-center justify-between">
                           <div>
@@ -2562,68 +2600,99 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               {language === 'ar' ? '🖼 صورك الخاصة (اختياري)' : '🖼 Your Own Images (Optional)'}
                             </p>
                             <p className="text-[10px] text-white/35 mt-0.5">
-                              {language === 'ar' ? 'ارفع شعارك أو منتجك أو صورتك — سيستخدمها الذكاء الاصطناعي مباشرة' : 'Upload your logo, product, or face — AI will use them directly'}
+                              {language === 'ar' ? 'ارفع صورك وحدد دورها — وجه، شعار، مشهد محدد' : 'Upload images & tag their role — face, logo, or specific scene'}
                             </p>
                           </div>
-                          {cinemaReferenceImages.some(Boolean) && (
+                          {uploadedCount > 0 && (
                             <button
-                              onClick={() => setCinemaReferenceImages([])}
-                              className="text-[10px] text-white/30 hover:text-white/60 transition-colors"
+                              onClick={() => { setCinemaReferenceImages([]); setCinemaRefTags([]); }}
+                              className="text-[10px] text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
                             >
                               {language === 'ar' ? 'مسح الكل' : 'Clear all'}
                             </button>
                           )}
                         </div>
-                        <div className="flex gap-2 flex-wrap">
-                          {Array.from({length: cinemaSceneCount}, (_, i) => i).map((idx) => {
-                            const refUrl = cinemaReferenceImages[idx];
+
+                        {/* Upload grid */}
+                        <div className="grid gap-2" style={{gridTemplateColumns: `repeat(${Math.min(totalSlots, 4)}, 1fr)`}}>
+                          {Array.from({length: totalSlots}, (_, slotIdx) => {
+                            const refUrl = cinemaReferenceImages[slotIdx];
+                            const tag = cinemaRefTags[slotIdx] || (slotIdx < cinemaSceneCount ? `scene${slotIdx + 1}` : 'logo');
+                            const tagLabel = tagOptions.find(t => t.value === tag)?.label || tag;
+                            const isLogoSlot = slotIdx === cinemaSceneCount; // last slot = logo/brand
                             return (
-                              <div key={idx} className="relative" style={{width: '60px', height: '60px'}}>
-                                {refUrl ? (
-                                  <>
-                                    <img src={refUrl} alt={`ref ${idx+1}`} className="w-full h-full object-cover rounded-xl border border-[#E2C7A8]/50" />
-                                    <button
-                                      onClick={() => setCinemaReferenceImages(prev => { const n = [...prev]; n[idx] = null; return n; })}
-                                      className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-black/80 text-white/80 text-[9px] flex items-center justify-center"
-                                    >✕</button>
-                                    <div className="absolute bottom-0 left-0 right-0 text-[8px] text-center font-bold text-[#E2C7A8] bg-black/60 rounded-b-xl py-0.5">
-                                      S{idx+1}
-                                    </div>
-                                  </>
-                                ) : (
-                                  <label className="w-full h-full rounded-xl border border-dashed border-white/20 flex flex-col items-center justify-center cursor-pointer hover:border-[#E2C7A8]/50 transition-colors" style={{background:'rgba(255,255,255,0.03)'}}>
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      className="hidden"
-                                      onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) handleCinemaRefUpload(file, idx);
-                                      }}
-                                    />
-                                    {isUploadingRef ? (
-                                      <Loader2 className="h-3 w-3 animate-spin text-white/30" />
-                                    ) : (
-                                      <>
-                                        <span className="text-white/30 text-[16px] leading-none">+</span>
-                                        <span className="text-[8px] text-white/25 mt-0.5">S{idx+1}</span>
-                                      </>
-                                    )}
-                                  </label>
-                                )}
+                              <div key={slotIdx} className="flex flex-col gap-1">
+                                {/* Image tile */}
+                                <div className="relative rounded-xl overflow-hidden" style={{aspectRatio:'1', background: refUrl ? 'transparent' : 'rgba(255,255,255,0.03)', border: refUrl ? '1px solid rgba(226,199,168,0.4)' : `2px dashed ${isLogoSlot ? 'rgba(142,76,55,0.35)' : 'rgba(255,255,255,0.15)'}`}}>
+                                  {refUrl ? (
+                                    <>
+                                      <img src={refUrl} alt={`ref ${slotIdx+1}`} className="w-full h-full object-cover" />
+                                      <button
+                                        onClick={() => {
+                                          setCinemaReferenceImages(prev => { const n = [...prev]; n[slotIdx] = null; return n; });
+                                          setCinemaRefTags(prev => { const n = [...prev]; n[slotIdx] = ''; return n; });
+                                        }}
+                                        className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/80 text-white text-[10px] flex items-center justify-center hover:bg-red-500/80 transition-colors"
+                                      >✕</button>
+                                    </>
+                                  ) : (
+                                    <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer gap-0.5">
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) handleCinemaRefUpload(file, slotIdx, tag);
+                                        }}
+                                      />
+                                      {isUploadingRef ? (
+                                        <Loader2 className="h-4 w-4 animate-spin text-white/30" />
+                                      ) : (
+                                        <>
+                                          <span className="text-white/25 text-xl leading-none">+</span>
+                                          <span className="text-[8px] text-white/20">{isLogoSlot ? (language === 'ar' ? 'شعار' : 'Logo') : `S${slotIdx+1}`}</span>
+                                        </>
+                                      )}
+                                    </label>
+                                  )}
+                                </div>
+
+                                {/* Tag selector — always visible so user can pre-select before upload OR change after */}
+                                <select
+                                  value={tag}
+                                  title={language === 'ar' ? 'نوع الصورة' : 'Image tag'}
+                                  onChange={(e) => {
+                                    const newTag = e.target.value;
+                                    setCinemaRefTags(prev => { const n = [...prev]; n[slotIdx] = newTag; return n; });
+                                  }}
+                                  className="w-full text-[9px] font-semibold rounded-lg px-1.5 py-1 outline-none appearance-none text-center cursor-pointer transition-all"
+                                  style={{
+                                    background: refUrl ? 'rgba(226,199,168,0.15)' : 'rgba(255,255,255,0.05)',
+                                    border: refUrl ? '1px solid rgba(226,199,168,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                                    color: refUrl ? '#E2C7A8' : 'rgba(255,255,255,0.3)',
+                                    colorScheme: 'dark',
+                                  }}
+                                >
+                                  {tagOptions.map(opt => (
+                                    <option key={opt.value} value={opt.value} className="bg-[#0c0f14] text-white">{opt.label}</option>
+                                  ))}
+                                </select>
                               </div>
                             );
                           })}
                         </div>
-                        {cinemaReferenceImages.some(Boolean) && (
+
+                        {uploadedCount > 0 && (
                           <p className="text-[10px] text-[#E2C7A8]/50 px-0.5">
                             {language === 'ar'
-                              ? `${cinemaReferenceImages.filter(Boolean).length} صور مرفوعة — سيتخطى الذكاء الاصطناعي توليد هذه المشاهد`
-                              : `${cinemaReferenceImages.filter(Boolean).length} image${cinemaReferenceImages.filter(Boolean).length > 1 ? 's' : ''} uploaded — AI will skip generation for those scenes`}
+                              ? `${uploadedCount} ${uploadedCount === 1 ? 'صورة مرفوعة' : 'صور مرفوعة'} — الذكاء الاصطناعي سيستخدمها وفق التصنيف`
+                              : `${uploadedCount} image${uploadedCount > 1 ? 's' : ''} uploaded — AI will use them based on their tag`}
                           </p>
                         )}
                       </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Sticky footer — CAST YOUR MOVIE */}
                     {cinemaScenes.length >= cinemaSceneCount && (

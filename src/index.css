@@ -94,16 +94,15 @@
 
 /* Cinema Sticky Footer */
 .cinema-sticky-footer {
-  position: fixed;
+  position: sticky;
   bottom: 0;
-  left: 0;
-  right: 0;
   z-index: 100;
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: rgba(12,15,20,0.85);
+  background: rgba(12,15,20,0.92);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
   border-top: 1px solid rgba(226,199,168,0.2);
+  margin-top: auto;
 }
 
 /* Document Scanner Animation */
