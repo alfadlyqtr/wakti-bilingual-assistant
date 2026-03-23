@@ -18,6 +18,8 @@ const allowed = (process.env.ALLOWED_ORIGINS || 'http://localhost,http://127.0.0
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
+    // Allow any localhost / 127.0.0.1 port (dev servers on any port)
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return callback(null, true);
     const ok = allowed.some(a => origin.startsWith(a));
     return callback(null, ok);
   },

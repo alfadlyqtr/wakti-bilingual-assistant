@@ -222,6 +222,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [cinemaCharacters, setCinemaCharacters] = useState('');
   const [cinemaRelationship, setCinemaRelationship] = useState('');
   const [cinemaCTA, setCinemaCTA] = useState('');
+  const [cinemaSceneCount, setCinemaSceneCount] = useState(3);
   const [cinemaCTACustom, setCinemaCTACustom] = useState('');
 
   // Typewriter effect component for Cinema scene cards
@@ -1031,6 +1032,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         body: JSON.stringify({
           vision: visionToSend,
           language: language,
+          scene_count: cinemaSceneCount,
         }),
       });
 
@@ -1069,7 +1071,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   // Step 3: fire I2I create for Scenes 2-6 in parallel
   // Step 4: poll all I2I tasks from frontend every 5s
   const handleCast = useCallback(async () => {
-    if (!user || isCasting || cinemaScenes.length < 6) return;
+    if (!user || isCasting || cinemaScenes.length < cinemaSceneCount) return;
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData?.session?.access_token;
     if (!accessToken) return;
@@ -1077,7 +1079,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setIsCasting(true);
     setAnchorImageUrl(null);
     setSceneImages([null, null, null, null, null, null]);
-    setCastingProgress(['loading', 'idle', 'idle', 'idle', 'idle', 'idle']);
+    setCastingProgress(Array.from({length: 6}, (_, i) => i === 0 ? 'loading' : 'idle') as ('idle'|'loading'|'done'|'error')[]);
     setCinemaStep('casting');
 
     const artistCall = async (body: Record<string, unknown>) => {
@@ -1114,11 +1116,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const anchor = await pollTask(t2iCreate.task_id, 0);
       setAnchorImageUrl(anchor);
       setSceneImages(prev => { const n = [...prev]; n[0] = anchor; return n; });
-      setCastingProgress(prev => { const n = [...prev]; n[0] = 'done'; n[1] = 'loading'; n[2] = 'loading'; n[3] = 'loading'; n[4] = 'loading'; n[5] = 'loading'; return n; });
+      setCastingProgress(prev => { const n = [...prev]; n[0] = 'done'; for (let i = 1; i < cinemaSceneCount; i++) n[i] = 'loading'; return n; });
 
-      // ── Scenes 2-6: I2I create all in parallel ──
+      // ── Scenes 2-N: I2I create all in parallel ──
       const i2iCreates = await Promise.allSettled(
-        cinemaScenes.filter(s => s.scene >= 2 && s.scene <= 6).map(async (scene) => {
+        cinemaScenes.filter(s => s.scene >= 2 && s.scene <= cinemaSceneCount).map(async (scene) => {
           const idx = scene.scene - 1;
           const created = await artistCall({ mode: 'i2i_create', prompt: scene.text, anchor_url: anchor, scene_index: idx, visual_dna: scene1!.text });
           return { idx, task_id: created.task_id as string };
@@ -1156,7 +1158,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const handleFilm = useCallback(async () => {
     if (!user || isFilming) return;
     const images = sceneImages;
-    if (images.some(img => img === null)) {
+    if (images.slice(0, cinemaSceneCount).some(img => img === null)) {
       toast.error(language === 'ar' ? 'لم تكتمل جميع الصور بعد' : 'Not all scene images are ready');
       return;
     }
@@ -1165,9 +1167,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     if (!accessToken) return;
 
     setIsFilming(true);
-    setVideoClips([null, null, null, null, null, null]);
-    setAnimTaskIds([null, null, null, null, null, null]);
-    setAnimProgress(['queued', 'queued', 'queued', 'queued', 'queued', 'queued']);
+    setVideoClips(Array(cinemaSceneCount).fill(null));
+    setAnimTaskIds(Array(cinemaSceneCount).fill(null));
+    setAnimProgress(Array(cinemaSceneCount).fill('queued'));
     setCinemaStep('filming');
 
     const callAnimator = async (body: Record<string, unknown>) => {
@@ -1186,9 +1188,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     };
 
     try {
-      // Fire all 6 I2V tasks in parallel
+      // Fire all N I2V tasks in parallel
       const taskResults = await Promise.allSettled(
-        images.map(async (imgUrl, idx) => {
+        images.slice(0, cinemaSceneCount).map(async (imgUrl, idx) => {
           const scene = cinemaScenes[idx];
           const result = await callAnimator({
             mode: 'create',
@@ -1303,6 +1305,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setVideoClips([null, null, null, null, null, null]);
     setAnimTaskIds([null, null, null, null, null, null]);
     setAnimProgress(['idle', 'idle', 'idle', 'idle', 'idle', 'idle']);
+    setCinemaSceneCount(6);
     setIsFilming(false);
     setIsCasting(false);
     setIsStitching(false);
@@ -1570,15 +1573,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
           {/* Mode toggle - Glassmorphic Segmented Control */}
           <div
-            className={`relative grid grid-cols-2 gap-1.5 p-1.5 ${
+            className={`relative grid grid-cols-2 gap-2 rounded-[26px] p-2 border ${
               isGenerating ? 'opacity-80' : ''
-            }`}
-            style={{
-              backdropFilter: 'blur(20px)',
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '24px',
-            }}
+            } bg-[linear-gradient(135deg,rgba(252,254,253,0.98),rgba(233,206,176,0.34))] border-[#060541]/10 shadow-[0_10px_28px_rgba(6,5,65,0.10)] dark:bg-[linear-gradient(135deg,rgba(12,15,20,0.96),rgba(30,34,42,0.94))] dark:border-white/10 dark:shadow-[0_18px_42px_rgba(0,0,0,0.42)]`}
             role="group"
             aria-label={language === 'ar' ? 'وضع إنشاء الفيديو' : 'Video generation mode'}
           >
@@ -1588,15 +1585,15 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 if (!isGenerating) setGenerationMode('image_to_video');
               }}
               disabled={isGenerating}
-              className={`flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-[11px] font-semibold transition-all duration-300 active:scale-[0.98] disabled:cursor-not-allowed whitespace-nowrap ${
+              className={`flex items-center justify-center gap-2 rounded-[18px] px-3 py-3 min-h-[52px] text-[11px] font-semibold transition-all duration-300 active:scale-[0.98] disabled:cursor-not-allowed whitespace-nowrap border ${
                 generationMode === 'image_to_video'
-                  ? 'text-white shadow-[0_4px_20px_rgba(226,199,168,0.35)]'
-                  : 'text-white/60 hover:text-white/80'
+                  ? 'text-[#060541] border-[#C5A47E] shadow-[0_10px_24px_rgba(197,164,126,0.28)] dark:text-[#0c0f14]'
+                  : 'text-[#060541]/70 border-[#060541]/10 bg-white/70 hover:bg-white dark:text-white/70 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10'
               }`}
               style={{
                 background: generationMode === 'image_to_video' 
                   ? 'linear-gradient(135deg, #E2C7A8 0%, #C5A47E 100%)' 
-                  : 'transparent',
+                  : undefined,
               }}
             >
               <ImageIcon className="h-3.5 w-3.5" />
@@ -1609,15 +1606,15 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 if (!isGenerating) setGenerationMode('text_to_video');
               }}
               disabled={isGenerating}
-              className={`flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-[11px] font-semibold transition-all duration-300 active:scale-[0.98] disabled:cursor-not-allowed whitespace-nowrap ${
+              className={`flex items-center justify-center gap-2 rounded-[18px] px-3 py-3 min-h-[52px] text-[11px] font-semibold transition-all duration-300 active:scale-[0.98] disabled:cursor-not-allowed whitespace-nowrap border ${
                 generationMode === 'text_to_video'
-                  ? 'text-white shadow-[0_4px_20px_rgba(226,199,168,0.35)]'
-                  : 'text-white/60 hover:text-white/80'
+                  ? 'text-[#060541] border-[#C5A47E] shadow-[0_10px_24px_rgba(197,164,126,0.28)] dark:text-[#0c0f14]'
+                  : 'text-[#060541]/70 border-[#060541]/10 bg-white/70 hover:bg-white dark:text-white/70 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10'
               }`}
               style={{
                 background: generationMode === 'text_to_video' 
                   ? 'linear-gradient(135deg, #E2C7A8 0%, #C5A47E 100%)' 
-                  : 'transparent',
+                  : undefined,
               }}
             >
               <Type className="h-3.5 w-3.5" />
@@ -1630,15 +1627,15 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 if (!isGenerating) setGenerationMode('2images_to_video');
               }}
               disabled={isGenerating}
-              className={`flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-[11px] font-semibold transition-all duration-300 active:scale-[0.98] disabled:cursor-not-allowed whitespace-nowrap ${
+              className={`flex items-center justify-center gap-2 rounded-[18px] px-3 py-3 min-h-[52px] text-[11px] font-semibold transition-all duration-300 active:scale-[0.98] disabled:cursor-not-allowed whitespace-nowrap border ${
                 generationMode === '2images_to_video'
-                  ? 'text-white shadow-[0_4px_20px_rgba(226,199,168,0.35)]'
-                  : 'text-white/60 hover:text-white/80'
+                  ? 'text-[#060541] border-[#C5A47E] shadow-[0_10px_24px_rgba(197,164,126,0.28)] dark:text-[#0c0f14]'
+                  : 'text-[#060541]/70 border-[#060541]/10 bg-white/70 hover:bg-white dark:text-white/70 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10'
               }`}
               style={{
                 background: generationMode === '2images_to_video' 
                   ? 'linear-gradient(135deg, #E2C7A8 0%, #C5A47E 100%)' 
-                  : 'transparent',
+                  : undefined,
               }}
             >
               <Images className="h-3.5 w-3.5" />
@@ -1651,17 +1648,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 if (!isGenerating && !isTrialUser) setGenerationMode('cinema');
               }}
               disabled={isGenerating}
-              className={`relative flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-[11px] font-semibold transition-all duration-300 active:scale-[0.98] disabled:cursor-not-allowed whitespace-nowrap ${
+              className={`relative flex items-center justify-center gap-2 rounded-[18px] px-3 py-3 min-h-[52px] text-[11px] font-semibold transition-all duration-300 active:scale-[0.98] disabled:cursor-not-allowed whitespace-nowrap border ${
                 isTrialUser
-                  ? 'text-white/30 cursor-not-allowed'
+                  ? 'text-[#060541]/35 border-[#060541]/10 bg-white/40 cursor-not-allowed dark:text-white/30 dark:border-white/10 dark:bg-white/5'
                   : generationMode === 'cinema'
-                  ? 'text-white shadow-[0_4px_20px_rgba(226,199,168,0.35)]'
-                  : 'text-white/60 hover:text-white/80'
+                  ? 'text-[#060541] border-[#C5A47E] shadow-[0_10px_24px_rgba(197,164,126,0.28)] dark:text-[#0c0f14]'
+                  : 'text-[#060541]/70 border-[#060541]/10 bg-white/70 hover:bg-white dark:text-white/70 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10'
               }`}
               style={{
                 background: !isTrialUser && generationMode === 'cinema'
                   ? 'linear-gradient(135deg, #E2C7A8 0%, #C5A47E 100%)'
-                  : 'transparent',
+                  : undefined,
               }}
             >
               <Film className="h-3.5 w-3.5" />
@@ -2316,6 +2313,40 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         )}
                         <p className="text-xs text-white/30 px-1">{language === 'ar' ? 'يساعد المخرج على تصميم القصة بشكل أفضل.' : 'Helps the AI Director craft a stronger story arc.'}</p>
                       </div>
+
+                      {/* Scene Count Selector */}
+                      <div className="flex flex-col gap-2">
+                        <label className="text-xs font-semibold text-[#E2C7A8] uppercase tracking-wider">
+                          {language === 'ar' ? 'عدد المشاهد (المدة)' : 'How many scenes? (Duration)'}
+                        </label>
+                        <div className="flex gap-2">
+                          {[1,2,3,4,5,6].map(n => (
+                            <button
+                              key={n}
+                              onClick={() => setCinemaSceneCount(n)}
+                              disabled={isDirecting}
+                              className="flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-40"
+                              style={{
+                                background: cinemaSceneCount === n
+                                  ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)'
+                                  : 'rgba(255,255,255,0.04)',
+                                border: cinemaSceneCount === n
+                                  ? '1px solid rgba(226,199,168,0.8)'
+                                  : '1px solid rgba(255,255,255,0.1)',
+                                color: cinemaSceneCount === n ? '#0c0f14' : 'rgba(255,255,255,0.5)',
+                              }}
+                            >
+                              <span className="text-sm font-bold">{n}</span>
+                              <span className="text-[9px] font-medium opacity-80">{n * 10}s</span>
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-white/30 px-1">
+                          {language === 'ar'
+                            ? `${cinemaSceneCount} مشهد • ${cinemaSceneCount * 10} ثانية إجمالي`
+                            : `${cinemaSceneCount} scene${cinemaSceneCount > 1 ? 's' : ''} • ${cinemaSceneCount * 10} seconds total`}
+                        </p>
+                      </div>
                     </div>
 
                     {/* PREVIEW & START DIRECTING button */}
@@ -2388,7 +2419,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                     {/* Vertical stacked scene cards */}
                     <div className="flex flex-col gap-3">
-                      {[1, 2, 3, 4, 5, 6].map((sceneNum) => {
+                      {Array.from({length: cinemaSceneCount}, (_, i) => i + 1).map((sceneNum) => {
                         const scene = cinemaScenes.find(s => s.scene === sceneNum);
                         return (
                           <div
@@ -2428,7 +2459,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     </div>
 
                     {/* Sticky footer — CAST YOUR MOVIE */}
-                    {cinemaScenes.length === 6 && (
+                    {cinemaScenes.length >= cinemaSceneCount && (
                       <div className="cinema-sticky-footer px-4 py-3">
                         <button
                           onClick={handleCast}
@@ -2474,9 +2505,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       </div>
                     )}
 
-                    {/* 6 scene image grid (2 columns) */}
+                    {/* N scene image grid (2 columns) */}
                     <div className="grid grid-cols-2 gap-3">
-                      {[0,1,2,3,4,5].map((idx) => {
+                      {Array.from({length: cinemaSceneCount}, (_, i) => i).map((idx) => {
                         const img = sceneImages[idx];
                         const prog = castingProgress[idx];
                         return (
@@ -2536,13 +2567,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     {/* Header */}
                     <div className="text-center space-y-1">
                       <h3 className="text-lg font-bold text-white">{language === 'ar' ? 'الإنتاج جارٍ...' : 'Production in Progress'}</h3>
-                      <p className="text-xs text-white/50">{language === 'ar' ? '٦ مشاهد • ١٠ ثوانٍ كل مشهد' : '6 chapters • 10s each'}</p>
+                      <p className="text-xs text-white/50">{language === 'ar' ? `${cinemaSceneCount} مشاهد • ١٠ ثوانٍ كل مشهد` : `${cinemaSceneCount} chapters • 10s each`}</p>
                     </div>
 
                     {/* Production progress bar */}
                     {(() => {
-                      const score = animProgress.reduce((acc, p) => acc + (p === 'done' ? 1 : p === 'rendering' ? 0.4 : p === 'queued' ? 0.05 : 0), 0);
-                      const pct = Math.min(100, Math.round((score / 6) * 100));
+                      const score = animProgress.slice(0, cinemaSceneCount).reduce((acc, p) => acc + (p === 'done' ? 1 : p === 'rendering' ? 0.4 : p === 'queued' ? 0.05 : 0), 0);
+                      const pct = Math.min(100, Math.round((score / cinemaSceneCount) * 100));
                       return (
                         <div className="space-y-2 px-1">
                           <div className="flex justify-between text-xs text-white/60">
@@ -2559,9 +2590,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       );
                     })()}
 
-                    {/* 6 scene clip status grid */}
+                    {/* N scene clip status grid */}
                     <div className="grid grid-cols-3 gap-3">
-                      {[0,1,2,3,4,5].map((idx) => {
+                      {Array.from({length: cinemaSceneCount}, (_, i) => i).map((idx) => {
                         const prog = animProgress[idx];
                         const clip = videoClips[idx];
                         return (

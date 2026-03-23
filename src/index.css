@@ -1780,7 +1780,6 @@ body.keyboard-visible {
 }
 
 /* --- AI Image Loading Enhancements --- */
-@layer components {
   /* ===== Journal 3D utilities (strong) ===== */
   .card-3d {
     position: relative;
@@ -1893,7 +1892,6 @@ body.keyboard-visible {
     0% { transform: translateY(-100%); opacity: 0.9; }
     100% { transform: translateY(100%); opacity: 0; }
   }
-}
 
 /* removed: forced visibility for #mobile-nav which interfered with keyboard-hide behavior */
 

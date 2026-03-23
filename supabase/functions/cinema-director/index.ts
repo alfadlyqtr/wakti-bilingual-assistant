@@ -71,7 +71,8 @@ serve(async (req) => {
       }
     }
 
-    const { vision, language = 'en' } = await req.json();
+    const { vision, language = 'en', scene_count = 6 } = await req.json();
+    const N = Math.max(1, Math.min(6, Number(scene_count) || 6));
 
     if (!vision || !vision.trim()) {
       return new Response(
@@ -90,18 +91,18 @@ serve(async (req) => {
 المشهد ١ (المرساة): أنشئ هذا خصيصاً للصورة-إلى-صورة. يجب أن يكون لقطة ساكنة مهيبة.
 المشاهد ٢-٦ (الاستمرارية): أنشئ هذه للصورة-إلى-صورة والصورة-إلى-فيديو. ركز على الحركة والفعل مع الحفاظ على 'البصمة البصرية' متطابقة.
 تنسيق الإخراج: أعد فقط مصفوفة JSON: [{"scene": 1, "text": "..."}, {"scene": 2, "text": "..."}, ...].`
-      : `You are the Wakti AI Cinema Director. Your mission is to turn a 1-sentence amateur vision into a consistent 60-second cinematic story (6 scenes, 10 seconds each).
+      : `You are the Wakti AI Cinema Director. Your mission is to turn a 1-sentence amateur vision into a consistent cinematic story (${N} scene${N > 1 ? 's' : ''}, 10 seconds each = ${N * 10} seconds total).
 
 CORE INSTRUCTIONS:
 CREATE THE VISUAL DNA BLOCK: First, extract the subject, materials, lighting, and cinematic style (e.g., 'Gold-plated mechanical falcon, polished metallic finish, sapphire eyes, 4pm Lusail sunset orange lighting, 35mm lens, 8k photorealistic'). This block MUST be prepended to the start of EVERY scene prompt for 100% consistency.
-WRITE THE STORY ARC: Generate 6 scenes that form a cohesive 60-second narrative (Introduction, Build-up, Action, Climax, Resolution, Finale).
+WRITE THE STORY ARC: Generate exactly ${N} scenes that form a cohesive narrative. Scene 1 is the anchor (static majestic shot), scenes 2-${N} are sequels (motion, action, same visual DNA).
 SCENE 1 (THE ANCHOR): Create this specifically for Text-to-Image. It must be a majestic static shot.
-SCENES 2-6 (THE SEQUEL): Create these for Image-to-Image and Image-to-Video. Focus on movement and action while keeping the 'Visual DNA' identical.
-OUTPUT FORMAT: Return ONLY a JSON array: [{"scene": 1, "text": "..."}, {"scene": 2, "text": "..."}, ...].`;
+SCENES 2-${N} (THE SEQUEL): Create these for Image-to-Image. Focus on movement and action while keeping the Visual DNA identical.
+OUTPUT FORMAT: Return ONLY a JSON array with exactly ${N} items: [{"scene": 1, "text": "..."}, ...].`;
 
     const userPrompt = language === 'ar'
-      ? `رؤيتي: ${vision.trim()}\n\nأنشئ لي ٦ مشاهد سينمائية مدة كل منها ١٠ ثواني.`
-      : `My vision: ${vision.trim()}\n\nCreate 6 cinematic 10-second scenes for me.`;
+      ? `رؤيتي: ${vision.trim()}\n\nأنشئ لي ${N} مشهد سينمائي مدة كل منها ١٠ ثواني.`
+      : `My vision: ${vision.trim()}\n\nCreate exactly ${N} cinematic 10-second scene${N > 1 ? 's' : ''} for me.`;
 
     // Call GPT-4o mini via OpenAI API
     const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -164,14 +165,14 @@ OUTPUT FORMAT: Return ONLY a JSON array: [{"scene": 1, "text": "..."}, {"scene":
       throw new Error('Invalid JSON from AI director');
     }
 
-    if (!scenes || scenes.length < 6) {
-      throw new Error(`AI director returned ${scenes?.length ?? 0} scenes, expected 6`);
+    if (!scenes || scenes.length < 1) {
+      throw new Error(`AI director returned no scenes`);
     }
 
     const response: DirectorResponse = {
       success: true,
       visualDna: '',
-      scenes: scenes.slice(0, 6).map((s, i) => ({
+      scenes: scenes.slice(0, N).map((s, i) => ({
         scene: s.scene || i + 1,
         text: s.text || ''
       }))

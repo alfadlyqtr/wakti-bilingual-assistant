@@ -1063,7 +1063,16 @@ function _promptTimezone(): string {
 
 // REMINDER INTERCEPTION: dynamic instruction injected only when user requests a reminder.
 function buildReminderInstruction(formattedOffset: string): string {
-  return `\n\nREMINDER RULES (CRITICAL): If the user asks for a reminder, append this JSON block at the absolute end of your response on its own line with no markdown: {"action":"set_reminder","time":"ISO-8601 datetime with offset","text":"reminder description"}. You MUST use the offset ${formattedOffset} for the time field (e.g. 2026-03-22T15:00:00${formattedOffset}). Calculate relative times by adding to the provided Current local time. If no reminder is requested, output NO JSON at all — not even a placeholder.`;
+  return `⚠️ REMINDER OUTPUT RULE (HIGHEST PRIORITY — OVERRIDE EVERYTHING ELSE):
+The user is asking for a reminder. You MUST append the following JSON block on its own line at the ABSOLUTE END of your response, after all text. No markdown, no code fences, no explanation:
+{"action":"set_reminder","time":"ISO-8601 datetime with offset","text":"reminder description"}
+Rules:
+- Use offset ${formattedOffset} (e.g. 2026-03-22T15:00:00${formattedOffset}).
+- Calculate relative times ("in 5 minutes", "tomorrow at 9am") by adding to the Current local time shown above.
+- NEVER omit the JSON. NEVER put it in a code block. NEVER add anything after it.
+- If you do not output this JSON, the reminder will be LOST and the user will be angry.
+
+`;
 }
 
 /**
@@ -1100,8 +1109,34 @@ async function interceptAndScheduleReminder(
       console.log(`🔔 REMINDER INTERCEPT: Found reminder block — time=${timeStr} (offset=${userOffset}), text=${reminderText}`);
 
       try {
-        const scheduleUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/schedule-reminder-push`;
+        const supabaseAdmin = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+        );
         const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+
+        // INSERT notification_history row first so process-scheduled-reminders can pick it up
+        const { data: inserted, error: insertError } = await supabaseAdmin
+          .from('notification_history')
+          .insert({
+            user_id: userId,
+            type: 'reminder',
+            reminder_content: reminderText,
+            scheduled_for: timeStr,
+            push_sent: false,
+          })
+          .select('id')
+          .single();
+
+        if (insertError) {
+          console.warn('⚠️ REMINDER INTERCEPT: Failed to insert notification_history row', insertError.message);
+        } else {
+          console.log(`📝 REMINDER INTERCEPT: Inserted notification_history row id=${inserted?.id}`);
+        }
+
+        const notificationId = inserted?.id || null;
+
+        const scheduleUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/schedule-reminder-push`;
         const schedResp = await fetch(scheduleUrl, {
           method: 'POST',
           headers: {
@@ -1113,6 +1148,7 @@ async function interceptAndScheduleReminder(
             scheduled_for: timeStr,
             reminder_text: reminderText,
             timezone,
+            notification_id: notificationId,
           }),
         });
         if (schedResp.ok) {
@@ -1155,8 +1191,14 @@ function buildSystemPrompt(
   const useSearch   = lazyOpts?.useSearch   ?? (activeTrigger === 'search');
   const _hasReminders = lazyOpts?.hasReminders ?? false;
 
+  // REMINDER INSTRUCTION: injected FIRST so it is never buried and always obeyed
+  let reminderPrefix = '';
+  if (lazyOpts?.isReminderTrigger) {
+    reminderPrefix = buildReminderInstruction(lazyOpts.formattedOffset || '+00:00');
+  }
+
   // BASE is always included (~500 chars)
-  let prompt = _promptBase(language, currentDate, localTime, pt, aiNick);
+  let prompt = reminderPrefix + _promptBase(language, currentDate, localTime, pt, aiNick);
 
   // MODE-SPECIFIC EXTENSIONS — injected only when needed
   if (activeTrigger === 'search') {
@@ -1174,10 +1216,6 @@ function buildSystemPrompt(
   } else {
     // Pure chat: freshness hint only — reminder interception handled at backend level
     prompt += _promptChatFreshness();
-  }
-  // Reminder instruction injected only when the user's message contains reminder keywords
-  if (lazyOpts?.isReminderTrigger) {
-    prompt += buildReminderInstruction(lazyOpts.formattedOffset || '+00:00');
   }
 
   console.log(`📌 SYSTEM PROMPT SIZE: ${prompt.length} chars | trigger=${activeTrigger} | submode=${chatSubmode} | useSearch=${useSearch}`);
