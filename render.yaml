@@ -13,4 +13,4 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: ALLOWED_ORIGINS
-        value: https://wakti.qa,https://www.wakti.qa,http://localhost:8080
+        value: https://wakti.qa,https://www.wakti.qa,http://localhost:8080,https://wakti-bilingual-assistant.netlify.app
