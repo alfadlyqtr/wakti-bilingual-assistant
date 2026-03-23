@@ -17,6 +17,99 @@
   animation: shimmer 3s ease-in-out infinite;
 }
 
+/* Desert Gold shimmer for Cinema Director button */
+@keyframes shimmerGold {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+/* Cinema Production — Brand Glow Pulse */
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 12px hsla(210,100%,65%,0.4), 0 0 24px hsla(280,70%,65%,0.2); }
+  50% { box-shadow: 0 0 28px hsla(210,100%,65%,0.8), 0 0 56px hsla(280,70%,65%,0.5); }
+}
+.cinema-glow-pulse { animation: glowPulse 1.8s ease-in-out infinite; }
+
+/* Cinema Production — Gold Glow Pulse (for scene cards) */
+@keyframes goldPulse {
+  0%, 100% { box-shadow: 0 0 8px hsla(40,90%,65%,0.3), inset 0 0 12px hsla(40,90%,65%,0.05); }
+  50% { box-shadow: 0 0 22px hsla(40,90%,65%,0.7), inset 0 0 24px hsla(40,90%,65%,0.12); }
+}
+.cinema-gold-pulse { animation: goldPulse 1.6s ease-in-out infinite; }
+
+/* Cinema Production — Painting Skeleton */
+@keyframes paintingSweep {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.cinema-painting-skeleton {
+  background: linear-gradient(90deg,
+    rgba(226,199,168,0.06) 25%,
+    rgba(226,199,168,0.18) 50%,
+    rgba(226,199,168,0.06) 75%
+  );
+  background-size: 200% 100%;
+  animation: paintingSweep 1.8s ease-in-out infinite;
+}
+
+/* Cinema Snap-Scroll Carousel */
+.cinema-carousel {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  gap: 12px;
+  padding: 4px 16px;
+}
+.cinema-carousel::-webkit-scrollbar { display: none; }
+.cinema-carousel-card {
+  flex: 0 0 calc(72vw);
+  max-width: 280px;
+  min-height: 340px;
+  aspect-ratio: 2 / 3;
+  scroll-snap-align: center;
+}
+
+/* Cinema Production Progress */
+@keyframes progressGlow {
+  0%, 100% { box-shadow: 0 0 6px hsla(210,100%,65%,0.5); }
+  50% { box-shadow: 0 0 18px hsla(210,100%,65%,0.9), 0 0 36px hsla(280,70%,65%,0.5); }
+}
+.cinema-progress-bar {
+  animation: progressGlow 1.5s ease-in-out infinite;
+}
+
+/* Cinema Full-Screen Player */
+.cinema-player-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #0c0f14;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.cinema-diamond-border {
+  border: 1px solid rgba(226,199,168,0.6);
+  box-shadow: 0 0 0 1px rgba(226,199,168,0.15), 0 0 40px rgba(226,199,168,0.2), inset 0 0 40px rgba(12,15,20,0.8);
+}
+
+/* Cinema Sticky Footer */
+.cinema-sticky-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: rgba(12,15,20,0.85);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(226,199,168,0.2);
+}
+
 /* Document Scanner Animation */
 @keyframes scan {
   0% { top: 0; opacity: 0; }

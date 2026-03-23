@@ -564,6 +564,7 @@ async function streamGemini(
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let fullText = "";
 
   while (true) {
     const { done, value } = await reader.read();
@@ -581,8 +582,8 @@ async function streamGemini(
         if (Array.isArray(cands) && cands.length > 0) {
           const parts = cands[0]?.content?.parts || [];
           for (const p of parts) {
-            const text = typeof p?.text === "string" ? p.text : undefined;
-            if (text) onToken(text);
+            const text = typeof p?.text === "string" ? p.text : "";
+            if (text) { fullText += text; onToken(text); }
           }
         }
       } catch { /* ignore */ }
@@ -691,6 +692,7 @@ function buildSearchFollowupContents(
       `${lastUser ? `Last user message: ${lastUser.slice(0, 5000)}\n` : ''}` +
       `${lastAssistant ? `Last assistant answer: ${lastAssistant.slice(0, 2000)}\n` : ''}` +
       `\nNow answer the user's new request using google_search.`;
+
     contents.push({ role: 'user', parts: [{ text: ctx }] });
     if (lastAssistant) {
       contents.push({ role: 'model', parts: [{ text: lastAssistant.slice(0, 2000) }] });
@@ -796,7 +798,7 @@ async function streamGemini3FlashChat(
   const body: Record<string, unknown> = {
     contents,
     // When grounding: limit to 3 snippets + 2000 tokens for a fast fact-check, not a research paper
-    generationConfig: { temperature: 0.4, maxOutputTokens: useSearch ? 4000 : 8000 },
+    generationConfig: { temperature: 0.4, maxOutputTokens: useSearch ? 4000 : 6000 },
   };
   if (useSearch) {
     body.tools = [{ google_search: {} }];
@@ -851,11 +853,8 @@ async function streamGemini3FlashChat(
         if (Array.isArray(cands) && cands.length > 0) {
           const parts = cands[0]?.content?.parts || [];
           for (const p of parts) {
-            const text = typeof p?.text === 'string' ? p.text : undefined;
-            if (text) {
-              fullText += text;
-              onToken(text);
-            }
+            const text = typeof p?.text === 'string' ? p.text : '';
+            if (text) { fullText += text; onToken(text); }
           }
         }
       } catch { /* ignore parse errors */ }
@@ -884,7 +883,7 @@ async function streamGemini3FlashChat(
   return fullText;
 }
 
-// Search mode: gemini-2.5-flash with grounding (power + formatting)
+// Search mode: dynamic model (gemini-3.1-pro-preview for intelligence tier, gemini-3-flash-preview for speed)
 async function streamGemini3WithSearch(
   query: string,
   systemInstruction: string,
@@ -892,10 +891,10 @@ async function streamGemini3WithSearch(
   recentMessages: unknown[] | undefined,
   onToken: (token: string) => void,
   onGroundingMetadata: (meta: Gemini3SearchResult['groundingMetadata']) => void,
-  userLocation?: { latitude: number; longitude: number; city?: string; country?: string } | null
+  userLocation?: { latitude: number; longitude: number; city?: string; country?: string } | null,
+  model: string = 'gemini-3.1-pro-preview'
 ): Promise<string> {
   const key = getGeminiApiKey();
-  const model = 'gemini-3.1-pro-preview';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
   // Inject today's date into the query so Google Search grounding fetches current results
@@ -978,11 +977,8 @@ async function streamGemini3WithSearch(
         if (Array.isArray(cands) && cands.length > 0) {
           const parts = cands[0]?.content?.parts || [];
           for (const p of parts) {
-            const text = typeof p?.text === 'string' ? p.text : undefined;
-            if (text) {
-              fullText += text;
-              onToken(text);
-            }
+            const text = typeof p?.text === 'string' ? p.text : '';
+            if (text) { fullText += text; onToken(text); }
           }
           // Capture grounding metadata from final chunk
           if (cands[0]?.groundingMetadata) {
@@ -1010,11 +1006,6 @@ function _promptPersonalSection(pt: Record<string, unknown>): string {
   const tone = ((pt.tone as string | undefined) || '').toString().trim();
   let style = ((pt.style as string | undefined) || '').toString().trim();
 
-  // Make 'short answers' strictly enforced
-  if (style === 'short answers') {
-    style = 'Strictly short, concise answers. No fluff or long paragraphs.';
-  }
-
   if (!userNick && !aiNick && !tone && !style) return '';
 
   let s = `\nPERSONAL TOUCH:`;
@@ -1022,7 +1013,6 @@ function _promptPersonalSection(pt: Record<string, unknown>): string {
   if (aiNick)   s += ` You are "${aiNick}".`;
   if (tone)     s += ` Tone: ${tone}.`;
   if (style)    s += ` Style: ${style}.`;
-  s += ` However, ALWAYS use Markdown tables for data or lists, regardless of style.`;
   return s + '\n';
 }
 
@@ -1041,7 +1031,9 @@ function _promptBase(
 MEMORY: Use the conversation history fully. Never ask about something the user already told you. Reference prior context naturally. Treat the whole conversation as one continuous discussion.
 
 LANGUAGE: Always respond in ${language === 'ar' ? 'Arabic (العربية)' : 'English'} unless the user explicitly asks to translate. Non-negotiable.${personalSection}
-CRITICAL FORMATTING: You MUST use Markdown tables whenever presenting 3 or more related items, facts, comparisons, or structured data. Always use **bold** for key terms. Bullets for steps/lists. Paragraph for conversation. Never present structured data as plain text when a table is clearer.`;
+FORMATTING: Use Markdown tables only if the data naturally fits a table format. If the user prefers a short or conversational style, use sentences or bullets instead. Never output internal reasoning.
+
+CRITICAL RULE: DO NOT output your internal thought process, reasoning, or meta-commentary (e.g. do not write "The user is asking for..." or "I should..."). Output ONLY the final response to the user.`;
 }
 
 // CHAT FRESHNESS EXTENSION (~150 chars): Only for pure chat mode
@@ -1069,9 +1061,10 @@ function _promptTimezone(): string {
   return `\n\n⏰ CRITICAL TIMEZONE RULES (HIGHEST PRIORITY):\n1. The user's local time is shown above as "Current local time". This IS the user's timezone.\n2. When you find times in OTHER timezones (ET, PT, GMT, UTC), convert them to the user's local timezone.\n3. If a time is ALREADY in the user's local timezone, DO NOT convert it again.\n4. Format: Show local time first, then original. Example: "3:00 AM (7:00 PM ET)"\n5. NEVER double-convert.`;
 }
 
-// REMINDER INTERCEPTION: lean single-line instruction appended to base prompt
-// Full reminder logic is now handled by backend interception after stream completes.
-const REMINDER_INSTRUCTION = '\n\nIf the user explicitly asks for a reminder, append this JSON block at the very end of your response (on its own line, no markdown): {"action":"set_reminder","time":"ISO-8601 with timezone offset","text":"reminder description"}. Calculate relative times by adding to the provided Current local time, and ALWAYS include the correct timezone offset (e.g., +03:00). If no reminder is requested, do not output any JSON.';
+// REMINDER INTERCEPTION: dynamic instruction injected only when user requests a reminder.
+function buildReminderInstruction(formattedOffset: string): string {
+  return `\n\nREMINDER RULES (CRITICAL): If the user asks for a reminder, append this JSON block at the absolute end of your response on its own line with no markdown: {"action":"set_reminder","time":"ISO-8601 datetime with offset","text":"reminder description"}. You MUST use the offset ${formattedOffset} for the time field (e.g. 2026-03-22T15:00:00${formattedOffset}). Calculate relative times by adding to the provided Current local time. If no reminder is requested, output NO JSON at all — not even a placeholder.`;
+}
 
 /**
  * Intercept reminder JSON from AI response, schedule it, and return cleaned text.
@@ -1082,7 +1075,8 @@ async function interceptAndScheduleReminder(
   userId: string,
   timezone: string,
   controller: ReadableStreamDefaultController<Uint8Array>,
-  encoder: TextEncoder
+  encoder: TextEncoder,
+  userOffset = '+00:00'
 ): Promise<string> {
   // Use lastIndexOf to find the TRAILING action block — not a mid-response mention
   const triggerIdx = responseText.lastIndexOf('{"action"');
@@ -1096,9 +1090,14 @@ async function interceptAndScheduleReminder(
     if (!data || typeof data !== 'object' || !('action' in data)) return responseText;
     const cleanText = responseText.substring(0, triggerIdx).trim();
     if (data.action === 'set_reminder') {
-      const timeStr = data.time as string;
+      let scheduledTime = (data.time as string) || '';
+      // Safety net: if AI omitted the offset, append the user's dynamic offset
+      if (scheduledTime && !scheduledTime.includes('+') && !scheduledTime.includes('-', 10) && !scheduledTime.endsWith('Z')) {
+        scheduledTime = `${scheduledTime}${userOffset}`;
+      }
+      const timeStr = scheduledTime;
       const reminderText = data.text as string;
-      console.log(`🔔 REMINDER INTERCEPT: Found reminder block — time=${timeStr}, text=${reminderText}`);
+      console.log(`🔔 REMINDER INTERCEPT: Found reminder block — time=${timeStr} (offset=${userOffset}), text=${reminderText}`);
 
       try {
         const scheduleUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/schedule-reminder-push`;
@@ -1148,7 +1147,7 @@ function buildSystemPrompt(
   personalTouch: Record<string, unknown> | null | undefined,
   activeTrigger: string,
   chatSubmode = 'chat',
-  lazyOpts?: { useSearch?: boolean; hasReminders?: boolean }
+  lazyOpts?: { useSearch?: boolean; hasReminders?: boolean; isReminderTrigger?: boolean; formattedOffset?: string }
 ) {
   const pt = (personalTouch || {}) as Record<string, unknown>;
   const userNick = ((pt.nickname as string | undefined) || '').toString().trim();
@@ -1176,8 +1175,10 @@ function buildSystemPrompt(
     // Pure chat: freshness hint only — reminder interception handled at backend level
     prompt += _promptChatFreshness();
   }
-  // Lean reminder instruction always appended (~150 chars vs ~800 chars old approach)
-  prompt += REMINDER_INSTRUCTION;
+  // Reminder instruction injected only when the user's message contains reminder keywords
+  if (lazyOpts?.isReminderTrigger) {
+    prompt += buildReminderInstruction(lazyOpts.formattedOffset || '+00:00');
+  }
 
   console.log(`📌 SYSTEM PROMPT SIZE: ${prompt.length} chars | trigger=${activeTrigger} | submode=${chatSubmode} | useSearch=${useSearch}`);
   return prompt;
@@ -2109,6 +2110,7 @@ serve(async (req) => {
         // Skip entirely for chat mode — clientTimezone from the frontend is sufficient.
         // Device GPS (via Natively SDK) is the source of truth for city/coordinates.
         const clientIp = extractClientIp(req);
+        // clientTimezone from browser is always authoritative — only fall back to IP geo if it is absent or UTC
         const needsIpGeo = (!clientTimezone || clientTimezone === 'UTC') && effectiveTrigger !== 'chat';
         const ipGeo = needsIpGeo
           ? await lookupIpGeo(clientIp)
@@ -2158,9 +2160,11 @@ serve(async (req) => {
           ? await getProfileTimezone(userId)
           : null;
 
+        // Priority: clientTimezone (browser) > profileTimezone (DB) > ipGeo (last resort)
+        // NEVER let ipGeo override a real clientTimezone — that is what caused the India bug.
         const effectiveTimezone = (clientTimezone && clientTimezone !== 'UTC')
           ? clientTimezone
-          : (profileTimezone || ipGeo?.timezone || clientTimezone || 'UTC');
+          : (profileTimezone || ipGeo?.timezone || 'UTC');
 
         const ipLocationLine = (() => {
           if (!ipGeo) return '';
@@ -2291,6 +2295,16 @@ serve(async (req) => {
           new Promise<string>(resolve => setTimeout(() => resolve(''), 300))
         ]);
 
+        // Calculate dynamic UTC offset for the user's timezone (used in reminder instructions)
+        const nowForOffset = new Date();
+        const offsetFormatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: effectiveTimezone || 'UTC',
+          timeZoneName: 'shortOffset'
+        });
+        const offsetPart = offsetFormatter.formatToParts(nowForOffset).find(p => p.type === 'timeZoneName')?.value || 'Z';
+        const numericOffset = offsetPart.replace('GMT', '').replace('UTC', '') || 'Z';
+        const formattedOffset = numericOffset === 'Z' ? '+00:00' : (numericOffset.length <= 3 ? numericOffset + ':00' : numericOffset);
+
         // Lazy-load: determine useSearch now so buildSystemPrompt can conditionally include blocks
         const chatUsesSearch = (effectiveTrigger === 'chat') && chatNeedsSearch(message || '');
         const systemPrompt = buildSystemPrompt(
@@ -2300,7 +2314,7 @@ serve(async (req) => {
           personalTouch as Record<string, unknown> | null | undefined,
           effectiveTrigger,
           chatSubmode,
-          { useSearch: chatUsesSearch, hasReminders: !!activeRemindersContext }
+          { useSearch: chatUsesSearch, hasReminders: !!activeRemindersContext, isReminderTrigger: messageHasReminderKeyword, formattedOffset }
         ) + (activeRemindersContext || '');
 
         const messages = [
@@ -2329,7 +2343,8 @@ serve(async (req) => {
             const userNick = ((pt.nickname as string | undefined) || '').toString().trim();
             const aiNick = ((pt.ai_nickname as string | undefined) || '').toString().trim();
             const toneVal = ((pt.tone as string | undefined) || 'neutral').toString().trim();
-            const _styleVal = ((pt.style as string | undefined) || 'short answers').toString().trim(); // unused but kept for future
+            let styleVal = ((pt.style as string | undefined) || '').toString().trim();
+            if (styleVal === 'short answers') styleVal = 'Strictly short, concise answers. No fluff or long paragraphs.';
             const customNote = ((pt.instruction as string | undefined) || '').toString().trim();
 
             // Detect search intent
@@ -2387,9 +2402,11 @@ serve(async (req) => {
             // Intent detection is now built into the system prompt itself
             // (searchIntent is still used for Maps grounding below)
 
+            const personalSection = _promptPersonalSection((personalTouch || {}) as Record<string, unknown>);
+
             const searchSystemPrompt = `${stayHotSummary ? stayHotSummary + "\n\n" : ''}${ipLocationLine ? ipLocationLine + "\n\n" : ''}You are WAKTI AI — an elite, hyper-intelligent Search Intelligence.
 You are the Al Jazeera of news (deep context), the ESPN of sports (real-time stakes), and the Oxford of research (academic rigor).
-You do not "chat". You perform REAL-TIME SYNTHESIS. You are a digital strategist with the brain of a researcher and the style of a high-end concierge.
+You perform REAL-TIME SYNTHESIS. You are a digital strategist with the brain of a researcher and the style of a high-end concierge.${personalSection}
 
 ### 🌐 THE WORLD SENSOR (LIVE CONTEXT)
 - CURRENT TIME: ${localTime} (${userTimeZone})
@@ -2399,6 +2416,7 @@ You do not "chat". You perform REAL-TIME SYNTHESIS. You are a digital strategist
 ${userNick ? `- USER NICKNAME: "${userNick}" (use naturally once in the intro).` : '- Use an elite, professional greeting.'}
 ${aiNick ? `- YOUR NAME: "${aiNick}".` : ''}
 ${toneVal !== 'neutral' ? `- TONE: ${toneVal}.` : ''}
+${styleVal ? `- STYLE: ${styleVal}` : ''}
 ${customNote ? `- SPECIAL NOTE (obey): ${customNote}` : ''}
 - LANGUAGE: ${language === 'ar' ? 'Arabic (RTL when appropriate)' : 'English'}
 
@@ -2515,11 +2533,12 @@ After the list, add:
 -------------------------
 INTENT B: LIVE DATA (ESPN/MARKET BRAIN)
 -------------------------
-Use a dashboard layout. Be strict and compact.
 
 ## 📊 ${language === 'ar' ? 'لوحة تحديث حي' : 'Live Dashboard'}: [Topic]
 
 [${language === 'ar' ? 'التوليف' : 'Synthesis'}: Connect today's result to the bigger picture/standings. Explain "The Stakes" — why this matters.]
+
+FORMATTING: You MUST use expansive, high-quality Markdown tables for data comparisons. Use **bold** for headers and key facts. Ensure the table is wide and detailed — include as many meaningful columns as the data supports. Avoid a cramped look. Only be concise if the user's style preference is 'short answers'.
 
 | ${language === 'ar' ? 'العنصر' : 'Data Category'} | ${language === 'ar' ? 'النتيجة/الحالة' : 'Current Status'} | ${language === 'ar' ? 'الأثر/الرهانات' : 'The Stakes / Impact'} |
 | :--- | :--- | :--- |
@@ -2530,7 +2549,6 @@ Rules:
 - For sports: include next game + time if available. Explain standings impact.
 - For stocks/crypto: include price + % change today if available. Note if it's a 52-week high/low.
 - For flights: include terminal/gate/delay if available. Add weather at destination if relevant.
-- Keep tables compact (max ~10 rows unless user asks for more).
 
 TABLE FORMAT ENFORCEMENT (CRITICAL):
 - You MUST output a VALID Markdown pipe table.
@@ -2629,6 +2647,9 @@ If you are running out of space, keep this order and drop the rest:
               : null;
 
             // Stream tokens to client
+            const searchModel = engineTier === 'intelligence' ? 'gemini-3.1-pro-preview' : 'gemini-3-flash-preview';
+            console.log(`🔍 SEARCH MODEL: ${searchModel} (engineTier=${engineTier})`);
+
             await streamGemini3WithSearch(
               message,
               searchSystemPrompt,
@@ -2641,7 +2662,8 @@ If you are running out of space, keep this order and drop the rest:
               (meta: Gemini3SearchResult['groundingMetadata']) => {
                 groundingMetadata = meta;
               },
-              userLocationForSearch
+              userLocationForSearch,
+              searchModel
             );
 
             // Emit grounding metadata for frontend citation injection
@@ -2671,15 +2693,15 @@ If you are running out of space, keep this order and drop the rest:
               logAIUsage({
                 userId,
                 functionName: 'brain_stream',
-                model: 'gemini-2.5-flash',
+                model: searchModel,
                 status: 'success',
                 prompt: message,
                 response: fullResponseText.slice(0, 500),
-                metadata: { trigger: 'search', provider: 'gemini-search', grounded: !!groundingMetadata },
+                metadata: { trigger: 'search', provider: 'gemini-search', grounded: !!groundingMetadata, engineTier },
                 inputTokens,
                 outputTokens,
                 durationMs: Date.now() - startTime,
-                costCredits: calculateCost('gemini-2.0-flash', inputTokens, outputTokens)
+                costCredits: calculateCost(searchModel, inputTokens, outputTokens)
               });
             }
 
@@ -2797,7 +2819,7 @@ If you are running out of space, keep this order and drop the rest:
               }
 
               // Intercept + schedule any reminder JSON embedded in the response
-              await interceptAndScheduleReminder(fullResponseText, userId || '', effectiveTimezone || 'UTC', controller, encoder);
+              await interceptAndScheduleReminder(fullResponseText, userId || '', effectiveTimezone || 'UTC', controller, encoder, formattedOffset);
 
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
               controller.close();
@@ -3157,7 +3179,7 @@ If you are running out of space, keep this order and drop the rest:
 
         if (aiProvider === 'gemini') {
           // Backend reminder interception: parse JSON block from response, schedule, strip it
-          responseText = await interceptAndScheduleReminder(responseText, userId || '', effectiveTimezone || 'UTC', controller, encoder);
+          responseText = await interceptAndScheduleReminder(responseText, userId || '', effectiveTimezone || 'UTC', controller, encoder, formattedOffset);
 
           // Log successful Gemini usage with token estimation
           const inputTokens = estimateTokens(requestMessage);
@@ -3223,7 +3245,7 @@ If you are running out of space, keep this order and drop the rest:
         }
 
         // Backend reminder interception for OpenAI/Claude paths
-        responseText = await interceptAndScheduleReminder(responseText, userId || '', effectiveTimezone || 'UTC', controller, encoder);
+        responseText = await interceptAndScheduleReminder(responseText, userId || '', effectiveTimezone || 'UTC', controller, encoder, formattedOffset);
 
         // Log successful OpenAI/Claude usage with token estimation
         const inputTokens = estimateTokens(requestMessage);

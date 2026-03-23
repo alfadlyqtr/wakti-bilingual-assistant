@@ -32,6 +32,7 @@ import {
   Type,
   GalleryHorizontalEnd,
   Images,
+  Film,
 } from 'lucide-react';
 
 interface QuotaInfo {
@@ -115,8 +116,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const hasArabicChars = (text: string) => /[\u0600-\u06FF]/.test(text || '');
 
   // State
-  const [generationMode, setGenerationModeRaw] = useState<'image_to_video' | 'text_to_video' | '2images_to_video'>('image_to_video');
-  const setGenerationMode = (mode: 'image_to_video' | 'text_to_video' | '2images_to_video') => {
+  const [generationMode, setGenerationModeRaw] = useState<'image_to_video' | 'text_to_video' | '2images_to_video' | 'cinema'>('image_to_video');
+  const setGenerationMode = (mode: 'image_to_video' | 'text_to_video' | '2images_to_video' | 'cinema') => {
     setGenerationModeRaw(mode);
     if (mode === '2images_to_video') {
       setDuration('8');
@@ -153,6 +154,107 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const pollInFlightRef = useRef(false);
   const usageIncrementedRef = useRef(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Trial access check — Cinema is locked for 24-hour trial users
+  const [isTrialUser, setIsTrialUser] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { data: { user: u } } = await supabase.auth.getUser();
+        if (!u?.id) return;
+        const { data: p } = await (supabase as any)
+          .from('profiles')
+          .select('is_subscribed, admin_gifted, payment_method, next_billing_date, free_access_start_at')
+          .eq('id', u.id)
+          .single();
+        if (!p || !mounted) return;
+        const isPaid = p.is_subscribed === true;
+        const isGifted = p.admin_gifted === true;
+        const pm = p.payment_method;
+        const hasActivePaid = pm && pm !== 'manual' && p.next_billing_date && new Date(p.next_billing_date) > new Date();
+        const isOn24hTrial = p.free_access_start_at != null;
+        if (!isPaid && !isGifted && !hasActivePaid && isOn24hTrial) {
+          setIsTrialUser(true);
+        }
+      } catch { /* non-critical */ }
+    })();
+    return () => { mounted = false; };
+  }, [user?.id]);
+
+  // Cinema mode state
+  const [cinemaVision, setCinemaVision] = useState('');
+  const [cinemaScenes, setCinemaScenes] = useState<{scene: number; text: string}[]>([]);
+  const [isDirecting, setIsDirecting] = useState(false);
+  const [cinemaStep, setCinemaStep] = useState<'desk' | 'storyboard' | 'casting' | 'filming' | 'premiere'>('desk');
+  const [visualDNA, setVisualDNA] = useState('');
+  const [cinemaFormat, setCinemaFormat] = useState<'16:9' | '9:16'>('16:9');
+
+  // Role 2 & 3 — Artist & Cloner
+  const [sceneImages, setSceneImages] = useState<(string | null)[]>([null, null, null, null, null, null]);
+  const [anchorImageUrl, setAnchorImageUrl] = useState<string | null>(null);
+  const [isCasting, setIsCasting] = useState(false);
+  const [castingProgress, setCastingProgress] = useState<('idle' | 'loading' | 'done' | 'error')[]>(
+    ['idle', 'idle', 'idle', 'idle', 'idle', 'idle']
+  );
+
+  // Role 4 — Animator
+  const [videoClips, setVideoClips] = useState<(string | null)[]>([null, null, null, null, null, null]);
+  const [animTaskIds, setAnimTaskIds] = useState<(string | null)[]>([null, null, null, null, null, null]);
+  const [animProgress, setAnimProgress] = useState<('idle' | 'queued' | 'rendering' | 'done' | 'error')[]>(
+    ['idle', 'idle', 'idle', 'idle', 'idle', 'idle']
+  );
+  const [isFilming, setIsFilming] = useState(false);
+  const animPollRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Role 5 — Premiere
+  const [isStitching, setIsStitching] = useState(false);
+  const [premiereVideoUrl, setPremiereVideoUrl] = useState<string | null>(null);
+
+  // Cinema Visionnaire form state
+  const [cinemaSubject, setCinemaSubject] = useState('');
+  const [cinemaSetting, setCinemaSetting] = useState('');
+  const [cinemaSettingCustom, setCinemaSettingCustom] = useState('');
+  const [cinemaAction, setCinemaAction] = useState('');
+  const [cinemaActionCustom, setCinemaActionCustom] = useState('');
+  const [cinemaVibe, setCinemaVibe] = useState('');
+  const [cinemaVibeCustom, setCinemaVibeCustom] = useState('');
+  const [cinemaCharacters, setCinemaCharacters] = useState('');
+  const [cinemaRelationship, setCinemaRelationship] = useState('');
+  const [cinemaCTA, setCinemaCTA] = useState('');
+  const [cinemaCTACustom, setCinemaCTACustom] = useState('');
+
+  // Typewriter effect component for Cinema scene cards
+  const TypewriterText = ({ text, delay = 0, className = '' }: { text: string; delay?: number; className?: string }) => {
+    const [displayText, setDisplayText] = useState('');
+    const [started, setStarted] = useState(false);
+
+    useEffect(() => {
+      const startTimeout = setTimeout(() => setStarted(true), delay);
+      return () => clearTimeout(startTimeout);
+    }, [delay]);
+
+    useEffect(() => {
+      if (!started) return;
+      let index = 0;
+      const interval = setInterval(() => {
+        if (index < text.length) {
+          setDisplayText(text.slice(0, index + 1));
+          index++;
+        } else {
+          clearInterval(interval);
+        }
+      }, 15); // 15ms per character for smooth typing
+      return () => clearInterval(interval);
+    }, [text, started]);
+
+    return (
+      <span className={className}>
+        {displayText}
+        <span className="animate-pulse">|</span>
+      </span>
+    );
+  };
 
   const invokePromptAmpWithBetterErrors = useCallback(
     async (body: Record<string, unknown>) => {
@@ -643,6 +745,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     if (generationMode === 'image_to_video' && !imagePreview) return;
     if (generationMode === 'text_to_video' && !prompt.trim()) return;
     if (generationMode === '2images_to_video' && !imagePreview) return;
+    if (generationMode === 'cinema' && !prompt.trim()) return;
     if (!user) return;
 
     const needsArabicTranslation =
@@ -892,6 +995,321 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
   };
 
+  // Cinema: handle directing (GPT-4o mini)
+  const handleDirect = useCallback(async () => {
+    const effectiveSetting = cinemaSetting === 'Custom' ? cinemaSettingCustom : cinemaSetting;
+    const effectiveAction = cinemaAction === 'Custom' ? cinemaActionCustom : cinemaAction;
+    const effectiveVibe = cinemaVibe === 'Custom' ? cinemaVibeCustom : cinemaVibe;
+    const effectiveCTA = cinemaCTA === 'Custom' ? cinemaCTACustom : cinemaCTA;
+    const builtVision = [
+      cinemaSubject && `Subject: ${cinemaSubject}`,
+      effectiveSetting && `Setting: ${effectiveSetting}`,
+      effectiveAction && `Action: ${effectiveAction}`,
+      effectiveVibe && `Vibe: ${effectiveVibe}`,
+      cinemaCharacters && `Characters: ${cinemaCharacters === 'Custom' ? (cinemaRelationship || 'custom characters') : cinemaCharacters}${cinemaCharacters !== 'Custom' && cinemaCharacters !== 'no people — product, object, or creature only' && cinemaCharacters !== 'one solo person — the hero, the protagonist' && cinemaRelationship ? ` (${cinemaRelationship})` : ''}`,
+      effectiveCTA && `Purpose: ${effectiveCTA}`,
+    ].filter(Boolean).join('. ');
+
+    const visionToSend = builtVision || cinemaVision.trim();
+    if (!visionToSend || isDirecting || !user) return;
+    setIsDirecting(true);
+    setCinemaScenes([]);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) throw new Error('Not authenticated');
+
+      // Call the cinema-director edge function
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/cinema-director`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          vision: visionToSend,
+          language: language,
+        }),
+      });
+
+      const txt = await resp.text().catch(() => '');
+      if (!resp.ok) {
+        throw new Error(txt || `cinema-director returned ${resp.status}`);
+      }
+
+      let result;
+      try {
+        result = JSON.parse(txt);
+      } catch {
+        throw new Error('Invalid JSON from cinema-director');
+      }
+
+      if (result?.success && result?.scenes && Array.isArray(result.scenes)) {
+        setCinemaScenes(result.scenes);
+        setVisualDNA(result.visualDna || '');
+        setCinemaStep('storyboard');
+        toast.success(language === 'ar' ? 'تم إنشاء السيناريو!' : 'Script created!');
+      } else {
+        throw new Error(result?.error || 'No scenes returned');
+      }
+    } catch (err: any) {
+      console.error('[AIVideomaker] Direct error:', err);
+      toast.error(language === 'ar' ? 'فشل إنشاء السيناريو: ' + (err.message || '') : 'Failed to create script: ' + (err.message || ''));
+    } finally {
+      setIsDirecting(false);
+    }
+  }, [cinemaVision, cinemaSubject, cinemaSetting, cinemaSettingCustom, cinemaAction, cinemaActionCustom, cinemaVibe, cinemaVibeCustom, cinemaCharacters, cinemaRelationship, cinemaCTA, cinemaCTACustom, isDirecting, language, user]);
+
+  // ── Role 2 & 3: Artist & Cloner ──
+  // Uses create/status two-call pattern to avoid edge function 60s timeout.
+  // Step 1: fire T2I create for Scene 1 → get task_id
+  // Step 2: poll until Scene 1 done → get anchor image URL
+  // Step 3: fire I2I create for Scenes 2-6 in parallel
+  // Step 4: poll all I2I tasks from frontend every 5s
+  const handleCast = useCallback(async () => {
+    if (!user || isCasting || cinemaScenes.length < 6) return;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) return;
+
+    setIsCasting(true);
+    setAnchorImageUrl(null);
+    setSceneImages([null, null, null, null, null, null]);
+    setCastingProgress(['loading', 'idle', 'idle', 'idle', 'idle', 'idle']);
+    setCinemaStep('casting');
+
+    const artistCall = async (body: Record<string, unknown>) => {
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/cinema-artist`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify(body),
+      });
+      const json = await resp.json();
+      if (!resp.ok || !json.ok) throw new Error(json.error || `cinema-artist ${resp.status}`);
+      return json;
+    };
+
+    // Poll a single task until COMPLETED or FAILED (max 3 min, 5s intervals)
+    const pollTask = async (task_id: string, scene_index: number): Promise<string> => {
+      for (let i = 0; i < 36; i++) {
+        await new Promise(r => setTimeout(r, 5000));
+        const res = await artistCall({ mode: 'status', task_id, scene_index });
+        if (res.status === 'COMPLETED' && res.image_url) return res.image_url as string;
+        if (res.status === 'FAILED') throw new Error(res.error || 'Image generation failed');
+      }
+      throw new Error('Image generation timed out');
+    };
+
+    try {
+      // ── Scene 1: T2I create → poll ──
+      const scene1 = cinemaScenes.find(s => s.scene === 1);
+      if (!scene1) throw new Error('Scene 1 not found');
+      const t2iCreate = await artistCall({ mode: 't2i_create', prompt: scene1.text, aspect_ratio: cinemaFormat });
+      const anchor = await pollTask(t2iCreate.task_id, 0);
+      setAnchorImageUrl(anchor);
+      setSceneImages(prev => { const n = [...prev]; n[0] = anchor; return n; });
+      setCastingProgress(prev => { const n = [...prev]; n[0] = 'done'; n[1] = 'loading'; n[2] = 'loading'; n[3] = 'loading'; n[4] = 'loading'; n[5] = 'loading'; return n; });
+
+      // ── Scenes 2-6: I2I create all in parallel ──
+      const i2iCreates = await Promise.allSettled(
+        cinemaScenes.filter(s => s.scene >= 2 && s.scene <= 6).map(async (scene) => {
+          const idx = scene.scene - 1;
+          const created = await artistCall({ mode: 'i2i_create', prompt: scene.text, anchor_url: anchor, scene_index: idx, visual_dna: scene1!.text });
+          return { idx, task_id: created.task_id as string };
+        })
+      );
+
+      // ── Poll all I2I tasks in parallel ──
+      await Promise.allSettled(
+        i2iCreates.map(async (r) => {
+          if (r.status === 'rejected') return;
+          const { idx, task_id } = r.value;
+          try {
+            const imgUrl = await pollTask(task_id, idx);
+            setSceneImages(prev => { const n = [...prev]; n[idx] = imgUrl; return n; });
+            setCastingProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
+          } catch (err: any) {
+            console.error(`[cinema] I2I poll scene ${idx + 1} failed:`, err);
+            setCastingProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
+          }
+        })
+      );
+
+      toast.success(language === 'ar' ? 'تم إنشاء الصور!' : 'Scenes cast!');
+    } catch (err: any) {
+      console.error('[cinema] Cast error:', err);
+      toast.error(language === 'ar' ? 'فشل إنشاء الصور: ' + err.message : 'Casting failed: ' + err.message);
+      setCinemaStep('storyboard');
+    } finally {
+      setIsCasting(false);
+    }
+  }, [user, isCasting, cinemaScenes, cinemaFormat, language]);
+
+  // ── Role 4: Animator ──
+  // Fires 6 parallel I2V tasks then polls until all done
+  const handleFilm = useCallback(async () => {
+    if (!user || isFilming) return;
+    const images = sceneImages;
+    if (images.some(img => img === null)) {
+      toast.error(language === 'ar' ? 'لم تكتمل جميع الصور بعد' : 'Not all scene images are ready');
+      return;
+    }
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) return;
+
+    setIsFilming(true);
+    setVideoClips([null, null, null, null, null, null]);
+    setAnimTaskIds([null, null, null, null, null, null]);
+    setAnimProgress(['queued', 'queued', 'queued', 'queued', 'queued', 'queued']);
+    setCinemaStep('filming');
+
+    const callAnimator = async (body: Record<string, unknown>) => {
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/cinema-animator`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify(body),
+      });
+      const json = await resp.json();
+      if (!resp.ok || !json.ok) throw new Error(json.error || `cinema-animator ${resp.status}`);
+      return json;
+    };
+
+    try {
+      // Fire all 6 I2V tasks in parallel
+      const taskResults = await Promise.allSettled(
+        images.map(async (imgUrl, idx) => {
+          const scene = cinemaScenes[idx];
+          const result = await callAnimator({
+            mode: 'create',
+            image_url: imgUrl,
+            prompt: scene?.text || '',
+            scene_index: idx,
+          });
+          setAnimTaskIds(prev => { const n = [...prev]; n[idx] = result.task_id; return n; });
+          setAnimProgress(prev => { const n = [...prev]; n[idx] = 'rendering'; return n; });
+          return { idx, task_id: result.task_id };
+        })
+      );
+
+      // Collect successful task ids
+      const activeTasks: { idx: number; task_id: string }[] = [];
+      taskResults.forEach((r, idx) => {
+        if (r.status === 'fulfilled') {
+          activeTasks.push(r.value);
+        } else {
+          setAnimProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
+        }
+      });
+
+      // Poll all active tasks every 6s until all done
+      const pollTasks = async () => {
+        const pending = [...activeTasks];
+        while (pending.length > 0) {
+          await new Promise(r => setTimeout(r, 6000));
+          const toRemove: number[] = [];
+          await Promise.allSettled(
+            pending.map(async ({ idx, task_id }) => {
+              try {
+                const status = await callAnimator({ mode: 'status', task_id, scene_index: idx });
+                if (status.status === 'COMPLETED' && status.video_url) {
+                  setVideoClips(prev => { const n = [...prev]; n[idx] = status.video_url; return n; });
+                  setAnimProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
+                  toRemove.push(idx);
+                } else if (status.status === 'FAILED') {
+                  setAnimProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
+                  toRemove.push(idx);
+                }
+              } catch (e) {
+                console.error(`[cinema] Poll scene ${idx} failed:`, e);
+              }
+            })
+          );
+          toRemove.forEach(idx => {
+            const pos = pending.findIndex(t => t.idx === idx);
+            if (pos !== -1) pending.splice(pos, 1);
+          });
+        }
+      };
+
+      await pollTasks();
+      toast.success(language === 'ar' ? 'تم تصوير جميع المشاهد!' : 'All scenes filmed!');
+    } catch (err: any) {
+      console.error('[cinema] Film error:', err);
+      toast.error(language === 'ar' ? 'فشل التصوير: ' + err.message : 'Filming failed: ' + err.message);
+    } finally {
+      setIsFilming(false);
+    }
+  }, [user, isFilming, sceneImages, cinemaScenes, language]);
+
+  // ── Role 5: Premiere ──
+  const handleStitch = useCallback(async () => {
+    const readyClips = videoClips.filter(Boolean) as string[];
+    if (readyClips.length < 2 || isStitching) return;
+    setIsStitching(true);
+    try {
+      const serverBase = import.meta.env.VITE_VISION_SERVER_URL || 'https://wakti-vision-proxy.onrender.com';
+      const resp = await fetch(`${serverBase}/api/cinema/stitch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clip_urls: readyClips }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `Stitch server ${resp.status}`);
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      setPremiereVideoUrl(url);
+      setCinemaStep('premiere');
+      toast.success(language === 'ar' ? 'العرض الأول جاهز! 🎬' : 'Premiere ready! 🎬');
+    } catch (err: any) {
+      console.error('[cinema] Stitch error:', err);
+      toast.error(language === 'ar' ? 'فشل تجميع الفيديو: ' + err.message : 'Stitch failed: ' + err.message);
+    } finally {
+      setIsStitching(false);
+    }
+  }, [videoClips, isStitching, language]);
+
+  // ── Cinema full reset ──
+  const handleCinemaReset = useCallback(() => {
+    setCinemaStep('desk');
+    setCinemaVision('');
+    setCinemaScenes([]);
+    setCinemaSubject('');
+    setCinemaSetting('');
+    setCinemaSettingCustom('');
+    setCinemaAction('');
+    setCinemaActionCustom('');
+    setCinemaVibe('');
+    setCinemaVibeCustom('');
+    setCinemaCharacters('');
+    setCinemaRelationship('');
+    setCinemaCTA('');
+    setCinemaCTACustom('');
+    setAnchorImageUrl(null);
+    setSceneImages([null, null, null, null, null, null]);
+    setCastingProgress(['idle', 'idle', 'idle', 'idle', 'idle', 'idle']);
+    setVideoClips([null, null, null, null, null, null]);
+    setAnimTaskIds([null, null, null, null, null, null]);
+    setAnimProgress(['idle', 'idle', 'idle', 'idle', 'idle', 'idle']);
+    setIsFilming(false);
+    setIsCasting(false);
+    setIsStitching(false);
+    setPremiereVideoUrl(null);
+    if (animPollRef.current) clearInterval(animPollRef.current);
+  }, []);
+
   const handleDownload = async () => {
     if (!generatedVideoUrl) return;
     try {
@@ -1025,6 +1443,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     'image_to_video':    { key: 'i2v',  limit: 1, en: 'Image to Video',    ar: 'صورة إلى فيديو' },
     'text_to_video':     { key: 't2v',  limit: 1, en: 'Text to Video',     ar: 'نص إلى فيديو' },
     '2images_to_video':  { key: '2i2v', limit: 1, en: '2 Images to Video', ar: 'صورتان إلى فيديو' },
+    'cinema':            { key: 'cinema', limit: 1, en: 'Cinema',            ar: 'سينما' },
   };
   const activeVideoTrial = videoTrialMap[generationMode] || videoTrialMap['image_to_video'];
 
@@ -1040,7 +1459,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9ImN1cnJlbnRDb2xvciIgZmlsbC1vcGFjaXR5PSIwLjAyIj48cGF0aCBkPSJNMjAgMjBjMC0xMSA5LTIwIDIwLTIwdjQwYy0xMSAwLTIwLTktMjAtMjB6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-50" />
         
         <div className="relative space-y-5">
-          {/* Compact header row */}
+          {/* Compact header row - Hidden in Cinema mode */}
+          {generationMode !== 'cinema' && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#060541] to-[hsl(210,100%,35%)] shadow-lg shadow-primary/30">
@@ -1053,6 +1473,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {/* Duration selector - hidden in Cinema mode */}
+              {generationMode !== 'cinema' && (
               <div className="flex items-center gap-0.5 rounded-full border border-primary/20 overflow-hidden">
                 <Clock className="h-3.5 w-3.5 text-primary ml-2.5" />
                 {generationMode === '2images_to_video' ? (
@@ -1133,6 +1555,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   </>
                 )}
               </div>
+              )}
               <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${limitReached ? 'bg-red-500/20 border-red-500/30' : 'bg-gradient-to-r from-[hsl(142,76%,55%)]/20 to-[hsl(160,80%,55%)]/20 border-green-500/20'}`}>
                 <Sparkles className={`h-3.5 w-3.5 ${limitReached ? 'text-red-500' : 'text-green-500'}`} />
                 {loadingQuota ? (
@@ -1143,12 +1566,19 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               </div>
             </div>
           </div>
+          )}
 
-          {/* Mode toggle */}
+          {/* Mode toggle - Glassmorphic Segmented Control */}
           <div
-            className={`inline-flex max-w-full flex-wrap items-center rounded-2xl border border-primary/20 bg-background/40 backdrop-blur-sm p-1 shadow-sm shadow-primary/10 ${
+            className={`relative grid grid-cols-2 gap-1.5 p-1.5 ${
               isGenerating ? 'opacity-80' : ''
             }`}
+            style={{
+              backdropFilter: 'blur(20px)',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '24px',
+            }}
             role="group"
             aria-label={language === 'ar' ? 'وضع إنشاء الفيديو' : 'Video generation mode'}
           >
@@ -1158,19 +1588,18 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 if (!isGenerating) setGenerationMode('image_to_video');
               }}
               disabled={isGenerating}
-              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed ${
+              className={`flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-[11px] font-semibold transition-all duration-300 active:scale-[0.98] disabled:cursor-not-allowed whitespace-nowrap ${
                 generationMode === 'image_to_video'
-                  ? 'bg-gradient-to-r from-[#060541] via-[hsl(210,100%,32%)] to-[#060541] text-white shadow-[0_6px_18px_hsla(210,100%,45%,0.25)]'
-                  : 'text-muted-foreground hover:text-primary hover:bg-primary/5'
+                  ? 'text-white shadow-[0_4px_20px_rgba(226,199,168,0.35)]'
+                  : 'text-white/60 hover:text-white/80'
               }`}
+              style={{
+                background: generationMode === 'image_to_video' 
+                  ? 'linear-gradient(135deg, #E2C7A8 0%, #C5A47E 100%)' 
+                  : 'transparent',
+              }}
             >
-              <span
-                className={`grid place-items-center h-6 w-6 rounded-lg ${
-                  generationMode === 'image_to_video' ? 'bg-white/15' : 'bg-primary/5'
-                }`}
-              >
-                <ImageIcon className="h-3.5 w-3.5" />
-              </span>
+              <ImageIcon className="h-3.5 w-3.5" />
               <span>{language === 'ar' ? 'صورة ← فيديو' : 'Image → Video'}</span>
             </button>
 
@@ -1180,19 +1609,18 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 if (!isGenerating) setGenerationMode('text_to_video');
               }}
               disabled={isGenerating}
-              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed ${
+              className={`flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-[11px] font-semibold transition-all duration-300 active:scale-[0.98] disabled:cursor-not-allowed whitespace-nowrap ${
                 generationMode === 'text_to_video'
-                  ? 'bg-gradient-to-r from-[#060541] via-[hsl(210,100%,32%)] to-[#060541] text-white shadow-[0_6px_18px_hsla(210,100%,45%,0.25)]'
-                  : 'text-muted-foreground hover:text-primary hover:bg-primary/5'
+                  ? 'text-white shadow-[0_4px_20px_rgba(226,199,168,0.35)]'
+                  : 'text-white/60 hover:text-white/80'
               }`}
+              style={{
+                background: generationMode === 'text_to_video' 
+                  ? 'linear-gradient(135deg, #E2C7A8 0%, #C5A47E 100%)' 
+                  : 'transparent',
+              }}
             >
-              <span
-                className={`grid place-items-center h-6 w-6 rounded-lg ${
-                  generationMode === 'text_to_video' ? 'bg-white/15' : 'bg-primary/5'
-                }`}
-              >
-                <Type className="h-3.5 w-3.5" />
-              </span>
+              <Type className="h-3.5 w-3.5" />
               <span>{language === 'ar' ? 'نص ← فيديو' : 'Text → Video'}</span>
             </button>
 
@@ -1202,20 +1630,43 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 if (!isGenerating) setGenerationMode('2images_to_video');
               }}
               disabled={isGenerating}
-              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed ${
+              className={`flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-[11px] font-semibold transition-all duration-300 active:scale-[0.98] disabled:cursor-not-allowed whitespace-nowrap ${
                 generationMode === '2images_to_video'
-                  ? 'bg-gradient-to-r from-[#060541] via-[hsl(210,100%,32%)] to-[#060541] text-white shadow-[0_6px_18px_hsla(210,100%,45%,0.25)]'
-                  : 'text-muted-foreground hover:text-primary hover:bg-primary/5'
+                  ? 'text-white shadow-[0_4px_20px_rgba(226,199,168,0.35)]'
+                  : 'text-white/60 hover:text-white/80'
               }`}
+              style={{
+                background: generationMode === '2images_to_video' 
+                  ? 'linear-gradient(135deg, #E2C7A8 0%, #C5A47E 100%)' 
+                  : 'transparent',
+              }}
             >
-              <span
-                className={`grid place-items-center h-6 w-6 rounded-lg ${
-                  generationMode === '2images_to_video' ? 'bg-white/15' : 'bg-primary/5'
-                }`}
-              >
-                <Images className="h-3.5 w-3.5" />
-              </span>
+              <Images className="h-3.5 w-3.5" />
               <span>{language === 'ar' ? 'صورتان ← فيديو' : '2Images → Video'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (!isGenerating && !isTrialUser) setGenerationMode('cinema');
+              }}
+              disabled={isGenerating}
+              className={`relative flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-[11px] font-semibold transition-all duration-300 active:scale-[0.98] disabled:cursor-not-allowed whitespace-nowrap ${
+                isTrialUser
+                  ? 'text-white/30 cursor-not-allowed'
+                  : generationMode === 'cinema'
+                  ? 'text-white shadow-[0_4px_20px_rgba(226,199,168,0.35)]'
+                  : 'text-white/60 hover:text-white/80'
+              }`}
+              style={{
+                background: !isTrialUser && generationMode === 'cinema'
+                  ? 'linear-gradient(135deg, #E2C7A8 0%, #C5A47E 100%)'
+                  : 'transparent',
+              }}
+            >
+              <Film className="h-3.5 w-3.5" />
+              <span>{language === 'ar' ? 'سينما' : 'Cinema'}</span>
+              {isTrialUser && <Lock className="h-3 w-3 ml-0.5 opacity-60" />}
             </button>
           </div>
 
@@ -1470,7 +1921,757 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               </div>
             )}
 
-            {/* Prompt & Generate */}
+            {/* Cinema mode - Director's Desk */}
+            {generationMode === 'cinema' && (
+              <div className="relative col-span-full min-h-[60vh] flex flex-col justify-center">
+                {cinemaStep === 'desk' && (() => {
+                  const effectiveSetting = cinemaSetting === 'Custom' ? cinemaSettingCustom : cinemaSetting;
+                  const effectiveAction = cinemaAction === 'Custom' ? cinemaActionCustom : cinemaAction;
+                  const effectiveVibe = cinemaVibe === 'Custom' ? cinemaVibeCustom : cinemaVibe;
+                  const effectiveCTA = cinemaCTA === 'Custom' ? cinemaCTACustom : cinemaCTA;
+                  const isFormReady = !!(cinemaSubject.trim() && effectiveSetting.trim() && effectiveAction.trim() && effectiveVibe.trim() && cinemaCharacters);
+                  return (
+                  <div className="flex flex-col gap-6 py-6">
+                    {/* Header */}
+                    <div className="text-center space-y-3">
+                      <h3
+                        className="text-2xl md:text-3xl font-bold text-white"
+                        style={{ textShadow: '0 0 30px rgba(226,199,168,0.6), 0 0 60px rgba(226,199,168,0.3)' }}
+                      >
+                        {language === 'ar' ? 'مكتب الفيزيونير' : 'The Visionnaire'}
+                      </h3>
+                      <p className="text-sm md:text-base text-white/70 max-w-md mx-auto leading-relaxed">
+                        {language === 'ar'
+                          ? 'مرحباً بك في سينما وكتي. أجب على بعض الأسئلة، وسيقوم مخرج الذكاء الاصطناعي بكتابة تحفتك السينمائية لمدة ٦٠ ثانية.'
+                          : 'Welcome to Wakti Cinema. Answer a few questions, and our AI Director will script your 60-second cinematic masterpiece.'}
+                      </p>
+                    </div>
+
+                    {/* The form - single column mobile */}
+                    <div className="flex flex-col gap-4 max-w-lg mx-auto w-full">
+
+                      {/* Q1 - Subject (free text — this must stay free, it's the core) */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-semibold text-[#E2C7A8] uppercase tracking-wider">
+                          {language === 'ar' ? '١. ما هو موضوع فيلمك؟' : '1. What is your movie about?'}
+                        </label>
+                        <div
+                          className="rounded-xl overflow-hidden"
+                          style={{
+                            background: 'rgba(12,15,20,0.65)',
+                            border: '1px solid rgba(226,199,168,0.35)',
+                            boxShadow: '0 4px 20px rgba(226,199,168,0.08), inset 0 1px 0 rgba(255,255,255,0.06)',
+                            backdropFilter: 'blur(14px)',
+                          }}
+                        >
+                          <input
+                            type="text"
+                            value={cinemaSubject}
+                            onChange={(e) => setCinemaSubject(e.target.value)}
+                            disabled={isDirecting}
+                            placeholder={language === 'ar' ? 'مثال: رجل أعمال يطلق منتجه، أم وطفلها في الحديقة...' : 'e.g., An entrepreneur launching a product, A mother and child in a park...'}
+                            className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none"
+                          />
+                        </div>
+                        <p className="text-xs text-white/40 px-1">{language === 'ar' ? 'الشخصية أو الكائن أو المنتج الرئيسي في قصتك.' : 'The main character, object, or product in your story.'}</p>
+                      </div>
+
+                      {/* Q2 - Setting */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-semibold text-[#E2C7A8] uppercase tracking-wider">
+                          {language === 'ar' ? '٢. الموقع' : '2. Setting'}
+                        </label>
+                        <div
+                          className="rounded-xl overflow-hidden"
+                          style={{
+                            background: 'rgba(12,15,20,0.65)',
+                            border: '1px solid rgba(226,199,168,0.35)',
+                            boxShadow: '0 4px 20px rgba(226,199,168,0.08), inset 0 1px 0 rgba(255,255,255,0.06)',
+                            backdropFilter: 'blur(14px)',
+                          }}
+                        >
+                          <select
+                            value={cinemaSetting}
+                            onChange={(e) => setCinemaSetting(e.target.value)}
+                            disabled={isDirecting}
+                            title={language === 'ar' ? 'الموقع' : 'Setting'}
+                            className="w-full bg-transparent px-4 py-3 text-sm text-white outline-none appearance-none cursor-pointer"
+                            style={{ colorScheme: 'dark' }}
+                          >
+                            <option value="" disabled className="bg-[#0c0f14]">{language === 'ar' ? 'اختر نوع الموقع...' : 'Choose a setting type...'}</option>
+                            <optgroup label={language === 'ar' ? '🌆 حضري وعمراني' : '🌆 Urban & City'} className="bg-[#0c0f14]">
+                              <option value="a futuristic modern city skyline at night, glass towers reflecting light" className="bg-[#0c0f14]">{language === 'ar' ? 'أفق مدينة عصرية ليلاً' : 'Modern City — Night Skyline'}</option>
+                              <option value="a busy city street at golden hour, people and motion blur" className="bg-[#0c0f14]">{language === 'ar' ? 'شارع مزدحم عند الغروب' : 'City Street — Golden Hour'}</option>
+                              <option value="a rooftop terrace overlooking a glowing cityscape" className="bg-[#0c0f14]">{language === 'ar' ? 'سطح بناية يطل على المدينة' : 'Rooftop — City View'}</option>
+                              <option value="an ancient market or bazaar, warm lanterns, stone arches" className="bg-[#0c0f14]">{language === 'ar' ? 'سوق قديم، فوانيس وأقواس حجرية' : 'Ancient Market / Bazaar'}</option>
+                            </optgroup>
+                            <optgroup label={language === 'ar' ? '🏞️ طبيعة وبيئة' : '🏞️ Nature & Environment'} className="bg-[#0c0f14]">
+                              <option value="a vast open desert at golden hour, endless sand dunes, warm haze" className="bg-[#0c0f14]">{language === 'ar' ? 'صحراء شاسعة عند الغروب' : 'Desert — Golden Hour'}</option>
+                              <option value="a lush green forest, rays of light through tall trees" className="bg-[#0c0f14]">{language === 'ar' ? 'غابة خضراء كثيفة مع أشعة الشمس' : 'Forest — Sunrays'}</option>
+                              <option value="an ocean coastline at sunrise, crashing waves, warm mist" className="bg-[#0c0f14]">{language === 'ar' ? 'ساحل المحيط عند الشروق' : 'Ocean Coast — Sunrise'}</option>
+                              <option value="dramatic mountain peaks above the clouds, epic wide shot" className="bg-[#0c0f14]">{language === 'ar' ? 'قمم جبلية فوق الغيوم' : 'Mountain Peaks — Above Clouds'}</option>
+                              <option value="a wide open field at twilight, stars beginning to appear" className="bg-[#0c0f14]">{language === 'ar' ? 'حقل مفتوح عند الغسق والنجوم' : 'Open Field — Twilight Stars'}</option>
+                            </optgroup>
+                            <optgroup label={language === 'ar' ? '🎬 بيئات سينمائية وخيالية' : '🎬 Cinematic & Fantastical'} className="bg-[#0c0f14]">
+                              <option value="a sleek dark product studio, dramatic spotlight, pure black background" className="bg-[#0c0f14]">{language === 'ar' ? 'استوديو منتج فاخر، خلفية سوداء' : 'Luxury Product Studio'}</option>
+                              <option value="a grand ancient palace interior, golden pillars, silk drapes, candlelight" className="bg-[#0c0f14]">{language === 'ar' ? 'قاعة قصر فخمة، أعمدة ذهبية' : 'Grand Palace Interior'}</option>
+                              <option value="outer space, earth from orbit, stars and galaxies stretching forever" className="bg-[#0c0f14]">{language === 'ar' ? 'الفضاء الخارجي، الأرض من المدار' : 'Outer Space'}</option>
+                              <option value="deep underwater, glowing coral reefs, bioluminescent marine life" className="bg-[#0c0f14]">{language === 'ar' ? 'أعماق البحر، شعاب مرجانية مضيئة' : 'Deep Ocean / Underwater'}</option>
+                              <option value="a neon-lit futuristic cyberpunk environment, holographic displays" className="bg-[#0c0f14]">{language === 'ar' ? 'بيئة مستقبلية بأضواء النيون' : 'Futuristic / Cyberpunk'}</option>
+                              <option value="inside a dream-like abstract world, swirling colors and surreal geometry" className="bg-[#0c0f14]">{language === 'ar' ? 'عالم حلمي مجرد، ألوان وأشكال سريالية' : 'Abstract / Dreamlike'}</option>
+                            </optgroup>
+                            <optgroup label={language === 'ar' ? '🏠 داخلي وشخصي' : '🏠 Indoor & Personal'} className="bg-[#0c0f14]">
+                              <option value="a cozy warmly lit home interior, soft textures, family atmosphere" className="bg-[#0c0f14]">{language === 'ar' ? 'منزل دافئ ومريح' : 'Cozy Home Interior'}</option>
+                              <option value="a sleek modern office or boardroom, clean lines, professional tone" className="bg-[#0c0f14]">{language === 'ar' ? 'مكتب عصري احترافي' : 'Modern Office / Boardroom'}</option>
+                              <option value="a high-energy sports arena or stadium, crowd energy" className="bg-[#0c0f14]">{language === 'ar' ? 'ملعب رياضي مليء بالطاقة' : 'Sports Arena / Stadium'}</option>
+                            </optgroup>
+                            <option value="Custom" className="bg-[#0c0f14]">{language === 'ar' ? '✏️ اكتب موقعك الخاص...' : '✏️ Describe your own setting...'}</option>
+                          </select>
+                        </div>
+                        {cinemaSetting === 'Custom' && (
+                          <div
+                            className="rounded-xl overflow-hidden"
+                            style={{
+                              background: 'rgba(12,15,20,0.65)',
+                              border: '1px solid rgba(226,199,168,0.5)',
+                              boxShadow: '0 4px 20px rgba(226,199,168,0.12)',
+                              backdropFilter: 'blur(14px)',
+                            }}
+                          >
+                            <input
+                              type="text"
+                              value={cinemaSettingCustom}
+                              onChange={(e) => setCinemaSettingCustom(e.target.value)}
+                              disabled={isDirecting}
+                              placeholder={language === 'ar' ? 'أدخل الموقع...' : 'Enter your custom location...'}
+                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none"
+                              autoFocus
+                            />
+                          </div>
+                        )}
+                        <p className="text-xs text-white/40 px-1">{language === 'ar' ? 'اختر موقعاً يناسب قصتك.' : 'Choose a location that best suits your story.'}</p>
+                      </div>
+
+                      {/* Q3 - Main Action */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-semibold text-[#E2C7A8] uppercase tracking-wider">
+                          {language === 'ar' ? '٣. الحدث الرئيسي' : '3. Main Action'}
+                        </label>
+                        <div
+                          className="rounded-xl overflow-hidden"
+                          style={{
+                            background: 'rgba(12,15,20,0.65)',
+                            border: '1px solid rgba(226,199,168,0.35)',
+                            boxShadow: '0 4px 20px rgba(226,199,168,0.08), inset 0 1px 0 rgba(255,255,255,0.06)',
+                            backdropFilter: 'blur(14px)',
+                          }}
+                        >
+                          <select
+                            value={cinemaAction}
+                            onChange={(e) => setCinemaAction(e.target.value)}
+                            disabled={isDirecting}
+                            title={language === 'ar' ? 'الحدث الرئيسي' : 'Main Action'}
+                            className="w-full bg-transparent px-4 py-3 text-sm text-white outline-none appearance-none cursor-pointer"
+                            style={{ colorScheme: 'dark' }}
+                          >
+                            <option value="" disabled className="bg-[#0c0f14]">{language === 'ar' ? 'اختر الحدث الرئيسي...' : 'Choose the main action...'}</option>
+                            <optgroup label={language === 'ar' ? '✨ كشف وإطلاق' : '✨ Reveal & Launch'} className="bg-[#0c0f14]">
+                              <option value="a slow dramatic cinematic reveal — the subject emerges from darkness into a spotlight" className="bg-[#0c0f14]">{language === 'ar' ? 'كشف درامي بطيء من الظلام' : 'Dramatic Reveal from Darkness'}</option>
+                              <option value="the subject rotates elegantly under dramatic studio lighting, every detail crisp" className="bg-[#0c0f14]">{language === 'ar' ? 'دوران أنيق تحت إضاءة استوديو' : 'Elegant 360° Product Rotation'}</option>
+                              <option value="a powerful transformation — before and after, the subject evolves visually" className="bg-[#0c0f14]">{language === 'ar' ? 'تحول قوي قبل وبعد' : 'Before & After Transformation'}</option>
+                              <option value="the subject materializes from light particles or abstract energy" className="bg-[#0c0f14]">{language === 'ar' ? 'يتشكل من جزيئات ضوء أو طاقة' : 'Materializes from Light / Energy'}</option>
+                            </optgroup>
+                            <optgroup label={language === 'ar' ? '🚀 حركة وديناميكية' : '🚀 Movement & Energy'} className="bg-[#0c0f14]">
+                              <option value="soaring and flying at high speed through a dramatic environment" className="bg-[#0c0f14]">{language === 'ar' ? 'يحلق بسرعة عبر بيئة درامية' : 'Soaring at High Speed'}</option>
+                              <option value="an intense chase or pursuit through a dynamic changing environment" className="bg-[#0c0f14]">{language === 'ar' ? 'مطاردة مثيرة في بيئة متغيرة' : 'Chase / Pursuit'}</option>
+                              <option value="a sweeping aerial journey — camera glides over landscapes and terrain" className="bg-[#0c0f14]">{language === 'ar' ? 'رحلة جوية كاسحة فوق المناظر الطبيعية' : 'Sweeping Aerial Journey'}</option>
+                              <option value="building up to a climactic powerful moment — tension then release" className="bg-[#0c0f14]">{language === 'ar' ? 'تصعيد نحو ذروة قوية ثم انفراج' : 'Build-up to Climax'}</option>
+                            </optgroup>
+                            <optgroup label={language === 'ar' ? '❤️ إنساني وعاطفي' : '❤️ Human & Emotional'} className="bg-[#0c0f14]">
+                              <option value="an intimate human moment — warmth, connection, and genuine emotion" className="bg-[#0c0f14]">{language === 'ar' ? 'لحظة إنسانية حميمة ودافئة' : 'Intimate Human Moment'}</option>
+                              <option value="a personal journey of struggle, growth, and triumph" className="bg-[#0c0f14]">{language === 'ar' ? 'رحلة شخصية من الصراع إلى الانتصار' : 'Journey of Growth & Triumph'}</option>
+                              <option value="a joyful celebration — energy, movement, confetti, people coming together" className="bg-[#0c0f14]">{language === 'ar' ? 'احتفال مبهج بالطاقة والحركة' : 'Joyful Celebration'}</option>
+                              <option value="a quiet reflective moment — stillness, beauty, inner peace" className="bg-[#0c0f14]">{language === 'ar' ? 'لحظة هادئة تأملية، السكون والجمال' : 'Quiet Reflective Moment'}</option>
+                            </optgroup>
+                            <optgroup label={language === 'ar' ? '🌍 استكشاف واكتشاف' : '🌍 Exploration & Discovery'} className="bg-[#0c0f14]">
+                              <option value="exploring and discovering an unknown world for the first time" className="bg-[#0c0f14]">{language === 'ar' ? 'استكشاف واكتشاف عالم مجهول' : 'Exploring an Unknown World'}</option>
+                              <option value="a time-lapse of the world transforming — day to night, seasons changing" className="bg-[#0c0f14]">{language === 'ar' ? 'انتقال زمني للعالم يتحول نهاراً وليلاً' : 'Time-lapse Transformation'}</option>
+                              <option value="witnessing a natural spectacle — storm, aurora, eruption, eclipse" className="bg-[#0c0f14]">{language === 'ar' ? 'مشهد طبيعي مذهل — عاصفة أو شفق قطبي' : 'Natural Spectacle'}</option>
+                            </optgroup>
+                            <option value="Custom" className="bg-[#0c0f14]">{language === 'ar' ? '✏️ وصف حدثك الخاص...' : '✏️ Describe your own action...'}</option>
+                          </select>
+                        </div>
+                        {cinemaAction === 'Custom' && (
+                          <div
+                            className="rounded-xl overflow-hidden"
+                            style={{
+                              background: 'rgba(12,15,20,0.65)',
+                              border: '1px solid rgba(226,199,168,0.5)',
+                              boxShadow: '0 4px 20px rgba(226,199,168,0.12)',
+                              backdropFilter: 'blur(14px)',
+                            }}
+                          >
+                            <input
+                              type="text"
+                              value={cinemaActionCustom}
+                              onChange={(e) => setCinemaActionCustom(e.target.value)}
+                              disabled={isDirecting}
+                              placeholder={language === 'ar' ? 'صف الحدث الذي تريده...' : 'Describe the action you want...'}
+                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none"
+                              autoFocus
+                            />
+                          </div>
+                        )}
+                        <p className="text-xs text-white/40 px-1">{language === 'ar' ? 'ما الذي يحدث في فيلمك؟' : 'What is happening in your movie?'}</p>
+                      </div>
+
+                      {/* Q4 - Vibe */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-semibold text-[#E2C7A8] uppercase tracking-wider">
+                          {language === 'ar' ? '٤. المزاج والأجواء' : '4. Vibe & Mood'}
+                        </label>
+                        <div
+                          className="rounded-xl overflow-hidden"
+                          style={{
+                            background: 'rgba(12,15,20,0.65)',
+                            border: '1px solid rgba(226,199,168,0.35)',
+                            boxShadow: '0 4px 20px rgba(226,199,168,0.08), inset 0 1px 0 rgba(255,255,255,0.06)',
+                            backdropFilter: 'blur(14px)',
+                          }}
+                        >
+                          <select
+                            value={cinemaVibe}
+                            onChange={(e) => setCinemaVibe(e.target.value)}
+                            disabled={isDirecting}
+                            title={language === 'ar' ? 'المزاج' : 'Vibe'}
+                            className="w-full bg-transparent px-4 py-3 text-sm text-white outline-none appearance-none cursor-pointer"
+                            style={{ colorScheme: 'dark' }}
+                          >
+                            <option value="" disabled className="bg-[#0c0f14]">{language === 'ar' ? 'اختر المزاج...' : 'Choose a mood...'}</option>
+                            <option value="Epic and grand — cinematic score, wide establishing shots, larger than life" className="bg-[#0c0f14]">{language === 'ar' ? '🔥 ملحمي وعظيم' : '🔥 Epic & Grand'}</option>
+                            <option value="Luxurious and prestigious — slow motion, rich textures, gold tones" className="bg-[#0c0f14]">{language === 'ar' ? '✨ فاخر وراقي' : '✨ Luxurious & Prestigious'}</option>
+                            <option value="Dramatic and intense — high contrast, deep shadows, powerful tension" className="bg-[#0c0f14]">{language === 'ar' ? '⚡ درامي ومكثف' : '⚡ Dramatic & Intense'}</option>
+                            <option value="Mysterious and cinematic — dark atmosphere, fog, slow reveals" className="bg-[#0c0f14]">{language === 'ar' ? '🌑 غامض وسينمائي' : '🌑 Mysterious & Cinematic'}</option>
+                            <option value="Emotional and heartfelt — soft light, intimate close-ups, stirring music" className="bg-[#0c0f14]">{language === 'ar' ? '💛 عاطفي ومؤثر' : '💛 Emotional & Heartfelt'}</option>
+                            <option value="Inspiring and uplifting — bright light, rising motion, hopeful tone" className="bg-[#0c0f14]">{language === 'ar' ? '🌅 ملهم ومحفز' : '🌅 Inspiring & Uplifting'}</option>
+                            <option value="Exciting and high energy — fast cuts, dynamic movement, adrenaline" className="bg-[#0c0f14]">{language === 'ar' ? '💥 مثير وطاقة عالية' : '💥 Exciting & High Energy'}</option>
+                            <option value="Peaceful and serene — slow camera, nature, stillness, gentle pace" className="bg-[#0c0f14]">{language === 'ar' ? '🌿 هادئ ومسالم' : '🌿 Peaceful & Serene'}</option>
+                            <option value="Playful and fun — bright colors, quick cuts, light-hearted energy" className="bg-[#0c0f14]">{language === 'ar' ? '🎉 مرح وممتع' : '🎉 Playful & Fun'}</option>
+                            <option value="Dark and gritty — raw texture, desaturated palette, urban realism" className="bg-[#0c0f14]">{language === 'ar' ? '🖤 مظلم وخشن' : '🖤 Dark & Gritty'}</option>
+                            <option value="Custom" className="bg-[#0c0f14]">{language === 'ar' ? '✏️ وصف مزاجك الخاص...' : '✏️ Describe your own mood...'}</option>
+                          </select>
+                        </div>
+                        {cinemaVibe === 'Custom' && (
+                          <div
+                            className="rounded-xl overflow-hidden"
+                            style={{
+                              background: 'rgba(12,15,20,0.65)',
+                              border: '1px solid rgba(226,199,168,0.5)',
+                              boxShadow: '0 4px 20px rgba(226,199,168,0.12)',
+                              backdropFilter: 'blur(14px)',
+                            }}
+                          >
+                            <input
+                              type="text"
+                              value={cinemaVibeCustom}
+                              onChange={(e) => setCinemaVibeCustom(e.target.value)}
+                              disabled={isDirecting}
+                              placeholder={language === 'ar' ? 'صف الشعور أو الأجواء...' : 'Describe the feeling or atmosphere...'}
+                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none"
+                              autoFocus
+                            />
+                          </div>
+                        )}
+                        <p className="text-xs text-white/40 px-1">{language === 'ar' ? 'اختر الشعور الذي يتناسب مع رؤيتك.' : 'Choose a feeling that matches your vision.'}</p>
+                      </div>
+
+                      {/* Q5 - Characters */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-semibold text-[#E2C7A8] uppercase tracking-wider">
+                          {language === 'ar' ? '٥. عدد الشخصيات' : '5. Characters'}
+                        </label>
+                        <div
+                          className="rounded-xl overflow-hidden"
+                          style={{
+                            background: 'rgba(12,15,20,0.65)',
+                            border: '1px solid rgba(226,199,168,0.35)',
+                            boxShadow: '0 4px 20px rgba(226,199,168,0.08), inset 0 1px 0 rgba(255,255,255,0.06)',
+                            backdropFilter: 'blur(14px)',
+                          }}
+                        >
+                          <select
+                            value={cinemaCharacters}
+                            onChange={(e) => { setCinemaCharacters(e.target.value); setCinemaRelationship(''); }}
+                            disabled={isDirecting}
+                            title={language === 'ar' ? 'عدد الشخصيات' : 'Characters'}
+                            className="w-full bg-transparent px-4 py-3 text-sm text-white outline-none appearance-none cursor-pointer"
+                            style={{ colorScheme: 'dark' }}
+                          >
+                            <option value="" disabled className="bg-[#0c0f14]">{language === 'ar' ? 'من يظهر في الفيلم؟' : 'Who is in the movie?'}</option>
+                            <option value="no people — product, object, or creature only" className="bg-[#0c0f14]">{language === 'ar' ? '📦 بدون بشر — منتج أو كائن فقط' : '📦 No People — Product / Object Only'}</option>
+                            <option value="one solo person — the hero, the protagonist" className="bg-[#0c0f14]">{language === 'ar' ? '👤 شخص واحد — البطل' : '👤 One Person — The Hero'}</option>
+                            <option value="two people" className="bg-[#0c0f14]">{language === 'ar' ? '👥 شخصان' : '👥 Two People'}</option>
+                            <option value="a small group of 3-5 people" className="bg-[#0c0f14]">{language === 'ar' ? '👨‍👩‍👧 مجموعة صغيرة ٣-٥ أشخاص' : '👨‍👩‍👧 Small Group (3–5)'}</option>
+                            <option value="a crowd or community — many people united" className="bg-[#0c0f14]">{language === 'ar' ? '🏟️ حشد أو مجتمع' : '🏟️ Crowd / Community'}</option>
+                            <option value="Custom" className="bg-[#0c0f14]">{language === 'ar' ? '✏️ اكتب وصف الشخصيات...' : '✏️ Describe your own characters...'}</option>
+                          </select>
+                        </div>
+                        {cinemaCharacters === 'Custom' && (
+                          <div
+                            className="rounded-xl overflow-hidden"
+                            style={{
+                              background: 'rgba(12,15,20,0.65)',
+                              border: '1px solid rgba(226,199,168,0.5)',
+                              boxShadow: '0 4px 20px rgba(226,199,168,0.12)',
+                              backdropFilter: 'blur(14px)',
+                            }}
+                          >
+                            <input
+                              type="text"
+                              value={cinemaRelationship}
+                              onChange={(e) => setCinemaRelationship(e.target.value)}
+                              disabled={isDirecting}
+                              placeholder={language === 'ar' ? 'صف الشخصيات (مثال: رجل يرتدي بذلة سوداء)' : 'Describe characters (e.g., A man in a black suit)'}
+                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none"
+                              autoFocus
+                            />
+                          </div>
+                        )}
+                        {cinemaCharacters && cinemaCharacters !== 'Custom' && cinemaCharacters !== 'no people — product, object, or creature only' && cinemaCharacters !== 'one solo person — the hero, the protagonist' && (
+                          <div
+                            className="rounded-xl overflow-hidden"
+                            style={{
+                              background: 'rgba(12,15,20,0.65)',
+                              border: '1px solid rgba(226,199,168,0.5)',
+                              boxShadow: '0 4px 20px rgba(226,199,168,0.12)',
+                              backdropFilter: 'blur(14px)',
+                            }}
+                          >
+                            <input
+                              type="text"
+                              value={cinemaRelationship}
+                              onChange={(e) => setCinemaRelationship(e.target.value)}
+                              disabled={isDirecting}
+                              placeholder={language === 'ar' ? 'العلاقة بين الشخصيات (مثال: أصدقاء، منافسون)' : 'Relationship between characters (e.g., Friends, Rivals)'}
+                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none"
+                              autoFocus
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Optional - Video Purpose */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-semibold text-white/40 uppercase tracking-wider">
+                          {language === 'ar' ? 'هدف الفيديو (اختياري)' : 'Video Purpose (Optional)'}
+                        </label>
+                        <div
+                          className="rounded-xl overflow-hidden"
+                          style={{
+                            background: 'rgba(12,15,20,0.5)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            backdropFilter: 'blur(14px)',
+                          }}
+                        >
+                          <select
+                            value={cinemaCTA}
+                            onChange={(e) => setCinemaCTA(e.target.value)}
+                            disabled={isDirecting}
+                            title={language === 'ar' ? 'هدف الفيديو' : 'Video Purpose'}
+                            className="w-full bg-transparent px-4 py-3 text-sm text-white outline-none appearance-none cursor-pointer"
+                            style={{ colorScheme: 'dark' }}
+                          >
+                            <option value="" className="bg-[#0c0f14]">{language === 'ar' ? 'فن خالص / لا هدف تسويقي' : 'Pure Art / No Marketing Goal'}</option>
+                            <option value="sell or promote a product — end with a strong desire to buy" className="bg-[#0c0f14]">{language === 'ar' ? '🛍️ بيع منتج أو الترويج له' : '🛍️ Sell / Promote a Product'}</option>
+                            <option value="build brand identity — make the audience feel who we are" className="bg-[#0c0f14]">{language === 'ar' ? '🏷️ بناء هوية العلامة التجارية' : '🏷️ Build Brand Identity'}</option>
+                            <option value="announce an event or launch — create urgency and excitement" className="bg-[#0c0f14]">{language === 'ar' ? '📣 الإعلان عن حدث أو إطلاق' : '📣 Announce Event / Launch'}</option>
+                            <option value="inspire and motivate the viewer — leave them feeling empowered" className="bg-[#0c0f14]">{language === 'ar' ? '💪 إلهام وتحفيز المشاهد' : '💪 Inspire & Motivate'}</option>
+                            <option value="create an emotional connection — make the audience feel deeply" className="bg-[#0c0f14]">{language === 'ar' ? '❤️ إنشاء تواصل عاطفي' : '❤️ Emotional Connection'}</option>
+                            <option value="educate or explain — show how something works or why it matters" className="bg-[#0c0f14]">{language === 'ar' ? '📚 التعليم أو الشرح' : '📚 Educate / Explain'}</option>
+                            <option value="grow social media presence — designed to be shared and go viral" className="bg-[#0c0f14]">{language === 'ar' ? '📱 النمو على وسائل التواصل الاجتماعي' : '📱 Social Media Growth / Viral'}</option>
+                            <option value="showcase a portfolio or creative craft" className="bg-[#0c0f14]">{language === 'ar' ? '🎨 عرض أعمال إبداعية' : '🎨 Portfolio / Creative Showcase'}</option>
+                            <option value="Custom" className="bg-[#0c0f14]">{language === 'ar' ? '✏️ اكتب هدفك الخاص...' : '✏️ Describe your own purpose...'}</option>
+                          </select>
+                        </div>
+                        {cinemaCTA === 'Custom' && (
+                          <div
+                            className="rounded-xl overflow-hidden"
+                            style={{
+                              background: 'rgba(12,15,20,0.65)',
+                              border: '1px solid rgba(226,199,168,0.5)',
+                              boxShadow: '0 4px 20px rgba(226,199,168,0.12)',
+                              backdropFilter: 'blur(14px)',
+                            }}
+                          >
+                            <input
+                              type="text"
+                              value={cinemaCTACustom}
+                              onChange={(e) => setCinemaCTACustom(e.target.value)}
+                              disabled={isDirecting}
+                              placeholder={language === 'ar' ? 'صف هدف الفيديو الذي تريده...' : 'Describe the video purpose you want...'}
+                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none"
+                              autoFocus
+                            />
+                          </div>
+                        )}
+                        <p className="text-xs text-white/30 px-1">{language === 'ar' ? 'يساعد المخرج على تصميم القصة بشكل أفضل.' : 'Helps the AI Director craft a stronger story arc.'}</p>
+                      </div>
+                    </div>
+
+                    {/* PREVIEW & START DIRECTING button */}
+                    <div className="pt-2 max-w-lg mx-auto w-full">
+                      {isDirecting ? (
+                        <div className="flex flex-col items-center gap-4 py-8">
+                          <div className="flex items-center gap-3">
+                            <div className="relative">
+                              <div className="w-4 h-4 rounded-full bg-[#E2C7A8] animate-pulse" />
+                              <div className="absolute inset-0 w-4 h-4 rounded-full bg-[#E2C7A8] animate-ping opacity-30" />
+                            </div>
+                            <span className="text-lg font-semibold text-[#E2C7A8] animate-pulse">
+                              {language === 'ar' ? 'المخرج يكتب السيناريو...' : 'Director is scripting...'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-white/60 max-w-md text-center">
+                            {language === 'ar'
+                              ? 'جاري تحليل رؤيتك وإنشاء ٦ مشاهد سينمائية...'
+                              : 'Analyzing your vision and creating 6 cinematic scenes...'}
+                          </p>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={handleDirect}
+                          disabled={!isFormReady || isDirecting}
+                          className="relative w-full h-16 text-lg font-bold rounded-xl border-0 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed overflow-hidden"
+                          style={{
+                            background: isFormReady
+                              ? 'linear-gradient(135deg, #E2C7A8 0%, #C5A47E 50%, #E2C7A8 100%)'
+                              : 'rgba(226,199,168,0.2)',
+                            backgroundSize: isFormReady ? '200% 100%' : '100% 100%',
+                            animation: isFormReady ? 'shimmerGold 2.5s ease-in-out infinite' : 'none',
+                            boxShadow: isFormReady ? '0 12px 40px rgba(226,199,168,0.45), 0 6px 20px rgba(197,164,126,0.3)' : 'none',
+                            color: isFormReady ? '#0c0f14' : 'rgba(226,199,168,0.5)',
+                          }}
+                        >
+                          <div className="flex items-center justify-center gap-3">
+                            <Film className="h-6 w-6" />
+                            <span>{language === 'ar' ? 'معاينة وابدأ الإخراج' : 'PREVIEW & START DIRECTING'}</span>
+                          </div>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  );
+                })()}
+
+                {cinemaStep === 'storyboard' && (
+                  <div className="flex flex-col gap-4 pb-28">
+                    {/* Header + Format Toggle */}
+                    <div className="flex items-center justify-between px-1">
+                      <div>
+                        <h3 className="text-lg font-bold text-white">{language === 'ar' ? 'اللوحة الإخراجية' : 'The Storyboard'}</h3>
+                        <p className="text-xs text-white/50 mt-0.5">{language === 'ar' ? 'اسحب للتنقل بين المشاهد' : 'Swipe through scenes'}</p>
+                      </div>
+                      {/* Format Toggle */}
+                      <div className="flex items-center rounded-full p-0.5" style={{background:'rgba(226,199,168,0.1)',border:'1px solid rgba(226,199,168,0.25)'}}>
+                        <button
+                          onClick={() => setCinemaFormat('16:9')}
+                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${cinemaFormat === '16:9' ? 'text-[#0c0f14]' : 'text-[#E2C7A8]/60'}`}
+                          style={cinemaFormat === '16:9' ? {background:'linear-gradient(135deg,#E2C7A8,#C5A47E)'} : {}}
+                        >16:9</button>
+                        <button
+                          onClick={() => setCinemaFormat('9:16')}
+                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${cinemaFormat === '9:16' ? 'text-[#0c0f14]' : 'text-[#E2C7A8]/60'}`}
+                          style={cinemaFormat === '9:16' ? {background:'linear-gradient(135deg,#E2C7A8,#C5A47E)'} : {}}
+                        >9:16</button>
+                      </div>
+                    </div>
+
+                    {/* Vertical stacked scene cards */}
+                    <div className="flex flex-col gap-3">
+                      {[1, 2, 3, 4, 5, 6].map((sceneNum) => {
+                        const scene = cinemaScenes.find(s => s.scene === sceneNum);
+                        return (
+                          <div
+                            key={sceneNum}
+                            className={`relative rounded-2xl p-4 flex flex-col gap-3 transition-all ${!scene ? 'cinema-painting-skeleton' : ''}`}
+                            style={{
+                              backdropFilter: 'blur(12px)',
+                              background: scene ? 'rgba(226,199,168,0.08)' : 'rgba(255,255,255,0.02)',
+                              border: scene ? '1px solid rgba(226,199,168,0.35)' : '1px solid rgba(255,255,255,0.06)',
+                            }}
+                          >
+                            {/* Scene badge */}
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                                style={{background: scene ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : 'rgba(255,255,255,0.08)', color: scene ? '#0c0f14' : 'rgba(255,255,255,0.4)'}}>
+                                {sceneNum}
+                              </div>
+                              <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">
+                                {language === 'ar' ? `مشهد ${sceneNum} • ١٠ث` : `Scene ${sceneNum} • 10s`}
+                              </span>
+                            </div>
+                            {/* Scene text */}
+                            <div className="flex-1 min-h-[40px]">
+                              {scene ? (
+                                <p className="text-xs leading-relaxed text-[#E2C7A8]/90">
+                                  <TypewriterText text={scene.text} delay={sceneNum * 200} />
+                                </p>
+                              ) : (
+                                <div className="flex items-center justify-center h-full">
+                                  <Loader2 className="h-5 w-5 animate-spin text-[#E2C7A8]/30" />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Sticky footer — CAST YOUR MOVIE */}
+                    {cinemaScenes.length === 6 && (
+                      <div className="cinema-sticky-footer px-4 py-3">
+                        <button
+                          onClick={handleCast}
+                          disabled={isCasting}
+                          className="relative w-full h-14 text-base font-bold rounded-xl overflow-hidden transition-all active:scale-[0.98] disabled:opacity-50"
+                          style={{background:'linear-gradient(135deg,#E2C7A8 0%,#C5A47E 50%,#E2C7A8 100%)',backgroundSize:'200% 100%',animation:'shimmerGold 2.5s ease-in-out infinite',boxShadow:'0 8px 32px rgba(226,199,168,0.4)',color:'#0c0f14'}}
+                        >
+                          {isCasting ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                              <span>{language === 'ar' ? 'المصور يرسم الصور...' : 'Artist is painting...'}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-2">
+                              <Camera className="h-5 w-5" />
+                              <span>{language === 'ar' ? 'التالي: صب الفيلم' : 'NEXT: CAST YOUR MOVIE'}</span>
+                              <ArrowRight className="h-5 w-5" />
+                            </div>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {cinemaStep === 'casting' && (
+                  <div className="flex flex-col gap-4 pb-28">
+                    {/* Header */}
+                    <div className="text-center space-y-1 px-1">
+                      <h3 className="text-lg font-bold text-white">{language === 'ar' ? 'تصوير المشاهد' : 'Casting the Movie'}</h3>
+                      <p className="text-xs text-white/50">
+                        {isCasting
+                          ? (language === 'ar' ? 'المصور الذكي يرسم مشاهدك...' : 'AI Artist is painting your scenes...')
+                          : (language === 'ar' ? 'اختر صورة المرساة للمشهد الأول' : 'Your scenes are ready — approve to film')}
+                      </p>
+                    </div>
+
+                    {/* Master Anchor Preview */}
+                    {anchorImageUrl && (
+                      <div className="mx-auto cinema-diamond-border rounded-2xl overflow-hidden"
+                        style={{width: cinemaFormat === '16:9' ? '100%' : '60%', aspectRatio: cinemaFormat === '16:9' ? '16/9' : '9/16', maxHeight: '240px'}}>
+                        <img src={anchorImageUrl} alt="Anchor scene" className="w-full h-full object-cover" />
+                      </div>
+                    )}
+
+                    {/* 6 scene image grid (2 columns) */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {[0,1,2,3,4,5].map((idx) => {
+                        const img = sceneImages[idx];
+                        const prog = castingProgress[idx];
+                        return (
+                          <div key={idx}
+                            className={`relative rounded-2xl overflow-hidden ${prog === 'loading' ? 'cinema-gold-pulse cinema-painting-skeleton' : ''}`}
+                            style={{aspectRatio: cinemaFormat === '16:9' ? '16/9' : '9/16', background:'rgba(12,15,20,0.8)', border: img ? '1px solid rgba(226,199,168,0.5)' : '1px solid rgba(255,255,255,0.06)'}}>
+                            {img ? (
+                              <img src={img} alt={`Scene ${idx+1}`} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="flex flex-col items-center justify-center h-full gap-2 p-3">
+                                {prog === 'loading' ? (
+                                  <Loader2 className="h-6 w-6 animate-spin text-[#E2C7A8]/50" />
+                                ) : prog === 'error' ? (
+                                  <span className="text-red-400 text-xs">✗</span>
+                                ) : (
+                                  <div className="w-5 h-5 rounded-full border border-white/10" />
+                                )}
+                              </div>
+                            )}
+                            {/* Scene label */}
+                            <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold"
+                              style={{background:'rgba(12,15,20,0.7)',color: prog === 'done' ? '#E2C7A8' : 'rgba(255,255,255,0.4)'}}>
+                              {language === 'ar' ? `م${idx+1}` : `S${idx+1}`}
+                              {prog === 'done' && ' ✓'}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Sticky footer — APPROVE & FILM */}
+                    <div className="cinema-sticky-footer px-4 py-3 flex gap-3">
+                      <button
+                        onClick={handleCinemaReset}
+                        className="h-12 px-4 rounded-xl text-sm font-semibold text-white/60 flex-shrink-0 transition-all active:scale-[0.97]"
+                        style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)'}}
+                      >
+                        {language === 'ar' ? 'من البداية' : 'Reset'}
+                      </button>
+                      <button
+                        onClick={handleFilm}
+                        disabled={isFilming || isCasting || castingProgress.some(p => p === 'loading') || sceneImages.some(img => img === null)}
+                        className="flex-1 h-12 text-sm font-bold rounded-xl overflow-hidden transition-all active:scale-[0.98] disabled:opacity-40"
+                        style={{background:'linear-gradient(135deg,#E2C7A8 0%,#C5A47E 100%)',color:'#0c0f14',boxShadow:'0 6px 24px rgba(226,199,168,0.35)'}}
+                      >
+                        <div className="flex items-center justify-center gap-2">
+                          <Film className="h-4 w-4" />
+                          <span>{language === 'ar' ? 'موافقة وابدأ التصوير' : 'APPROVE & FILM'}</span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {cinemaStep === 'filming' && (
+                  <div className="flex flex-col gap-5 pb-28">
+                    {/* Header */}
+                    <div className="text-center space-y-1">
+                      <h3 className="text-lg font-bold text-white">{language === 'ar' ? 'الإنتاج جارٍ...' : 'Production in Progress'}</h3>
+                      <p className="text-xs text-white/50">{language === 'ar' ? '٦ مشاهد • ١٠ ثوانٍ كل مشهد' : '6 chapters • 10s each'}</p>
+                    </div>
+
+                    {/* Production progress bar */}
+                    {(() => {
+                      const score = animProgress.reduce((acc, p) => acc + (p === 'done' ? 1 : p === 'rendering' ? 0.4 : p === 'queued' ? 0.05 : 0), 0);
+                      const pct = Math.min(100, Math.round((score / 6) * 100));
+                      return (
+                        <div className="space-y-2 px-1">
+                          <div className="flex justify-between text-xs text-white/60">
+                            <span>{language === 'ar' ? 'تقدم الإنتاج' : 'Production progress'}</span>
+                            <span className="text-[#E2C7A8] font-bold">{pct}%</span>
+                          </div>
+                          <div className="h-2 rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.06)'}}>
+                            <div
+                              className="h-full rounded-full cinema-progress-bar transition-all duration-700"
+                              style={{width:`${pct}%`, background:'linear-gradient(90deg,#E2C7A8,#C5A47E,hsl(210,100%,65%))'}}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* 6 scene clip status grid */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {[0,1,2,3,4,5].map((idx) => {
+                        const prog = animProgress[idx];
+                        const clip = videoClips[idx];
+                        return (
+                          <div key={idx}
+                            className={`relative rounded-xl overflow-hidden flex flex-col items-center justify-center gap-1.5 ${prog === 'rendering' || prog === 'queued' ? 'cinema-gold-pulse' : ''}`}
+                            style={{aspectRatio:'9/16', minHeight:'120px', background:'rgba(12,15,20,0.8)', border: clip ? '1px solid rgba(226,199,168,0.6)' : '1px solid rgba(255,255,255,0.06)'}}>
+                            {clip ? (
+                              <video src={clip} muted playsInline loop autoPlay className="w-full h-full object-cover" />
+                            ) : (
+                              <>
+                                {prog === 'queued' && <div className="w-3 h-3 rounded-full bg-[#E2C7A8]/30 animate-pulse" />}
+                                {prog === 'rendering' && <Loader2 className="h-5 w-5 animate-spin text-[#E2C7A8]" />}
+                                {prog === 'error' && <span className="text-red-400 text-xs">✗</span>}
+                                {prog === 'done' && <span className="text-green-400 text-xs">✓</span>}
+                              </>
+                            )}
+                            <span className="absolute top-1.5 left-2 text-[9px] font-bold"
+                              style={{color: prog === 'done' ? '#E2C7A8' : 'rgba(255,255,255,0.3)'}}>
+                              {language === 'ar' ? `م${idx+1}` : `Ch.${idx+1}`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Sticky footer — PREMIERE */}
+                    <div className="cinema-sticky-footer px-4 py-3 flex gap-3">
+                      <button
+                        onClick={handleCinemaReset}
+                        className="h-12 px-4 rounded-xl text-sm font-semibold text-white/60 flex-shrink-0 transition-all active:scale-[0.97]"
+                        style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)'}}
+                      >
+                        {language === 'ar' ? 'إعادة' : 'Reset'}
+                      </button>
+                      <button
+                        onClick={handleStitch}
+                        disabled={isStitching || isFilming || videoClips.filter(Boolean).length < 2}
+                        className="flex-1 h-12 text-sm font-bold rounded-xl transition-all active:scale-[0.98] disabled:opacity-40 cinema-glow-pulse"
+                        style={{background:'linear-gradient(135deg,hsl(210,100%,60%),hsl(280,70%,65%))',color:'#fff',boxShadow:'0 6px 28px hsla(210,100%,65%,0.4)'}}
+                      >
+                        {isStitching ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>{language === 'ar' ? 'جاري التجميع...' : 'Stitching...'}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-2">
+                            <Sparkles className="h-4 w-4" />
+                            <span>{language === 'ar' ? `العرض الأول (${videoClips.filter(Boolean).length}/6)` : `PREMIERE (${videoClips.filter(Boolean).length}/6 ready)`}</span>
+                          </div>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {cinemaStep === 'premiere' && premiereVideoUrl && (
+                  <div className="cinema-player-overlay">
+                    {/* Gold frame video player */}
+                    <div className="relative w-full max-w-2xl mx-auto px-4 flex flex-col gap-4">
+                      <div className="text-center space-y-1">
+                        <p className="text-[#E2C7A8] text-xs font-semibold uppercase tracking-widest opacity-80">
+                          {language === 'ar' ? 'وكتي سينما' : 'Wakti Cinema'}
+                        </p>
+                        <h2 className="text-2xl font-bold text-white">{language === 'ar' ? '🎬 العرض الأول' : '🎬 The Premiere'}</h2>
+                      </div>
+                      <div className="cinema-diamond-border rounded-2xl overflow-hidden w-full"
+                        style={{aspectRatio: cinemaFormat === '16:9' ? '16/9' : '9/16', maxHeight:'70vh'}}>
+                        <video
+                          src={premiereVideoUrl}
+                          controls
+                          autoPlay
+                          playsInline
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      {/* Actions */}
+                      <div className="flex gap-3">
+                        <button
+                          onClick={async () => {
+                            try {
+                              const a = document.createElement('a');
+                              a.href = premiereVideoUrl;
+                              a.download = `wakti-cinema-premiere-${Date.now()}.mp4`;
+                              a.click();
+                            } catch {}
+                          }}
+                          className="flex-1 h-12 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                          style={{background:'rgba(226,199,168,0.12)',border:'1px solid rgba(226,199,168,0.35)',color:'#E2C7A8'}}
+                        >
+                          <Download className="h-4 w-4" />
+                          {language === 'ar' ? 'تحميل' : 'Download'}
+                        </button>
+                        <button
+                          onClick={handleCinemaReset}
+                          className="flex-1 h-12 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                          style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',color:'rgba(255,255,255,0.6)'}}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          {language === 'ar' ? 'فيلم جديد' : 'New Film'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Prompt & Generate - Hidden in Cinema mode */}
+            {generationMode !== 'cinema' && (
             <div className="flex flex-col gap-3 pt-2 border-t border-border/30">
               {/* Limit reached overlay */}
               {limitReached && (
@@ -1699,6 +2900,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 )
               )}
             </div>
+            )}
           </div>
 
           {/* Generated video result - Mobile optimized, full width */}
@@ -1791,7 +2993,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             </div>
           )}
 
-          {showLatestVideo && (
+          {/* Latest Video - Hidden in Cinema mode */}
+          {showLatestVideo && generationMode !== 'cinema' && (
             <div className="rounded-2xl overflow-hidden" style={{background: 'linear-gradient(135deg, hsl(235,25%,8%) 0%, hsl(250,20%,10%) 100%)', border: '1px solid hsla(210,100%,65%,0.2)', boxShadow: '0 4px 32px hsla(0,0%,0%,0.4), 0 0 0 1px hsla(210,100%,65%,0.08)'}}>
               {/* Header */}
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5">
@@ -1854,6 +3057,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               </div>
               <button
                 onClick={() => setShowSavedPicker(false)}
+                title={language === 'ar' ? 'إغلاق' : 'Close'}
+                aria-label={language === 'ar' ? 'إغلاق' : 'Close'}
                 className="p-1.5 rounded-full hover:bg-muted transition-colors"
               >
                 <X className="h-5 w-5" />

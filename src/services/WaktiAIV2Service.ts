@@ -782,12 +782,14 @@ class WaktiAIV2ServiceClass {
       // 2) PARALLEL TRACK B: Session token (module-level cache — instant if warm)
       const sessionPromise = getCachedSession();
 
-      // 3) PARALLEL TRACK C: Location — NEVER blocks chat.
-      //    For search: race with 500ms timeout so fetch isn't held hostage by GPS.
+      // 3) PARALLEL TRACK C: Location — NEVER blocks chat or search.
+      //    Always use cached location for search — forceFresh only for explicit "near me" GPS queries.
+      //    This eliminates the 30-second GPS wait on every search request.
       const needsLocation = activeTrigger === 'search' || queryNeedsFreshLocation(message);
+      const forceFreshLocation = queryNeedsFreshLocation(message); // only true for "near me" type queries
       const locationPromise: Promise<UserLocationContext | null> = needsLocation
         ? Promise.race([
-            this.getUserLocation(userId || '', activeTrigger === 'search' || queryNeedsFreshLocation(message)),
+            this.getUserLocation(userId || '', forceFreshLocation),
             new Promise<null>(r => setTimeout(() => r(null), 500))
           ])
         : Promise.resolve(null);
@@ -1117,7 +1119,9 @@ class WaktiAIV2ServiceClass {
                     console.log(`🎯 CLIENT: First token received [${requestId}] (primary=${primary})`);
                   }
                   fullResponse += parsed.token; 
-                  onToken?.(parsed.token); 
+                  if (!fullResponse.includes('{"action"')) {
+                    onToken?.(parsed.token);
+                  }
                 }
                 else if (typeof parsed.response === 'string') { 
                   if (!firstTokenReceived) {

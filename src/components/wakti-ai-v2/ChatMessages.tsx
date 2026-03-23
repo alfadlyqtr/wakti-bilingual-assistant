@@ -98,8 +98,16 @@ function repairMarkdownTables(markdown: string): string {
         }
 
         if (tableLines.length > 0) {
-          const fixedTable = fixTable(tableLines);
-          result.push(...fixedTable);
+          // Need at least a header + separator + 1 data row to attempt repair.
+          // If the table is incomplete (stream cut off), pass lines through as-is
+          // so react-markdown can render whatever it can rather than silently dropping content.
+          const dataRows = tableLines.filter(l => !isSeparatorLine(l.trim()));
+          if (dataRows.length >= 2) {
+            const fixedTable = fixTable(tableLines);
+            result.push(...fixedTable);
+          } else {
+            result.push(...tableLines);
+          }
           continue;
         }
       }
