@@ -1278,10 +1278,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setIsStitching(true);
     try {
       const serverBase = import.meta.env.VITE_VISION_SERVER_URL || 'https://wakti-vision-proxy.onrender.com';
+      // Wake up Render server (free tier sleeps — ping first, ignore errors)
+      try { await fetch(`${serverBase}/healthz`, { method: 'GET', signal: AbortSignal.timeout(8000) }); } catch {}
       const resp = await fetch(`${serverBase}/api/cinema/stitch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clip_urls: readyClips }),
+        signal: AbortSignal.timeout(5 * 60 * 1000), // 5 min timeout for FFmpeg
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
@@ -1294,7 +1297,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       toast.success(language === 'ar' ? 'العرض الأول جاهز! 🎬' : 'Premiere ready! 🎬');
     } catch (err: any) {
       console.error('[cinema] Stitch error:', err);
-      toast.error(language === 'ar' ? 'فشل تجميع الفيديو: ' + err.message : 'Stitch failed: ' + err.message);
+      const msg = err?.name === 'TimeoutError'
+        ? (language === 'ar' ? 'انتهت مهلة التجميع — حاول مجدداً' : 'Stitch timed out — please try again')
+        : (language === 'ar' ? 'فشل تجميع الفيديو: ' + err.message : 'Stitch failed: ' + err.message);
+      toast.error(msg);
     } finally {
       setIsStitching(false);
     }
