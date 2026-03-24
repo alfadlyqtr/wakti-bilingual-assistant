@@ -1,5 +1,5 @@
 // supabase/functions/cinema-director/index.ts
-// Wakti Cinema Director - GPT-4o mini powered scene generation
+// Wakti Cinema Director - GPT-4o mini powered scene generation v12 (subject lock)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -14,7 +14,8 @@ const corsHeaders = {
 
 interface Scene {
   scene: number;
-  text: string;
+  text: string;         // display text in user's language (Arabic or English)
+  english_prompt: string; // always-English prompt for AI image generation
 }
 
 interface DirectorResponse {
@@ -87,19 +88,28 @@ serve(async (req) => {
 
 التعليمات الأساسية:
 أنشئ بلوك البصمة البصرية: أولاً، استخرج الموضوع، المواد، الإضاءة، والأسلوب السينمائي (مثال: 'صقر ميكانيكي مطلي بالذهب، تشطيب معدني مصقول، عيون زفير، إضاءة غروب الوسيل ٤ مساءً باللون البرتقالي، عدسة ٣٥مم، ٨ك فوتوغرافي واقعي'). يجب إضافة هذا البلوك في بداية EVERY مشهد لتحقيق ١٠٠٪ تناسق.
+قفل الشخصية — للتناسق بين المشاهد: استخرج وصفاً دقيقاً ومحدداً للشخصيات وملابسهم من رؤية المستخدم (ألوان الملابس بالضبط، الملامح الخاصة). هذا الوصف يجب تضمينه حرفياً في بداية كل english_prompt. مثال: إذا قال المستخدم 'أطفال يلعبون كرة القدم بقمصان خضراء'، فكل مشهد يجب أن يبدأ بَ: 'kids in green jerseys' — لا يجوز تغيير اللون أبداً.
 اكتب قوس القصة: أنشئ ٦ مشاهد تشكل رواية متسعة ٦٠ ثانية (مقدمة، بناء، حركة، ذروة، حل، ختام).
 المشهد ١ (المرساة): أنشئ هذا خصيصاً للصورة-إلى-صورة. يجب أن يكون لقطة ساكنة مهيبة.
-المشاهد ٢-٦ (الاستمرارية): أنشئ هذه للصورة-إلى-صورة والصورة-إلى-فيديو. ركز على الحركة والفعل مع الحفاظ على 'البصمة البصرية' متطابقة.
-تنسيق الإخراج: أعد فقط مصفوفة JSON: [{"scene": 1, "text": "..."}, {"scene": 2, "text": "..."}, ...].`
+المشاهد ٢-٦ (الاستمرارية): أنشئ هذه للصورة-إلى-صورة والصورة-إلى-فيديو. ركز على الحركة والفعل مع الحفاظ على 'البصمة البصرية' وقفل الشخصية متطابقين.
+الإخراج ثنائي اللغة: كل مشهد يجب أن يحتوي على حقلين:
+- "text": وصف المشهد بالعربية — يُعرض في لوحة القصة للمستخدم.
+- "english_prompt": ترجمة إنجليزية دقيقة وسينمائية للوصف — تُرسل لنماذج الذكاء الاصطناعي لتوليد الصور (الذكاء الاصطناعي لا يفهم العربية جيداً). يجب أن تبدأ بقفل الشخصية.
+تنسيق الإخراج: أعد فقط مصفوفة JSON: [{"scene": 1, "text": "...", "english_prompt": "..."}, ...].`
       : `You are the Wakti AI Cinema Director. Your mission is to turn a 1-sentence amateur vision into a consistent cinematic story (${N} scene${N > 1 ? 's' : ''}, 10 seconds each = ${N * 10} seconds total).
 
 CORE INSTRUCTIONS:
 CREATE THE VISUAL DNA BLOCK: First, extract the subject, materials, lighting, and cinematic style (e.g., 'Gold-plated mechanical falcon, polished metallic finish, sapphire eyes, 4pm Lusail sunset orange lighting, 35mm lens, 8k photorealistic'). This block MUST be prepended to the start of EVERY scene prompt for 100% consistency.
+SUBJECT LOCK — CRITICAL FOR CHARACTER CONSISTENCY: Extract a precise, locked subject description from the user's vision. This includes: exact clothing colors and style (e.g., 'kids wearing white jerseys with blue trim'), specific physical features, faces, or distinguishing marks. This SUBJECT LOCK string MUST be included verbatim at the start of every single english_prompt. Example: if the user says 'kids playing football in green jerseys', every scene's english_prompt must begin with 'kids in green jerseys' — NEVER change it to white, blue, or any other color. The clothes and characters must be IDENTICAL in every scene.
 WRITE THE STORY ARC: Generate exactly ${N} scenes that follow a strict CHRONOLOGICAL / NARRATIVE PROGRESSION. The story must flow logically forward in time — from beginning to end, cause to effect, small to large, young to old. Scene 1 is always the starting state; each subsequent scene advances the story one step forward. NEVER skip ahead or go backwards. If the vision implies growth or transformation, show it step by step.
 SCENE 1 (THE ANCHOR): The very BEGINNING of the story — the starting point. Must be a majestic static shot suitable for Text-to-Image generation.
-SCENES 2-${N} (THE PROGRESSION): Each scene advances the story exactly one step forward from the previous scene. Show gradual change, motion, and continuity. Keep the Visual DNA identical across all scenes.
+SCENES 2-${N} (THE PROGRESSION): Each scene advances the story exactly one step forward from the previous scene. Show gradual change, motion, and continuity. Keep the Visual DNA AND Subject Lock identical across all scenes.
 CRITICAL — DO NOT REORDER OR SCRAMBLE SCENES. Scene 1 must be earliest in time, scene ${N} must be latest. If scene 1 shows a kitten, scene 2 shows a slightly older kitten, scene 3 shows a young cat — in that order, never reversed.
-OUTPUT FORMAT: Return ONLY a JSON array with exactly ${N} items: [{"scene": 1, "text": "..."}, ...].`;
+BILINGUAL OUTPUT: Each scene object MUST have TWO fields:
+- "text": The scene description in the user's language (English in this case) — shown in the UI storyboard.
+- "english_prompt": The scene description in strict English — fed to the image AI (always English, even if text is Arabic). MUST start with the Subject Lock string.
+Since this is English input, both fields will be identical.
+OUTPUT FORMAT: Return ONLY a JSON array with exactly ${N} items: [{"scene": 1, "text": "...", "english_prompt": "..."}, ...].`;
 
     const userPrompt = language === 'ar'
       ? `رؤيتي: ${vision.trim()}\n\nأنشئ لي ${N} مشهد سينمائي مدة كل منها ١٠ ثواني.`
@@ -175,7 +185,8 @@ OUTPUT FORMAT: Return ONLY a JSON array with exactly ${N} items: [{"scene": 1, "
       visualDna: '',
       scenes: scenes.slice(0, N).map((s, i) => ({
         scene: s.scene || i + 1,
-        text: s.text || ''
+        text: s.text || '',
+        english_prompt: s.english_prompt || s.text || ''
       }))
     };
 
