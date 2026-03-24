@@ -1441,18 +1441,16 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       videoEl.style.display = 'none';
       document.body.appendChild(videoEl);
 
-      // Step 3: Web Audio API — route video audio into MediaRecorder alongside canvas video.
-      // canvas.captureStream() only captures video; we must manually pipe audio through
-      // an AudioContext so the final WebM contains the Grok clip audio.
-      const audioCtx = new AudioContext();
-      const audioDest = audioCtx.createMediaStreamDestination();
-      const mediaSource = audioCtx.createMediaElementSource(videoEl);
-      mediaSource.connect(audioDest);
-      mediaSource.connect(audioCtx.destination); // also play to speakers during stitch
-
-      // Combine canvas video track + audio destination track into one stream
-      const videoTrack = canvas.captureStream(30).getVideoTracks()[0];
-      const combinedStream = new MediaStream([videoTrack, ...audioDest.stream.getAudioTracks()]);
+      // Step 3: Build the combined stream for MediaRecorder.
+      // - Video track: from canvas.captureStream (frame-by-frame drawing gives us compositing control)
+      // - Audio track: from videoEl.captureStream() called AFTER the clip starts playing,
+      //   which gives us the live decoded audio directly from the browser's media pipeline.
+      //   This is more reliable than AudioContext/createMediaElementSource which requires
+      //   a user-gesture AudioContext and breaks when src changes between clips.
+      const canvasStream = canvas.captureStream(30);
+      const videoTrack = canvasStream.getVideoTracks()[0];
+      // Start with a combined stream that has just the video track; audio is added per-clip below.
+      const combinedStream = new MediaStream([videoTrack]);
 
       const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
         ? 'video/webm;codecs=vp9,opus'
@@ -1481,8 +1479,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         await new Promise<void>((resolve, reject) => {
           videoEl.src = blobUrls[i];
           videoEl.onloadeddata = () => {
-            // Resume AudioContext if browser suspended it (autoplay policy)
-            if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
             videoEl.play().catch(reject);
           };
           videoEl.onerror = () => reject(new Error(`Video ${i + 1} failed to load`));
@@ -1497,7 +1493,18 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
             rafId = requestAnimationFrame(drawFrame);
           };
-          videoEl.onplaying = () => { rafId = requestAnimationFrame(drawFrame); };
+          videoEl.onplaying = () => {
+            // Swap in this clip's live audio track so MediaRecorder captures it
+            try {
+              const clipStream = (videoEl as any).captureStream?.() as MediaStream | undefined;
+              if (clipStream) {
+                // Remove any previously added audio tracks
+                combinedStream.getAudioTracks().forEach(t => combinedStream.removeTrack(t));
+                clipStream.getAudioTracks().forEach(t => combinedStream.addTrack(t));
+              }
+            } catch (_) { /* captureStream not supported — video-only output */ }
+            rafId = requestAnimationFrame(drawFrame);
+          };
           videoEl.onended = () => { cancelAnimationFrame(rafId); resolve(); };
         });
         // Small pause between clips
@@ -1505,7 +1512,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       }
 
       recorder.stop();
-      audioCtx.close().catch(() => {});
       document.body.removeChild(videoEl);
 
       // Revoke blob URLs
@@ -1629,15 +1635,16 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const videoBlob = await blobResp.blob();
 
       const ext = videoBlob.type.includes('mp4') ? 'mp4' : 'webm';
-      const fileName = `cinema/${user.id}/${Date.now()}-${(cinemaVision.trim().slice(0, 30) || 'premiere').replace(/[^a-z0-9]/gi, '-')}.${ext}`;
+      // Path must start with {userId}/ to satisfy the 'videos' bucket RLS policy
+      const fileName = `${user.id}/cinema/${Date.now()}-${(cinemaVision.trim().slice(0, 30) || 'premiere').replace(/[^a-z0-9]/gi, '-')}.${ext}`;
 
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('user_videos')
+        .from('videos')
         .upload(fileName, videoBlob, { contentType: videoBlob.type, upsert: false });
       if (uploadError) throw uploadError;
 
       const storagePath = uploadData.path;
-      const { data: publicData } = supabase.storage.from('user_videos').getPublicUrl(storagePath);
+      const { data: publicData } = supabase.storage.from('videos').getPublicUrl(storagePath);
       const publicUrl = publicData?.publicUrl || null;
 
       const { error: dbError } = await (supabase as any).from('user_videos').insert({
