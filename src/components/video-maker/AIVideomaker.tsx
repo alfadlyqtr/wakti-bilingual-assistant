@@ -227,6 +227,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [regenSceneNum, setRegenSceneNum] = useState<number | null>(null); // which scene is regenerating
 
   // Cinema Visionnaire form state
+  const [cinemaOpenSection, setCinemaOpenSection] = useState(0); // accordion open section index
   const [cinemaSubject, setCinemaSubject] = useState('');
   const [cinemaSetting, setCinemaSetting] = useState('');
   const [cinemaSettingCustom, setCinemaSettingCustom] = useState('');
@@ -2167,69 +2168,105 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   const effectiveVibe = cinemaVibe === 'Custom' ? cinemaVibeCustom : cinemaVibe;
                   const effectiveCTA = cinemaCTA === 'Custom' ? cinemaCTACustom : cinemaCTA;
                   const isFormReady = !!(cinemaSubject.trim() && effectiveSetting.trim() && effectiveAction.trim() && effectiveVibe.trim());
+
+                  // Progress: 4 required fields
+                  const filledCount = [
+                    cinemaSubject.trim(),
+                    effectiveSetting.trim(),
+                    effectiveAction.trim(),
+                    effectiveVibe.trim(),
+                  ].filter(Boolean).length;
+                  const progressPct = Math.round((filledCount / 4) * 100);
+
+                  // Accordion: use component-level state (hooks must not be called inside IIFE)
+                  const openSection = cinemaOpenSection;
+                  const advanceTo = (next: number) => setCinemaOpenSection(next);
+                  const shortLabel = (val: string, maxLen = 28) =>
+                    val.length > maxLen ? val.slice(0, maxLen) + '…' : val;
+                  const SectionHeader = ({ idx, label, filled, summary, required = true }: { idx: number; label: string; filled: boolean; summary?: string; required?: boolean }) => (
+                    <button type="button" onClick={() => setCinemaOpenSection(openSection === idx ? -1 : idx)}
+                      className="w-full flex items-center justify-between gap-2 text-left transition-all">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-all"
+                          style={{background: filled ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : 'rgba(255,255,255,0.08)', color: filled ? '#0c0f14' : 'rgba(255,255,255,0.4)'}}>
+                          {filled ? '✓' : (idx + 1)}
+                        </span>
+                        <span className={`text-xs font-bold uppercase tracking-wider truncate ${filled ? 'text-[#E2C7A8]' : required ? 'text-white/70' : 'text-white/35'}`}>{label}</span>
+                        {filled && summary && openSection !== idx && (
+                          <span className="text-[10px] text-white/40 truncate ml-1 hidden sm:block">— {shortLabel(summary)}</span>
+                        )}
+                      </div>
+                      <span className="flex-shrink-0 text-white/30 text-xs" style={{display:'inline-block', transform: openSection === idx ? 'rotate(180deg)' : 'rotate(0deg)', transition:'transform 0.2s'}}>▼</span>
+                    </button>
+                  );
+
                   return (
-                  <div className="flex flex-col gap-6 py-6">
-                    {/* Header */}
-                    <div className="text-center space-y-3">
-                      <h3
-                        className="text-2xl md:text-3xl font-bold text-white"
-                        style={{ textShadow: '0 0 30px rgba(226,199,168,0.6), 0 0 60px rgba(226,199,168,0.3)' }}
-                      >
-                        {language === 'ar' ? 'مكتب الفيزيونير' : 'The Visionnaire'}
-                      </h3>
-                      <p className="text-sm md:text-base text-white/70 max-w-md mx-auto leading-relaxed">
-                        {language === 'ar'
-                          ? 'مرحباً بك في سينما وكتي. أجب على بعض الأسئلة، وسيقوم مخرج الذكاء الاصطناعي بكتابة تحفتك السينمائية لمدة ٦٠ ثانية.'
-                          : 'Welcome to Wakti Cinema. Answer a few questions, and our AI Director will script your 60-second cinematic masterpiece.'}
-                      </p>
+                  <div className="flex flex-col gap-0 py-4">
+                    {/* Gold progress glow line — fixed at top of form */}
+                    <div className="sticky top-0 z-20 pt-1 pb-3 px-0" style={{background:'linear-gradient(to bottom, rgba(12,15,20,0.98) 70%, transparent)'}}>
+                      {/* Header */}
+                      <div className="text-center mb-3">
+                        <h3
+                          className="text-xl font-bold text-white"
+                          style={{ textShadow: '0 0 20px rgba(226,199,168,0.5)' }}
+                        >
+                          {language === 'ar' ? 'مكتب الفيزيونير' : 'The Visionnaire'}
+                        </h3>
+                      </div>
+                      {/* Progress bar */}
+                      <div className="relative h-[3px] rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.07)'}}>
+                        <div
+                          className="absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out"
+                          style={{
+                            width: `${progressPct}%`,
+                            background: 'linear-gradient(90deg, #C5A47E, #E2C7A8, #fff9ee)',
+                            boxShadow: progressPct > 0 ? '0 0 8px rgba(226,199,168,0.8), 0 0 16px rgba(226,199,168,0.4)' : 'none',
+                          }}
+                        />
+                      </div>
+                      {progressPct > 0 && (
+                        <p className="text-[10px] text-[#E2C7A8]/60 text-right mt-1 pr-0.5">
+                          {progressPct === 100
+                            ? (language === 'ar' ? '✨ جاهز للتصوير!' : '✨ Ready to direct!')
+                            : (language === 'ar' ? `${progressPct}% مكتمل` : `${progressPct}% complete`)}
+                        </p>
+                      )}
                     </div>
 
-                    {/* The form - single column mobile */}
-                    <div className="flex flex-col gap-4 max-w-lg mx-auto w-full">
+                    {/* The form - accordion single column */}
+                    <div className="flex flex-col gap-2 max-w-lg mx-auto w-full">
 
-                      {/* Q1 - Subject (free text — this must stay free, it's the core) */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-semibold text-[#E2C7A8] uppercase tracking-wider">
-                          {language === 'ar' ? '١. ما هو موضوع فيلمك؟' : '1. What is your movie about?'}
-                        </label>
-                        <div
-                          className="rounded-xl overflow-hidden"
-                          style={{
-                            background: 'rgba(12,15,20,0.65)',
-                            border: '1px solid rgba(226,199,168,0.35)',
-                            boxShadow: '0 4px 20px rgba(226,199,168,0.08), inset 0 1px 0 rgba(255,255,255,0.06)',
-                            backdropFilter: 'blur(14px)',
-                          }}
-                        >
-                          <input
-                            type="text"
-                            value={cinemaSubject}
-                            onChange={(e) => setCinemaSubject(e.target.value)}
-                            disabled={isDirecting}
-                            placeholder={language === 'ar' ? 'مثال: رجل أعمال يطلق منتجه، أم وطفلها في الحديقة...' : 'e.g., An entrepreneur launching a product, A mother and child in a park...'}
-                            className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none"
-                          />
-                        </div>
-                        <p className="text-xs text-white/40 px-1">{language === 'ar' ? 'الشخصية أو الكائن أو المنتج الرئيسي في قصتك.' : 'The main character, object, or product in your story.'}</p>
+                      {/* Q1 - Subject */}
+                      <div className="rounded-2xl px-4 py-3 transition-all" style={{background: openSection === 0 ? 'rgba(226,199,168,0.06)' : 'rgba(255,255,255,0.02)', border: openSection === 0 ? '1px solid rgba(226,199,168,0.25)' : '1px solid rgba(255,255,255,0.07)'}}>
+                        <SectionHeader idx={0} label={language === 'ar' ? 'ما هو موضوع فيلمك؟' : 'What is your movie about?'} filled={!!cinemaSubject.trim()} summary={cinemaSubject} />
+                        {openSection === 0 && (
+                          <div className="mt-3 flex flex-col gap-2">
+                            <div className="rounded-xl overflow-hidden" style={{background:'rgba(12,15,20,0.7)',border:'1px solid rgba(226,199,168,0.3)'}}>
+                              <input type="text" value={cinemaSubject}
+                                onChange={(e) => setCinemaSubject(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter' && cinemaSubject.trim()) advanceTo(1); }}
+                                disabled={isDirecting} autoFocus
+                                placeholder={language === 'ar' ? 'مثال: رجل أعمال يطلق منتجه...' : 'e.g., An entrepreneur launching a product...'}
+                                className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none" />
+                            </div>
+                            {cinemaSubject.trim() && (
+                              <button type="button" onClick={() => advanceTo(1)} className="self-end text-[11px] font-semibold text-[#E2C7A8] opacity-70 hover:opacity-100 transition-opacity">
+                                {language === 'ar' ? 'التالي ›' : 'Next ›'}
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Q2 - Setting */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-semibold text-[#E2C7A8] uppercase tracking-wider">
-                          {language === 'ar' ? '٢. الموقع' : '2. Setting'}
-                        </label>
-                        <div
-                          className="rounded-xl overflow-hidden"
-                          style={{
-                            background: 'rgba(12,15,20,0.65)',
-                            border: '1px solid rgba(226,199,168,0.35)',
-                            boxShadow: '0 4px 20px rgba(226,199,168,0.08), inset 0 1px 0 rgba(255,255,255,0.06)',
-                            backdropFilter: 'blur(14px)',
-                          }}
-                        >
+                      <div className="rounded-2xl px-4 py-3 transition-all" style={{background: openSection === 1 ? 'rgba(226,199,168,0.06)' : 'rgba(255,255,255,0.02)', border: openSection === 1 ? '1px solid rgba(226,199,168,0.25)' : '1px solid rgba(255,255,255,0.07)'}}>
+                        <SectionHeader idx={1} label={language === 'ar' ? 'الموقع' : 'Setting'} filled={!!effectiveSetting.trim()} summary={effectiveSetting.split(',')[0]} />
+                        {openSection === 1 && (
+                          <div className="mt-3 flex flex-col gap-2">
+                        <div className="rounded-xl overflow-hidden" style={{background:'rgba(12,15,20,0.65)',border:'1px solid rgba(226,199,168,0.35)'}}>
                           <select
                             value={cinemaSetting}
-                            onChange={(e) => setCinemaSetting(e.target.value)}
+                            onChange={(e) => { setCinemaSetting(e.target.value); if (e.target.value && e.target.value !== 'Custom') advanceTo(2); }}
                             disabled={isDirecting}
                             title={language === 'ar' ? 'الموقع' : 'Setting'}
                             className="w-full bg-transparent px-4 py-3 text-sm text-white outline-none appearance-none cursor-pointer"
@@ -2266,46 +2303,31 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           </select>
                         </div>
                         {cinemaSetting === 'Custom' && (
-                          <div
-                            className="rounded-xl overflow-hidden"
-                            style={{
-                              background: 'rgba(12,15,20,0.65)',
-                              border: '1px solid rgba(226,199,168,0.5)',
-                              boxShadow: '0 4px 20px rgba(226,199,168,0.12)',
-                              backdropFilter: 'blur(14px)',
-                            }}
-                          >
-                            <input
-                              type="text"
-                              value={cinemaSettingCustom}
-                              onChange={(e) => setCinemaSettingCustom(e.target.value)}
-                              disabled={isDirecting}
-                              placeholder={language === 'ar' ? 'أدخل الموقع...' : 'Enter your custom location...'}
-                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none"
-                              autoFocus
-                            />
+                          <div className="rounded-xl overflow-hidden" style={{background:'rgba(12,15,20,0.65)',border:'1px solid rgba(226,199,168,0.5)'}}>
+                            <input type="text" value={cinemaSettingCustom} onChange={(e) => setCinemaSettingCustom(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' && cinemaSettingCustom.trim()) advanceTo(2); }}
+                              disabled={isDirecting} placeholder={language === 'ar' ? 'أدخل الموقع...' : 'Enter your custom location...'}
+                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none" autoFocus />
                           </div>
                         )}
-                        <p className="text-xs text-white/40 px-1">{language === 'ar' ? 'اختر موقعاً يناسب قصتك.' : 'Choose a location that best suits your story.'}</p>
+                        {effectiveSetting.trim() && (
+                          <button type="button" onClick={() => advanceTo(2)} className="self-end text-[11px] font-semibold text-[#E2C7A8] opacity-70 hover:opacity-100 transition-opacity">
+                            {language === 'ar' ? 'التالي ›' : 'Next ›'}
+                          </button>
+                        )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Q3 - Main Action */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-semibold text-[#E2C7A8] uppercase tracking-wider">
-                          {language === 'ar' ? '٣. الحدث الرئيسي' : '3. Main Action'}
-                        </label>
-                        <div
-                          className="rounded-xl overflow-hidden"
-                          style={{
-                            background: 'rgba(12,15,20,0.65)',
-                            border: '1px solid rgba(226,199,168,0.35)',
-                            boxShadow: '0 4px 20px rgba(226,199,168,0.08), inset 0 1px 0 rgba(255,255,255,0.06)',
-                            backdropFilter: 'blur(14px)',
-                          }}
-                        >
+                      <div className="rounded-2xl px-4 py-3 transition-all" style={{background: openSection === 2 ? 'rgba(226,199,168,0.06)' : 'rgba(255,255,255,0.02)', border: openSection === 2 ? '1px solid rgba(226,199,168,0.25)' : '1px solid rgba(255,255,255,0.07)'}}>
+                        <SectionHeader idx={2} label={language === 'ar' ? 'الحدث الرئيسي' : 'Main Action'} filled={!!effectiveAction.trim()} summary={effectiveAction.split('—')[0].trim()} />
+                        {openSection === 2 && (
+                          <div className="mt-3 flex flex-col gap-2">
+                        <div className="rounded-xl overflow-hidden" style={{background:'rgba(12,15,20,0.65)',border:'1px solid rgba(226,199,168,0.35)'}}>
                           <select
                             value={cinemaAction}
-                            onChange={(e) => setCinemaAction(e.target.value)}
+                            onChange={(e) => { setCinemaAction(e.target.value); if (e.target.value && e.target.value !== 'Custom') advanceTo(3); }}
                             disabled={isDirecting}
                             title={language === 'ar' ? 'الحدث الرئيسي' : 'Main Action'}
                             className="w-full bg-transparent px-4 py-3 text-sm text-white outline-none appearance-none cursor-pointer"
@@ -2339,46 +2361,31 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           </select>
                         </div>
                         {cinemaAction === 'Custom' && (
-                          <div
-                            className="rounded-xl overflow-hidden"
-                            style={{
-                              background: 'rgba(12,15,20,0.65)',
-                              border: '1px solid rgba(226,199,168,0.5)',
-                              boxShadow: '0 4px 20px rgba(226,199,168,0.12)',
-                              backdropFilter: 'blur(14px)',
-                            }}
-                          >
-                            <input
-                              type="text"
-                              value={cinemaActionCustom}
-                              onChange={(e) => setCinemaActionCustom(e.target.value)}
-                              disabled={isDirecting}
-                              placeholder={language === 'ar' ? 'صف الحدث الذي تريده...' : 'Describe the action you want...'}
-                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none"
-                              autoFocus
-                            />
+                          <div className="rounded-xl overflow-hidden" style={{background:'rgba(12,15,20,0.65)',border:'1px solid rgba(226,199,168,0.5)'}}>
+                            <input type="text" value={cinemaActionCustom} onChange={(e) => setCinemaActionCustom(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' && cinemaActionCustom.trim()) advanceTo(3); }}
+                              disabled={isDirecting} placeholder={language === 'ar' ? 'صف الحدث...' : 'Describe the action...'}
+                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none" autoFocus />
                           </div>
                         )}
-                        <p className="text-xs text-white/40 px-1">{language === 'ar' ? 'ما الذي يحدث في فيلمك؟' : 'What is happening in your movie?'}</p>
+                        {effectiveAction.trim() && (
+                          <button type="button" onClick={() => advanceTo(3)} className="self-end text-[11px] font-semibold text-[#E2C7A8] opacity-70 hover:opacity-100 transition-opacity">
+                            {language === 'ar' ? 'التالي ›' : 'Next ›'}
+                          </button>
+                        )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Q4 - Vibe */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-semibold text-[#E2C7A8] uppercase tracking-wider">
-                          {language === 'ar' ? '٤. المزاج والأجواء' : '4. Vibe & Mood'}
-                        </label>
-                        <div
-                          className="rounded-xl overflow-hidden"
-                          style={{
-                            background: 'rgba(12,15,20,0.65)',
-                            border: '1px solid rgba(226,199,168,0.35)',
-                            boxShadow: '0 4px 20px rgba(226,199,168,0.08), inset 0 1px 0 rgba(255,255,255,0.06)',
-                            backdropFilter: 'blur(14px)',
-                          }}
-                        >
+                      <div className="rounded-2xl px-4 py-3 transition-all" style={{background: openSection === 3 ? 'rgba(226,199,168,0.06)' : 'rgba(255,255,255,0.02)', border: openSection === 3 ? '1px solid rgba(226,199,168,0.25)' : '1px solid rgba(255,255,255,0.07)'}}>
+                        <SectionHeader idx={3} label={language === 'ar' ? 'المزاج والأجواء' : 'Vibe & Mood'} filled={!!effectiveVibe.trim()} summary={effectiveVibe.split('—')[0].trim()} />
+                        {openSection === 3 && (
+                          <div className="mt-3 flex flex-col gap-2">
+                        <div className="rounded-xl overflow-hidden" style={{background:'rgba(12,15,20,0.65)',border:'1px solid rgba(226,199,168,0.35)'}}>
                           <select
                             value={cinemaVibe}
-                            onChange={(e) => setCinemaVibe(e.target.value)}
+                            onChange={(e) => { setCinemaVibe(e.target.value); if (e.target.value && e.target.value !== 'Custom') advanceTo(4); }}
                             disabled={isDirecting}
                             title={language === 'ar' ? 'المزاج' : 'Vibe'}
                             className="w-full bg-transparent px-4 py-3 text-sm text-white outline-none appearance-none cursor-pointer"
@@ -2399,120 +2406,67 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           </select>
                         </div>
                         {cinemaVibe === 'Custom' && (
-                          <div
-                            className="rounded-xl overflow-hidden"
-                            style={{
-                              background: 'rgba(12,15,20,0.65)',
-                              border: '1px solid rgba(226,199,168,0.5)',
-                              boxShadow: '0 4px 20px rgba(226,199,168,0.12)',
-                              backdropFilter: 'blur(14px)',
-                            }}
-                          >
-                            <input
-                              type="text"
-                              value={cinemaVibeCustom}
-                              onChange={(e) => setCinemaVibeCustom(e.target.value)}
-                              disabled={isDirecting}
-                              placeholder={language === 'ar' ? 'صف الشعور أو الأجواء...' : 'Describe the feeling or atmosphere...'}
-                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none"
-                              autoFocus
-                            />
+                          <div className="rounded-xl overflow-hidden" style={{background:'rgba(12,15,20,0.65)',border:'1px solid rgba(226,199,168,0.5)'}}>
+                            <input type="text" value={cinemaVibeCustom} onChange={(e) => setCinemaVibeCustom(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' && cinemaVibeCustom.trim()) advanceTo(4); }}
+                              disabled={isDirecting} placeholder={language === 'ar' ? 'صف الشعور...' : 'Describe the feeling...'}
+                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none" autoFocus />
                           </div>
                         )}
-                        <p className="text-xs text-white/40 px-1">{language === 'ar' ? 'اختر الشعور الذي يتناسب مع رؤيتك.' : 'Choose a feeling that matches your vision.'}</p>
+                        {effectiveVibe.trim() && (
+                          <button type="button" onClick={() => advanceTo(4)} className="self-end text-[11px] font-semibold text-[#E2C7A8] opacity-70 hover:opacity-100 transition-opacity">
+                            {language === 'ar' ? 'التالي ›' : 'Next ›'}
+                          </button>
+                        )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Q5 - Characters */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-semibold text-[#E2C7A8] uppercase tracking-wider">
-                          {language === 'ar' ? '٥. عدد الشخصيات' : '5. Characters'}
-                        </label>
-                        <div
-                          className="rounded-xl overflow-hidden"
-                          style={{
-                            background: 'rgba(12,15,20,0.65)',
-                            border: '1px solid rgba(226,199,168,0.35)',
-                            boxShadow: '0 4px 20px rgba(226,199,168,0.08), inset 0 1px 0 rgba(255,255,255,0.06)',
-                            backdropFilter: 'blur(14px)',
-                          }}
-                        >
-                          <select
-                            value={cinemaCharacters}
-                            onChange={(e) => { setCinemaCharacters(e.target.value); setCinemaRelationship(''); }}
-                            disabled={isDirecting}
-                            title={language === 'ar' ? 'عدد الشخصيات' : 'Characters'}
-                            className="w-full bg-transparent px-4 py-3 text-sm text-white outline-none appearance-none cursor-pointer"
-                            style={{ colorScheme: 'dark' }}
-                          >
-                            <option value="" disabled className="bg-[#0c0f14]">{language === 'ar' ? 'من يظهر في الفيلم؟' : 'Who is in the movie?'}</option>
-                            <option value="no people — product, object, or creature only" className="bg-[#0c0f14]">{language === 'ar' ? '📦 بدون بشر — منتج أو كائن فقط' : '📦 No People — Product / Object Only'}</option>
-                            <option value="one solo person — the hero, the protagonist" className="bg-[#0c0f14]">{language === 'ar' ? '👤 شخص واحد — البطل' : '👤 One Person — The Hero'}</option>
-                            <option value="two people" className="bg-[#0c0f14]">{language === 'ar' ? '👥 شخصان' : '👥 Two People'}</option>
-                            <option value="a small group of 3-5 people" className="bg-[#0c0f14]">{language === 'ar' ? '👨‍👩‍👧 مجموعة صغيرة ٣-٥ أشخاص' : '👨‍👩‍👧 Small Group (3–5)'}</option>
-                            <option value="a crowd or community — many people united" className="bg-[#0c0f14]">{language === 'ar' ? '🏟️ حشد أو مجتمع' : '🏟️ Crowd / Community'}</option>
-                            <option value="Custom" className="bg-[#0c0f14]">{language === 'ar' ? '✏️ اكتب وصف الشخصيات...' : '✏️ Describe your own characters...'}</option>
-                          </select>
-                        </div>
-                        {cinemaCharacters === 'Custom' && (
-                          <div
-                            className="rounded-xl overflow-hidden"
-                            style={{
-                              background: 'rgba(12,15,20,0.65)',
-                              border: '1px solid rgba(226,199,168,0.5)',
-                              boxShadow: '0 4px 20px rgba(226,199,168,0.12)',
-                              backdropFilter: 'blur(14px)',
-                            }}
-                          >
-                            <input
-                              type="text"
-                              value={cinemaRelationship}
-                              onChange={(e) => setCinemaRelationship(e.target.value)}
-                              disabled={isDirecting}
-                              placeholder={language === 'ar' ? 'صف الشخصيات (مثال: رجل يرتدي بذلة سوداء)' : 'Describe characters (e.g., A man in a black suit)'}
-                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none"
-                              autoFocus
-                            />
-                          </div>
-                        )}
-                        {cinemaCharacters && cinemaCharacters !== 'Custom' && cinemaCharacters !== 'no people — product, object, or creature only' && cinemaCharacters !== 'one solo person — the hero, the protagonist' && (
-                          <div
-                            className="rounded-xl overflow-hidden"
-                            style={{
-                              background: 'rgba(12,15,20,0.65)',
-                              border: '1px solid rgba(226,199,168,0.5)',
-                              boxShadow: '0 4px 20px rgba(226,199,168,0.12)',
-                              backdropFilter: 'blur(14px)',
-                            }}
-                          >
-                            <input
-                              type="text"
-                              value={cinemaRelationship}
-                              onChange={(e) => setCinemaRelationship(e.target.value)}
-                              disabled={isDirecting}
-                              placeholder={language === 'ar' ? 'العلاقة بين الشخصيات (مثال: أصدقاء، منافسون)' : 'Relationship between characters (e.g., Friends, Rivals)'}
-                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none"
-                              autoFocus
-                            />
+                      <div className="rounded-2xl px-4 py-3 transition-all" style={{background: openSection === 4 ? 'rgba(226,199,168,0.06)' : 'rgba(255,255,255,0.02)', border: openSection === 4 ? '1px solid rgba(226,199,168,0.25)' : '1px solid rgba(255,255,255,0.07)'}}>
+                        <SectionHeader idx={4} label={language === 'ar' ? 'الشخصيات' : 'Characters'} filled={!!cinemaCharacters.trim()} summary={cinemaCharacters.split('—')[0].trim()} />
+                        {openSection === 4 && (
+                          <div className="mt-3 flex flex-col gap-2">
+                            <div className="rounded-xl overflow-hidden" style={{background:'rgba(12,15,20,0.65)',border:'1px solid rgba(226,199,168,0.35)'}}>
+                              <select value={cinemaCharacters}
+                                onChange={(e) => { setCinemaCharacters(e.target.value); setCinemaRelationship(''); if (e.target.value && e.target.value !== 'Custom') advanceTo(5); }}
+                                disabled={isDirecting} title={language === 'ar' ? 'الشخصيات' : 'Characters'}
+                                className="w-full bg-transparent px-4 py-3 text-sm text-white outline-none appearance-none cursor-pointer" style={{ colorScheme: 'dark' }}>
+                                <option value="" disabled className="bg-[#0c0f14]">{language === 'ar' ? 'من يظهر في الفيلم؟' : 'Who is in the movie?'}</option>
+                                <option value="no people — product, object, or creature only" className="bg-[#0c0f14]">{language === 'ar' ? '📦 بدون بشر — منتج أو كائن فقط' : '📦 No People — Product / Object Only'}</option>
+                                <option value="one solo person — the hero, the protagonist" className="bg-[#0c0f14]">{language === 'ar' ? '👤 شخص واحد — البطل' : '👤 One Person — The Hero'}</option>
+                                <option value="two people" className="bg-[#0c0f14]">{language === 'ar' ? '👥 شخصان' : '👥 Two People'}</option>
+                                <option value="a small group of 3-5 people" className="bg-[#0c0f14]">{language === 'ar' ? '👨‍👩‍👧 مجموعة صغيرة' : '👨‍👩‍👧 Small Group (3–5)'}</option>
+                                <option value="a crowd or community — many people united" className="bg-[#0c0f14]">{language === 'ar' ? '🏟️ حشد أو مجتمع' : '🏟️ Crowd / Community'}</option>
+                                <option value="Custom" className="bg-[#0c0f14]">{language === 'ar' ? '✏️ وصف الشخصيات...' : '✏️ Describe your own characters...'}</option>
+                              </select>
+                            </div>
+                            {(cinemaCharacters === 'Custom' || (cinemaCharacters && cinemaCharacters !== 'no people — product, object, or creature only' && cinemaCharacters !== 'one solo person — the hero, the protagonist')) && (
+                              <div className="rounded-xl overflow-hidden" style={{background:'rgba(12,15,20,0.65)',border:'1px solid rgba(226,199,168,0.5)'}}>
+                                <input type="text" value={cinemaRelationship} onChange={(e) => setCinemaRelationship(e.target.value)}
+                                  disabled={isDirecting}
+                                  placeholder={cinemaCharacters === 'Custom' ? (language === 'ar' ? 'صف الشخصيات...' : 'Describe characters...') : (language === 'ar' ? 'العلاقة بينهم...' : 'Relationship between them...')}
+                                  className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none" autoFocus />
+                              </div>
+                            )}
+                            {cinemaCharacters && (
+                              <button type="button" onClick={() => advanceTo(5)} className="self-end text-[11px] font-semibold text-[#E2C7A8] opacity-70 hover:opacity-100 transition-opacity">
+                                {language === 'ar' ? 'التالي ›' : 'Next ›'}
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
 
-                      {/* Optional - Video Purpose */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-semibold text-white/40 uppercase tracking-wider">
-                          {language === 'ar' ? 'هدف الفيديو (اختياري)' : 'Video Purpose (Optional)'}
-                        </label>
-                        <div
-                          className="rounded-xl overflow-hidden"
-                          style={{
-                            background: 'rgba(12,15,20,0.5)',
-                            border: '1px solid rgba(255,255,255,0.1)',
-                            backdropFilter: 'blur(14px)',
-                          }}
-                        >
+                      {/* Q6 - Video Purpose (Optional) */}
+                      <div className="rounded-2xl px-4 py-3 transition-all" style={{background: openSection === 5 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.01)', border: openSection === 5 ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,255,255,0.05)'}}>
+                        <SectionHeader idx={5} label={language === 'ar' ? 'هدف الفيديو (اختياري)' : 'Video Purpose (Optional)'} filled={!!effectiveCTA.trim()} summary={effectiveCTA.split('—')[0].trim()} required={false} />
+                        {openSection === 5 && (
+                          <div className="mt-3 flex flex-col gap-2">
+                        <div className="rounded-xl overflow-hidden" style={{background:'rgba(12,15,20,0.5)',border:'1px solid rgba(255,255,255,0.1)'}}>
                           <select
                             value={cinemaCTA}
-                            onChange={(e) => setCinemaCTA(e.target.value)}
+                            onChange={(e) => { setCinemaCTA(e.target.value); if (e.target.value !== 'Custom') advanceTo(6); }}
                             disabled={isDirecting}
                             title={language === 'ar' ? 'هدف الفيديو' : 'Video Purpose'}
                             className="w-full bg-transparent px-4 py-3 text-sm text-white outline-none appearance-none cursor-pointer"
@@ -2531,34 +2485,25 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           </select>
                         </div>
                         {cinemaCTA === 'Custom' && (
-                          <div
-                            className="rounded-xl overflow-hidden"
-                            style={{
-                              background: 'rgba(12,15,20,0.65)',
-                              border: '1px solid rgba(226,199,168,0.5)',
-                              boxShadow: '0 4px 20px rgba(226,199,168,0.12)',
-                              backdropFilter: 'blur(14px)',
-                            }}
-                          >
-                            <input
-                              type="text"
-                              value={cinemaCTACustom}
-                              onChange={(e) => setCinemaCTACustom(e.target.value)}
-                              disabled={isDirecting}
-                              placeholder={language === 'ar' ? 'صف هدف الفيديو الذي تريده...' : 'Describe the video purpose you want...'}
-                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none"
-                              autoFocus
-                            />
+                          <div className="rounded-xl overflow-hidden" style={{background:'rgba(12,15,20,0.65)',border:'1px solid rgba(226,199,168,0.5)'}}>
+                            <input type="text" value={cinemaCTACustom} onChange={(e) => setCinemaCTACustom(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' && cinemaCTACustom.trim()) advanceTo(6); }}
+                              disabled={isDirecting} placeholder={language === 'ar' ? 'صف هدف الفيديو...' : 'Describe the video purpose...'}
+                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none" autoFocus />
                           </div>
                         )}
-                        <p className="text-xs text-white/30 px-1">{language === 'ar' ? 'يساعد المخرج على تصميم القصة بشكل أفضل.' : 'Helps the AI Director craft a stronger story arc.'}</p>
+                          <button type="button" onClick={() => advanceTo(6)} className="self-end text-[11px] font-semibold text-[#E2C7A8]/50 hover:text-[#E2C7A8]/80 transition-opacity">
+                            {language === 'ar' ? 'التالي ›' : 'Next ›'}
+                          </button>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Scene Count Selector */}
-                      <div className="flex flex-col gap-2">
-                        <label className="text-xs font-semibold text-[#E2C7A8] uppercase tracking-wider">
-                          {language === 'ar' ? 'عدد المشاهد (المدة)' : 'How many scenes? (Duration)'}
-                        </label>
+                      {/* Q7 - Scene Count */}
+                      <div className="rounded-2xl px-4 py-3 transition-all" style={{background: openSection === 6 ? 'rgba(226,199,168,0.06)' : 'rgba(255,255,255,0.02)', border: openSection === 6 ? '1px solid rgba(226,199,168,0.25)' : '1px solid rgba(255,255,255,0.07)'}}>
+                        <SectionHeader idx={6} label={language === 'ar' ? 'عدد المشاهد' : 'How Many Scenes?'} filled={true} summary={`${cinemaSceneCount} ${language === 'ar' ? 'مشاهد' : 'scenes'} · ${cinemaSceneCount * 10}s`} />
+                        {openSection === 6 && (
+                          <div className="mt-3 flex flex-col gap-2">
                         <div className="flex gap-2">
                           {[1,2,3,4,5,6].map(n => (
                             <button
@@ -2581,11 +2526,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             </button>
                           ))}
                         </div>
-                        <p className="text-xs text-white/30 px-1">
+                        <p className="text-[11px] text-white/35 px-1">
                           {language === 'ar'
                             ? `${cinemaSceneCount} مشهد • ${cinemaSceneCount * 10} ثانية إجمالي`
                             : `${cinemaSceneCount} scene${cinemaSceneCount > 1 ? 's' : ''} • ${cinemaSceneCount * 10} seconds total`}
                         </p>
+                          </div>
+                        )}
                       </div>
                     </div>
 
