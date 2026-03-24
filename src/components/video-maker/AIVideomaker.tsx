@@ -1436,6 +1436,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setCinemaRefTags([]);
     setEditingSceneNum(null);
     setRegenSceneNum(null);
+    setCinemaOpenSection(0);
     if (animPollRef.current) clearInterval(animPollRef.current);
   }, []);
 
