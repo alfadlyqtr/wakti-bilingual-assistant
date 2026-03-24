@@ -2248,7 +2248,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                 onKeyDown={(e) => { if (e.key === 'Enter' && cinemaSubject.trim()) advanceTo(1); }}
                                 disabled={isDirecting} autoFocus
                                 placeholder={language === 'ar' ? 'مثال: رجل أعمال يطلق منتجه...' : 'e.g., An entrepreneur launching a product...'}
-                                className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none" />
+                                className="w-full bg-transparent px-4 py-4 text-base text-white placeholder:text-white/35 outline-none" />
                             </div>
                             {cinemaSubject.trim() && (
                               <button type="button" onClick={() => advanceTo(1)} className="self-end text-[11px] font-semibold text-[#E2C7A8] opacity-70 hover:opacity-100 transition-opacity">
@@ -2308,7 +2308,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             <input type="text" value={cinemaSettingCustom} onChange={(e) => setCinemaSettingCustom(e.target.value)}
                               onKeyDown={(e) => { if (e.key === 'Enter' && cinemaSettingCustom.trim()) advanceTo(2); }}
                               disabled={isDirecting} placeholder={language === 'ar' ? 'أدخل الموقع...' : 'Enter your custom location...'}
-                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none" autoFocus />
+                              className="w-full bg-transparent px-4 py-4 text-base text-white placeholder:text-white/35 outline-none" autoFocus />
                           </div>
                         )}
                         {effectiveSetting.trim() && (
@@ -2366,7 +2366,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             <input type="text" value={cinemaActionCustom} onChange={(e) => setCinemaActionCustom(e.target.value)}
                               onKeyDown={(e) => { if (e.key === 'Enter' && cinemaActionCustom.trim()) advanceTo(3); }}
                               disabled={isDirecting} placeholder={language === 'ar' ? 'صف الحدث...' : 'Describe the action...'}
-                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none" autoFocus />
+                              className="w-full bg-transparent px-4 py-4 text-base text-white placeholder:text-white/35 outline-none" autoFocus />
                           </div>
                         )}
                         {effectiveAction.trim() && (
@@ -2411,7 +2411,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             <input type="text" value={cinemaVibeCustom} onChange={(e) => setCinemaVibeCustom(e.target.value)}
                               onKeyDown={(e) => { if (e.key === 'Enter' && cinemaVibeCustom.trim()) advanceTo(4); }}
                               disabled={isDirecting} placeholder={language === 'ar' ? 'صف الشعور...' : 'Describe the feeling...'}
-                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none" autoFocus />
+                              className="w-full bg-transparent px-4 py-4 text-base text-white placeholder:text-white/35 outline-none" autoFocus />
                           </div>
                         )}
                         {effectiveVibe.trim() && (
@@ -2447,7 +2447,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                 <input type="text" value={cinemaRelationship} onChange={(e) => setCinemaRelationship(e.target.value)}
                                   disabled={isDirecting}
                                   placeholder={cinemaCharacters === 'Custom' ? (language === 'ar' ? 'صف الشخصيات...' : 'Describe characters...') : (language === 'ar' ? 'العلاقة بينهم...' : 'Relationship between them...')}
-                                  className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none" autoFocus />
+                                  className="w-full bg-transparent px-4 py-4 text-base text-white placeholder:text-white/35 outline-none" autoFocus />
                               </div>
                             )}
                             {cinemaCharacters && (
@@ -2490,7 +2490,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             <input type="text" value={cinemaCTACustom} onChange={(e) => setCinemaCTACustom(e.target.value)}
                               onKeyDown={(e) => { if (e.key === 'Enter' && cinemaCTACustom.trim()) advanceTo(6); }}
                               disabled={isDirecting} placeholder={language === 'ar' ? 'صف هدف الفيديو...' : 'Describe the video purpose...'}
-                              className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none" autoFocus />
+                              className="w-full bg-transparent px-4 py-4 text-base text-white placeholder:text-white/35 outline-none" autoFocus />
                           </div>
                         )}
                           <button type="button" onClick={() => advanceTo(6)} className="self-end text-[11px] font-semibold text-[#E2C7A8]/50 hover:text-[#E2C7A8]/80 transition-opacity">
