@@ -23,14 +23,12 @@ export const useOptimizedTRData = () => {
   const fetchData = useCallback(async (force = false) => {
     // Prevent multiple simultaneous requests
     if (fetchingRef.current && !force) {
-      console.log('🔄 Request already in progress, skipping...');
       return;
     }
 
     // Check cache first
     const now = Date.now();
     if (!force && dataCache && (now - dataCache.timestamp) < CACHE_TTL) {
-      console.log('⚡ Using cached TR data');
       setTasks(dataCache.tasks);
       setReminders(dataCache.reminders);
       setLoading(false);
@@ -42,7 +40,6 @@ export const useOptimizedTRData = () => {
       setLoading(true);
       setError(null);
 
-      console.log('🔄 Fetching fresh TR data from API');
       const [tasksData, remindersData] = await Promise.all([
         TRService.getTasks(),
         TRService.getReminders()
@@ -59,10 +56,6 @@ export const useOptimizedTRData = () => {
 
       setTasks(tasksData);
       setReminders(remindersData);
-      console.log('✅ TR data fetched and cached:', {
-        tasksCount: tasksData.length,
-        remindersCount: remindersData.length
-      });
       
     } catch (error) {
       console.error('❌ Error fetching TR data:', error);
@@ -81,7 +74,6 @@ export const useOptimizedTRData = () => {
   const debouncedRefresh = useDebounced(fetchData, 500);
 
   const refreshData = useCallback(() => {
-    console.log('🔄 Force refreshing TR data');
     // Clear cache to force fresh fetch
     dataCache = null;
     return fetchData(true);

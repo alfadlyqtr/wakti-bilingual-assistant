@@ -225,11 +225,16 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [cinemaRefTags, setCinemaRefTags] = useState<string[]>([]); // 'scene1'..'scene6', 'logo', 'ref'
   const [isUploadingRef, setIsUploadingRef] = useState(false);
 
+  // Smart-Tag: user-declared intent for the brand anchor image
+  const [anchorTag, setAnchorTag] = useState<'logo' | 'style' | 'character'>('style');
+
   // Casting: per-scene regen modal
   const [castingRegenModal, setCastingRegenModal] = useState<{ sceneIdx: number } | null>(null);
   const [castingRegenNote, setCastingRegenNote] = useState('');
   const [castingRegenUseMaster, setCastingRegenUseMaster] = useState(true);
   const [isRegenningScene, setIsRegenningScene] = useState(false);
+  const [castingRegenSceneAnchor, setCastingRegenSceneAnchor] = useState<string | null>(null);
+  const [isUploadingRegenAnchor, setIsUploadingRegenAnchor] = useState(false);
 
   // Premiere: manual download fallback URL if save fails
   const [cinematicSaveFallbackUrl, setCinematicSaveFallbackUrl] = useState<string | null>(null);
@@ -1049,7 +1054,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       effectiveVibe && `Vibe: ${effectiveVibe}`,
       cinemaCharacters && `Characters: ${cinemaCharacters === 'Custom' ? (cinemaRelationship || 'custom characters') : cinemaCharacters}${cinemaCharacters !== 'Custom' && cinemaCharacters !== 'no people — product, object, or creature only' && cinemaCharacters !== 'one solo person — the hero, the protagonist' && cinemaRelationship ? ` (${cinemaRelationship})` : ''}`,
       effectiveCTA && `Purpose: ${effectiveCTA}`,
-      brandAnchor && `Brand style anchor image provided: yes (use consistent brand identity throughout all scenes)`,
+      brandAnchor && anchorTag === 'logo' && `Brand asset provided: a LOGO/TEXT mark — Scene 1 must describe the visual scene that the logo will be composited onto; do NOT describe the logo itself`,
+      brandAnchor && anchorTag === 'style' && `Brand reference image provided: use ONLY its color palette, lighting mood, and atmosphere — do NOT mention logos, brand marks, emblems, or text`,
+      brandAnchor && anchorTag === 'character' && `Character reference image provided: describe the actions and journey of this specific character throughout all scenes`,
     ].filter(Boolean).join('. ');
 
     const visionToSend = builtVision || cinemaVision.trim();
@@ -1075,6 +1082,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           language: language,
           scene_count: cinemaSceneCount,
           brand_anchor_url: brandAnchor || undefined,
+          anchor_tag: brandAnchor ? anchorTag : undefined,
         }),
       });
 
@@ -1174,15 +1182,51 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         }
       });
 
-      // ── Scene 1: use tagged scene image OR T2I (with logo as anchor if available) ──
+      // ── Smart-Tag pipeline selection ──
+      // Pipeline A (logo):      True I2I — brandAnchor sent as source image; AI generates new background around it
+      // Pipeline B (style):     Dual-anchor ghost-cure — brandAnchor=style@0.45, prevAnchor=motion
+      // Pipeline C (character): I2I at 0.72 strength to preserve facial/body identity across scenes
+      const effectiveTag = brandAnchor ? anchorTag : 'style';
+
+      // ── Scene 1 ──
       let anchor: string;
       if (sceneSlotMap[0]) {
         anchor = sceneSlotMap[0];
-      } else if (logoAnchor) {
-        // I2I from logo anchor to get scene 1 in brand style
-        const t2iCreate = await artistCall({ mode: 'i2i_create', prompt: scene1.text, anchor_url: logoAnchor, scene_index: 0, visual_dna: scene1.text });
-        anchor = await pollTask(t2iCreate.task_id, 0);
+      } else if (effectiveTag === 'logo' && brandAnchor) {
+        // Logo pipeline: True I2I — send logo as source image, AI generates new background around it
+        const created = await artistCall({
+          mode: 'i2i_create',
+          prompt: scene1.text,
+          style_anchor_url: brandAnchor,
+          anchor_pipeline: 'logo',
+          scene_index: 0,
+          visual_dna: scene1.text,
+        });
+        anchor = await pollTask(created.task_id, 0);
+      } else if (effectiveTag === 'style' && brandAnchor) {
+        // Style pipeline: I2I with brandAnchor as style guide, ghost-cure shield applied
+        const created = await artistCall({
+          mode: 'i2i_create',
+          prompt: scene1.text,
+          style_anchor_url: brandAnchor,
+          anchor_pipeline: 'style',
+          scene_index: 0,
+          visual_dna: scene1.text,
+        });
+        anchor = await pollTask(created.task_id, 0);
+      } else if (effectiveTag === 'character' && brandAnchor) {
+        // Character pipeline: I2I at 0.72 — prioritise facial/body structure from reference
+        const created = await artistCall({
+          mode: 'i2i_create',
+          prompt: scene1.text,
+          style_anchor_url: brandAnchor,
+          anchor_pipeline: 'character',
+          scene_index: 0,
+          visual_dna: scene1.text,
+        });
+        anchor = await pollTask(created.task_id, 0);
       } else {
+        // No brandAnchor fallback: pure T2I
         const t2iCreate = await artistCall({ mode: 't2i_create', prompt: scene1.text, aspect_ratio: cinemaFormat });
         anchor = await pollTask(t2iCreate.task_id, 0);
       }
@@ -1190,9 +1234,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setSceneImages(prev => { const n = [...prev]; n[0] = anchor; return n; });
       setCastingProgress(prev => { const n = [...prev]; n[0] = 'done'; for (let i = 1; i < cinemaSceneCount; i++) n[i] = 'loading'; return n; });
 
-      // ── Scenes 2-N: Ghost Cure ──
-      // brandAnchor = primary STYLE reference (logo/master look)
-      // prevAnchor  = MOTION reference only (ensures action continuity, not visual clone)
+      // ── Scenes 2-N: pipeline-aware generation ──
       let prevAnchor = anchor;
 
       for (const scene of cinemaScenes.filter(s => s.scene >= 2 && s.scene <= cinemaSceneCount).sort((a, b) => a.scene - b.scene)) {
@@ -1204,18 +1246,44 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           continue;
         }
         try {
-          // If brandAnchor exists: use it as primary style ref; pass prevAnchor as motion_anchor only
-          // If no brandAnchor: fall back to original sequential chain (prevAnchor drives style)
-          const styleRef = brandAnchor || prevAnchor;
-          const motionRef = brandAnchor ? prevAnchor : null;
-          const created = await artistCall({
-            mode: 'i2i_create',
-            prompt: scene.text,
-            anchor_url: styleRef,
-            motion_anchor_url: motionRef || undefined,
-            scene_index: idx,
-            visual_dna: scene1!.text,
-          });
+          let created;
+          if (effectiveTag === 'logo' && brandAnchor) {
+            // Scenes 2-N: release the logo lock — switch to 'style' pipeline so the AI
+            // extracts colors/mood from the logo without stamping its shape into the frame.
+            // Scene 1 already locked the logo integration; now the story can flow freely.
+            const currentPipeline = idx > 0 ? 'style' : 'logo';
+            created = await artistCall({
+              mode: 'i2i_create',
+              prompt: scene.text,
+              style_anchor_url: brandAnchor,
+              motion_anchor_url: prevAnchor,
+              anchor_pipeline: currentPipeline,
+              scene_index: idx,
+              visual_dna: scene1!.text,
+            });
+          } else if (effectiveTag === 'character') {
+            // Character: high-strength I2I (0.72) against prevAnchor for face/body consistency
+            created = await artistCall({
+              mode: 'i2i_create',
+              prompt: scene.text,
+              style_anchor_url: brandAnchor || undefined,
+              motion_anchor_url: prevAnchor,
+              anchor_pipeline: 'character',
+              scene_index: idx,
+              visual_dna: scene1!.text,
+            });
+          } else {
+            // Style (default): dual-anchor ghost-cure
+            created = await artistCall({
+              mode: 'i2i_create',
+              prompt: scene.text,
+              style_anchor_url: brandAnchor || undefined,
+              motion_anchor_url: prevAnchor,
+              anchor_pipeline: 'style',
+              scene_index: idx,
+              visual_dna: scene1!.text,
+            });
+          }
           const imgUrl = await pollTask(created.task_id, idx);
           setSceneImages(prev => { const n = [...prev]; n[idx] = imgUrl; return n; });
           setCastingProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
@@ -1234,7 +1302,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       setIsCasting(false);
     }
-  }, [user, isCasting, cinemaScenes, cinemaFormat, language, cinemaReferenceImages]);
+  }, [user, isCasting, cinemaScenes, cinemaFormat, language, cinemaReferenceImages, anchorTag, brandAnchor]);
 
   // ── Role 4: Animator ──
   // Fires 6 parallel I2V tasks then polls until all done
@@ -1368,22 +1436,34 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const ctx = canvas.getContext('2d')!;
 
       const videoEl = document.createElement('video');
-      videoEl.muted = true;
       videoEl.playsInline = true;
       videoEl.crossOrigin = 'anonymous';
       videoEl.style.display = 'none';
       document.body.appendChild(videoEl);
 
-      // Step 3: Set up MediaRecorder on canvas stream
-      const stream = canvas.captureStream(30);
-      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-        ? 'video/webm;codecs=vp9'
+      // Step 3: Web Audio API — route video audio into MediaRecorder alongside canvas video.
+      // canvas.captureStream() only captures video; we must manually pipe audio through
+      // an AudioContext so the final WebM contains the Grok clip audio.
+      const audioCtx = new AudioContext();
+      const audioDest = audioCtx.createMediaStreamDestination();
+      const mediaSource = audioCtx.createMediaElementSource(videoEl);
+      mediaSource.connect(audioDest);
+      mediaSource.connect(audioCtx.destination); // also play to speakers during stitch
+
+      // Combine canvas video track + audio destination track into one stream
+      const videoTrack = canvas.captureStream(30).getVideoTracks()[0];
+      const combinedStream = new MediaStream([videoTrack, ...audioDest.stream.getAudioTracks()]);
+
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+        ? 'video/webm;codecs=vp9,opus'
+        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+        ? 'video/webm;codecs=vp8,opus'
         : MediaRecorder.isTypeSupported('video/webm')
         ? 'video/webm'
         : 'video/mp4';
 
       const chunks: Blob[] = [];
-      const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 4_000_000 });
+      const recorder = new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: 4_000_000 });
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
 
       const recordingDone = new Promise<Blob>((resolve) => {
@@ -1401,6 +1481,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         await new Promise<void>((resolve, reject) => {
           videoEl.src = blobUrls[i];
           videoEl.onloadeddata = () => {
+            // Resume AudioContext if browser suspended it (autoplay policy)
+            if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
             videoEl.play().catch(reject);
           };
           videoEl.onerror = () => reject(new Error(`Video ${i + 1} failed to load`));
@@ -1423,6 +1505,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       }
 
       recorder.stop();
+      audioCtx.close().catch(() => {});
       document.body.removeChild(videoEl);
 
       // Revoke blob URLs
@@ -1482,7 +1565,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setCinematicSaveFallbackUrl(null);
     setCastingRegenModal(null);
     setCastingRegenNote('');
+    setCastingRegenSceneAnchor(null);
     setIsRegenningScene(false);
+    setAnchorTag('style');
     if (animPollRef.current) clearInterval(animPollRef.current);
   }, []);
 
@@ -1537,45 +1622,52 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     if (!premiereVideoUrl || !user || isCinemaSaved || isCinemaSaving) return;
     setIsCinemaSaving(true);
     try {
-      const { data: importData, error: importError } = await supabase.functions.invoke('import-external-video', {
-        body: {
-          sourceUrl: premiereVideoUrl,
-          filenameHint: cinemaVision.trim().slice(0, 40) || 'cinema-premiere',
-        },
-      });
-      if (importError) throw importError;
-      const storagePath = importData?.storagePath as string | undefined;
-      if (!storagePath) throw new Error(importData?.error || 'Failed to save video');
+      // Direct upload: fetch the local blob URL, upload raw bytes to Supabase Storage.
+      // This avoids passing a local blob:// URL to any edge function (which can't access it).
+      const blobResp = await fetch(premiereVideoUrl);
+      if (!blobResp.ok) throw new Error('Failed to read local video blob');
+      const videoBlob = await blobResp.blob();
 
-      const { error } = await (supabase as any).from('user_videos').insert({
+      const ext = videoBlob.type.includes('mp4') ? 'mp4' : 'webm';
+      const fileName = `cinema/${user.id}/${Date.now()}-${(cinemaVision.trim().slice(0, 30) || 'premiere').replace(/[^a-z0-9]/gi, '-')}.${ext}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('user_videos')
+        .upload(fileName, videoBlob, { contentType: videoBlob.type, upsert: false });
+      if (uploadError) throw uploadError;
+
+      const storagePath = uploadData.path;
+      const { data: publicData } = supabase.storage.from('user_videos').getPublicUrl(storagePath);
+      const publicUrl = publicData?.publicUrl || null;
+
+      const { error: dbError } = await (supabase as any).from('user_videos').insert({
         user_id: user.id,
         title: cinemaVision.trim().slice(0, 60) || 'Wakti Cinema',
         description: cinemaVision.trim() || null,
         storage_path: storagePath,
-        video_url: null,
+        video_url: publicUrl,
         thumbnail_url: sceneImages[0] || null,
         duration_seconds: cinemaSceneCount * 10,
         aspect_ratio: cinemaFormat,
         style_template: 'cinema',
         is_public: false,
       });
-      if (error) throw error;
+      if (dbError) throw dbError;
+
       setIsCinemaSaved(true);
       toast.success(language === 'ar' ? 'تم الحفظ في فيديوهاتي!' : 'Saved to My Videos!');
       await loadLatestVideo();
       if (onSaveSuccess) setTimeout(() => onSaveSuccess(), 1000);
     } catch (e: any) {
       console.error('Cinema save failed:', e);
-      // Provide manual download fallback so the user never loses their work
-      if (premiereVideoUrl) setCinematicSaveFallbackUrl(premiereVideoUrl);
-      toast.error(language === 'ar' ? 'فشل الحفظ — يمكنك تنزيل الفيديو مباشرة' : 'Save failed — manual download available below');
+      toast.error(language === 'ar' ? 'فشل الحفظ — استخدم زر التنزيل أدناه' : 'Save failed — use the Download button below');
     } finally {
       setIsCinemaSaving(false);
     }
   };
 
   // ── Casting: regenerate a single scene image with optional note and master style ──
-  const handleCastingRegenScene = useCallback(async (sceneIdx: number, note: string, useMaster: boolean) => {
+  const handleCastingRegenScene = useCallback(async (sceneIdx: number, note: string, useMaster: boolean, sceneAnchor: string | null = null) => {
     if (!user) return;
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData?.session?.access_token;
@@ -1585,9 +1677,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     try {
       const scene = cinemaScenes.find(s => s.scene === sceneIdx + 1);
       if (!scene) throw new Error('Scene not found');
-      const prompt = note ? `${scene.text}. Director note: ${note}` : scene.text;
-      const styleRef = (useMaster && brandAnchor) ? brandAnchor : (sceneImages[sceneIdx > 0 ? sceneIdx - 1 : 0] || brandAnchor || undefined);
-      const artistCall = async (body: Record<string, unknown>) => {
+      const regenArtistCall = async (body: Record<string, unknown>) => {
         const resp = await fetch(`${SUPABASE_URL}/functions/v1/cinema-artist`, {
           method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}`, apikey: SUPABASE_ANON_KEY },
           body: JSON.stringify(body),
@@ -1596,22 +1686,45 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         if (!resp.ok || !json.ok) throw new Error(json.error || `cinema-artist ${resp.status}`);
         return json;
       };
-      const pollTask = async (task_id: string): Promise<string> => {
+      const regenPollTask = async (task_id: string): Promise<string> => {
         for (let i = 0; i < 36; i++) {
           await new Promise(r => setTimeout(r, 5000));
-          const res = await artistCall({ mode: 'status', task_id, scene_index: sceneIdx });
+          const res = await regenArtistCall({ mode: 'status', task_id, scene_index: sceneIdx });
           if (res.status === 'COMPLETED' && res.image_url) return res.image_url as string;
           if (res.status === 'FAILED') throw new Error(res.error || 'Failed');
         }
         throw new Error('Timed out');
       };
+
+      // Anchor priority:
+      // 1. sceneAnchor (uploaded in modal) → exclusive override at 0.70 strength
+      // 2. brandAnchor (global Style & Brand Foundation) → style ref when useMaster=true
+      // 3. prevScene image → motion/composition continuity only
+      const prevSceneImg = sceneImages[sceneIdx > 0 ? sceneIdx - 1 : 0] || null;
+      const hasSceneOverride = !!sceneAnchor;
+      const styleAnchorUrl = hasSceneOverride ? sceneAnchor : ((useMaster && brandAnchor) ? brandAnchor : null);
+      const motionAnchorUrl = prevSceneImg;
+
       let imgUrl: string;
-      if (styleRef) {
-        const created = await artistCall({ mode: 'i2i_create', prompt, anchor_url: styleRef, scene_index: sceneIdx, visual_dna: scene.text });
-        imgUrl = await pollTask(created.task_id);
+      if (styleAnchorUrl || motionAnchorUrl) {
+        const created = await regenArtistCall({
+          mode: 'i2i_create',
+          prompt: scene.text,
+          style_anchor_url: styleAnchorUrl || undefined,
+          motion_anchor_url: motionAnchorUrl || undefined,
+          director_note: note || undefined,
+          scene_override_strength: hasSceneOverride ? 0.70 : undefined,
+          scene_index: sceneIdx,
+          visual_dna: cinemaScenes[0]?.text,
+        });
+        imgUrl = await regenPollTask(created.task_id);
       } else {
-        const created = await artistCall({ mode: 't2i_create', prompt, aspect_ratio: cinemaFormat });
-        imgUrl = await pollTask(created.task_id);
+        const created = await regenArtistCall({
+          mode: 't2i_create',
+          prompt: note ? `${scene.text}. Director adjustment: ${note}` : scene.text,
+          aspect_ratio: cinemaFormat,
+        });
+        imgUrl = await regenPollTask(created.task_id);
       }
       setSceneImages(prev => { const n = [...prev]; n[sceneIdx] = imgUrl; return n; });
       setCastingProgress(prev => { const n = [...prev]; n[sceneIdx] = 'done'; return n; });
@@ -1624,6 +1737,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setCastingRegenModal(null);
       setCastingRegenNote('');
       setCastingRegenUseMaster(true);
+      setCastingRegenSceneAnchor(null);
     }
   }, [user, cinemaScenes, sceneImages, brandAnchor, cinemaFormat, language]);
 
@@ -2404,11 +2518,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             {/* Brand / Anchor Image Upload */}
                             <div className="mt-1 rounded-xl p-3 flex flex-col gap-2" style={{background: brandAnchor ? 'rgba(226,199,168,0.08)' : clr.cardBg, border: `1px solid ${brandAnchor ? 'rgba(226,199,168,0.35)' : clr.cardBorder}`}}>
                               <p className="text-[10px] font-bold uppercase tracking-wider" style={{color: brandAnchor ? '#C5A47E' : clr.textMuted}}>
-                                {language==='ar' ? '🎨 مرساة النمط / شعار العلامة (اختياري)' : '🎨 Brand Anchor / Style Reference (Optional)'}
+                                {language==='ar' ? '🎨 أساس النمط والعلامة التجارية (اختياري)' : '🎨 Style & Brand Foundation (Optional)'}
                                 {brandAnchor && <span className="ml-1 text-[#E2C7A8]">✓</span>}
                               </p>
                               <p className="text-[9px]" style={{color: clr.textSubtle}}>
-                                {language==='ar' ? 'شعار، صورة منتج، أو مرجع بصري يحدد هوية العلامة لجميع المشاهد' : 'Logo, product shot, or visual reference that locks brand identity across all scenes'}
+                                {language==='ar' ? 'شعار، صورة منتج، أو مرجع بصري — يُثبِّت الهوية البصرية في جميع المشاهد' : 'Logo, product shot, or visual reference — locks brand identity across all scenes'}
                               </p>
                               <div className="flex items-center gap-3">
                                 {brandAnchor ? (
@@ -2446,6 +2560,43 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                     : (language==='ar' ? 'إذا لم ترفع صورة، سيبتكر الذكاء الاصطناعي نمطه الخاص' : 'Without one, the AI will invent its own visual style')}
                                 </p>
                               </div>
+
+                              {/* ── Smart-Tag Selector — shown after upload ── */}
+                              {brandAnchor && (
+                                <div className="mt-2 flex flex-col gap-1.5">
+                                  <p className="text-[9px] font-bold uppercase tracking-wider" style={{color: clr.textMuted}}>
+                                    {language==='ar' ? '🏷 ما هذه الصورة؟' : '🏷 What is this?'}
+                                  </p>
+                                  <div className="flex gap-1.5 flex-wrap">
+                                    {([
+                                      { value: 'logo',      labelEn: 'Logo / Text',       labelAr: 'شعار / نص',         descEn: 'AI Background Integration', descAr: 'تكامل الخلفية بالذكاء' },
+                                      { value: 'style',     labelEn: 'Style / Colors',    labelAr: 'نمط / ألوان',       descEn: 'Mood & palette guide',     descAr: 'مرشد المزاج واللون' },
+                                      { value: 'character', labelEn: 'Character / Person', labelAr: 'شخصية / وجه',       descEn: 'Identity consistency',     descAr: 'تناسق الهوية البصرية' },
+                                    ] as const).map(opt => {
+                                      const isActive = anchorTag === opt.value;
+                                      return (
+                                        <button
+                                          key={opt.value}
+                                          type="button"
+                                          onClick={() => setAnchorTag(opt.value)}
+                                          className="flex flex-col items-start px-2.5 py-2 rounded-xl text-left transition-all active:scale-95 flex-1 min-w-[80px]"
+                                          style={{
+                                            background: isActive ? 'rgba(226,199,168,0.18)' : clr.numBg,
+                                            border: `1.5px solid ${isActive ? 'rgba(226,199,168,0.6)' : clr.cardBorder}`,
+                                          }}
+                                        >
+                                          <span className="text-[10px] font-bold leading-tight" style={{color: isActive ? '#E2C7A8' : clr.textMuted}}>
+                                            {language==='ar' ? opt.labelAr : opt.labelEn}
+                                          </span>
+                                          <span className="text-[8px] leading-tight mt-0.5" style={{color: isActive ? 'rgba(226,199,168,0.55)' : clr.textSubtle}}>
+                                            {language==='ar' ? opt.descAr : opt.descEn}
+                                          </span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
@@ -2680,7 +2831,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           <p className="text-sm text-white/60 max-w-md text-center">
                             {language === 'ar'
                               ? 'جاري تحليل رؤيتك وإنشاء ٦ مشاهد سينمائية...'
-                              : 'Analyzing your vision and creating 6 cinematic scenes...'}
+                              : `Analyzing your vision and creating ${cinemaSceneCount} cinematic scene${cinemaSceneCount === 1 ? '' : 's'}...`}
                           </p>
                         </div>
                       ) : (
@@ -2879,123 +3030,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       })}
                     </div>
 
-                    {/* Reference image upload section */}
-                    {cinemaScenes.length >= cinemaSceneCount && (() => {
-                      // Slot definitions: N scene slots + 1 logo/brand slot
-                      const totalSlots = cinemaSceneCount + 1;
-                      const tagOptions = [
-                        ...Array.from({length: cinemaSceneCount}, (_, i) => ({ value: `scene${i+1}`, label: language === 'ar' ? `مشهد ${i+1}` : `Scene ${i+1}` })),
-                        { value: 'logo', label: language === 'ar' ? 'شعار العلامة' : 'Brand Logo' },
-                        { value: 'ref', label: language === 'ar' ? 'مرجع بصري' : 'Visual Ref' },
-                      ];
-                      const uploadedCount = cinemaReferenceImages.filter(Boolean).length;
-                      return (
-                      <div className="rounded-2xl p-4 flex flex-col gap-3" style={{background:'rgba(226,199,168,0.05)', border:'1px solid rgba(226,199,168,0.15)'}}>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-xs font-bold text-[#E2C7A8] uppercase tracking-wider">
-                              {language === 'ar' ? '🖼 صورك الخاصة (اختياري)' : '🖼 Your Own Images (Optional)'}
-                            </p>
-                            <p className="text-[10px] text-white/35 mt-0.5">
-                              {language === 'ar' ? 'ارفع صورك وحدد دورها — وجه، شعار، مشهد محدد' : 'Upload images & tag their role — face, logo, or specific scene'}
-                            </p>
-                          </div>
-                          {uploadedCount > 0 && (
-                            <button
-                              onClick={() => { setCinemaReferenceImages([]); setCinemaRefTags([]); }}
-                              className="text-[10px] text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
-                            >
-                              {language === 'ar' ? 'مسح الكل' : 'Clear all'}
-                            </button>
-                          )}
+                    {/* Style & Brand Foundation reminder — upload is in Step 1 */}
+                    {cinemaScenes.length >= cinemaSceneCount && brandAnchor && (
+                      <div className="rounded-xl px-3 py-2.5 flex items-center gap-2.5" style={{background:'rgba(226,199,168,0.06)',border:'1px solid rgba(226,199,168,0.18)'}}>
+                        <img src={brandAnchor} alt="Brand anchor" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" style={{border:'1px solid rgba(226,199,168,0.35)'}} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-bold text-[#E2C7A8] uppercase tracking-wider">{language === 'ar' ? 'أساس الهوية البصرية مُفعَّل' : 'Style & Brand Foundation Active'}</p>
+                          <p className="text-[9px] text-white/35 mt-0.5 truncate">{language === 'ar' ? 'جميع المشاهد ستُنجز بنمط هذه الصورة' : 'All scenes will be rendered in this style'}</p>
                         </div>
-
-                        {/* Upload grid */}
-                        <div className="grid gap-2" style={{gridTemplateColumns: `repeat(${Math.min(totalSlots, 4)}, 1fr)`}}>
-                          {Array.from({length: totalSlots}, (_, slotIdx) => {
-                            const refUrl = cinemaReferenceImages[slotIdx];
-                            const tag = cinemaRefTags[slotIdx] || 'ref'; // default: always visual ref until user picks
-                            const tagLabel = tagOptions.find(t => t.value === tag)?.label || tag;
-                            const isLogoSlot = slotIdx === cinemaSceneCount; // last slot = logo/brand
-                            return (
-                              <div key={slotIdx} className="flex flex-col gap-1">
-                                {/* Image tile */}
-                                <div className="relative rounded-xl overflow-hidden" style={{aspectRatio:'1', background: refUrl ? 'transparent' : 'rgba(255,255,255,0.03)', border: refUrl ? '1px solid rgba(226,199,168,0.4)' : `2px dashed ${isLogoSlot ? 'rgba(142,76,55,0.35)' : 'rgba(255,255,255,0.15)'}`}}>
-                                  {refUrl ? (
-                                    <>
-                                      <img src={refUrl} alt={`ref ${slotIdx+1}`} className="w-full h-full object-cover" />
-                                      <button
-                                        onClick={() => {
-                                          setCinemaReferenceImages(prev => { const n = [...prev]; n[slotIdx] = null; return n; });
-                                          setCinemaRefTags(prev => { const n = [...prev]; n[slotIdx] = ''; return n; });
-                                        }}
-                                        className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/80 text-white text-[10px] flex items-center justify-center hover:bg-red-500/80 transition-colors"
-                                      >✕</button>
-                                    </>
-                                  ) : (
-                                    <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer gap-0.5">
-                                      <input
-                                        type="file"
-                                        accept="image/*"
-                                        className="hidden"
-                                        onChange={(e) => {
-                                          const file = e.target.files?.[0];
-                                          if (file) handleCinemaRefUpload(file, slotIdx, tag);
-                                        }}
-                                      />
-                                      {isUploadingRef ? (
-                                        <Loader2 className="h-4 w-4 animate-spin text-white/30" />
-                                      ) : (
-                                        <span className="text-white/25 text-xl leading-none">+</span>
-                                      )}
-                                    </label>
-                                  )}
-                                </div>
-
-                                {/* Tag selector — custom styled to look like a real dropdown */}
-                                <div className="relative w-full">
-                                  <select
-                                    value={tag}
-                                    title={language === 'ar' ? 'نوع الصورة' : 'Image tag'}
-                                    aria-label={language === 'ar' ? 'نوع الصورة' : 'Image tag'}
-                                    onChange={(e) => {
-                                      const newTag = e.target.value;
-                                      setCinemaRefTags(prev => { const n = [...prev]; n[slotIdx] = newTag; return n; });
-                                    }}
-                                    className="w-full text-[9px] font-semibold rounded-lg pl-2 pr-5 py-1.5 outline-none appearance-none cursor-pointer transition-all"
-                                    style={{
-                                      background: refUrl ? 'rgba(226,199,168,0.15)' : 'rgba(255,255,255,0.06)',
-                                      border: refUrl ? '1px solid rgba(226,199,168,0.4)' : '1px solid rgba(255,255,255,0.12)',
-                                      color: refUrl ? '#E2C7A8' : 'rgba(255,255,255,0.45)',
-                                      colorScheme: 'dark',
-                                    }}
-                                  >
-                                    {tagOptions.map(opt => (
-                                      <option key={opt.value} value={opt.value} className="bg-[#0c0f14] text-white">{opt.label}</option>
-                                    ))}
-                                  </select>
-                                  {/* Chevron overlay */}
-                                  <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center">
-                                    <svg width="8" height="5" viewBox="0 0 8 5" fill="none">
-                                      <path d="M1 1l3 3 3-3" stroke={refUrl ? '#E2C7A8' : 'rgba(255,255,255,0.35)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                    </svg>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {uploadedCount > 0 && (
-                          <p className="text-[10px] text-[#E2C7A8]/50 px-0.5">
-                            {language === 'ar'
-                              ? `${uploadedCount} ${uploadedCount === 1 ? 'صورة مرفوعة' : 'صور مرفوعة'} — الذكاء الاصطناعي سيستخدمها وفق التصنيف`
-                              : `${uploadedCount} image${uploadedCount > 1 ? 's' : ''} uploaded — AI will use them based on their tag`}
-                          </p>
-                        )}
+                        <span className="text-green-400 text-sm flex-shrink-0">✓</span>
                       </div>
-                      );
-                    })()}
+                    )}
 
                     {/* Sticky footer — CAST YOUR MOVIE */}
                     {cinemaScenes.length >= cinemaSceneCount && (
@@ -3099,12 +3144,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             <h4 className="text-sm font-bold text-[#E2C7A8]">
                               {language === 'ar' ? `إعادة توليد المشهد ${castingRegenModal.sceneIdx + 1}` : `Regenerate Scene ${castingRegenModal.sceneIdx + 1}`}
                             </h4>
-                            <button onClick={() => setCastingRegenModal(null)}
+                            <button onClick={() => { setCastingRegenModal(null); setCastingRegenSceneAnchor(null); }}
                               className="text-white/40 hover:text-white/70 text-sm transition-colors">✕</button>
                           </div>
                           <div className="flex flex-col gap-1.5">
                             <label className="text-[10px] font-semibold uppercase tracking-wider text-white/50">
-                              {language === 'ar' ? 'تغييرات محددة (اختياري)' : 'Specific changes? (optional)'}
+                              {language === 'ar' ? 'تغييرات محددة (اختياري)' : 'Director\'s note (optional)'}
                             </label>
                             <input
                               type="text"
@@ -3114,6 +3159,48 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               className="w-full bg-transparent rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/25 outline-none"
                               style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.1)'}}
                             />
+                          </div>
+                          {/* Scene-specific reference upload — overrides brandAnchor for this scene only */}
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] font-semibold uppercase tracking-wider text-white/50">
+                              {language === 'ar' ? 'مرجع مشهد مخصص (يستبدل الهوية العامة لهذا المشهد فقط)' : 'Scene-specific reference (overrides brand anchor for this scene only)'}
+                            </label>
+                            <div className="flex items-center gap-3">
+                              {castingRegenSceneAnchor ? (
+                                <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0" style={{border:'1px solid rgba(226,199,168,0.5)'}}>
+                                  <img src={castingRegenSceneAnchor} alt="scene ref" className="w-full h-full object-cover" />
+                                  <button
+                                    onClick={() => setCastingRegenSceneAnchor(null)}
+                                    className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/80 text-white text-[9px] flex items-center justify-center hover:bg-red-500/80 transition-colors"
+                                  >✕</button>
+                                </div>
+                              ) : (
+                                <label className="w-14 h-14 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0 transition-all hover:opacity-80"
+                                  style={{background:'rgba(255,255,255,0.04)',border:'2px dashed rgba(226,199,168,0.25)'}}>
+                                  <input type="file" accept="image/*" className="hidden"
+                                    onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (!file || !user) return;
+                                      setIsUploadingRegenAnchor(true);
+                                      try {
+                                        const ext = file.name.split('.').pop() || 'jpg';
+                                        const path = `${user.id}/cinema-refs/regen-${Date.now()}.${ext}`;
+                                        await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
+                                        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+                                        if (urlData?.publicUrl) setCastingRegenSceneAnchor(urlData.publicUrl);
+                                      } catch { toast.error(language === 'ar' ? 'فشل رفع الصورة' : 'Upload failed'); }
+                                      finally { setIsUploadingRegenAnchor(false); }
+                                    }}
+                                  />
+                                  {isUploadingRegenAnchor ? <Loader2 className="h-4 w-4 animate-spin text-white/30" /> : <span className="text-xl leading-none text-white/25">+</span>}
+                                </label>
+                              )}
+                              <p className="text-[9px] text-white/35 leading-relaxed">
+                                {castingRegenSceneAnchor
+                                  ? (language === 'ar' ? 'هذه الصورة ستُستخدم كمرجع حصري لهذا المشهد فقط (قوة ٧٠٪)' : 'This image overrides the brand anchor for this scene at 70% strength')
+                                  : (language === 'ar' ? 'اتركها فارغة لاستخدام أساس النمط العام' : 'Leave empty to use the global Style & Brand Foundation')}
+                              </p>
+                            </div>
                           </div>
                           <label className="flex items-center gap-3 cursor-pointer">
                             <div
@@ -3133,13 +3220,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             </div>
                           </label>
                           <div className="flex gap-2 pt-1">
-                            <button onClick={() => setCastingRegenModal(null)}
+                            <button onClick={() => { setCastingRegenModal(null); setCastingRegenSceneAnchor(null); }}
                               className="flex-1 h-10 rounded-xl text-sm font-semibold transition-all"
                               style={{background:'rgba(255,255,255,0.06)',color:'rgba(255,255,255,0.6)'}}>
                               {language === 'ar' ? 'إلغاء' : 'Cancel'}
                             </button>
                             <button
-                              onClick={() => handleCastingRegenScene(castingRegenModal.sceneIdx, castingRegenNote, castingRegenUseMaster)}
+                              onClick={() => handleCastingRegenScene(castingRegenModal.sceneIdx, castingRegenNote, castingRegenUseMaster, castingRegenSceneAnchor)}
                               disabled={isRegenningScene}
                               className="flex-1 h-10 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
                               style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14'}}>
@@ -3286,7 +3373,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         />
                       </div>
                       {/* Actions */}
-                      <div className="flex gap-3">
+                      <div className="flex gap-2">
+                        {/* Save to My Videos */}
                         <button
                           onClick={handleCinemaSave}
                           disabled={isCinemaSaving || isCinemaSaved}
@@ -3307,35 +3395,28 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             <><Download className="h-4 w-4" /><span>{language === 'ar' ? 'حفظ في فيديوهاتي' : 'Save to My Videos'}</span></>
                           )}
                         </button>
+
+                        {/* Download — always visible as a primary action */}
+                        <a
+                          href={premiereVideoUrl}
+                          download="Wakti-Cinema.mp4"
+                          className="h-12 px-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2 flex-shrink-0 transition-all active:scale-95"
+                          style={{background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.85)'}}
+                        >
+                          <Download className="h-4 w-4" />
+                          <span>{language === 'ar' ? 'تنزيل' : 'Download'}</span>
+                        </a>
+
+                        {/* New film */}
                         <button
                           onClick={handleCinemaReset}
-                          className="h-12 px-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2 flex-shrink-0"
-                          style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',color:'rgba(255,255,255,0.6)'}}
+                          className="h-12 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 flex-shrink-0"
+                          style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',color:'rgba(255,255,255,0.5)'}}
                         >
                           <RefreshCw className="h-4 w-4" />
                           {language === 'ar' ? 'جديد' : 'New'}
                         </button>
                       </div>
-
-                      {/* Manual Download Fallback — shown only if save failed */}
-                      {cinematicSaveFallbackUrl && !isCinemaSaved && (
-                        <div className="rounded-xl p-3 flex items-center gap-3" style={{background:'rgba(234,179,8,0.08)',border:'1px solid rgba(234,179,8,0.3)'}}>
-                          <span className="text-yellow-400 text-lg flex-shrink-0">⚠️</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-yellow-300">{language === 'ar' ? 'فشل الحفظ التلقائي' : 'Auto-save failed'}</p>
-                            <p className="text-[10px] text-yellow-300/60 mt-0.5">{language === 'ar' ? 'انقر لتنزيل الفيديو مباشرة — لا تغلق هذه الصفحة' : "Click to download directly — don't close this page"}</p>
-                          </div>
-                          <a
-                            href={cinematicSaveFallbackUrl}
-                            download={`wakti-cinema-${Date.now()}.webm`}
-                            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all active:scale-95"
-                            style={{background:'rgba(234,179,8,0.2)',border:'1px solid rgba(234,179,8,0.5)',color:'#fde68a'}}
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                            <span>{language === 'ar' ? 'تنزيل' : 'Download'}</span>
-                          </a>
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}

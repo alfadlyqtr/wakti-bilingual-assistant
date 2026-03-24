@@ -196,13 +196,9 @@ export class TRService {
 
   // Task operations - Updated with caching for instant loading
   static async getTasks(): Promise<TRTask[]> {
-    console.log('TRService.getTasks: Starting to fetch tasks');
-    
     // Try to get cached data first for instant loading
     const cachedTasks = TRServiceCache.getTasks();
     if (cachedTasks) {
-      console.log('TRService.getTasks: Returning cached tasks:', cachedTasks.length);
-      
       // Still fetch fresh data in background and update cache
       this.refreshTasksInBackground();
       
@@ -214,8 +210,6 @@ export class TRService {
       console.error('TRService.getTasks: No user found');
       throw new Error('User not authenticated. Please log in.');
     }
-
-    console.log('TRService.getTasks: Fetching tasks for user:', userId);
 
     await ensurePassport();
     const { data, error } = await supabase
@@ -230,7 +224,6 @@ export class TRService {
     }
 
     const tasks = data || [];
-    console.log('TRService.getTasks: Fetched tasks count:', tasks.length);
     
     // Cache the fresh data
     TRServiceCache.setTasks(tasks);
@@ -253,7 +246,6 @@ export class TRService {
       
       if (!error && data) {
         TRServiceCache.setTasks(data);
-        console.log('TRService: Background refresh completed for tasks');
       }
     } catch (error) {
       console.error('TRService: Background refresh failed for tasks:', error);
@@ -452,13 +444,9 @@ export class TRService {
 
   // Reminder operations - Updated with caching for instant loading
   static async getReminders(): Promise<TRReminder[]> {
-    console.log('TRService.getReminders: Starting to fetch reminders');
-    
     // Try to get cached data first for instant loading
     const cachedReminders = TRServiceCache.getReminders();
     if (cachedReminders) {
-      console.log('TRService.getReminders: Returning cached reminders:', cachedReminders.length);
-      
       // Still fetch fresh data in background and update cache
       this.refreshRemindersInBackground();
       
@@ -470,8 +458,6 @@ export class TRService {
       console.error('TRService.getReminders: No user found');
       throw new Error('User not authenticated. Please log in.');
     }
-
-    console.log('TRService.getReminders: Fetching reminders for user:', userId);
 
     await ensurePassport();
     const { data, error } = await supabase
@@ -486,7 +472,6 @@ export class TRService {
     }
 
     const reminders = data || [];
-    console.log('TRService.getReminders: Fetched reminders count:', reminders.length);
     
     // Cache the fresh data
     TRServiceCache.setReminders(reminders);
@@ -509,7 +494,6 @@ export class TRService {
       
       if (!error && data) {
         TRServiceCache.setReminders(data);
-        console.log('TRService: Background refresh completed for reminders');
       }
     } catch (error) {
       console.error('TRService: Background refresh failed for reminders:', error);

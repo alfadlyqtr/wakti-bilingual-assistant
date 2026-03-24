@@ -33,11 +33,21 @@ export function useWhoopData() {
 
     const fetchData = async () => {
       try {
+        // SAFE-GUARD: Only query Whoop cache if user has a connected Whoop token.
+        // Prevents repeated 406 errors for users who never connected Whoop.
+        const { data: tokenRow } = await supabase
+          .from("user_whoop_tokens")
+          .select("user_id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (!tokenRow) return;
+
         const { data: cache } = await supabase
           .from("user_whoop_metrics_cache")
           .select("metrics, status, updated_at")
           .eq("user_id", user.id)
-          .single();
+          .maybeSingle();
 
         if (!cache) return;
 

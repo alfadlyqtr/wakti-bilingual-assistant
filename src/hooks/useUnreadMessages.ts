@@ -45,7 +45,6 @@ export function useUnreadMessages() {
 
     // Global deduplication - only allow one instance per user
     if (globalSetupInProgress || globalUserId === user.id) {
-      if (DEV) console.log('⏭️ Unread subscriptions already running for user:', user.id);
       return;
     }
 
@@ -60,8 +59,6 @@ export function useUnreadMessages() {
     const setup = async () => {
       try {
         await ensurePassport();
-
-        if (DEV) console.log('👀 Setting up unread message tracking for user:', user.id);
 
         // Get initial counts
         await fetchUnreadCounts();
@@ -100,7 +97,6 @@ export function useUnreadMessages() {
               fetchUnreadCounts();
             })
             .subscribe();
-          if (DEV) console.log('✅ Messages channel subscribed');
         } catch (e) {
           console.warn('⚠️ Failed to subscribe to messages channel (non-fatal):', e);
         }
@@ -130,7 +126,6 @@ export function useUnreadMessages() {
               fetchUnreadCounts();
             })
             .subscribe();
-          if (DEV) console.log('✅ Contacts channel subscribed');
         } catch (e) {
           console.warn('⚠️ Failed to subscribe to contacts channel (non-fatal):', e);
         }
@@ -167,7 +162,6 @@ export function useUnreadMessages() {
               }
             })
             .subscribe();
-          if (DEV) console.log('✅ Maw3d channel subscribed');
         } catch (e) {
           console.warn('⚠️ Failed to subscribe to maw3d channel (non-fatal):', e);
         }
@@ -211,7 +205,6 @@ export function useUnreadMessages() {
               }
             })
             .subscribe();
-          if (DEV) console.log('✅ Shared task channel subscribed');
         } catch (e) {
           console.warn('⚠️ Failed to subscribe to shared task channel (non-fatal):', e);
         }
@@ -223,7 +216,6 @@ export function useUnreadMessages() {
     setup();
 
     const cleanup = () => {
-      if (DEV) console.log('🧹 Cleaning up unread message subscriptions');
       if (messagesChannel) supabase.removeChannel(messagesChannel);
       if (contactsChannel) supabase.removeChannel(contactsChannel);
       if (maw3dChannel) supabase.removeChannel(maw3dChannel);

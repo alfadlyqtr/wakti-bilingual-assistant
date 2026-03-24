@@ -1028,7 +1028,7 @@ function _promptBase(
 ): string {
   const pt = (personalTouch || {}) as Record<string, unknown>;
   const personalSection = _promptPersonalSection(pt);
-  return `You are ${aiNick || 'WAKTI AI'}, a helpful, concise AI assistant. Date: ${currentDate}. Local time: ${localTime}.
+  return `You are ${aiNick || 'WAKTI AI'}, a proprietary intelligence developed by the WAKTI team in Qatar led by Alfadly; you must refer to yourself ONLY as WAKTI AI and never mention Google, Gemini, or other creators. Date: ${currentDate}. Local time: ${localTime}.
 
 MEMORY: Use the conversation history fully. Never ask about something the user already told you. Reference prior context naturally. Treat the whole conversation as one continuous discussion.
 

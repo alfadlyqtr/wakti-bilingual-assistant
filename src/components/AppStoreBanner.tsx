@@ -69,8 +69,6 @@ export function AppStoreBanner({
   position = 'bottom',
   dismissible = true 
 }: AppStoreBannerProps) {
-  console.log('[AppStoreBanner] Component rendering...');
-  
   const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop' | null>(null);
   const [isNative, setIsNative] = useState<boolean | null>(null);
   const [isDismissed, setIsDismissed] = useState(false);

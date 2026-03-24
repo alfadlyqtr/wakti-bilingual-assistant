@@ -21,8 +21,6 @@ export function useGiftNotifications() {
     // CRITICAL: Wait for auth to complete AND user to be logged in
     if (loading || !user?.id) return;
 
-    if (DEV) console.log('Gift notification system ready - setting up listener for user:', user.id);
-
     // Listen for new notifications of type 'admin_gifts'
     const channel = supabase
       .channel(`gift-notifications-${user.id}`)
@@ -35,14 +33,10 @@ export function useGiftNotifications() {
           filter: `user_id=eq.${user.id}`
         },
         (payload) => {
-          if (DEV) console.log('New notification received:', payload);
-          
           const notification = payload.new;
           
           // Check if this is an admin gift notification
           if (notification.type === 'admin_gifts' && notification.data) {
-            if (DEV) console.log('Gift notification detected:', notification);
-            
             const giftData = notification.data;
             
             // Show the gift popup
@@ -58,13 +52,10 @@ export function useGiftNotifications() {
           }
         }
       )
-      .subscribe((status) => {
-        if (DEV) console.log('Gift notification subscription status:', status);
-      });
+      .subscribe();
 
     // Cleanup
     return () => {
-      if (DEV) console.log('Cleaning up gift notification listener');
       supabase.removeChannel(channel);
     };
   }, [user?.id, loading]);
