@@ -2164,7 +2164,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
             {/* Cinema mode - Director's Desk */}
             {generationMode === 'cinema' && (
-              <div className="relative col-span-full min-h-[60vh] flex flex-col justify-center">
+              <div className="relative col-span-full min-h-[60vh] flex flex-col justify-center rounded-2xl" style={{background:'#0c0f14'}}>
                 {cinemaStep === 'desk' && (() => {
                   const effectiveSetting = cinemaSetting === 'Custom' ? cinemaSettingCustom : cinemaSetting;
                   const effectiveAction = cinemaAction === 'Custom' ? cinemaActionCustom : cinemaAction;
