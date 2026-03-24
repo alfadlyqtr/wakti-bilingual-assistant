@@ -1687,16 +1687,22 @@ export function ChatMessages({
       const studyModeFlag = (message as any)?.metadata?.studyMode;
       const isStudyMode = studyModeFlag || wolframMeta?.mode === 'study';
       
-      // For Study mode without Wolfram, extract the first sentence as the "answer"
+      // Extract the [BOX]...[/BOX] summary sentence from the AI response
       const extractStudyAnswer = (text: string): string => {
         if (!text) return '';
-        // Try to find "Answer:" prefix first
+        // Priority 1: [BOX]...[/BOX] tag (new format)
+        const boxMatch = text.match(/\[BOX\]([\s\S]*?)\[\/BOX\]/i);
+        if (boxMatch) return boxMatch[1].trim();
+        // Priority 2: "Answer:" prefix
         const answerMatch = text.match(/\*?\*?Answer:?\*?\*?\s*([^\n]+)/i);
         if (answerMatch) return answerMatch[1].trim();
-        // Otherwise take first sentence (up to period, question mark, or newline)
+        // Fallback: first sentence
         const firstSentence = text.split(/[.!?\n]/)[0];
         return firstSentence?.trim() || text.slice(0, 150);
       };
+      // Strip the [BOX]...[/BOX] block from body so the sentence isn't repeated
+      const stripBoxTag = (text: string): string =>
+        text.replace(/\[BOX\][\s\S]*?\[\/BOX\]\n?/i, '').trimStart();
 
       return (
         <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-pre:my-3 prose-table:my-3">
@@ -1835,7 +1841,7 @@ export function ChatMessages({
               },
             }}
           >
-            {content}
+            {isStudyMode ? stripBoxTag(content) : content}
           </ReactMarkdown>
           {(() => {
             const chip = (message as any)?.metadata?.helpGuideChip as { label?: string; route?: string } | undefined;

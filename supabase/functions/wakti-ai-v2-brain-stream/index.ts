@@ -33,6 +33,7 @@ const getCorsHeaders = (origin: string | null) => {
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const WOLFRAM_APP_ID = Deno.env.get('WOLFRAM_APP_ID') || 'H2PK3P9R7E';
+const WOLFRAM_LLM_APP_ID = 'U2W74EHLQX';
 const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -404,6 +405,7 @@ function estimateTokens(text: string): number {
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'gemini-2.0-flash': { input: 0.075, output: 0.30 },
   'gemini-2.5-flash': { input: 0.075, output: 0.30 },
+  'gemini-3-flash-preview': { input: 0.075, output: 0.30 },
   'gemini-3.1-pro-preview': { input: 2.00, output: 8.00 },
   'gpt-4o-mini': { input: 0.15, output: 0.60 },
   'claude-3-5-sonnet-20241022': { input: 3.00, output: 15.00 },
@@ -861,7 +863,7 @@ async function streamGemini3FlashChat(
     }
   }
 
-  console.log(`✅ CHAT ${useSearch ? 'GROUNDED' : 'FAST'} (Gemini 3 Flash): Stream complete, length:`, fullText.length);
+  console.log(`✅ CHAT ${useSearch ? 'GROUNDED' : 'FAST'} (${model}): Stream complete, length:`, fullText.length);
 
   // Cache the result for 60s to avoid redundant search round-trips
   if (useSearch && fullText) {
@@ -1043,7 +1045,7 @@ function _promptChatFreshness(): string {
 
 // STUDY MODE EXTENSION (~600 chars): Only when chatSubmode === 'study'
 function _promptStudy(): string {
-  return `\n\n📚 STUDY MODE (TUTOR STYLE) - CRITICAL\nYou are now in STUDY MODE. Act as a friendly, patient tutor.\n\nSTUDY MODE RULES:\n1. ANSWER FIRST: Always start with the clear, direct answer or key takeaway (1-2 sentences).\n2. EXPLAIN STEP-BY-STEP: Break down the reasoning in simple, numbered steps.\n3. USE SIMPLE LANGUAGE: Avoid jargon. Explain like teaching a curious student.\n4. STRUCTURE CLEARLY: Use bullet points, numbered lists, or short paragraphs. Never a wall of text.\n5. ADD EXAMPLES: When helpful, include a real-world example or analogy.\n6. PRACTICE QUESTIONS (optional): For suitable topics, end with 1-2 short practice questions.\n7. ENCOURAGE: Be supportive and encouraging.\n\nApplies to ALL subjects: math, science, history, languages, programming, exam prep, general knowledge.\nIf user uploads an image (photo of notes, textbook, problem), analyze and teach based on what you see.`;
+  return `\n\n📚 STUDY MODE (TUTOR STYLE) - CRITICAL\nYou are now in STUDY MODE. Act as a friendly, patient tutor.\n\nSTUDY MODE RULES:\n0. ANSWER BOX (MANDATORY): Your response MUST start with a unique 1-sentence summary wrapped in [BOX]...[/BOX] tags. Example: [BOX]Photosynthesis is the process plants use to convert sunlight into food.[/BOX]. DO NOT repeat this sentence anywhere in the main body of your response.\n1. EXPLAIN STEP-BY-STEP: After the [BOX], break down the reasoning in simple, numbered steps.\n2. USE SIMPLE LANGUAGE: Avoid jargon. Explain like teaching a curious student.\n3. STRUCTURE CLEARLY: Use bullet points, numbered lists, or short paragraphs. Never a wall of text.\n4. ADD EXAMPLES: When helpful, include a real-world example or analogy.\n5. PRACTICE QUESTIONS (optional): For suitable topics, end with 1-2 short practice questions.\n6. ENCOURAGE: Be supportive and encouraging.\n\nApplies to ALL subjects: math, science, history, languages, programming, exam prep, general knowledge.\nIf user uploads an image (photo of notes, textbook, problem), analyze and teach based on what you see.`;
 }
 
 // SEARCH EXTENSION (~800 chars): Only when useSearch===true in chat mode
@@ -1156,6 +1158,7 @@ async function interceptAndScheduleReminder(
             user_id: userId,
             type: 'ai_reminder',
             title: 'Wakti AI Reminder',
+            body: reminderText,
             reminder_content: reminderText,
             scheduled_for: validTimeStr,
             push_sent: false,
@@ -1431,7 +1434,125 @@ async function executeRegularSearch(query: string, language = 'en') {
   }
 }
 
-// === WOLFRAM|ALPHA HELPER (with timeout protection) ===
+// === WOLFRAM UNIVERSAL KNOWLEDGE ENGINE ===
+
+// Strip conversational noise so Wolfram receives a clean subject string
+function getCleanSubject(message: string): string {
+  if (!message) return '';
+  const cleaned = message.replace(/\?+$/, '').replace(/[؟!]+$/, '').trim();
+
+  // SHORT-CIRCUIT: For person/entity queries, extract proper nouns only (capitalized words after the opener)
+  // "Who was Bill Clinton" → "Bill Clinton"
+  // "Tell me about Albert Einstein" → "Albert Einstein"
+  const entityOpenerMatch = cleaned.match(
+    /^(?:who\s+(?:is|was)|tell\s+me\s+about(?:\s+the)?|what\s+is(?:\s+the)?)\s+(.+)$/i
+  );
+  if (entityOpenerMatch) {
+    const rest = entityOpenerMatch[1].trim();
+    // Extract consecutive capitalized words (proper noun sequence)
+    const properNounMatch = rest.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
+    if (properNounMatch && properNounMatch[1].length >= 2) {
+      console.log(`🎯 CLEAN SUBJECT (short-circuit): "${cleaned}" → "${properNounMatch[1]}"`);
+      return properNounMatch[1];
+    }
+    // No proper nouns found — return the rest stripped of filler
+    const fillerStripped = rest
+      .replace(/^(the\s+(city|country|life|history|story|process|concept|meaning)\s+of\s+)/i, '')
+      .replace(/^(the\s+)/i, '')
+      .trim();
+    console.log(`🎯 CLEAN SUBJECT (entity fallback): "${cleaned}" → "${fillerStripped}"`);
+    return fillerStripped;
+  }
+
+  let s = cleaned;
+  // Strip bot name references
+  s = s.replace(/\b(wakto|waqti|wakti|jester|assistant|hey|hi|hello|ok|okay)\b/gi, '');
+  // Iteratively strip leading openers (run twice to handle nested: "explain the history of X")
+  const leadingOpeners = /^(what\s+is\s+the\s+(city|country|life|history|story|process|concept|meaning)\s+of|what\s+is|what\s+are|explain\s+the\s+(process|history|concept|life)\s+of|explain|describe|give\s+me\s+info\s+on|information\s+about|facts\s+about|about|define|meaning\s+of|what\s+do\s+you\s+know\s+about|can\s+you\s+explain|can\s+you\s+tell\s+me\s+about|i\s+want\s+to\s+know\s+about|i\s+need\s+to\s+know\s+about|help\s+me\s+understand|show\s+me|list\s+the|summary\s+of|the\s+(city|country|history|life|story|process)\s+of|the)\s+/i;
+  s = s.replace(leadingOpeners, '').replace(leadingOpeners, '');
+  // Strip trailing instructional modifiers
+  s = s
+    .replace(/\s+in\s+\d+\s+\w+\s+steps?\s*$/i, '')
+    .replace(/\s+in\s+simple\s+terms?\s*$/i, '')
+    .replace(/\s+in\s+\d+\s+steps?\s*$/i, '')
+    .replace(/\s+(detailed\s+)?report\s*$/i, '')
+    .replace(/\s+for\s+me\s*$/i, '')
+    .replace(/\s+please\s*$/i, '');
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+// Internal translation bridge: translate Arabic subject to English for Wolfram API use only
+async function translateSubjectToEnglish(subject: string): Promise<string> {
+  try {
+    const key = getGeminiApiKey();
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+    const body = {
+      contents: [{ role: 'user', parts: [{ text: `Translate this academic topic to English. Return ONLY the translated term, nothing else, no explanation:\n${subject}` }] }],
+      generationConfig: { temperature: 0, maxOutputTokens: 50 },
+    };
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 2000);
+    const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!resp.ok) return subject;
+    const data = await resp.json();
+    const translated = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    if (translated && translated.length > 0 && translated.length < 200) {
+      console.log(`🌐 TRANSLATE: "${subject.substring(0, 40)}" → "${translated.substring(0, 40)}"`);
+      return translated;
+    }
+    return subject;
+  } catch {
+    return subject; // fail silently, use original
+  }
+}
+
+// Gatekeeper: superseded by inlined recognizer logic in study block — kept for non-study fallback use
+async function _wolframGatekeeperCheck(subject: string, timeoutMs: number = 1500): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const url = `http://www.wolframalpha.com/queryrecognizer/query.jsp?appid=${WOLFRAM_LLM_APP_ID}&mode=Default&i=${encodeURIComponent(subject)}`;
+    const resp = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!resp.ok) return true; // if check fails, proceed anyway
+    const xml = await resp.text();
+    const acceptedMatch = xml.match(/accepted="([^"]+)"/);
+    const accepted = acceptedMatch?.[1] !== 'false';
+    console.log(`🎓 WOLFRAM GATEKEEPER: "${subject.substring(0, 40)}" → accepted=${accepted}`);
+    return accepted;
+  } catch {
+    return true; // timeout or error → proceed
+  }
+}
+
+// LLM API: modern endpoint that returns a clean fact sheet for any academic subject
+async function queryWolframLLM(subject: string, timeoutMs: number = 8000): Promise<{ success: boolean; factSheet?: string; error?: string }> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const url = `https://www.wolframalpha.com/api/v1/llm-api?appid=${WOLFRAM_LLM_APP_ID}&input=${encodeURIComponent(subject)}&maxchars=3000`;
+    console.log(`🎓 WOLFRAM LLM API: Querying for "${subject.substring(0, 60)}"`);
+    const resp = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!resp.ok) {
+      console.warn(`⚠️ WOLFRAM LLM: HTTP ${resp.status}`);
+      return { success: false, error: `HTTP ${resp.status}` };
+    }
+    const text = await resp.text();
+    if (!text || text.trim().length < 20) {
+      return { success: false, error: 'Empty response' };
+    }
+    console.log(`✅ WOLFRAM LLM: Got fact sheet (${text.length} chars)`);
+    return { success: true, factSheet: text.trim() };
+  } catch (err: unknown) {
+    const isAbort = err && typeof err === 'object' && 'name' in err && (err as { name?: unknown }).name === 'AbortError';
+    console.warn(isAbort ? `⚠️ WOLFRAM LLM: Timeout after ${timeoutMs}ms` : `⚠️ WOLFRAM LLM: Error`);
+    return { success: false, error: isAbort ? 'Timeout' : String(err) };
+  }
+}
+
+// === WOLFRAM|ALPHA HELPER (legacy v2/query — used for math/calculation outside study mode) ===
 async function queryWolfram(input: string, timeoutMs: number = 4000): Promise<{ success: boolean; answer?: string; steps?: string[]; interpretation?: string; error?: string }> {
   try {
     const controller = new AbortController();
@@ -1524,6 +1645,7 @@ interface SummaryBoxResult {
   success: boolean;
   domain?: string;
   summary?: string;
+  rawHtml?: string;
   path?: string;
   error?: string;
 }
@@ -1581,7 +1703,7 @@ async function queryWolframSummaryBox(input: string, timeoutMs: number = 3000): 
     console.log('📦 WOLFRAM SUMMARY: Found path:', path, 'domain:', domain);
 
     // Step 2: Get the summary box content
-    const summaryUrl = `https://www.wolframalpha.com/summaryboxes/v1/query?appid=${WOLFRAM_APP_ID}&path=${encodeURIComponent(path)}`;
+    const summaryUrl = `https://www.wolframalpha.com/summaryboxes/v1/query?appid=${WOLFRAM_LLM_APP_ID}&path=${encodeURIComponent(path)}`;
     
     const summaryResp = await fetch(summaryUrl, {
       method: 'GET',
@@ -1613,7 +1735,7 @@ async function queryWolframSummaryBox(input: string, timeoutMs: number = 3000): 
     }
 
     console.log('✅ WOLFRAM SUMMARY: Got summary for domain:', domain, '(', textContent.length, 'chars)');
-    return { success: true, domain, summary: textContent, path };
+    return { success: true, domain, summary: textContent, rawHtml: summaryHtml, path };
 
   } catch (err: unknown) {
     const errName = (err && typeof err === 'object' && 'name' in err) ? (err as { name?: unknown }).name : undefined;
@@ -2867,8 +2989,8 @@ If you are running out of space, keep this order and drop the rest:
 
             try {
               // Chat early-return path: respect engineTier for model selection
-              const chatModel = engineTier === 'intelligence' ? 'gemini-3-flash-preview' : 'gemini-2.5-flash';
-              const chatEngineLabel = engineTier === 'intelligence' ? 'Intelligence Engine (Flash)' : 'Speed Engine (2.5)';
+              const chatModel = 'gemini-3-flash-preview';
+              const chatEngineLabel = engineTier === 'intelligence' ? 'Intelligence Engine (Flash)' : 'Speed Engine (Flash)';
               modelUsedOuter = chatEngineLabel;
               console.log(` ENGINE: ${chatEngineLabel} selected (tier=${engineTier}, chat path)`);
               let fullResponseText = '';
@@ -2964,132 +3086,179 @@ If you are running out of space, keep this order and drop the rest:
             }
           }
 
-          // Determine the query to send to Wolfram:
-          // - If OCR extracted text, use that (combined with user prompt if provided)
-          // - Otherwise, use the original message
-          const wolframQuery = ocrExtractedText 
-            ? (message?.trim() 
-                ? `${message}\n\n[Extracted from image]:\n${ocrExtractedText}` 
+          // Determine the raw query string
+          const rawWolframQuery = ocrExtractedText
+            ? (message?.trim()
+                ? `${message}\n\n[Extracted from image]:\n${ocrExtractedText}`
                 : ocrExtractedText)
             : message;
 
-          // Study mode ALWAYS tries Wolfram; Chat mode for academic/math/science queries
           let wolframContext = '';
-          let fullResultsData = '';
-          let summaryBoxData = '';
           let wolframMetaBase: Record<string, unknown> | null = null;
-          const useWolfram = chatSubmode === 'study' || isWolframQuery(wolframQuery);
-          const useSummaryBox = isSummaryBoxQuery(wolframQuery);
-          
-          // For academic queries: run BOTH APIs in parallel for maximum knowledge
+          const useWolfram = chatSubmode === 'study' || isWolframQuery(rawWolframQuery);
+          const useSummaryBox = isSummaryBoxQuery(rawWolframQuery);
+
           if (useWolfram) {
-            console.log(`🔢 WOLFRAM: ${chatSubmode === 'study' ? 'Study mode' : 'Academic query'} - querying BOTH APIs in parallel...`);
-            if (ocrExtractedText) {
-              console.log(`🔢 WOLFRAM: Using OCR-extracted text: "${ocrExtractedText.substring(0, 80)}..."`);
-            }
-            
-            // Send keepalive ping to prevent connection timeout during Wolfram calls
             try {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ keepalive: true, stage: 'wolfram' })}\n\n`));
-            } catch { /* connection may be closed */ }
-            
-            // Run both APIs in parallel for speed
-            // Study mode needs longer timeout (8s) since Wolfram is the primary source
-            const summaryBoxInput = normalizeSummaryBoxQuery(wolframQuery);
-            const [fullResultsResult, summaryBoxResult] = await Promise.all([
-              queryWolfram(wolframQuery, chatSubmode === 'study' ? 8000 : 4000),
-              useSummaryBox ? queryWolframSummaryBox(summaryBoxInput, 5000) : Promise.resolve<SummaryBoxResult>({ success: false })
-            ]);
-            
-            // Process Full Results API response
-            if (fullResultsResult.success && fullResultsResult.answer) {
-              const wolfResult = fullResultsResult;
-              console.log('✅ WOLFRAM FULL: Got answer');
-              
-              // Emit metadata for Full Results
-              wolframMetaBase = {
-                answer: wolfResult.answer,
-                interpretation: wolfResult.interpretation || null,
-                steps: wolfResult.steps || [],
-                mode: chatSubmode,
-                api: 'full_results'
-              };
+            } catch { /* ignore */ }
+
+            if (chatSubmode === 'study') {
+              // === STUDY MODE: Universal Knowledge Engine ===
+              const rawSubject = ocrExtractedText || message || '';
+              let cleanSubject = getCleanSubject(rawSubject);
+              console.log(`🎓 STUDY MODE: Clean subject = "${cleanSubject.substring(0, 60)}" (lang=${language})`);
+
+              // STEP 0 — Arabic Translation Bridge (internal, never shown to user)
+              if (language === 'ar' && cleanSubject.length > 0) {
+                cleanSubject = await translateSubjectToEnglish(cleanSubject);
+                console.log(`🌐 STUDY MODE: Wolfram subject (EN) = "${cleanSubject.substring(0, 60)}"`);
+              }
+
+              // STEP 1 — Query Recognizer: check accepted + detect summarybox path
+              let recognizerAccepted = true;
+              let summaryBoxPath: string | null = null;
+              let recognizerDomain: string | null = null;
               try {
-                const wolfMeta = {
-                  metadata: {
-                    wolfram: wolframMetaBase
-                  }
-                };
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify(wolfMeta)}\n\n`));
-              } catch { /* ignore */ }
-              
-              // Build Full Results context
-              if (chatSubmode === 'study') {
-                fullResultsData = language === 'ar'
-                  ? `[بيانات موثقة - Full Results]\nالسؤال: ${wolfResult.interpretation || message}\nالإجابة: ${wolfResult.answer}${wolfResult.steps?.length ? '\nالخطوات: ' + wolfResult.steps.join(' → ') : ''}`
-                  : `[Verified Data - Full Results]\nQuestion: ${wolfResult.interpretation || message}\nAnswer: ${wolfResult.answer}${wolfResult.steps?.length ? '\nSteps: ' + wolfResult.steps.join(' → ') : ''}`;
+                const recCtrl = new AbortController();
+                const recTid = setTimeout(() => recCtrl.abort(), 1500);
+                const recUrl = `http://www.wolframalpha.com/queryrecognizer/query.jsp?appid=${WOLFRAM_LLM_APP_ID}&mode=Default&i=${encodeURIComponent(cleanSubject)}`;
+                const recResp = await fetch(recUrl, { signal: recCtrl.signal });
+                clearTimeout(recTid);
+                if (recResp.ok) {
+                  const recXml = await recResp.text();
+                  console.log('🔍 RAW RECOGNIZER XML:', recXml.substring(0, 600));
+                  const acceptedMatch = recXml.match(/accepted=["']([^"']+)["']/);
+                  recognizerAccepted = acceptedMatch?.[1] !== 'false';
+                  const pathMatch = recXml.match(/<summarybox\s+path=["']([^"']+)["']/i);
+                  summaryBoxPath = pathMatch?.[1] || null;
+                  const domainMatch = recXml.match(/domain=["']([^"']+)["']/);
+                  recognizerDomain = domainMatch?.[1] || null;
+                  console.log(`🎓 WOLFRAM RECOGNIZER: accepted=${recognizerAccepted}, summaryBoxPath=${summaryBoxPath ?? 'NONE'}, domain=${recognizerDomain}`);
+                }
+              } catch {
+                // fail-open
+              }
+
+              if (!recognizerAccepted) {
+                console.log('🎓 WOLFRAM RECOGNIZER: Topic rejected — Gemini handles alone');
               } else {
+                const parts: string[] = [];
+                let eliteSummaryBoxResult: SummaryBoxResult | null = null;
+
+                if (summaryBoxPath) {
+                  // STEP 2a — ELITE CARD PATH: Summary Box + LLM API in parallel
+                  console.log('🎓 WOLFRAM: Elite Card path (summarybox found) — running Summary Box + LLM in parallel');
+                  const [llmResult, summaryBoxResult] = await Promise.all([
+                    queryWolframLLM(cleanSubject, 8000),
+                    queryWolframSummaryBox(cleanSubject, 5000),
+                  ]);
+                  eliteSummaryBoxResult = summaryBoxResult;
+
+                  if (summaryBoxResult.success && summaryBoxResult.summary) {
+                    parts.push(`[WOLFRAM ELITE CARD (${summaryBoxResult.domain || recognizerDomain || 'entity'})]:\n${summaryBoxResult.summary.substring(0, 1000)}`);
+                    wolframUsedOuter = true;
+                    console.log(`✅ WOLFRAM ELITE CARD: Got summary for domain=${summaryBoxResult.domain}`);
+                  }
+                  if (llmResult.success && llmResult.factSheet) {
+                    parts.push(`[WOLFRAM FACT SHEET]:\n${llmResult.factSheet}`);
+                    wolframUsedOuter = true;
+                    console.log('✅ WOLFRAM LLM: Got fact sheet');
+                  }
+                } else {
+                  // STEP 2b — STANDARD PATH: LLM API for deep context
+                  console.log('🎓 WOLFRAM: Standard path (no summarybox) — LLM API only');
+                  const llmResult = await queryWolframLLM(cleanSubject, 8000);
+                  if (llmResult.success && llmResult.factSheet) {
+                    parts.push(`[WOLFRAM VERIFIED DATA]:\n${llmResult.factSheet}`);
+                    wolframUsedOuter = true;
+                    console.log('✅ WOLFRAM LLM: Got fact sheet');
+                  } else {
+                    // STEP 3 — SHORT ANSWER FALLBACK: v1/result for a single verified fact
+                    try {
+                      const saCtrl = new AbortController();
+                      const saTid = setTimeout(() => saCtrl.abort(), 3000);
+                      const saUrl = `https://api.wolframalpha.com/v1/result?appid=${WOLFRAM_LLM_APP_ID}&i=${encodeURIComponent(cleanSubject)}`;
+                      const saResp = await fetch(saUrl, { signal: saCtrl.signal });
+                      clearTimeout(saTid);
+                      if (saResp.ok) {
+                        const saText = (await saResp.text()).trim();
+                        if (saText && saText.length > 3 && !saText.toLowerCase().startsWith('wolfram')) {
+                          parts.push(`[WOLFRAM VERIFIED FACT]:\n${saText}`);
+                          wolframUsedOuter = true;
+                          console.log(`✅ WOLFRAM SHORT ANSWER FALLBACK: "${saText.substring(0, 80)}"`);
+                        }
+                      }
+                    } catch { /* best-effort */ }
+                  }
+                }
+
+                wolframMetaBase = {
+                  api: summaryBoxPath ? 'elite_card' : 'llm_api',
+                  mode: 'study',
+                  subject: cleanSubject,
+                  ...(eliteSummaryBoxResult?.success && eliteSummaryBoxResult?.rawHtml
+                    ? { summaryBox: eliteSummaryBoxResult.rawHtml }
+                    : {}),
+                };
+
+                if (parts.length > 0) {
+                  const instruction = language === 'ar'
+                    ? '\n\nأنت مدرس خبير وذو شخصية. استخدم البيانات الموثقة أعلاه كمصدرك الرئيسي للحقائق.\nقاعدة صارمة: اكتب جملة ملخص فريدة وذات شخصية داخل وسوم [BOX]...[/BOX] في بداية ردك فقط. الجملة داخل [BOX] يجب أن لا تُكرَّر أبداً في الفقرة الأولى أو أي مكان في النص.'
+                    : '\n\nYou are an expert tutor with personality. Use the Verified Data above as your primary source of truth.\nSTRICT RULE: Write ONE unique personality-driven sentence inside [BOX]...[/BOX] at the very start. That exact sentence MUST NOT appear again — not in the first paragraph, not anywhere in the body. The body explanation starts fresh after the [BOX] tag.';
+                  wolframContext = parts.join('\n\n') + instruction;
+                  console.log(`✅ WOLFRAM STUDY: Injected ${parts.length} source(s) into Gemini prompt (path=${summaryBoxPath ? 'elite' : 'standard'})`);
+
+                  try {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { wolfram: wolframMetaBase } })}\n\n`));
+                  } catch { /* ignore */ }
+                }
+              }
+
+            } else {
+              // === NON-STUDY MODE: legacy v2/query for math/science calculations ===
+              console.log(`🔢 WOLFRAM: Academic query - legacy API...`);
+              const summaryBoxInput = normalizeSummaryBoxQuery(rawWolframQuery);
+              const [fullResultsResult, summaryBoxResult] = await Promise.all([
+                queryWolfram(rawWolframQuery, 4000),
+                useSummaryBox ? queryWolframSummaryBox(summaryBoxInput, 5000) : Promise.resolve<SummaryBoxResult>({ success: false })
+              ]);
+
+              let fullResultsData = '';
+              let summaryBoxData = '';
+
+              if (fullResultsResult.success && fullResultsResult.answer) {
+                const wolfResult = fullResultsResult;
+                console.log('✅ WOLFRAM FULL: Got answer');
+                wolframMetaBase = { answer: wolfResult.answer, interpretation: wolfResult.interpretation || null, steps: wolfResult.steps || [], mode: chatSubmode, api: 'full_results' };
+                try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { wolfram: wolframMetaBase } })}\n\n`)); } catch { /* ignore */ }
                 fullResultsData = language === 'ar'
                   ? `[حقيقة موثقة: ${wolfResult.answer}]`
                   : `[Verified fact: ${wolfResult.answer}]`;
+                wolframUsedOuter = true;
+              } else {
+                console.log('⚠️ WOLFRAM FULL: No result');
               }
-              wolframUsedOuter = true;
-            } else {
-              console.log('⚠️ WOLFRAM FULL: No result');
-            }
-            
-            // Process Summary Boxes API response
-            if (summaryBoxResult.success && summaryBoxResult.summary) {
-              const summaryResult = summaryBoxResult;
-              const summaryText = summaryResult.summary || '';
-              console.log('✅ WOLFRAM SUMMARY: Got summary (domain:', summaryResult.domain, ')');
-              
-              // Emit metadata with Summary Box appended (preserve full-results fields if present)
-              try {
-                const summaryMeta = {
-                  metadata: {
-                    wolfram: {
-                      ...(wolframMetaBase || {
-                        answer: summaryText.substring(0, 500),
-                        mode: chatSubmode,
-                        api: 'summary_boxes'
-                      }),
-                      summaryBox: summaryText.substring(0, 1200),
-                      summaryDomain: summaryResult.domain || null,
-                      api: wolframMetaBase ? 'full_results+summary_boxes' : 'summary_boxes'
-                    }
-                  }
-                };
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify(summaryMeta)}\n\n`));
-              } catch { /* ignore */ }
-              
-              // Build Summary Box context
-              summaryBoxData = language === 'ar'
-                ? `[معلومات إضافية عن ${summaryResult.domain || 'الموضوع'}]\n${summaryText.substring(0, 800)}`
-                : `[Additional info about ${summaryResult.domain || 'topic'}]\n${summaryText.substring(0, 800)}`;
-              wolframUsedOuter = true;
-            } else if (useSummaryBox) {
-              console.log('⚠️ WOLFRAM SUMMARY: No summary box');
-            }
-            
-            // Combine both results into context
-            if (fullResultsData || summaryBoxData) {
-              const combinedParts: string[] = [];
-              if (fullResultsData) combinedParts.push(fullResultsData);
-              if (summaryBoxData) combinedParts.push(summaryBoxData);
-              
-              const instruction = chatSubmode === 'study'
-                ? (language === 'ar' 
-                    ? '\n\nاستخدم هذه البيانات لشرح الإجابة بطريقة تعليمية واضحة. اعرض الإجابة أولاً ثم الشرح.'
-                    : '\n\nUse this data to explain the answer in a clear, educational way. Present the answer first, then explain.')
-                : (language === 'ar'
-                    ? '\n\nاستخدم هذه المعلومات في إجابتك بشكل طبيعي.'
-                    : '\n\nUse this information naturally in your response.');
-              
-              wolframContext = combinedParts.join('\n\n') + instruction;
-              console.log('✅ WOLFRAM: Combined context from', combinedParts.length, 'API(s)');
-            } else {
-              console.log('⚠️ WOLFRAM: No data from either API, AI will handle alone');
+
+              if (summaryBoxResult.success && summaryBoxResult.summary) {
+                const summaryText = summaryBoxResult.summary || '';
+                console.log('✅ WOLFRAM SUMMARY: Got summary (domain:', summaryBoxResult.domain, ')');
+                try {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { wolfram: { ...(wolframMetaBase || {}), summaryBox: summaryText.substring(0, 1200), summaryDomain: summaryBoxResult.domain || null, api: wolframMetaBase ? 'full_results+summary_boxes' : 'summary_boxes' } } })}\n\n`));
+                } catch { /* ignore */ }
+                summaryBoxData = language === 'ar'
+                  ? `[معلومات إضافية عن ${summaryBoxResult.domain || 'الموضوع'}]\n${summaryText.substring(0, 800)}`
+                  : `[Additional info about ${summaryBoxResult.domain || 'topic'}]\n${summaryText.substring(0, 800)}`;
+                wolframUsedOuter = true;
+              }
+
+              if (fullResultsData || summaryBoxData) {
+                const combinedParts = [fullResultsData, summaryBoxData].filter(Boolean);
+                wolframContext = combinedParts.join('\n\n') + (language === 'ar' ? '\n\nاستخدم هذه المعلومات في إجابتك بشكل طبيعي.' : '\n\nUse this information naturally in your response.');
+                console.log('✅ WOLFRAM: Combined context from', combinedParts.length, 'API(s)');
+              } else {
+                console.log('⚠️ WOLFRAM: No data from either API, AI will handle alone');
+              }
             }
           }
 
@@ -3141,8 +3310,8 @@ If you are running out of space, keep this order and drop the rest:
             selectedModel = isDeepWork ? 'gemini-3.1-pro-preview' : 'gemini-3-flash-preview';
             engineLabel = isDeepWork ? 'Intelligence Engine (Pro)' : 'Intelligence Engine (Flash)';
           } else {
-            selectedModel = isDeepWork ? 'gemini-3-flash-preview' : 'gemini-2.5-flash';
-            engineLabel = isDeepWork ? 'Speed Engine (Flash)' : 'Speed Engine (2.5)';
+            selectedModel = 'gemini-3-flash-preview';
+            engineLabel = isDeepWork ? 'Speed Engine (Flash/Deep)' : 'Speed Engine (Flash)';
           }
           modelUsed = engineLabel;
           modelUsedOuter = engineLabel;

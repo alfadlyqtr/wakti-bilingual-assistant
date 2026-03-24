@@ -790,7 +790,7 @@ class WaktiAIV2ServiceClass {
       const locationPromise: Promise<UserLocationContext | null> = needsLocation
         ? Promise.race([
             this.getUserLocation(userId || '', forceFreshLocation),
-            new Promise<null>(r => setTimeout(() => r(null), 500))
+            new Promise<null>(r => setTimeout(() => r(null), 200))
           ])
         : Promise.resolve(null);
 

@@ -215,11 +215,24 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [isCinemaSaving, setIsCinemaSaving] = useState(false);
   const [isCinemaSaved, setIsCinemaSaved] = useState(false);
 
+  // Brand anchor — the master style/logo image uploaded in Visionnaire step 1
+  const [brandAnchor, setBrandAnchor] = useState<string | null>(null);
+  const [isUploadingBrand, setIsUploadingBrand] = useState(false);
+
   // Reference images — user-uploaded assets for Cinema
   // Index 0-5 = scene slots, index 6 = brand logo/reference anchor
   const [cinemaReferenceImages, setCinemaReferenceImages] = useState<(string | null)[]>([]);
   const [cinemaRefTags, setCinemaRefTags] = useState<string[]>([]); // 'scene1'..'scene6', 'logo', 'ref'
   const [isUploadingRef, setIsUploadingRef] = useState(false);
+
+  // Casting: per-scene regen modal
+  const [castingRegenModal, setCastingRegenModal] = useState<{ sceneIdx: number } | null>(null);
+  const [castingRegenNote, setCastingRegenNote] = useState('');
+  const [castingRegenUseMaster, setCastingRegenUseMaster] = useState(true);
+  const [isRegenningScene, setIsRegenningScene] = useState(false);
+
+  // Premiere: manual download fallback URL if save fails
+  const [cinematicSaveFallbackUrl, setCinematicSaveFallbackUrl] = useState<string | null>(null);
 
   // Storyboard scene editing state
   const [editingSceneNum, setEditingSceneNum] = useState<number | null>(null); // which scene is being edited
@@ -229,11 +242,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   // Cinema Visionnaire form state
   const [cinemaOpenSection, setCinemaOpenSection] = useState(0); // accordion open section index
   const [cinemaSubject, setCinemaSubject] = useState('');
-  const [cinemaSetting, setCinemaSetting] = useState('');
+  const [cinemaSetting, setCinemaSetting] = useState<string[]>([]);
   const [cinemaSettingCustom, setCinemaSettingCustom] = useState('');
-  const [cinemaAction, setCinemaAction] = useState('');
+  const [cinemaAction, setCinemaAction] = useState<string[]>([]);
   const [cinemaActionCustom, setCinemaActionCustom] = useState('');
-  const [cinemaVibe, setCinemaVibe] = useState('');
+  const [cinemaVibe, setCinemaVibe] = useState<string[]>([]);
   const [cinemaVibeCustom, setCinemaVibeCustom] = useState('');
   const [cinemaCharacters, setCinemaCharacters] = useState('');
   const [cinemaRelationship, setCinemaRelationship] = useState('');
@@ -1015,9 +1028,19 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
   // Cinema: handle directing (GPT-4o mini)
   const handleDirect = useCallback(async () => {
-    const effectiveSetting = cinemaSetting === 'Custom' ? cinemaSettingCustom : cinemaSetting;
-    const effectiveAction = cinemaAction === 'Custom' ? cinemaActionCustom : cinemaAction;
-    const effectiveVibe = cinemaVibe === 'Custom' ? cinemaVibeCustom : cinemaVibe;
+    // Multi-select arrays: join into comma-separated string; fallback to custom text
+    const hasCustomVibe = cinemaVibe.includes('Custom');
+    const hasCustomSetting = cinemaSetting.includes('Custom');
+    const hasCustomAction = cinemaAction.includes('Custom');
+    const effectiveVibe = hasCustomVibe
+      ? [cinemaVibeCustom].filter(Boolean).join(', ')
+      : cinemaVibe.filter(v => v !== 'Custom').join(', ');
+    const effectiveSetting = hasCustomSetting
+      ? [cinemaSettingCustom].filter(Boolean).join(', ')
+      : cinemaSetting.filter(v => v !== 'Custom').join(', ');
+    const effectiveAction = hasCustomAction
+      ? [cinemaActionCustom].filter(Boolean).join(', ')
+      : cinemaAction.filter(v => v !== 'Custom').join(', ');
     const effectiveCTA = cinemaCTA === 'Custom' ? cinemaCTACustom : cinemaCTA;
     const builtVision = [
       cinemaSubject && `Subject: ${cinemaSubject}`,
@@ -1026,6 +1049,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       effectiveVibe && `Vibe: ${effectiveVibe}`,
       cinemaCharacters && `Characters: ${cinemaCharacters === 'Custom' ? (cinemaRelationship || 'custom characters') : cinemaCharacters}${cinemaCharacters !== 'Custom' && cinemaCharacters !== 'no people — product, object, or creature only' && cinemaCharacters !== 'one solo person — the hero, the protagonist' && cinemaRelationship ? ` (${cinemaRelationship})` : ''}`,
       effectiveCTA && `Purpose: ${effectiveCTA}`,
+      brandAnchor && `Brand style anchor image provided: yes (use consistent brand identity throughout all scenes)`,
     ].filter(Boolean).join('. ');
 
     const visionToSend = builtVision || cinemaVision.trim();
@@ -1050,6 +1074,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           vision: visionToSend,
           language: language,
           scene_count: cinemaSceneCount,
+          brand_anchor_url: brandAnchor || undefined,
         }),
       });
 
@@ -1079,7 +1104,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       setIsDirecting(false);
     }
-  }, [cinemaVision, cinemaSubject, cinemaSetting, cinemaSettingCustom, cinemaAction, cinemaActionCustom, cinemaVibe, cinemaVibeCustom, cinemaCharacters, cinemaRelationship, cinemaCTA, cinemaCTACustom, isDirecting, language, user]);
+  }, [cinemaVision, cinemaSubject, cinemaSetting, cinemaSettingCustom, cinemaAction, cinemaActionCustom, cinemaVibe, cinemaVibeCustom, cinemaCharacters, cinemaRelationship, cinemaCTA, cinemaCTACustom, isDirecting, language, user, brandAnchor, cinemaSceneCount]);
 
   // ── Role 2 & 3: Artist & Cloner ──
   // Uses create/status two-call pattern to avoid edge function 60s timeout.
@@ -1165,21 +1190,32 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setSceneImages(prev => { const n = [...prev]; n[0] = anchor; return n; });
       setCastingProgress(prev => { const n = [...prev]; n[0] = 'done'; for (let i = 1; i < cinemaSceneCount; i++) n[i] = 'loading'; return n; });
 
-      // ── Scenes 2-N: sequential chain — each scene uses previous result as anchor ──
+      // ── Scenes 2-N: Ghost Cure ──
+      // brandAnchor = primary STYLE reference (logo/master look)
+      // prevAnchor  = MOTION reference only (ensures action continuity, not visual clone)
       let prevAnchor = anchor;
 
       for (const scene of cinemaScenes.filter(s => s.scene >= 2 && s.scene <= cinemaSceneCount).sort((a, b) => a.scene - b.scene)) {
         const idx = scene.scene - 1;
         if (sceneSlotMap[idx]) {
-          // User tagged this exact scene — use directly
           setSceneImages(prev => { const n = [...prev]; n[idx] = sceneSlotMap[idx]; return n; });
           setCastingProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
           prevAnchor = sceneSlotMap[idx];
           continue;
         }
-        // I2I from previous scene result — ensures visual chain continuity
         try {
-          const created = await artistCall({ mode: 'i2i_create', prompt: scene.text, anchor_url: prevAnchor, scene_index: idx, visual_dna: scene1!.text });
+          // If brandAnchor exists: use it as primary style ref; pass prevAnchor as motion_anchor only
+          // If no brandAnchor: fall back to original sequential chain (prevAnchor drives style)
+          const styleRef = brandAnchor || prevAnchor;
+          const motionRef = brandAnchor ? prevAnchor : null;
+          const created = await artistCall({
+            mode: 'i2i_create',
+            prompt: scene.text,
+            anchor_url: styleRef,
+            motion_anchor_url: motionRef || undefined,
+            scene_index: idx,
+            visual_dna: scene1!.text,
+          });
           const imgUrl = await pollTask(created.task_id, idx);
           setSceneImages(prev => { const n = [...prev]; n[idx] = imgUrl; return n; });
           setCastingProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
@@ -1323,7 +1359,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         blobUrls.push(URL.createObjectURL(blob));
       }
 
-      setStitchStatus(language === 'ar' ? 'جاري تجميع الفيديو...' : 'Stitching video...');
+      setStitchStatus(language === 'ar' ? 'تجهيز المشاهد للمونتاج...' : 'Preparing scenes for final cut...');
 
       // Step 2: Set up canvas + hidden video element
       const canvas = document.createElement('canvas');
@@ -1358,7 +1394,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
       // Step 4: Play each clip sequentially, drawing each frame to canvas
       for (let i = 0; i < blobUrls.length; i++) {
-        setStitchStatus(language === 'ar' ? `جاري الدمج ${i + 1}/${blobUrls.length}...` : `Merging ${i + 1}/${blobUrls.length}...`);
+        const cinematicMessages = language === 'ar'
+          ? ['تلوين المشهد الأول...','تأطير المشهد التالي...','تنقيح اللقطات...','ضبط الإيقاع...','توليف الصوت والصورة...','اللمسات الأخيرة...']
+          : ['Composing frames...','Sequencing the narrative...','Refining the cut...','Calibrating motion...','Synchronizing the master edit...','Finalizing the premiere...'];
+        setStitchStatus(cinematicMessages[Math.min(i, cinematicMessages.length - 1)]);
         await new Promise<void>((resolve, reject) => {
           videoEl.src = blobUrls[i];
           videoEl.onloadeddata = () => {
@@ -1389,7 +1428,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       // Revoke blob URLs
       blobUrls.forEach(u => URL.revokeObjectURL(u));
 
-      setStitchStatus(language === 'ar' ? 'جاري المعالجة النهائية...' : 'Finalizing...');
+      setStitchStatus(language === 'ar' ? 'تسليم النسخة النهائية...' : 'Delivering the master copy...');
       const finalBlob = await recordingDone;
       const url = URL.createObjectURL(finalBlob);
       setPremiereVideoUrl(url);
@@ -1410,12 +1449,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setCinemaVision('');
     setCinemaScenes([]);
     setCinemaSubject('');
-    setCinemaSetting('');
+    setCinemaSetting([]);
     setCinemaSettingCustom('');
-    setCinemaAction('');
+    setCinemaAction([]);
     setCinemaActionCustom('');
-    setCinemaVibe('');
+    setCinemaVibe([]);
     setCinemaVibeCustom('');
+    setBrandAnchor(null);
     setCinemaCharacters('');
     setCinemaRelationship('');
     setCinemaCTA('');
@@ -1439,6 +1479,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setEditingSceneNum(null);
     setRegenSceneNum(null);
     setCinemaOpenSection(0);
+    setCinematicSaveFallbackUrl(null);
+    setCastingRegenModal(null);
+    setCastingRegenNote('');
+    setIsRegenningScene(false);
     if (animPollRef.current) clearInterval(animPollRef.current);
   }, []);
 
@@ -1450,9 +1494,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) throw new Error('Not authenticated');
-      const effectiveSetting = cinemaSetting === 'Custom' ? cinemaSettingCustom : cinemaSetting;
-      const effectiveAction = cinemaAction === 'Custom' ? cinemaActionCustom : cinemaAction;
-      const effectiveVibe = cinemaVibe === 'Custom' ? cinemaVibeCustom : cinemaVibe;
+      const effectiveVibe = cinemaVibe.includes('Custom') ? cinemaVibeCustom : cinemaVibe.filter(v => v !== 'Custom').join(', ');
+      const effectiveSetting = cinemaSetting.includes('Custom') ? cinemaSettingCustom : cinemaSetting.filter(v => v !== 'Custom').join(', ');
+      const effectiveAction = cinemaAction.includes('Custom') ? cinemaActionCustom : cinemaAction.filter(v => v !== 'Custom').join(', ');
       const effectiveCTA = cinemaCTA === 'Custom' ? cinemaCTACustom : cinemaCTA;
       const builtVision = [
         cinemaSubject && `Subject: ${cinemaSubject}`,
@@ -1522,11 +1566,66 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       if (onSaveSuccess) setTimeout(() => onSaveSuccess(), 1000);
     } catch (e: any) {
       console.error('Cinema save failed:', e);
-      toast.error(language === 'ar' ? 'فشل الحفظ' : 'Failed to save');
+      // Provide manual download fallback so the user never loses their work
+      if (premiereVideoUrl) setCinematicSaveFallbackUrl(premiereVideoUrl);
+      toast.error(language === 'ar' ? 'فشل الحفظ — يمكنك تنزيل الفيديو مباشرة' : 'Save failed — manual download available below');
     } finally {
       setIsCinemaSaving(false);
     }
   };
+
+  // ── Casting: regenerate a single scene image with optional note and master style ──
+  const handleCastingRegenScene = useCallback(async (sceneIdx: number, note: string, useMaster: boolean) => {
+    if (!user) return;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) return;
+    setIsRegenningScene(true);
+    setCastingProgress(prev => { const n = [...prev]; n[sceneIdx] = 'loading'; return n; });
+    try {
+      const scene = cinemaScenes.find(s => s.scene === sceneIdx + 1);
+      if (!scene) throw new Error('Scene not found');
+      const prompt = note ? `${scene.text}. Director note: ${note}` : scene.text;
+      const styleRef = (useMaster && brandAnchor) ? brandAnchor : (sceneImages[sceneIdx > 0 ? sceneIdx - 1 : 0] || brandAnchor || undefined);
+      const artistCall = async (body: Record<string, unknown>) => {
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/cinema-artist`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}`, apikey: SUPABASE_ANON_KEY },
+          body: JSON.stringify(body),
+        });
+        const json = await resp.json();
+        if (!resp.ok || !json.ok) throw new Error(json.error || `cinema-artist ${resp.status}`);
+        return json;
+      };
+      const pollTask = async (task_id: string): Promise<string> => {
+        for (let i = 0; i < 36; i++) {
+          await new Promise(r => setTimeout(r, 5000));
+          const res = await artistCall({ mode: 'status', task_id, scene_index: sceneIdx });
+          if (res.status === 'COMPLETED' && res.image_url) return res.image_url as string;
+          if (res.status === 'FAILED') throw new Error(res.error || 'Failed');
+        }
+        throw new Error('Timed out');
+      };
+      let imgUrl: string;
+      if (styleRef) {
+        const created = await artistCall({ mode: 'i2i_create', prompt, anchor_url: styleRef, scene_index: sceneIdx, visual_dna: scene.text });
+        imgUrl = await pollTask(created.task_id);
+      } else {
+        const created = await artistCall({ mode: 't2i_create', prompt, aspect_ratio: cinemaFormat });
+        imgUrl = await pollTask(created.task_id);
+      }
+      setSceneImages(prev => { const n = [...prev]; n[sceneIdx] = imgUrl; return n; });
+      setCastingProgress(prev => { const n = [...prev]; n[sceneIdx] = 'done'; return n; });
+      toast.success(language === 'ar' ? `تم إعادة توليد المشهد ${sceneIdx + 1}` : `Scene ${sceneIdx + 1} regenerated!`);
+    } catch (err: any) {
+      setCastingProgress(prev => { const n = [...prev]; n[sceneIdx] = 'error'; return n; });
+      toast.error(language === 'ar' ? 'فشل إعادة التوليد' : 'Regen failed: ' + err.message);
+    } finally {
+      setIsRegenningScene(false);
+      setCastingRegenModal(null);
+      setCastingRegenNote('');
+      setCastingRegenUseMaster(true);
+    }
+  }, [user, cinemaScenes, sceneImages, brandAnchor, cinemaFormat, language]);
 
   const handleCinemaRefUpload = async (file: File, slotIdx: number, tag: string) => {
     if (!user) return;
@@ -2166,16 +2265,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             {generationMode === 'cinema' && (
               <div className="relative col-span-full flex flex-col">
                 {cinemaStep === 'desk' && (() => {
-                  const effectiveSetting = cinemaSetting === 'Custom' ? cinemaSettingCustom : cinemaSetting;
-                  const effectiveAction = cinemaAction === 'Custom' ? cinemaActionCustom : cinemaAction;
-                  const effectiveVibe = cinemaVibe === 'Custom' ? cinemaVibeCustom : cinemaVibe;
+                  // Multi-select → comma-separated string helpers
+                  const effectiveVibe = cinemaVibe.includes('Custom') ? cinemaVibeCustom : cinemaVibe.filter(v => v !== 'Custom').join(', ');
+                  const effectiveSetting = cinemaSetting.includes('Custom') ? cinemaSettingCustom : cinemaSetting.filter(v => v !== 'Custom').join(', ');
+                  const effectiveAction = cinemaAction.includes('Custom') ? cinemaActionCustom : cinemaAction.filter(v => v !== 'Custom').join(', ');
                   const effectiveCTA = cinemaCTA === 'Custom' ? cinemaCTACustom : cinemaCTA;
                   const isSceneCountReady = cinemaSceneCountTouched === true;
                   const isDark = theme === 'dark';
 
                   // Explicit boolean checks — no implicit truthy on number defaults
                   const f1 = cinemaSubject.trim().length > 0;
-                  const f2 = effectiveVibe.trim().length > 0;
+                  const f2 = cinemaVibe.length > 0 && (cinemaVibe.includes('Custom') ? cinemaVibeCustom.trim().length > 0 : true);
                   const f3 = cinemaCharacters.trim().length > 0;
                   const f4 = isSceneCountReady;
                   const filledCount = [f1, f2, f3, f4].filter(Boolean).length;
@@ -2300,6 +2400,53 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                 </button>
                               )}
                             </div>
+
+                            {/* Brand / Anchor Image Upload */}
+                            <div className="mt-1 rounded-xl p-3 flex flex-col gap-2" style={{background: brandAnchor ? 'rgba(226,199,168,0.08)' : clr.cardBg, border: `1px solid ${brandAnchor ? 'rgba(226,199,168,0.35)' : clr.cardBorder}`}}>
+                              <p className="text-[10px] font-bold uppercase tracking-wider" style={{color: brandAnchor ? '#C5A47E' : clr.textMuted}}>
+                                {language==='ar' ? '🎨 مرساة النمط / شعار العلامة (اختياري)' : '🎨 Brand Anchor / Style Reference (Optional)'}
+                                {brandAnchor && <span className="ml-1 text-[#E2C7A8]">✓</span>}
+                              </p>
+                              <p className="text-[9px]" style={{color: clr.textSubtle}}>
+                                {language==='ar' ? 'شعار، صورة منتج، أو مرجع بصري يحدد هوية العلامة لجميع المشاهد' : 'Logo, product shot, or visual reference that locks brand identity across all scenes'}
+                              </p>
+                              <div className="flex items-center gap-3">
+                                {brandAnchor ? (
+                                  <div className="relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0" style={{border:'1px solid rgba(226,199,168,0.5)'}}>
+                                    <img src={brandAnchor} alt="brand anchor" className="w-full h-full object-cover" />
+                                    <button
+                                      onClick={() => setBrandAnchor(null)}
+                                      className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/80 text-white text-[9px] flex items-center justify-center hover:bg-red-500/80 transition-colors"
+                                    >✕</button>
+                                  </div>
+                                ) : (
+                                  <label className="w-16 h-16 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0 transition-all hover:opacity-80"
+                                    style={{background: clr.numBg, border:`2px dashed rgba(226,199,168,0.3)`}}>
+                                    <input type="file" accept="image/*" className="hidden"
+                                      onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file || !user) return;
+                                        setIsUploadingBrand(true);
+                                        try {
+                                          const ext = file.name.split('.').pop() || 'jpg';
+                                          const path = `${user.id}/cinema-refs/brand-${Date.now()}.${ext}`;
+                                          await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
+                                          const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+                                          if (urlData?.publicUrl) setBrandAnchor(urlData.publicUrl);
+                                        } catch { toast.error(language==='ar'?'فشل رفع الصورة':'Upload failed'); }
+                                        finally { setIsUploadingBrand(false); }
+                                      }}
+                                    />
+                                    {isUploadingBrand ? <Loader2 className="h-4 w-4 animate-spin" style={{color:clr.textMuted}} /> : <span className="text-xl leading-none" style={{color:clr.textSubtle}}>+</span>}
+                                  </label>
+                                )}
+                                <p className="text-[9px] leading-relaxed" style={{color: clr.textMuted}}>
+                                  {brandAnchor
+                                    ? (language==='ar' ? 'المخرج والمصور سيحافظان على هذا النمط في كل مشهد' : 'The Director & Artist will maintain this style across all scenes')
+                                    : (language==='ar' ? 'إذا لم ترفع صورة، سيبتكر الذكاء الاصطناعي نمطه الخاص' : 'Without one, the AI will invent its own visual style')}
+                                </p>
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -2312,12 +2459,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         {openSection === 1 && (
                           <div className="mt-3 flex flex-col gap-5">
 
-                            {/* Vibe & Mood — required */}
+                            {/* Vibe & Mood — required, multi-select */}
                             <div>
-                              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{color: f2 ? '#C5A47E' : clr.text}}>
+                              <p className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{color: f2 ? '#C5A47E' : clr.text}}>
                                 {language==='ar'?'المزاج والأجواء':'Vibe & Mood'}
                                 <span className="ml-1" style={{color:'#E2C7A8'}}>{f2 ? '✓' : '✱'}</span>
                               </p>
+                              <p className="text-[9px] mb-2" style={{color: clr.textMuted}}>{language==='ar'?'اختر واحداً أو أكثر':'Select one or more'}</p>
                               <div className="flex flex-wrap gap-2">
                                 {([
                                   {e:'🔥',en:'Epic & Grand',ar:'ملحمي وعظيم',v:'Epic and grand — cinematic score, wide establishing shots, larger than life'},
@@ -2328,13 +2476,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   {e:'💥',en:'High Energy',ar:'طاقة عالية',v:'Exciting and high energy — fast cuts, dynamic movement, adrenaline'},
                                   {e:'🌿',en:'Peaceful',ar:'هادئ',v:'Peaceful and serene — slow camera, nature, stillness, gentle pace'},
                                 ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
-                                  <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaVibe===v}
-                                    onSelect={()=>{setCinemaVibe(v);setCinemaVibeCustom('');}} disabled={isDirecting} />
+                                  <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaVibe.includes(v)}
+                                    onSelect={()=>{
+                                      setCinemaVibe(prev => prev.includes(v) ? prev.filter(x=>x!==v) : [...prev.filter(x=>x!=='Custom'), v]);
+                                    }} disabled={isDirecting} />
                                 ))}
                                 <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                                  selected={cinemaVibe==='Custom'} onSelect={()=>setCinemaVibe('Custom')} disabled={isDirecting} />
+                                  selected={cinemaVibe.includes('Custom')}
+                                  onSelect={()=>setCinemaVibe(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])}
+                                  disabled={isDirecting} />
                               </div>
-                              {cinemaVibe==='Custom' && (
+                              {cinemaVibe.includes('Custom') && (
                                 <input type="text" value={cinemaVibeCustom} onChange={(e)=>setCinemaVibeCustom(e.target.value)}
                                   disabled={isDirecting} placeholder={language==='ar'?'صف المزاج...':'Describe the mood...'}
                                   className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
@@ -2412,32 +2564,36 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         style={{background: clr.cardBg, border: `1px solid ${clr.cardBorder}`}}>
                         <SecHeader idx={2} optional
                           label={language==='ar'?'تفاصيل إضافية':'Extra Details'}
-                          done={!!(effectiveSetting.trim() || effectiveAction.trim() || effectiveCTA.trim())}
-                          summary={effectiveSetting.trim() || effectiveAction.trim() || effectiveCTA.trim() || undefined} />
+                          done={!!(effectiveSetting || effectiveAction || effectiveCTA.trim())}
+                          summary={effectiveSetting || effectiveAction || effectiveCTA.trim() || undefined} />
                         {openSection === 2 && (
                           <div className="mt-3 flex flex-col gap-5">
 
-                            {/* Setting */}
+                            {/* Setting — multi-select */}
                             <div>
-                              <p className="text-[10px] mb-2 font-semibold uppercase tracking-wider" style={{color: clr.textMuted}}>
-                                {language==='ar'?'الموقع':'Setting'}{effectiveSetting.trim() && <span className="text-[#E2C7A8] ml-1">✓</span>}
+                              <p className="text-[10px] mb-1 font-semibold uppercase tracking-wider" style={{color: clr.textMuted}}>
+                                {language==='ar'?'الموقع':'Setting'}{effectiveSetting && <span className="text-[#E2C7A8] ml-1">✓</span>}
                               </p>
+                              <p className="text-[9px] mb-2" style={{color: clr.textSubtle}}>{language==='ar'?'اختر واحداً أو أكثر':'Select one or more'}</p>
                               <div className="flex flex-wrap gap-2">
                                 {([
-                                  {e:'🌆',en:'City Night',ar:'مدينة ليلاً',v:'a futuristic modern city skyline at night, glass towers reflecting light'},
+                                  {e:'🏙️',en:'City Night',ar:'مدينة ليلاً',v:'a futuristic modern city skyline at night, glass towers reflecting light'},
                                   {e:'🏜️',en:'Desert',ar:'صحراء',v:'a vast open desert at golden hour, endless sand dunes, warm haze'},
                                   {e:'🌊',en:'Ocean',ar:'ساحل',v:'an ocean coastline at sunrise, crashing waves, warm mist'},
                                   {e:'🚀',en:'Space',ar:'الفضاء',v:'outer space, earth from orbit, stars and galaxies stretching forever'},
                                   {e:'🏔️',en:'Mountains',ar:'جبال',v:'dramatic mountain peaks above the clouds, epic wide shot'},
                                   {e:'🌲',en:'Forest',ar:'غابة',v:'a lush green forest, rays of light through tall trees'},
                                 ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
-                                  <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaSetting===v}
-                                    onSelect={()=>{setCinemaSetting(v);setCinemaSettingCustom('');}} disabled={isDirecting} />
+                                  <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaSetting.includes(v)}
+                                    onSelect={()=>setCinemaSetting(prev => prev.includes(v) ? prev.filter(x=>x!==v) : [...prev.filter(x=>x!=='Custom'), v])}
+                                    disabled={isDirecting} />
                                 ))}
                                 <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                                  selected={cinemaSetting==='Custom'} onSelect={()=>setCinemaSetting('Custom')} disabled={isDirecting} />
+                                  selected={cinemaSetting.includes('Custom')}
+                                  onSelect={()=>setCinemaSetting(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])}
+                                  disabled={isDirecting} />
                               </div>
-                              {cinemaSetting==='Custom' && (
+                              {cinemaSetting.includes('Custom') && (
                                 <input type="text" value={cinemaSettingCustom} onChange={(e)=>setCinemaSettingCustom(e.target.value)}
                                   disabled={isDirecting} placeholder={language==='ar'?'صف الموقع...':'Describe the setting...'}
                                   className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
@@ -2445,11 +2601,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               )}
                             </div>
 
-                            {/* Main Action */}
+                            {/* Main Action — multi-select */}
                             <div>
-                              <p className="text-[10px] mb-2 font-semibold uppercase tracking-wider" style={{color: clr.textMuted}}>
-                                {language==='ar'?'الحدث الرئيسي':'Main Action'}{effectiveAction.trim() && <span className="text-[#E2C7A8] ml-1">✓</span>}
+                              <p className="text-[10px] mb-1 font-semibold uppercase tracking-wider" style={{color: clr.textMuted}}>
+                                {language==='ar'?'الحدث الرئيسي':'Main Action'}{effectiveAction && <span className="text-[#E2C7A8] ml-1">✓</span>}
                               </p>
+                              <p className="text-[9px] mb-2" style={{color: clr.textSubtle}}>{language==='ar'?'اختر واحداً أو أكثر':'Select one or more'}</p>
                               <div className="flex flex-wrap gap-2">
                                 {([
                                   {e:'🎬',en:'Dramatic Reveal',ar:'كشف درامي',v:'a slow dramatic cinematic reveal — the subject emerges from darkness into a spotlight'},
@@ -2458,13 +2615,16 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   {e:'🌍',en:'Epic Journey',ar:'رحلة ملحمية',v:'a sweeping aerial journey — camera glides over landscapes and terrain'},
                                   {e:'🎉',en:'Celebration',ar:'احتفال',v:'a joyful celebration — energy, movement, confetti, people coming together'},
                                 ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
-                                  <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaAction===v}
-                                    onSelect={()=>{setCinemaAction(v);setCinemaActionCustom('');}} disabled={isDirecting} />
+                                  <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaAction.includes(v)}
+                                    onSelect={()=>setCinemaAction(prev => prev.includes(v) ? prev.filter(x=>x!==v) : [...prev.filter(x=>x!=='Custom'), v])}
+                                    disabled={isDirecting} />
                                 ))}
                                 <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                                  selected={cinemaAction==='Custom'} onSelect={()=>setCinemaAction('Custom')} disabled={isDirecting} />
+                                  selected={cinemaAction.includes('Custom')}
+                                  onSelect={()=>setCinemaAction(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])}
+                                  disabled={isDirecting} />
                               </div>
-                              {cinemaAction==='Custom' && (
+                              {cinemaAction.includes('Custom') && (
                                 <input type="text" value={cinemaActionCustom} onChange={(e)=>setCinemaActionCustom(e.target.value)}
                                   disabled={isDirecting} placeholder={language==='ar'?'صف الحدث...':'Describe the action...'}
                                   className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
@@ -2648,7 +2808,31 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             </div>
 
                             {/* Scene text — view or edit */}
+                            {(() => {
+                              // Sanitize: strip Visual DNA and SCENE ACTION technical blocks from display
+                              const sanitizeSceneText = (raw: string) => {
+                                return raw
+                                  .replace(/Visual DNA:.*?(\n|$)/gi, '')
+                                  .replace(/\[SCENE ACTION\]:.*?(\n|$)/gi, '')
+                                  .replace(/\[VISUAL DNA\][^[]*(\[|$)/gi, '')
+                                  .trim();
+                              };
+                              // Extract Visual DNA badge text if present
+                              const extractDnaBadge = (raw: string) => {
+                                const match = raw.match(/Visual DNA:\s*([^\n\[]+)/i) || raw.match(/\[VISUAL DNA\]\s*([^\[]+)/i);
+                                return match ? match[1].trim().slice(0, 60) : null;
+                              };
+                              const dnaBadge = scene ? extractDnaBadge(scene.text) : null;
+                              const cleanText = scene ? sanitizeSceneText(scene.text) : '';
+                              return (
                             <div className="flex-1 min-h-[40px]">
+                              {dnaBadge && !isEditing && (
+                                <div className="mb-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold"
+                                  style={{background:'rgba(226,199,168,0.12)',border:'1px solid rgba(226,199,168,0.25)',color:'rgba(226,199,168,0.7)'}}>
+                                  <span>🎨</span>
+                                  <span>{language === 'ar' ? 'النمط: ' : 'Style: '}{dnaBadge}</span>
+                                </div>
+                              )}
                               {isEditing ? (
                                 <div className="flex flex-col gap-2">
                                   <textarea
@@ -2680,7 +2864,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                 </div>
                               ) : scene ? (
                                 <p className="text-xs leading-relaxed text-[#E2C7A8]/90">
-                                  <TypewriterText text={scene.text} delay={sceneNum * 200} />
+                                  <TypewriterText text={cleanText || scene.text} delay={sceneNum * 200} />
                                 </p>
                               ) : (
                                 <div className="flex items-center justify-center h-full">
@@ -2688,6 +2872,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                 </div>
                               )}
                             </div>
+                          );
+                            })()}
                           </div>
                         );
                       })}
@@ -2886,10 +3072,87 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               {language === 'ar' ? `م${idx+1}` : `S${idx+1}`}
                               {prog === 'done' && ' ✓'}
                             </div>
+                            {/* Per-scene Regenerate button */}
+                            {img && prog === 'done' && !isCasting && (
+                              <button
+                                onClick={() => { setCastingRegenModal({ sceneIdx: idx }); setCastingRegenNote(''); setCastingRegenUseMaster(true); }}
+                                disabled={isRegenningScene}
+                                className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold transition-all active:scale-95 disabled:opacity-40"
+                                style={{background:'rgba(12,15,20,0.8)',border:'1px solid rgba(226,199,168,0.4)',color:'#E2C7A8',backdropFilter:'blur(8px)'}}
+                              >
+                                <RefreshCw className="h-2.5 w-2.5" />
+                                <span>{language === 'ar' ? 'إعادة' : 'Regen'}</span>
+                              </button>
+                            )}
                           </div>
                         );
                       })}
                     </div>
+
+                    {/* Casting Regen Modal */}
+                    {castingRegenModal !== null && (
+                      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+                        style={{background:'rgba(0,0,0,0.7)',backdropFilter:'blur(8px)'}}>
+                        <div className="w-full max-w-sm rounded-2xl p-5 flex flex-col gap-4"
+                          style={{background:'rgba(12,15,20,0.95)',border:'1px solid rgba(226,199,168,0.25)'}}>
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-bold text-[#E2C7A8]">
+                              {language === 'ar' ? `إعادة توليد المشهد ${castingRegenModal.sceneIdx + 1}` : `Regenerate Scene ${castingRegenModal.sceneIdx + 1}`}
+                            </h4>
+                            <button onClick={() => setCastingRegenModal(null)}
+                              className="text-white/40 hover:text-white/70 text-sm transition-colors">✕</button>
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] font-semibold uppercase tracking-wider text-white/50">
+                              {language === 'ar' ? 'تغييرات محددة (اختياري)' : 'Specific changes? (optional)'}
+                            </label>
+                            <input
+                              type="text"
+                              value={castingRegenNote}
+                              onChange={(e) => setCastingRegenNote(e.target.value)}
+                              placeholder={language === 'ar' ? 'مثال: أضف ضوءاً ذهبياً، غيّر الخلفية...' : 'e.g., Add golden light, change background...'}
+                              className="w-full bg-transparent rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/25 outline-none"
+                              style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.1)'}}
+                            />
+                          </div>
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <div
+                              onClick={() => setCastingRegenUseMaster(prev => !prev)}
+                              className="relative w-9 h-5 rounded-full transition-all flex-shrink-0"
+                              style={{background: castingRegenUseMaster ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : 'rgba(255,255,255,0.12)'}}>
+                              <div className="absolute top-0.5 rounded-full w-4 h-4 bg-white transition-all"
+                                style={{left: castingRegenUseMaster ? '18px' : '2px'}} />
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold text-white/80">
+                                {language === 'ar' ? 'الحفاظ على النمط الرئيسي' : 'Maintain Master Style'}
+                              </p>
+                              <p className="text-[10px] text-white/40">
+                                {language === 'ar' ? 'يستخدم مرساة العلامة كمرجع أساسي' : 'Uses brand anchor as primary style reference'}
+                              </p>
+                            </div>
+                          </label>
+                          <div className="flex gap-2 pt-1">
+                            <button onClick={() => setCastingRegenModal(null)}
+                              className="flex-1 h-10 rounded-xl text-sm font-semibold transition-all"
+                              style={{background:'rgba(255,255,255,0.06)',color:'rgba(255,255,255,0.6)'}}>
+                              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                            </button>
+                            <button
+                              onClick={() => handleCastingRegenScene(castingRegenModal.sceneIdx, castingRegenNote, castingRegenUseMaster)}
+                              disabled={isRegenningScene}
+                              className="flex-1 h-10 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+                              style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14'}}>
+                              {isRegenningScene ? (
+                                <><Loader2 className="h-4 w-4 animate-spin" /><span>{language === 'ar' ? 'جاري التوليد...' : 'Generating...'}</span></>
+                              ) : (
+                                <><RefreshCw className="h-4 w-4" /><span>{language === 'ar' ? 'إعادة التوليد' : 'Regenerate'}</span></>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Sticky footer — APPROVE & FILM */}
                     <div className="cinema-sticky-footer px-4 py-3 flex gap-3">
@@ -3053,6 +3316,26 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           {language === 'ar' ? 'جديد' : 'New'}
                         </button>
                       </div>
+
+                      {/* Manual Download Fallback — shown only if save failed */}
+                      {cinematicSaveFallbackUrl && !isCinemaSaved && (
+                        <div className="rounded-xl p-3 flex items-center gap-3" style={{background:'rgba(234,179,8,0.08)',border:'1px solid rgba(234,179,8,0.3)'}}>
+                          <span className="text-yellow-400 text-lg flex-shrink-0">⚠️</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-yellow-300">{language === 'ar' ? 'فشل الحفظ التلقائي' : 'Auto-save failed'}</p>
+                            <p className="text-[10px] text-yellow-300/60 mt-0.5">{language === 'ar' ? 'انقر لتنزيل الفيديو مباشرة — لا تغلق هذه الصفحة' : "Click to download directly — don't close this page"}</p>
+                          </div>
+                          <a
+                            href={cinematicSaveFallbackUrl}
+                            download={`wakti-cinema-${Date.now()}.webm`}
+                            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all active:scale-95"
+                            style={{background:'rgba(234,179,8,0.2)',border:'1px solid rgba(234,179,8,0.5)',color:'#fde68a'}}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            <span>{language === 'ar' ? 'تنزيل' : 'Download'}</span>
+                          </a>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

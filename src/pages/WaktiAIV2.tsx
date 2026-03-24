@@ -461,8 +461,11 @@ const WaktiAIV2 = () => {
               setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, metadata: { ...(m.metadata || {}), loading: false } } : m));
             }
             // ZERO React re-renders: write accumulated text directly to DOM via ref
-            // Invisibility cloak: strip any trailing reminder JSON before it hits the screen
-            const displayContent = stripTrailingActionJSON(streamed);
+            // Invisibility cloak: strip reminder JSON + [BOX] block (complete or in-progress)
+            const displayContent = stripTrailingActionJSON(streamed)
+              .replace(/\[BOX\][\s\S]*?\[\/BOX\]/g, '')
+              .replace(/\[BOX\][\s\S]*$/g, '')
+              .trim();
             if (!rafPending) {
               rafPending = true;
               requestAnimationFrame(() => {
@@ -602,11 +605,15 @@ const WaktiAIV2 = () => {
             // ZERO React re-renders: write accumulated text directly to DOM via ref
             // Read streamedContentRef.current INSIDE the RAF so it always gets the
             // latest token batch, not the stale closure value from when RAF was scheduled.
+            // Invisibility cloak: strip reminder JSON + [BOX] block (complete or in-progress)
             if (!rafPending) {
               rafPending = true;
               requestAnimationFrame(() => {
                 rafPending = false;
-                const latest = stripTrailingActionJSON(streamedContentRef.current);
+                const latest = stripTrailingActionJSON(streamedContentRef.current)
+                  .replace(/\[BOX\][\s\S]*?\[\/BOX\]/g, '')
+                  .replace(/\[BOX\][\s\S]*$/g, '')
+                  .trim();
                 streamingBubbleRef.current?.setContent(latest);
               });
             }

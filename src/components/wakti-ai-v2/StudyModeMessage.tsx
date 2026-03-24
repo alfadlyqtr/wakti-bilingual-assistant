@@ -37,12 +37,13 @@ export function StudyModeMessage({
         </div>
         {summaryBox && (
           <div className="mt-3 pt-3 border-t border-purple-200/60 dark:border-purple-700/40">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-300">
-              {isArabic ? 'ملخص إضافي' : 'Summary Box'}
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-300 mb-2">
+              {isArabic ? '🌐 بطاقة معرفية' : '🌐 Elite Card'}
             </div>
-            <div className="mt-1 text-sm text-purple-900/90 dark:text-purple-100/90">
-              {summaryBox}
-            </div>
+            <div
+              className="wolfram-elite-card text-sm text-purple-900/90 dark:text-purple-100/90 overflow-hidden rounded-lg [&_table]:w-full [&_table]:border-collapse [&_td]:py-1 [&_td]:pr-3 [&_td]:text-xs [&_td]:align-top [&_img]:max-w-full [&_img]:rounded [&_a]:text-purple-600 [&_a]:no-underline"
+              dangerouslySetInnerHTML={{ __html: summaryBox }}
+            />
           </div>
         )}
         {inputInterpretation && inputInterpretation !== answer && (
