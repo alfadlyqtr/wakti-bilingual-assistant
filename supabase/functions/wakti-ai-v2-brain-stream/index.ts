@@ -1118,28 +1118,37 @@ async function interceptAndScheduleReminder(
         );
         const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-        // Validate the scheduled time before inserting
-        // Strip hidden chars / extra whitespace that can cause Deno's Date parser to reject valid ISO strings
-        const cleanedTimeStr = timeStr.replace(/[^\x20-\x7E]/g, '').trim();
-        let parsedDate = new Date(cleanedTimeStr);
-
-        // Deno can reject "2026-03-24T10:36:00+03:00" style strings — manually convert to UTC as fallback
-        if (isNaN(parsedDate.getTime())) {
-          // Try replacing space with 'T' (some AIs produce "2026-03-24 10:36:00+03:00")
-          const spaceFix = cleanedTimeStr.replace(' ', 'T');
-          parsedDate = new Date(spaceFix);
-        }
-        if (isNaN(parsedDate.getTime())) {
-          // Try parsing ISO+offset manually: strip offset, parse as UTC, adjust
-          const isoOffsetMatch = cleanedTimeStr.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})([+-])(\d{2}):(\d{2})$/);
-          if (isoOffsetMatch) {
-            const [, base, sign, hh, mm] = isoOffsetMatch;
-            const baseMs = new Date(base + 'Z').getTime();
-            const offsetMs = (parseInt(hh) * 60 + parseInt(mm)) * 60000 * (sign === '+' ? -1 : 1);
-            parsedDate = new Date(baseMs + offsetMs);
+        const cleanedTimeStr = timeStr
+          .replace(/[\u200B-\u200D\uFEFF]/g, '')
+          .replace(/[^\x20-\x7E]/g, '')
+          .trim()
+          .replace(' ', 'T');
+        const isoMatch = cleanedTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?(Z|([+-])(\d{2}):?(\d{2}))$/);
+        let parsedDate: Date | null = null;
+        if (isoMatch) {
+          const [, year, month, day, hour, minute, second = '00', milli = '0', zone, sign, tzHour, tzMinute] = isoMatch;
+          const utcMs = Date.UTC(
+            Number(year),
+            Number(month) - 1,
+            Number(day),
+            Number(hour),
+            Number(minute),
+            Number(second),
+            Number(milli.padEnd(3, '0')),
+          );
+          let adjustedMs = utcMs;
+          if (zone !== 'Z' && sign && tzHour && tzMinute) {
+            const offsetMinutes = (Number(tzHour) * 60 + Number(tzMinute)) * (sign === '+' ? 1 : -1);
+            adjustedMs -= offsetMinutes * 60_000;
+          }
+          parsedDate = new Date(adjustedMs);
+        } else {
+          const fallbackDate = new Date(cleanedTimeStr);
+          if (!isNaN(fallbackDate.getTime())) {
+            parsedDate = fallbackDate;
           }
         }
-        if (isNaN(parsedDate.getTime())) {
+        if (!parsedDate || isNaN(parsedDate.getTime())) {
           console.warn(`⚠️ REMINDER INTERCEPT: Invalid scheduled_for date: "${timeStr}" — aborting`);
           return cleanText;
         }
