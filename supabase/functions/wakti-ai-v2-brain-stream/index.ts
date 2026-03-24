@@ -1116,11 +1116,31 @@ async function interceptAndScheduleReminder(
         const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
         // Validate the scheduled time before inserting
-        const parsedDate = new Date(timeStr);
+        // Strip hidden chars / extra whitespace that can cause Deno's Date parser to reject valid ISO strings
+        const cleanedTimeStr = timeStr.replace(/[^\x20-\x7E]/g, '').trim();
+        let parsedDate = new Date(cleanedTimeStr);
+
+        // Deno can reject "2026-03-24T10:36:00+03:00" style strings — manually convert to UTC as fallback
+        if (isNaN(parsedDate.getTime())) {
+          // Try replacing space with 'T' (some AIs produce "2026-03-24 10:36:00+03:00")
+          const spaceFix = cleanedTimeStr.replace(' ', 'T');
+          parsedDate = new Date(spaceFix);
+        }
+        if (isNaN(parsedDate.getTime())) {
+          // Try parsing ISO+offset manually: strip offset, parse as UTC, adjust
+          const isoOffsetMatch = cleanedTimeStr.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})([+-])(\d{2}):(\d{2})$/);
+          if (isoOffsetMatch) {
+            const [, base, sign, hh, mm] = isoOffsetMatch;
+            const baseMs = new Date(base + 'Z').getTime();
+            const offsetMs = (parseInt(hh) * 60 + parseInt(mm)) * 60000 * (sign === '+' ? -1 : 1);
+            parsedDate = new Date(baseMs + offsetMs);
+          }
+        }
         if (isNaN(parsedDate.getTime())) {
           console.warn(`⚠️ REMINDER INTERCEPT: Invalid scheduled_for date: "${timeStr}" — aborting`);
           return cleanText;
         }
+        console.log(`✅ REMINDER INTERCEPT: Parsed date ok → ${parsedDate.toISOString()}`);
         const validTimeStr = parsedDate.toISOString();
 
         // INSERT notification_history row first so process-scheduled-reminders can pick it up
