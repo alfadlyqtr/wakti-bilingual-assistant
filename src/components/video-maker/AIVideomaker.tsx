@@ -2243,12 +2243,24 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         {openSection === 0 && (
                           <div className="mt-3 flex flex-col gap-2">
                             <div className="rounded-xl overflow-hidden" style={{background:'rgba(12,15,20,0.7)',border:'1px solid rgba(226,199,168,0.3)'}}>
-                              <input type="text" value={cinemaSubject}
-                                onChange={(e) => setCinemaSubject(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter' && cinemaSubject.trim()) advanceTo(1); }}
-                                disabled={isDirecting} autoFocus
+                              <textarea value={cinemaSubject}
+                                onChange={(e) => setCinemaSubject(e.target.value.slice(0, 300))}
+                                onInput={(e) => {
+                                  const target = e.currentTarget;
+                                  target.style.height = 'auto';
+                                  target.style.height = `${Math.min(target.scrollHeight, 140)}px`;
+                                  target.style.overflowY = target.scrollHeight > 140 ? 'auto' : 'hidden';
+                                }}
+                                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && cinemaSubject.trim()) { e.preventDefault(); advanceTo(1); } }}
+                                disabled={isDirecting} autoFocus rows={1} maxLength={300}
                                 placeholder={language === 'ar' ? 'مثال: رجل أعمال يطلق منتجه...' : 'e.g., An entrepreneur launching a product...'}
-                                className="w-full bg-transparent px-4 py-4 text-base text-white placeholder:text-white/35 outline-none" />
+                                className="w-full resize-none bg-transparent px-4 py-4 text-base text-white placeholder:text-white/35 outline-none min-h-[56px] max-h-[140px] leading-7" />
+                            </div>
+                            <div className="flex items-center justify-between px-1">
+                              <span className="text-[10px] text-white/30">
+                                {language === 'ar' ? 'حتى ٥ أسطر • Shift+Enter لسطر جديد' : 'Up to 5 lines • Shift+Enter for new line'}
+                              </span>
+                              <span className="text-[10px] text-white/35">{cinemaSubject.length}/300</span>
                             </div>
                             {cinemaSubject.trim() && (
                               <button type="button" onClick={() => advanceTo(1)} className="self-end text-[11px] font-semibold text-[#E2C7A8] opacity-70 hover:opacity-100 transition-opacity">
