@@ -109,7 +109,7 @@ const cleanSignedUrl = (url: string): string => {
 };
 
 export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
-  const { language } = useTheme();
+  const { language, theme } = useTheme();
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef2 = useRef<HTMLInputElement>(null);
@@ -2164,7 +2164,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
             {/* Cinema mode - Director's Desk */}
             {generationMode === 'cinema' && (
-              <div className="relative col-span-full min-h-[60vh] flex flex-col justify-center rounded-2xl" style={{background:'#0c0f14'}}>
+              <div className="relative col-span-full flex flex-col rounded-2xl overflow-hidden" style={{background: theme === 'dark' ? '#0c0f14' : '#1a1d24', boxShadow: '0 4px 32px rgba(0,0,0,0.35)'}}>
                 {cinemaStep === 'desk' && (() => {
                   const effectiveSetting = cinemaSetting === 'Custom' ? cinemaSettingCustom : cinemaSetting;
                   const effectiveAction = cinemaAction === 'Custom' ? cinemaActionCustom : cinemaAction;
