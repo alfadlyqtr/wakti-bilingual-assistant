@@ -1091,7 +1091,10 @@ async function interceptAndScheduleReminder(
   const triggerIdx = responseText.lastIndexOf('{"action"');
   if (triggerIdx === -1) return responseText;
 
-  const tail = responseText.substring(triggerIdx).trim();
+  const rawTail = responseText.substring(triggerIdx).trim();
+  // Find the last closing brace — AI may append trailing text/newlines after the JSON
+  const lastBrace = rawTail.lastIndexOf('}');
+  const tail = lastBrace !== -1 ? rawTail.substring(0, lastBrace + 1) : rawTail;
 
   try {
     const data = JSON.parse(tail);
