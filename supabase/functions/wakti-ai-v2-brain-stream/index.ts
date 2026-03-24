@@ -1118,42 +1118,36 @@ async function interceptAndScheduleReminder(
         );
         const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
+        // Parse the scheduled time — handle ISO 8601 with timezone offset (e.g. 2026-03-24T10:36:00+03:00)
         const cleanedTimeStr = timeStr
-          .replace(/[\u200B-\u200D\uFEFF]/g, '')
-          .replace(/[^\x20-\x7E]/g, '')
+          .replace(/[\u200B-\u200D\uFEFF]/g, '') // strip zero-width chars
+          .replace(/[^\x20-\x7E]/g, '')          // strip non-ASCII
           .trim()
-          .replace(' ', 'T');
-        const isoMatch = cleanedTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?(Z|([+-])(\d{2}):?(\d{2}))$/);
-        let parsedDate: Date | null = null;
-        if (isoMatch) {
-          const [, year, month, day, hour, minute, second = '00', milli = '0', zone, sign, tzHour, tzMinute] = isoMatch;
-          const utcMs = Date.UTC(
-            Number(year),
-            Number(month) - 1,
-            Number(day),
-            Number(hour),
-            Number(minute),
-            Number(second),
-            Number(milli.padEnd(3, '0')),
-          );
-          let adjustedMs = utcMs;
-          if (zone !== 'Z' && sign && tzHour && tzMinute) {
-            const offsetMinutes = (Number(tzHour) * 60 + Number(tzMinute)) * (sign === '+' ? 1 : -1);
-            adjustedMs -= offsetMinutes * 60_000;
-          }
-          parsedDate = new Date(adjustedMs);
-        } else {
-          const fallbackDate = new Date(cleanedTimeStr);
-          if (!isNaN(fallbackDate.getTime())) {
-            parsedDate = fallbackDate;
-          }
-        }
-        if (!parsedDate || isNaN(parsedDate.getTime())) {
-          console.warn(`⚠️ REMINDER INTERCEPT: Invalid scheduled_for date: "${timeStr}" — aborting`);
+          .replace(' ', 'T');                     // normalise space-separated datetime
+
+        if (!cleanedTimeStr) {
+          console.warn(`⚠️ REMINDER INTERCEPT: Empty scheduled_for — aborting`);
           return cleanText;
         }
-        console.log(`✅ REMINDER INTERCEPT: Parsed date ok → ${parsedDate.toISOString()}`);
-        const validTimeStr = parsedDate.toISOString();
+
+        // Manual ISO+offset parser — guaranteed to work in all Deno versions
+        // Handles: YYYY-MM-DDTHH:MM[:SS][.mmm](Z|±HH:MM|±HHMM)
+        let validTimeStr: string;
+        const m = cleanedTimeStr.match(
+          /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(?:(Z)|([+-])(\d{2}):?(\d{2}))$/
+        );
+        if (m) {
+          const [, yr, mo, dy, hr, mn, sc = '00', ms = '000', zulu, sign, tzH, tzM] = m;
+          const baseMs = Date.UTC(+yr, +mo - 1, +dy, +hr, +mn, +sc, +ms.padEnd(3, '0'));
+          const offsetMs = zulu ? 0 : ((+tzH * 60 + +tzM) * 60_000 * (sign === '+' ? 1 : -1));
+          validTimeStr = new Date(baseMs - offsetMs).toISOString();
+        } else {
+          // Last-resort fallback
+          const fb = new Date(cleanedTimeStr);
+          validTimeStr = isNaN(fb.getTime()) ? new Date(Date.now() + 60_000).toISOString() : fb.toISOString();
+          console.warn(`⚠️ REMINDER INTERCEPT: Non-standard date "${timeStr}" — using fallback: ${validTimeStr}`);
+        }
+        console.log(`✅ REMINDER INTERCEPT: Scheduled for ${validTimeStr}`);
 
         // INSERT notification_history row first so process-scheduled-reminders can pick it up
         const { data: inserted, error: insertError } = await supabaseAdmin

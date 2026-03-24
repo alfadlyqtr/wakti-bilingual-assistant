@@ -2164,13 +2164,14 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
             {/* Cinema mode - Director's Desk */}
             {generationMode === 'cinema' && (
-              <div className="relative col-span-full flex flex-col rounded-2xl overflow-hidden" style={{background: theme === 'dark' ? '#0c0f14' : '#1a1d24', boxShadow: '0 4px 32px rgba(0,0,0,0.35)'}}>
+              <div className="relative col-span-full flex flex-col">
                 {cinemaStep === 'desk' && (() => {
                   const effectiveSetting = cinemaSetting === 'Custom' ? cinemaSettingCustom : cinemaSetting;
                   const effectiveAction = cinemaAction === 'Custom' ? cinemaActionCustom : cinemaAction;
                   const effectiveVibe = cinemaVibe === 'Custom' ? cinemaVibeCustom : cinemaVibe;
                   const effectiveCTA = cinemaCTA === 'Custom' ? cinemaCTACustom : cinemaCTA;
                   const isSceneCountReady = cinemaSceneCountTouched === true;
+                  const isDark = theme === 'dark';
 
                   // Explicit boolean checks — no implicit truthy on number defaults
                   const f1 = cinemaSubject.trim().length > 0;
@@ -2187,15 +2188,42 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                   const openSection = cinemaOpenSection;
 
+                  // Theme-aware color tokens
+                  const clr = {
+                    text:       isDark ? 'rgba(255,255,255,0.85)' : '#1a1d2e',
+                    textMuted:  isDark ? 'rgba(255,255,255,0.4)'  : 'rgba(0,0,0,0.35)',
+                    textSubtle: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)',
+                    cardBg:     isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
+                    cardBgOpen: isDark ? 'rgba(226,199,168,0.06)' : 'rgba(226,199,168,0.12)',
+                    cardBorder: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)',
+                    cardBorderOpen: isDark ? 'rgba(226,199,168,0.25)' : 'rgba(226,199,168,0.5)',
+                    inputBg:    isDark ? 'rgba(12,15,20,0.7)'    : 'rgba(255,255,255,0.8)',
+                    inputBorder: (active: boolean) => active
+                      ? 'rgba(226,199,168,0.6)'
+                      : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.12)',
+                    chipBg:     isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                    chipBorder: isDark ? 'rgba(255,255,255,0.1)'  : 'rgba(0,0,0,0.1)',
+                    chipText:   isDark ? 'rgba(255,255,255,0.7)'  : 'rgba(0,0,0,0.65)',
+                    numBg:      isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
+                    numBorder:  isDark ? 'rgba(255,255,255,0.1)'  : 'rgba(0,0,0,0.1)',
+                    numText:    isDark ? 'rgba(255,255,255,0.5)'  : 'rgba(0,0,0,0.45)',
+                    stickyBg:   isDark
+                      ? 'linear-gradient(to bottom,rgba(12,15,20,0.98) 70%,transparent)'
+                      : 'linear-gradient(to bottom,rgba(252,254,253,0.98) 70%,transparent)',
+                    secNumBg:   isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)',
+                    optBadgeBg: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+                    progressTrack: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)',
+                  };
+
                   // Chip helper
                   type ChipProps = { label: string; emoji: string; value: string; selected: boolean; onSelect: () => void; disabled?: boolean };
                   const Chip = ({ label, emoji, value: _v, selected, onSelect, disabled }: ChipProps) => (
                     <button type="button" onClick={onSelect} disabled={disabled}
                       className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 disabled:opacity-40 whitespace-nowrap"
                       style={{
-                        background: selected ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : 'rgba(255,255,255,0.05)',
-                        border: selected ? '1px solid rgba(226,199,168,0.9)' : '1px solid rgba(255,255,255,0.1)',
-                        color: selected ? '#0c0f14' : 'rgba(255,255,255,0.7)',
+                        background: selected ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : clr.chipBg,
+                        border: selected ? '1px solid rgba(226,199,168,0.9)' : `1px solid ${clr.chipBorder}`,
+                        color: selected ? '#0c0f14' : clr.chipText,
                         boxShadow: selected ? '0 2px 12px rgba(226,199,168,0.35)' : 'none',
                       }}>{emoji} {label}</button>
                   );
@@ -2206,33 +2234,34 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       className="w-full flex items-center justify-between gap-2 text-left">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-all"
-                          style={{background: done ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : optional ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.08)', color: done ? '#0c0f14' : 'rgba(255,255,255,0.4)'}}>
+                          style={{background: done ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : optional ? clr.optBadgeBg : clr.secNumBg, color: done ? '#0c0f14' : clr.textMuted}}>
                           {done ? '✓' : (idx + 1)}
                         </span>
-                        <span className={`text-xs font-bold uppercase tracking-wider truncate ${done ? 'text-[#E2C7A8]' : optional ? 'text-white/40' : 'text-white/70'}`}>{label}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider truncate"
+                          style={{color: done ? '#C5A47E' : optional ? clr.textMuted : clr.text}}>{label}</span>
                         {done && summary && openSection !== idx && (
-                          <span className="text-[10px] text-white/35 truncate ml-1 hidden sm:block">— {summary.length > 28 ? summary.slice(0,28)+'…' : summary}</span>
+                          <span className="text-[10px] truncate ml-1 hidden sm:block" style={{color: clr.textMuted}}>— {summary.length > 28 ? summary.slice(0,28)+'…' : summary}</span>
                         )}
                         {optional && !done && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded-full ml-1 font-semibold" style={{background:'rgba(255,255,255,0.06)',color:'rgba(255,255,255,0.3)'}}>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full ml-1 font-semibold" style={{background: clr.optBadgeBg, color: clr.textMuted}}>
                             {language==='ar'?'اختياري':'optional'}
                           </span>
                         )}
                       </div>
-                      <span className="flex-shrink-0 text-white/30 text-xs" style={{transform: openSection === idx ? 'rotate(180deg)' : 'rotate(0deg)', transition:'transform 0.2s'}}>▼</span>
+                      <span className="flex-shrink-0 text-xs" style={{color: clr.textMuted, transform: openSection === idx ? 'rotate(180deg)' : 'rotate(0deg)', transition:'transform 0.2s'}}>▼</span>
                     </button>
                   );
 
                   return (
                   <div className="flex flex-col gap-0 py-2">
                     {/* Sticky gold progress bar */}
-                    <div className="sticky top-0 z-20 pt-1 pb-3" style={{background:'linear-gradient(to bottom,rgba(12,15,20,0.98) 70%,transparent)'}}>
+                    <div className="sticky top-0 z-20 pt-1 pb-3" style={{background: clr.stickyBg}}>
                       <div className="text-center mb-2">
-                        <h3 className="text-xl font-bold text-white" style={{textShadow:'0 0 20px rgba(226,199,168,0.5)'}}>
+                        <h3 className="text-xl font-bold" style={{color: clr.text, textShadow: isDark ? '0 0 20px rgba(226,199,168,0.5)' : 'none'}}>
                           {language === 'ar' ? 'مكتب الفيزيونير' : 'The Visionnaire'}
                         </h3>
                       </div>
-                      <div className="relative h-[3px] rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.07)'}}>
+                      <div className="relative h-[3px] rounded-full overflow-hidden" style={{background: clr.progressTrack}}>
                         <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out"
                           style={{width:`${progressPct}%`, background:'linear-gradient(90deg,#C5A47E,#E2C7A8,#fff9ee)', boxShadow: progressPct > 0 ? '0 0 8px rgba(226,199,168,0.8),0 0 16px rgba(226,199,168,0.4)' : 'none'}} />
                       </div>
@@ -2247,22 +2276,22 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                       {/* ── SECTION 1: What is your movie about? ── */}
                       <div className="rounded-2xl px-4 py-3 transition-all"
-                        style={{background: openSection===0 ? 'rgba(226,199,168,0.06)' : 'rgba(255,255,255,0.02)', border: openSection===0 ? '1px solid rgba(226,199,168,0.25)' : '1px solid rgba(255,255,255,0.07)'}}>
+                        style={{background: openSection===0 ? clr.cardBgOpen : clr.cardBg, border: `1px solid ${openSection===0 ? clr.cardBorderOpen : clr.cardBorder}`}}>
                         <SecHeader idx={0} label={language==='ar'?'عم يدور فيلمك؟':'What is your movie about?'} done={sec1Done} summary={cinemaSubject} />
                         {openSection === 0 && (
                           <div className="mt-3 flex flex-col gap-2">
-                            <div className="rounded-xl overflow-hidden" style={{background:'rgba(12,15,20,0.7)', border:`1px solid ${f1 ? 'rgba(226,199,168,0.5)' : 'rgba(255,255,255,0.1)'}`}}>
+                            <div className="rounded-xl overflow-hidden" style={{background: clr.inputBg, border:`1px solid ${clr.inputBorder(f1)}`}}>
                               <textarea
                                 value={cinemaSubject}
                                 onChange={(e) => setCinemaSubject(e.target.value.slice(0,300))}
                                 onInput={(e) => { const t=e.currentTarget; t.style.height='auto'; t.style.height=`${Math.min(t.scrollHeight,140)}px`; t.style.overflowY=t.scrollHeight>140?'auto':'hidden'; }}
                                 disabled={isDirecting} autoFocus rows={2} maxLength={300}
                                 placeholder={language==='ar'?'مثال: رجل أعمال يطلق منتجه الجديد في مؤتمر كبير...':'e.g., An entrepreneur launching a new product at a major conference...'}
-                                className="w-full resize-none bg-transparent px-4 py-3 text-base text-white placeholder:text-white/30 outline-none min-h-[72px] max-h-[140px] leading-7"
+                                className="w-full resize-none bg-transparent px-4 py-3 text-base placeholder:text-black/25 outline-none min-h-[72px] max-h-[140px] leading-7" style={{color: clr.text}}
                               />
                             </div>
                             <div className="flex items-center justify-between px-1">
-                              <span className="text-[10px] text-white/30">{cinemaSubject.length}/300</span>
+                              <span className="text-[10px]" style={{color: clr.textSubtle}}>{cinemaSubject.length}/300</span>
                               {f1 && (
                                 <button type="button" onClick={()=>setCinemaOpenSection(1)}
                                   className="text-[11px] font-semibold text-[#E2C7A8] opacity-70 hover:opacity-100 transition-opacity">
@@ -2276,7 +2305,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                       {/* ── SECTION 2: Style & Cast (all required) ── */}
                       <div className="rounded-2xl px-4 py-3 transition-all"
-                        style={{background: openSection===1 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.02)', border: openSection===1 ? '1px solid rgba(226,199,168,0.2)' : '1px solid rgba(255,255,255,0.07)'}}>
+                        style={{background: openSection===1 ? clr.cardBgOpen : clr.cardBg, border: `1px solid ${openSection===1 ? clr.cardBorderOpen : clr.cardBorder}`}}>
                         <SecHeader idx={1} label={language==='ar'?'الأسلوب والممثلون':'Style & Cast'} done={sec2Done}
                           summary={effectiveVibe ? effectiveVibe.split('—')[0].trim() : undefined} />
                         {openSection === 1 && (
@@ -2284,7 +2313,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                             {/* Vibe & Mood — required */}
                             <div>
-                              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{color: f2 ? '#E2C7A8' : 'rgba(255,255,255,0.8)'}}>
+                              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{color: f2 ? '#C5A47E' : clr.text}}>
                                 {language==='ar'?'المزاج والأجواء':'Vibe & Mood'}
                                 <span className="ml-1" style={{color:'#E2C7A8'}}>{f2 ? '✓' : '✱'}</span>
                               </p>
@@ -2307,14 +2336,14 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               {cinemaVibe==='Custom' && (
                                 <input type="text" value={cinemaVibeCustom} onChange={(e)=>setCinemaVibeCustom(e.target.value)}
                                   disabled={isDirecting} placeholder={language==='ar'?'صف المزاج...':'Describe the mood...'}
-                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none"
-                                  style={{background:'rgba(12,15,20,0.6)',border:'1px solid rgba(226,199,168,0.4)'}} autoFocus />
+                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
+                                  style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
                               )}
                             </div>
 
                             {/* Characters — required */}
                             <div>
-                              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{color: f3 ? '#E2C7A8' : 'rgba(255,255,255,0.8)'}}>
+                              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{color: f3 ? '#C5A47E' : clr.text}}>
                                 {language==='ar'?'من يظهر في الفيلم؟':'Who is in the movie?'}
                                 <span className="ml-1" style={{color:'#E2C7A8'}}>{f3 ? '✓' : '✱'}</span>
                               </p>
@@ -2336,14 +2365,14 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                 <input type="text" value={cinemaRelationship} onChange={(e)=>setCinemaRelationship(e.target.value)}
                                   disabled={isDirecting}
                                   placeholder={cinemaCharacters==='Custom'?(language==='ar'?'صف الشخصيات...':'Describe characters...'):(language==='ar'?'العلاقة بينهم...':'Relationship between them...')}
-                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none"
-                                  style={{background:'rgba(12,15,20,0.6)',border:'1px solid rgba(226,199,168,0.4)'}} autoFocus />
+                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
+                                  style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
                               )}
                             </div>
 
                             {/* Scene count — required, user must tap */}
                             <div>
-                              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{color: f4 ? '#E2C7A8' : 'rgba(255,255,255,0.8)'}}>
+                              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{color: f4 ? '#C5A47E' : clr.text}}>
                                 {language==='ar'?'عدد المشاهد':'How many scenes?'}
                                 <span className="ml-1" style={{color:'#E2C7A8'}}>{f4 ? '✓' : '✱'}</span>
                               </p>
@@ -2354,16 +2383,16 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                     disabled={isDirecting}
                                     className="flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-40"
                                     style={{
-                                      background: f4 && cinemaSceneCount===n ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : n===3 && !f4 ? 'rgba(226,199,168,0.07)' : 'rgba(255,255,255,0.04)',
-                                      border: f4 && cinemaSceneCount===n ? '1px solid rgba(226,199,168,0.8)' : n===3 && !f4 ? '1px solid rgba(226,199,168,0.15)' : '1px solid rgba(255,255,255,0.1)',
-                                      color: f4 && cinemaSceneCount===n ? '#0c0f14' : 'rgba(255,255,255,0.5)',
+                                      background: f4 && cinemaSceneCount===n ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : n===3 && !f4 ? 'rgba(226,199,168,0.1)' : clr.numBg,
+                                      border: f4 && cinemaSceneCount===n ? '1px solid rgba(226,199,168,0.8)' : n===3 && !f4 ? '1px solid rgba(226,199,168,0.25)' : `1px solid ${clr.numBorder}`,
+                                      color: f4 && cinemaSceneCount===n ? '#0c0f14' : clr.numText,
                                     }}>
                                     <span className="text-sm font-bold">{n}</span>
                                     <span className="text-[9px] opacity-80">{n*10}s</span>
                                   </button>
                                 ))}
                               </div>
-                              {!f4 && <p className="text-[10px] text-white/25 mt-1.5 px-1">{language==='ar'?'اختر عدداً للمتابعة':'Tap a number to confirm'}</p>}
+                              {!f4 && <p className="text-[10px] mt-1.5 px-1" style={{color: clr.textSubtle}}>{language==='ar'?'اختر عدداً للمتابعة':'Tap a number to confirm'}</p>}
                             </div>
 
                             {sec2Done && (
@@ -2378,7 +2407,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                       {/* ── SECTION 3: All optionals together ── */}
                       <div className="rounded-2xl px-4 py-3 transition-all"
-                        style={{background: openSection===2 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.01)', border: openSection===2 ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,255,255,0.05)'}}>
+                        style={{background: clr.cardBg, border: `1px solid ${clr.cardBorder}`}}>
                         <SecHeader idx={2} optional
                           label={language==='ar'?'تفاصيل إضافية':'Extra Details'}
                           done={!!(effectiveSetting.trim() || effectiveAction.trim() || effectiveCTA.trim())}
@@ -2388,7 +2417,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                             {/* Setting */}
                             <div>
-                              <p className="text-[10px] text-white/40 mb-2 font-semibold uppercase tracking-wider">
+                              <p className="text-[10px] mb-2 font-semibold uppercase tracking-wider" style={{color: clr.textMuted}}>
                                 {language==='ar'?'الموقع':'Setting'}{effectiveSetting.trim() && <span className="text-[#E2C7A8] ml-1">✓</span>}
                               </p>
                               <div className="flex flex-wrap gap-2">
@@ -2409,14 +2438,14 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               {cinemaSetting==='Custom' && (
                                 <input type="text" value={cinemaSettingCustom} onChange={(e)=>setCinemaSettingCustom(e.target.value)}
                                   disabled={isDirecting} placeholder={language==='ar'?'صف الموقع...':'Describe the setting...'}
-                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none"
-                                  style={{background:'rgba(12,15,20,0.6)',border:'1px solid rgba(226,199,168,0.4)'}} autoFocus />
+                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
+                                  style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
                               )}
                             </div>
 
                             {/* Main Action */}
                             <div>
-                              <p className="text-[10px] text-white/40 mb-2 font-semibold uppercase tracking-wider">
+                              <p className="text-[10px] mb-2 font-semibold uppercase tracking-wider" style={{color: clr.textMuted}}>
                                 {language==='ar'?'الحدث الرئيسي':'Main Action'}{effectiveAction.trim() && <span className="text-[#E2C7A8] ml-1">✓</span>}
                               </p>
                               <div className="flex flex-wrap gap-2">
@@ -2436,14 +2465,14 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               {cinemaAction==='Custom' && (
                                 <input type="text" value={cinemaActionCustom} onChange={(e)=>setCinemaActionCustom(e.target.value)}
                                   disabled={isDirecting} placeholder={language==='ar'?'صف الحدث...':'Describe the action...'}
-                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none"
-                                  style={{background:'rgba(12,15,20,0.6)',border:'1px solid rgba(226,199,168,0.4)'}} autoFocus />
+                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
+                                  style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
                               )}
                             </div>
 
                             {/* Goal */}
                             <div>
-                              <p className="text-[10px] text-white/40 mb-2 font-semibold uppercase tracking-wider">
+                              <p className="text-[10px] mb-2 font-semibold uppercase tracking-wider" style={{color: clr.textMuted}}>
                                 {language==='ar'?'هدف الفيديو':'Video Goal'}{effectiveCTA.trim() && <span className="text-[#E2C7A8] ml-1">✓</span>}
                               </p>
                               <div className="flex flex-wrap gap-2">
@@ -2464,8 +2493,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               {cinemaCTA==='Custom' && (
                                 <input type="text" value={cinemaCTACustom} onChange={(e)=>setCinemaCTACustom(e.target.value)}
                                   disabled={isDirecting} placeholder={language==='ar'?'صف الهدف...':'Describe the goal...'}
-                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none"
-                                  style={{background:'rgba(12,15,20,0.6)',border:'1px solid rgba(226,199,168,0.4)'}} autoFocus />
+                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
+                                  style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
                               )}
                             </div>
                           </div>
