@@ -2192,6 +2192,31 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     >{emoji} {label}</button>
                   );
 
+                  // Collapse state uses cinemaOpenSection: 0=section1, 1=section2, 2=section3
+                  const openSection = cinemaOpenSection;
+                  const sec1Done = !!cinemaSubject.trim();
+                  const sec2Done = !!effectiveVibe.trim();
+                  const sec3Done = !!cinemaCharacters.trim() && isSceneCountReady;
+
+                  // Section header helper
+                  const SecHeader = ({ idx, label, done, summary }: { idx: number; label: string; done: boolean; summary?: string }) => (
+                    <button type="button" onClick={() => setCinemaOpenSection(openSection === idx ? -1 : idx)}
+                      className="w-full flex items-center justify-between gap-2 text-left">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-all"
+                          style={{background:done?'linear-gradient(135deg,#E2C7A8,#C5A47E)':'rgba(255,255,255,0.08)',color:done?'#0c0f14':'rgba(255,255,255,0.4)'}}>
+                          {done ? '✓' : (idx + 1)}
+                        </span>
+                        <span className={`text-xs font-bold uppercase tracking-wider truncate ${done ? 'text-[#E2C7A8]' : 'text-white/70'}`}>{label}</span>
+                        {done && summary && openSection !== idx && (
+                          <span className="text-[10px] text-white/35 truncate ml-1 hidden sm:block">— {summary.length > 30 ? summary.slice(0,30)+'…' : summary}</span>
+                        )}
+                      </div>
+                      <span className="flex-shrink-0 text-white/30 text-xs transition-transform duration-200"
+                        style={{transform: openSection === idx ? 'rotate(180deg)' : 'rotate(0deg)'}}>▼</span>
+                    </button>
+                  );
+
                   return (
                   <div className="flex flex-col gap-0 py-2">
                     {/* Sticky gold progress bar */}
@@ -2212,205 +2237,237 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       )}
                     </div>
 
-                    <div className="flex flex-col gap-4 max-w-lg mx-auto w-full">
+                    <div className="flex flex-col gap-2 max-w-lg mx-auto w-full">
 
                       {/* ── SECTION 1: What is your movie about? ── */}
-                      <div className="rounded-2xl px-4 py-4" style={{background:'rgba(226,199,168,0.05)',border:'1px solid rgba(226,199,168,0.2)'}}>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-[#E2C7A8]/70 mb-2">
-                          {language==='ar'?'١ · عم يدور فيلمك؟':'1 · What is your movie about?'}
-                        </p>
-                        <div className="rounded-xl overflow-hidden" style={{background:'rgba(12,15,20,0.7)',border:`1px solid ${cinemaSubject.trim()?'rgba(226,199,168,0.5)':'rgba(255,255,255,0.1)'}`}}>
-                          <textarea
-                            value={cinemaSubject}
-                            onChange={(e) => setCinemaSubject(e.target.value.slice(0,300))}
-                            onInput={(e) => {
-                              const t = e.currentTarget;
-                              t.style.height='auto';
-                              t.style.height=`${Math.min(t.scrollHeight,140)}px`;
-                              t.style.overflowY=t.scrollHeight>140?'auto':'hidden';
-                            }}
-                            disabled={isDirecting} autoFocus rows={2} maxLength={300}
-                            placeholder={language==='ar'?'مثال: رجل أعمال يطلق منتجه الجديد في مؤتمر كبير...':'e.g., An entrepreneur launching a new product at a major conference...'}
-                            className="w-full resize-none bg-transparent px-4 py-3 text-base text-white placeholder:text-white/30 outline-none min-h-[72px] max-h-[140px] leading-7"
-                          />
-                        </div>
-                        <div className="flex justify-end mt-1"><span className="text-[10px] text-white/30">{cinemaSubject.length}/300</span></div>
+                      <div className="rounded-2xl px-4 py-3 transition-all"
+                        style={{background:openSection===0?'rgba(226,199,168,0.06)':'rgba(255,255,255,0.02)',border:openSection===0?'1px solid rgba(226,199,168,0.25)':'1px solid rgba(255,255,255,0.07)'}}>
+                        <SecHeader idx={0} label={language==='ar'?'عم يدور فيلمك؟':'What is your movie about?'} done={sec1Done} summary={cinemaSubject} />
+                        {openSection === 0 && (
+                          <div className="mt-3 flex flex-col gap-2">
+                            <div className="rounded-xl overflow-hidden" style={{background:'rgba(12,15,20,0.7)',border:`1px solid ${cinemaSubject.trim()?'rgba(226,199,168,0.5)':'rgba(255,255,255,0.1)'}`}}>
+                              <textarea
+                                value={cinemaSubject}
+                                onChange={(e) => setCinemaSubject(e.target.value.slice(0,300))}
+                                onInput={(e) => {
+                                  const t = e.currentTarget;
+                                  t.style.height='auto';
+                                  t.style.height=`${Math.min(t.scrollHeight,140)}px`;
+                                  t.style.overflowY=t.scrollHeight>140?'auto':'hidden';
+                                }}
+                                disabled={isDirecting} autoFocus rows={2} maxLength={300}
+                                placeholder={language==='ar'?'مثال: رجل أعمال يطلق منتجه الجديد في مؤتمر كبير...':'e.g., An entrepreneur launching a new product at a major conference...'}
+                                className="w-full resize-none bg-transparent px-4 py-3 text-base text-white placeholder:text-white/30 outline-none min-h-[72px] max-h-[140px] leading-7"
+                              />
+                            </div>
+                            <div className="flex items-center justify-between px-1">
+                              <span className="text-[10px] text-white/30">{cinemaSubject.length}/300</span>
+                              {cinemaSubject.trim() && (
+                                <button type="button" onClick={()=>setCinemaOpenSection(1)}
+                                  className="text-[11px] font-semibold text-[#E2C7A8] opacity-70 hover:opacity-100 transition-opacity">
+                                  {language==='ar'?'التالي ›':'Next ›'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* ── SECTION 2: Style pickers ── */}
-                      <div className="rounded-2xl px-4 py-4 flex flex-col gap-4" style={{background:'rgba(255,255,255,0.02)',border:'1px solid rgba(255,255,255,0.07)'}}>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-[#E2C7A8]/70">
-                          {language==='ar'?'٢ · اختر أسلوب فيلمك':'2 · Choose your style'}
-                        </p>
+                      <div className="rounded-2xl px-4 py-3 transition-all"
+                        style={{background:openSection===1?'rgba(255,255,255,0.03)':'rgba(255,255,255,0.02)',border:openSection===1?'1px solid rgba(226,199,168,0.2)':'1px solid rgba(255,255,255,0.07)'}}>
+                        <SecHeader idx={1} label={language==='ar'?'اختر أسلوب فيلمك':'Choose your style'} done={sec2Done}
+                          summary={effectiveVibe ? effectiveVibe.split('—')[0].trim() : undefined} />
+                        {openSection === 1 && (
+                          <div className="mt-3 flex flex-col gap-4">
 
-                        {/* Vibe & Mood chips */}
-                        <div>
-                          <p className="text-[10px] text-white/40 mb-2 font-semibold uppercase tracking-wider">
-                            {language==='ar'?'المزاج والأجواء':'Vibe & Mood'}{effectiveVibe.trim() && <span className="text-[#E2C7A8] ml-2">✓</span>}
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {([
-                              {e:'🔥',en:'Epic & Grand',ar:'ملحمي وعظيم',v:'Epic and grand — cinematic score, wide establishing shots, larger than life'},
-                              {e:'✨',en:'Luxurious',ar:'فاخر وراقي',v:'Luxurious and prestigious — slow motion, rich textures, gold tones'},
-                              {e:'⚡',en:'Dramatic',ar:'درامي مكثف',v:'Dramatic and intense — high contrast, deep shadows, powerful tension'},
-                              {e:'💛',en:'Emotional',ar:'عاطفي مؤثر',v:'Emotional and heartfelt — soft light, intimate close-ups, stirring music'},
-                              {e:'🌅',en:'Inspiring',ar:'ملهم',v:'Inspiring and uplifting — bright light, rising motion, hopeful tone'},
-                              {e:'💥',en:'High Energy',ar:'طاقة عالية',v:'Exciting and high energy — fast cuts, dynamic movement, adrenaline'},
-                              {e:'🌿',en:'Peaceful',ar:'هادئ',v:'Peaceful and serene — slow camera, nature, stillness, gentle pace'},
-                            ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
-                              <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaVibe===v} onSelect={()=>{setCinemaVibe(v);setCinemaVibeCustom('');}} disabled={isDirecting} />
-                            ))}
-                            <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                              selected={cinemaVibe==='Custom'} onSelect={()=>setCinemaVibe('Custom')} disabled={isDirecting} />
-                          </div>
-                          {cinemaVibe==='Custom' && (
-                            <input type="text" value={cinemaVibeCustom} onChange={(e)=>setCinemaVibeCustom(e.target.value)}
-                              disabled={isDirecting} placeholder={language==='ar'?'صف المزاج...':'Describe the mood...'}
-                              className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none"
-                              style={{background:'rgba(12,15,20,0.6)',border:'1px solid rgba(226,199,168,0.4)'}} autoFocus />
-                          )}
-                        </div>
+                            {/* Vibe & Mood chips */}
+                            <div>
+                              <p className="text-[10px] text-white/40 mb-2 font-semibold uppercase tracking-wider">
+                                {language==='ar'?'المزاج والأجواء ✱':'Vibe & Mood ✱'}{effectiveVibe.trim() && <span className="text-[#E2C7A8] ml-1">✓</span>}
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {([
+                                  {e:'🔥',en:'Epic & Grand',ar:'ملحمي وعظيم',v:'Epic and grand — cinematic score, wide establishing shots, larger than life'},
+                                  {e:'✨',en:'Luxurious',ar:'فاخر وراقي',v:'Luxurious and prestigious — slow motion, rich textures, gold tones'},
+                                  {e:'⚡',en:'Dramatic',ar:'درامي مكثف',v:'Dramatic and intense — high contrast, deep shadows, powerful tension'},
+                                  {e:'💛',en:'Emotional',ar:'عاطفي مؤثر',v:'Emotional and heartfelt — soft light, intimate close-ups, stirring music'},
+                                  {e:'🌅',en:'Inspiring',ar:'ملهم',v:'Inspiring and uplifting — bright light, rising motion, hopeful tone'},
+                                  {e:'💥',en:'High Energy',ar:'طاقة عالية',v:'Exciting and high energy — fast cuts, dynamic movement, adrenaline'},
+                                  {e:'🌿',en:'Peaceful',ar:'هادئ',v:'Peaceful and serene — slow camera, nature, stillness, gentle pace'},
+                                ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
+                                  <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaVibe===v}
+                                    onSelect={()=>{setCinemaVibe(v);setCinemaVibeCustom('');}} disabled={isDirecting} />
+                                ))}
+                                <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
+                                  selected={cinemaVibe==='Custom'} onSelect={()=>setCinemaVibe('Custom')} disabled={isDirecting} />
+                              </div>
+                              {cinemaVibe==='Custom' && (
+                                <input type="text" value={cinemaVibeCustom} onChange={(e)=>setCinemaVibeCustom(e.target.value)}
+                                  disabled={isDirecting} placeholder={language==='ar'?'صف المزاج...':'Describe the mood...'}
+                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none"
+                                  style={{background:'rgba(12,15,20,0.6)',border:'1px solid rgba(226,199,168,0.4)'}} autoFocus />
+                              )}
+                            </div>
 
-                        {/* Setting chips */}
-                        <div>
-                          <p className="text-[10px] text-white/40 mb-2 font-semibold uppercase tracking-wider">
-                            {language==='ar'?'الموقع (اختياري)':'Setting (optional)'}{effectiveSetting.trim() && <span className="text-[#E2C7A8] ml-2">✓</span>}
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {([
-                              {e:'🌆',en:'City Night',ar:'مدينة ليلاً',v:'a futuristic modern city skyline at night, glass towers reflecting light'},
-                              {e:'🏜️',en:'Desert Dunes',ar:'صحراء ذهبية',v:'a vast open desert at golden hour, endless sand dunes, warm haze'},
-                              {e:'🌊',en:'Ocean Coast',ar:'ساحل المحيط',v:'an ocean coastline at sunrise, crashing waves, warm mist'},
-                              {e:'🚀',en:'Outer Space',ar:'الفضاء',v:'outer space, earth from orbit, stars and galaxies stretching forever'},
-                              {e:'🏔️',en:'Mountains',ar:'جبال شامخة',v:'dramatic mountain peaks above the clouds, epic wide shot'},
-                              {e:'🌲',en:'Forest',ar:'غابة',v:'a lush green forest, rays of light through tall trees'},
-                            ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
-                              <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaSetting===v} onSelect={()=>{setCinemaSetting(v);setCinemaSettingCustom('');}} disabled={isDirecting} />
-                            ))}
-                            <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                              selected={cinemaSetting==='Custom'} onSelect={()=>setCinemaSetting('Custom')} disabled={isDirecting} />
-                          </div>
-                          {cinemaSetting==='Custom' && (
-                            <input type="text" value={cinemaSettingCustom} onChange={(e)=>setCinemaSettingCustom(e.target.value)}
-                              disabled={isDirecting} placeholder={language==='ar'?'صف الموقع...':'Describe the setting...'}
-                              className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none"
-                              style={{background:'rgba(12,15,20,0.6)',border:'1px solid rgba(226,199,168,0.4)'}} autoFocus />
-                          )}
-                        </div>
+                            {/* Setting chips */}
+                            <div>
+                              <p className="text-[10px] text-white/35 mb-2 font-semibold uppercase tracking-wider">
+                                {language==='ar'?'الموقع (اختياري)':'Setting (optional)'}{effectiveSetting.trim() && <span className="text-[#E2C7A8] ml-1">✓</span>}
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {([
+                                  {e:'🌆',en:'City Night',ar:'مدينة ليلاً',v:'a futuristic modern city skyline at night, glass towers reflecting light'},
+                                  {e:'🏜️',en:'Desert',ar:'صحراء',v:'a vast open desert at golden hour, endless sand dunes, warm haze'},
+                                  {e:'🌊',en:'Ocean',ar:'ساحل',v:'an ocean coastline at sunrise, crashing waves, warm mist'},
+                                  {e:'🚀',en:'Space',ar:'الفضاء',v:'outer space, earth from orbit, stars and galaxies stretching forever'},
+                                  {e:'🏔️',en:'Mountains',ar:'جبال',v:'dramatic mountain peaks above the clouds, epic wide shot'},
+                                  {e:'🌲',en:'Forest',ar:'غابة',v:'a lush green forest, rays of light through tall trees'},
+                                ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
+                                  <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaSetting===v}
+                                    onSelect={()=>{setCinemaSetting(v);setCinemaSettingCustom('');}} disabled={isDirecting} />
+                                ))}
+                                <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
+                                  selected={cinemaSetting==='Custom'} onSelect={()=>setCinemaSetting('Custom')} disabled={isDirecting} />
+                              </div>
+                              {cinemaSetting==='Custom' && (
+                                <input type="text" value={cinemaSettingCustom} onChange={(e)=>setCinemaSettingCustom(e.target.value)}
+                                  disabled={isDirecting} placeholder={language==='ar'?'صف الموقع...':'Describe the setting...'}
+                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none"
+                                  style={{background:'rgba(12,15,20,0.6)',border:'1px solid rgba(226,199,168,0.4)'}} autoFocus />
+                              )}
+                            </div>
 
-                        {/* Main Action chips */}
-                        <div>
-                          <p className="text-[10px] text-white/40 mb-2 font-semibold uppercase tracking-wider">
-                            {language==='ar'?'الحدث الرئيسي (اختياري)':'Main Action (optional)'}{effectiveAction.trim() && <span className="text-[#E2C7A8] ml-2">✓</span>}
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {([
-                              {e:'🎬',en:'Dramatic Reveal',ar:'كشف درامي',v:'a slow dramatic cinematic reveal — the subject emerges from darkness into a spotlight'},
-                              {e:'🚀',en:'Soaring Flight',ar:'تحليق جريء',v:'soaring and flying at high speed through a dramatic environment'},
-                              {e:'❤️',en:'Human Moment',ar:'لحظة إنسانية',v:'an intimate human moment — warmth, connection, and genuine emotion'},
-                              {e:'🌍',en:'Epic Journey',ar:'رحلة ملحمية',v:'a sweeping aerial journey — camera glides over landscapes and terrain'},
-                              {e:'🎉',en:'Celebration',ar:'احتفال',v:'a joyful celebration — energy, movement, confetti, people coming together'},
-                            ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
-                              <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaAction===v} onSelect={()=>{setCinemaAction(v);setCinemaActionCustom('');}} disabled={isDirecting} />
-                            ))}
-                            <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                              selected={cinemaAction==='Custom'} onSelect={()=>setCinemaAction('Custom')} disabled={isDirecting} />
+                            {/* Main Action chips */}
+                            <div>
+                              <p className="text-[10px] text-white/35 mb-2 font-semibold uppercase tracking-wider">
+                                {language==='ar'?'الحدث الرئيسي (اختياري)':'Main Action (optional)'}{effectiveAction.trim() && <span className="text-[#E2C7A8] ml-1">✓</span>}
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {([
+                                  {e:'🎬',en:'Dramatic Reveal',ar:'كشف درامي',v:'a slow dramatic cinematic reveal — the subject emerges from darkness into a spotlight'},
+                                  {e:'🚀',en:'Soaring Flight',ar:'تحليق جريء',v:'soaring and flying at high speed through a dramatic environment'},
+                                  {e:'❤️',en:'Human Moment',ar:'لحظة إنسانية',v:'an intimate human moment — warmth, connection, and genuine emotion'},
+                                  {e:'🌍',en:'Epic Journey',ar:'رحلة ملحمية',v:'a sweeping aerial journey — camera glides over landscapes and terrain'},
+                                  {e:'🎉',en:'Celebration',ar:'احتفال',v:'a joyful celebration — energy, movement, confetti, people coming together'},
+                                ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
+                                  <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaAction===v}
+                                    onSelect={()=>{setCinemaAction(v);setCinemaActionCustom('');}} disabled={isDirecting} />
+                                ))}
+                                <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
+                                  selected={cinemaAction==='Custom'} onSelect={()=>setCinemaAction('Custom')} disabled={isDirecting} />
+                              </div>
+                              {cinemaAction==='Custom' && (
+                                <input type="text" value={cinemaActionCustom} onChange={(e)=>setCinemaActionCustom(e.target.value)}
+                                  disabled={isDirecting} placeholder={language==='ar'?'صف الحدث...':'Describe the action...'}
+                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none"
+                                  style={{background:'rgba(12,15,20,0.6)',border:'1px solid rgba(226,199,168,0.4)'}} autoFocus />
+                              )}
+                            </div>
+
+                            {effectiveVibe.trim() && (
+                              <button type="button" onClick={()=>setCinemaOpenSection(2)}
+                                className="self-end text-[11px] font-semibold text-[#E2C7A8] opacity-70 hover:opacity-100 transition-opacity">
+                                {language==='ar'?'التالي ›':'Next ›'}
+                              </button>
+                            )}
                           </div>
-                          {cinemaAction==='Custom' && (
-                            <input type="text" value={cinemaActionCustom} onChange={(e)=>setCinemaActionCustom(e.target.value)}
-                              disabled={isDirecting} placeholder={language==='ar'?'صف الحدث...':'Describe the action...'}
-                              className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none"
-                              style={{background:'rgba(12,15,20,0.6)',border:'1px solid rgba(226,199,168,0.4)'}} autoFocus />
-                          )}
-                        </div>
+                        )}
                       </div>
 
                       {/* ── SECTION 3: Characters + Scenes ── */}
-                      <div className="rounded-2xl px-4 py-4 flex flex-col gap-4" style={{background:'rgba(255,255,255,0.02)',border:'1px solid rgba(255,255,255,0.07)'}}>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-[#E2C7A8]/70">
-                          {language==='ar'?'٣ · الشخصيات وعدد المشاهد':'3 · Characters & Scenes'}
-                        </p>
+                      <div className="rounded-2xl px-4 py-3 transition-all"
+                        style={{background:openSection===2?'rgba(255,255,255,0.03)':'rgba(255,255,255,0.02)',border:openSection===2?'1px solid rgba(226,199,168,0.2)':'1px solid rgba(255,255,255,0.07)'}}>
+                        <SecHeader idx={2} label={language==='ar'?'الشخصيات وعدد المشاهد':'Characters & Scenes'} done={sec3Done}
+                          summary={cinemaCharacters ? cinemaCharacters.split('—')[0].trim() : undefined} />
+                        {openSection === 2 && (
+                          <div className="mt-3 flex flex-col gap-4">
 
-                        {/* Characters chips */}
-                        <div>
-                          <p className="text-[10px] text-white/40 mb-2 font-semibold uppercase tracking-wider">
-                            {language==='ar'?'من يظهر في الفيلم؟':'Who is in the movie?'}{cinemaCharacters.trim() && <span className="text-[#E2C7A8] ml-2">✓</span>}
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {([
-                              {e:'📦',en:'No People',ar:'بدون أشخاص',v:'no people — product, object, or creature only'},
-                              {e:'👤',en:'Solo Hero',ar:'بطل واحد',v:'one solo person — the hero, the protagonist'},
-                              {e:'👥',en:'Two People',ar:'شخصان',v:'two people'},
-                              {e:'👨‍👩‍👧',en:'Small Group',ar:'مجموعة صغيرة',v:'a small group of 3-5 people'},
-                              {e:'🏟️',en:'Crowd',ar:'حشد',v:'a crowd or community — many people united'},
-                            ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
-                              <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v}
-                                selected={cinemaCharacters===v}
-                                onSelect={()=>{setCinemaCharacters(v);setCinemaRelationship('');}}
-                                disabled={isDirecting} />
-                            ))}
-                            <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                              selected={cinemaCharacters==='Custom'} onSelect={()=>{setCinemaCharacters('Custom');setCinemaRelationship('');}} disabled={isDirecting} />
-                          </div>
-                          {(cinemaCharacters==='Custom' || (cinemaCharacters && cinemaCharacters!=='no people — product, object, or creature only' && cinemaCharacters!=='one solo person — the hero, the protagonist')) && (
-                            <input type="text" value={cinemaRelationship} onChange={(e)=>setCinemaRelationship(e.target.value)}
-                              disabled={isDirecting}
-                              placeholder={cinemaCharacters==='Custom'?(language==='ar'?'صف الشخصيات...':'Describe characters...'):(language==='ar'?'العلاقة بينهم...':'Relationship between them...')}
-                              className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none"
-                              style={{background:'rgba(12,15,20,0.6)',border:'1px solid rgba(226,199,168,0.4)'}} autoFocus />
-                          )}
-                        </div>
+                            {/* Characters chips */}
+                            <div>
+                              <p className="text-[10px] text-white/40 mb-2 font-semibold uppercase tracking-wider">
+                                {language==='ar'?'من يظهر في الفيلم؟ ✱':'Who is in the movie? ✱'}{cinemaCharacters.trim() && <span className="text-[#E2C7A8] ml-1">✓</span>}
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {([
+                                  {e:'📦',en:'No People',ar:'بدون أشخاص',v:'no people — product, object, or creature only'},
+                                  {e:'👤',en:'Solo Hero',ar:'بطل واحد',v:'one solo person — the hero, the protagonist'},
+                                  {e:'👥',en:'Two People',ar:'شخصان',v:'two people'},
+                                  {e:'👨‍👩‍👧',en:'Small Group',ar:'مجموعة صغيرة',v:'a small group of 3-5 people'},
+                                  {e:'🏟️',en:'Crowd',ar:'حشد',v:'a crowd or community — many people united'},
+                                ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
+                                  <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v}
+                                    selected={cinemaCharacters===v}
+                                    onSelect={()=>{setCinemaCharacters(v);setCinemaRelationship('');}}
+                                    disabled={isDirecting} />
+                                ))}
+                                <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
+                                  selected={cinemaCharacters==='Custom'} onSelect={()=>{setCinemaCharacters('Custom');setCinemaRelationship('');}} disabled={isDirecting} />
+                              </div>
+                              {(cinemaCharacters==='Custom' || (cinemaCharacters && cinemaCharacters!=='no people — product, object, or creature only' && cinemaCharacters!=='one solo person — the hero, the protagonist')) && (
+                                <input type="text" value={cinemaRelationship} onChange={(e)=>setCinemaRelationship(e.target.value)}
+                                  disabled={isDirecting}
+                                  placeholder={cinemaCharacters==='Custom'?(language==='ar'?'صف الشخصيات...':'Describe characters...'):(language==='ar'?'العلاقة بينهم...':'Relationship between them...')}
+                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none"
+                                  style={{background:'rgba(12,15,20,0.6)',border:'1px solid rgba(226,199,168,0.4)'}} autoFocus />
+                              )}
+                            </div>
 
-                        {/* Scene count — compact inline pills */}
-                        <div>
-                          <p className="text-[10px] text-white/40 mb-2 font-semibold uppercase tracking-wider">
-                            {language==='ar'?'عدد المشاهد':'How many scenes?'}{isSceneCountReady && <span className="text-[#E2C7A8] ml-2">✓</span>}
-                          </p>
-                          <div className="flex gap-2">
-                            {[1,2,3,4,5,6].map(n=>(
-                              <button key={n}
-                                onClick={()=>{setCinemaSceneCount(n);setCinemaSceneCountTouched(true);}}
-                                disabled={isDirecting}
-                                className="flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-40"
-                                style={{
-                                  background:cinemaSceneCountTouched&&cinemaSceneCount===n?'linear-gradient(135deg,#E2C7A8,#C5A47E)':'rgba(255,255,255,0.04)',
-                                  border:cinemaSceneCountTouched&&cinemaSceneCount===n?'1px solid rgba(226,199,168,0.8)':'1px solid rgba(255,255,255,0.1)',
-                                  color:cinemaSceneCountTouched&&cinemaSceneCount===n?'#0c0f14':'rgba(255,255,255,0.5)',
-                                }}>
-                                <span className="text-sm font-bold">{n}</span>
-                                <span className="text-[9px] opacity-80">{n*10}s</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+                            {/* Scene count — compact inline pills — default 3 shown dimmed, user must tap */}
+                            <div>
+                              <p className="text-[10px] text-white/40 mb-2 font-semibold uppercase tracking-wider">
+                                {language==='ar'?'عدد المشاهد ✱':'How many scenes? ✱'}{isSceneCountReady && <span className="text-[#E2C7A8] ml-1">✓</span>}
+                              </p>
+                              <div className="flex gap-2">
+                                {[1,2,3,4,5,6].map(n=>(
+                                  <button key={n}
+                                    onClick={()=>{setCinemaSceneCount(n);setCinemaSceneCountTouched(true);}}
+                                    disabled={isDirecting}
+                                    className="flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-40"
+                                    style={{
+                                      background: isSceneCountReady && cinemaSceneCount===n ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : n===3 && !isSceneCountReady ? 'rgba(226,199,168,0.08)' : 'rgba(255,255,255,0.04)',
+                                      border: isSceneCountReady && cinemaSceneCount===n ? '1px solid rgba(226,199,168,0.8)' : n===3 && !isSceneCountReady ? '1px solid rgba(226,199,168,0.2)' : '1px solid rgba(255,255,255,0.1)',
+                                      color: isSceneCountReady && cinemaSceneCount===n ? '#0c0f14' : 'rgba(255,255,255,0.5)',
+                                    }}>
+                                    <span className="text-sm font-bold">{n}</span>
+                                    <span className="text-[9px] opacity-80">{n*10}s</span>
+                                  </button>
+                                ))}
+                              </div>
+                              {!isSceneCountReady && (
+                                <p className="text-[10px] text-white/25 mt-1.5 px-1">{language==='ar'?'اختر عدد المشاهد للمتابعة':'Tap a number to confirm'}</p>
+                              )}
+                            </div>
 
-                        {/* Video Purpose chips (optional) */}
-                        <div>
-                          <p className="text-[10px] text-white/35 mb-2 font-semibold uppercase tracking-wider">
-                            {language==='ar'?'هدف الفيديو (اختياري)':'Goal (optional)'}{effectiveCTA.trim() && <span className="text-[#E2C7A8] ml-2">✓</span>}
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {([
-                              {e:'🛍️',en:'Sell Product',ar:'بيع منتج',v:'sell or promote a product — end with a strong desire to buy'},
-                              {e:'🏷️',en:'Brand',ar:'هوية العلامة',v:'build brand identity — make the audience feel who we are'},
-                              {e:'📣',en:'Announce',ar:'إعلان حدث',v:'announce an event or launch — create urgency and excitement'},
-                              {e:'💪',en:'Inspire',ar:'إلهام',v:'inspire and motivate the viewer — leave them feeling empowered'},
-                              {e:'❤️',en:'Emotional',ar:'تواصل عاطفي',v:'create an emotional connection — make the audience feel deeply'},
-                              {e:'📱',en:'Go Viral',ar:'انتشار واسع',v:'grow social media presence — designed to be shared and go viral'},
-                            ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
-                              <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v}
-                                selected={cinemaCTA===v} onSelect={()=>{setCinemaCTA(v);setCinemaCTACustom('');}} disabled={isDirecting} />
-                            ))}
-                            <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                              selected={cinemaCTA==='Custom'} onSelect={()=>setCinemaCTA('Custom')} disabled={isDirecting} />
+                            {/* Video Purpose chips (optional) */}
+                            <div>
+                              <p className="text-[10px] text-white/35 mb-2 font-semibold uppercase tracking-wider">
+                                {language==='ar'?'هدف الفيديو (اختياري)':'Goal (optional)'}{effectiveCTA.trim() && <span className="text-[#E2C7A8] ml-1">✓</span>}
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {([
+                                  {e:'🛍️',en:'Sell Product',ar:'بيع منتج',v:'sell or promote a product — end with a strong desire to buy'},
+                                  {e:'🏷️',en:'Brand',ar:'هوية العلامة',v:'build brand identity — make the audience feel who we are'},
+                                  {e:'📣',en:'Announce',ar:'إعلان حدث',v:'announce an event or launch — create urgency and excitement'},
+                                  {e:'💪',en:'Inspire',ar:'إلهام',v:'inspire and motivate the viewer — leave them feeling empowered'},
+                                  {e:'❤️',en:'Emotional',ar:'تواصل عاطفي',v:'create an emotional connection — make the audience feel deeply'},
+                                  {e:'📱',en:'Go Viral',ar:'انتشار واسع',v:'grow social media presence — designed to be shared and go viral'},
+                                ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
+                                  <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v}
+                                    selected={cinemaCTA===v} onSelect={()=>{setCinemaCTA(v);setCinemaCTACustom('');}} disabled={isDirecting} />
+                                ))}
+                                <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
+                                  selected={cinemaCTA==='Custom'} onSelect={()=>setCinemaCTA('Custom')} disabled={isDirecting} />
+                              </div>
+                              {cinemaCTA==='Custom' && (
+                                <input type="text" value={cinemaCTACustom} onChange={(e)=>setCinemaCTACustom(e.target.value)}
+                                  disabled={isDirecting} placeholder={language==='ar'?'صف هدف الفيديو...':'Describe the goal...'}
+                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none"
+                                  style={{background:'rgba(12,15,20,0.6)',border:'1px solid rgba(226,199,168,0.4)'}} autoFocus />
+                              )}
+                            </div>
                           </div>
-                          {cinemaCTA==='Custom' && (
-                            <input type="text" value={cinemaCTACustom} onChange={(e)=>setCinemaCTACustom(e.target.value)}
-                              disabled={isDirecting} placeholder={language==='ar'?'صف هدف الفيديو...':'Describe the goal...'}
-                              className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none"
-                              style={{background:'rgba(12,15,20,0.6)',border:'1px solid rgba(226,199,168,0.4)'}} autoFocus />
-                          )}
-                        </div>
+                        )}
                       </div>
                     </div>
 
