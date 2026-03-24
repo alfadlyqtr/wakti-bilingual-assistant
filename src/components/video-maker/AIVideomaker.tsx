@@ -2294,7 +2294,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               <span className="text-[10px]" style={{color: clr.textSubtle}}>{cinemaSubject.length}/300</span>
                               {f1 && (
                                 <button type="button" onClick={()=>setCinemaOpenSection(1)}
-                                  className="text-[11px] font-semibold text-[#E2C7A8] opacity-70 hover:opacity-100 transition-opacity">
+                                  className="px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
+                                  style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
                                   {language==='ar'?'التالي ›':'Next ›'}
                                 </button>
                               )}
@@ -2397,7 +2398,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                             {sec2Done && (
                               <button type="button" onClick={()=>setCinemaOpenSection(2)}
-                                className="self-end text-[11px] font-semibold text-[#E2C7A8] opacity-70 hover:opacity-100 transition-opacity">
+                                className="self-end px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
+                                style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
                                 {language==='ar'?'التالي ›':'Next ›'}
                               </button>
                             )}
