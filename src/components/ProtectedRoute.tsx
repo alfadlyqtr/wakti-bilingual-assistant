@@ -13,8 +13,6 @@ interface ProtectedRouteProps {
   CustomPaywallModal?: React.ComponentType<{ open: boolean; onOpenChange: (open: boolean) => void; variant: PaywallVariant }>;
 }
 
-// Cache TTL: 30 minutes
-const CACHE_TTL_MS = 30 * 60 * 1000;
 
 export default function ProtectedRoute({ children, CustomPaywallModal }: ProtectedRouteProps) {
   const DEV = !!(import.meta && import.meta.env && import.meta.env.DEV);
@@ -115,66 +113,15 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
       }
 
       try {
-        // Ensure we have a fresh/valid session before hitting DB (dedupes refreshes)
+        // Zero-Trust: always wait for live DB response — no timeouts, no cache
         await ensurePassport();
         console.log("ProtectedRoute: Fetching subscription status from database...");
 
-        const timeoutMs = 3000;
-        let timedOut = false;
-        const timeoutPromise = new Promise((resolve) => setTimeout(() => { timedOut = true; resolve('timeout'); }, timeoutMs));
-        const fetchPromise = (async () => {
-          const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('is_subscribed, subscription_status, next_billing_date, billing_start_date, plan_name, payment_method')
-            .eq('id', user.id)
-            .maybeSingle();
-          return { profile, error } as const;
-        })();
-
-        const result = await Promise.race([fetchPromise, timeoutPromise]);
-
-        if (result === 'timeout') {
-          console.warn('ProtectedRoute: Subscription check timed out after', timeoutMs, 'ms');
-          // Try cached status; if none, temporarily allow and retry later
-          try {
-            const cacheKey = `wakti_sub_status_${user.id}`;
-            const cached = localStorage.getItem(cacheKey);
-            if (cached) {
-              const parsed = JSON.parse(cached);
-              const fresh = typeof parsed.ts === 'number' && (Date.now() - parsed.ts) <= CACHE_TTL_MS;
-              if (fresh) {
-                setSubscriptionStatus({
-                  isSubscribed: !!parsed.isSubscribed,
-                  isLoading: false,
-                  needsPayment: !!parsed.needsPayment,
-                  subscriptionDetails: parsed.subscriptionDetails
-                });
-              } else {
-                // SURGICAL FIX #3: Secure the Timeout Fallback
-                // Default to unsubscribed - better to show paywall than give away app
-                setSubscriptionStatus({ isSubscribed: false, isLoading: false, needsPayment: true });
-              }
-            } else {
-              // SURGICAL FIX #3: Secure the Timeout Fallback
-              // Default to unsubscribed - better to show paywall than give away app
-              setSubscriptionStatus({ isSubscribed: false, isLoading: false, needsPayment: true });
-            }
-          } catch {}
-
-          // Retry in background (only once per user, StrictMode-safe)
-          if (!retriedRef.current && !destroyedRef.current) {
-            retriedRef.current = true;
-            if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
-            retryTimerRef.current = window.setTimeout(() => {
-              if (!destroyedRef.current) {
-                checkSubscriptionStatus();
-              }
-            }, 3000);
-          }
-          return;
-        }
-
-        const { profile, error } = result as { profile: any, error: any };
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('is_subscribed, subscription_status, next_billing_date, billing_start_date, plan_name, payment_method')
+          .eq('id', user.id)
+          .maybeSingle();
 
         if (error) {
           console.error('ProtectedRoute: Error fetching subscription status:', error);
@@ -249,24 +196,12 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
           needsPayment
         });
 
-        const nextStatus = { 
+        setSubscriptionStatus({ 
           isSubscribed: isValidSubscription, 
           isLoading: false,
           needsPayment: needsPayment && !isValidSubscription,
           subscriptionDetails: profile
-        };
-        setSubscriptionStatus(nextStatus);
-
-        // Cache the latest status for fast restores
-        try {
-          const cacheKey = `wakti_sub_status_${user.id}`;
-          localStorage.setItem(cacheKey, JSON.stringify({
-            isSubscribed: nextStatus.isSubscribed,
-            needsPayment: nextStatus.needsPayment,
-            subscriptionDetails: nextStatus.subscriptionDetails,
-            ts: Date.now()
-          }));
-        } catch {}
+        });
       } catch (error) {
         console.error('ProtectedRoute: Exception during subscription check:', error);
         setSubscriptionStatus({ 
@@ -340,12 +275,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     const handleSubscriptionUpdate = () => {
       console.log('ProtectedRoute: Received subscription update event, refreshing profile...');
       if (user?.id) {
-        // Clear cache
-        try {
-          localStorage.removeItem(`wakti_sub_status_${user.id}`);
-        } catch {}
         // Directly fetch fresh profile data from database
-        // This bypasses slow realtime updates and ensures immediate state refresh
         supabase
           .from('profiles')
           .select('*')
@@ -354,7 +284,6 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
           .then(({ data, error }) => {
             if (!error && data) {
               console.log('ProtectedRoute: Fresh profile fetched, is_subscribed:', data.is_subscribed);
-              // Force useUserProfile to see the update by dispatching a custom event it listens to
               window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
             }
           });
@@ -520,13 +449,20 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   }
 
   // ── ZERO-TRUST WHITELIST ──
-  // Plain booleans (primitives compare by value — useMemo is unnecessary and would
-  // violate Rules of Hooks here since we're after early returns).
-  const isVerifiedSubscriber = !!(isSubscribed || subscriptionStatus.isSubscribed || isAdminGifted || isGracePeriod);
-  const shouldSeeDashboard = !isLoading && !isProfileLoading && !subscriptionStatus.isLoading && isVerifiedSubscriber && !isNewUser;
+  // Access is confirmed ONLY when all loading is done AND at least one positive
+  // live-verified signal is true. subscriptionStatus.isSubscribed is kept here
+  // because it reflects the same live DB fetch (no cache feeds it anymore).
+  // isNewUser explicitly blocks even if a live signal passes (they must start trial first).
+  const hasConfirmedAccess = (
+    !isLoading &&
+    !isProfileLoading &&
+    !subscriptionStatus.isLoading &&
+    (isSubscribed || subscriptionStatus.isSubscribed || isAdminGifted || isGracePeriod) &&
+    !isNewUser
+  );
 
   // Log access decision only when values actually change (not on every render)
-  const accessDecisionSnapshot = DEV ? JSON.stringify({ email: user?.email, shouldSeeDashboard, isVerifiedSubscriber, isNewUser, isSubscribed, isAdminGifted, isGracePeriod, showPaywall, paywallVariant }) : '';
+  const accessDecisionSnapshot = DEV ? JSON.stringify({ email: user?.email, hasConfirmedAccess, isNewUser, isSubscribed, subscriptionStatus_isSubscribed: subscriptionStatus.isSubscribed, isAdminGifted, isGracePeriod, showPaywall, paywallVariant }) : '';
   if (DEV && accessDecisionSnapshot !== accessDecisionRef.current) {
     accessDecisionRef.current = accessDecisionSnapshot;
     console.log('ProtectedRoute: Access decision:', JSON.parse(accessDecisionSnapshot));
@@ -537,11 +473,11 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
       {CustomPaywallModal && (
         <CustomPaywallModal open={showPaywall} onOpenChange={setShowPaywall} variant={paywallVariant} />
       )}
-      {shouldSeeDashboard ? (
+      {hasConfirmedAccess ? (
         children
       ) : (
         <div className="w-screen h-[100dvh] bg-[#0c0f14] flex items-center justify-center overflow-hidden">
-          {/* Pitch-black. No greetings. No icons. No leaks. */}
+          {/* Absolute Black. No icons. No greetings. No leaks. Zero-Trust. */}
         </div>
       )}
     </>

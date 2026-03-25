@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { toast } from "sonner";
 import { DragModeToggle } from "@/components/dashboard/DragModeToggle";
 import { WidgetGrid } from "@/components/dashboard/WidgetGrid";
@@ -12,6 +13,7 @@ import { t } from "@/utils/translations";
 export default function Dashboard() {
   const { language } = useTheme();
   const { user } = useAuth();
+  const { profile, loading: profileLoading } = useUserProfile();
   const [isDragging, setIsDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen'>(() => {
@@ -72,19 +74,13 @@ export default function Dashboard() {
     };
   }, [dashboardLook]);
 
-  // Extract display name or fallback to email/first char
-  let displayName = '';
-  if (user?.user_metadata) {
-    displayName =
-      user.user_metadata.display_name ||
-      user.user_metadata.full_name ||
-      user.user_metadata.username ||
-      (user.email ? user.email.split("@")[0] : "");
-    // fallback so username doesn't appear empty
-    if (!displayName && user.email) {
-      displayName = user.email.split("@")[0];
-    }
-  }
+  // Extract display name from LIVE profile data (never from stale user_metadata)
+  // Safe fallback chain: display_name → username → email prefix → empty (loading)
+  const displayName = profileLoading
+    ? ''
+    : (profile?.display_name ||
+       profile?.username ||
+       (user?.email ? user.email.split('@')[0] : '')) || '';
 
   // Listen for widget settings changes from Settings page
   useEffect(() => {

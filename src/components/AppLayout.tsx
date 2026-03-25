@@ -447,7 +447,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   // X and Skip are gone. No variant has an escape hatch.
   const showXButton = false;
   const showSkipButton = false;
-  const showRestorePurchases = variant === 'cancelled' && step === 2;
+  const showRestorePurchases = (variant === 'cancelled' || variant === 'trial_expired') && step === 2;
   // Nothing can be dismissed — paywall is always a hard gate
   const canDismiss = false;
 

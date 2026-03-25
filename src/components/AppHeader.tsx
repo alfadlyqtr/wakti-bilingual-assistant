@@ -15,12 +15,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo, ChevronLeft } from "lucide-react";
+import { Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo, ChevronLeft, Settings, HelpCircle as Help, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo3D } from "@/components/Logo3D";
 import { MobileSlideDownNav } from "@/components/MobileSlideDownNav";
 import { t } from "@/utils/translations";
-import { Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut } from "lucide-react";
 import { UnreadBadge } from "./UnreadBadge";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { WeatherButton } from "@/components/WeatherButton";
@@ -133,25 +132,11 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
       hoverClass: 'hover:bg-blue-500/10'
     },
     { 
-      title: language === 'ar' ? 'الحساب' : 'Account', 
-      href: '/account',
-      icon: <Account className="w-4 h-4" />,
-      colorClass: 'text-purple-500',
-      hoverClass: 'hover:bg-purple-500/10'
-    },
-    { 
       title: t("help", language), 
       href: '/help',
       icon: <Help className="w-4 h-4" />,
       colorClass: 'text-green-500',
       hoverClass: 'hover:bg-green-500/10'
-    },
-    { 
-      title: language === 'ar' ? 'جهات الاتصال' : 'Contacts', 
-      href: '/contacts',
-      icon: <Contacts className="w-4 h-4" />,
-      colorClass: 'text-cyan-500',
-      hoverClass: 'hover:bg-cyan-500/10'
     },
     { 
       title: language === 'ar' ? 'تسجيل الخروج' : 'Logout', 
@@ -160,10 +145,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
       colorClass: 'text-red-500',
       hoverClass: 'hover:bg-red-500/10'
     }
-  ].filter((item) => {
-    if (!isHomescreenMode) return true;
-    return item.href !== '/account' && item.href !== '/contacts';
-  });
+  ];
   
   // Function to get page title and icon with matching colors from MobileNav
   const getPageTitleWithIcon = () => {

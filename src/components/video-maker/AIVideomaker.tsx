@@ -190,7 +190,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [isCinemaAmping, setIsCinemaAmping] = useState(false);
   const [cinemaStep, setCinemaStep] = useState<'desk' | 'storyboard' | 'casting' | 'filming' | 'premiere'>('desk');
   const [visualDNA, setVisualDNA] = useState('');
-  const [cinemaFormat, setCinemaFormat] = useState<'16:9' | '9:16'>('16:9');
+  const [cinemaFormat, setCinemaFormat] = useState<'16:9' | '9:16' | '4:5'>('16:9');
+  const [selectedPlatform, setSelectedPlatform] = useState<'youtube' | 'tiktok' | 'instagram' | 'snapchat' | null>(null);
+  const [selectedSubFormat, setSelectedSubFormat] = useState<string | null>(null);
   const [cinemaMode, setCinemaMode] = useState<'auto' | 'custom'>('auto');
   const [cinemaAudio, setCinemaAudio] = useState(true);
 
@@ -1060,6 +1062,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       brandAnchor && anchorTag === 'logo' && `Brand asset provided: a LOGO/TEXT mark — Scene 1 must describe the visual scene that the logo will be composited onto; do NOT describe the logo itself`,
       brandAnchor && anchorTag === 'style' && `Brand reference image provided: use ONLY its color palette, lighting mood, and atmosphere — do NOT mention logos, brand marks, emblems, or text`,
       brandAnchor && anchorTag === 'character' && `Character reference image provided: describe the actions and journey of this specific character throughout all scenes`,
+      selectedSubFormat && (() => {
+        const sf = selectedSubFormat;
+        if(sf.includes('YouTube Standard')) return `Format: YouTube Standard Video (16:9 widescreen) — optimize for cinematic widescreen storytelling with wide establishing shots and deliberate pacing`;
+        if(sf.includes('YouTube Shorts')) return `Format: YouTube Shorts (9:16 vertical) — optimize for high-energy vertical mobile viewing; fast hook in first 2 seconds`;
+        if(sf.includes('Instagram Reels')) return `Format: Instagram Reel (9:16 vertical) — optimize for high-energy mobile viewing; bold visuals, trendy pacing, immediate visual hook`;
+        if(sf.includes('Instagram Feed')) return `Format: Instagram Feed Post (4:5 vertical) — bold clean composition for the feed; strong central subject, immediate visual impact`;
+        if(sf.includes('Instagram Story')) return `Format: Instagram Story (9:16 vertical) — full-screen immersive vertical; intimate tone, ephemeral feel`;
+        if(sf.includes('TikTok')) return `Format: TikTok Vertical (9:16) — optimize for vertical viewing with high-impact visuals for the mobile feed; fast hooks, energetic pacing, trending aesthetic`;
+        if(sf.includes('Snapchat')) return `Format: Snapchat Story (9:16 vertical) — full-screen vertical; playful, authentic, immediate visual engagement`;
+        return `Format: ${sf} — optimize for the selected platform and aspect ratio`;
+      })(),
     ].filter(Boolean).join('. ');
 
     const visionToSend = cinemaVision.trim() ? `${cinemaVision.trim()}. ${builtVision}` : builtVision;
@@ -2605,20 +2618,20 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             onClick={() => setCinemaMode('auto')}
                             className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold transition-all"
                             style={cinemaMode==='auto'
-                              ? {background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14'}
-                              : {background:'transparent',color:'rgba(255,255,255,0.45)'}}
+                              ? {background:'#0f172a',color:'#E2C7A8',border:'2px solid #E2C7A8',boxShadow:'0 0 12px rgba(226,199,168,0.5)',borderRadius:'10px'}
+                              : {background:'transparent',color:'rgba(255,255,255,0.45)',border:'2px solid transparent',borderRadius:'10px'}}
                           >
-                            <span>🪄</span><span>{language==='ar'?'تلقائي':'Auto'}</span>
+                            <span style={{filter: cinemaMode==='auto' ? 'none' : 'grayscale(1) opacity(0.5)'}}>🪄</span><span>{language==='ar'?'تلقائي':'Auto'}</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => setCinemaMode('custom')}
                             className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold transition-all"
                             style={cinemaMode==='custom'
-                              ? {background:'linear-gradient(135deg,hsl(210,100%,60%),hsl(280,70%,65%))',color:'#fff'}
-                              : {background:'transparent',color:'rgba(255,255,255,0.45)'}}
+                              ? {background:'#0f172a',color:'#E2C7A8',border:'2px solid #E2C7A8',boxShadow:'0 0 12px rgba(226,199,168,0.5)',borderRadius:'10px'}
+                              : {background:'transparent',color:'rgba(255,255,255,0.45)',border:'2px solid transparent',borderRadius:'10px'}}
                           >
-                            <span>🎥</span><span>{language==='ar'?'يدوي':'Custom'}</span>
+                            <span style={{filter: cinemaMode==='custom' ? 'none' : 'grayscale(1) opacity(0.5)'}}>🎥</span><span>{language==='ar'?'يدوي':'Custom'}</span>
                           </button>
                         </div>
                         
@@ -2820,6 +2833,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   {e:'🌅',en:'Inspiring',ar:'ملهم',v:'Inspiring and uplifting — bright light, rising motion, hopeful tone'},
                                   {e:'💥',en:'High Energy',ar:'طاقة عالية',v:'Exciting and high energy — fast cuts, dynamic movement, adrenaline'},
                                   {e:'🌿',en:'Peaceful',ar:'هادئ',v:'Peaceful and serene — slow camera, nature, stillness, gentle pace'},
+                                  {e:'📺',en:'Nostalgic / Retro',ar:'نوستالژيا / ريترو',v:'Nostalgic and retro — warm film grain, faded colors, childhood memory aesthetic'},
+                                  {e:'🎞️',en:'Vintage Film',ar:'فيلم كلاسيكي',v:'Vintage film look — heavy grain, muted tones, old-money cinematic quality'},
+                                  {e:'🛸',en:'Futuristic',ar:'مستقبلي',v:'Futuristic and hi-tech — neon accents, sleek surfaces, modern urban atmosphere'},
+                                  {e:'⬛',en:'Minimalist',ar:'بسيط هادئ',v:'Minimalist and clean — negative space, simple geometry, silent elegance'},
+
                                 ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
                                   <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaVibe.includes(v)}
                                     onSelect={()=>{
@@ -2850,7 +2868,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   {e:'📦',en:'No People',ar:'بدون أشخاص',v:'no people — product, object, or creature only'},
                                   {e:'👤',en:'Solo Hero',ar:'بطل واحد',v:'one solo person — the hero, the protagonist'},
                                   {e:'👥',en:'Two People',ar:'شخصان',v:'two people'},
-                                  {e:'👨‍👩‍👧',en:'Small Group',ar:'مجموعة صغيرة',v:'a small group of 3-5 people'},
+                                  {e:'👨‍👩‍👧‍👦',en:'Family',ar:'العائلة',v:'a family — warm, authentic moments between family members'},
+                                  {e:'💼',en:'Professionals',ar:'محترفون',v:'a group of professionals — confident, competent, business-ready'},
+                                  {e:'🦅',en:'Animals',ar:'حيوانات',v:'animals or wildlife — majestic creatures as the visual subject'},
+                                  {e:'📦',en:'Objects',ar:'منتجات / مجسمات',v:'objects or products — hero product shots, no people'},
                                   {e:'🏟️',en:'Crowd',ar:'حشد',v:'a crowd or community — many people united'},
                                 ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
                                   <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaCharacters===v}
@@ -2893,6 +2914,108 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               {!f4 && <p className="text-[10px] mt-1.5 px-1" style={{color: clr.textSubtle}}>{language==='ar'?'اختر عدداً للمتابعة':'Tap a number to confirm'}</p>}
                             </div>
 
+                            {/* Platform & Format selector */}
+                            <div>
+                              <p className="text-[10px] mb-1 font-semibold uppercase tracking-wider" style={{color: clr.textMuted}}>
+                                {language==='ar'?'المنصة والتنسيق':'Platform & Format'}{selectedSubFormat && <span className="text-[#E2C7A8] ml-1">✓</span>}
+                              </p>
+                              <p className="text-[9px] mb-2" style={{color: clr.textSubtle}}>{language==='ar'?'اختر منصة النشر':'Choose your publishing platform'}</p>
+                              <div className="flex flex-wrap gap-2">
+
+                                {/* YouTube — real dropdown */}
+                                <div className="relative">
+                                  <button
+                                    type="button" disabled={isDirecting}
+                                    onClick={()=>setSelectedPlatform(p => p==='youtube' ? null : 'youtube')}
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 disabled:opacity-40"
+                                    style={selectedPlatform==='youtube'||selectedSubFormat?.includes('YouTube')
+                                      ? {background:'rgba(255,0,0,0.15)',border:'1.5px solid rgba(255,0,0,0.6)',color:'#fff',boxShadow:'0 0 8px rgba(255,0,0,0.3)'}
+                                      : {background: clr.numBg, border:`1px solid ${clr.numBorder}`, color: clr.numText}}
+                                  >
+                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="#FF0000"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                                    <span>{selectedSubFormat?.includes('YouTube') ? selectedSubFormat.replace(' (16:9)','').replace(' (9:16)','') : (language==='ar'?'يوتيوب':'YouTube')}</span>
+                                    <span className="text-[9px] opacity-60">{selectedPlatform==='youtube' ? '▴' : '▾'}</span>
+                                  </button>
+                                  {selectedPlatform==='youtube' && (
+                                    <div className="absolute left-0 top-full mt-1 z-50 rounded-xl overflow-hidden shadow-xl" style={{background:'#1a1f2e',border:'1px solid rgba(255,0,0,0.4)',minWidth:'160px'}}>
+                                      {([
+                                        {label:language==='ar'?'فيديو عادي':'Standard Video', sub:'16:9', fmt:'16:9' as const, sfName:'YouTube Standard (16:9)'},
+                                        {label:language==='ar'?'يوتيوب شورتس':'YouTube Shorts', sub:'9:16', fmt:'9:16' as const, sfName:'YouTube Shorts (9:16)'},
+                                      ]).map(({label,sub,fmt,sfName})=>(
+                                        <button key={sfName} type="button"
+                                          onClick={()=>{setCinemaFormat(fmt);setSelectedSubFormat(sfName);setSelectedPlatform(null);}}
+                                          className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium transition-all hover:bg-red-900/30 active:scale-[0.98]"
+                                          style={{color: selectedSubFormat===sfName ? '#fff' : 'rgba(255,255,255,0.75)', background: selectedSubFormat===sfName ? 'rgba(255,0,0,0.2)' : 'transparent'}}>
+                                          <span>{label}</span>
+                                          <span className="opacity-50 text-[9px]">{sub}</span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* TikTok — instant select */}
+                                <button
+                                  type="button" disabled={isDirecting}
+                                  onClick={()=>{setSelectedPlatform('tiktok');setCinemaFormat('9:16');setSelectedSubFormat('TikTok Vertical (9:16)');}}
+                                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 disabled:opacity-40"
+                                  style={selectedSubFormat?.includes('TikTok')
+                                    ? {background:'rgba(0,0,0,0.5)',border:'1.5px solid #69C9D0',color:'#fff',boxShadow:'0 0 8px rgba(105,201,208,0.4)'}
+                                    : {background: clr.numBg, border:`1px solid ${clr.numBorder}`, color: clr.numText}}
+                                >
+                                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.29 6.29 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.16 8.16 0 0 0 4.77 1.52V6.76a4.85 4.85 0 0 1-1-.07z"/></svg>
+                                  <span>{language==='ar'?'تيك توك':'TikTok'}</span>
+                                </button>
+
+                                {/* Instagram — real dropdown */}
+                                <div className="relative">
+                                  <button
+                                    type="button" disabled={isDirecting}
+                                    onClick={()=>setSelectedPlatform(p => p==='instagram' ? null : 'instagram')}
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 disabled:opacity-40"
+                                    style={selectedPlatform==='instagram'||selectedSubFormat?.includes('Instagram')
+                                      ? {background:'rgba(188,24,136,0.2)',border:'1.5px solid #cc2366',color:'#fff',boxShadow:'0 0 8px rgba(188,24,136,0.3)'}
+                                      : {background: clr.numBg, border:`1px solid ${clr.numBorder}`, color: clr.numText}}
+                                  >
+                                    <svg viewBox="0 0 24 24" width="13" height="13"><defs><linearGradient id="ig3" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stopColor="#f09433"/><stop offset="50%" stopColor="#dc2743"/><stop offset="100%" stopColor="#bc1888"/></linearGradient></defs><path fill="url(#ig3)" d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                                    <span>{selectedSubFormat?.includes('Instagram') ? selectedSubFormat.replace(' (9:16)','').replace(' (4:5)','') : (language==='ar'?'إنستغرام':'Instagram')}</span>
+                                    <span className="text-[9px] opacity-60">{selectedPlatform==='instagram' ? '▴' : '▾'}</span>
+                                  </button>
+                                  {selectedPlatform==='instagram' && (
+                                    <div className="absolute left-0 top-full mt-1 z-50 rounded-xl overflow-hidden shadow-xl" style={{background:'#1a1f2e',border:'1px solid rgba(204,35,102,0.5)',minWidth:'160px'}}>
+                                      {([
+                                        {label:language==='ar'?'ريلز':'Reels', sub:'9:16', fmt:'9:16' as const, sfName:'Instagram Reels (9:16)'},
+                                        {label:language==='ar'?'بوست':'Feed Post', sub:'4:5', fmt:'4:5' as const, sfName:'Instagram Feed Post (4:5)'},
+                                        {label:language==='ar'?'ستوري':'Story', sub:'9:16', fmt:'9:16' as const, sfName:'Instagram Story (9:16)'},
+                                      ]).map(({label,sub,fmt,sfName})=>(
+                                        <button key={sfName} type="button"
+                                          onClick={()=>{setCinemaFormat(fmt);setSelectedSubFormat(sfName);setSelectedPlatform(null);}}
+                                          className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium transition-all hover:bg-pink-900/30 active:scale-[0.98]"
+                                          style={{color: selectedSubFormat===sfName ? '#fff' : 'rgba(255,255,255,0.75)', background: selectedSubFormat===sfName ? 'rgba(188,24,136,0.25)' : 'transparent'}}>
+                                          <span>{label}</span>
+                                          <span className="opacity-50 text-[9px]">{sub}</span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Snapchat — instant select */}
+                                <button
+                                  type="button" disabled={isDirecting}
+                                  onClick={()=>{setSelectedPlatform('snapchat');setCinemaFormat('9:16');setSelectedSubFormat('Snapchat Story (9:16)');}}
+                                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 disabled:opacity-40"
+                                  style={selectedSubFormat?.includes('Snapchat')
+                                    ? {background:'rgba(255,252,0,0.15)',border:'1.5px solid rgba(255,252,0,0.7)',color:'#fff',boxShadow:'0 0 8px rgba(255,252,0,0.3)'}
+                                    : {background: clr.numBg, border:`1px solid ${clr.numBorder}`, color: clr.numText}}
+                                >
+                                  <svg viewBox="0 0 24 24" width="13" height="13" fill="#FFFC00"><path d="M12.166.006c.94-.006 4.55.26 6.22 3.79.56 1.17.44 3.14.35 4.73l-.02.3c-.01.21-.02.41-.03.58.24-.09.5-.22.74-.39.3-.21.61-.3.9-.27.5.05.95.43.98.85.03.38-.2.79-.73 1.1-.09.05-.21.11-.35.17-.44.19-1.07.43-1.27 1.01-.1.3.01.64.34 1.03.02.02 1.93 2.44 4.55 2.86.18.03.31.19.29.37-.02.16-.14.29-.29.32-.03.01-.05.01-.08.02-.45.09-2.18.46-2.48 1.5-.06.2-.22.31-.43.26-.11-.02-.22-.04-.36-.07-.56-.12-1.29-.28-2.29-.28-.42 0-.86.03-1.29.1-.87.14-1.62.61-2.42 1.11-.97.59-1.96 1.21-3.27 1.21s-2.3-.62-3.27-1.21c-.8-.5-1.55-.97-2.42-1.11-.43-.07-.87-.1-1.29-.1-1 0-1.73.16-2.29.28-.13.03-.25.05-.36.07-.21.05-.37-.06-.43-.26-.3-1.04-2.03-1.41-2.48-1.5-.03 0-.05-.01-.08-.02-.15-.03-.27-.16-.29-.32-.02-.18.11-.34.29-.37 2.62-.42 4.52-2.82 4.55-2.86.33-.39.44-.73.34-1.03-.2-.58-.83-.82-1.27-1.01-.14-.06-.26-.12-.35-.17-.48-.28-.74-.68-.73-1.1.03-.42.48-.8.98-.85.29-.03.6.06.9.27.24.17.5.3.74.39-.01-.17-.02-.37-.03-.58l-.02-.3c-.09-1.59-.21-3.56.35-4.73C7.616.272 11.17.012 12.116.006h.05z"/></svg>
+                                  <span>{language==='ar'?'سناب شات':'Snapchat'}</span>
+                                </button>
+
+                              </div>
+                            </div>
+
                             {sec2Done && (
                               <button type="button" onClick={()=>setCinemaOpenSection(2)}
                                 className="self-end px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
@@ -2923,11 +3046,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               <div className="flex flex-wrap gap-2">
                                 {([
                                   {e:'🏙️',en:'City Night',ar:'مدينة ليلاً',v:'a futuristic modern city skyline at night, glass towers reflecting light'},
+                                  {e:'🌇',en:'City Day',ar:'مدينة نهاراً',v:'a vibrant modern city skyline during the day, blue sky, busy streets, urban energy'},
                                   {e:'🏜️',en:'Desert',ar:'صحراء',v:'a vast open desert at golden hour, endless sand dunes, warm haze'},
                                   {e:'🌊',en:'Ocean',ar:'ساحل',v:'an ocean coastline at sunrise, crashing waves, warm mist'},
                                   {e:'🚀',en:'Space',ar:'الفضاء',v:'outer space, earth from orbit, stars and galaxies stretching forever'},
                                   {e:'🏔️',en:'Mountains',ar:'جبال',v:'dramatic mountain peaks above the clouds, epic wide shot'},
                                   {e:'🌲',en:'Forest',ar:'غابة',v:'a lush green forest, rays of light through tall trees'},
+                                  {e:'🏠',en:'Luxury Interior',ar:'تصميم داخلي فاخر',v:'a high-end luxury interior — marble floors, tall ceilings, warm ambient lighting, premium furniture'},
+                                  {e:'🕌',en:'Heritage / Traditional',ar:'تراثي / تقليدي',v:'a traditional GCC heritage setting — old market, wind towers, traditional architecture, warm earth tones'},
+                                  {e:'🏢',en:'Modern Office',ar:'مكتب عصري',v:'a sleek modern corporate office — glass walls, open plan, professional lighting'},
+                                  {e:'🛣️',en:'Highway / Road',ar:'طريق سريعة',v:'a long open highway stretching into the horizon, heat haze, dramatic sky'},
+
                                 ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
                                   <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaSetting.includes(v)}
                                     onSelect={()=>setCinemaSetting(prev => prev.includes(v) ? prev.filter(x=>x!==v) : [...prev.filter(x=>x!=='Custom'), v])}
@@ -2959,6 +3088,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   {e:'❤️',en:'Human Moment',ar:'لحظة إنسانية',v:'an intimate human moment — warmth, connection, and genuine emotion'},
                                   {e:'🌍',en:'Epic Journey',ar:'رحلة ملحمية',v:'a sweeping aerial journey — camera glides over landscapes and terrain'},
                                   {e:'🎉',en:'Celebration',ar:'احتفال',v:'a joyful celebration — energy, movement, confetti, people coming together'},
+                                  {e:'🛸',en:'Drone Sweep',ar:'مسح طائرة درون',v:'a cinematic drone sweep — wide aerial pull-back revealing scale and grandeur of the scene'},
+                                  {e:'🔍',en:'Product Close-up',ar:'لقطة مقربة للمنتج',v:'a detailed product close-up — macro lens, texture and craftsmanship, slow rotation'},
+                                  {e:'🚶‍♂️',en:'Cinematic Walk',ar:'مشي سينمائي',v:'a confident cinematic walk — hero strides forward, camera tracks alongside or follows from behind'},
+                                  {e:'⚡',en:'Fast Motion / Speed',ar:'حركة سريعة',v:'fast motion and speed — blurred streaks, rapid movement, adrenaline-fueled energy'},
+
                                 ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
                                   <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaAction.includes(v)}
                                     onSelect={()=>setCinemaAction(prev => prev.includes(v) ? prev.filter(x=>x!==v) : [...prev.filter(x=>x!=='Custom'), v])}
@@ -2990,6 +3124,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   {e:'💪',en:'Inspire',ar:'إلهام',v:'inspire and motivate the viewer — leave them feeling empowered'},
                                   {e:'❤️',en:'Emotional',ar:'تواصل عاطفي',v:'create an emotional connection — make the audience feel deeply'},
                                   {e:'📱',en:'Go Viral',ar:'انتشار واسع',v:'grow social media presence — designed to be shared and go viral'},
+                                  {e:'🏠',en:'Real Estate Tour',ar:'جولة عقارية',v:'showcase a property — highlight space, luxury finishes, and lifestyle — make the viewer want to live there'},
+                                  {e:'🚗',en:'Automotive / Speed',ar:'عرض سيارات',v:'showcase an automotive vehicle — power, speed, design — evoke desire and aspiration'},
+                                  {e:'🍴',en:'Food & Beverage',ar:'مطاعم ومأكولات',v:'showcase food and dining — close-up textures, steam, pour shots, appetite appeal'},
+
                                 ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
                                   <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v}
                                     selected={cinemaCTA===v} onSelect={()=>{setCinemaCTA(v);setCinemaCTACustom('');}} disabled={isDirecting} />
