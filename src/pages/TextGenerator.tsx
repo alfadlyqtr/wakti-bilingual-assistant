@@ -32,7 +32,7 @@ export default function TextGenerator() {
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === 'compose' ? 'true' : 'false'}
+              aria-selected={activeTab === 'compose'}
               onClick={() => setActiveTab('compose')}
               className={`h-12 rounded-xl border text-sm font-medium transition-all
                 ${activeTab === 'compose'
@@ -45,7 +45,7 @@ export default function TextGenerator() {
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === 'reply' ? 'true' : 'false'}
+              aria-selected={activeTab === 'reply'}
               onClick={() => setActiveTab('reply')}
               className={`h-12 rounded-xl border text-sm font-medium transition-all
                 ${activeTab === 'reply'
@@ -58,7 +58,7 @@ export default function TextGenerator() {
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === 'generated' ? 'true' : 'false'}
+              aria-selected={activeTab === 'generated'}
               onClick={() => setActiveTab('generated')}
               className={`h-12 rounded-xl border text-sm font-medium transition-all
                 ${activeTab === 'generated'
@@ -71,7 +71,7 @@ export default function TextGenerator() {
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === 'diagrams' ? 'true' : 'false'}
+              aria-selected={activeTab === 'diagrams'}
               onClick={() => setActiveTab('diagrams')}
               className={`h-12 rounded-xl border text-sm font-medium transition-all
                 ${activeTab === 'diagrams'
@@ -84,7 +84,7 @@ export default function TextGenerator() {
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === 'presentation' ? 'true' : 'false'}
+              aria-selected={activeTab === 'presentation'}
               onClick={() => setActiveTab('presentation')}
               className={`h-12 rounded-xl border text-sm font-medium transition-all
                 ${activeTab === 'presentation'
@@ -97,7 +97,7 @@ export default function TextGenerator() {
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === 'translate' ? 'true' : 'false'}
+              aria-selected={activeTab === 'translate'}
               onClick={() => setActiveTab('translate')}
               className={`h-12 rounded-xl border text-sm font-medium transition-all
                 ${activeTab === 'translate'
@@ -115,6 +115,7 @@ export default function TextGenerator() {
           renderAsPage={true}
           initialTab={activeTab}
           onClose={() => { /* no-op (page) */ }}
+          onTabChange={(tab) => setActiveTab(tab as any)}
           onTextGenerated={(text) => {
             if (text) setActiveTab('generated');
           }}

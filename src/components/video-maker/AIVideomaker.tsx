@@ -191,6 +191,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [cinemaStep, setCinemaStep] = useState<'desk' | 'storyboard' | 'casting' | 'filming' | 'premiere'>('desk');
   const [visualDNA, setVisualDNA] = useState('');
   const [cinemaFormat, setCinemaFormat] = useState<'16:9' | '9:16'>('16:9');
+  const [cinemaMode, setCinemaMode] = useState<'auto' | 'custom'>('auto');
 
   // Role 2 & 3 — Artist & Cloner
   const [sceneImages, setSceneImages] = useState<(string | null)[]>([null, null, null, null, null, null]);
@@ -1648,6 +1649,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setCastingRegenSceneAnchor(null);
     setIsRegenningScene(false);
     setAnchorTag('style');
+    setCinemaMode('auto');
     if (animPollRef.current) clearInterval(animPollRef.current);
   }, []);
 
@@ -2586,6 +2588,29 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         <h3 className="text-xl font-bold" style={{color: clr.text, textShadow: isDark ? '0 0 20px rgba(226,199,168,0.5)' : 'none'}}>
                           {language === 'ar' ? 'مكتب الفيزيونير' : 'The Visionnaire'}
                         </h3>
+                        {/* Auto / Custom toggle */}
+                        <div className="inline-flex mt-2 rounded-xl overflow-hidden" style={{border:'1px solid rgba(226,199,168,0.25)',background:'rgba(12,15,20,0.4)'}}>
+                          <button
+                            type="button"
+                            onClick={() => setCinemaMode('auto')}
+                            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold transition-all"
+                            style={cinemaMode==='auto'
+                              ? {background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14'}
+                              : {background:'transparent',color:'rgba(255,255,255,0.45)'}}
+                          >
+                            <span>🪄</span><span>{language==='ar'?'تلقائي':'Auto'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCinemaMode('custom')}
+                            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold transition-all"
+                            style={cinemaMode==='custom'
+                              ? {background:'linear-gradient(135deg,hsl(210,100%,60%),hsl(280,70%,65%))',color:'#fff'}
+                              : {background:'transparent',color:'rgba(255,255,255,0.45)'}}
+                          >
+                            <span>🎥</span><span>{language==='ar'?'يدوي':'Custom'}</span>
+                          </button>
+                        </div>
                       </div>
                       <div className="relative h-[3px] rounded-full overflow-hidden" style={{background: clr.progressTrack}}>
                         <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out"
@@ -2644,8 +2669,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               </div>
                             </div>
 
-                            {/* Brand / Anchor Image Upload */}
-                            <div className="mt-1 rounded-xl p-3 flex flex-col gap-2" style={{background: brandAnchor ? 'rgba(226,199,168,0.08)' : clr.cardBg, border: `1px solid ${brandAnchor ? 'rgba(226,199,168,0.35)' : clr.cardBorder}`}}>
+                            {/* Brand / Anchor Image Upload — hidden in Custom mode */}
+                            {cinemaMode === 'auto' && <div className="mt-1 rounded-xl p-3 flex flex-col gap-2" style={{background: brandAnchor ? 'rgba(226,199,168,0.08)' : clr.cardBg, border: `1px solid ${brandAnchor ? 'rgba(226,199,168,0.35)' : clr.cardBorder}`}}>
                               <p className="text-[10px] font-bold uppercase tracking-wider" style={{color: brandAnchor ? '#C5A47E' : clr.textMuted}}>
                                 {language==='ar' ? '🎨 أساس النمط والعلامة التجارية (اختياري)' : '🎨 Style & Brand Foundation (Optional)'}
                                 {brandAnchor && <span className="ml-1 text-[#E2C7A8]">✓</span>}
@@ -2730,7 +2755,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   </div>
                                 </div>
                               )}
-                            </div>
+                            </div>}
+
                           </div>
                         )}
                       </div>
@@ -3179,15 +3205,31 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     {cinemaScenes.length >= cinemaSceneCount && (
                       <div className="cinema-sticky-footer px-4 py-3">
                         <button
-                          onClick={handleCast}
+                          onClick={() => {
+                            if (cinemaMode === 'custom') {
+                              setSceneImages(Array(cinemaSceneCount).fill(null));
+                              setCastingProgress(Array(cinemaSceneCount).fill('idle'));
+                              setCinemaStep('casting');
+                            } else {
+                              handleCast();
+                            }
+                          }}
                           disabled={isCasting}
                           className="relative w-full h-14 text-base font-bold rounded-xl overflow-hidden transition-all active:scale-[0.98] disabled:opacity-50"
-                          style={{background:'linear-gradient(135deg,#E2C7A8 0%,#C5A47E 50%,#E2C7A8 100%)',backgroundSize:'200% 100%',animation:'shimmerGold 2.5s ease-in-out infinite',boxShadow:'0 8px 32px rgba(226,199,168,0.4)',color:'#0c0f14'}}
+                          style={cinemaMode === 'custom'
+                            ? {background:'linear-gradient(135deg,hsl(210,100%,60%),hsl(280,70%,65%))',boxShadow:'0 8px 32px hsla(210,100%,65%,0.4)',color:'#fff'}
+                            : {background:'linear-gradient(135deg,#E2C7A8 0%,#C5A47E 50%,#E2C7A8 100%)',backgroundSize:'200% 100%',animation:'shimmerGold 2.5s ease-in-out infinite',boxShadow:'0 8px 32px rgba(226,199,168,0.4)',color:'#0c0f14'}}
                         >
                           {isCasting ? (
                             <div className="flex items-center justify-center gap-2">
                               <Loader2 className="h-5 w-5 animate-spin" />
                               <span>{language === 'ar' ? 'المصور يرسم الصور...' : 'Artist is painting...'}</span>
+                            </div>
+                          ) : cinemaMode === 'custom' ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <span>🎥</span>
+                              <span>{language === 'ar' ? 'رفع صور المشاهد يدوياً' : 'Upload My Own Scene Images'}</span>
+                              <ArrowRight className="h-5 w-5" />
                             </div>
                           ) : (
                             <div className="flex items-center justify-center gap-2">
@@ -3206,16 +3248,22 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   <div className="flex flex-col gap-4 pb-4">
                     {/* Header */}
                     <div className="text-center space-y-1 px-1">
-                      <h3 className="text-lg font-bold text-white">{language === 'ar' ? 'تصوير المشاهد' : 'Casting the Movie'}</h3>
+                      <h3 className="text-lg font-bold text-white">
+                        {cinemaMode === 'custom'
+                          ? (language === 'ar' ? '🎥 رفع صور المشاهد' : '🎥 Upload Scene Images')
+                          : (language === 'ar' ? 'تصوير المشاهد' : 'Casting the Movie')}
+                      </h3>
                       <p className="text-xs text-white/50">
-                        {isCasting
-                          ? (language === 'ar' ? 'المصور الذكي يرسم مشاهدك...' : 'AI Artist is painting your scenes...')
-                          : (language === 'ar' ? 'اختر صورة المرساة للمشهد الأول' : 'Your scenes are ready — approve to film')}
+                        {cinemaMode === 'custom'
+                          ? (language === 'ar' ? 'ارفع صورة لكل مشهد — ثم اضغط تصوير' : 'Upload one image per scene — then tap Film')
+                          : isCasting
+                            ? (language === 'ar' ? 'المصور الذكي يرسم مشاهدك...' : 'AI Artist is painting your scenes...')
+                            : (language === 'ar' ? 'اختر صورة المرساة للمشهد الأول' : 'Your scenes are ready — approve to film')}
                       </p>
                     </div>
 
-                    {/* Master Anchor Preview */}
-                    {anchorImageUrl && (
+                    {/* Master Anchor Preview — auto mode only */}
+                    {cinemaMode === 'auto' && anchorImageUrl && (
                       <div className="mx-auto cinema-diamond-border rounded-2xl overflow-hidden"
                         style={{width: cinemaFormat === '16:9' ? '100%' : '60%', aspectRatio: cinemaFormat === '16:9' ? '16/9' : '9/16', maxHeight: '240px'}}>
                         <img src={anchorImageUrl} alt="Anchor scene" className="w-full h-full object-cover" />
@@ -3227,6 +3275,77 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       {Array.from({length: cinemaSceneCount}, (_, i) => i).map((idx) => {
                         const img = sceneImages[idx];
                         const prog = castingProgress[idx];
+
+                        // ── CUSTOM MODE: upload zone ──
+                        if (cinemaMode === 'custom') {
+                          return (
+                            <div key={idx} className="relative flex flex-col gap-1">
+                              <label
+                                className="relative rounded-2xl overflow-hidden cursor-pointer flex flex-col items-center justify-center transition-all active:scale-95"
+                                style={{aspectRatio: cinemaFormat === '16:9' ? '16/9' : '9/16', minHeight: '100px', background: img ? 'rgba(12,15,20,0.9)' : 'rgba(12,15,20,0.5)', border: img ? '1px solid rgba(226,199,168,0.6)' : '2px dashed rgba(255,255,255,0.15)'}}>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file || !user) return;
+                                    setCastingProgress(prev => { const n = [...prev]; n[idx] = 'loading'; return n; });
+                                    try {
+                                      const ext = file.name.split('.').pop() || 'jpg';
+                                      const path = `${user.id}/cinema-custom/scene-${idx}-${Date.now()}.${ext}`;
+                                      await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
+                                      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+                                      if (urlData?.publicUrl) {
+                                        setSceneImages(prev => { const n = [...prev]; n[idx] = urlData.publicUrl; return n; });
+                                        setCastingProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
+                                      }
+                                    } catch {
+                                      setCastingProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
+                                      toast.error(language === 'ar' ? 'فشل رفع الصورة' : 'Upload failed');
+                                    }
+                                    e.target.value = '';
+                                  }}
+                                />
+                                {img ? (
+                                  <img src={img} alt={`Scene ${idx+1}`} className="w-full h-full object-cover" />
+                                ) : prog === 'loading' ? (
+                                  <Loader2 className="h-6 w-6 animate-spin text-[#E2C7A8]/60" />
+                                ) : (
+                                  <div className="flex flex-col items-center gap-1.5">
+                                    <Upload className="h-5 w-5 text-white/30" />
+                                    <span className="text-[9px] text-white/30 font-semibold">
+                                      {language === 'ar' ? 'اضغط للرفع' : 'Tap to upload'}
+                                    </span>
+                                  </div>
+                                )}
+                                {/* Scene label */}
+                                <div className="absolute top-1.5 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold"
+                                  style={{background:'rgba(12,15,20,0.75)',color: img ? '#E2C7A8' : 'rgba(255,255,255,0.35)'}}>
+                                  {language === 'ar' ? `م${idx+1}` : `S${idx+1}`}
+                                  {img && ' ✓'}
+                                </div>
+                                {/* Clear button if uploaded */}
+                                {img && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.preventDefault(); setSceneImages(prev => { const n = [...prev]; n[idx] = null; return n; }); setCastingProgress(prev => { const n = [...prev]; n[idx] = 'idle'; return n; }); }}
+                                    className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center transition-colors"
+                                    style={{background:'rgba(0,0,0,0.7)',color:'rgba(255,255,255,0.7)'}}
+                                  >✕</button>
+                                )}
+                              </label>
+                              {/* Scene title from storyboard */}
+                              {cinemaScenes[idx] && (
+                                <p className="text-[9px] text-white/40 px-1 line-clamp-2 leading-tight">
+                                  {cinemaScenes[idx].text.slice(0, 60)}{cinemaScenes[idx].text.length > 60 ? '…' : ''}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        // ── AUTO MODE: existing AI-painted cell ──
                         return (
                           <div key={idx}
                             className={`relative rounded-2xl overflow-hidden ${prog === 'loading' ? 'cinema-gold-pulse cinema-painting-skeleton' : ''}`}
@@ -3250,7 +3369,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               {language === 'ar' ? `م${idx+1}` : `S${idx+1}`}
                               {prog === 'done' && ' ✓'}
                             </div>
-                            {/* Per-scene Regenerate button */}
+                            {/* Per-scene Regenerate button — auto mode only */}
                             {img && prog === 'done' && !isCasting && (
                               <button
                                 onClick={() => { setCastingRegenModal({ sceneIdx: idx }); setCastingRegenNote(''); setCastingRegenUseMaster(true); }}
@@ -3356,7 +3475,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             </div>
                           </label>
                           <div className="flex gap-2 pt-1">
-                            <button onClick={() => { setCastingRegenModal(null); setCastingRegenSceneAnchor(null); }}
+                            <button onClick={() => { setCastingRegenModal(null); setCastingRegenNote(''); setCastingRegenSceneAnchor(null); }}
                               className="flex-1 h-10 rounded-xl text-sm font-semibold transition-all active:scale-95"
                               style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',color:'rgba(255,255,255,0.6)'}}>
                               {language === 'ar' ? 'إلغاء' : 'Cancel'}
@@ -3550,18 +3669,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           className="w-full h-full object-cover"
                         />
                       </div>
-                      {/* Debug: open final blob in new tab to verify audio */}
-                      <a
-                        href={premiereVideoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95"
-                        style={{background:'rgba(99,102,241,0.12)',border:'1px solid rgba(99,102,241,0.3)',color:'rgba(165,167,255,0.9)'}}
-                      >
-                        <span>🔊</span>
-                        <span>{language === 'ar' ? 'معاينة الفيديو النهائي في تبويب جديد (للتحقق من الصوت)' : 'Preview final video in new tab (audio check)'}</span>
-                      </a>
-
                       {/* Actions */}
                       <div className="flex gap-2">
                         {/* Save to My Videos */}
@@ -3578,15 +3685,15 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           }}
                         >
                           {isCinemaSaving ? (
-                            <><Loader2 className="h-4 w-4 animate-spin" /><span>{language === 'ar' ? 'جاري الحفظ...' : 'Saving...'}</span></>
+                            <><Loader2 className="h-4 w-4 animate-spin" /><span className="hidden sm:inline">{language === 'ar' ? 'جاري الحفظ...' : 'Saving...'}</span></>
                           ) : isCinemaSaved ? (
-                            <><span>✓</span><span>{language === 'ar' ? 'تم الحفظ' : 'Saved!'}</span></>
+                            <><span>✓</span><span className="hidden sm:inline">{language === 'ar' ? 'تم الحفظ' : 'Saved!'}</span></>
                           ) : (
-                            <><Download className="h-4 w-4" /><span>{language === 'ar' ? 'حفظ في فيديوهاتي' : 'Save to My Videos'}</span></>
+                            <><Download className="h-4 w-4" /><span className="sm:hidden">{language === 'ar' ? 'حفظ' : 'Save'}</span><span className="hidden sm:inline">{language === 'ar' ? 'حفظ في فيديوهاتي' : 'Save to My Videos'}</span></>
                           )}
                         </button>
 
-                        {/* Download — always visible as a primary action */}
+                        {/* Download */}
                         <a
                           href={premiereVideoUrl}
                           download="Wakti-Cinema.mp4"
@@ -3594,7 +3701,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           style={{background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.85)'}}
                         >
                           <Download className="h-4 w-4" />
-                          <span>{language === 'ar' ? 'تنزيل' : 'Download'}</span>
+                          <span className="sm:hidden">{language === 'ar' ? 'تنزيل' : 'DL'}</span>
+                          <span className="hidden sm:inline">{language === 'ar' ? 'تنزيل' : 'Download'}</span>
                         </a>
 
                         {/* New film */}
@@ -3604,7 +3712,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',color:'rgba(255,255,255,0.5)'}}
                         >
                           <RefreshCw className="h-4 w-4" />
-                          {language === 'ar' ? 'جديد' : 'New'}
+                          <span className="hidden sm:inline">{language === 'ar' ? 'جديد' : 'New'}</span>
                         </button>
                       </div>
                     </div>

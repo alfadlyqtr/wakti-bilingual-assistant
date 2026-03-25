@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { ImagePlus, Loader2, Globe } from 'lucide-react';
+import { ImagePlus, Loader2, Globe, ChevronDown, ChevronUp } from 'lucide-react';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { safeCopyToClipboard } from '@/utils/clipboardUtils';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import DiagramsTab from './DiagramsTab';
 import PresentationTab from './PresentationTab';
 import TextTranslateTab from './TextTranslateTab';
@@ -14,6 +16,7 @@ interface TextGeneratorPopupProps {
   isOpen?: boolean;
   onClose: () => void;
   onTextGenerated: (text: string, mode: 'compose' | 'reply') => void;
+  onTabChange?: (tab: 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate') => void;
   renderAsPage?: boolean;
   initialTab?: 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate';
 }
@@ -325,10 +328,15 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   isOpen = true,
   onClose,
   onTextGenerated,
-  initialTab = 'compose',
+  onTabChange,
   renderAsPage = false,
+  initialTab = 'compose',
 }) => {
-  const [activeTab, setActiveTab] = useState<Tab>((initialTab as Tab) || 'compose');
+  const [activeTab, setActiveTab_internal] = useState<Tab>((initialTab as Tab) || 'compose');
+  const setActiveTab = useCallback((tab: Tab) => {
+    setActiveTab_internal(tab);
+    onTabChange?.(tab);
+  }, [onTabChange]);
   const [generatedSubTab, setGeneratedSubTab] = useState<'current' | 'saved'>('current');
   const [mode, setMode] = useState<Mode>('compose');
   const { language } = useTheme();
@@ -365,6 +373,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const [copied, setCopied] = useState(false);
   const [copyMenuOpen, setCopyMenuOpen] = useState(false);
   const [typingFrameIndex, setTypingFrameIndex] = useState(0);
+  const [showMoreOptions, setShowMoreOptions] = useState(false);
 
   // Screenshot upload refs
   const composeFileInputRef = useRef<HTMLInputElement>(null);
@@ -478,12 +487,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     }
   }, [initialTab]);
 
-  // If user opens Generated tab and there's no current text, auto-load newest cached
-  useEffect(() => {
-    if (activeTab === 'generated' && !generatedText && cachedTexts.length > 0) {
-      setGeneratedText(cachedTexts[0]);
-    }
-  }, [activeTab, generatedText, cachedTexts]);
+  // Note: auto-load from cache intentionally removed to avoid polluting the textarea
+  // during streaming. Cached texts are shown below for manual selection.
 
   const saveCache = (arr: string[]) => {
     setCachedTexts(arr);
@@ -563,8 +568,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
   const canUseUrlField = true;
 
-  const buildPrompt = (): string => {
-    if (activeTab === 'compose') {
+  const buildPromptForTab = useCallback((tab: Tab): string => {
+    if (tab === 'compose') {
       const humanBlock = tone === 'human' ? humanVoiceGuidelines(language) : '';
       const parts = [
         contentType === 'auto'
@@ -579,10 +584,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         humanBlock,
       ].filter(Boolean);
       return parts.join('\n');
-    } else if (activeTab === 'reply') {
+    } else if (tab === 'reply') {
       const humanBlock = tone === 'human' ? humanVoiceGuidelines(language) : '';
-      // If a screenshot was detected as a form, switch Reply into Fill Mode.
-      // Output should be copy/paste friendly (Subject + Message), not a letter-style reply.
       if (extractedForm) {
         const parts = [
           language === 'ar'
@@ -613,8 +616,6 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         return parts.join('\n');
       }
 
-      // Normal reply flow (email/message): choose whether we are replying to the sender
-      // or messaging someone else (e.g., a friend) about the original message.
       const audienceLine = replyAudience === 'someone_else'
         ? `Write a message to my friend${replyRecipientName.trim() ? ` (${replyRecipientName.trim()})` : ''}. The message should be addressed to my friend, not to the original sender.`
         : 'Craft a reply to the original sender.';
@@ -636,9 +637,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         originalMessage,
       ].filter(Boolean);
       return parts.join('\n');
-    } else if (activeTab === 'generated') {
-      // Use the last generated text as the seed for regeneration
-      // Keep intent but improve clarity, style and flow.
+    } else if (tab === 'generated') {
       return [
         'Rewrite and improve the following text while keeping the original intent. Refine clarity, style and flow. Preserve language and emojis if present.',
         '',
@@ -646,7 +645,11 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       ].join('\n');
     }
     return '';
-  };
+  }, [tone, language, contentType, topic, length, normalizedWordCount, captionPlatform, register, languageVariant, emojis, extractedForm, formSubject, formServiceAffected, formSeverity, formMessage, keyPoints, replyLength, normalizedReplyWordCount, replyAudience, replyRecipientName, originalMessage, generatedText]);
+
+  const buildPrompt = useCallback((): string => {
+    return buildPromptForTab(activeTab);
+  }, [buildPromptForTab, activeTab]);
 
   const splitNotesFromText = useCallback((text: string): { mainText: string; notes: string } => {
     let t = (text || '').trim();
@@ -768,12 +771,13 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     setError('');
     setCopied(false);
     try {
-      const prompt = buildPrompt();
+      const sourceTab = activeTab;
+      const prompt = buildPromptForTab(sourceTab);
       if (!prompt || !prompt.trim()) {
         setError('Nothing to regenerate');
         return;
       }
-      const modeForRequest: 'compose' | 'reply' = activeTab === 'compose' ? 'compose' : activeTab === 'reply' ? 'reply' : mode;
+      const modeForRequest: 'compose' | 'reply' = sourceTab === 'compose' ? 'compose' : sourceTab === 'reply' ? 'reply' : mode;
       const effectiveLength = (val: string): 'short' | 'medium' | 'long' | undefined => {
         if (!val || val === 'auto' || val === 'word_count') return undefined;
         if (val === 'very_short') return 'short';
@@ -802,39 +806,133 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         fetchUrlOnly: fetchUrlOnly ? true : undefined,
       };
 
-      const resp = await callEdgeFunctionWithRetry<any>('text-generator', {
-        body,
-        maxRetries: 1,
-        retryDelay: 500,
+      setGeneratedText('');
+      setWebSearchSources([]);
+      setGeneratedSubTab('current');
+      setActiveTab('generated');
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      const response = await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/functions/v1/text-generator`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify(body),
       });
 
-      if (resp?.error === 'TRIAL_LIMIT_REACHED') {
-        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: resp?.feature || (body.mode === 'reply' ? 'reply' : 'compose') } }));
+      const responseContentType = response.headers.get('content-type') || '';
+
+      if (!response.ok) {
+        if (responseContentType.includes('application/json')) {
+          const errorPayload = await response.json();
+          if (errorPayload?.error === 'TRIAL_LIMIT_REACHED') {
+            window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: errorPayload?.feature || (body.mode === 'reply' ? 'reply' : 'compose') } }));
+            return;
+          }
+          setError(errorPayload?.error || 'Failed to generate text');
+          return;
+        }
+
+        const errorText = await response.text();
+        setError(errorText || 'Failed to generate text');
         return;
       }
-      if (resp?.success && resp?.generatedText) {
-        setGeneratedText(resp.generatedText);
-        // Capture web search sources if available
-        setWebSearchSources(Array.isArray(resp.webSearchSources) ? resp.webSearchSources : []);
-        setActiveTab('generated');
-        setGeneratedSubTab('current');
-        onTextGenerated(resp.generatedText, body.mode);
 
-        // Update cache: newest first, keep max 3, remove duplicates/empties
-        const clean = (resp.generatedText || '').trim();
-        if (clean) {
-          const next = [clean, ...cachedTexts.filter((t) => t.trim() && t.trim() !== clean)].slice(0, 3);
-          saveCache(next);
+      if (responseContentType.includes('application/json')) {
+        const jsonPayload = await response.json();
+        if (jsonPayload?.error === 'TRIAL_LIMIT_REACHED') {
+          window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: jsonPayload?.feature || (body.mode === 'reply' ? 'reply' : 'compose') } }));
+          return;
         }
-      } else {
-        setError(resp?.error || 'Failed to generate text');
+
+        const cleanJsonText = typeof jsonPayload?.generatedText === 'string' ? jsonPayload.generatedText.trim() : '';
+        if (!jsonPayload?.success || !cleanJsonText) {
+          setError(jsonPayload?.error || 'Failed to generate text');
+          return;
+        }
+
+        const jsonSources = Array.isArray(jsonPayload?.webSearchSources) ? jsonPayload.webSearchSources : [];
+        setGeneratedText(cleanJsonText);
+        setWebSearchSources(jsonSources);
+        onTextGenerated(cleanJsonText, body.mode);
+
+        const next = [cleanJsonText, ...cachedTexts.filter((t) => t.trim() && t.trim() !== cleanJsonText)].slice(0, 3);
+        saveCache(next);
+        return;
       }
+
+      if (!response.body) {
+        setError('Streaming response not available');
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let sseBuffer = '';
+      let finalGeneratedText = '';
+      let finalSources: Array<{ title: string; url: string }> = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        sseBuffer += decoder.decode(value, { stream: true });
+        const events = sseBuffer.split('\n\n');
+        sseBuffer = events.pop() || '';
+
+        for (const eventChunk of events) {
+          const dataLines = eventChunk
+            .split('\n')
+            .filter((line) => line.startsWith('data:'))
+            .map((line) => line.slice(5).trim())
+            .filter(Boolean);
+
+          for (const dataLine of dataLines) {
+            try {
+              const event = JSON.parse(dataLine);
+              if (event?.type === 'chunk' && typeof event.text === 'string') {
+                finalGeneratedText += event.text;
+                setGeneratedText((prev) => prev + event.text);
+              }
+
+              if (event?.type === 'complete') {
+                finalGeneratedText = typeof event.generatedText === 'string' ? event.generatedText : finalGeneratedText;
+                finalSources = Array.isArray(event.webSearchSources) ? event.webSearchSources : [];
+                setGeneratedText(finalGeneratedText);
+                setWebSearchSources(finalSources);
+              }
+
+              if (event?.type === 'error') {
+                throw new Error(event?.error || 'Streaming failed');
+              }
+            } catch (streamErr) {
+              if (streamErr instanceof Error) throw streamErr;
+            }
+          }
+        }
+      }
+
+      const clean = (finalGeneratedText || '').trim();
+      if (!clean) {
+        setError('Failed to generate text');
+        return;
+      }
+
+      setGeneratedText(clean);
+      setWebSearchSources(finalSources);
+      onTextGenerated(clean, body.mode);
+
+      const next = [clean, ...cachedTexts.filter((t) => t.trim() && t.trim() !== clean)].slice(0, 3);
+      saveCache(next);
     } catch (e: any) {
       setError(e?.message || 'Generation failed');
     } finally {
       setIsLoading(false);
     }
-  }, [canGenerate, buildPrompt, activeTab, language, modelPreference, temperature, contentType, length, replyLength, tone, register, languageVariant, emojis, captionPlatform, useWebSearch, webSearchUrl, isWebSearchAllowed, fetchUrlOnly, normalizedWordCount, normalizedReplyWordCount, onTextGenerated]);
+  }, [canGenerate, activeTab, buildPromptForTab, mode, language, modelPreference, temperature, contentType, length, replyLength, tone, register, languageVariant, emojis, captionPlatform, useWebSearch, webSearchUrl, isWebSearchAllowed, fetchUrlOnly, normalizedWordCount, normalizedReplyWordCount, onTextGenerated]);
 
   const [isFetchingUrl, setIsFetchingUrl] = useState(false);
 
@@ -1178,84 +1276,120 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 </div>
               </div>
 
-              {/* Row 2: Length | Register (requested side-by-side) */}
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <label htmlFor="composeLength" className="text-sm font-medium">{language === 'ar' ? 'الطول' : 'Length'}</label>
-                  <select 
-                    id="composeLength"
-                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
-                    value={length} 
-                    onChange={(e) => setLength(e.target.value as any)}
-                    title={language === 'ar' ? 'اختر الطول' : 'Select length'}
-                  >
-                    <option value="auto">{language === 'ar' ? 'تلقائي' : 'Auto'}</option>
-                    <option value="very_short">{language === 'ar' ? 'قصير جدًا' : 'Very short'}</option>
-                    <option value="short">{language === 'ar' ? 'قصير' : 'Short'}</option>
-                    <option value="medium">{language === 'ar' ? 'متوسط' : 'Medium'}</option>
-                    <option value="long">{language === 'ar' ? 'طويل' : 'Long'}</option>
-                    <option value="very_long">{language === 'ar' ? 'طويل جدًا' : 'Very long'}</option>
-                    <option value="word_count">{language === 'ar' ? 'عدد الكلمات' : 'Word count'}</option>
-                  </select>
-                  {length === 'word_count' && (
-                    <div className="grid gap-1">
-                      <input
-                        type="number"
-                        min={1}
-                        max={3000}
-                        inputMode="numeric"
-                        className={`border rounded px-3 py-2 ${fieldAccent} ${placeholderMuted}`}
-                        placeholder={language === 'ar' ? 'أدخل عدد الكلمات (1-3000)' : 'Enter word count (1-3000)'}
-                        value={wordCount}
-                        onChange={(e) => setWordCount(e.target.value)}
-                      />
-                      <span className="text-xs text-muted-foreground">
-                        {language === 'ar' ? 'الحد الأقصى 3000 كلمة' : 'Max 3000 words'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="grid gap-2">
-                  <label htmlFor="composeRegister" className="text-sm font-medium">{language === 'ar' ? 'السجل اللغوي' : 'Register'}</label>
-                  <select 
-                    id="composeRegister"
-                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
-                    value={register} 
-                    onChange={(e) => setRegister(e.target.value as RegisterKey)}
-                    title={language === 'ar' ? 'اختر السجل اللغوي' : 'Select register'}
-                  >
-                    {REGISTER_KEYS.map((k) => (<option key={k} value={k}>{registerLabel(k, language)}</option>))}
-                  </select>
-                </div>
+              <div className="flex justify-start pt-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowMoreOptions((prev) => !prev)}
+                  className="h-9 px-3 text-sm text-muted-foreground hover:text-foreground border border-border/60 hover:border-border bg-background/60"
+                  aria-controls="composeAdvancedOptions"
+                >
+                  {showMoreOptions
+                    ? (language === 'ar' ? 'عرض أقل' : 'Show Less')
+                    : (language === 'ar' ? 'المزيد من الخيارات' : 'More Options')}
+                  {showMoreOptions ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </Button>
               </div>
 
-              {/* Row 2: Language Variant | Emojis */}
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="grid gap-2">
-                  <label htmlFor="composeLangVariant" className="text-sm font-medium">{language === 'ar' ? 'متغير اللغة' : 'Language Variant'}</label>
-                  <select 
-                    id="composeLangVariant"
-                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
-                    value={languageVariant} 
-                    onChange={(e) => setLanguageVariant(e.target.value as LanguageVariantKey)}
-                    title={language === 'ar' ? 'اختر متغير اللغة' : 'Select language variant'}
-                  >
-                    {(language === 'ar' ? LANGUAGE_VARIANT_KEYS_AR : LANGUAGE_VARIANT_KEYS_EN).map((k) => (
-                      <option key={k} value={k}>{langVariantLabel(k, language)}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid gap-2">
-                  <label htmlFor="composeEmojis" className="text-sm font-medium">Emojis</label>
-                  <select 
-                    id="composeEmojis"
-                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
-                    value={emojis} 
-                    onChange={(e) => setEmojis(e.target.value as EmojisKey)}
-                    title={language === 'ar' ? 'اختر تفضيلات الإيموجي' : 'Select emoji preferences'}
-                  >
-                    {EMOJIS_KEYS.map((k) => (<option key={k} value={k}>{emojisLabel(k, language)}</option>))}
-                  </select>
+              <div
+                id="composeAdvancedOptions"
+                className={`grid transition-all duration-300 ease-out ${showMoreOptions ? 'grid-rows-[1fr] opacity-100 mt-1' : 'grid-rows-[0fr] opacity-0'}`}
+              >
+                <div className="overflow-hidden">
+                  <div className="mt-2 rounded-2xl border border-border/60 bg-gradient-to-br from-background via-background to-muted/40 shadow-sm backdrop-blur-sm p-4 md:p-5 space-y-4">
+                    <div className="flex items-center justify-between gap-3 border-b border-border/40 pb-3">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">
+                          {language === 'ar' ? 'خيارات متقدمة' : 'Advanced Options'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {language === 'ar' ? 'خصص الصياغة والأسلوب بشكل أدق' : 'Refine style, structure, and expression'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <label htmlFor="composeLength" className="text-sm font-medium">{language === 'ar' ? 'الطول' : 'Length'}</label>
+                        <select 
+                          id="composeLength"
+                          className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                          value={length} 
+                          onChange={(e) => setLength(e.target.value as any)}
+                          title={language === 'ar' ? 'اختر الطول' : 'Select length'}
+                        >
+                          <option value="auto">{language === 'ar' ? 'تلقائي' : 'Auto'}</option>
+                          <option value="very_short">{language === 'ar' ? 'قصير جدًا' : 'Very short'}</option>
+                          <option value="short">{language === 'ar' ? 'قصير' : 'Short'}</option>
+                          <option value="medium">{language === 'ar' ? 'متوسط' : 'Medium'}</option>
+                          <option value="long">{language === 'ar' ? 'طويل' : 'Long'}</option>
+                          <option value="very_long">{language === 'ar' ? 'طويل جدًا' : 'Very long'}</option>
+                          <option value="word_count">{language === 'ar' ? 'عدد الكلمات' : 'Word count'}</option>
+                        </select>
+                        {length === 'word_count' && (
+                          <div className="grid gap-1">
+                            <input
+                              type="number"
+                              min={1}
+                              max={3000}
+                              inputMode="numeric"
+                              className={`border rounded px-3 py-2 ${fieldAccent} ${placeholderMuted}`}
+                              placeholder={language === 'ar' ? 'أدخل عدد الكلمات (1-3000)' : 'Enter word count (1-3000)'}
+                              value={wordCount}
+                              onChange={(e) => setWordCount(e.target.value)}
+                            />
+                            <span className="text-xs text-muted-foreground">
+                              {language === 'ar' ? 'الحد الأقصى 3000 كلمة' : 'Max 3000 words'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <label htmlFor="composeRegister" className="text-sm font-medium">{language === 'ar' ? 'السجل اللغوي' : 'Register'}</label>
+                        <select 
+                          id="composeRegister"
+                          className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                          value={register} 
+                          onChange={(e) => setRegister(e.target.value as RegisterKey)}
+                          title={language === 'ar' ? 'اختر السجل اللغوي' : 'Select register'}
+                        >
+                          {REGISTER_KEYS.map((k) => (<option key={k} value={k}>{registerLabel(k, language)}</option>))}
+                        </select>
+                      </div>
+                      <div className="grid gap-2">
+                        <label htmlFor="composeLangVariant" className="text-sm font-medium">{language === 'ar' ? 'متغير اللغة' : 'Language Variant'}</label>
+                        <select 
+                          id="composeLangVariant"
+                          className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                          value={languageVariant} 
+                          onChange={(e) => setLanguageVariant(e.target.value as LanguageVariantKey)}
+                          title={language === 'ar' ? 'اختر متغير اللغة' : 'Select language variant'}
+                        >
+                          {(language === 'ar' ? LANGUAGE_VARIANT_KEYS_AR : LANGUAGE_VARIANT_KEYS_EN).map((k) => (
+                            <option key={k} value={k}>{langVariantLabel(k, language)}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <label htmlFor="composeEmojis" className="text-sm font-medium">Emojis</label>
+                        <select 
+                          id="composeEmojis"
+                          className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                          value={emojis} 
+                          onChange={(e) => setEmojis(e.target.value as EmojisKey)}
+                          title={language === 'ar' ? 'اختر تفضيلات الإيموجي' : 'Select emoji preferences'}
+                        >
+                          {EMOJIS_KEYS.map((k) => (<option key={k} value={k}>{emojisLabel(k, language)}</option>))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1332,33 +1466,47 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                   )}
                 </div>
               </div>
-              <div className="grid gap-3 mb-3">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-sm font-medium">{language === 'ar' ? 'نقاط أساسية وكلمات مفتاحية' : 'Key Points & Keywords'}</label>
-                  <button
-                    type="button"
-                    onClick={() => setKeyPoints('')}
-                    className="text-xs px-2 py-1 rounded-md border hover:bg-muted"
-                    aria-label={language === 'ar' ? 'مسح النص' : 'Clear text'}
-                  >
-                    {language === 'ar' ? 'مسح' : 'Clear'}
-                  </button>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid gap-3 mb-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-sm font-medium">{language === 'ar' ? 'نقاط أساسية وكلمات مفتاحية' : 'Key Points & Keywords'}</label>
+                    <button
+                      type="button"
+                      onClick={() => setKeyPoints('')}
+                      className="text-xs px-2 py-1 rounded-md border hover:bg-muted"
+                      aria-label={language === 'ar' ? 'مسح النص' : 'Clear text'}
+                    >
+                      {language === 'ar' ? 'مسح' : 'Clear'}
+                    </button>
+                  </div>
+                  <textarea
+                    id="replyKeyPoints"
+                    className={`w-full border rounded px-3 py-2 min-h-[96px] ${fieldAccent} ${placeholderMuted}`}
+                    placeholder={
+                      language === 'ar'
+                        ? 'نقاط أساسية مفصولة بفواصل. مثال: اعتذار عن التأخير، رقم الطلب #1234، إرسال البديل، رقم التتبع، خصم 10%'
+                        : 'Must‑have points, comma‑separated. e.g., apologize for delay, order #1234, send replacement, tracking no., 10% coupon'
+                    }
+                    value={keyPoints}
+                    onChange={(e) => setKeyPoints(e.target.value)}
+                    title={language === 'ar' ? 'نقاط أساسية وكلمات مفتاحية' : 'Key points and keywords'}
+                  />
                 </div>
-                <textarea
-                  id="replyKeyPoints"
-                  className={`w-full border rounded px-3 py-2 min-h-[96px] ${fieldAccent} ${placeholderMuted}`}
-                  placeholder={
-                    language === 'ar'
-                      ? 'نقاط أساسية مفصولة بفواصل. مثال: اعتذار عن التأخير، رقم الطلب #1234، إرسال البديل، رقم التتبع، خصم 10%'
-                      : 'Must‑have points, comma‑separated. e.g., apologize for delay, order #1234, send replacement, tracking no., 10% coupon'
-                  }
-                  value={keyPoints}
-                  onChange={(e) => setKeyPoints(e.target.value)}
-                  title={language === 'ar' ? 'نقاط أساسية وكلمات مفتاحية' : 'Key points and keywords'}
-                />
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium" htmlFor="replyRecipientNameInput">{language === 'ar' ? 'اسم الشخص (اختياري)' : 'Name (optional)'}</label>
+                  <input
+                    id="replyRecipientNameInput"
+                    type="text"
+                    className={`border rounded px-3 py-2 ${fieldAccent} ${placeholderMuted}`}
+                    placeholder={language === 'ar' ? 'مثال: Jan' : 'e.g., Jan'}
+                    value={replyRecipientName}
+                    onChange={(e) => setReplyRecipientName(e.target.value)}
+                    disabled={replyAudience !== 'someone_else'}
+                    title={language === 'ar' ? 'أدخل اسم الشخص' : 'Enter recipient name'}
+                  />
+                </div>
               </div>
 
-              {/* Row 1: Who is this message for? | Name (optional) */}
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium" htmlFor="replyAudienceSelect">{language === 'ar' ? 'لمن هذه الرسالة؟' : 'Who is this message for?'} </label>
@@ -1373,20 +1521,49 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                     <option value="someone_else">{language === 'ar' ? 'رسالة لشخص آخر (صديق/زميل)' : 'Message someone else (friend)'}</option>
                   </select>
                 </div>
-
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium" htmlFor="replyRecipientNameInput">{language === 'ar' ? 'اسم الشخص (اختياري)' : 'Name (optional)'} </label>
-                  <input
-                    id="replyRecipientNameInput"
-                    type="text"
-                    className={`border rounded px-3 py-2 ${fieldAccent} ${placeholderMuted}`}
-                    placeholder={language === 'ar' ? 'مثال: Jan' : 'e.g., Jan'}
-                    value={replyRecipientName}
-                    onChange={(e) => setReplyRecipientName(e.target.value)}
-                    disabled={replyAudience !== 'someone_else'}
-                    title={language === 'ar' ? 'أدخل اسم الشخص' : 'Enter recipient name'}
-                  />
+                  <label htmlFor="replyContentType" className="text-sm font-medium">{language === 'ar' ? 'نوع المحتوى' : 'Content Type'}</label>
+                  <select 
+                    id="replyContentType"
+                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                    value={contentType} 
+                    onChange={(e) => setContentType(e.target.value as ContentTypeKey)}
+                    title={language === 'ar' ? 'اختر نوع المحتوى' : 'Select content type'}
+                  >
+                    {CONTENT_TYPE_KEYS.map((k) => (<option key={k} value={k}>{ctLabel(k, language)}</option>))}
+                  </select>
+                  {contentType === 'captions' && (
+                    <div className="mt-2 grid gap-2">
+                      <label htmlFor="replyCaptionPlatform" className="text-sm font-medium">
+                        {language === 'ar' ? 'منصة الكابتشن' : 'Caption platform'}
+                      </label>
+                      <select
+                        id="replyCaptionPlatform"
+                        className={`border rounded px-3 py-2 ${fieldAccent}`}
+                        value={captionPlatform}
+                        onChange={(e) => setCaptionPlatform(e.target.value as CaptionPlatformKey)}
+                        title={language === 'ar' ? 'اختر منصة الكابتشن' : 'Select caption platform'}
+                      >
+                        {CAPTION_PLATFORM_KEYS.map((k) => (
+                          <option key={k} value={k}>{captionPlatformLabel(k, language)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
+              </div>
+
+              <div className="grid gap-2">
+                <label htmlFor="replyTone" className="text-sm font-medium">{language === 'ar' ? 'النبرة' : 'Tone'}</label>
+                <select 
+                  id="replyTone"
+                  className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                  value={tone} 
+                  onChange={(e) => setTone(e.target.value as ToneKey)}
+                  title={language === 'ar' ? 'اختر النبرة' : 'Select tone'}
+                >
+                  {TONE_KEYS.map((k) => (<option key={k} value={k}>{toneLabel(k, language)}</option>))}
+                </select>
               </div>
 
               <div className="grid gap-2">
@@ -1443,133 +1620,120 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 />
               </div>
 
-              {/* Row 2: Content Type | Tone */}
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <label htmlFor="replyContentType" className="text-sm font-medium">{language === 'ar' ? 'نوع المحتوى' : 'Content Type'}</label>
-                  <select 
-                    id="replyContentType"
-                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
-                    value={contentType} 
-                    onChange={(e) => setContentType(e.target.value as ContentTypeKey)}
-                    title={language === 'ar' ? 'اختر نوع المحتوى' : 'Select content type'}
-                  >
-                    {CONTENT_TYPE_KEYS.map((k) => (<option key={k} value={k}>{ctLabel(k, language)}</option>))}
-                  </select>
-                  {contentType === 'captions' && (
-                    <div className="mt-2 grid gap-2">
-                      <label htmlFor="replyCaptionPlatform" className="text-sm font-medium">
-                        {language === 'ar' ? 'منصة الكابتشن' : 'Caption platform'}
-                      </label>
-                      <select
-                        id="replyCaptionPlatform"
-                        className={`border rounded px-3 py-2 ${fieldAccent}`}
-                        value={captionPlatform}
-                        onChange={(e) => setCaptionPlatform(e.target.value as CaptionPlatformKey)}
-                        title={language === 'ar' ? 'اختر منصة الكابتشن' : 'Select caption platform'}
-                      >
-                        {CAPTION_PLATFORM_KEYS.map((k) => (
-                          <option key={k} value={k}>{captionPlatformLabel(k, language)}</option>
-                        ))}
-                      </select>
+              <div className="flex justify-start pt-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowMoreOptions((prev) => !prev)}
+                  className="h-9 px-3 text-sm text-muted-foreground hover:text-foreground border border-border/60 hover:border-border bg-background/60"
+                  aria-controls="replyAdvancedOptions"
+                >
+                  {showMoreOptions
+                    ? (language === 'ar' ? 'عرض أقل' : 'Show Less')
+                    : (language === 'ar' ? 'المزيد من الخيارات' : 'More Options')}
+                  {showMoreOptions ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </Button>
+              </div>
+
+              <div
+                id="replyAdvancedOptions"
+                className={`grid transition-all duration-300 ease-out ${showMoreOptions ? 'grid-rows-[1fr] opacity-100 mt-1' : 'grid-rows-[0fr] opacity-0'}`}
+              >
+                <div className="overflow-hidden">
+                  <div className="mt-2 rounded-2xl border border-border/60 bg-gradient-to-br from-background via-background to-muted/40 shadow-sm backdrop-blur-sm p-4 md:p-5 space-y-4">
+                    <div className="flex items-center justify-between gap-3 border-b border-border/40 pb-3">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">
+                          {language === 'ar' ? 'خيارات متقدمة' : 'Advanced Options'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {language === 'ar' ? 'اضبط الطول والنبرة الأسلوبية بدقة أكبر' : 'Fine-tune length and stylistic expression'}
+                        </p>
+                      </div>
                     </div>
-                  )}
-                </div>
-                <div className="grid gap-2">
-                  <label htmlFor="replyTone" className="text-sm font-medium">{language === 'ar' ? 'النبرة' : 'Tone'}</label>
-                  <select 
-                    id="replyTone"
-                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
-                    value={tone} 
-                    onChange={(e) => setTone(e.target.value as ToneKey)}
-                    title={language === 'ar' ? 'اختر النبرة' : 'Select tone'}
-                  >
-                    {TONE_KEYS.map((k) => (<option key={k} value={k}>{toneLabel(k, language)}</option>))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Row 3: Length | Register */}
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <label htmlFor="replyLength" className="text-sm font-medium">{language === 'ar' ? 'الطول' : 'Length'}</label>
-                  <select 
-                    id="replyLength"
-                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
-                    value={replyLength} 
-                    onChange={(e) => setReplyLength(e.target.value as any)}
-                    title={language === 'ar' ? 'اختر الطول' : 'Select length'}
-                  >
-                    <option value="auto">{language === 'ar' ? 'تلقائي' : 'Auto'}</option>
-                    <option value="very_short">{language === 'ar' ? 'قصير جدًا' : 'Very short'}</option>
-                    <option value="short">{language === 'ar' ? 'قصير' : 'Short'}</option>
-                    <option value="medium">{language === 'ar' ? 'متوسط' : 'Medium'}</option>
-                    <option value="long">{language === 'ar' ? 'طويل' : 'Long'}</option>
-                    <option value="very_long">{language === 'ar' ? 'طويل جدًا' : 'Very long'}</option>
-                    <option value="word_count">{language === 'ar' ? 'عدد الكلمات' : 'Word count'}</option>
-                  </select>
-                  {replyLength === 'word_count' && (
-                    <div className="grid gap-1">
-                      <input
-                        type="number"
-                        min={1}
-                        max={3000}
-                        inputMode="numeric"
-                        className={`border rounded px-3 py-2 ${fieldAccent} ${placeholderMuted}`}
-                        placeholder={language === 'ar' ? 'أدخل عدد الكلمات (1-3000)' : 'Enter word count (1-3000)'}
-                        value={replyWordCount}
-                        onChange={(e) => setReplyWordCount(e.target.value)}
-                      />
-                      <span className="text-xs text-muted-foreground">
-                        {language === 'ar' ? 'الحد الأقصى 3000 كلمة' : 'Max 3000 words'}
-                      </span>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <label htmlFor="replyLength" className="text-sm font-medium">{language === 'ar' ? 'الطول' : 'Length'}</label>
+                        <select 
+                          id="replyLength"
+                          className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                          value={replyLength} 
+                          onChange={(e) => setReplyLength(e.target.value as any)}
+                          title={language === 'ar' ? 'اختر الطول' : 'Select length'}
+                        >
+                          <option value="auto">{language === 'ar' ? 'تلقائي' : 'Auto'}</option>
+                          <option value="very_short">{language === 'ar' ? 'قصير جدًا' : 'Very short'}</option>
+                          <option value="short">{language === 'ar' ? 'قصير' : 'Short'}</option>
+                          <option value="medium">{language === 'ar' ? 'متوسط' : 'Medium'}</option>
+                          <option value="long">{language === 'ar' ? 'طويل' : 'Long'}</option>
+                          <option value="very_long">{language === 'ar' ? 'طويل جدًا' : 'Very long'}</option>
+                          <option value="word_count">{language === 'ar' ? 'عدد الكلمات' : 'Word count'}</option>
+                        </select>
+                        {replyLength === 'word_count' && (
+                          <div className="grid gap-1">
+                            <input
+                              type="number"
+                              min={1}
+                              max={3000}
+                              inputMode="numeric"
+                              className={`border rounded px-3 py-2 ${fieldAccent} ${placeholderMuted}`}
+                              placeholder={language === 'ar' ? 'أدخل عدد الكلمات (1-3000)' : 'Enter word count (1-3000)'}
+                              value={replyWordCount}
+                              onChange={(e) => setReplyWordCount(e.target.value)}
+                            />
+                            <span className="text-xs text-muted-foreground">
+                              {language === 'ar' ? 'الحد الأقصى 3000 كلمة' : 'Max 3000 words'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
-                <div className="grid gap-2">
-                  <label htmlFor="replyRegister" className="text-sm font-medium">{language === 'ar' ? 'السجل اللغوي' : 'Register'}</label>
-                  <select 
-                    id="replyRegister"
-                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
-                    value={register} 
-                    onChange={(e) => setRegister(e.target.value as RegisterKey)}
-                    title={language === 'ar' ? 'اختر السجل اللغوي' : 'Select register'}
-                  >
-                    {REGISTER_KEYS.map((k) => (<option key={k} value={k}>{registerLabel(k, language)}</option>))}
-                  </select>
-                </div>
-              </div>
 
-              {/* Row 4: Language Variant | Emojis */}
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <label htmlFor="replyLangVariant" className="text-sm font-medium">{language === 'ar' ? 'متغير اللغة' : 'Language Variant'}</label>
-                  <select 
-                    id="replyLangVariant"
-                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
-                    value={languageVariant} 
-                    onChange={(e) => setLanguageVariant(e.target.value as LanguageVariantKey)}
-                    title={language === 'ar' ? 'اختر متغير اللغة' : 'Select language variant'}
-                  >
-                    {(language === 'ar' ? LANGUAGE_VARIANT_KEYS_AR : LANGUAGE_VARIANT_KEYS_EN).map((k) => (
-                      <option key={k} value={k}>{langVariantLabel(k, language)}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <label htmlFor="replyRegister" className="text-sm font-medium">{language === 'ar' ? 'السجل اللغوي' : 'Register'}</label>
+                        <select 
+                          id="replyRegister"
+                          className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                          value={register} 
+                          onChange={(e) => setRegister(e.target.value as RegisterKey)}
+                          title={language === 'ar' ? 'اختر السجل اللغوي' : 'Select register'}
+                        >
+                          {REGISTER_KEYS.map((k) => (<option key={k} value={k}>{registerLabel(k, language)}</option>))}
+                        </select>
+                      </div>
+                      <div className="grid gap-2">
+                        <label htmlFor="replyLangVariant" className="text-sm font-medium">{language === 'ar' ? 'متغير اللغة' : 'Language Variant'}</label>
+                        <select 
+                          id="replyLangVariant"
+                          className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                          value={languageVariant} 
+                          onChange={(e) => setLanguageVariant(e.target.value as LanguageVariantKey)}
+                          title={language === 'ar' ? 'اختر متغير اللغة' : 'Select language variant'}
+                        >
+                          {(language === 'ar' ? LANGUAGE_VARIANT_KEYS_AR : LANGUAGE_VARIANT_KEYS_EN).map((k) => (
+                            <option key={k} value={k}>{langVariantLabel(k, language)}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <label htmlFor="replyEmojis" className="text-sm font-medium">Emojis</label>
-                  <select 
-                    id="replyEmojis"
-                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
-                    value={emojis} 
-                    onChange={(e) => setEmojis(e.target.value as EmojisKey)}
-                    title={language === 'ar' ? 'اختر تفضيلات الإيموجي' : 'Select emoji preferences'}
-                  >
-                    {EMOJIS_KEYS.map((k) => (<option key={k} value={k}>{emojisLabel(k, language)}</option>))}
-                  </select>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <label htmlFor="replyEmojis" className="text-sm font-medium">Emojis</label>
+                        <select 
+                          id="replyEmojis"
+                          className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                          value={emojis} 
+                          onChange={(e) => setEmojis(e.target.value as EmojisKey)}
+                          title={language === 'ar' ? 'اختر تفضيلات الإيموجي' : 'Select emoji preferences'}
+                        >
+                          {EMOJIS_KEYS.map((k) => (<option key={k} value={k}>{emojisLabel(k, language)}</option>))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1604,13 +1768,44 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 <div className="space-y-3">
                   <div className="grid gap-2">
                     <label htmlFor="generatedTextArea" className="text-sm font-medium">{language === 'ar' ? 'النص المُولد' : 'Generated Text'}</label>
-                    <textarea 
-                      id="generatedTextArea"
-                      className={`w-full border rounded p-3 min-h-[220px] ${fieldAccent}`} 
-                      readOnly 
-                      value={parsedText.mainText} 
-                      title={language === 'ar' ? 'النص المُولد' : 'Generated text'}
-                    />
+                    <div className="relative">
+                      <textarea 
+                        id="generatedTextArea"
+                        className={`w-full border rounded p-3 min-h-[220px] ${fieldAccent}`} 
+                        readOnly 
+                        value={parsedText.mainText} 
+                        title={language === 'ar' ? 'النص المُولد' : 'Generated text'}
+                      />
+                      {/* Empty state — show when no text and not loading */}
+                      {!parsedText.mainText && !isLoading && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
+                          <div className="w-16 h-16 rounded-full bg-purple-500/10 flex items-center justify-center">
+                            <svg className="w-8 h-8 text-purple-500/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <div className="text-center px-4">
+                            <p className="text-sm font-medium text-muted-foreground mb-1">
+                              {language === 'ar' ? 'لا يوجد نص بعد' : 'No text yet'}
+                            </p>
+                            <p className="text-xs text-muted-foreground/70">
+                              {language === 'ar' 
+                                ? 'استخدم تبويب "تأليف" أو "رد" لتوليد نص جديد'
+                                : 'Use Compose or Reply tab to generate text'}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      {/* Loading state overlay */}
+                      {isLoading && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm pointer-events-none">
+                          <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+                          <p className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                            {typingFrames[typingFrameIndex] || (language === 'ar' ? 'جارٍ التوليد...' : 'Generating...')}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   {parsedText.notes && (
                     <div className="rounded-lg border border-border/50 bg-muted/30 p-3">
@@ -1643,32 +1838,30 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                     </details>
                   )}
                   
-                  {/* Cached texts: show up to 3 previous results */}
-                  {cachedTexts.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="text-xs text-muted-foreground">
-                        {language === 'ar' ? 'نصوص محفوظة:' : 'Cached texts:'}
+                  {/* Cached texts — always below, never pre-filled into textarea */}
+                  {!isLoading && cachedTexts.length > 0 && (
+                    <div className="space-y-2 mt-4 pt-4 border-t border-border/40">
+                      <div className="text-xs font-medium text-muted-foreground">
+                        {language === 'ar' ? 'النصوص السابقة — اضغط لتحميل:' : 'Previous generations — tap to load:'}
                       </div>
                       <div className="flex flex-col gap-2">
                         {cachedTexts.map((t, idx) => (
                           <button
                             key={idx}
-                            className="text-left border rounded p-2 hover:bg-muted"
-                            onClick={() => { setGeneratedText(t); setActiveTab('generated'); setGeneratedSubTab('current'); }}
-                            title={language === 'ar' ? 'تحميل في مربع النص' : 'Load into Generated Text'}
+                            className="text-left border border-border/50 rounded-lg p-3 hover:bg-muted/60 transition-colors"
+                            onClick={() => { setGeneratedText(t); setGeneratedSubTab('current'); }}
+                            title={language === 'ar' ? 'تحميل في مربع النص' : 'Tap to load'}
                           >
-                            <div className="text-xs line-clamp-2 whitespace-pre-wrap break-words">{t}</div>
+                            <div className="text-xs line-clamp-2 whitespace-pre-wrap break-words text-muted-foreground">{t}</div>
                           </button>
                         ))}
                       </div>
-                      <div>
-                        <button
-                          className="px-3 py-1.5 rounded border hover:bg-muted"
-                          onClick={() => { saveCache([]); }}
-                        >
-                          {language === 'ar' ? 'مسح المحفوظات' : 'Clear Cache'}
-                        </button>
-                      </div>
+                      <button
+                        className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                        onClick={() => { saveCache([]); }}
+                      >
+                        {language === 'ar' ? 'مسح المحفوظات' : 'Clear history'}
+                      </button>
                     </div>
                   )}
                   <div className="flex gap-2">
@@ -1679,7 +1872,6 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                         onClick={() => setCopyMenuOpen((v) => !v)}
                         disabled={!generatedText.trim()}
                         aria-haspopup="menu"
-                        aria-expanded={copyMenuOpen ? "true" : "false"}
                       >
                         {copied ? (language === 'ar' ? 'تم النسخ!' : 'Copied!') : (language === 'ar' ? 'نسخ' : 'Copy')}
                       </button>

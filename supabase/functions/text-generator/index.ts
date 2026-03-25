@@ -160,6 +160,152 @@ function getGenerationParams(contentType: string, tone: string, length: string, 
   };
 }
 
+function toSseEvent(payload: Record<string, unknown>) {
+  return `data: ${JSON.stringify(payload)}\n\n`;
+}
+
+async function streamClaudeResponse(args: {
+  req: Request;
+  systemPrompt: string;
+  userPrompt: string;
+  originalPrompt: string;
+  language: string;
+  mode: string;
+  contentType?: string;
+  modelUsedLabel?: string;
+  temperature: number;
+  maxTokens: number;
+  metadata: Record<string, unknown>;
+  webSearchSources?: Array<{ title: string; url: string }>;
+  postProcess?: (text: string) => string;
+}) {
+  const {
+    req,
+    systemPrompt,
+    userPrompt,
+    originalPrompt,
+    language,
+    mode,
+    contentType,
+    modelUsedLabel,
+    temperature,
+    maxTokens,
+    metadata,
+    webSearchSources,
+    postProcess,
+  } = args;
+
+  const startedAt = Date.now();
+  const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": ANTHROPIC_API_KEY || "",
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+      temperature,
+      max_tokens: maxTokens,
+      stream: true,
+    }),
+  });
+
+  if (!claudeResponse.ok || !claudeResponse.body) {
+    const errTxt = await claudeResponse.text();
+    throw new Error(`Claude API error (${claudeResponse.status}): ${errTxt}`);
+  }
+
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const upstreamReader = claudeResponse.body.getReader();
+  let fullText = "";
+  let buffer = "";
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      controller.enqueue(encoder.encode(toSseEvent({ type: "start" })));
+      try {
+        while (true) {
+          const { done, value } = await upstreamReader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data:")) continue;
+            const dataStr = trimmed.slice(5).trim();
+            if (!dataStr || dataStr === "[DONE]") continue;
+
+            try {
+              const eventData = JSON.parse(dataStr);
+              const deltaText = eventData?.type === "content_block_delta"
+                ? eventData?.delta?.text || ""
+                : "";
+
+              if (deltaText) {
+                fullText += deltaText;
+                controller.enqueue(encoder.encode(toSseEvent({ type: "chunk", text: deltaText })));
+              }
+            } catch (_err) {
+              // Ignore malformed upstream SSE chunks
+            }
+          }
+        }
+
+        fullText = sanitizeEmDashes(fullText);
+        if (postProcess) {
+          fullText = postProcess(fullText);
+        }
+        const durationMs = Date.now() - startedAt;
+
+        await logAIFromRequest(req, {
+          functionName: "text-generator",
+          provider: "anthropic",
+          model: CLAUDE_MODEL,
+          inputText: originalPrompt,
+          outputText: fullText,
+          durationMs,
+          status: "success",
+          metadata,
+        });
+
+        controller.enqueue(encoder.encode(toSseEvent({
+          type: "complete",
+          generatedText: fullText,
+          mode,
+          language,
+          modelUsed: modelUsedLabel || CLAUDE_MODEL,
+          temperatureUsed: temperature,
+          contentType: contentType || null,
+          webSearchSources: webSearchSources || [],
+        })));
+        controller.close();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Streaming failed";
+        controller.enqueue(encoder.encode(toSseEvent({ type: "error", error: message })));
+        controller.close();
+      } finally {
+        upstreamReader.releaseLock();
+      }
+    }
+  });
+
+  return new Response(stream, {
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === "OPTIONS") {
@@ -400,10 +546,10 @@ serve(async (req) => {
               const textContent = geminiResponse?.candidates?.[0]?.content?.parts?.[0]?.text;
               if (!textContent) throw new Error("No text returned from Gemini");
               
-              let extractedData = {};
+              let extractedData: { rawText?: string; [key: string]: unknown } = {};
               try {
                 extractedData = JSON.parse(textContent);
-              } catch (e) {
+              } catch (_e) {
                 extractedData = { rawText: textContent };
               }
               
@@ -415,10 +561,11 @@ serve(async (req) => {
                 }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } }
               );
-            } catch (err) {
+            } catch (err: unknown) {
               console.error("?? Text Generator: Gemini PDF extraction failed:", err);
+              const message = err instanceof Error ? err.message : '';
               return new Response(
-                JSON.stringify({ success: false, error: "Failed to extract text from PDF: " + (err.message || "") }),
+                JSON.stringify({ success: false, error: "Failed to extract text from PDF: " + message }),
                 { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
               );
             }
@@ -641,7 +788,13 @@ Return ONLY the JSON, no additional text.`;
     const webSearchEnabled = !!webSearch && webSearchAllowed;
     const normalizedWebSearchUrl = typeof webSearchUrl === 'string' && webSearchUrl.trim() ? webSearchUrl.trim() : undefined;
     const urlFetchEnabled = !!fetchUrlOnly && !!normalizedWebSearchUrl;
-    const systemPrompt = buildSystemPrompt(language, { tone, register, languageVariant, emojis, contentType, wordCount: wordCount ?? replyWordCount, captionPlatform });
+    const baseSystemPrompt = buildSystemPrompt(language, { tone, register, languageVariant, emojis, contentType, wordCount: wordCount ?? replyWordCount, captionPlatform });
+    const replyAutoToneInstruction = mode === 'reply' && !tone
+      ? (language === 'ar'
+        ? '\n\n⚠️ عند كون النبرة تلقائية في وضع الرد: حلّل الرسالة الأصلية أولاً، ثم اكتشف نبرتها تلقائياً، وبعدها اكتب رداً محسناً يحافظ على نفس الروح والأسلوب لكن بشكل أوضح وأذكى وأكثر ملاءمة.'
+        : '\n\n⚠️ When Tone is Auto in reply mode: first analyze the original message, automatically detect its tone, then write an improved reply that mirrors the original vibe and intent while making it clearer, smarter, and more polished.')
+      : '';
+    const systemPrompt = `${baseSystemPrompt}${replyAutoToneInstruction}`;
     const genParams = getGenerationParams(contentType, tone, length || replyLength || 'medium', register);
     const requestedWordCountRaw = Number(wordCount ?? replyWordCount);
     const requestedWordCount = Number.isFinite(requestedWordCountRaw) && requestedWordCountRaw > 0
@@ -702,63 +855,26 @@ ${urlText}
 
 User request:
 ${finalPrompt}`;
-
-          const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-api-key": ANTHROPIC_API_KEY || "",
-              "anthropic-version": "2023-06-01",
+          return await streamClaudeResponse({
+            req,
+            systemPrompt,
+            userPrompt: claudePrompt,
+            originalPrompt: prompt,
+            language,
+            mode,
+            contentType,
+            modelUsedLabel: `${CLAUDE_MODEL} (url)`,
+            temperature: genParams.temperature,
+            maxTokens: genParams.max_tokens,
+            metadata: {
+              ...logMetadataBase,
+              webSearchUsed: true,
+              webSearchProvider: 'url_fetch',
+              prefetchDurationMs: urlFetchDuration,
             },
-            body: JSON.stringify({
-              model: CLAUDE_MODEL,
-              system: systemPrompt,
-              messages: [{ role: "user", content: claudePrompt }],
-              temperature: genParams.temperature,
-              max_tokens: genParams.max_tokens,
-            }),
+            webSearchSources: [{ title: normalizedWebSearchUrl, url: normalizedWebSearchUrl }],
+            postProcess: applyWordCount,
           });
-
-          if (claudeResponse.ok) {
-            const claudeResult = await claudeResponse.json();
-            const content = claudeResult.content?.[0]?.text || "";
-            if (content) {
-              generatedText = applyWordCount(sanitizeEmDashes(content));
-
-              await logAIFromRequest(req, {
-                functionName: "text-generator",
-                provider: "anthropic",
-                model: CLAUDE_MODEL,
-                inputText: prompt,
-                outputText: generatedText,
-                durationMs: urlFetchDuration,
-                status: "success",
-                metadata: {
-                  ...logMetadataBase,
-                  webSearchUsed: true,
-                  webSearchProvider: "url_fetch",
-                }
-              });
-
-              return new Response(
-                JSON.stringify({
-                  success: true,
-                  generatedText,
-                  mode,
-                  language,
-                  modelUsed: `${CLAUDE_MODEL} (url)` ,
-                  temperatureUsed: genParams.temperature,
-                  contentType: contentType || null,
-                  webSearchUsed: true,
-                  webSearchSources: [{ title: normalizedWebSearchUrl, url: normalizedWebSearchUrl }]
-                }),
-                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-              );
-            }
-          } else {
-            const errTxt = await claudeResponse.text();
-            console.warn("🎯 Text Generator: URL fetch Claude error:", errTxt);
-          }
         } else {
           console.warn("🎯 Text Generator: URL fetch returned empty content");
         }
@@ -836,63 +952,26 @@ ${contextChunks}
 
 User request:
 ${finalPrompt}`;
-
-            const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-api-key": ANTHROPIC_API_KEY || "",
-                "anthropic-version": "2023-06-01",
+            return await streamClaudeResponse({
+              req,
+              systemPrompt,
+              userPrompt: claudePrompt,
+              originalPrompt: prompt,
+              language,
+              mode,
+              contentType,
+              modelUsedLabel: `${CLAUDE_MODEL} (tavily)`,
+              temperature: genParams.temperature,
+              maxTokens: genParams.max_tokens,
+              metadata: {
+                ...logMetadataBase,
+                webSearchUsed: true,
+                webSearchProvider: 'tavily',
+                prefetchDurationMs: webSearchDuration,
               },
-              body: JSON.stringify({
-                model: CLAUDE_MODEL,
-                system: systemPrompt,
-                messages: [{ role: "user", content: claudePrompt }],
-                temperature: genParams.temperature,
-                max_tokens: genParams.max_tokens,
-              }),
+              webSearchSources: sources,
+              postProcess: applyWordCount,
             });
-
-            if (claudeResponse.ok) {
-              const claudeResult = await claudeResponse.json();
-              const content = claudeResult.content?.[0]?.text || "";
-              if (content) {
-                generatedText = applyWordCount(sanitizeEmDashes(content));
-
-                await logAIFromRequest(req, {
-                  functionName: "text-generator",
-                  provider: "anthropic",
-                  model: CLAUDE_MODEL,
-                  inputText: prompt,
-                  outputText: generatedText,
-                  durationMs: webSearchDuration,
-                  status: "success",
-                  metadata: {
-                    ...logMetadataBase,
-                    webSearchUsed: true,
-                    webSearchProvider: "tavily",
-                  }
-                });
-
-                return new Response(
-                  JSON.stringify({
-                    success: true,
-                    generatedText,
-                    mode,
-                    language,
-                    modelUsed: `${CLAUDE_MODEL} (tavily)` ,
-                    temperatureUsed: genParams.temperature,
-                    contentType: contentType || null,
-                    webSearchUsed: true,
-                    webSearchSources: sources
-                  }),
-                  { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-                );
-              }
-            } else {
-              const errTxt = await claudeResponse.text();
-              console.warn("🎯 Text Generator: Claude web search synthesis error:", errTxt);
-            }
           } else {
             console.warn("🎯 Text Generator: Tavily returned empty results");
           }
@@ -909,67 +988,23 @@ ${finalPrompt}`;
     if (ANTHROPIC_API_KEY && !generatedText) {
       try {
         console.log(`🎯 Text Generator: PRIMARY - Claude (${CLAUDE_MODEL})`);
-        const startClaude = Date.now();
-        const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
+        return await streamClaudeResponse({
+          req,
+          systemPrompt,
+          userPrompt: finalPrompt,
+          originalPrompt: prompt,
+          language,
+          mode,
+          contentType,
+          modelUsedLabel: CLAUDE_MODEL,
+          temperature: genParams.temperature,
+          maxTokens: genParams.max_tokens,
+          metadata: {
+            ...logMetadataBase,
+            webSearchUsed: false,
           },
-          body: JSON.stringify({
-            model: CLAUDE_MODEL,
-            system: systemPrompt,
-            messages: [
-              { role: "user", content: finalPrompt }
-            ],
-            temperature: genParams.temperature,
-            max_tokens: genParams.max_tokens,
-          }),
+          postProcess: applyWordCount,
         });
-        const claudeDuration = Date.now() - startClaude;
-        console.log(`🎯 Text Generator: Claude completed in ${claudeDuration}ms, status ${claudeResponse.status}`);
-
-        if (claudeResponse.ok) {
-          const claudeResult = await claudeResponse.json();
-          const content = claudeResult.content?.[0]?.text || "";
-          if (content) {
-            generatedText = applyWordCount(sanitizeEmDashes(content));
-            console.log("🎯 Text Generator: Claude success, length:", generatedText?.length || 0);
-
-            await logAIFromRequest(req, {
-              functionName: "text-generator",
-              provider: "anthropic",
-              model: CLAUDE_MODEL,
-              inputText: prompt,
-              outputText: generatedText,
-              durationMs: claudeDuration,
-              status: "success",
-              metadata: {
-                ...logMetadataBase,
-                webSearchUsed: false,
-              }
-            });
-
-            return new Response(
-              JSON.stringify({
-                success: true,
-                generatedText,
-                mode,
-                language,
-                modelUsed: CLAUDE_MODEL,
-                temperatureUsed: genParams.temperature,
-                contentType: contentType || null
-              }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          } else {
-            console.warn("🎯 Text Generator: Claude returned no content");
-          }
-        } else {
-          const errTxt = await claudeResponse.text();
-          console.warn("🎯 Text Generator: Claude API error:", { status: claudeResponse.status, error: errTxt });
-        }
       } catch (e) {
         console.warn("🎯 Text Generator: Claude threw error:", e);
       }

@@ -1,5 +1,5 @@
 // supabase/functions/cinema-director/index.ts
-// Wakti Cinema Director - GPT-4o mini powered scene generation v12 (subject lock)
+// Wakti Cinema Director - GPT-4o mini powered scene generation v13 (wardrobe lock)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -100,7 +100,11 @@ serve(async (req) => {
 
 CORE INSTRUCTIONS:
 CREATE THE VISUAL DNA BLOCK: First, extract the subject, materials, lighting, and cinematic style (e.g., 'Gold-plated mechanical falcon, polished metallic finish, sapphire eyes, 4pm Lusail sunset orange lighting, 35mm lens, 8k photorealistic'). This block MUST be prepended to the start of EVERY scene prompt for 100% consistency.
-SUBJECT LOCK — CRITICAL FOR CHARACTER CONSISTENCY: Extract a precise, locked subject description from the user's vision. This includes: exact clothing colors and style (e.g., 'kids wearing white jerseys with blue trim'), specific physical features, faces, or distinguishing marks. This SUBJECT LOCK string MUST be included verbatim at the start of every single english_prompt. Example: if the user says 'kids playing football in green jerseys', every scene's english_prompt must begin with 'kids in green jerseys' — NEVER change it to white, blue, or any other color. The clothes and characters must be IDENTICAL in every scene.
+SUBJECT & WARDROBE LOCK — CRITICAL FOR CHARACTER CONSISTENCY: Extract a precise, locked subject description from the user's vision. This MUST include:
+  1. CLOTHING STRUCTURE: Describe the exact garment type, cut, and any distinctive physical details (e.g., 'Kuwaiti man in a standard plain white dishdasha — no zippers, no visible seams, no pockets — with a white ghutra folded flat and secured by a black agal'). Never invent new garment details, buttons, or textures not specified by the user.
+  2. COLORS: Lock all exact colors (e.g., 'white dishdasha', 'green jersey', 'red cap'). NEVER change colors between scenes.
+  3. PHYSICAL FEATURES: Lock any distinctive physical traits mentioned.
+This full SUBJECT + WARDROBE LOCK string MUST be copy-pasted verbatim at the very start of EVERY english_prompt in every scene. Example: if the user says 'Kuwaiti man in a white dishdasha walking in a market', every scene's english_prompt must begin with 'Kuwaiti man in a plain white dishdasha, white ghutra, black agal' — the wardrobe NEVER changes. If the AI would otherwise describe a shirt, jacket, or any clothing variant — STOP and revert to the locked wardrobe description.
 WRITE THE STORY ARC: Generate exactly ${N} scenes that follow a strict CHRONOLOGICAL / NARRATIVE PROGRESSION. The story must flow logically forward in time — from beginning to end, cause to effect, small to large, young to old. Scene 1 is always the starting state; each subsequent scene advances the story one step forward. NEVER skip ahead or go backwards. If the vision implies growth or transformation, show it step by step.
 SCENE 1 (THE ANCHOR): The very BEGINNING of the story — the starting point. Must be a majestic static shot suitable for Text-to-Image generation.
 SCENES 2-${N} (THE PROGRESSION): Each scene advances the story exactly one step forward from the previous scene. Show gradual change, motion, and continuity. Keep the Visual DNA AND Subject Lock identical across all scenes.
