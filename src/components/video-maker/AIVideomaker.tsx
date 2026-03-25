@@ -192,6 +192,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [visualDNA, setVisualDNA] = useState('');
   const [cinemaFormat, setCinemaFormat] = useState<'16:9' | '9:16'>('16:9');
   const [cinemaMode, setCinemaMode] = useState<'auto' | 'custom'>('auto');
+  const [cinemaAudio, setCinemaAudio] = useState(true);
 
   // Role 2 & 3 — Artist & Cloner
   const [sceneImages, setSceneImages] = useState<(string | null)[]>([null, null, null, null, null, null]);
@@ -1061,7 +1062,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       brandAnchor && anchorTag === 'character' && `Character reference image provided: describe the actions and journey of this specific character throughout all scenes`,
     ].filter(Boolean).join('. ');
 
-    const visionToSend = builtVision || cinemaVision.trim();
+    const visionToSend = cinemaVision.trim() ? `${cinemaVision.trim()}. ${builtVision}` : builtVision;
     if (!visionToSend || isDirecting || !user) return;
     setIsDirecting(true);
     setCinemaScenes([]);
@@ -1511,24 +1512,32 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       videoEl.style.display = 'none';
       document.body.appendChild(videoEl);
 
-      // Step 3: Build the combined stream for MediaRecorder.
-      // Strategy: AudioContext + createMediaStreamDestination gives us a stable, persistent
-      // audio track that we can pipe each clip into. We connect the videoEl as a source
-      // (reconnecting per clip by setting src) — the AudioContext node stays alive across
-      // all clips so MediaRecorder sees a continuous, uninterrupted audio track.
-      const audioCtx = new AudioContext();
-      const audioDest = audioCtx.createMediaStreamDestination();
-      // Connect videoEl as a media element source once — it stays connected as src changes
-      const mediaElSource = audioCtx.createMediaElementSource(videoEl);
-      mediaElSource.connect(audioDest);
-      // Also connect to destination so audio plays to speakers during stitch preview
-      mediaElSource.connect(audioCtx.destination);
-
-      // Explicit video track from canvas, explicit audio track from AudioContext destination
+      // Step 3: Build the stream for MediaRecorder (with or without audio based on cinemaAudio toggle)
       const canvasVideoTrack = canvas.captureStream(30).getVideoTracks()[0];
-      const audioTrack = audioDest.stream.getAudioTracks()[0];
-      // Brand new clean MediaStream with both tracks — no ambiguity for the browser
-      const combinedStream = new MediaStream([canvasVideoTrack, audioTrack]);
+      let combinedStream: MediaStream;
+      let audioCtx: AudioContext | null = null;
+      let mediaElSource: MediaElementAudioSourceNode | null = null;
+
+      if (cinemaAudio) {
+        // WITH AUDIO: AudioContext + createMediaStreamDestination gives us a stable, persistent
+        // audio track that we can pipe each clip into. We connect the videoEl as a source
+        // (reconnecting per clip by setting src) — the AudioContext node stays alive across
+        // all clips so MediaRecorder sees a continuous, uninterrupted audio track.
+        audioCtx = new AudioContext();
+        const audioDest = audioCtx.createMediaStreamDestination();
+        // Connect videoEl as a media element source once — it stays connected as src changes
+        mediaElSource = audioCtx.createMediaElementSource(videoEl);
+        mediaElSource.connect(audioDest);
+        // Also connect to destination so audio plays to speakers during stitch preview
+        mediaElSource.connect(audioCtx.destination);
+
+        // Brand new clean MediaStream with both video and audio tracks
+        const audioTrack = audioDest.stream.getAudioTracks()[0];
+        combinedStream = new MediaStream([canvasVideoTrack, audioTrack]);
+      } else {
+        // WITHOUT AUDIO: Only canvas video track — no AudioContext initialization
+        combinedStream = new MediaStream([canvasVideoTrack]);
+      }
 
       // Force explicit codec: vp9+opus is the gold standard for WebM with audio.
       // Fall back only if the browser truly doesn't support it.
@@ -1562,8 +1571,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         await new Promise<void>((resolve, reject) => {
           videoEl.src = blobUrls[i];
           videoEl.onloadeddata = () => {
-            // Resume AudioContext in case browser suspended it (autoplay policy)
-            if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+            // Resume AudioContext in case browser suspended it (autoplay policy) — only if audio is enabled
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
             videoEl.play().catch(reject);
           };
           videoEl.onerror = () => reject(new Error(`Video ${i + 1} failed to load`));
@@ -1586,7 +1595,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       }
 
       recorder.stop();
-      audioCtx.close().catch(() => {});
+      if (audioCtx) audioCtx.close().catch(() => {});
       document.body.removeChild(videoEl);
 
       // Revoke blob URLs
@@ -1605,7 +1614,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setIsStitching(false);
       setStitchStatus('');
     }
-  }, [videoClips, isStitching, language, cinemaFormat]);
+  }, [videoClips, isStitching, language, cinemaFormat, cinemaAudio]);
 
   // ── Cinema full reset ──
   const handleCinemaReset = useCallback(() => {
@@ -1650,6 +1659,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setIsRegenningScene(false);
     setAnchorTag('style');
     setCinemaMode('auto');
+    setCinemaAudio(true);
     if (animPollRef.current) clearInterval(animPollRef.current);
   }, []);
 
@@ -2609,6 +2619,31 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               : {background:'transparent',color:'rgba(255,255,255,0.45)'}}
                           >
                             <span>🎥</span><span>{language==='ar'?'يدوي':'Custom'}</span>
+                          </button>
+                        </div>
+                        
+                        {/* Cinematic Audio Toggle */}
+                        <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl mt-3 max-w-xs mx-auto" style={{background:'rgba(226,199,168,0.08)',border:'1px solid rgba(226,199,168,0.2)'}}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">{cinemaAudio ? '🔊' : '🔇'}</span>
+                            <div>
+                              <p className="text-[11px] font-bold" style={{color:'#E2C7A8'}}>
+                                {language==='ar' ? 'صوت سينمائي' : 'Cinematic Audio'}
+                              </p>
+                              <p className="text-[9px]" style={{color:'rgba(226,199,168,0.5)'}}>
+                                {language==='ar' ? 'موسيقى خلفية تلقائية' : 'Auto background music'}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setCinemaAudio(prev => !prev)}
+                            className="relative w-11 h-6 rounded-full transition-all flex-shrink-0"
+                            style={{background: cinemaAudio ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : 'rgba(255,255,255,0.12)'}}
+                            aria-label={language === 'ar' ? (cinemaAudio ? 'تعطيل الصوت السينمائي' : 'تفعيل الصوت السينمائي') : (cinemaAudio ? 'Disable cinematic audio' : 'Enable cinematic audio')}
+                          >
+                            <div className="absolute top-0.5 rounded-full w-5 h-5 bg-white shadow-md transition-all"
+                              style={{left: cinemaAudio ? '22px' : '2px'}} />
                           </button>
                         </div>
                       </div>

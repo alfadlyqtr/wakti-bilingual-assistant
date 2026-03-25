@@ -73,6 +73,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const [purchaseInProgress, setPurchaseInProgress] = useState(false);
   const [activePackageId, setActivePackageId] = useState<string>('$rc_monthly');
   const [step, setStep] = useState(variant === 'new_user' ? 1 : 2);
+  // New users go directly to Dashboard via handleSkip — Step 2 is only for expired/cancelled
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [usernameInput, setUsernameInput] = useState('');
@@ -96,6 +97,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
 
   useEffect(() => {
     if (!open) return;
+    // new_user always starts at Step 1 (Hello Wall). expired/cancelled go straight to Step 2.
     setStep(variant === 'new_user' ? 1 : 2);
   }, [open, variant]);
 
@@ -442,20 +444,22 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const subtitle = subtitles[variant]?.[lang] || subtitles.new_user.en;
   const featureList = features[lang] || features.en;
 
-  const showXButton = variant === 'new_user' && step === 2;
-  const showSkipButton = variant === 'new_user' && step === 2;
+  // X and Skip are gone. No variant has an escape hatch.
+  const showXButton = false;
+  const showSkipButton = false;
   const showRestorePurchases = variant === 'cancelled' && step === 2;
-  const canDismiss = variant === 'new_user' && step === 2;
+  // Nothing can be dismissed — paywall is always a hard gate
+  const canDismiss = false;
 
   return (
-    <Dialog open={open} onOpenChange={canDismiss ? onOpenChange : undefined}>
+    <Dialog open={open} onOpenChange={undefined}>
       <DialogContent
         className="w-[95vw] max-w-[95vw] sm:w-[90vw] sm:max-w-[500px] bg-gradient-to-br from-background via-background to-accent/5 border-accent/20 max-h-[90vh] overflow-y-auto rounded-xl"
         dir={language === 'ar' ? 'rtl' : 'ltr'}
         hideCloseButton
-        onEscapeKeyDown={(e) => { if (!canDismiss) e.preventDefault(); }}
-        onPointerDownOutside={(e) => { if (!canDismiss) e.preventDefault(); }}
-        onInteractOutside={(e) => { if (!canDismiss) e.preventDefault(); }}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
       >
         {/* Top bar: logo | language toggle + X (top-right, step 2 only) */}
         <div className="flex items-center justify-between">
@@ -488,15 +492,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                 >{label}</button>
               );
             })()}
-            {showXButton && (
-              <button
-                onClick={handleSkip}
-                className="w-7 h-7 rounded-full flex items-center justify-center bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] shadow-[0_0_12px_hsl(200,100%,55%,0.5)] hover:shadow-[0_0_20px_hsl(200,100%,55%,0.7)] active:scale-95 transition-all duration-150"
-                aria-label="Close"
-              >
-                <X className="w-3.5 h-3.5 text-white" />
-              </button>
-            )}
           </div>
         </div>
 
@@ -679,16 +674,19 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                   : '✨ We constantly update and add new features!'}
               </p>
 
-              {/* Continue button — the ONLY action on this screen */}
-              <div className="hello-float hello-float-5">
+              {/* Continue button — starts 24h trial immediately, no pricing screen */}
+              <div className="hello-float hello-float-5 px-1 pb-2">
                 <Button
-                  onClick={() => setStep(2)}
+                  onClick={handleSkip}
                   size="lg"
-                  className="continue-btn-glow w-full min-h-[60px] bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:opacity-95 text-white font-bold text-xl tracking-wide active:scale-[0.98] transition-all duration-150 border-0"
+                  className="continue-btn-glow w-full min-h-[64px] bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:opacity-95 text-white font-bold text-xl tracking-wide active:scale-[0.98] transition-all duration-150 border-0 rounded-2xl shadow-[0_0_40px_hsl(200,100%,55%,0.6),0_0_80px_hsl(200,100%,55%,0.3),0_4px_20px_hsl(200,100%,55%,0.4)]"
                 >
                   <Sparkles className="w-5 h-5 mr-2" />
-                  {language === 'ar' ? 'استمرار' : 'Continue'}
+                  {language === 'ar' ? 'ابدأ مجاناً ✨' : 'Start Free ✨'}
                 </Button>
+                <p className="text-center text-[10px] text-foreground/40 mt-2">
+                  {language === 'ar' ? '24 ساعة مجاناً — لا بطاقة مطلوبة' : '24 hours free — no card required'}
+                </p>
               </div>
             </div>
           </>
