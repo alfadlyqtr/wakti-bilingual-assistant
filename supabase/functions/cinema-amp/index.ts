@@ -42,14 +42,15 @@ serve(async (req) => {
       });
     }
 
-    const systemPrompt = `You are an expert Cinematic Prompt Engineer for a high-end AI Video Studio. Your job is to take an amateur user's video idea and enhance it into a visually rich, professional cinematic description.
+    const systemPrompt = `You are a Cinematic Prompt Engineer for a high-end AI Video Studio. Enhance the user's idea into a visually rich, cinematic description.
 
 STRICT RULES:
-Visuals Only: Add cinematic terminology (e.g., lighting, camera angles, mood, time of day, lens types). Transform basic words into visual poetry (e.g., 'a car' becomes 'a sleek modern car reflecting the neon city lights').
-NO Story Changes: Do NOT add new characters, plot twists, dialogue, or voiceovers. Stick exactly to the user's core subjects.
-Language Matching: If the user's input is in Arabic, your output MUST be in high-quality, cinematic Arabic. If English, output English.
-Length Constraint: Keep the final output concise and punchy — maximum 3 to 4 sentences (under 300 characters).
-Output Format: Return ONLY the enhanced text. No introductions, no explanations, no quotes.`;
+1. Language Lock: Match the user's language EXACTLY. English in = English out. Arabic in = Arabic out. ZERO tolerance for any other language — Spanish, French, or any other language is a critical failure.
+2. Visuals Only: Add cinematic language — lighting, camera angles, mood, lens types, time of day. Make it visual poetry.
+3. POSITIVE DESCRIPTIONS ONLY: Describe what IS in the frame. NEVER write "without", "no", "avoid", "not", or any negative phrase. Only affirmative visual descriptions.
+4. Keep the core subjects. Do not add new characters, dialogue, or plot twists.
+5. LENGTH — CRITICAL: Your output MUST be between 500 and 650 characters. This is the sweet spot — rich enough to be cinematic, short enough to fit the UI. Stop at 650. Do not pad or repeat to reach 500; quality over quantity.
+6. Output Format: Return ONLY the enhanced text. No intro, no explanation, no quotes.`;
 
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -60,8 +61,8 @@ Output Format: Return ONLY the enhanced text. No introductions, no explanations,
           { role: 'system', content: systemPrompt },
           { role: 'user', content: text.trim() },
         ],
-        temperature: 0.75,
-        max_tokens: 300,
+        temperature: 0.72,
+        max_tokens: 380,
       }),
     });
 
@@ -71,8 +72,18 @@ Output Format: Return ONLY the enhanced text. No introductions, no explanations,
     }
 
     const data = await resp.json();
-    const enhanced = data.choices?.[0]?.message?.content?.trim();
+    let enhanced = data.choices?.[0]?.message?.content?.trim();
     if (!enhanced) throw new Error('No content returned from OpenAI');
+
+    // Hard server-side cap: truncate at last word boundary at or before 650 chars
+    const HARD_CAP = 650;
+    if (enhanced.length > HARD_CAP) {
+      const cut = enhanced.slice(0, HARD_CAP);
+      const lastSpace = cut.lastIndexOf(' ');
+      enhanced = (lastSpace > 300 ? cut.slice(0, lastSpace) : cut).trimEnd();
+      // Ensure it ends with punctuation
+      if (!/[.!?]$/.test(enhanced)) enhanced += '.';
+    }
 
     return new Response(JSON.stringify({ ok: true, enhanced }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

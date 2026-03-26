@@ -31,7 +31,7 @@ interface KieStatusResponse {
   };
 }
 
-function parseImageUrl(resultJson: string): string | null {
+function parseImageUrls(resultJson: string): string[] {
   try {
     const parsed = JSON.parse(resultJson);
     const urls: string[] =
@@ -40,9 +40,9 @@ function parseImageUrl(resultJson: string): string | null {
       (parsed.url ? [parsed.url] : null) ||
       (Array.isArray(parsed) ? parsed : null) ||
       [];
-    return urls.find((u: unknown) => typeof u === 'string' && (u as string).startsWith('http')) || null;
+    return urls.filter((u: unknown) => typeof u === 'string' && (u as string).startsWith('http'));
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -60,26 +60,36 @@ async function kieCreateTask(model: string, input: Record<string, unknown>): Pro
   return data.data.taskId;
 }
 
-async function kieGetStatus(taskId: string): Promise<{ status: string; image_url: string | null; error: string | null }> {
-  const res = await fetch(`${KIE_STATUS_URL}?taskId=${encodeURIComponent(taskId)}`, {
-    headers: { 'Authorization': `Bearer ${KIE_API_KEY}` },
-  });
-  const text = await res.text();
-  console.log('[cinema-artist] status response:', text.slice(0, 300));
-  if (!res.ok) throw new Error(`KIE status ${res.status}: ${text}`);
-  const data: KieStatusResponse = JSON.parse(text);
-  const state = (data.data?.state || '').toLowerCase();
-  const rawResult = data.data?.resultJson || '';
+async function kieGetStatus(taskId: string): Promise<{ status: string; image_url: string | null; image_urls: string[]; error: string | null }> {
+  try {
+    const res = await fetch(`${KIE_STATUS_URL}?taskId=${encodeURIComponent(taskId)}`, {
+      headers: { 'Authorization': `Bearer ${KIE_API_KEY}` },
+    });
+    const text = await res.text();
+    console.log('[cinema-artist] status response:', text.slice(0, 300));
+    // BD-2: KIE 500 or non-ok → treat as FAILED, never throw
+    if (!res.ok) {
+      console.error(`[cinema-artist] KIE status non-ok ${res.status}: ${text.slice(0, 200)}`);
+      return { status: 'FAILED', image_url: null, image_urls: [], error: `KIE server error ${res.status}` };
+    }
+    const data: KieStatusResponse = JSON.parse(text);
+    const state = (data.data?.state || '').toLowerCase();
+    const rawResult = data.data?.resultJson || '';
 
-  if (state === 'success' || state === 'finished' || state === 'completed') {
-    const url = rawResult ? parseImageUrl(rawResult) : null;
-    return { status: 'COMPLETED', image_url: url, error: null };
+    if (state === 'success' || state === 'finished' || state === 'completed') {
+      const urls = rawResult ? parseImageUrls(rawResult) : [];
+      return { status: 'COMPLETED', image_url: urls[0] || null, image_urls: urls, error: null };
+    }
+    if (state === 'fail' || state === 'failed' || state === 'error') {
+      return { status: 'FAILED', image_url: null, image_urls: [], error: data.data?.failMsg || 'KIE task failed' };
+    }
+    // waiting / queuing / generating
+    return { status: 'IN_PROGRESS', image_url: null, image_urls: [], error: null };
+  } catch (err) {
+    // BD-2: any unexpected error → FAILED, never throw out of status check
+    console.error('[cinema-artist] kieGetStatus unexpected error:', err);
+    return { status: 'FAILED', image_url: null, image_urls: [], error: 'Status check failed' };
   }
-  if (state === 'fail' || state === 'failed' || state === 'error') {
-    return { status: 'FAILED', image_url: null, error: data.data?.failMsg || 'KIE task failed' };
-  }
-  // waiting / queuing / generating
-  return { status: 'IN_PROGRESS', image_url: null, error: null };
 }
 
 serve(async (req) => {
@@ -109,12 +119,12 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { mode, prompt, anchor_url, scene_index, aspect_ratio = '16:9', task_id, visual_dna } = body;
+    const { mode, prompt, anchor_url, anchor_pipeline, scene_index, aspect_ratio = '16:9', task_id } = body;
 
     // ── Mode: create T2I task (returns task_id immediately) ──
     if (mode === 't2i_create') {
       if (!prompt) return new Response(JSON.stringify({ error: 'prompt required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      console.log(`[cinema-artist] T2I create, aspect_ratio=${aspect_ratio}`);
+      console.log(`[cinema-artist] T2I create scene ${scene_index}, aspect_ratio=${aspect_ratio}`);
       const id = await kieCreateTask('grok-imagine/text-to-image', { prompt: prompt.slice(0, 2500), aspect_ratio });
       return new Response(JSON.stringify({ ok: true, task_id: id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -122,11 +132,20 @@ serve(async (req) => {
     // ── Mode: create I2I task (returns task_id immediately) ──
     if (mode === 'i2i_create') {
       if (!prompt || !anchor_url) return new Response(JSON.stringify({ error: 'prompt and anchor_url required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      // Prepend visual DNA from Scene 1 to enforce consistency
-      const fullPrompt = visual_dna
-        ? `[VISUAL DNA — keep identical style]: ${visual_dna}\n\n[SCENE ACTION]: ${prompt}`.slice(0, 2500)
-        : prompt.slice(0, 2500);
-      console.log(`[cinema-artist] I2I create scene ${scene_index}, anchor=${String(anchor_url).slice(0, 60)}, prompt=${fullPrompt.slice(0, 100)}`);
+
+      // Pipeline-specific prompt — clean and direct, no technical wall-of-text
+      let fullPrompt: string;
+      if (anchor_pipeline === 'logo') {
+        fullPrompt = `Integrate the provided logo/brand asset into this background scene: ${prompt}. Keep the logo pixels 100% original and unmodified. Do not redraw or alter the logo shape.`;
+      } else if (anchor_pipeline === 'character') {
+        fullPrompt = `Maintain the hero person's exact identity, face, and outfit in this scene: ${prompt}. Preserve all facial features and clothing details from the reference.`;
+      } else {
+        // style (default): extract color palette and lighting only
+        fullPrompt = `Apply the color palette, lighting mood, and atmosphere of the reference image to this scene: ${prompt}. Do not draw the reference objects, logos, or brand marks — use only the colors and light.`;
+      }
+      fullPrompt = fullPrompt.slice(0, 2500);
+
+      console.log(`[cinema-artist] I2I create scene ${scene_index}, pipeline=${anchor_pipeline}, anchor=${String(anchor_url).slice(0, 60)}`);
       const id = await kieCreateTask('grok-imagine/image-to-image', { prompt: fullPrompt, image_urls: [anchor_url], strength: 0.55 });
       return new Response(JSON.stringify({ ok: true, task_id: id, scene_index }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }

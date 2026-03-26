@@ -1,5 +1,5 @@
 // supabase/functions/cinema-director/index.ts
-// Wakti Cinema Director - GPT-4o mini powered scene generation v13 (wardrobe lock)
+// Wakti Cinema Director - GPT-4o mini powered scene generation v15 (language lock)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -16,12 +16,15 @@ interface Scene {
   scene: number;
   text: string;         // display text in user's language (Arabic or English)
   english_prompt: string; // always-English prompt for AI image generation
+  scene_pipeline?: 'logo_integration' | 'style_extraction' | 'character_lock';
+  subject_lock?: string; // locked subject description for consistency
 }
 
 interface DirectorResponse {
   success: boolean;
   scenes: Scene[];
   visualDna?: string;
+  subject_lock?: string;
   error?: string;
 }
 
@@ -72,8 +75,9 @@ serve(async (req) => {
       }
     }
 
-    const { vision, language = 'en', scene_count = 6 } = await req.json();
+    const { vision, language = 'en', scene_count = 6, anchor_tag = '' } = await req.json();
     const N = Math.max(1, Math.min(6, Number(scene_count) || 6));
+    const effectiveAnchorTag = anchor_tag || 'style'; // 'logo' | 'style' | 'character'
 
     if (!vision || !vision.trim()) {
       return new Response(
@@ -82,38 +86,97 @@ serve(async (req) => {
       );
     }
 
-    // System prompt for GPT-4o mini
+    // System prompt for GPT-4o mini — Vision Slicer
     const systemPrompt = language === 'ar'
-      ? `أنت مخرج سينما الذكاء الاصطناعي في وكتي. مهمتك هي تحويل رؤية هاوية من جملة واحدة إلى قصة سينمائية متسقة مدة ٦٠ ثانية (٦ مشاهد، ١٠ ثواني لكل مشهد).
+      ? `⚠️ قاعدة لغوية: حقل "text" بالعربية فقط. حقل "english_prompt" بالإنجليزية فقط دائماً.
 
-التعليمات الأساسية:
-أنشئ بلوك البصمة البصرية: أولاً، استخرج الموضوع، المواد، الإضاءة، والأسلوب السينمائي (مثال: 'صقر ميكانيكي مطلي بالذهب، تشطيب معدني مصقول، عيون زفير، إضاءة غروب الوسيل ٤ مساءً باللون البرتقالي، عدسة ٣٥مم، ٨ك فوتوغرافي واقعي'). يجب إضافة هذا البلوك في بداية EVERY مشهد لتحقيق ١٠٠٪ تناسق.
-قفل الشخصية — للتناسق بين المشاهد: استخرج وصفاً دقيقاً ومحدداً للشخصيات وملابسهم من رؤية المستخدم (ألوان الملابس بالضبط، الملامح الخاصة). هذا الوصف يجب تضمينه حرفياً في بداية كل english_prompt. مثال: إذا قال المستخدم 'أطفال يلعبون كرة القدم بقمصان خضراء'، فكل مشهد يجب أن يبدأ بَ: 'kids in green jerseys' — لا يجوز تغيير اللون أبداً.
-اكتب قوس القصة: أنشئ ٦ مشاهد تشكل رواية متسعة ٦٠ ثانية (مقدمة، بناء، حركة، ذروة، حل، ختام).
-المشهد ١ (المرساة): أنشئ هذا خصيصاً للصورة-إلى-صورة. يجب أن يكون لقطة ساكنة مهيبة.
-المشاهد ٢-٦ (الاستمرارية): أنشئ هذه للصورة-إلى-صورة والصورة-إلى-فيديو. ركز على الحركة والفعل مع الحفاظ على 'البصمة البصرية' وقفل الشخصية متطابقين.
-الإخراج ثنائي اللغة: كل مشهد يجب أن يحتوي على حقلين:
-- "text": وصف المشهد بالعربية — يُعرض في لوحة القصة للمستخدم.
-- "english_prompt": ترجمة إنجليزية دقيقة وسينمائية للوصف — تُرسل لنماذج الذكاء الاصطناعي لتوليد الصور (الذكاء الاصطناعي لا يفهم العربية جيداً). يجب أن تبدأ بقفل الشخصية.
-تنسيق الإخراج: أعد فقط مصفوفة JSON: [{"scene": 1, "text": "...", "english_prompt": "..."}, ...].`
-      : `You are the Wakti AI Cinema Director. Your mission is to turn a 1-sentence amateur vision into a consistent cinematic story (${N} scene${N > 1 ? 's' : ''}, 10 seconds each = ${N * 10} seconds total).
+أنت سالب الرؤية. مهمتك الوحيدة: خذ رؤية المستخدم وقسّمها بالتساوي إلى ${N} مشهد سينمائي (١٠ ثواني لكل مشهد).
 
-CORE INSTRUCTIONS:
-CREATE THE VISUAL DNA BLOCK: First, extract the subject, materials, lighting, and cinematic style (e.g., 'Gold-plated mechanical falcon, polished metallic finish, sapphire eyes, 4pm Lusail sunset orange lighting, 35mm lens, 8k photorealistic'). This block MUST be prepended to the start of EVERY scene prompt for 100% consistency.
-SUBJECT & WARDROBE LOCK — CRITICAL FOR CHARACTER CONSISTENCY: Extract a precise, locked subject description from the user's vision. This MUST include:
-  1. CLOTHING STRUCTURE: Describe the exact garment type, cut, and any distinctive physical details (e.g., 'Kuwaiti man in a standard plain white dishdasha — no zippers, no visible seams, no pockets — with a white ghutra folded flat and secured by a black agal'). Never invent new garment details, buttons, or textures not specified by the user.
-  2. COLORS: Lock all exact colors (e.g., 'white dishdasha', 'green jersey', 'red cap'). NEVER change colors between scenes.
-  3. PHYSICAL FEATURES: Lock any distinctive physical traits mentioned.
-This full SUBJECT + WARDROBE LOCK string MUST be copy-pasted verbatim at the very start of EVERY english_prompt in every scene. Example: if the user says 'Kuwaiti man in a white dishdasha walking in a market', every scene's english_prompt must begin with 'Kuwaiti man in a plain white dishdasha, white ghutra, black agal' — the wardrobe NEVER changes. If the AI would otherwise describe a shirt, jacket, or any clothing variant — STOP and revert to the locked wardrobe description.
-WRITE THE STORY ARC: Generate exactly ${N} scenes that follow a strict CHRONOLOGICAL / NARRATIVE PROGRESSION. The story must flow logically forward in time — from beginning to end, cause to effect, small to large, young to old. Scene 1 is always the starting state; each subsequent scene advances the story one step forward. NEVER skip ahead or go backwards. If the vision implies growth or transformation, show it step by step.
-SCENE 1 (THE ANCHOR): The very BEGINNING of the story — the starting point. Must be a majestic static shot suitable for Text-to-Image generation.
-SCENES 2-${N} (THE PROGRESSION): Each scene advances the story exactly one step forward from the previous scene. Show gradual change, motion, and continuity. Keep the Visual DNA AND Subject Lock identical across all scenes.
-CRITICAL — DO NOT REORDER OR SCRAMBLE SCENES. Scene 1 must be earliest in time, scene ${N} must be latest. If scene 1 shows a kitten, scene 2 shows a slightly older kitten, scene 3 shows a young cat — in that order, never reversed.
-BILINGUAL OUTPUT: Each scene object MUST have TWO fields:
-- "text": The scene description in the user's language (English in this case) — shown in the UI storyboard.
-- "english_prompt": The scene description in strict English — fed to the image AI (always English, even if text is Arabic). MUST start with the Subject Lock string.
-Since this is English input, both fields will be identical.
-OUTPUT FORMAT: Return ONLY a JSON array with exactly ${N} items: [{"scene": 1, "text": "...", "english_prompt": "..."}, ...].`;
+━━━ القواعد ━━━
+
+١. سلب الرؤية — محظور تماماً اختراع محتوى جديد
+يجب أن يكون كل حقل "text" مأخوذاً حرفياً من كلمات المستخدم نفسها. لا تضيف شعارات جديدة، لا تخترع موضوعات جديدة، لا تختصر النص. قُسّم كلمات المستخدم فقط إلى فصول بصرية.
+مثال: إذا قال المستخدم "شاحنة تمشي في الصحراء ثم تصل إلى المدينة ويظهر شعار ميركاب" وN=3، الناتج:
+  • مشهد 1 text: "شاحنة تمشي في الصحراء"
+  • مشهد 2 text: "تصل إلى المدينة"
+  • مشهد 3 text: "يظهر شعار ميركاب"
+
+٢. قفل الموضوع (subject_lock)
+استخرج الموضوع المادي الأساسي. القواعد:
+  • لا تضمّن كلمات: شعار، لوغو، علامة تجارية، wordmark.
+  • اربط الألوان الدقيقة — ٣ إلى ٨ كلمات.
+
+٣. قفل الشعار — قاعدة مطلقة
+محظور تماماً إعادة صياغة أو اختراع شعارات العلامة التجارية.
+إذا كتب المستخدم شعاراً محدداً (مثال: "تراث يتحرك")، انسخه حرفياً كلمة بكلمة في "text" للمشهد الأخير.
+لا تستخدم عبارات عامة أبداً. كلمات المستخدم هي القانون. لا تُعيد صياغته.
+
+٤. علامات الأنبوب (scene_pipeline)
+anchor_tag هو "${effectiveAnchorTag}".
+إذا كان anchor_tag هو "logo": المشهد ١ والمشهد ${N} → "logo_integration". باقي المشاهد → "style_extraction".
+إذا كان anchor_tag هو "style": جميع المشاهد → "style_extraction".
+إذا كان anchor_tag هو "character": جميع المشاهد → "character_lock".
+
+٥. تنسيق english_prompt — حرج جداً
+قصير: ١٥-٢٥ كلمة. كلمات مفتاحية مفصولة بفواصل. يبدأ بقيمة subject_lock. ممنوع: [VISUAL DNA] أو أي header بين أقواس.
+مثال: "blue Merkab semi-truck, open desert highway, golden hour, cinematic wide shot, 8k"
+لمشاهد الشعار: يبدأ بـ "The provided [brand] logo" ثم يصف المشهد.
+
+٦. تنسيق الإخراج
+أعد JSON صالحاً فقط — بدون markdown:
+{"subject_lock": "<٣-٨ كلمات>", "scenes": [{"scene": 1, "text": "...", "english_prompt": "<١٥-٢٥ كلمة>", "scene_pipeline": "..."}, ...]}
+أعد ${N} مشهداً بالضبط.`
+      : `⚠️ LANGUAGE LOCK — NON-NEGOTIABLE: "text" field MUST be in ENGLISH only. Violation = task failure.
+
+You are the Vision Slicer for Wakti AI Cinema. Your ONLY job is to take the User Vision and divide it into exactly ${N} cinematic 10-second scene${N > 1 ? 's' : ''}.
+
+YOU ARE STRICTLY FORBIDDEN FROM:
+• Adding new slogans, taglines, or closing text that the user did not write.
+• Inventing new themes, story beats, or creative elements.
+• Summarizing or paraphrasing the user's words.
+• Adding any text that was not in the user's original input.
+
+YOUR ONLY ALLOWED ACTION: Break the user's literal words into ${N} visual chapters in the order they were written.
+
+━━━ RULES ━━━
+
+1. WORD-FOR-WORD SLICING — CRITICAL
+Every "text" field MUST be taken verbatim from the user's input. Do not add, invent, or summarize.
+Example: If user says "truck drives through desert then arrives at city then Merkab logo appears" with N=3:
+  • Scene 1 text: "truck drives through desert"
+  • Scene 2 text: "arrives at city"
+  • Scene 3 text: "Merkab logo appears"
+
+2. SUBJECT LOCK
+Extract the core physical subject (e.g., "striking blue Merkab semi-truck"). Rules:
+  • NEVER include: logo, brand, emblem, wordmark, insignia.
+  • Lock exact colors. Keep it 3-8 words.
+
+3. SLOGAN LOCK — ABSOLUTE RULE
+You are STRICTLY FORBIDDEN from paraphrasing, summarizing, or inventing brand slogans.
+If the user wrote a specific slogan (e.g. "Heritage in Motion", "Together We Build"), you MUST copy it EXACTLY word-for-word into the final scene's "text".
+NEVER use generic fillers like "Together we build" or "Moving forward" unless the user wrote those exact words.
+The user's exact words are the law. No exceptions.
+
+4. PIPELINE TAGS
+anchor_tag is "${effectiveAnchorTag}".
+If logo: Scene 1 and Scene ${N} → "logo_integration". Middle scenes → "style_extraction".
+If style: ALL scenes → "style_extraction".
+If character: ALL scenes → "character_lock".
+
+5. english_prompt FORMAT — CRITICAL
+Fed directly to image AI. MUST be:
+  • SHORT: 15–25 words max.
+  • COMMA-SEPARATED KEYWORDS: subject, action, setting, lighting, style. No sentences. No brackets.
+  • Start with subject_lock value.
+  • For logo scenes: start with "The provided [brand name] logo".
+  • NEVER include: [VISUAL DNA], [CONTENT LOCK], or any bracket headers.
+  • GOOD: "blue Merkab semi-truck, open desert highway, golden hour, cinematic wide shot, 8k"
+
+6. OUTPUT FORMAT
+Return ONLY valid JSON — no markdown:
+{"subject_lock": "<3-8 words>", "scenes": [{"scene": 1, "text": "...", "english_prompt": "<15-25 keywords>", "scene_pipeline": "..."}, ...]}
+Return exactly ${N} scenes.`;
 
     const userPrompt = language === 'ar'
       ? `رؤيتي: ${vision.trim()}\n\nأنشئ لي ${N} مشهد سينمائي مدة كل منها ١٠ ثواني.`
@@ -133,7 +196,7 @@ OUTPUT FORMAT: Return ONLY a JSON array with exactly ${N} items: [{"scene": 1, "
           { role: 'user', content: userPrompt }
         ],
         temperature: 0.8,
-        max_tokens: 2000,
+        max_tokens: 3000,
       }),
     });
 
@@ -149,30 +212,38 @@ OUTPUT FORMAT: Return ONLY a JSON array with exactly ${N} items: [{"scene": 1, "
       throw new Error('No content returned from OpenAI');
     }
 
-    // Parse the JSON response - GPT returns a JSON array directly per the system prompt
+    // Parse the JSON response — Director now returns {subject_lock, scenes:[...]}
     let scenes: Scene[];
+    let subjectLock = '';
     
     try {
       // Strip markdown code fences if present
       const cleaned = aiContent.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
       
-      // Try array match first (expected format per system prompt)
-      const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
-      if (arrayMatch) {
-        const parsed = JSON.parse(arrayMatch[0]);
-        if (Array.isArray(parsed)) {
-          scenes = parsed;
-        } else {
-          throw new Error('Not an array');
-        }
-      } else {
-        // Fallback: try parsing as object with scenes key
-        const objMatch = cleaned.match(/\{[\s\S]*\}/);
-        const parsed = JSON.parse(objMatch ? objMatch[0] : cleaned);
+      // Try object format first (new Production Contract format)
+      const objMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (objMatch) {
+        const parsed = JSON.parse(objMatch[0]);
         if (parsed.scenes && Array.isArray(parsed.scenes)) {
           scenes = parsed.scenes;
+          subjectLock = parsed.subject_lock || '';
+        } else if (Array.isArray(parsed)) {
+          scenes = parsed;
         } else {
-          throw new Error('No scenes array found');
+          throw new Error('No scenes array found in object');
+        }
+      } else {
+        // Fallback: try array match (legacy format)
+        const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
+        if (arrayMatch) {
+          const parsed = JSON.parse(arrayMatch[0]);
+          if (Array.isArray(parsed)) {
+            scenes = parsed;
+          } else {
+            throw new Error('Not an array');
+          }
+        } else {
+          throw new Error('No JSON found');
         }
       }
     } catch (_parseError) {
@@ -187,10 +258,12 @@ OUTPUT FORMAT: Return ONLY a JSON array with exactly ${N} items: [{"scene": 1, "
     const response: DirectorResponse = {
       success: true,
       visualDna: '',
+      subject_lock: subjectLock,
       scenes: scenes.slice(0, N).map((s, i) => ({
         scene: s.scene || i + 1,
         text: s.text || '',
-        english_prompt: s.english_prompt || s.text || ''
+        english_prompt: s.english_prompt || s.text || '',
+        scene_pipeline: s.scene_pipeline || 'style_extraction',
       }))
     };
 
