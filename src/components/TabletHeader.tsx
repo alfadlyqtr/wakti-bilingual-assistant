@@ -79,6 +79,8 @@ export function TabletHeader() {
     ? (immediateAvatarUrl ? getCacheBustedAvatarUrl(immediateAvatarUrl.trim()) : undefined)
     : (profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url.trim()) : undefined);
   
+  const isHomescreenMode = localStorage.getItem('wakti_dashboard_look') === 'homescreen';
+
   // Define menu items with icons
   const menuItems = [
     { 
@@ -116,7 +118,10 @@ export function TabletHeader() {
       colorClass: 'text-red-500',
       hoverClass: 'hover:bg-red-500/10'
     }
-  ];
+  ].filter(item => {
+    if (isHomescreenMode) return item.href !== '/account' && item.href !== '/contacts';
+    return true;
+  });
 
   // Function to get page title and icon
   const getPageTitleWithIcon = () => {

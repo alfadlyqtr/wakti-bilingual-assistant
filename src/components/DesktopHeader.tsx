@@ -163,6 +163,8 @@ export function DesktopHeader() {
     shouldGlowLogo && "wakti-logo-glow--pulse"
   );
 
+  const isHomescreenMode = localStorage.getItem('wakti_dashboard_look') === 'homescreen';
+
   // Define menu items with icons and vibrant colors
   const menuItems = [
     { 
@@ -200,7 +202,10 @@ export function DesktopHeader() {
       colorClass: 'text-red-500',
       hoverClass: 'hover:bg-red-500/10'
     }
-  ];
+  ].filter(item => {
+    if (isHomescreenMode) return item.href !== '/account' && item.href !== '/contacts';
+    return true;
+  });
 
   return (
     <div className="w-full px-6 py-0 transition-all duration-300" dir="ltr">
