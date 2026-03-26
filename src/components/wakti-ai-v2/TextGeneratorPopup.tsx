@@ -1864,11 +1864,11 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                       </button>
                     </div>
                   )}
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2 mt-2">
                     <div className="relative">
                       <button
                         type="button"
-                        className="px-3 py-1.5 rounded border hover:bg-muted"
+                        className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
                         onClick={() => setCopyMenuOpen((v) => !v)}
                         disabled={!generatedText.trim()}
                         aria-haspopup="menu"
@@ -1912,27 +1912,27 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                       )}
                     </div>
                     <button
-                      className="px-3 py-1.5 rounded border-2 border-indigo-500/60 text-indigo-700 dark:text-indigo-200 bg-indigo-500/10 hover:bg-indigo-500/20 shadow-[0_0_18px_rgba(99,102,241,0.45)] hover:shadow-[0_0_26px_rgba(99,102,241,0.6)]"
+                      className="px-4 py-2 rounded-lg border-2 border-indigo-500/60 text-indigo-700 dark:text-indigo-200 bg-indigo-500/10 hover:bg-indigo-500/20 text-sm font-medium shadow-[0_0_18px_rgba(99,102,241,0.45)] transition-colors"
                       onClick={handleGenerate}
                     >
                       {language === 'ar' ? 'إعادة توليد' : 'Regenerate'}
                     </button>
                     <button
-                      className="px-3 py-1.5 rounded border border-emerald-500/50 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20"
+                      className="px-4 py-2 rounded-lg border border-emerald-500/50 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 text-sm font-medium transition-colors"
                       onClick={handleSaveText}
                       disabled={!generatedText.trim()}
                     >
                       {language === 'ar' ? 'حفظ' : 'Save'}
                     </button>
                     <button
-                      className="px-3 py-1.5 rounded border hover:bg-muted"
+                      className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
                       onClick={() => setGeneratedText('')}
                       aria-label="Clear generated text"
                     >
                       {language === 'ar' ? 'مسح النص' : 'Clear'}
                     </button>
                     <button
-                      className="px-3 py-1.5 rounded border hover:bg-muted"
+                      className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
                       onClick={handleShare}
                       disabled={!generatedText.trim()}
                     >

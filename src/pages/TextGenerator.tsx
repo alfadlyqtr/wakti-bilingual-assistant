@@ -20,93 +20,38 @@ export default function TextGenerator() {
   
   return (
     <div className="w-full h-full">
-      <div className="mx-auto w-full max-w-none pt-6 md:pt-8 pb-6 px-3 md:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-none pt-4 md:pt-8 pb-6 px-3 md:px-6 lg:px-8">
         <div className="text-center mb-3">
-          <h1 className="text-2xl font-semibold">
+          <h1 className="text-xl md:text-2xl font-semibold">
             {language === 'ar' ? 'مولد النص الذكي' : 'Smart Text Generator'}
           </h1>
         </div>
 
         <div className="mb-3">
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-2 p-1 rounded-2xl border border-border/70 bg-white/60 dark:bg-white/5 shadow-sm" role="tablist" aria-label={language === 'ar' ? 'التبويبات' : 'Tabs'}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'compose'}
-              onClick={() => setActiveTab('compose')}
-              className={`h-12 rounded-xl border text-sm font-medium transition-all
-                ${activeTab === 'compose'
-                  ? 'bg-gradient-primary text-primary-foreground shadow-lg border-primary ring-1 ring-primary/60'
-                  : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white'}
-              `}
-            >
-              {language === 'ar' ? 'تأليف' : 'Compose'}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'reply'}
-              onClick={() => setActiveTab('reply')}
-              className={`h-12 rounded-xl border text-sm font-medium transition-all
-                ${activeTab === 'reply'
-                  ? 'bg-gradient-primary text-primary-foreground shadow-lg border-primary ring-1 ring-primary/60'
-                  : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white'}
-              `}
-            >
-              {language === 'ar' ? 'رد' : 'Reply'}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'generated'}
-              onClick={() => setActiveTab('generated')}
-              className={`h-12 rounded-xl border text-sm font-medium transition-all
-                ${activeTab === 'generated'
-                  ? 'bg-muted/90 text-foreground shadow-lg border-muted-foreground/20 ring-1 ring-muted-foreground/20'
-                  : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white'}
-              `}
-            >
-              {language === 'ar' ? 'النص المُولد' : 'Generated'}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'diagrams'}
-              onClick={() => setActiveTab('diagrams')}
-              className={`h-12 rounded-xl border text-sm font-medium transition-all
-                ${activeTab === 'diagrams'
-                  ? 'bg-white text-foreground shadow-lg border-foreground/20 ring-1 ring-foreground/20'
-                  : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white'}
-              `}
-            >
-              {language === 'ar' ? 'المخططات' : 'Diagrams'}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'presentation'}
-              onClick={() => setActiveTab('presentation')}
-              className={`h-12 rounded-xl border text-sm font-medium transition-all
-                ${activeTab === 'presentation'
-                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg hover:shadow-xl hover:from-indigo-400 hover:to-purple-500'
-                  : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white'}
-              `}
-            >
-              {language === 'ar' ? 'العروض' : 'Presentations'}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'translate'}
-              onClick={() => setActiveTab('translate')}
-              className={`h-12 rounded-xl border text-sm font-medium transition-all
-                ${activeTab === 'translate'
-                  ? 'bg-white text-foreground shadow-lg border-foreground/20 ring-1 ring-foreground/20'
-                  : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white'}
-              `}
-            >
-              {language === 'ar' ? 'مترجم النص' : 'Text Translator'}
-            </button>
+          <div className="flex md:grid md:grid-cols-6 gap-1.5 p-1 rounded-2xl border border-border/70 bg-white/60 dark:bg-white/5 shadow-sm overflow-x-auto scrollbar-none" role="tablist" aria-label={language === 'ar' ? 'التبويبات' : 'Tabs'}>
+            {[
+              { key: 'compose',      labelEn: 'Compose',         labelAr: 'تأليف',         activeClass: 'bg-gradient-primary text-primary-foreground shadow-lg border-primary ring-1 ring-primary/60' },
+              { key: 'reply',        labelEn: 'Reply',           labelAr: 'رد',            activeClass: 'bg-gradient-primary text-primary-foreground shadow-lg border-primary ring-1 ring-primary/60' },
+              { key: 'generated',    labelEn: 'Generated',       labelAr: 'النص المُولد',  activeClass: 'bg-muted/90 text-foreground shadow-lg border-muted-foreground/20 ring-1 ring-muted-foreground/20' },
+              { key: 'diagrams',     labelEn: 'Diagrams',        labelAr: 'المخططات',      activeClass: 'bg-white text-foreground shadow-lg border-foreground/20 ring-1 ring-foreground/20' },
+              { key: 'presentation', labelEn: 'Presentations',   labelAr: 'العروض',        activeClass: 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg' },
+              { key: 'translate',    labelEn: 'Text Translator',  labelAr: 'مترجم النص',   activeClass: 'bg-white text-foreground shadow-lg border-foreground/20 ring-1 ring-foreground/20' },
+            ].map(({ key, labelEn, labelAr, activeClass }) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === key}
+                onClick={() => setActiveTab(key as any)}
+                className={`flex-shrink-0 h-10 md:h-12 px-3 md:px-4 rounded-xl border text-xs md:text-sm font-medium transition-all whitespace-nowrap
+                  ${activeTab === key
+                    ? activeClass
+                    : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white dark:hover:bg-white/10'}
+                `}
+              >
+                {language === 'ar' ? labelAr : labelEn}
+              </button>
+            ))}
           </div>
         </div>
 
