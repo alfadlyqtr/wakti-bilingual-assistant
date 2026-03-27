@@ -77,7 +77,6 @@ export function clearStaleTokensBeforeInit(): void {
     
     // If token is expired, clear it BEFORE SDK tries to refresh
     if (nowSec >= expiresAt) {
-      console.log('[Auth] Clearing expired token to prevent 400 error');
       safeStorage.removeItem('wakti-auth');
       // Also clear any other Supabase auth keys
       try {
@@ -151,7 +150,6 @@ if (typeof window !== 'undefined') {
     
     if (isJWTError) {
       isRecovering = true;
-      console.log('[Auth] JWT error detected, waiting for refresh to complete:', errorStr);
       
       // Wait 2 seconds to let Supabase auto-refresh complete, then re-check
       setTimeout(async () => {
@@ -159,14 +157,12 @@ if (typeof window !== 'undefined') {
           const { data } = await supabase.auth.getSession();
           if (data?.session) {
             // Session recovered - do NOT logout
-            console.log('[Auth] Session recovered after JWT error, staying logged in');
             isRecovering = false;
             return;
           }
         } catch (_) {}
         
         // Session is truly dead - now logout
-        console.log('[Auth] Session not recovered, logging out');
         clearAllSupabaseAuthKeys();
         supabase.auth.signOut().catch(() => {});
         
@@ -314,7 +310,7 @@ export const callEdgeFunctionWithRetry = async <T>(
   
   let lastError: Error | null = null;
   
-  console.log(`Calling edge function "${functionName}" with options:`, {
+  if (false) console.log(`Calling edge function "${functionName}" with options:`, {
     hasBody: !!body,
     bodyType: body ? typeof body : null,
     bodyKeys: body ? Object.keys(body) : null,
@@ -328,14 +324,14 @@ export const callEdgeFunctionWithRetry = async <T>(
   if (functionName === 'transcribe-audio' && body) {
     // Type assertion for the audio body
     const audioBody = body as TranscribeAudioPayload;
-    console.log(`transcribe-audio request payload:`, {
+    if (false) console.log(`transcribe-audio request payload:`, {
       audioUrlStart: audioBody.audioUrl ? `${audioBody.audioUrl.substring(0, 30)}...` : 'undefined',
       audioUrlLength: audioBody.audioUrl ? audioBody.audioUrl.length : 0
     });
   } else if (functionName === 'summarize-text' && body) {
     // Log summarize-text specific details
     const sBody = body as { transcript?: string; language?: string };
-    console.log(`summarize-text request payload:`, {
+    if (false) console.log(`summarize-text request payload:`, {
       hasTranscript: !!sBody.transcript,
       transcriptLength: sBody.transcript ? sBody.transcript.length : 0,
       language: sBody.language
@@ -343,7 +339,7 @@ export const callEdgeFunctionWithRetry = async <T>(
   } else if (functionName === 'generate-speech' && body) {
     // Log generate-speech specific details
     const gBody = body as { summary?: string; voice?: string };
-    console.log(`generate-speech request payload:`, {
+    if (false) console.log(`generate-speech request payload:`, {
       summaryLength: gBody.summary ? gBody.summary.length : 0,
       voice: gBody.voice
     });
@@ -351,10 +347,8 @@ export const callEdgeFunctionWithRetry = async <T>(
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      console.log(`Edge function "${functionName}" attempt ${attempt + 1}/${maxRetries}`);
       
       const fullUrl = `${effectiveUrl}/functions/v1/${functionName}`;
-      console.log(`Using direct fetch to: ${fullUrl}`);
       
       // Central Trial Gate: send user JWT as Authorization so backend trial checks can identify the user.
       // Anon key goes in apikey header for project identification.
@@ -375,7 +369,7 @@ export const callEdgeFunctionWithRetry = async <T>(
         body: JSON.stringify(body)
       };
       
-      console.log('Fetch options:', {
+      if (false) console.log('Fetch options:', {
         method: fetchOptions.method,
         hasBody: !!fetchOptions.body,
         headersKeys: Object.keys(fetchOptions.headers || {})
@@ -385,7 +379,7 @@ export const callEdgeFunctionWithRetry = async <T>(
       const response = await fetch(fullUrl, fetchOptions);
       const duration = Date.now() - startTime;
       
-      console.log(`Direct fetch to "${functionName}" response:`, {
+      if (false) console.log(`Direct fetch to "${functionName}" response:`, {
         status: response.status,
         ok: response.ok,
         statusText: response.statusText,
@@ -425,7 +419,7 @@ export const callEdgeFunctionWithRetry = async <T>(
         }
       }
       
-      console.log(`Edge function "${functionName}" response received:`, {
+      if (false) console.log(`Edge function "${functionName}" response received:`, {
         type: typeof data,
         isBlob: data instanceof Blob,
         isArrayBuffer: data instanceof ArrayBuffer,
@@ -493,7 +487,6 @@ export const withRetry = async <T>(
 // Function to manually trigger auto-delete of old recordings
 export const manuallyDeleteOldRecordings = async (): Promise<{ success: boolean; message: string; deletedCount?: number }> => {
   try {
-    console.log('Manually triggering auto-delete of old recordings...');
     
     const data = await callEdgeFunctionWithRetry<{
       message: string;
@@ -505,7 +498,6 @@ export const manuallyDeleteOldRecordings = async (): Promise<{ success: boolean;
       retryDelay: 1000
     });
 
-    console.log('Auto-delete function result:', data);
     
     return {
       success: true,
@@ -553,7 +545,6 @@ export const saveTasjeelRecord = async (
       throw new Error('No authenticated user found');
     }
     
-    console.log('Creating Tasjeel record for user:', userId);
     
     // Make sure to include the saved field, defaulting to true
     const finalRecordData = {
@@ -575,7 +566,6 @@ export const saveTasjeelRecord = async (
       throw error;
     }
     
-    console.log('Successfully saved Tasjeel record:', data);
     return mapDbTasjeelRecord(data);
   } catch (error) {
     console.error('Error saving Tasjeel record:', error);

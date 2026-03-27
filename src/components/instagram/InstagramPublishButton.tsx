@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Instagram, Loader2, Check, X, ExternalLink } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 interface IGAccount {
@@ -43,11 +43,25 @@ export default function InstagramPublishButton({
   const checkConnection = useCallback(async () => {
     setCheckingStatus(true);
     try {
-      const { data, error } = await supabase.functions.invoke('instagram-connect-user', {
-        method: 'GET' as never,
-        headers: { 'x-action': 'status' },
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        setIgAccount(null);
+        return;
+      }
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/instagram-connect-user?action=status`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
-      if (!error && data?.connected) {
+
+      const data = await response.json();
+
+      if (response.ok && data?.connected) {
         setIgAccount(data.account);
       } else {
         setIgAccount(null);
@@ -97,7 +111,11 @@ export default function InstagramPublishButton({
       toast.error(ar ? 'معرّف تطبيق Meta غير متوفر' : 'Meta App ID not configured');
       return;
     }
-    const state = btoa(JSON.stringify({ origin: window.location.origin, source: 'media_publish' }));
+    const state = btoa(JSON.stringify({
+      origin: window.location.origin,
+      source: 'media_publish',
+      return_to: `${window.location.pathname}${window.location.search}`,
+    }));
     const oauthUrl = `https://api.instagram.com/oauth/authorize?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${IG_SCOPES}&response_type=code&state=${state}`;
     window.location.href = oauthUrl;
   };

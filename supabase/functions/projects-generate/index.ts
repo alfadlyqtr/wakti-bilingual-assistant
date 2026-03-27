@@ -220,11 +220,11 @@ function calculateCost(model: string, inputTokens: number, outputTokens: number)
 }
 
 function logCreditUsage(
-  mode: string,
+  _mode: string,
   modelSelection: ModelSelection,
   inputText: string,
   outputText: string,
-  projectId: string
+  _projectId: string
 ): CreditUsage {
   const inputTokens = estimateTokens(inputText);
   const outputTokens = estimateTokens(outputText);
@@ -239,11 +239,6 @@ function logCreditUsage(
     reason: modelSelection.reason
   };
   
-  console.log(`[💰 CREDIT USAGE] Mode: ${mode} | Model: ${usage.model} (${usage.tier})`);
-  console.log(`[💰 CREDIT USAGE] Tokens: ~${inputTokens} in / ~${outputTokens} out`);
-  console.log(`[💰 CREDIT USAGE] Estimated cost: $${cost.toFixed(6)}`);
-  console.log(`[💰 CREDIT USAGE] Reason: ${usage.reason}`);
-  console.log(`[💰 CREDIT USAGE] Project: ${projectId}`);
   
   return usage;
 }
@@ -272,8 +267,6 @@ interface ProcessedAsset {
  */
 async function extractTextFromPDF(url: string, apiKey: string): Promise<string> {
   try {
-    console.log(`[PDF Extract] Downloading PDF from: ${url}`);
-    
     // Download the PDF
     const response = await fetch(url);
     if (!response.ok) {
@@ -290,8 +283,6 @@ async function extractTextFromPDF(url: string, apiKey: string): Promise<string> 
       binaryStr += String.fromCharCode(...uint8.subarray(i, Math.min(i + chunkSize, uint8.length)));
     }
     const base64Pdf = btoa(binaryStr);
-    
-    console.log(`[PDF Extract] PDF size: ${pdfBytes.byteLength} bytes, sending to Gemini...`);
     
     // Use Gemini to extract text from PDF (it has native PDF understanding)
     const geminiResponse = await fetch(
@@ -339,7 +330,6 @@ Format it clearly so it can be used to generate a portfolio/CV website.`
     const result = await geminiResponse.json();
     const extractedText = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
-    console.log(`[PDF Extract] Extracted ${extractedText.length} characters from PDF`);
     return extractedText;
     
   } catch (error) {
@@ -353,8 +343,6 @@ Format it clearly so it can be used to generate a portfolio/CV website.`
  */
 async function extractTextFromDOCX(url: string, apiKey: string): Promise<string> {
   try {
-    console.log(`[DOCX Extract] Downloading DOCX from: ${url}`);
-    
     // Download the DOCX
     const response = await fetch(url);
     if (!response.ok) {
@@ -371,8 +359,6 @@ async function extractTextFromDOCX(url: string, apiKey: string): Promise<string>
       binaryStrDocx += String.fromCharCode(...uint8Docx.subarray(i, Math.min(i + chunkSizeDocx, uint8Docx.length)));
     }
     const base64Docx = btoa(binaryStrDocx);
-    
-    console.log(`[DOCX Extract] DOCX size: ${docxBytes.byteLength} bytes, sending to Gemini...`);
     
     // Use Gemini to extract text (it can handle DOCX as well)
     const geminiResponse = await fetch(
@@ -412,7 +398,6 @@ Return the extracted text in a clean, structured format. Include all sections, h
     const result = await geminiResponse.json();
     const extractedText = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
-    console.log(`[DOCX Extract] Extracted ${extractedText.length} characters from DOCX`);
     return extractedText;
     
   } catch (error) {
@@ -426,8 +411,6 @@ Return the extracted text in a clean, structured format. Include all sections, h
  */
 async function analyzeImageForInspiration(url: string, apiKey: string): Promise<string> {
   try {
-    console.log(`[Vision] Analyzing image for inspiration: ${url}`);
-    
     // Download the image
     const response = await fetch(url);
     if (!response.ok) {
@@ -448,8 +431,6 @@ async function analyzeImageForInspiration(url: string, apiKey: string): Promise<
     // Determine mime type from URL or response
     const contentType = response.headers.get('content-type') || 'image/jpeg';
     const mimeType = contentType.split(';')[0].trim();
-    
-    console.log(`[Vision] Image size: ${imageBytes.byteLength} bytes, type: ${mimeType}`);
     
     // Use Gemini Vision to analyze the image
     const geminiResponse = await fetch(
@@ -501,7 +482,6 @@ Be specific and actionable so the AI can recreate a similar style.`
     const result = await geminiResponse.json();
     const analysis = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
-    console.log(`[Vision] Generated ${analysis.length} character analysis`);
     return analysis;
     
   } catch (error) {
@@ -588,57 +568,36 @@ async function processUploadedAssets(
   let documentContent = '';
   let visionInspirations = '';
   
-  console.log(`[Process Assets] Starting to process ${assets.length} assets...`);
-  
   for (const asset of assets) {
     const processed: ProcessedAsset = { ...asset };
     
-    // Log detailed file info for debugging
-    console.log(`[Process Assets] Checking asset: filename="${asset.filename}", file_type="${asset.file_type}", url="${asset.url.substring(0, 100)}..."`);
-    
     // Check if it's a PDF using robust detection
     if (isPdfFile(asset.file_type, asset.filename, asset.url)) {
-      console.log(`[Process Assets] ✅ DETECTED AS PDF: ${asset.filename}`);
       const text = await extractTextFromPDF(asset.url, apiKey);
       if (text) {
         processed.extractedText = text;
         documentContent += `\n\n📄 **CONTENT FROM ${asset.filename}:**\n${text}\n`;
-        console.log(`[Process Assets] ✅ Extracted ${text.length} chars from PDF`);
-      } else {
-        console.log(`[Process Assets] ⚠️ PDF extraction returned empty for ${asset.filename}`);
       }
     }
     // Check if it's a DOCX/DOC using robust detection
     else if (isWordFile(asset.file_type, asset.filename, asset.url)) {
-      console.log(`[Process Assets] ✅ DETECTED AS WORD DOC: ${asset.filename}`);
       const text = await extractTextFromDOCX(asset.url, apiKey);
       if (text) {
         processed.extractedText = text;
         documentContent += `\n\n📄 **CONTENT FROM ${asset.filename}:**\n${text}\n`;
-        console.log(`[Process Assets] ✅ Extracted ${text.length} chars from DOCX`);
-      } else {
-        console.log(`[Process Assets] ⚠️ DOCX extraction returned empty for ${asset.filename}`);
       }
     }
     // Check if it's an image using robust detection
     else if (isImageFile(asset.file_type, asset.filename, asset.url)) {
-      console.log(`[Process Assets] ✅ DETECTED AS IMAGE: ${asset.filename}`);
       const analysis = await analyzeImageForInspiration(asset.url, apiKey);
       if (analysis) {
         processed.visionAnalysis = analysis;
         visionInspirations += `\n\n🎨 **DESIGN INSPIRATION FROM ${asset.filename}:**\n${analysis}\n`;
-        console.log(`[Process Assets] ✅ Generated ${analysis.length} chars of vision analysis`);
-      } else {
-        console.log(`[Process Assets] ⚠️ Image analysis returned empty for ${asset.filename}`);
       }
-    } else {
-      console.log(`[Process Assets] ❌ UNKNOWN FILE TYPE - not processed: filename="${asset.filename}", file_type="${asset.file_type}"`);
     }
     
     processedAssets.push(processed);
   }
-  
-  console.log(`[Process Assets] Completed. Document content: ${documentContent.length} chars, Vision: ${visionInspirations.length} chars`);
   
   return { processedAssets, documentContent, visionInspirations };
 }
@@ -845,8 +804,6 @@ async function callGeminiWithModel(
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
   
-  console.log(`[Gemini] Calling model: ${model}`);
-
   let lastError: Error | null = null;
   let activeModel = model;
   
@@ -854,7 +811,6 @@ async function callGeminiWithModel(
     if (attempt > 0) {
       // Exponential backoff: 2s, 4s, 8s
       const backoffMs = Math.pow(2, attempt) * 1000;
-      console.log(`[Gemini] Rate limited, waiting ${backoffMs}ms before retry ${attempt}/${maxRetries}...`);
       await new Promise(resolve => setTimeout(resolve, backoffMs));
     }
     
@@ -991,7 +947,6 @@ Return JSON:
 CRITICAL: Return ONLY the PRIMARY section's text. If you see multiple sections, pick the ONE that appears most prominent or central.`
   });
 
-  console.log(`[Screenshot Analysis] Analyzing ${parts.length - 1} images for text anchors...`);
 
   const response = await withTimeout(
     fetch(
@@ -1026,7 +981,6 @@ CRITICAL: Return ONLY the PRIMARY section's text. If you see multiple sections, 
   
   try {
     const result = JSON.parse(text);
-    console.log(`[Screenshot Analysis] Found anchors:`, result.anchors);
     return {
       anchors: Array.isArray(result.anchors) ? result.anchors : [],
       description: result.description || ''
@@ -1056,7 +1010,6 @@ async function callGemini25ProWithImages(
   
   // Add images first if provided
   if (images && images.length > 0) {
-    console.log(`[Gemini 2.5 Pro Vision] Processing ${images.length} attachments...`);
     for (const imgData of images) {
       if (typeof imgData !== 'string') continue;
       
@@ -1073,7 +1026,6 @@ async function callGemini25ProWithImages(
                 data: base64Data
               }
             });
-            console.log(`[Gemini 2.5 Pro Vision] Added PDF attachment`);
           }
         }
         continue;
@@ -1092,7 +1044,6 @@ async function callGemini25ProWithImages(
               data: base64Data
             }
           });
-          console.log(`[Gemini 2.5 Pro Vision] Added image (${mimeType})`);
         }
       }
     }
@@ -1101,7 +1052,6 @@ async function callGemini25ProWithImages(
   // Add text prompt
   parts.push({ text: userPrompt });
   
-  console.log(`[Gemini 2.5 Pro Vision] Calling model: ${model} with ${parts.length} parts`);
 
   const response = await withTimeout(
     fetch(
@@ -1189,8 +1139,6 @@ async function callGeminiPlanMode(
   // Medium projects (11-30 files): top 15
   // Large projects (>30 files): top 20
   const dynamicTopN = fileCount <= 10 ? fileCount : (fileCount <= 30 ? 15 : 20);
-  console.log(`[Plan Mode] Dynamic context: ${dynamicTopN} files (project has ${fileCount})`);
-  
   const sortedFiles = Object.entries(fileRelevanceScores)
     .sort((a, b) => b[1] - a[1])
     .slice(0, dynamicTopN)
@@ -1215,7 +1163,6 @@ ${otherFiles}` : ''}
 
   // Smart model selection for plan mode
   const modelSelection = selectOptimalModel(userPrompt, false, 'plan', fileCount);
-  console.log(`[Plan Mode] Model selected: ${modelSelection.model} (${modelSelection.tier}) - ${modelSelection.reason}`);
 
   const systemPrompt = `You are a code analysis engine. Your ONLY job is to analyze the provided codebase and propose REAL, SPECIFIC changes.
 
@@ -1319,7 +1266,6 @@ ${relevantContext}`;
 
   // Smart model selection for execute mode
   const modelSelection = selectOptimalModel(planToExecute, false, 'execute', fileCount);
-  console.log(`[Execute Mode] Model selected: ${modelSelection.model} (${modelSelection.tier}) - ${modelSelection.reason}`);
 
   const systemPrompt = GEMINI_EXECUTE_SYSTEM_PROMPT;
 
@@ -1382,15 +1328,12 @@ async function callGeminiFullRewriteEdit(
   let screenshotAnchorsContext = '';
   
   if (images && images.length > 0) {
-    console.log(`[Edit Mode] Processing ${images.length} attached files...`);
-    
     // STEP 1: Analyze screenshots to extract visible text anchors
     const screenshotImages = images.filter(img => 
       typeof img === 'string' && img.startsWith('data:image/')
     );
     
     if (screenshotImages.length > 0) {
-      console.log(`[Edit Mode] Running 2-step screenshot analysis...`);
       try {
         const { anchors, description } = await analyzeScreenshotForAnchors(screenshotImages);
         if (anchors.length > 0) {
@@ -1407,7 +1350,6 @@ The user attached a screenshot. I analyzed it and found these text anchors:
 3. Apply the user's request ONLY to that section
 4. Do NOT invent or guess other text - use ONLY the anchors above
 `;
-          console.log(`[Edit Mode] Screenshot anchors injected: ${anchors.join(', ')}`);
         }
       } catch (err) {
         console.error(`[Edit Mode] Screenshot analysis failed:`, err);
@@ -1428,7 +1370,6 @@ The user attached a screenshot. I analyzed it and found these text anchors:
           const pdfBase64Data = imgData.substring(endMarker + 1);
           
           // Extract text from PDF using Gemini Vision
-          console.log(`[Edit Mode] 📄 Extracting text from PDF: ${pdfName}`);
           try {
             const pdfMatches = pdfBase64Data.match(/^data:([^;]+);base64,(.+)$/);
             if (pdfMatches && GEMINI_API_KEY_EDIT) {
@@ -1478,9 +1419,7 @@ ${extractedText}
 
 🚨 **CRITICAL**: Use this REAL data from the user's document above.
 DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
-                  console.log(`[Edit Mode] ✅ Extracted ${extractedText.length} chars from PDF: ${pdfName}`);
                 } else {
-                  console.log(`[Edit Mode] ⚠️ PDF extraction returned empty for ${pdfName}`);
                   pdfTextContent += `\n\n📄 ATTACHED PDF: ${pdfName} - Could not extract text.`;
                 }
               } else {
@@ -1728,7 +1667,6 @@ MISSING FILES (return these exact paths):\n${missingPaths.join('\n')}
 
 CONTEXT:\n${filesStr}\n\nORIGINAL REQUEST:\n${originalUserPrompt}`;
 
-  console.log(`[Gemini Missing Files] Generating ${missingPaths.length} missing files using ${model}`);
 
   const text = await callGeminiWithModel(model, systemPrompt, userMsg, true);
   
@@ -1843,7 +1781,6 @@ function recoverBrokenJson(text: string): Record<string, unknown> | null {
     try {
       const parsed = JSON.parse(attempt);
       if (parsed && typeof parsed === 'object') {
-        console.log('[recoverBrokenJson] Recovery succeeded');
         return parsed as Record<string, unknown>;
       }
     } catch {
@@ -2074,7 +2011,6 @@ async function preFetchAndStoreImages(
               uploadId: uploadData?.id
             });
             
-            console.log(`[PreFetch] Stored image for "${query}": ${storedUrl}`);
           }
         } catch (imgErr) {
           console.warn(`[PreFetch] Error processing image for "${query}":`, imgErr);
@@ -2124,8 +2060,6 @@ async function bootstrapBackendData(
     const isEcommercePrompt = /shop|store|e-?commerce|product|catalog|inventory|متجر|منتج/i.test(lowerPrompt);
 
     if (hasProductsCode || isEcommercePrompt) {
-      console.log(`[Bootstrap] Detected e-commerce - seeding sample products with images...`);
-      
       // Check if products already exist
       const { data: existingProducts } = await supabase
         .from('project_collections')
@@ -2184,14 +2118,12 @@ async function bootstrapBackendData(
                 })
                 .eq('id', assignedUploadId);
               
-              console.log(`[Bootstrap] Linked image ${assignedUploadId} to product ${insertedProduct.id}`);
             }
           }
         }
         
         if (results.productsSeeded > 0) {
           results.collectionsCreated.push('products');
-          console.log(`[Bootstrap] Seeded ${results.productsSeeded} sample products with ${preFetchedImages.length} images`);
         }
       }
     }
@@ -2203,8 +2135,6 @@ async function bootstrapBackendData(
     const isBookingPrompt = /booking|appointment|schedule|reservation|salon|barber|clinic|حجز|موعد/i.test(lowerPrompt);
 
     if (hasBookingsCode || isBookingPrompt) {
-      console.log(`[Bootstrap] Detected booking system - seeding sample services...`);
-      
       // Check if services already exist
       const { data: existingServices } = await supabase
         .from('project_collections')
@@ -2233,7 +2163,6 @@ async function bootstrapBackendData(
         
         if (results.servicesSeeded > 0) {
           results.collectionsCreated.push('services');
-          console.log(`[Bootstrap] Seeded ${results.servicesSeeded} sample services`);
         }
       }
     }
@@ -2241,7 +2170,6 @@ async function bootstrapBackendData(
     // 3. STORE FREEPIK IMAGES: Extract image URLs from generated code and store them
     const freepikUrls = extractFreepikUrls(allContent);
     if (freepikUrls.length > 0) {
-      console.log(`[Bootstrap] Found ${freepikUrls.length} Freepik image references...`);
       // Note: Images are fetched at runtime via fetchStockImages, no need to pre-store
       // But we track them for analytics
       results.imagesStored = freepikUrls.length;
@@ -3937,7 +3865,6 @@ async function callClaudeOpus4Fixer(
   const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
   if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY missing");
 
-  console.log(`[THE FIXER] Claude claude-sonnet-4-5-20250929 activated - Final auto-fix attempt`);
 
   // Convert Gemini-style tools to Claude format
   const claudeTools = tools.map(tool => ({
@@ -4035,7 +3962,6 @@ async function callClaudeOpus4Fixer(
     }
   }
 
-  console.log(`[THE FIXER] Response complete. Content: ${fullContent.length} chars, Tool calls: ${toolCalls.length}`);
 
   return { content: fullContent, toolCalls: toolCalls.length > 0 ? toolCalls : undefined };
 }
@@ -4050,7 +3976,6 @@ async function callClaudeStreaming(systemPrompt: string, userPrompt: string, ima
   
   // Add images first if present (vision mode)
   if (images && images.length > 0) {
-    console.log(`[Claude] Vision mode: ${images.length} image(s) attached`);
     for (const img of images) {
       contentBlocks.push({
         type: "image",
@@ -4065,7 +3990,6 @@ async function callClaudeStreaming(systemPrompt: string, userPrompt: string, ima
   
   contentBlocks.push({ type: "text", text: userPrompt });
 
-  console.log(`[Claude 3.5 Sonnet] Starting STREAMING request... (${contentBlocks.length} content blocks)`);
 
   const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -4121,7 +4045,6 @@ async function callClaudeStreaming(systemPrompt: string, userPrompt: string, ima
     }
   }
 
-  console.log(`[Claude 3.7 Sonnet] Streaming complete. Total length: ${fullContent.length}`);
 
   // Clean up response
   let content = fullContent.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
@@ -4300,7 +4223,6 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
     // BULLETPROOF SERVER-SIDE FETCH: ALWAYS fetch from DB using service-role client.
     // Client-provided URLs may be broken (public URLs that 400). Service-role signed URLs always work.
     if (projectId) {
-      console.log(`[Assets] Server-side DB fetch for project: ${projectId} (client sent ${uploadedAssets.length} assets, overriding with signed URLs)`);
       try {
         const { data: dbUploads, error: dbErr } = await supabase
           .from('project_uploads')
@@ -4310,7 +4232,6 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
         if (dbErr) {
           console.error(`[Assets] DB fetch error:`, dbErr);
         } else if (dbUploads && dbUploads.length > 0) {
-          console.log(`[Assets] Found ${dbUploads.length} uploads in DB, building signed URLs...`);
           // Clear client-provided assets — replace with server-side signed URLs
           uploadedAssets.length = 0;
           for (const upload of dbUploads) {
@@ -4331,7 +4252,6 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
                 file_type: (upload as any).file_type
               });
             } else {
-              console.log(`[Assets] ✅ Signed URL OK for ${(upload as any).filename} (${bucket})`);
               uploadedAssets.push({
                 filename: (upload as any).filename,
                 url: signedData.signedUrl,
@@ -4339,9 +4259,6 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
               });
             }
           }
-          console.log(`[Assets] SERVER-SIDE FETCH: Built ${uploadedAssets.length} uploadedAssets from DB`);
-        } else {
-          console.log(`[Assets] No project_uploads found in DB for project ${projectId}`);
         }
       } catch (fetchErr) {
         console.error(`[Assets] Exception fetching from DB:`, fetchErr);
@@ -4369,16 +4286,10 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
           uploadedAssets.push({ filename, url, file_type });
         }
       }
-      if (uploadedAssets.length > 0) {
-        console.log(`[Assets] FALLBACK #2: Converted ${uploadedAssets.length} asset URLs to uploadedAssets`);
-      }
     }
-    
-    console.log(`[Assets] Final uploadedAssets count: ${uploadedAssets.length}, assets count: ${assets.length}`);
     
     const geminiApiKeyForAssets = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
     if (uploadedAssets.length > 0 && geminiApiKeyForAssets) {
-      console.log(`[Assets] Processing ${uploadedAssets.length} uploaded assets for content extraction...`);
       try {
         const { documentContent, visionInspirations } = await processUploadedAssets(
           uploadedAssets as Array<{ filename: string; url: string; file_type: string | null }>,
@@ -4386,7 +4297,6 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
         );
         documentContentStr = documentContent;
         visionInspirationStr = visionInspirations;
-        console.log(`[Assets] Extracted: ${documentContent.length} chars from docs, ${visionInspirations.length} chars from vision`);
       } catch (err) {
         console.error('[Assets] Error processing assets:', err);
       }
@@ -4518,12 +4428,8 @@ ${fileList}
       // Smart model selection for chat mode
       const hasImages = Array.isArray(images) && images.length > 0;
       const chatModelSelection = selectOptimalModel(prompt, hasImages, 'chat', fileCount);
-      console.log(`[Chat Mode] Model selected: ${chatModelSelection.model} (${chatModelSelection.tier}) - ${chatModelSelection.reason}`);
-      
       const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
       if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
-      
-      console.log(`[Chat Mode] Has images: ${hasImages}, count: ${hasImages ? images.length : 0}`);
       
       // Build asset picker priority section - MUST be checked FIRST
       const assetPickerPriorityStr = uploadedAssets.length > 1 
@@ -4682,7 +4588,6 @@ ${filesStr}`;
               const pdfBase64Data = imgData.substring(endBracket + 1);
               
               // Extract text from PDF using Gemini Vision
-              console.log(`[Chat Mode] 📄 Extracting text from PDF: ${pdfName}`);
               try {
                 // Parse the base64 data URL
                 const pdfMatches = pdfBase64Data.match(/^data:([^;]+);base64,(.+)$/);
@@ -4744,9 +4649,7 @@ ${extractedText}
 
 🚨 **CRITICAL**: Use this REAL data from the user's document above.
 DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
-                      console.log(`[Chat Mode] ✅ Extracted ${extractedText.length} chars from PDF: ${pdfName}`);
                     } else {
-                      console.log(`[Chat Mode] ⚠️ PDF extraction returned empty for ${pdfName}`);
                       pdfTextContent += `\n\n📄 USER ATTACHED PDF: "${pdfName}" - Could not extract text. Please describe the content.`;
                     }
                   } else {
@@ -4754,7 +4657,6 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
                     pdfTextContent += `\n\n📄 USER ATTACHED PDF: "${pdfName}" - Extraction failed. Please describe the content.`;
                   }
                 } else {
-                  console.log(`[Chat Mode] Could not parse PDF base64 data for ${pdfName}`);
                   pdfTextContent += `\n\n📄 USER ATTACHED PDF: "${pdfName}" - Please describe the content.`;
                 }
               } catch (pdfErr) {
@@ -4778,7 +4680,6 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
             }
           }
         }
-        console.log(`[Chat Mode] Added ${contentParts.length} images to request`);
       }
       
       // Add the text prompt (with PDF context if any)
@@ -4796,7 +4697,6 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
       
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          console.log(`[Chat Mode] Attempt ${attempt}/${maxRetries} with ${chatTimeout/1000}s timeout`);
           chatResponse = await withTimeout(
             fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/${selectedChatModel}:generateContent`,
@@ -4825,7 +4725,6 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
           lastError = err instanceof Error ? err : new Error(String(err));
           console.warn(`[Chat Mode] Attempt ${attempt} failed: ${lastError.message}`);
           if (attempt < maxRetries && lastError.message.includes('TIMEOUT')) {
-            console.log(`[Chat Mode] Retrying after timeout...`);
             await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
           } else {
             throw lastError;
@@ -4856,8 +4755,6 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
       
       // Check if the response contains a JSON (plan or asset_picker)
       const trimmedAnswer = answer.trim();
-      console.log(`[Chat Mode] Checking response for JSON. Length: ${trimmedAnswer.length}, starts with: ${trimmedAnswer.substring(0, 50)}`);
-      
       // Try to extract JSON from response
       let extractedJson: string | null = null;
       let jsonType: 'plan' | 'asset_picker' | null = null;
@@ -4867,11 +4764,9 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
         if (trimmedAnswer.includes('"asset_picker"')) {
           extractedJson = trimmedAnswer;
           jsonType = 'asset_picker';
-          console.log(`[Chat Mode] Method 1: Detected asset_picker (direct JSON)`);
         } else if (trimmedAnswer.includes('"plan"')) {
           extractedJson = trimmedAnswer;
           jsonType = 'plan';
-          console.log(`[Chat Mode] Method 1: Detected plan (direct JSON)`);
         }
       }
       
@@ -4895,18 +4790,14 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
           
           if (jsonEnd > firstBrace) {
             const potentialJson = trimmedAnswer.substring(firstBrace, jsonEnd);
-            console.log(`[Chat Mode] Method 2: Found potential JSON from ${firstBrace} to ${jsonEnd}`);
-            
             // Check what type it is
             if (potentialJson.includes('"type"')) {
               if (potentialJson.includes('"asset_picker"')) {
                 extractedJson = potentialJson;
                 jsonType = 'asset_picker';
-                console.log(`[Chat Mode] Method 2: Detected asset_picker`);
               } else if (potentialJson.includes('"plan"')) {
                 extractedJson = potentialJson;
                 jsonType = 'plan';
-                console.log(`[Chat Mode] Method 2: Detected plan`);
               }
             }
           }
@@ -4917,8 +4808,6 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
         // Validate it's actually valid JSON before returning
         try {
           const parsed = JSON.parse(extractedJson);
-          console.log(`[Chat Mode] ✅ Successfully parsed ${jsonType} JSON`);
-          
           if (jsonType === 'asset_picker') {
             // Return asset_picker for frontend to show selection UI
             return createResponse({ 
@@ -4930,13 +4819,9 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
           } else {
             return createResponse({ ok: true, plan: extractedJson, mode: 'plan', creditUsage: chatCreditUsage });
           }
-        } catch (parseErr) {
+        } catch {
           // Invalid JSON, return as regular message
-          console.log(`[Chat Mode] ❌ Failed to parse ${jsonType} JSON: ${parseErr}`);
-          console.log(`[Chat Mode] JSON content (first 200): ${extractedJson.substring(0, 200)}`);
         }
-      } else {
-        console.log(`[Chat Mode] No JSON detected, returning as regular message`);
       }
       
       // Return as regular chat message with credit usage
@@ -4962,10 +4847,6 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
       // THE FIXER MODE: Claude Opus 4 for final auto-fix attempt (attempt #4)
       // ========================================================================
       if (body.fixerMode && body.fixerContext) {
-        console.log(`[THE FIXER] 🔧 Fixer Mode activated - Claude claude-sonnet-4-5-20250929 taking over`);
-        console.log(`[THE FIXER] Error: ${body.fixerContext.errorMessage.substring(0, 200)}...`);
-        console.log(`[THE FIXER] Previous attempts: ${body.fixerContext.previousAttempts}`);
-        
         // Build Fixer context with all available information
         const fixerUserPrompt = `🔧 THE FIXER - FINAL AUTO-FIX ATTEMPT
 
@@ -5005,8 +4886,6 @@ REMEMBER: You have ONE SHOT. Read first, then fix correctly.`;
           const fixerMaxIterations = 6; // Fixer gets 6 iterations max
           
           for (let fixerIter = 0; fixerIter < fixerMaxIterations; fixerIter++) {
-            console.log(`[THE FIXER] Iteration ${fixerIter + 1}/${fixerMaxIterations}`);
-            
             const fixerResponse = await callClaudeOpus4Fixer(
               FIXER_SYSTEM_PROMPT,
               fixerMessages.map(m => m.content).join('\n\n'),
@@ -5018,8 +4897,6 @@ REMEMBER: You have ONE SHOT. Read first, then fix correctly.`;
               const toolResults: string[] = [];
               
               for (const toolCall of fixerResponse.toolCalls) {
-                console.log(`[THE FIXER] Tool call: ${toolCall.name}`);
-                
                 // Execute the tool - match executeToolCall signature
                 const toolCallObj = {
                   name: toolCall.name,
@@ -5047,7 +4924,6 @@ REMEMBER: You have ONE SHOT. Read first, then fix correctly.`;
                     summary: toolCall.input.summary || 'Fix applied by The Fixer',
                     filesChanged: toolCall.input.filesChanged || []
                   };
-                  console.log(`[THE FIXER] ✅ Task complete: ${fixerTaskComplete.summary}`);
                   break;
                 }
               }
@@ -5065,7 +4941,6 @@ REMEMBER: You have ONE SHOT. Read first, then fix correctly.`;
               });
             } else {
               // No tool calls, just text response
-              console.log(`[THE FIXER] Text response: ${fixerResponse.content.substring(0, 200)}...`);
               break;
             }
           }
@@ -5109,8 +4984,6 @@ REMEMBER: You have ONE SHOT. Read first, then fix correctly.`;
         }
       }
       
-      console.log(`[Agent Mode] Starting agent loop for: ${prompt.substring(0, 100)}...`);
-      
       const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
       if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
       
@@ -5122,7 +4995,6 @@ REMEMBER: You have ONE SHOT. Read first, then fix correctly.`;
       const agentImages = (images as unknown as string[]) || [];
       
       if (agentImages.length > 0) {
-        console.log(`[Agent Mode] Found ${agentImages.length} images, running screenshot analysis...`);
         try {
           const screenshotImages = agentImages.filter(img => 
             typeof img === 'string' && img.startsWith('data:image/')
@@ -5144,7 +5016,6 @@ The user attached a screenshot. I analyzed it and found these text anchors:
 3. Apply the user's request ONLY to the section containing these strings
 4. Do NOT guess or invent text - use ONLY the anchors above
 `;
-              console.log(`[Agent Mode] Screenshot anchors: ${anchors.join(', ')}`);
             }
           }
         } catch (err) {
@@ -5174,7 +5045,6 @@ The user attached a screenshot. I analyzed it and found these text anchors:
       
       // SAFETY NET: If currentFiles is empty, fetch file list from DB
       if (fileCount === 0) {
-        console.log(`[Agent Mode] WARNING: currentFiles empty, fetching from DB...`);
         const { data: dbFiles } = await supabase
           .from('project_files')
           .select('path')
@@ -5183,12 +5053,8 @@ The user attached a screenshot. I analyzed it and found these text anchors:
         if (dbFiles && dbFiles.length > 0) {
           fileList = dbFiles.map(f => normalizeFilePath(f.path)).join('\n');
           fileCount = dbFiles.length;
-          console.log(`[Agent Mode] Recovered ${fileCount} files from DB`);
         }
       }
-      
-      console.log(`[Agent Mode] OPTIMIZED: Sending ${fileCount} file NAMES only (not content)`);
-      console.log(`[Agent Mode] Files: ${fileList.substring(0, 200)}...`);
       
       // ========================================================================
       // 🚀 CRITICAL FILES PRE-READ: Auto-read index.js and App.js for context
@@ -5228,7 +5094,6 @@ The user attached a screenshot. I analyzed it and found these text anchors:
           criticalFilesContext += `\n`;
         }
         
-        console.log(`[Agent Mode] 📋 Pre-loaded ${criticalFiles.length} critical files for context`);
       }
       
       // Extract inspect selection from debug context for precise element targeting
@@ -5248,7 +5113,6 @@ ${lastInspect.message}
 ⚠️ CRITICAL: The user clicked on this specific element. Your changes MUST target this EXACT element.
 Match the className and innerText to find it in the code.
 `;
-          console.log(`[Agent Mode] Inspect selection context injected: ${lastInspect.message.substring(0, 200)}...`);
         }
       }
       
@@ -5307,9 +5171,6 @@ Match the className and innerText to find it in the code.
       const entryPoint = filesForIntent.find(f => f.path.includes('App.jsx') || f.path.includes('App.tsx'))?.path || '/App.jsx';
       
       const editIntent = analyzeEditIntent(enrichedPrompt, filesForIntent, entryPoint);
-      console.log(`[Agent Mode] Edit intent: ${editIntent.type} (confidence: ${editIntent.confidence}) - ${editIntent.description}`);
-      console.log(`[Agent Mode] Target files:`, editIntent.targetFiles);
-      
       // Build intent guidance based on analysis
       let intentGuidance = '';
       if (editIntent.confidence >= 0.7) {
@@ -5348,7 +5209,6 @@ Match the className and innerText to find it in the code.
               const pdfName = imgData.substring(5, endBracket);
               const pdfBase64Data = imgData.substring(endBracket + 1);
               
-              console.log(`[Agent Mode] 📄 Extracting text from attached PDF: ${pdfName}`);
               try {
                 const pdfMatches = pdfBase64Data.match(/^data:([^;]+);base64,(.+)$/);
                 if (pdfMatches && GEMINI_API_KEY_AGENT) {
@@ -5392,7 +5252,6 @@ Format the output clearly with sections. Do NOT summarize - extract the FULL tex
                     const extractedText = extractData.candidates?.[0]?.content?.parts?.[0]?.text || '';
                     if (extractedText) {
                       agentPdfExtractedContent += `\n\n📄 **EXTRACTED CONTENT FROM ${pdfName}:**\n${extractedText}`;
-                      console.log(`[Agent Mode] ✅ Extracted ${extractedText.length} chars from PDF: ${pdfName}`);
                     }
                   } else {
                     console.error(`[Agent Mode] PDF extraction API error: ${extractResponse.status}`);
@@ -5431,7 +5290,6 @@ ${agentPdfExtractedContent}
 USE THIS REAL DATA to update the website - names, experience, skills, education, contact info, etc.
 DO NOT make up fake information. Use EXACTLY what is in the extracted content above.
 Update mockData.js or the relevant data files with this REAL information.`;
-        console.log(`[Agent Mode] ✅ Added ${agentPdfExtractedContent.length} chars of PDF content to prompt`);
       }
       
       // Add debug context if there are errors
@@ -5506,8 +5364,6 @@ Update mockData.js or the relevant data files with this REAL information.`;
         const normalized = f.startsWith('/') ? f : `/${f}`;
         knownFiles.add(normalized);
       });
-      console.log(`[Agent Mode] 🔒 Known files set initialized with ${knownFiles.size} files: ${[...knownFiles].slice(0, 5).join(', ')}...`);
-      
       // 🔒 NEW: RENDER PATH TRACKING - Know which files are actually used
       let allFilesCache: Record<string, string> = {};
       let activeRenderPath: Set<string> = new Set();
@@ -5515,16 +5371,6 @@ Update mockData.js or the relevant data files with this REAL information.`;
       
       // 🔒 ENHANCED: INTENT PARSING - Extract specific anchors from user prompt (with debugContext)
       const intentAnchors = parseIntentAnchors(prompt, agentDebugContext);
-      console.log(`[Agent Mode] 🎯 Intent anchors parsed:`, JSON.stringify({
-        exactTexts: intentAnchors.exactTexts,
-        classNames: intentAnchors.classNames,
-        dataBindings: intentAnchors.dataBindings,
-        isGeneric: intentAnchors.isGenericQuery,
-        isStyleRequest: intentAnchors.isStyleRequest,
-        requestedColor: intentAnchors.requestedColor,
-        hasInspectSelection: intentAnchors.hasInspectSelection
-      }));
-      
       // 🔒 PHASE 1: Early block for style changes without proper anchors
       let styleChangeBlocked = false;
       let styleBlockReason = '';
@@ -5597,23 +5443,16 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         role: "user",
         parts: [{ text: mandatoryExplorationPrompt }]
       });
-      console.log(`[Agent Mode] 🔒 Injected mandatory exploration prompt with intent-aware guidance`);
-      
       // Smart model selection for agent mode
       const hasVisionInput = body.images && body.images.length > 0;
       // fileCount already defined above in context optimization section
       const agentModelSelection = selectOptimalModel(prompt, hasVisionInput, 'agent', fileCount);
-      
-      console.log(`[Agent Mode] Model selected: ${agentModelSelection.model} (${agentModelSelection.tier}) - ${agentModelSelection.reason}`);
       
       // Track total input for cost estimation
       let totalInputText = systemPromptWithProjectId + userMessageContent;
       let totalOutputText = '';
       
       for (let iteration = 0; iteration < maxIterations; iteration++) {
-        console.log(`[Agent Mode] ========== ITERATION ${iteration + 1}/${maxIterations} ==========`);
-        console.log(`[Agent Mode] User prompt: ${prompt.substring(0, 500)}...`);
-        
         // Call Gemini with smart model selection
         // Pro for complex/vision, Flash for standard, Flash-Lite for simple
         const geminiResponse = await withTimeout(
@@ -5670,13 +5509,9 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           // No function calls, check if we got a text response
           const textPart = content.parts?.find((p: any) => p.text);
           if (textPart) {
-            console.log(`[Agent Mode] Got text response (no tools): ${textPart.text.substring(0, 100)}...`);
-            
             // 🚀 MORPH FAST APPLY: Check for <edit> blocks in the response
             const morphEdits = parseMorphEdits(textPart.text);
             if (morphEdits.length > 0) {
-              console.log(`[Agent Mode] 🚀 Found ${morphEdits.length} <edit> blocks, applying via Morph Fast Apply...`);
-              
               for (const edit of morphEdits) {
                 try {
                   // Read the current file content
@@ -5714,7 +5549,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
                       .eq('project_id', projectId)
                       .eq('path', normalizedPath);
                     
-                    console.log(`[Morph] ✅ Applied edit to ${edit.targetFile}`);
                     toolCallsLog.push({
                       tool: 'morph_edit_auto',
                       args: { path: edit.targetFile, instructions: edit.instructions },
@@ -5742,8 +5576,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           // 🚀 AUTO-SEARCH FALLBACK: If model skips tools on early iterations, WE run them automatically
           // This makes the AI Coder "Cascade-like" - always searches before editing
           if (iteration <= 1 && toolCallsLog.length === 0) {
-            console.log(`[Agent Mode] 🚀 AUTO-SEARCH FALLBACK: Model skipped tools, running automatic search...`);
-            
             // Step 1: Get suggested grep queries from intent anchors
             const suggestedQueries = getSuggestedGrepQueries(intentAnchors);
             
@@ -5764,8 +5596,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             
             if (suggestedQueries.length > 0) {
               const searchQuery = suggestedQueries[0];
-              console.log(`[Agent Mode] 🔍 Auto-grep for: "${searchQuery}"`);
-              
               // Get all files from project for grep
               const { data: allProjectFiles } = await supabase
                 .from('project_files')
@@ -5801,7 +5631,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
                     bestMatchContent = matchedFile.content;
                     filesRead.add(bestMatchFile);
                     fileContentCache.set(bestMatchFile, bestMatchContent);
-                    console.log(`[Agent Mode] 📖 Auto-read best match: ${bestMatchFile}`);
                   }
                 }
               }
@@ -5853,13 +5682,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           const { name, args } = fc.functionCall;
           
           // ========================================================================
-          // DEEP LOGGING: Log every tool call with full details
-          // ========================================================================
-          console.log(`[Agent Mode] ========== TOOL CALL ==========`);
-          console.log(`[Agent Mode] Tool: ${name}`);
-          console.log(`[Agent Mode] Args: ${JSON.stringify(args, null, 2).substring(0, 2000)}`);
-          
-          // ========================================================================
           // 🔒 ENFORCEMENT: Read-before-edit check (like Cascade)
           // ========================================================================
           const targetPath = args?.path ? (args.path.startsWith('/') ? args.path : `/${args.path}`) : null;
@@ -5896,7 +5718,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             
             // If creating a new file, add it to knownFiles
             if (isNewFileCreation) {
-              console.log(`[Agent Mode] 📝 New file creation: ${targetPath}`);
               knownFiles.add(targetPath);
             }
             
@@ -5922,7 +5743,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
                 // Auto-read successful - add to filesRead and cache
                 filesRead.add(targetPath);
                 fileContentCache.set(targetPath, autoReadData.content);
-                console.log(`[Agent Mode] 📖 AUTO-READ: ${targetPath} (${autoReadData.content.length} chars) - proceeding with edit`);
               } else {
                 // File doesn't exist - block only if not a new file creation
                 console.error(`[Agent Mode] 🚫 BLOCKED: ${name} on ${targetPath} - file not found and no files read`);
@@ -5940,8 +5760,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
                 continue;
               }
             } else if (!filesRead.has(targetPath) && !isNewFileCreation && hasReadAnyFile) {
-              // Agent has read other files but not this one - auto-read for safety
-              console.log(`[Agent Mode] 📖 AUTO-READ (multi-file): ${targetPath}`);
               const { data: autoReadData } = await supabase
                 .from('project_files')
                 .select('content')
@@ -5996,15 +5814,12 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
                   for (const file of allFiles) {
                     if (file.content && file.content.includes(searchString)) {
                       correctFile = file.path;
-                      console.log(`[Agent Mode] 🎯 Found correct file: ${correctFile}`);
                       break;
                     }
                   }
                 }
                 
                 if (correctFile && correctFile !== targetPath) {
-                  // REDIRECT: Update the args to use the correct file
-                  console.log(`[Agent Mode] 🔄 REDIRECTING edit from ${targetPath} to ${correctFile}`);
                   args.path = correctFile;
                   // Update tracking
                   filesRead.add(correctFile);
@@ -6027,19 +5842,12 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             // Cache file content for render path computation AND search_replace validation
             allFilesCache[targetPath] = result.content;
             fileContentCache.set(targetPath, result.content);
-            console.log(`[Agent Mode] 📖 Tracked read: ${targetPath} (${result.content.length} chars cached)`);
           }
           
-          if (name === 'list_files' && result.files && !renderPathComputed) {
-            // When we get the file list, pre-populate for render path computation
-            console.log(`[Agent Mode] 📁 Got file list, will compute render path on first edit`);
-          }
           
           if (name === 'grep_search' && result.matches && result.matches.length > 0) {
             // Mark all files found in grep as "read" (agent knows about them)
             result.matches.forEach((m: { file: string }) => filesRead.add(m.file));
-            console.log(`[Agent Mode] 🔍 Grep found files: ${[...new Set(result.matches.map((m: { file: string }) => m.file))].join(', ')}`);
-            
             // 🔒 NEW: AMBIGUITY DETECTION
             const ambiguity = detectAmbiguity(result.matches);
             if (ambiguity.isAmbiguous) {
@@ -6056,13 +5864,10 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             filesEdited.add(targetPath);
             lastEditPath = targetPath;
             editVerificationPending = true;
-            console.log(`[Agent Mode] ✏️ Tracked edit: ${targetPath}`);
-            
             // 🔒 NEW: RENDER PATH ENFORCEMENT - Check if edited file is in active render chain
             if (!renderPathComputed && Object.keys(allFilesCache).length > 0) {
               activeRenderPath = traceRenderPath(allFilesCache);
               renderPathComputed = true;
-              console.log(`[Agent Mode] 🔗 Computed render path: ${[...activeRenderPath].join(', ')}`);
             }
             
             if (renderPathComputed && !activeRenderPath.has(targetPath)) {
@@ -6098,7 +5903,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
                 
                 if (usesRouterComponents && !hasBrowserRouter) {
                   console.error(`[Agent Mode] 🚫 REACT ROUTER ERROR: App uses router components but index.js missing BrowserRouter!`);
-                  console.log(`[Agent Mode] 🔧 AUTO-FIX: Applying BrowserRouter fix automatically...`);
                   
                   // ========================================================================
                   // 🔧 AUTO-FIX: Automatically wrap App with BrowserRouter in index.js
@@ -6164,7 +5968,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
                           .eq('path', indexPath);
                         
                         if (!updateError) {
-                          console.log(`[Agent Mode] ✅ AUTO-FIX SUCCESS: Added BrowserRouter to ${indexPath}`);
                           result.autoFixApplied = true;
                           result.autoFixMessage = `✅ Auto-fixed: Added BrowserRouter wrapper to ${indexPath}`;
                           result.autoFixedFiles = [indexPath];
@@ -6189,10 +5992,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
               }
             }
           }
-          
-          // Log the result
-          console.log(`[Agent Mode] Result: ${JSON.stringify(result, null, 2).substring(0, 1000)}`);
-          console.log(`[Agent Mode] ================================`);
           
           toolCallsLog.push({ tool: name, args, result });
           functionResponses.push({
@@ -6430,7 +6229,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         
         // If task is complete, exit loop
         if (taskCompleteResult) {
-          console.log(`[Agent Mode] Task completed: ${taskCompleteResult.summary}`);
           break;
         }
       }
@@ -6468,8 +6266,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         
         // If no successful edits and ambiguity detected, return clarification card
         if (successfulEditsCheck.length === 0) {
-          console.log(`[Agent Mode] 🎯 CLARIFICATION NEEDED: Found ${grepCandidateFiles.length} candidates, no edits made`);
-          
           // Extract candidate details from grep results
           const candidateDetails: Array<{ file: string; preview: string; line?: number }> = [];
           for (const tc of toolCallsLog) {
@@ -6529,8 +6325,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
       // This catches cases where AI creates imports but forgets to create files
       // ========================================================================
       if (filesChanged.length > 0) {
-        console.log(`[Agent Mode] Checking for missing referenced files...`);
-        
         // Get current project files after agent changes
         const { data: currentRows } = await supabase
           .from('project_files')
@@ -6546,8 +6340,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         const missing = findMissingReferencedFiles({ changedFiles: currentFiles, existingFiles: {} });
         
         if (missing.length > 0) {
-          console.log(`[Agent Mode] SAFETY NET: Found ${missing.length} missing files: ${missing.join(', ')}`);
-          
           try {
             // Auto-generate missing files using Gemini
             const generatedMissing = await callGeminiMissingFiles(missing, currentFiles, {}, prompt);
@@ -6565,7 +6357,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
               
               if (!writeErr) {
                 filesChanged.push(normalizedPath);
-                console.log(`[Agent Mode] SAFETY NET: Created missing file: ${normalizedPath}`);
               }
             }
           } catch (genErr) {
@@ -6612,15 +6403,10 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
       // 🎯 UPGRADE #1: Generate "What Changed" Report
       // ========================================================================
       const changeReport = generateChangeReport(toolCallsLog, prompt);
-      console.log(`[Agent Mode] 📋 Change Report: ${changeReport.title} - ${changeReport.summary}`);
-      
       // ========================================================================
       // 🔒 UPGRADE #2: Multi-file Safety Guardrails Check
       // ========================================================================
       const multiFileGuardrail = checkMultiFileGuardrails(filesEdited, toolCallsLog, allFilesCache);
-      if (multiFileGuardrail.triggered) {
-        console.log(`[Agent Mode] 🔒 Multi-file guardrail: ${multiFileGuardrail.message}`);
-      }
       
       // ========================================================================
       // 🧪 UPGRADE #3: Run Smoke Tests on Changed Files
@@ -6629,8 +6415,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
       if (!smokeTestResult.passed) {
         console.warn(`[Agent Mode] 🧪 Smoke test FAILED: ${smokeTestResult.criticalErrors.join(', ')}`);
         resultWarnings.push(...smokeTestResult.criticalErrors);
-      } else if (smokeTestResult.warnings.length > 0) {
-        console.log(`[Agent Mode] 🧪 Smoke test passed with ${smokeTestResult.warnings.length} warning(s)`);
       }
       
       const result: AgentResult = {
@@ -6666,8 +6450,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         smokeTestResult
       };
       
-      console.log(`[Agent Mode] Completed. Files changed: ${result.filesChanged.join(', ')}`);
-      
       return createResponse({ 
         ok: true, 
         mode: 'agent',
@@ -6697,16 +6479,11 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           existingFiles[normalizeFilePath(row.path)] = row.content;
         }
         
-        console.log(`[Plan Mode] Generating plan for: ${prompt.substring(0, 50)}...`);
-        console.log(`[Plan Mode] Files count: ${Object.keys(existingFiles).length}`);
-        
         const { plan, modelSelection: planModelSelection } = await callGeminiPlanMode(prompt, existingFiles);
         
         // Log credit usage for plan mode
         const planInputText = Object.values(existingFiles).join('\n') + prompt;
         const planCreditUsage = logCreditUsage('plan', planModelSelection, planInputText, plan, projectId);
-        
-        console.log(`[Plan Mode] Plan generated, length: ${plan.length}`);
         
         return createResponse({ ok: true, plan, mode: 'plan', creditUsage: planCreditUsage });
       } catch (planError: any) {
@@ -6741,9 +6518,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         
         const fileList = (existingRows || []).map(r => normalizeFilePath(r.path)).join('\n');
         const fileCount = existingRows?.length || 0;
-        
-        console.log(`[Execute Mode V2] AGENT-STYLE: Sending ${fileCount} file NAMES only (not content)`);
-        console.log(`[Execute Mode V2] Plan to execute: ${planToExecute.substring(0, 200)}...`);
         
         // Prepare agent-style system prompt for execute mode
         const executeSystemPrompt = AGENT_SYSTEM_PROMPT.replace(/\{\{PROJECT_ID\}\}/g, projectId) + `
@@ -6791,8 +6565,6 @@ Call task_complete when finished.`;
         
         // Model selection for execute mode
         const execModelSelection = selectOptimalModel(planToExecute, false, 'execute', fileCount);
-        console.log(`[Execute Mode V2] Model selected: ${execModelSelection.model} (${execModelSelection.tier})`);
-        
         let execTotalInputText = executeSystemPrompt + executeUserMessage;
         let execTotalOutputText = '';
         
@@ -6807,8 +6579,6 @@ Call task_complete when finished.`;
         if (!GEMINI_API_KEY_EXEC) throw new Error("GEMINI_API_KEY missing");
         
         for (let iteration = 0; iteration < execMaxIterations; iteration++) {
-          console.log(`[Execute Mode V2] ========== ITERATION ${iteration + 1}/${execMaxIterations} ==========`);
-          
           const geminiResponse = await withTimeout(
             fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/${execModelSelection.model}:generateContent`,
@@ -6859,10 +6629,6 @@ Call task_complete when finished.`;
           const functionCalls = content.parts?.filter((p: any) => p.functionCall);
           
           if (!functionCalls || functionCalls.length === 0) {
-            const textPart = content.parts?.find((p: any) => p.text);
-            if (textPart) {
-              console.log(`[Execute Mode V2] Got text response: ${textPart.text.substring(0, 100)}...`);
-            }
             break;
           }
           
@@ -6872,11 +6638,7 @@ Call task_complete when finished.`;
           for (const fc of functionCalls) {
             const { name, args } = fc.functionCall;
             
-            console.log(`[Execute Mode V2] Tool: ${name} | Args: ${JSON.stringify(args).substring(0, 500)}`);
-            
             const result = await executeToolCall(projectId, { name, arguments: args || {} }, execDebugContext, supabase, userId);
-            
-            console.log(`[Execute Mode V2] Result: ${JSON.stringify(result).substring(0, 300)}`);
             
             execToolCallsLog.push({ tool: name, args, result });
             functionResponses.push({
@@ -6895,7 +6657,6 @@ Call task_complete when finished.`;
           execMessages.push({ role: "user", parts: functionResponses });
           
           if (execTaskCompleteResult) {
-            console.log(`[Execute Mode V2] Task completed: ${execTaskCompleteResult.summary}`);
             break;
           }
         }
@@ -6919,8 +6680,6 @@ Call task_complete when finished.`;
         
         // Log credit usage
         const execCreditUsage = logCreditUsage('execute', execModelSelection, execTotalInputText, execTotalOutputText, projectId);
-        
-        console.log(`[Execute Mode V2] Completed. Files changed: ${[...new Set(execFilesChanged)].join(', ')}`);
         
         await updateJob(supabase, job.id, { 
           status: 'succeeded', 
@@ -6983,7 +6742,6 @@ Call task_complete when finished.`;
             .from('project_generation_jobs')
             .update({ updated_at: new Date().toISOString() })
             .eq('id', jobId);
-          console.log(`[Heartbeat] Job ${jobId} still running...`);
         } catch (e) {
           console.warn(`[Heartbeat] Failed to update:`, e);
         }
@@ -7007,13 +6765,10 @@ Call task_complete when finished.`;
         // Frontend sent detailed theme instructions (colors, typography, shadows, layout, mood)
         // These are MUCH richer than THEME_PRESETS one-liners — use them as primary
         selectedThemeDesc = userInstructions;
-        console.log(`[Theme] Using detailed userInstructions (${userInstructions.length} chars): ${userInstructions.substring(0, 120)}...`);
       } else if (theme === 'user_prompt' || !theme) {
         selectedThemeDesc = extractThemeFromPrompt(prompt);
-        console.log(`[Theme] Extracted from prompt: ${selectedThemeDesc.substring(0, 100)}...`);
       } else {
         selectedThemeDesc = THEME_PRESETS[theme] || THEME_PRESETS['none'];
-        console.log(`[Theme] Using THEME_PRESETS[${theme}]: ${selectedThemeDesc.substring(0, 100)}...`);
       }
       // CRITICAL: Force theme instructions to be the most important rule
       const themeEnforcement = `\n\nCRITICAL STYLE RULES (MUST FOLLOW):\n${selectedThemeDesc}\n\nIMPORTANT: Define these colors as CSS variables in :root and use var(--...) everywhere. Ensure ALL components use these exact colors and vibe. DO NOT USE DEFAULT COLORS.`;
@@ -7032,10 +6787,8 @@ Call task_complete when finished.`;
         let preFetchedImages: PreFetchedImage[] = [];
         
         if (imageQueries.length > 0) {
-          console.log(`[Create Mode] Pre-fetching images for queries: ${imageQueries.join(', ')}`);
           try {
             preFetchedImages = await preFetchAndStoreImages(supabase, projectId, userId, imageQueries);
-            console.log(`[Create Mode] Pre-fetched ${preFetchedImages.length} images`);
           } catch (prefetchErr) {
             console.warn(`[Create Mode] Image pre-fetch failed:`, prefetchErr);
             // Continue without pre-fetched images
@@ -7053,11 +6806,7 @@ Call task_complete when finished.`;
         }
         
         // Add extracted document content (CV/Resume text, etc.) - CRITICAL FOR PORTFOLIOS
-        console.log(`[Create Mode] Document content available: ${documentContentStr ? documentContentStr.length + ' chars' : 'NONE'}`);
-        console.log(`[Create Mode] Vision inspiration available: ${visionInspirationStr ? visionInspirationStr.length + ' chars' : 'NONE'}`);
-        
         if (documentContentStr && documentContentStr.trim()) {
-          console.log(`[Create Mode] ✅ INJECTING EXTRACTED DOCUMENT CONTENT INTO PROMPT`);
           textPrompt += `
 
 📄 **EXTRACTED DOCUMENT CONTENT** (USE THIS DATA TO BUILD THE WEBSITE):
@@ -7108,7 +6857,6 @@ When user mentions "my photo", "my image", "uploaded image", use the appropriate
                 const pdfName = imgData.substring(5, endBracket);
                 const pdfBase64Data = imgData.substring(endBracket + 1);
                 
-                console.log(`[Create Mode] 📄 Extracting text from attached PDF: ${pdfName}`);
                 try {
                   const pdfMatches = pdfBase64Data.match(/^data:([^;]+);base64,(.+)$/);
                   if (pdfMatches && GEMINI_API_KEY_CREATE) {
@@ -7152,9 +6900,6 @@ Format the output clearly with sections. Do NOT summarize - extract the FULL tex
                       const extractedText = extractData.candidates?.[0]?.content?.parts?.[0]?.text || '';
                       if (extractedText) {
                         pdfExtractedContent += `\n\n📄 **EXTRACTED CONTENT FROM ${pdfName}:**\n${extractedText}`;
-                        console.log(`[Create Mode] ✅ Extracted ${extractedText.length} chars from PDF: ${pdfName}`);
-                      } else {
-                        console.log(`[Create Mode] ⚠️ PDF extraction returned empty for ${pdfName}`);
                       }
                     } else {
                       console.error(`[Create Mode] PDF extraction API error: ${extractResponse.status}`);
@@ -7178,7 +6923,6 @@ ${pdfExtractedContent}
 USE THIS REAL DATA to populate the website - names, experience, skills, education, contact info, etc.
 DO NOT make up fake information. Use EXACTLY what is in the extracted content above.
 If this is a portfolio/CV website, use the person's REAL name, REAL experience, REAL skills from the document.`;
-            console.log(`[Create Mode] ✅ Added ${pdfExtractedContent.length} chars of PDF content to prompt`);
           }
           
           // Only add screenshot-to-code prefix if there are actual images (not just PDFs)
@@ -7191,9 +6935,6 @@ If this is a portfolio/CV website, use the person's REAL name, REAL experience, 
         const createStartTime = Date.now();
         let aiText = await callGemini25Pro(finalSystemPrompt, textPrompt, true);
         const createDuration = Date.now() - createStartTime;
-        console.log(`[Create Mode] AI Response length: ${aiText.length}`);
-        console.log(`[Create Mode] AI Response (first 500 chars): ${aiText.substring(0, 500)}`);
-
         // Log AI usage for project creation
         await logAIFromRequest(req, {
           functionName: "projects-generate",
@@ -7210,11 +6951,8 @@ If this is a portfolio/CV website, use the person's REAL name, REAL experience, 
         content = fixUnescapedNewlines(content);
         let parsed = JSON.parse(content);
         let { files, summary } = coerceFilesMap(parsed);
-        console.log(`[Create Mode] Files keys: ${Object.keys(files).join(', ')}`);
-
         // If AI returned HTML instead of React, retry with ultra-strict prompt
         if (!files["/App.js"] || files["/App.js"]?.toLowerCase().includes("<!doctype")) {
-          console.log(`[Create Mode] AI returned HTML, retrying with strict React prompt...`);
           const strictPrompt = `You are a REACT CODE generator. Return ONLY a JSON object with React files.
 
 CRITICAL: Your response must be a JSON object like this:
@@ -7230,14 +6968,12 @@ USER REQUEST: ${prompt}
 Return ONLY the JSON object. No explanation.`;
 
           aiText = await callGemini25Pro(strictPrompt, "", true);
-          console.log(`[Create Mode] Retry response (first 500 chars): ${aiText.substring(0, 500)}`);
           content = extractJsonObject(aiText);
           content = fixUnescapedNewlines(content);
           parsed = JSON.parse(content);
           const retryResult = coerceFilesMap(parsed);
           files = retryResult.files;
           summary = retryResult.summary;
-          console.log(`[Create Mode] Retry files keys: ${Object.keys(files).join(', ')}`);
         }
 
         if (!files["/App.js"]) {
@@ -7280,7 +7016,6 @@ Return ONLY the JSON object. No explanation.`;
         const usesBackend = Object.values(files).some(content => 
           content.includes('project-backend-api')
         );
-        console.log(`[Create Mode] Enabling backend foundation for project...`);
         await supabase.from('project_backends').upsert({
           project_id: projectId,
           user_id: userId,
@@ -7291,13 +7026,11 @@ Return ONLY the JSON object. No explanation.`;
 
         // 🚀 POST-GENERATION BOOTSTRAPPING: Auto-seed backend data based on generated code
         // Pass pre-fetched images so they can be linked to products
-        const bootstrapResults = await bootstrapBackendData(supabase, projectId, userId, files, prompt, preFetchedImages);
-        console.log(`[Create Mode] Bootstrap results:`, bootstrapResults);
+        await bootstrapBackendData(supabase, projectId, userId, files, prompt, preFetchedImages);
 
         await replaceProjectFiles(supabase, projectId, files);
         stopHeartbeat();
         await updateJob(supabase, job.id, { status: 'succeeded', result_summary: summary || 'Created.', error: null });
-        console.log(`[Background Worker] Job ${job.id} CREATE succeeded`);
         return; // Worker done - job status updated in DB
       }
 
@@ -7312,11 +7045,6 @@ Return ONLY the JSON object. No explanation.`;
         existingFiles[normalizeFilePath(row.path)] = row.content;
       }
 
-      console.log(`[Edit Mode] Full rewrite for: ${prompt.substring(0, 50)}...`);
-      console.log(`[Edit Mode] Existing files: ${Object.keys(existingFiles).join(', ')}`);
-      console.log(`[Edit Mode] Images attached: ${images ? (Array.isArray(images) ? images.length : 'yes') : 'none'}`);
-      console.log(`[Edit Mode] Uploaded assets: ${uploadedAssets.length}`);
-      console.log(`[Edit Mode] Backend enabled: ${backendContext?.enabled || false}`);
       const userPrompt = `${prompt}\n\n${userInstructions || ""}`;
       
       // USE FULL REWRITE - NO PATCHES (now with image support + uploaded assets + backend context + extracted content)
@@ -7338,9 +7066,6 @@ Return ONLY the JSON object. No explanation.`;
         metadata: { mode: "edit", project_id: projectId, files_changed: Object.keys(changedFiles).length }
       });
       
-      console.log(`[Edit Mode] Changed files returned: ${Object.keys(changedFiles).join(', ') || 'NONE'}`);
-      console.log(`[Edit Mode] Summary: ${result.summary}`);
-      
       if (Object.keys(changedFiles).length === 0) {
         console.error(`[Edit Mode] WARNING: AI returned no changed files!`);
       }
@@ -7351,7 +7076,6 @@ Return ONLY the JSON object. No explanation.`;
       let finalFilesToUpsert: Record<string, string> = { ...changedFiles };
 
       if (missing.length > 0) {
-        console.log(`[Edit validation] Missing referenced files detected: ${missing.join(', ')}`);
         const generatedMissing = await callGeminiMissingFiles(missing, changedFiles, existingFiles, userPrompt);
         finalFilesToUpsert = { ...finalFilesToUpsert, ...generatedMissing };
 
@@ -7405,12 +7129,8 @@ Return ONLY the JSON object. No explanation.`;
 
       await upsertProjectFiles(supabase, projectId, finalFilesToUpsert);
       
-      // Include the list of changed files in the response
-      const changedFilesList = Object.keys(finalFilesToUpsert);
-      
       stopHeartbeat();
       await updateJob(supabase, job.id, { status: 'succeeded', result_summary: result.summary || 'Updated.', error: null });
-      console.log(`[Background Worker] Job ${job.id} EDIT succeeded. Changed: ${changedFilesList.join(', ')}`);
       return; // Worker done - job status updated in DB
 
     } catch (innerErr) {
@@ -7431,21 +7151,15 @@ Return ONLY the JSON object. No explanation.`;
     // The frontend will poll for status using action: 'status'
     // This prevents the 150s gateway timeout from killing the request
     
-    console.log(`[Async Mode] Starting background generation for job ${job.id}...`);
-    
     // Use EdgeRuntime.waitUntil if available, otherwise run synchronously
     // EdgeRuntime.waitUntil allows the function to return immediately while
     // the generation continues in the background
     if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
-      console.log(`[Async Mode] Using EdgeRuntime.waitUntil for background execution`);
       EdgeRuntime.waitUntil(runGenerationWorker());
       // Return immediately with jobId - frontend will poll for status
       return createResponse({ ok: true, jobId: job.id, status: 'running' });
     } else {
-      // Fallback: Run synchronously (may timeout on long generations)
-      console.log(`[Sync Mode] EdgeRuntime.waitUntil not available, running synchronously`);
       await runGenerationWorker();
-      console.log(`[Sync Mode] Generation completed for job ${job.id}`);
       return createResponse({ ok: true, jobId: job.id, status: 'succeeded' });
     }
 

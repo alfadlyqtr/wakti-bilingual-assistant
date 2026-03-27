@@ -391,7 +391,6 @@ function buildStayHotSummary(recentMessages: unknown[]): string {
   }
 }
 
-console.log("WAKTI AI V2 STREAMING BRAIN: Ready (with verified facts + AI Logging)");
 
 // === TOKEN ESTIMATION ===
 // Rough estimate: ~4 chars = 1 token for English, ~3 chars for mixed/Arabic
@@ -456,12 +455,10 @@ async function logAIUsage(params: {
     });
     
     if (error) {
-      console.warn('⚠️ AI LOG: Failed to log usage:', error.message);
-    } else {
-      console.log('📊 AI LOG: Usage logged successfully');
+      console.error('⚠️ AI LOG: Failed to log usage:', error.message);
     }
   } catch (err) {
-    console.warn('⚠️ AI LOG: Exception:', err);
+    console.error('⚠️ AI LOG: Exception:', err);
   }
 }
 
@@ -780,14 +777,12 @@ async function streamGemini3FlashChat(
   // Brain-First hard router: 95% of chat queries go straight to the model (no search overhead).
   // Only explicit live-data signals (weather, scores, prices, breaking news) trigger grounding.
   const useSearch = chatNeedsSearch(query);
-  console.log(`🧠 CHAT BRAIN-FIRST: useSearch=${useSearch} for query: "${query.slice(0, 80)}"`);
 
   // If search IS needed, check 60s in-memory cache first
   if (useSearch) {
     const cacheKey = query.trim().toLowerCase();
     const cached = chatSearchCache.get(cacheKey);
     if (cached && (Date.now() - cached.ts) < CHAT_SEARCH_CACHE_TTL_MS) {
-      console.log('⚡ CHAT SEARCH CACHE HIT — serving cached result');
       onToken(cached.result);
       return cached.result;
     }
@@ -809,13 +804,6 @@ async function streamGemini3FlashChat(
     body.system_instruction = { parts: [{ text: systemInstruction }] };
   }
 
-  console.log(`💬 CHAT ${useSearch ? 'GROUNDED' : 'FAST'}: Streaming with Gemini 3 Flash Preview ${useSearch ? '+ google_search' : '(no tools, pure reasoning)'}...`, {
-    contentsCount: contents.length,
-    firstRole: contents[0]?.role,
-    lastRole: contents[contents.length - 1]?.role,
-    lastText: contents[contents.length - 1]?.parts?.[0]?.text?.slice(0, 100),
-    systemLen: systemInstruction?.length || 0
-  });
 
   const resp = await fetch(url, {
     method: 'POST',
@@ -863,7 +851,6 @@ async function streamGemini3FlashChat(
     }
   }
 
-  console.log(`✅ CHAT ${useSearch ? 'GROUNDED' : 'FAST'} (${model}): Stream complete, length:`, fullText.length);
 
   // Cache the result for 60s to avoid redundant search round-trips
   if (useSearch && fullText) {
@@ -921,9 +908,6 @@ async function streamGemini3WithSearch(
       locationHint = ` User is at coordinates [${userLocation.latitude.toFixed(4)}, ${userLocation.longitude.toFixed(4)}]. Prioritize results near these coordinates for all "near me" and location queries.`;
     }
   }
-  if (locationHint) {
-    console.log('📍 SEARCH QUERY LOCATION INJECTION:', locationHint.slice(0, 120));
-  }
   const latestQuery = `${query} (as of ${todayStr}).${nhlHint}${locationHint}\n\nLATEST-FIRST RULE (CRITICAL): Today is ${todayStr}.${nhlHint} Use the newest available sources/snippets. Prefer results updated today/this hour when present. If sources conflict, choose the most recently updated. If any result refers to an older season (example: \"2023-24\"), treat it as STALE and re-search with a stricter query. Do not use memory for live facts.`;
 
   const body: Record<string, unknown> = {
@@ -938,7 +922,6 @@ async function streamGemini3WithSearch(
     body.generationConfig = generationConfig;
   }
 
-  console.log('🔍 GEMINI SEARCH: Streaming with Gemini 3 Flash + google_search...');
 
   const resp = await fetch(url, {
     method: 'POST',
@@ -996,7 +979,6 @@ async function streamGemini3WithSearch(
     onGroundingMetadata(groundingMeta);
   }
 
-  console.log('✅ GEMINI SEARCH: Stream complete, length:', fullText.length, 'grounded:', !!groundingMeta);
   return fullText;
 }
 
@@ -1111,7 +1093,6 @@ async function interceptAndScheduleReminder(
       }
       const timeStr = scheduledTime;
       const reminderText = data.text as string;
-      console.log(`🔔 REMINDER INTERCEPT: Found reminder block — time=${timeStr} (offset=${userOffset}), text=${reminderText}`);
 
       try {
         const supabaseAdmin = createClient(
@@ -1128,7 +1109,7 @@ async function interceptAndScheduleReminder(
           .replace(' ', 'T');                     // normalise space-separated datetime
 
         if (!cleanedTimeStr) {
-          console.warn(`⚠️ REMINDER INTERCEPT: Empty scheduled_for — aborting`);
+          console.error(`⚠️ REMINDER INTERCEPT: Empty scheduled_for — aborting`);
           return cleanText;
         }
 
@@ -1147,9 +1128,8 @@ async function interceptAndScheduleReminder(
           // Last-resort fallback
           const fb = new Date(cleanedTimeStr);
           validTimeStr = isNaN(fb.getTime()) ? new Date(Date.now() + 60_000).toISOString() : fb.toISOString();
-          console.warn(`⚠️ REMINDER INTERCEPT: Non-standard date "${timeStr}" — using fallback: ${validTimeStr}`);
+          console.error(`⚠️ REMINDER INTERCEPT: Non-standard date "${timeStr}" — using fallback: ${validTimeStr}`);
         }
-        console.log(`✅ REMINDER INTERCEPT: Scheduled for ${validTimeStr}`);
 
         // INSERT notification_history row first so process-scheduled-reminders can pick it up
         const { data: inserted, error: insertError } = await supabaseAdmin
@@ -1167,9 +1147,8 @@ async function interceptAndScheduleReminder(
           .single();
 
         if (insertError) {
-          console.warn('⚠️ REMINDER INTERCEPT: Failed to insert notification_history row', insertError.message);
+          console.error('⚠️ REMINDER INTERCEPT: Failed to insert notification_history row', insertError.message);
         } else {
-          console.log(`📝 REMINDER INTERCEPT: Inserted notification_history row id=${inserted?.id}`);
         }
 
         const notificationId = inserted?.id || null;
@@ -1191,22 +1170,21 @@ async function interceptAndScheduleReminder(
           }),
         });
         if (schedResp.ok) {
-          console.log(`✅ REMINDER INTERCEPT: Scheduled successfully`);
           try {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ reminderScheduled: { time: timeStr, text: reminderText } })}\n\n`));
           } catch { /* stream may be closing */ }
         } else {
           const errBody = await schedResp.text();
-          console.warn(`⚠️ REMINDER INTERCEPT: Schedule failed ${schedResp.status}`, errBody);
+          console.error(`⚠️ REMINDER INTERCEPT: Schedule failed ${schedResp.status}`, errBody);
         }
       } catch (err) {
-        console.warn('⚠️ REMINDER INTERCEPT: Fetch error', err);
+        console.error('⚠️ REMINDER INTERCEPT: Fetch error', err);
       }
 
       return cleanText;
     }
   } catch (e) {
-    console.warn('⚠️ REMINDER INTERCEPT: Failed to parse intercepted reminder JSON', e);
+      console.error('⚠️ REMINDER INTERCEPT: Failed to parse intercepted reminder JSON', e);
   }
 
   return responseText;
@@ -1257,7 +1235,6 @@ function buildSystemPrompt(
     prompt += _promptChatFreshness();
   }
 
-  console.log(`📌 SYSTEM PROMPT SIZE: ${prompt.length} chars | trigger=${activeTrigger} | submode=${chatSubmode} | useSearch=${useSearch}`);
   return prompt;
 }
 
@@ -1323,7 +1300,6 @@ async function streamClaudeResponse(
 async function executeRegularSearch(query: string, language = 'en') {
   const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
   
-  console.log('🔍 SEARCH: Starting search for:', query.substring(0, 50));
   
   if (!TAVILY_API_KEY) {
     return {
@@ -1406,7 +1382,6 @@ async function executeRegularSearch(query: string, language = 'en') {
       });
     }
 
-    console.log(`✅ SEARCH: Found ${results.length} results`);
     return {
       success: true,
       error: null,
@@ -1452,15 +1427,13 @@ function getCleanSubject(message: string): string {
     // Extract consecutive capitalized words (proper noun sequence)
     const properNounMatch = rest.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
     if (properNounMatch && properNounMatch[1].length >= 2) {
-      console.log(`🎯 CLEAN SUBJECT (short-circuit): "${cleaned}" → "${properNounMatch[1]}"`);
-      return properNounMatch[1];
+        return properNounMatch[1];
     }
     // No proper nouns found — return the rest stripped of filler
     const fillerStripped = rest
       .replace(/^(the\s+(city|country|life|history|story|process|concept|meaning)\s+of\s+)/i, '')
       .replace(/^(the\s+)/i, '')
       .trim();
-    console.log(`🎯 CLEAN SUBJECT (entity fallback): "${cleaned}" → "${fillerStripped}"`);
     return fillerStripped;
   }
 
@@ -1498,7 +1471,6 @@ async function translateSubjectToEnglish(subject: string): Promise<string> {
     const data = await resp.json();
     const translated = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
     if (translated && translated.length > 0 && translated.length < 200) {
-      console.log(`🌐 TRANSLATE: "${subject.substring(0, 40)}" → "${translated.substring(0, 40)}"`);
       return translated;
     }
     return subject;
@@ -1519,7 +1491,6 @@ async function _wolframGatekeeperCheck(subject: string, timeoutMs: number = 1500
     const xml = await resp.text();
     const acceptedMatch = xml.match(/accepted="([^"]+)"/);
     const accepted = acceptedMatch?.[1] !== 'false';
-    console.log(`🎓 WOLFRAM GATEKEEPER: "${subject.substring(0, 40)}" → accepted=${accepted}`);
     return accepted;
   } catch {
     return true; // timeout or error → proceed
@@ -1532,7 +1503,6 @@ async function queryWolframLLM(subject: string, timeoutMs: number = 8000): Promi
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     const url = `https://www.wolframalpha.com/api/v1/llm-api?appid=${WOLFRAM_LLM_APP_ID}&input=${encodeURIComponent(subject)}&maxchars=3000`;
-    console.log(`🎓 WOLFRAM LLM API: Querying for "${subject.substring(0, 60)}"`);
     const resp = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
     if (!resp.ok) {
@@ -1543,7 +1513,6 @@ async function queryWolframLLM(subject: string, timeoutMs: number = 8000): Promi
     if (!text || text.trim().length < 20) {
       return { success: false, error: 'Empty response' };
     }
-    console.log(`✅ WOLFRAM LLM: Got fact sheet (${text.length} chars)`);
     return { success: true, factSheet: text.trim() };
   } catch (err: unknown) {
     const isAbort = err && typeof err === 'object' && 'name' in err && (err as { name?: unknown }).name === 'AbortError';
@@ -1567,7 +1536,6 @@ async function queryWolfram(input: string, timeoutMs: number = 4000): Promise<{ 
     });
 
     const url = `https://api.wolframalpha.com/v2/query?${params.toString()}`;
-    console.log('🔢 WOLFRAM: Querying (timeout=' + timeoutMs + 'ms):', input.substring(0, 50));
 
     const response = await fetch(url, {
       method: 'GET',
@@ -1586,7 +1554,6 @@ async function queryWolfram(input: string, timeoutMs: number = 4000): Promise<{ 
     const qr = data?.queryresult;
 
     if (!qr || qr.success === false || qr.error === true) {
-      console.log('🔢 WOLFRAM: No results');
       return { success: false, error: 'No results' };
     }
 
@@ -1625,7 +1592,6 @@ async function queryWolfram(input: string, timeoutMs: number = 4000): Promise<{ 
       return { success: false, error: 'No answer found' };
     }
 
-    console.log('✅ WOLFRAM: Got answer');
     return { success: true, answer, steps: steps.length > 0 ? steps : undefined, interpretation };
 
   } catch (err: unknown) {
@@ -1672,7 +1638,6 @@ async function queryWolframSummaryBox(input: string, timeoutMs: number = 3000): 
 
     // Step 1: Get the summary box path from Query Recognizer
     const recognizerUrl = `https://www.wolframalpha.com/queryrecognizer/query.jsp?appid=${WOLFRAM_APP_ID}&mode=Default&i=${encodeURIComponent(input)}`;
-    console.log('📦 WOLFRAM SUMMARY: Query Recognizer for:', input.substring(0, 40));
 
     const recognizerResp = await fetch(recognizerUrl, {
       method: 'GET',
@@ -1694,13 +1659,11 @@ async function queryWolframSummaryBox(input: string, timeoutMs: number = 3000): 
 
     if (!pathMatch || acceptedMatch?.[1] === 'false') {
       clearTimeout(timeoutId);
-      console.log('📦 WOLFRAM SUMMARY: No summary box available for this query');
       return { success: false, error: 'No summary box path' };
     }
 
     const path = pathMatch[1];
     const domain = domainMatch?.[1] || 'unknown';
-    console.log('📦 WOLFRAM SUMMARY: Found path:', path, 'domain:', domain);
 
     // Step 2: Get the summary box content
     const summaryUrl = `https://www.wolframalpha.com/summaryboxes/v1/query?appid=${WOLFRAM_LLM_APP_ID}&path=${encodeURIComponent(path)}`;
@@ -1730,11 +1693,9 @@ async function queryWolframSummaryBox(input: string, timeoutMs: number = 3000): 
       .substring(0, 1500); // Limit to reasonable size
 
     if (!textContent || textContent.length < 20) {
-      console.log('📦 WOLFRAM SUMMARY: Empty or too short summary');
       return { success: false, error: 'Empty summary' };
     }
 
-    console.log('✅ WOLFRAM SUMMARY: Got summary for domain:', domain, '(', textContent.length, 'chars)');
     return { success: true, domain, summary: textContent, rawHtml: summaryHtml, path };
 
   } catch (err: unknown) {
@@ -1807,7 +1768,6 @@ Return ONLY the extracted text, no explanations or analysis.`;
       }
     };
 
-    console.log('📸 STUDY OCR: Extracting text from image...');
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1824,7 +1784,6 @@ Return ONLY the extracted text, no explanations or analysis.`;
     const extractedText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     if (!extractedText || extractedText.length < 5) {
-      console.log('⚠️ STUDY OCR: No text extracted from image');
       return { success: false, error: 'No text found in image' };
     }
 
@@ -1841,7 +1800,6 @@ Return ONLY the extracted text, no explanations or analysis.`;
       questionType = 'language';
     }
 
-    console.log(`✅ STUDY OCR: Extracted ${extractedText.length} chars, type=${questionType}`);
     return { success: true, extractedText: extractedText.trim(), questionType };
 
   } catch (err) {
@@ -2069,7 +2027,6 @@ async function reverseGeocode(lat: number, lng: number): Promise<GeocodingResult
       }
     }
 
-    console.log(`📍 GEOCODING: ${lat},${lng} → ${city}, ${country}`);
     return {
       city,
       country,
@@ -2262,25 +2219,10 @@ serve(async (req) => {
           const gate = await intentGatePromise;
           if (gate?.needsSearch && gate.confidence >= 0.95) {
             effectiveTrigger = 'search';
-            console.log('🔍 AUTO-SEARCH: High confidence live data query');
           }
         } catch { /* stay in chat mode */ }
 
         requestTrigger = effectiveTrigger;
-        console.log(`🎯 REQUEST: trigger=${effectiveTrigger}, submode=${chatSubmode}, lang=${language}`);
-        const locationDebugUserId = 'd63c3ea5-9ae2-48f9-bdba-001baa5c6953';
-        if (userId === locationDebugUserId && effectiveTrigger === 'search') {
-          console.log('📍 LOCATION PAYLOAD (DEBUG USER ONLY):', {
-            hasLocation: !!location,
-            source: location?.source,
-            latitude: location?.latitude,
-            longitude: location?.longitude,
-            city: location?.city,
-            country: location?.country,
-            accuracy: location?.accuracy,
-            timezone: clientTimezone,
-          });
-        }
 
         if (!message) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Message required' })}\n\n`));
@@ -2477,7 +2419,6 @@ serve(async (req) => {
                     }) : 'unknown time';
                     return `- "${content}" at ${time}`;
                   }).join('\n');
-                  console.log(`🔔 REMINDER AWARENESS: Found ${activeReminders.length} active reminders`);
                   return `\n\n📋 USER'S ACTIVE REMINDERS (DO NOT OFFER DUPLICATES):\n${remindersList}\nIf user already has a reminder for something, acknowledge it instead of offering a new one.`;
                 }
               } catch { /* not critical */ }
@@ -2564,7 +2505,6 @@ serve(async (req) => {
             let userCity = '';
             let userCountry = '';
             if (location?.latitude && location?.longitude) {
-              console.log('📍 Reverse geocoding from GPS (ignoring profile city/country)...');
               const geocoded = await reverseGeocode(location.latitude, location.longitude);
               if (geocoded.city) userCity = geocoded.city;
               if (geocoded.country) userCountry = geocoded.country;
@@ -2832,8 +2772,6 @@ If you are running out of space, keep this order and drop the rest:
 7) Social links
 8) Extra commentary / sources`;
 
-            console.log('🔍 SEARCH: Streaming with Gemini 3 Flash + google_search...');
-            
             let fullResponseText = '';
             let groundingMetadata: Gemini3SearchResult['groundingMetadata'] | null = null;
 
@@ -2844,7 +2782,6 @@ If you are running out of space, keep this order and drop the rest:
 
             // Stream tokens to client
             const searchModel = engineTier === 'intelligence' ? 'gemini-3.1-pro-preview' : 'gemini-3-flash-preview';
-            console.log(`🔍 SEARCH MODEL: ${searchModel} (engineTier=${engineTier})`);
 
             await streamGemini3WithSearch(
               message,
@@ -2980,7 +2917,6 @@ If you are running out of space, keep this order and drop the rest:
                   // Combine: "Find the closest coffee shop" + "Al Khor Qatar" → "Find the closest coffee shop near Al Khor, Qatar"
                   const locationReply = message.trim();
                   effectiveMessage = `${originalIntent.replace(/\b(near me|around me|close to me)\b/gi, '')} near ${locationReply}`.trim();
-                  console.log(`📍 LOCATION FOLLOW-UP: Combined "${originalIntent}" + "${locationReply}" → "${effectiveMessage}"`);
                 }
               }
             } catch (err) {
@@ -2992,7 +2928,6 @@ If you are running out of space, keep this order and drop the rest:
               const chatModel = 'gemini-3-flash-preview';
               const chatEngineLabel = engineTier === 'intelligence' ? 'Intelligence Engine (Flash)' : 'Speed Engine (Flash)';
               modelUsedOuter = chatEngineLabel;
-              console.log(` ENGINE: ${chatEngineLabel} selected (tier=${engineTier}, chat path)`);
               let fullResponseText = '';
               // Force reminder JSON compliance: append instruction to user turn (Gemini ignores system_instruction alone)
               const reminderAugmentedMessage = messageHasReminderKeyword
@@ -3044,8 +2979,6 @@ If you are running out of space, keep this order and drop the rest:
           const studyHasImages = chatSubmode === 'study' && Array.isArray(attachedFiles) && attachedFiles.length > 0;
           
           if (studyHasImages) {
-            console.log(`📸 STUDY+IMAGE: Detected ${attachedFiles.length} image(s), starting OCR→Wolfram pipeline...`);
-            
             // Send keepalive ping during OCR
             try {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ keepalive: true, stage: 'ocr' })}\n\n`));
@@ -3064,8 +2997,6 @@ If you are running out of space, keep this order and drop the rest:
               if (ocrResult.success && ocrResult.extractedText) {
                 ocrExtractedText = ocrResult.extractedText;
                 ocrQuestionType = ocrResult.questionType;
-                console.log(`✅ STUDY OCR: Extracted "${ocrExtractedText.substring(0, 100)}..." (type: ${ocrQuestionType})`);
-                
                 // Emit OCR metadata for frontend
                 try {
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
@@ -3078,11 +3009,7 @@ If you are running out of space, keep this order and drop the rest:
                     } 
                   })}\n\n`));
                 } catch { /* ignore */ }
-              } else {
-                console.log('⚠️ STUDY OCR: Failed to extract text:', ocrResult.error);
               }
-            } else {
-              console.log('⚠️ STUDY OCR: No valid image data found in attachedFiles');
             }
           }
 
@@ -3107,12 +3034,10 @@ If you are running out of space, keep this order and drop the rest:
               // === STUDY MODE: Universal Knowledge Engine ===
               const rawSubject = ocrExtractedText || message || '';
               let cleanSubject = getCleanSubject(rawSubject);
-              console.log(`🎓 STUDY MODE: Clean subject = "${cleanSubject.substring(0, 60)}" (lang=${language})`);
 
               // STEP 0 — Arabic Translation Bridge (internal, never shown to user)
               if (language === 'ar' && cleanSubject.length > 0) {
                 cleanSubject = await translateSubjectToEnglish(cleanSubject);
-                console.log(`🌐 STUDY MODE: Wolfram subject (EN) = "${cleanSubject.substring(0, 60)}"`);
               }
 
               // STEP 1 — Query Recognizer: check accepted + detect summarybox path
@@ -3127,28 +3052,23 @@ If you are running out of space, keep this order and drop the rest:
                 clearTimeout(recTid);
                 if (recResp.ok) {
                   const recXml = await recResp.text();
-                  console.log('🔍 RAW RECOGNIZER XML:', recXml.substring(0, 600));
                   const acceptedMatch = recXml.match(/accepted=["']([^"']+)["']/);
                   recognizerAccepted = acceptedMatch?.[1] !== 'false';
                   const pathMatch = recXml.match(/<summarybox\s+path=["']([^"']+)["']/i);
                   summaryBoxPath = pathMatch?.[1] || null;
                   const domainMatch = recXml.match(/domain=["']([^"']+)["']/);
                   recognizerDomain = domainMatch?.[1] || null;
-                  console.log(`🎓 WOLFRAM RECOGNIZER: accepted=${recognizerAccepted}, summaryBoxPath=${summaryBoxPath ?? 'NONE'}, domain=${recognizerDomain}`);
                 }
               } catch {
                 // fail-open
               }
 
-              if (!recognizerAccepted) {
-                console.log('🎓 WOLFRAM RECOGNIZER: Topic rejected — Gemini handles alone');
-              } else {
+              if (recognizerAccepted) {
                 const parts: string[] = [];
                 let eliteSummaryBoxResult: SummaryBoxResult | null = null;
 
                 if (summaryBoxPath) {
                   // STEP 2a — ELITE CARD PATH: Summary Box + LLM API in parallel
-                  console.log('🎓 WOLFRAM: Elite Card path (summarybox found) — running Summary Box + LLM in parallel');
                   const [llmResult, summaryBoxResult] = await Promise.all([
                     queryWolframLLM(cleanSubject, 8000),
                     queryWolframSummaryBox(cleanSubject, 5000),
@@ -3158,21 +3078,17 @@ If you are running out of space, keep this order and drop the rest:
                   if (summaryBoxResult.success && summaryBoxResult.summary) {
                     parts.push(`[WOLFRAM ELITE CARD (${summaryBoxResult.domain || recognizerDomain || 'entity'})]:\n${summaryBoxResult.summary.substring(0, 1000)}`);
                     wolframUsedOuter = true;
-                    console.log(`✅ WOLFRAM ELITE CARD: Got summary for domain=${summaryBoxResult.domain}`);
                   }
                   if (llmResult.success && llmResult.factSheet) {
                     parts.push(`[WOLFRAM FACT SHEET]:\n${llmResult.factSheet}`);
                     wolframUsedOuter = true;
-                    console.log('✅ WOLFRAM LLM: Got fact sheet');
                   }
                 } else {
                   // STEP 2b — STANDARD PATH: LLM API for deep context
-                  console.log('🎓 WOLFRAM: Standard path (no summarybox) — LLM API only');
                   const llmResult = await queryWolframLLM(cleanSubject, 8000);
                   if (llmResult.success && llmResult.factSheet) {
                     parts.push(`[WOLFRAM VERIFIED DATA]:\n${llmResult.factSheet}`);
                     wolframUsedOuter = true;
-                    console.log('✅ WOLFRAM LLM: Got fact sheet');
                   } else {
                     // STEP 3 — SHORT ANSWER FALLBACK: v1/result for a single verified fact
                     try {
@@ -3186,7 +3102,6 @@ If you are running out of space, keep this order and drop the rest:
                         if (saText && saText.length > 3 && !saText.toLowerCase().startsWith('wolfram')) {
                           parts.push(`[WOLFRAM VERIFIED FACT]:\n${saText}`);
                           wolframUsedOuter = true;
-                          console.log(`✅ WOLFRAM SHORT ANSWER FALLBACK: "${saText.substring(0, 80)}"`);
                         }
                       }
                     } catch { /* best-effort */ }
@@ -3207,7 +3122,6 @@ If you are running out of space, keep this order and drop the rest:
                     ? '\n\nأنت مدرس خبير وذو شخصية. استخدم البيانات الموثقة أعلاه كمصدرك الرئيسي للحقائق.\nقاعدة صارمة: اكتب جملة ملخص فريدة وذات شخصية داخل وسوم [BOX]...[/BOX] في بداية ردك فقط. الجملة داخل [BOX] يجب أن لا تُكرَّر أبداً في الفقرة الأولى أو أي مكان في النص.'
                     : '\n\nYou are an expert tutor with personality. Use the Verified Data above as your primary source of truth.\nSTRICT RULE: Write ONE unique personality-driven sentence inside [BOX]...[/BOX] at the very start. That exact sentence MUST NOT appear again — not in the first paragraph, not anywhere in the body. The body explanation starts fresh after the [BOX] tag.';
                   wolframContext = parts.join('\n\n') + instruction;
-                  console.log(`✅ WOLFRAM STUDY: Injected ${parts.length} source(s) into Gemini prompt (path=${summaryBoxPath ? 'elite' : 'standard'})`);
 
                   try {
                     controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { wolfram: wolframMetaBase } })}\n\n`));
@@ -3217,7 +3131,6 @@ If you are running out of space, keep this order and drop the rest:
 
             } else {
               // === NON-STUDY MODE: legacy v2/query for math/science calculations ===
-              console.log(`🔢 WOLFRAM: Academic query - legacy API...`);
               const summaryBoxInput = normalizeSummaryBoxQuery(rawWolframQuery);
               const [fullResultsResult, summaryBoxResult] = await Promise.all([
                 queryWolfram(rawWolframQuery, 4000),
@@ -3229,20 +3142,16 @@ If you are running out of space, keep this order and drop the rest:
 
               if (fullResultsResult.success && fullResultsResult.answer) {
                 const wolfResult = fullResultsResult;
-                console.log('✅ WOLFRAM FULL: Got answer');
                 wolframMetaBase = { answer: wolfResult.answer, interpretation: wolfResult.interpretation || null, steps: wolfResult.steps || [], mode: chatSubmode, api: 'full_results' };
                 try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { wolfram: wolframMetaBase } })}\n\n`)); } catch { /* ignore */ }
                 fullResultsData = language === 'ar'
                   ? `[حقيقة موثقة: ${wolfResult.answer}]`
                   : `[Verified fact: ${wolfResult.answer}]`;
                 wolframUsedOuter = true;
-              } else {
-                console.log('⚠️ WOLFRAM FULL: No result');
               }
 
               if (summaryBoxResult.success && summaryBoxResult.summary) {
                 const summaryText = summaryBoxResult.summary || '';
-                console.log('✅ WOLFRAM SUMMARY: Got summary (domain:', summaryBoxResult.domain, ')');
                 try {
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { wolfram: { ...(wolframMetaBase || {}), summaryBox: summaryText.substring(0, 1200), summaryDomain: summaryBoxResult.domain || null, api: wolframMetaBase ? 'full_results+summary_boxes' : 'summary_boxes' } } })}\n\n`));
                 } catch { /* ignore */ }
@@ -3255,9 +3164,6 @@ If you are running out of space, keep this order and drop the rest:
               if (fullResultsData || summaryBoxData) {
                 const combinedParts = [fullResultsData, summaryBoxData].filter(Boolean);
                 wolframContext = combinedParts.join('\n\n') + (language === 'ar' ? '\n\nاستخدم هذه المعلومات في إجابتك بشكل طبيعي.' : '\n\nUse this information naturally in your response.');
-                console.log('✅ WOLFRAM: Combined context from', combinedParts.length, 'API(s)');
-              } else {
-                console.log('⚠️ WOLFRAM: No data from either API, AI will handle alone');
               }
             }
           }
@@ -3315,7 +3221,6 @@ If you are running out of space, keep this order and drop the rest:
           }
           modelUsed = engineLabel;
           modelUsedOuter = engineLabel;
-          console.log(`⚙️ ENGINE: ${engineLabel} selected (tier=${engineTier}, deepWork=${isDeepWork})`);
           try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'gemini' })}\n\n`)); } catch { /* ignore */ }
           
           let geminiTokenCount = 0;
@@ -3338,8 +3243,6 @@ If you are running out of space, keep this order and drop the rest:
 
         const tryOpenAI = async () => {
           if (!OPENAI_API_KEY) throw new Error('OpenAI API key not configured');
-          console.log('🤖 Trying OpenAI (fallback from Gemini)...');
-          
           // CRITICAL: Reformat messages from Gemini format if needed
           // Gemini uses contents array with parts, OpenAI uses standard messages
           let reformattedMessages = messages;
@@ -3368,13 +3271,10 @@ If you are running out of space, keep this order and drop the rest:
           modelUsedOuter = modelUsed;
           streamReader = response.body?.getReader() || null;
           try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'openai' })}\n\n`)); } catch { /* ignore */ }
-          console.log('✅ OpenAI fallback active');
         };
 
         const tryClaude = async () => {
           if (!ANTHROPIC_API_KEY) throw new Error('Claude API key not configured');
-          console.log('🤖 Trying Claude (fallback from Gemini/OpenAI)...');
-          
           // CRITICAL: Reformat messages for Claude format
           // Claude expects separate system string and messages array
           const { system, messages: claudeMessages } = convertMessagesToClaudeFormat(messages);
@@ -3401,7 +3301,6 @@ If you are running out of space, keep this order and drop the rest:
           modelUsedOuter = modelUsed;
           streamReader = response.body?.getReader() || null;
           try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'claude' })}\n\n`)); } catch { /* ignore */ }
-          console.log('✅ Claude fallback active');
         };
 
         try {

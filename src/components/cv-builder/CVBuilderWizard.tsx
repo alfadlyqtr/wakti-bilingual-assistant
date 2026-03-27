@@ -335,6 +335,26 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
 
   const currentColor = selectedTemplate.colors[selectedColorIndex];
 
+  const cvPreviewData = useMemo(() => ({
+    name: cvData.personalInfo.fullName || (isRTL ? 'اسمك هنا' : 'Your Name'),
+    title: cvData.personalInfo.jobTitle || (isRTL ? 'المسمى الوظيفي' : 'Job title'),
+    email: cvData.personalInfo.email || 'email@example.com',
+    phone: cvData.personalInfo.phone || '+1 (555) 000-0000',
+    location: cvData.personalInfo.location || (isRTL ? 'الموقع' : 'Location'),
+    summary: cvData.personalInfo.summary || (isRTL ? 'اكتب ملخصاً قصيراً هنا...' : 'Write a short summary here...'),
+    experience: cvData.experience.length > 0 ? cvData.experience.map(e => ({
+      company: e.company || (isRTL ? 'شركة' : 'Company'),
+      position: e.position || (isRTL ? 'منصب' : 'Position'),
+      date: e.current ? (isRTL ? 'حتى الآن' : 'Present') : (e.endDate || '2024')
+    })) : [{ company: isRTL ? 'شركة' : 'Company', position: isRTL ? 'منصب' : 'Position', date: '2024' }],
+    education: cvData.education.length > 0 ? cvData.education.map(e => ({
+      school: e.institution || (isRTL ? 'مؤسسة' : 'Institution'),
+      degree: e.degree || (isRTL ? 'درجة' : 'Degree'),
+      date: e.endDate || '2024'
+    })) : [{ school: isRTL ? 'مؤسسة' : 'Institution', degree: isRTL ? 'درجة' : 'Degree', date: '2024' }],
+    skills: cvData.skills.length > 0 ? cvData.skills.map(s => s.name).filter(Boolean) : [isRTL ? 'مهارة' : 'Skill']
+  }), [cvData, isRTL]);
+
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
     const update = () => setIsMobile(mq.matches);
@@ -455,11 +475,8 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
   };
 
   const handleTemplateCardClick = (template: CVTemplate) => {
-    if (selectedTemplate?.id === template.id) {
-      setStep('method');
-      return;
-    }
     selectTemplate(template);
+    setStep('builder');
   };
 
   // ============================================================================
@@ -515,6 +532,108 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
                   <div className="text-[7px] text-gray-500">{edu.school}</div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (template.layout === 'sidebar-right') {
+      return (
+        <div className={`w-[400px] h-[566px] ${scale} origin-top bg-white rounded-lg shadow-lg overflow-hidden flex`}>
+          <div className="flex-1 p-4" style={{ backgroundColor: color.bg }}>
+            <div className="mb-3">
+              <div className="font-bold text-[10px] mb-1 pb-1 border-b flex items-center gap-1" style={{ color: color.primary, borderColor: color.secondary }}>
+                SUMMARY
+              </div>
+              <div className="text-[7px] text-gray-600 leading-relaxed">{data.summary}</div>
+            </div>
+            <div className="mb-3">
+              <div className="font-bold text-[10px] mb-1 pb-1 border-b flex items-center gap-1" style={{ color: color.primary, borderColor: color.secondary }}>
+                WORK EXPERIENCE
+              </div>
+              {data.experience.map((exp, i) => (
+                <div key={i} className="mb-2">
+                  <div className="font-semibold text-[8px]">{exp.position}</div>
+                  <div className="text-[7px] text-gray-500">{exp.company} • {exp.date}</div>
+                </div>
+              ))}
+            </div>
+            <div>
+              <div className="font-bold text-[10px] mb-1 pb-1 border-b" style={{ color: color.primary, borderColor: color.secondary }}>
+                EDUCATION
+              </div>
+              {data.education.map((edu, i) => (
+                <div key={i} className="text-[7px] mb-1">{edu.degree} - {edu.school}</div>
+              ))}
+            </div>
+          </div>
+          <div className="w-[140px] p-3 flex flex-col" style={{ backgroundColor: color.secondary }}>
+            <div className="w-14 h-14 rounded-lg mx-auto mb-2" style={{ backgroundColor: color.primary }} />
+            <div className="text-center mb-3">
+              <div className="font-bold text-[10px]" style={{ color: color.primary }}>{data.name}</div>
+              <div className="text-[7px] text-gray-500">{data.title}</div>
+            </div>
+            <div className="font-bold text-[8px] mb-2" style={{ color: color.primary }}>SKILLS</div>
+            {data.skills.slice(0, 4).map((s, i) => (
+              <div key={i} className="mb-1.5">
+                <div className="text-[6px] text-gray-600 mb-0.5">{s}</div>
+                <div className="h-1.5 bg-white rounded-full">
+                  <div className="h-1.5 rounded-full" style={{ backgroundColor: color.primary, width: `${95 - i * 15}%` }} />
+                </div>
+              </div>
+            ))}
+            <div className="font-bold text-[8px] mb-1 mt-3" style={{ color: color.primary }}>CONTACT</div>
+            <div className="text-[6px] text-gray-500">{data.email}</div>
+            <div className="text-[6px] text-gray-500">{data.phone}</div>
+          </div>
+        </div>
+      );
+    }
+
+    if (template.layout === 'modern') {
+      return (
+        <div className={`w-[400px] h-[566px] ${scale} origin-top bg-white rounded-lg shadow-lg overflow-hidden`}>
+          <div className="p-3 flex items-center justify-between" style={{ backgroundColor: color.primary }}>
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-lg bg-white/20" />
+              <div className="text-white">
+                <div className="font-bold text-[11px]">{data.name}</div>
+                <div className="text-[8px] opacity-70">{data.title}</div>
+              </div>
+            </div>
+            <div className="text-white/70 text-[6px] text-right">
+              <div>{data.email}</div>
+              <div>{data.phone}</div>
+            </div>
+          </div>
+          <div className="p-3">
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              {data.skills.slice(0, 6).map((s, i) => (
+                <div key={i} className="text-center p-1.5 rounded" style={{ backgroundColor: color.secondary }}>
+                  <div className="text-[6px] font-semibold" style={{ color: color.primary }}>{s}</div>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="font-bold text-[8px] mb-2" style={{ color: color.primary }}>EXPERIENCE</div>
+                {data.experience.map((exp, i) => (
+                  <div key={i} className="mb-2 p-1.5 rounded border" style={{ borderColor: color.secondary }}>
+                    <div className="font-semibold text-[7px]">{exp.position}</div>
+                    <div className="text-[6px] text-gray-500">{exp.company}</div>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div className="font-bold text-[8px] mb-2" style={{ color: color.primary }}>EDUCATION</div>
+                {data.education.map((edu, i) => (
+                  <div key={i} className="mb-2 p-1.5 rounded border" style={{ borderColor: color.secondary }}>
+                    <div className="font-semibold text-[7px]">{edu.degree}</div>
+                    <div className="text-[6px] text-gray-500">{edu.school}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -2035,43 +2154,52 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
   };
 
   const handleDownloadPDF = async () => {
-    const previewElement = document.getElementById('cv-preview-for-pdf');
-    if (!previewElement) {
-      toast({ title: isRTL ? 'لا يمكن العثور على المعاينة' : 'Cannot find preview', variant: 'destructive' });
-      return;
-    }
-
     setIsDownloading(true);
     toast({ title: isRTL ? 'جاري إنشاء PDF...' : 'Generating PDF...' });
 
     try {
-      const canvas = await html2canvas(previewElement, {
+      // Find the existing preview element and temporarily remove its CSS scale transform
+      const previewEl = document.getElementById('cv-preview-for-pdf');
+      if (!previewEl) {
+        toast({ title: isRTL ? 'لا يمكن العثور على المعاينة' : 'Cannot find preview', variant: 'destructive' });
+        setIsDownloading(false);
+        return;
+      }
+      const inner = previewEl.firstElementChild as HTMLElement | null;
+      const originalTransform = inner?.style.transform || '';
+      const originalTransformOrigin = inner?.style.transformOrigin || '';
+      // Strip scale so html2canvas captures full-size
+      if (inner) {
+        inner.style.transform = 'none';
+        inner.style.transformOrigin = 'unset';
+      }
+      await new Promise(r => setTimeout(r, 50));
+
+      const canvas = await html2canvas(previewEl, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
       });
 
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
+      // Restore scale
+      if (inner) {
+        inner.style.transform = originalTransform;
+        inner.style.transformOrigin = originalTransformOrigin;
+      }
 
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const imgX = (pdfWidth - imgWidth * ratio) / 2;
-      const imgY = 0;
+      const imgW = canvas.width;
+      const imgH = canvas.height;
+      const ratio = pdfWidth / imgW;
+      const scaledH = imgH * ratio;
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, scaledH > pdfHeight ? pdfHeight : scaledH);
 
-      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-      
       const fileName = `${cvData.personalInfo.fullName || 'CV'}_${new Date().toISOString().split('T')[0]}.pdf`;
       pdf.save(fileName);
-
       toast({ title: isRTL ? 'تم تحميل PDF بنجاح!' : 'PDF downloaded successfully!' });
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -2209,26 +2337,7 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
   };
 
   const PreviewPanel = () => {
-    // Create preview data from user's CV data
-    const previewData = {
-      name: cvData.personalInfo.fullName || (isRTL ? 'اسمك هنا' : 'Your Name'),
-      title: cvData.personalInfo.jobTitle || (isRTL ? 'المسمى الوظيفي' : 'Job title'),
-      email: cvData.personalInfo.email || 'email@example.com',
-      phone: cvData.personalInfo.phone || '+1 (555) 000-0000',
-      location: cvData.personalInfo.location || (isRTL ? 'الموقع' : 'Location'),
-      summary: cvData.personalInfo.summary || (isRTL ? 'اكتب ملخصاً قصيراً هنا...' : 'Write a short summary here...'),
-      experience: cvData.experience.length > 0 ? cvData.experience.map(e => ({
-        company: e.company || (isRTL ? 'شركة' : 'Company'),
-        position: e.position || (isRTL ? 'منصب' : 'Position'),
-        date: e.current ? (isRTL ? 'حتى الآن' : 'Present') : (e.endDate || '2024')
-      })) : [{ company: isRTL ? 'شركة' : 'Company', position: isRTL ? 'منصب' : 'Position', date: '2024' }],
-      education: cvData.education.length > 0 ? cvData.education.map(e => ({
-        school: e.institution || (isRTL ? 'مؤسسة' : 'Institution'),
-        degree: e.degree || (isRTL ? 'درجة' : 'Degree'),
-        date: e.endDate || '2024'
-      })) : [{ school: isRTL ? 'مؤسسة' : 'Institution', degree: isRTL ? 'درجة' : 'Degree', date: '2024' }],
-      skills: cvData.skills.length > 0 ? cvData.skills.map(s => s.name).filter(Boolean) : [isRTL ? 'مهارة' : 'Skill']
-    };
+    const previewData = cvPreviewData;
 
     return (
       <div className="h-full rounded-3xl border-2 border-white/5 bg-gradient-to-br from-white/[0.07] via-white/[0.04] to-white/[0.02] backdrop-blur-xl overflow-hidden shadow-2xl">
@@ -2265,7 +2374,7 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
   const BuilderV2 = () => (
     <div className="flex flex-col h-full">
       <div className="shrink-0 px-6 py-4 border-b-2 border-white/10 bg-gradient-to-r from-white/[0.05] via-white/[0.02] to-white/[0.05] backdrop-blur-xl flex items-center justify-between shadow-lg">
-        <button onClick={() => setStep('method')} className="p-2.5 rounded-xl hover:bg-white/10 transition-all" title={t.back}>
+        <button onClick={() => setStep('templates')} className="p-2.5 rounded-xl hover:bg-white/10 transition-all" title={t.back}>
           <ArrowLeft className={`w-5 h-5 ${isRTL ? 'rotate-180' : ''}`} />
         </button>
         <div className="text-center">
@@ -2456,6 +2565,13 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
           </div>
         </div>
       )}
+
+      {/* Hidden full-size capture element for PDF download */}
+      <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', pointerEvents: 'none', zIndex: -1 }}>
+        <div id="cv-preview-for-pdf">
+          <TemplatePreviewWithData template={selectedTemplate} colorIndex={selectedColorIndex} data={cvPreviewData} />
+        </div>
+      </div>
 
       {/* Change Template (Placeholder modal) */}
       {changeTemplateOpen && (

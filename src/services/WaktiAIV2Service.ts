@@ -12,7 +12,6 @@ const SESSION_CACHE_TTL_MS = 55 * 60 * 1000; // 55 minutes
 async function getCachedSession() {
   const now = Date.now();
   if (_cachedSession?.access_token && (now - _sessionCachedAt) < SESSION_CACHE_TTL_MS) {
-    console.log(`🔑 AUTH: Used cached session (0ms)`);
     return _cachedSession;
   }
   const t0 = Date.now();
@@ -21,7 +20,6 @@ async function getCachedSession() {
   if (session?.access_token) {
     _cachedSession = session;
     _sessionCachedAt = now;
-    console.log(`🔑 AUTH: Performed network validation (${elapsed}ms)`);
   } else {
     // Invalidate cache on failure — prevent ghost logged-out state
     _cachedSession = null;
@@ -77,7 +75,6 @@ class WaktiAIV2ServiceClass {
   private lastPTFetchAt: number | null = null;
 
   constructor() {
-    console.log('🤖 WAKTI AI SERVICE: Initialized as Backend Worker (Frontend Boss mode)');
     this.loadConversationsFromStorage();
     try { this.ensurePersonalTouch(); } catch {}
   }
@@ -895,7 +892,6 @@ class WaktiAIV2ServiceClass {
               }),
               signal
             });
-            console.log(`📡 CHAT: Response status=${response.status} ok=${response.ok} [${requestId}]`);
 
             if (response.ok) break;
 
@@ -1022,7 +1018,6 @@ class WaktiAIV2ServiceClass {
 
                     if (data === '[DONE]') {
                       if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
-                      console.log(`🏁 FRONTEND BOSS: Received [DONE] (tail) [${requestId}] (primary=${primary})`);
                       continue;
                     }
 
@@ -1053,7 +1048,6 @@ class WaktiAIV2ServiceClass {
                 }
               } catch {}
               if (!isCompleted) onComplete?.(metadata);
-              console.log(`✅ FRONTEND BOSS: Stream closed cleanly [${requestId}] (primary=${primary})`);
               break;
             }
 
@@ -1067,7 +1061,6 @@ class WaktiAIV2ServiceClass {
 
               if (data === '[DONE]') {
                 if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
-                console.log(`🏁 FRONTEND BOSS: Received [DONE] [${requestId}] (primary=${primary})`);
                 continue;
               }
 
@@ -1095,47 +1088,33 @@ class WaktiAIV2ServiceClass {
                   continue;
                 }
 
-                if (parsed.metadata?.pt_applied) {
-                  console.log('🧩 PT_IN_APPLIED:', parsed.metadata.pt_applied);
-                }
 
                 // Handle search confirmation request from backend (Yes/No card)
                 if (parsed.searchConfirmation) {
-                  console.log('🔎 SEARCH CONFIRMATION:', parsed.searchConfirmation);
                   metadata = { ...metadata, searchConfirmation: parsed.searchConfirmation };
                   continue;
                 }
 
                 // Handle reminder scheduled confirmation from backend interception
                 if (parsed.reminderScheduled) {
-                  console.log('🔔 REMINDER: Backend confirmed scheduled:', parsed.reminderScheduled);
                   metadata = { ...metadata, reminderScheduled: parsed.reminderScheduled };
                   continue;
                 }
 
                 if (typeof parsed.token === 'string') { 
-                  if (!firstTokenReceived) {
-                    firstTokenReceived = true;
-                    console.log(`🎯 CLIENT: First token received [${requestId}] (primary=${primary})`);
-                  }
+                  if (!firstTokenReceived) { firstTokenReceived = true; }
                   fullResponse += parsed.token; 
                   if (!fullResponse.includes('{"action"')) {
                     onToken?.(parsed.token);
                   }
                 }
                 else if (typeof parsed.response === 'string') { 
-                  if (!firstTokenReceived) {
-                    firstTokenReceived = true;
-                    console.log(`🎯 CLIENT: First response chunk received [${requestId}] (primary=${primary})`);
-                  }
+                  if (!firstTokenReceived) { firstTokenReceived = true; }
                   fullResponse += parsed.response; 
                   onToken?.(parsed.response); 
                 }
                 else if (typeof parsed.content === 'string') { 
-                  if (!firstTokenReceived) {
-                    firstTokenReceived = true;
-                    console.log(`🎯 CLIENT: First content chunk received [${requestId}] (primary=${primary})`);
-                  }
+                  if (!firstTokenReceived) { firstTokenReceived = true; }
                   fullResponse += parsed.content; 
                   onToken?.(parsed.content); 
                 }
@@ -1147,10 +1126,7 @@ class WaktiAIV2ServiceClass {
                   if (!isCompleted) { onComplete?.(parsed.metadata || metadata); isCompleted = true; }
                 }
               } catch {
-                if (!firstTokenReceived) {
-                  firstTokenReceived = true;
-                  console.log(`🎯 CLIENT: First raw token received [${requestId}] (primary=${primary})`);
-                }
+                if (!firstTokenReceived) { firstTokenReceived = true; }
                 fullResponse += data;
                 onToken?.(data);
               }
@@ -1205,11 +1181,6 @@ class WaktiAIV2ServiceClass {
         // The backend detects the JSON block, schedules via schedule-reminder-push, and strips it.
         // Frontend receives a `reminderScheduled` event in the SSE stream when a reminder is set.
         // No frontend parsing needed — just log if backend confirmed a reminder was scheduled.
-        if (metadata?.reminderScheduled) {
-          console.log('✅ REMINDER: Backend scheduled reminder:', metadata.reminderScheduled);
-        }
-
-        console.log(`✅ FRONTEND BOSS: Streaming completed successfully [${requestId}] (primary=${primary})`);
         // Invisibility cloak: strip only a TRAILING action JSON block (not mid-response)
         const stripTrailing = (t: string) => {
           const idx = t.lastIndexOf('{"action"');
@@ -1284,7 +1255,6 @@ class WaktiAIV2ServiceClass {
             const bucketName = 'vision-uploads';
             const uid = (userId || 'anon').toString();
             const path = `vision/${uid}/${requestId}/${Date.now()}_${i}.${ext}`;
-            console.log('📤 VISION UPLOAD → bucket:', bucketName, 'path:', path, 'mime:', mime);
             const up = await supabase.storage.from(bucketName).upload(path, blob, { contentType: mime, upsert: true });
             if (up?.error) throw up.error;
             // Try public URL first
@@ -1334,7 +1304,6 @@ class WaktiAIV2ServiceClass {
           try {
             // Extract visionCategory from the first image's imageType.id (set by the UI dropdown)
             const visionCategory = (visionFiles[0] as any)?.imageType?.id || 'general';
-            console.log(`🚀 VISION(SSE): Attempt ${attempt}/2 - Calling ${supabaseUrl}/functions/v1/wakti-vision-stream (provider=gemini-vision, category=${visionCategory})`);
             const body = {
               requestId: requestId,
               prompt: visionPrompt,
@@ -1361,7 +1330,6 @@ class WaktiAIV2ServiceClass {
               },
               body: JSON.stringify(body)
             });
-            console.log(`📡 VISION: Response status=${resp.status} ok=${resp.ok}`);
             if (resp.ok) break;
             if (attempt === 2) throw new Error(`Vision HTTP ${resp.status}`);
           } catch (e: any) {
@@ -1387,7 +1355,6 @@ class WaktiAIV2ServiceClass {
         }
 
         // Otherwise fallback to SSE streaming parsing
-        console.log('📡 VISION SSE: Starting SSE parsing, content-type:', ct);
         const reader = respNonNull.body?.getReader();
         if (!reader) throw new Error('No response body reader for vision');
 
@@ -1441,15 +1408,11 @@ class WaktiAIV2ServiceClass {
                 }
               } catch {}
               if (!isCompleted) onComplete?.(metadata);
-              console.log(`✅ VISION: Stream closed cleanly [${requestId}] (primary=${primary})`);
               break;
             }
             chunkCount++;
             const rawChunk = decoder.decode(value, { stream: true });
             buffer += rawChunk;
-            if (chunkCount <= 3) {
-              console.log(`📡 VISION SSE chunk #${chunkCount}:`, rawChunk.substring(0, 200));
-            }
             const lines = buffer.split('\n');
             buffer = lines.pop() || '';
             for (const line of lines) {

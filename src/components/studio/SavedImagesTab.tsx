@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import ShareButton from '@/components/ui/ShareButton';
+import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
 import {
   Loader2,
   Download,
@@ -293,7 +294,6 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
                   loading="lazy"
                 />
               </div>
-
               {/* Bottom info bar */}
               <div className="p-2 space-y-1.5">
                 {/* Meta row */}
@@ -308,12 +308,16 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => setLightboxImage(img)}
+                    aria-label={language === 'ar' ? 'توسيع الصورة' : 'Expand image'}
+                    title={language === 'ar' ? 'توسيع الصورة' : 'Expand image'}
                     className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-medium bg-white/80 dark:bg-white/5 border border-border/40 text-foreground active:scale-95 transition-transform"
                   >
                     <Maximize2 className="h-3 w-3" />
                   </button>
                   <button
                     onClick={() => handleDownload(img.image_url)}
+                    aria-label={language === 'ar' ? 'تحميل الصورة' : 'Download image'}
+                    title={language === 'ar' ? 'تحميل الصورة' : 'Download image'}
                     className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-medium bg-white/80 dark:bg-white/5 border border-border/40 text-foreground active:scale-95 transition-transform"
                   >
                     <Download className="h-3 w-3" />
@@ -330,10 +334,21 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
                   <button
                     onClick={() => handleDelete(img.id)}
                     disabled={deletingId === img.id}
+                    aria-label={language === 'ar' ? 'حذف الصورة' : 'Delete image'}
+                    title={language === 'ar' ? 'حذف الصورة' : 'Delete image'}
                     className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-medium bg-red-50 dark:bg-red-950/20 border border-red-200/40 dark:border-red-800/30 text-red-600 dark:text-red-400 active:scale-95 transition-transform disabled:opacity-50"
                   >
                     {deletingId === img.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                   </button>
+                </div>
+
+                <div className="pt-1">
+                  <InstagramPublishButton
+                    mediaUrl={img.image_url}
+                    mediaType="image"
+                    defaultCaption={img.prompt || ''}
+                    language={language as 'en' | 'ar'}
+                  />
                 </div>
               </div>
             </div>
