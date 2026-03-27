@@ -452,6 +452,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   // Saved texts (persisted)
   const SAVED_TEXTS_KEY = 'wakti_saved_texts_v1';
   const [savedTextsList, setSavedTextsList] = useState<{ id: string; text: string; savedAt: string }[]>([]);
+  const [savedCount, setSavedCount] = useState(0);
 
   const loadSavedTexts = () => {
     try {
@@ -716,6 +717,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       const next = [entry, ...existing].slice(0, 20);
       localStorage.setItem(SAVED_TEXTS_KEY, JSON.stringify(next));
       setSavedTextsList(next);
+      setSavedCount(c => c + 1);
       toast.success(language === 'ar' ? 'تم الحفظ في المحفوظات' : 'Saved to Saved tab');
     } catch { }
   }, [parsedText.mainText, language]);
@@ -1942,7 +1944,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 </div>
               ) : (
                 <div className="mt-4 border-t pt-4">
-                  <SavedItemsTab />
+                  <SavedItemsTab key={savedCount} />
                 </div>
               )}
             </div>
