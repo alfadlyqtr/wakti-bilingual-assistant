@@ -79,7 +79,7 @@ export function TabletHeader() {
     ? (immediateAvatarUrl ? getCacheBustedAvatarUrl(immediateAvatarUrl.trim()) : undefined)
     : (profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url.trim()) : undefined);
   
-  const isHomescreenMode = localStorage.getItem('wakti_dashboard_look') === 'homescreen';
+  const isHomescreenMode = (localStorage.getItem('wakti_dashboard_look') ?? 'homescreen') !== 'dashboard';
 
   // Define menu items with icons
   const menuItems = [

@@ -2320,7 +2320,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   }, [syncToSupabase]);
 
   // ── Derived lists — bulletproof dedup & dynamic grid generation ──
-  const dockSet = new Set(dockIds);
+  // Cap dockSet to the actual rendered slots so overflow apps (e.g. Maw3d on mobile)
+  // appear in the main grid instead of being hidden in both dock and grid.
+  const _isMobileGrid = typeof window !== 'undefined' && window.innerWidth < 768;
+  const _maxDockGrid  = _isMobileGrid ? MAX_DOCK_MOBILE : MAX_DOCK_DESKTOP;
+  const dockSet = new Set(dockIds.slice(0, _maxDockGrid));
   const enabledWidgetIds = new Set(WIDGET_IDS.filter(k => hsWidgets[k]).map(k => `widget::${k}`));
 
   const { effectiveUnified, realItems, gridTemplateAreas, gridPositions } = React.useMemo(() => {

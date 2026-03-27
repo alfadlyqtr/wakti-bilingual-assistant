@@ -16,7 +16,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentUserProfile } from "@/services/contactsService";
 import { t } from "@/utils/translations";
 import { deleteUserAccount, updateUserPassword } from "@/utils/auth";
-import { CustomPaywallModal } from "@/components/AppLayout";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import type { PaywallVariant } from "@/components/ProtectedRoute";
 import { 
@@ -36,7 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { restorePurchases } from "@/integrations/natively/purchasesBridge";
+import { purchasePackage, restorePurchases } from "@/integrations/natively/purchasesBridge";
 import { MyGallery } from "@/components/social/MyGallery";
 import { ContactsContent } from "@/pages/Contacts";
 import { getPendingRequestsCount } from "@/services/contactsService";
@@ -366,12 +365,48 @@ export default function Account() {
   const [confirmationEmail, setConfirmationEmail] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   
-  // Paywall modal state (for subscribe CTA from billing tab)
-  const [showPaywallModal, setShowPaywallModal] = useState(false);
-  
   // Detect correct paywall variant using same logic as ProtectedRoute (priority: trial_expired > cancelled > new_user)
   const { isNewUser, wasSubscribed, isAccessExpired, profile } = useUserProfile();
   const paywallVariant: PaywallVariant = isAccessExpired ? 'trial_expired' : wasSubscribed ? 'cancelled' : 'new_user';
+
+  // Direct native purchase — skips modal, fires Apple/Android payment sheet immediately
+  const [isBillingPurchasing, setIsBillingPurchasing] = useState(false);
+  const handleBillingSubscribe = () => {
+    if (isBillingPurchasing) return;
+    setIsBillingPurchasing(true);
+    purchasePackage('$rc_monthly', async (resp: any) => {
+      const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
+        resp.message.toLowerCase().includes('already subscribed');
+      const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
+      if (isPurchased || isAlreadySubscribed) {
+        if (user?.id) {
+          try {
+            await supabase
+              .from('profiles')
+              .update({
+                is_subscribed: true,
+                subscription_status: 'active',
+                plan_name: 'Wakti Monthly',
+                billing_start_date: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', user.id);
+          } catch {}
+          try {
+            localStorage.removeItem(`wakti_sub_status_${user.id}`);
+            window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
+            window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+          } catch {}
+          supabase.functions.invoke('check-subscription', { body: { userId: user.id } }).catch(() => {});
+        }
+        toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
+        queryClient.invalidateQueries({ queryKey: ['subscription'] });
+      } else if (resp?.status === 'ERROR') {
+        toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
+      }
+      setIsBillingPurchasing(false);
+    });
+  };
   
   // Restore purchases state
   const [isRestoring, setIsRestoring] = useState(false);
@@ -1342,13 +1377,14 @@ export default function Account() {
                           <TrialCountdown 
                             startAt={billingProfile.free_access_start_at!} 
                             language={language} 
-                            onSubscribeClick={() => setShowPaywallModal(true)}
+                            onSubscribeClick={handleBillingSubscribe}
                           />
                           {/* Active trial: Subscribe + Restore only for cancelled variant */}
                           {isTrialActive && (
                             <div className="flex flex-col items-center gap-2 pt-2">
                               <Button
-                                onClick={() => setShowPaywallModal(true)}
+                                onClick={handleBillingSubscribe}
+                                disabled={isBillingPurchasing}
                                 className="w-full max-w-xs bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:from-[hsl(210,100%,60%)] hover:via-[hsl(195,100%,55%)] hover:to-[hsl(175,100%,50%)] text-white font-bold shadow-[0_0_30px_hsl(200,100%,55%,0.4)]"
                                 size="lg"
                               >
@@ -1436,11 +1472,12 @@ export default function Account() {
                             : 'مرحباً بك في وقتي! اشترك الآن واستمتع بـ 3 أيام تجريبية مجانية.'}
                         </p>
                         <Button 
-                          onClick={() => setShowPaywallModal(true)}
+                          onClick={handleBillingSubscribe}
+                          disabled={isBillingPurchasing}
                           className="w-full max-w-xs bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:from-[hsl(210,100%,60%)] hover:via-[hsl(195,100%,55%)] hover:to-[hsl(175,100%,50%)] text-white font-bold shadow-[0_0_30px_hsl(200,100%,55%,0.4)]"
                           size="lg"
                         >
-                          <Sparkles className="w-4 h-4 mr-2" />
+                          {isBillingPurchasing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
                           {language === 'en' ? 'Subscribe Now' : 'اشترك الآن'}
                         </Button>
                         {/* Restore only for cancelled variant (previously subscribed) */}
@@ -1690,8 +1727,6 @@ export default function Account() {
         </DialogContent>
       </Dialog>
       
-      {/* Paywall Modal - triggered from billing tab subscribe CTA */}
-      <CustomPaywallModal open={showPaywallModal} onOpenChange={setShowPaywallModal} variant={paywallVariant} />
     </PageContainer>
   );
 }

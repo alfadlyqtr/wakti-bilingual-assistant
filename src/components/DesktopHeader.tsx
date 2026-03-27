@@ -163,7 +163,7 @@ export function DesktopHeader() {
     shouldGlowLogo && "wakti-logo-glow--pulse"
   );
 
-  const isHomescreenMode = localStorage.getItem('wakti_dashboard_look') === 'homescreen';
+  const isHomescreenMode = (localStorage.getItem('wakti_dashboard_look') ?? 'homescreen') !== 'dashboard';
 
   // Define menu items with icons and vibrant colors
   const menuItems = [
