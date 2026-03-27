@@ -136,7 +136,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             } catch { res(1); }
           };
           reader.onerror = () => res(1);
-          reader.readAsArrayBuffer(file.slice(0, 65536));
+          reader.readAsArrayBuffer(file);
         });
 
         if (orientation === 1) {
@@ -460,6 +460,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     setResultImageUrl(null);
     startProgress();
 
+    let generatedUrl: string | null = null;
     try {
       let url: string;
       switch (submode) {
@@ -476,12 +477,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
           throw new Error('Unknown submode');
       }
       stopProgress();
+      generatedUrl = url;
       setResultImageUrl(url);
-      await persistGeneratedImage(url, {
-        showSuccessToast: false,
-        showAlreadySavedToast: false,
-        triggerSaveSuccess: false,
-      });
     } catch (err: any) {
       stopProgress();
       const msg = err?.message || (language === 'ar' ? 'فشل إنشاء الصورة' : 'Image generation failed');
@@ -489,6 +486,14 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       toast.error(msg);
     } finally {
       setIsGenerating(false);
+    }
+    // Auto-save is fire-and-forget — never surfaces errors to the user
+    if (generatedUrl) {
+      persistGeneratedImage(generatedUrl, {
+        showSuccessToast: false,
+        showAlreadySavedToast: false,
+        triggerSaveSuccess: false,
+      }).catch(() => { /* silent */ });
     }
   }, [submode, prompt, quality, uploadedFile, language, persistGeneratedImage]);
 
@@ -902,6 +907,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                     src={uploadedFile.preview || uploadedFile.url}
                     alt="Reference 1"
                     className="w-full rounded-xl object-contain max-h-48"
+                    style={{ imageOrientation: 'from-image' }}
                   />
                   <button
                     onClick={() => setUploadedFile(null)}
@@ -962,6 +968,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                       src={uploadedFile2.preview || uploadedFile2.url}
                       alt="Reference 2"
                       className="w-full rounded-xl object-contain max-h-32"
+                      style={{ imageOrientation: 'from-image' }}
                     />
                     <button
                       onClick={() => setUploadedFile2(null)}
