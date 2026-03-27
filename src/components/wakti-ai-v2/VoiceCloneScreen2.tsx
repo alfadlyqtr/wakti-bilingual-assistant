@@ -249,21 +249,30 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       console.log('🎤 FRONTEND: Calling voice-clone function...');
       const startTime = Date.now();
 
-      const { data, error } = await supabase.functions.invoke('voice-clone', {
-        body: formData,
-      });
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('User not authenticated - please login again');
+      }
+
+      const response = await fetch(
+        `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-clone`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU',
+          },
+          body: formData,
+        }
+      );
 
       const endTime = Date.now();
       console.log(`🎤 FRONTEND: Function call completed in ${endTime - startTime}ms`);
+
+      const data = await response.json();
       console.log('🎤 FRONTEND: Response data:', data);
-      console.log('🎤 FRONTEND: Response error:', error);
 
-      if (error) {
-        console.error('🎤 FRONTEND: Voice clone error:', error);
-        throw error;
-      }
-
-      if (!data?.success) {
+      if (!response.ok || !data?.success) {
         console.error('🎤 FRONTEND: Function returned failure:', data);
         if (data?.error === 'TRIAL_LIMIT_REACHED') {
           window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: data?.feature || 'voice_clone' } }));
