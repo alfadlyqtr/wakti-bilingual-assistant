@@ -159,7 +159,7 @@ export default function CalendarDropdown({ event, eventId, language = 'en', butt
       'VERSION:2.0',
       'PRODID:-//WAKTI//EN',
       'BEGIN:VEVENT',
-      `UID:${Date.now()}@wakti.app`,
+      `UID:${Date.now()}@wakti.qa`,
       `DTSTART:${formatICSDate(startDate)}`,
       `DTEND:${formatICSDate(endDate)}`,
       `SUMMARY:${event.title}`,

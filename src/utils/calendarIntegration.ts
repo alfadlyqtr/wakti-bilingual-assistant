@@ -17,7 +17,7 @@ export const generateICSFile = (event: CalendarEvent): string => {
     'VERSION:2.0',
     'PRODID:-//WAKTI//Event//EN',
     'BEGIN:VEVENT',
-    `UID:${Date.now()}@wakti.app`,
+    `UID:${Date.now()}@wakti.qa`,
     `DTSTAMP:${formatDate(new Date())}`,
     `DTSTART:${formatDate(event.startTime)}`,
     `DTEND:${formatDate(event.endTime)}`,

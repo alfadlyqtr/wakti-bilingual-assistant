@@ -4,6 +4,10 @@ import { logAIFromRequest } from "../_shared/aiLogger.ts";
 const ALLOWED_ORIGINS = [
   "https://wakti.app",
   "https://www.wakti.app",
+  "https://wakti.qa",
+  "https://www.wakti.qa",
+  "https://wakti.ai",
+  "https://www.wakti.ai",
   "https://hxauxozopvpzpdygoqwf.supabase.co",
   "http://localhost:5173",
   "http://localhost:3000",
