@@ -10,6 +10,9 @@ interface IGAccount {
   profile_picture_url: string | null;
 }
 
+let sharedConnectionPromise: Promise<IGAccount | null> | null = null;
+let sharedConnectionCache: { account: IGAccount | null; expiresAt: number } | null = null;
+
 interface InstagramPublishButtonProps {
   mediaUrl: string;
   mediaType: 'image' | 'video' | 'reel';
@@ -21,6 +24,42 @@ interface InstagramPublishButtonProps {
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || '';
 const REDIRECT_URI = `${window.location.origin}/instagram-connect-callback`;
 const IG_SCOPES = 'instagram_basic,instagram_content_publish';
+
+async function fetchSharedConnectionStatus(): Promise<IGAccount | null> {
+  const now = Date.now();
+  if (sharedConnectionCache && sharedConnectionCache.expiresAt > now) {
+    return sharedConnectionCache.account;
+  }
+
+  if (!sharedConnectionPromise) {
+    sharedConnectionPromise = (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        sharedConnectionCache = { account: null, expiresAt: Date.now() + 10_000 };
+        return null;
+      }
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/instagram-connect-user?action=status`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      const data = await response.json();
+      const account = response.ok && data?.connected ? (data.account as IGAccount) : null;
+      sharedConnectionCache = { account, expiresAt: Date.now() + 10_000 };
+      return account;
+    })().finally(() => {
+      sharedConnectionPromise = null;
+    });
+  }
+
+  return sharedConnectionPromise;
+}
 
 export default function InstagramPublishButton({
   mediaUrl,
@@ -43,29 +82,8 @@ export default function InstagramPublishButton({
   const checkConnection = useCallback(async () => {
     setCheckingStatus(true);
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.access_token) {
-        setIgAccount(null);
-        return;
-      }
-
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/instagram-connect-user?action=status`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data?.connected) {
-        setIgAccount(data.account);
-      } else {
-        setIgAccount(null);
-      }
+      const account = await fetchSharedConnectionStatus();
+      setIgAccount(account);
     } catch {
       setIgAccount(null);
     } finally {
@@ -95,6 +113,7 @@ export default function InstagramPublishButton({
         if (error || !data?.success) {
           throw new Error(data?.error || 'Connection failed');
         }
+        sharedConnectionCache = { account: data.account, expiresAt: Date.now() + 10_000 };
         setIgAccount(data.account);
         toast.success(ar ? 'تم ربط حساب Instagram!' : 'Instagram connected!');
         setShowPanel(true);
@@ -124,6 +143,7 @@ export default function InstagramPublishButton({
     await supabase.functions.invoke('instagram-connect-user', {
       body: { action: 'disconnect' },
     });
+    sharedConnectionCache = { account: null, expiresAt: Date.now() + 10_000 };
     setIgAccount(null);
     setShowPanel(false);
     toast.success(ar ? 'تم قطع الاتصال بـ Instagram' : 'Instagram disconnected');

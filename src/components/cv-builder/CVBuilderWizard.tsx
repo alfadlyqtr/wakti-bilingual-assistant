@@ -483,9 +483,9 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
   // TEMPLATE PREVIEW COMPONENT
   // ============================================================================
 
-  const TemplatePreviewWithData: React.FC<{ template: CVTemplate; colorIndex: number; data: typeof SAMPLE_DATA }> = ({ template, colorIndex, data }) => {
+  const TemplatePreviewWithData: React.FC<{ template: CVTemplate; colorIndex: number; data: typeof SAMPLE_DATA; fullSize?: boolean }> = ({ template, colorIndex, data, fullSize }) => {
     const color = template.colors[colorIndex];
-    const scale = 'scale-[0.65]';
+    const scale = fullSize ? '' : 'scale-[0.65]';
     
     if (template.layout === 'sidebar-left') {
       return (
@@ -2158,45 +2158,141 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
     toast({ title: isRTL ? 'جاري إنشاء PDF...' : 'Generating PDF...' });
 
     try {
-      // Find the existing preview element and temporarily remove its CSS scale transform
-      const previewEl = document.getElementById('cv-preview-for-pdf');
-      if (!previewEl) {
-        toast({ title: isRTL ? 'لا يمكن العثور على المعاينة' : 'Cannot find preview', variant: 'destructive' });
-        setIsDownloading(false);
-        return;
-      }
-      const inner = previewEl.firstElementChild as HTMLElement | null;
-      const originalTransform = inner?.style.transform || '';
-      const originalTransformOrigin = inner?.style.transformOrigin || '';
-      // Strip scale so html2canvas captures full-size
-      if (inner) {
-        inner.style.transform = 'none';
-        inner.style.transformOrigin = 'unset';
-      }
-      await new Promise(r => setTimeout(r, 50));
-
-      const canvas = await html2canvas(previewEl, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-      });
-
-      // Restore scale
-      if (inner) {
-        inner.style.transform = originalTransform;
-        inner.style.transformOrigin = originalTransformOrigin;
-      }
-
-      const imgData = canvas.toDataURL('image/png');
+      const color = selectedTemplate.colors[selectedColorIndex];
+      const d = cvPreviewData;
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgW = canvas.width;
-      const imgH = canvas.height;
-      const ratio = pdfWidth / imgW;
-      const scaledH = imgH * ratio;
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, scaledH > pdfHeight ? pdfHeight : scaledH);
+      const W = pdf.internal.pageSize.getWidth();   // 210
+      const H = pdf.internal.pageSize.getHeight();  // 297
+
+      const hexToRgb = (hex: string) => {
+        const r = parseInt(hex.slice(1,3),16);
+        const g = parseInt(hex.slice(3,5),16);
+        const b = parseInt(hex.slice(5,7),16);
+        return [r,g,b] as [number,number,number];
+      };
+
+      const layout = selectedTemplate.layout;
+
+      if (layout === 'sidebar-left' || layout === 'sidebar-right') {
+        const sideW = 65;
+        const mainX = layout === 'sidebar-left' ? sideW : 0;
+        const sideX = layout === 'sidebar-left' ? 0 : W - sideW;
+        const mainW = W - sideW;
+
+        // Sidebar background
+        const [sr,sg,sb] = hexToRgb(color.primary);
+        pdf.setFillColor(sr,sg,sb);
+        pdf.rect(sideX, 0, sideW, H, 'F');
+
+        // Sidebar content
+        pdf.setTextColor(255,255,255);
+        pdf.setFontSize(12);
+        pdf.setFont('helvetica','bold');
+        pdf.text(d.name, sideX + sideW/2, 30, { align: 'center', maxWidth: sideW - 8 });
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica','normal');
+        pdf.text(d.title, sideX + sideW/2, 37, { align: 'center', maxWidth: sideW - 8 });
+
+        pdf.setFontSize(7);
+        let sy = 50;
+        pdf.text(d.email, sideX + 4, sy, { maxWidth: sideW - 8 }); sy += 6;
+        pdf.text(d.phone, sideX + 4, sy, { maxWidth: sideW - 8 }); sy += 6;
+        pdf.text(d.location, sideX + 4, sy, { maxWidth: sideW - 8 }); sy += 10;
+
+        pdf.setFontSize(9);
+        pdf.setFont('helvetica','bold');
+        pdf.text('SKILLS', sideX + 4, sy); sy += 6;
+        pdf.setFontSize(7);
+        pdf.setFont('helvetica','normal');
+        d.skills.slice(0,8).forEach(s => { pdf.text(`• ${s}`, sideX + 4, sy, { maxWidth: sideW - 8 }); sy += 5; });
+
+        // Main content
+        pdf.setTextColor(30,30,30);
+        let y = 20;
+        const section = (title: string) => {
+          const [pr,pg,pb] = hexToRgb(color.primary);
+          pdf.setFontSize(10); pdf.setFont('helvetica','bold');
+          pdf.setTextColor(pr,pg,pb);
+          pdf.text(title, mainX + 8, y); y += 2;
+          pdf.setDrawColor(pr,pg,pb); pdf.setLineWidth(0.3);
+          pdf.line(mainX + 8, y, mainX + mainW - 8, y); y += 5;
+          pdf.setTextColor(30,30,30);
+        };
+
+        section('SUMMARY');
+        pdf.setFontSize(8); pdf.setFont('helvetica','normal');
+        const sumLines = pdf.splitTextToSize(d.summary, mainW - 16);
+        pdf.text(sumLines, mainX + 8, y); y += sumLines.length * 4 + 6;
+
+        section('WORK EXPERIENCE');
+        d.experience.forEach(e => {
+          pdf.setFontSize(9); pdf.setFont('helvetica','bold'); pdf.setTextColor(30,30,30);
+          pdf.text(e.position, mainX + 8, y); y += 4;
+          pdf.setFontSize(7); pdf.setFont('helvetica','normal'); pdf.setTextColor(100,100,100);
+          pdf.text(`${e.company}  |  ${e.date}`, mainX + 8, y); y += 7;
+        });
+        y += 2;
+
+        section('EDUCATION');
+        d.education.forEach(e => {
+          pdf.setFontSize(9); pdf.setFont('helvetica','bold'); pdf.setTextColor(30,30,30);
+          pdf.text(e.degree, mainX + 8, y); y += 4;
+          pdf.setFontSize(7); pdf.setFont('helvetica','normal'); pdf.setTextColor(100,100,100);
+          pdf.text(e.school, mainX + 8, y); y += 7;
+        });
+
+      } else {
+        // Classic / minimal / modern — full-width header then sections
+        const [pr,pg,pb] = hexToRgb(color.primary);
+        const [sr2,sg2,sb2] = hexToRgb(color.secondary);
+        pdf.setFillColor(sr2,sg2,sb2);
+        pdf.rect(0,0,W,30,'F');
+        pdf.setTextColor(pr,pg,pb);
+        pdf.setFontSize(18); pdf.setFont('helvetica','bold');
+        pdf.text(d.name, W/2, 12, { align: 'center' });
+        pdf.setFontSize(10); pdf.setFont('helvetica','normal');
+        pdf.text(d.title, W/2, 19, { align: 'center' });
+        pdf.setFontSize(7); pdf.setTextColor(80,80,80);
+        pdf.text(`${d.email}  |  ${d.phone}  |  ${d.location}`, W/2, 25, { align: 'center' });
+
+        let y = 38;
+        const section = (title: string) => {
+          pdf.setFontSize(10); pdf.setFont('helvetica','bold');
+          pdf.setTextColor(pr,pg,pb);
+          pdf.text(title, 15, y); y += 2;
+          pdf.setDrawColor(pr,pg,pb); pdf.setLineWidth(0.3);
+          pdf.line(15, y, W - 15, y); y += 5;
+          pdf.setTextColor(30,30,30);
+        };
+
+        section('SUMMARY');
+        pdf.setFontSize(8); pdf.setFont('helvetica','normal');
+        const sumLines = pdf.splitTextToSize(d.summary, W - 30);
+        pdf.text(sumLines, 15, y); y += sumLines.length * 4 + 6;
+
+        section('WORK EXPERIENCE');
+        d.experience.forEach(e => {
+          pdf.setFontSize(9); pdf.setFont('helvetica','bold'); pdf.setTextColor(30,30,30);
+          pdf.text(e.position, 15, y);
+          pdf.setFontSize(7); pdf.setFont('helvetica','normal'); pdf.setTextColor(100,100,100);
+          pdf.text(e.date, W - 15, y, { align: 'right' }); y += 4;
+          pdf.text(`${e.company}`, 15, y); y += 7;
+        }); y += 2;
+
+        section('EDUCATION');
+        d.education.forEach(e => {
+          pdf.setFontSize(9); pdf.setFont('helvetica','bold'); pdf.setTextColor(30,30,30);
+          pdf.text(e.degree, 15, y); y += 4;
+          pdf.setFontSize(7); pdf.setFont('helvetica','normal'); pdf.setTextColor(100,100,100);
+          pdf.text(e.school, 15, y); y += 7;
+        }); y += 2;
+
+        section('SKILLS');
+        pdf.setFontSize(8); pdf.setFont('helvetica','normal'); pdf.setTextColor(30,30,30);
+        const skillsText = d.skills.join('  •  ');
+        const skillLines = pdf.splitTextToSize(skillsText, W - 30);
+        pdf.text(skillLines, 15, y);
+      }
 
       const fileName = `${cvData.personalInfo.fullName || 'CV'}_${new Date().toISOString().split('T')[0]}.pdf`;
       pdf.save(fileName);
@@ -2565,13 +2661,6 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
           </div>
         </div>
       )}
-
-      {/* Hidden full-size capture element for PDF download */}
-      <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', pointerEvents: 'none', zIndex: -1 }}>
-        <div id="cv-preview-for-pdf">
-          <TemplatePreviewWithData template={selectedTemplate} colorIndex={selectedColorIndex} data={cvPreviewData} />
-        </div>
-      </div>
 
       {/* Change Template (Placeholder modal) */}
       {changeTemplateOpen && (
