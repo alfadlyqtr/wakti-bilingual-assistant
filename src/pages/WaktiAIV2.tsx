@@ -145,8 +145,19 @@ const WaktiAIV2 = () => {
   }, [isLoading]);
 
   const handleRefreshConversations = useCallback(() => {
-    const archived = EnhancedFrontendMemory.loadArchivedConversations();
-    setArchivedConversations(Array.isArray(archived) ? archived : []);
+    SavedConversationsService.listConversations()
+      .then(list => setArchivedConversations(
+        (Array.isArray(list) ? list : []).map((c: any) => ({
+          id: c.id,
+          title: c.title,
+          lastMessageAt: new Date(c.last_message_at),
+          messageCount: c.message_count,
+          createdAt: new Date(c.last_message_at),
+          is_active: c.is_active,
+          conversation_id: c.conversation_id,
+        }))
+      ))
+      .catch(() => {});
   }, []);
 
   // When the active mode changes, clear loading state but DON'T abort
@@ -163,11 +174,46 @@ const WaktiAIV2 = () => {
   useEffect(() => {
     loadUserProfile();
     loadPersonalTouch();
-    const { messages, conversationId } = EnhancedFrontendMemory.loadActiveConversation();
-    setSessionMessages(Array.isArray(messages) ? messages : []);
-    setCurrentConversationId(conversationId);
-    setIsNewConversation(!conversationId || messages.length === 0);
-    handleRefreshConversations();
+    // Load active conversation from DB first, fallback to localStorage
+    SavedConversationsService.listConversations()
+      .then(async (list: any[]) => {
+        setArchivedConversations(
+          list.map((c: any) => ({
+            id: c.id,
+            title: c.title,
+            lastMessageAt: new Date(c.last_message_at),
+            messageCount: c.message_count,
+            createdAt: new Date(c.last_message_at),
+            is_active: c.is_active,
+            conversation_id: c.conversation_id,
+          }))
+        );
+        const active = list.find((c: any) => c.is_active);
+        if (active) {
+          const full = await SavedConversationsService.loadConversation(active.id);
+          if (full?.messages && Array.isArray(full.messages) && full.messages.length > 0) {
+            const msgs = full.messages.map((m: any) => ({ ...m, timestamp: m.timestamp ? new Date(m.timestamp) : new Date() }));
+            setSessionMessages(msgs);
+            setCurrentConversationId(active.conversation_id || active.id);
+            setIsNewConversation(false);
+            EnhancedFrontendMemory.saveActiveConversation(msgs, active.conversation_id || active.id);
+            return;
+          }
+        }
+        // Fallback to localStorage
+        const { messages, conversationId } = EnhancedFrontendMemory.loadActiveConversation();
+        setSessionMessages(Array.isArray(messages) ? messages : []);
+        setCurrentConversationId(conversationId);
+        setIsNewConversation(!conversationId || messages.length === 0);
+      })
+      .catch(() => {
+        // Full localStorage fallback
+        const { messages, conversationId } = EnhancedFrontendMemory.loadActiveConversation();
+        setSessionMessages(Array.isArray(messages) ? messages : []);
+        setCurrentConversationId(conversationId);
+        setIsNewConversation(!conversationId || messages.length === 0);
+        handleRefreshConversations();
+      });
   }, [handleRefreshConversations]);
 
   // Always portal to document.body to avoid iOS fixed-inside-scroller bugs
@@ -228,47 +274,52 @@ const WaktiAIV2 = () => {
     return () => window.removeEventListener('wakti-chat-input-resized', handler as EventListener);
   }, []);
 
-  const isCloudConversationId = (id?: string | null) => Boolean(id && !id.startsWith('frontend-conv-'));
-
-  const autoSaveCloudConversation = useCallback(async () => {
-    if (!currentConversationId || sessionMessages.length === 0) return;
-    if (!isCloudConversationId(currentConversationId)) return;
+  // Auto-save active conversation to DB (called after every message)
+  const autoSaveActiveConversation = useCallback(async (messages: any[], convId: string) => {
+    if (!convId || messages.length === 0) return;
     try {
-      await SavedConversationsService.saveCurrentConversation(sessionMessages, currentConversationId);
-    } catch (error) {
-      console.warn('Auto-save cloud conversation failed:', error);
-    }
-  }, [currentConversationId, sessionMessages]);
+      await SavedConversationsService.upsertActiveConversation(messages, convId);
+    } catch {}
+    // Also keep localStorage in sync as offline cache
+    EnhancedFrontendMemory.saveActiveConversation(messages, convId);
+  }, []);
 
   const handleSelectConversation = useCallback(async (id: string) => {
-    await autoSaveCloudConversation();
-    if (currentConversationId && sessionMessages.length > 0) {
-      EnhancedFrontendMemory.archiveCurrentConversation(sessionMessages, currentConversationId);
-    }
-    const conv = EnhancedFrontendMemory.loadArchivedConversation(id);
-    if (conv) {
-      setSessionMessages(conv.messages);
-      setCurrentConversationId(conv.conversationId);
-      EnhancedFrontendMemory.saveActiveConversation(conv.messages, conv.conversationId);
-      setIsNewConversation(false);
-    }
+    // Load from DB
+    try {
+      const full = await SavedConversationsService.loadConversation(id);
+      if (full?.messages && Array.isArray(full.messages)) {
+        const msgs = full.messages.map((m: any) => ({ ...m, timestamp: m.timestamp ? new Date(m.timestamp) : new Date() }));
+        const convId = (full as any).conversation_id || id;
+        // Deactivate old
+        if (currentConversationId) SavedConversationsService.deactivateConversation(currentConversationId).catch(() => {});
+        // Mark new as active
+        await SavedConversationsService.upsertActiveConversation(msgs, convId);
+        setSessionMessages(msgs);
+        setCurrentConversationId(convId);
+        EnhancedFrontendMemory.saveActiveConversation(msgs, convId);
+        setIsNewConversation(false);
+      }
+    } catch {}
     handleRefreshConversations();
     setShowConversations(false);
-  }, [autoSaveCloudConversation, currentConversationId, sessionMessages, handleRefreshConversations]);
+  }, [currentConversationId, handleRefreshConversations]);
 
   const handleClearChat = useCallback(async () => {
-    await autoSaveCloudConversation();
-    if (currentConversationId && sessionMessages.length > 0) {
-      EnhancedFrontendMemory.archiveCurrentConversation(sessionMessages, currentConversationId);
+    // Deactivate current in DB
+    if (currentConversationId) {
+      SavedConversationsService.deactivateConversation(currentConversationId).catch(() => {});
     }
-    const newId = EnhancedFrontendMemory.startNewConversation([], null);
+    const newId = `frontend-conv-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
     setSessionMessages([]);
     setCurrentConversationId(newId);
     setIsNewConversation(true);
+    EnhancedFrontendMemory.clearActiveConversation();
     handleRefreshConversations();
-  }, [autoSaveCloudConversation, currentConversationId, sessionMessages, handleRefreshConversations]);
+  }, [currentConversationId, handleRefreshConversations]);
 
-  const handleDeleteConversation = useCallback((id: string) => {
+  const handleDeleteConversation = useCallback(async (id: string) => {
+    await SavedConversationsService.deleteConversation(id).catch(() => {});
     EnhancedFrontendMemory.deleteArchivedConversation(id);
     if (id === currentConversationId) {
       handleClearChat();
@@ -520,7 +571,7 @@ const WaktiAIV2 = () => {
         streamingBubbleRef.current?.reset();
         setSessionMessages(prev => {
           const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
-          setTimeout(() => EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId), 0);
+          setTimeout(() => autoSaveActiveConversation(finalMessages, convId), 0);
           return finalMessages;
         });
         return; // Done (skip streaming path)
@@ -569,7 +620,7 @@ const WaktiAIV2 = () => {
 
           setSessionMessages(prev => {
             const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
-            setTimeout(() => EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId), 0);
+            setTimeout(() => autoSaveActiveConversation(finalMessages, convId), 0);
             return finalMessages;
           });
           return; // Done (skip streaming path)
@@ -695,7 +746,7 @@ const WaktiAIV2 = () => {
         streamingBubbleRef.current?.reset();
         setSessionMessages(prev => {
           const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
-          setTimeout(() => EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId), 0);
+          setTimeout(() => autoSaveActiveConversation(finalMessages, convId), 0);
           return finalMessages;
         });
       }
@@ -742,7 +793,7 @@ const WaktiAIV2 = () => {
             },
           };
         });
-        setTimeout(() => EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId), 0);
+        setTimeout(() => autoSaveActiveConversation(finalMessages, convId), 0);
         return finalMessages;
       });
     } finally {
@@ -832,10 +883,10 @@ const WaktiAIV2 = () => {
     };
     setSessionMessages(prev => {
       const updated = [...prev, newMessage];
-      setTimeout(() => EnhancedFrontendMemory.saveActiveConversation(updated, currentConversationId), 0);
+      if (currentConversationId) setTimeout(() => autoSaveActiveConversation(updated, currentConversationId), 0);
       return updated;
     });
-  }, [currentConversationId]);
+  }, [currentConversationId, autoSaveActiveConversation]);
 
   return (
     <div className="wakti-ai-page-container" style={{ position: 'relative' }}>

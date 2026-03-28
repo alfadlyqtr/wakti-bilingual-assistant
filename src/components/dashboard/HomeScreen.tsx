@@ -87,7 +87,9 @@ const MAX_DOCK_DESKTOP = 5;
 // ── Per-user localStorage key helpers ─────────────────────────────────────────
 // Keys are scoped to the logged-in user so different accounts on the same browser
 // never bleed their homescreen data into each other.
-const DEFAULT_BG = "/wakti-image-1773608945903.jpg"; // default homescreen wallpaper
+const DEFAULT_BG_DARK  = "/wakti-image-1773608945903.jpg"; // default dark mode wallpaper
+const DEFAULT_BG_LIGHT = "/wakti-image-1774727385038.jpg"; // default light mode wallpaper
+const DEFAULT_BG = DEFAULT_BG_DARK; // fallback constant (used outside component)
 const LS_ACTIVE_USER = "homescreen_active_uid"; // meta key tracking who is cached
 const lsKey = (uid: string, base: string) => `${base}__${uid}`;
 const LS_ORDER_BASE        = "homescreen_icon_order_v2";
@@ -1793,7 +1795,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     } catch { return sanitizeOrder(DEFAULT_ORDER); }
   });
   const [showQuote,       setShowQuote]       = useState<boolean>(() => localStorage.getItem(LS_QUOTE_KEY()) !== "false");
-  const [bgImage,         setBgImage]         = useState<string>(() => localStorage.getItem(LS_BG_KEY()) || DEFAULT_BG);
+  const [bgImage,         setBgImage]         = useState<string>(() => {
+    const saved = localStorage.getItem(LS_BG_KEY());
+    if (saved) return saved;
+    const savedTheme = localStorage.getItem('wakti-theme') || localStorage.getItem('theme') || 'dark';
+    return savedTheme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK;
+  });
   const [bgPositionY,     setBgPositionY]     = useState<number>(() => {
     const raw = localStorage.getItem(LS_BG_POS_Y_KEY());
     const parsed = raw ? parseInt(raw, 10) : 50;
@@ -1880,7 +1887,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     setDockIds(sanitizeDock(DEFAULT_DOCK));
     setIconOrder(sanitizeOrder(DEFAULT_ORDER));
     setShowQuote(true);
-    setBgImage(DEFAULT_BG);
+    setBgImage(theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK);
     setBgPositionY(50);
     setHeaderColor("");
     setHsBg({ mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false });
@@ -1891,6 +1898,17 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   useEffect(() => { setQuote(getQuoteForDisplay()); }, []);
   useEffect(() => { if (user?.id) localStorage.setItem(LS_ORDER_KEY(), JSON.stringify(iconOrder)); }, [iconOrder, user?.id]);
   useEffect(() => { if (user?.id) localStorage.setItem(LS_DOCK_KEY(),  JSON.stringify(dockIds));  }, [dockIds, user?.id]);
+
+  // Swap default BG when theme changes — only if no custom BG is set
+  useEffect(() => {
+    if (hsBgActive) return; // custom gradient is active, leave it alone
+    const saved = localStorage.getItem(LS_BG_KEY());
+    const isShowingDefault = !saved || saved === DEFAULT_BG_DARK || saved === DEFAULT_BG_LIGHT;
+    if (isShowingDefault) {
+      const next = theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK;
+      setBgImage(next);
+    }
+  }, [theme]);
 
   const syncToSupabase = useCallback(async (patch: Record<string, any>) => {
     if (!user) return;
@@ -1911,6 +1929,37 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     }
     return result;
   };
+
+  // ── Always load homescreenBg from Supabase — never skipped by local-cache guard ──
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
+        const s = (data?.settings as any);
+        if (s?.homescreenBg) {
+          const bg = s.homescreenBg;
+          const newBg = {
+            mode:   bg.mode   === 'gradient' ? 'gradient' : 'solid' as 'solid'|'gradient',
+            color1: bg.color1 || '',
+            color2: bg.color2 || '',
+            color3: bg.color3 || '',
+            angle:  typeof bg.angle === 'number' ? bg.angle : 180,
+            glow:   typeof bg.glow === 'boolean' ? bg.glow : false,
+          };
+          const newBgJson = JSON.stringify(newBg);
+          setHsBg(prev => JSON.stringify(prev) === newBgJson ? prev : newBg);
+          localStorage.setItem(LS_HSBG_KEY(), newBgJson);
+          setHsBgActive(true);
+          localStorage.setItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE), 'true');
+        } else if (s?.homescreen?.bgImage) {
+          const img = s.homescreen.bgImage;
+          setBgImage(prev => prev === img ? prev : img);
+          localStorage.setItem(LS_BG_KEY(), img);
+        }
+      } catch { /* silent */ }
+    })();
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user) return;
@@ -1966,22 +2015,6 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             setUnifiedGrid(prev => JSON.stringify(prev) === JSON.stringify(grid) ? prev : grid);
             localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(grid));
           }
-        }
-        if (s?.homescreenBg) {
-          const bg = s.homescreenBg;
-          const newBg = {
-            mode:   bg.mode   === 'gradient' ? 'gradient' : 'solid',
-            color1: bg.color1 || '',
-            color2: bg.color2 || '',
-            color3: bg.color3 || '',
-            angle:  typeof bg.angle === 'number' ? bg.angle : 180,
-            glow:   typeof bg.glow === 'boolean' ? bg.glow : false,
-          };
-          const newBgJson = JSON.stringify(newBg);
-          setHsBg(prev => JSON.stringify(prev) === newBgJson ? prev : newBg);
-          localStorage.setItem(LS_HSBG_KEY(), newBgJson);
-          setHsBgActive(true);
-          localStorage.setItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE), 'true');
         }
         const hs = s?.homescreen;
         if (!hs) return;
@@ -2180,17 +2213,39 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       setHsBgActive(false);
       localStorage.setItem(LS_BG_KEY(), url);
       localStorage.setItem(LS_BG_POS_Y_KEY(), '50');
+      localStorage.removeItem(LS_HSBG_KEY());
       localStorage.setItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE), 'false');
-      syncToSupabase({ bgImage: url, bgPositionY: 50 });
+      // Clear gradient BG from Supabase so it doesn't re-apply on reload
+      if (user) {
+        (async () => {
+          try {
+            const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
+            const cur = (data?.settings as any) || {};
+            await supabase.from("profiles").update({ settings: { ...cur, homescreenBg: null, homescreen: { ...(cur.homescreen || {}), bgImage: url, bgPositionY: 50 } } }).eq("id", user.id);
+          } catch { /* silent */ }
+        })();
+      }
     };
     reader.readAsDataURL(file);
   };
   const removeBg = () => {
-    setBgImage(DEFAULT_BG);
+    setBgImage(defaultBg);
     setBgPositionY(50);
+    setHsBgActive(false);
     localStorage.removeItem(LS_BG_KEY());
     localStorage.removeItem(LS_BG_POS_Y_KEY());
-    syncToSupabase({ bgImage: "", bgPositionY: 50 });
+    localStorage.removeItem(LS_HSBG_KEY());
+    localStorage.setItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE), 'false');
+    // Clear both bgImage and homescreenBg gradient from Supabase
+    if (user) {
+      (async () => {
+        try {
+          const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
+          const cur = (data?.settings as any) || {};
+          await supabase.from("profiles").update({ settings: { ...cur, homescreenBg: null, homescreen: { ...(cur.homescreen || {}), bgImage: '', bgPositionY: 50 } } }).eq("id", user.id);
+        } catch { /* silent */ }
+      })();
+    }
   };
   const saveBgPositionY = (value: number) => {
     const next = Math.max(0, Math.min(100, value));
@@ -2204,10 +2259,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     localStorage.setItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE), 'true');
     setHsBgActive(true);
     // Clear default BG image so custom style shows through
-    if (bgImage === DEFAULT_BG) {
+    if (bgImage === defaultBg || bgImage === DEFAULT_BG_DARK || bgImage === DEFAULT_BG_LIGHT) {
       setBgImage('');
       localStorage.removeItem(LS_BG_KEY());
     }
+    // Save to Supabase — homescreenBg lives at root level of settings so the
+    // always-running BG effect can pick it up on any device / fresh load
     if (user) {
       (async () => {
         try {
@@ -2221,12 +2278,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                 homescreenBg: patch,
                 homescreen: {
                   ...(cur.homescreen || {}),
-                  bgImage: bgImage === DEFAULT_BG ? '' : bgImage,
+                  bgImage: isDefaultBgImage ? '' : bgImage,
                 },
               },
             })
             .eq("id", user.id);
-        } catch {}
+        } catch { /* silent */ }
       })();
     }
     window.dispatchEvent(new Event('homescreenBgChanged'));
@@ -2476,8 +2533,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   // ── Theme-aware surface colors ──
   const isDark = theme === "dark";
-  const hasUserImage = !!bgImage && bgImage !== DEFAULT_BG;
-  const isDefaultBgImage = bgImage === DEFAULT_BG;
+  const defaultBg = isDark ? DEFAULT_BG_DARK : DEFAULT_BG_LIGHT;
+  const hasUserImage = !!bgImage && bgImage !== defaultBg;
+  const isDefaultBgImage = bgImage === defaultBg || bgImage === DEFAULT_BG_DARK || bgImage === DEFAULT_BG_LIGHT;
   const hasBg  = hasUserImage || (!!bgImage && !hsBgActive);
   const wallpaperTranslateY = `${(bgPositionY - 50) * 1.2}%`;
 
@@ -2684,7 +2742,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                     <span>{language === 'ar' ? 'خلفية' : 'BG'}</span>
                   </button>
                   {/* Remove BG */}
-                  {bgImage && bgImage !== DEFAULT_BG && (
+                  {bgImage && !isDefaultBgImage && (
                     <button onClick={removeBg}
                       style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#dc2626', border: '2px solid #ef4444', color: '#ffffff', fontSize: '12px', fontWeight: 600 }}>
                       <X style={{ width: '16px', height: '16px' }} />
@@ -2701,7 +2759,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                       setHsWidgets(DEFAULT_WIDGETS);
                       localStorage.setItem(LS_WIDGETS_KEY(), JSON.stringify(DEFAULT_WIDGETS));
                       // Reset BG image
-                      setBgImage(DEFAULT_BG);
+                      setBgImage(defaultBg);
                       setBgPositionY(50);
                       localStorage.removeItem(LS_BG_KEY());
                       localStorage.removeItem(LS_BG_POS_Y_KEY());
@@ -2714,15 +2772,38 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                       try { localStorage.removeItem(lsKey(uid,'hs_grad_left')); localStorage.removeItem(lsKey(uid,'hs_grad_right')); } catch {}
                       // Reset custom BG style active flag
                       setHsBgActive(false);
+                      setHsBg({ mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false });
                       try { localStorage.removeItem(lsKey(uid, LS_HSBG_ACTIVE_BASE)); } catch {}
+                      try { localStorage.removeItem(LS_HSBG_KEY()); } catch {}
                       // Reset dock color
                       setDockColor('');
                       try { localStorage.removeItem(lsKey(uid, LS_DOCK_COLOR_BASE)); } catch {}
                       // Reset unified grid
                       setUnifiedGrid([]);
                       localStorage.removeItem(LS_UNIFIED_KEY());
-                      // Sync
-                      syncToSupabase({ bgImage: '', bgPositionY: 50, headerColor: '', homescreenWidgets: DEFAULT_WIDGETS });
+                      // Sync — must set homescreenBg: null at root so the always-running BG effect
+                      // does NOT re-apply the old gradient on next navigation/load
+                      if (user) {
+                        (async () => {
+                          try {
+                            const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
+                            const cur = (data?.settings as any) || {};
+                            await supabase.from("profiles").update({
+                              settings: {
+                                ...cur,
+                                homescreenBg: null,
+                                homescreen: {
+                                  ...(cur.homescreen || {}),
+                                  bgImage: '',
+                                  bgPositionY: 50,
+                                  headerColor: '',
+                                  homescreenWidgets: DEFAULT_WIDGETS,
+                                },
+                              },
+                            }).eq("id", user.id);
+                          } catch { /* silent */ }
+                        })();
+                      }
                     }}
                     style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#334155', border: '2px solid #64748b', color: '#ffffff', fontSize: '12px', fontWeight: 600 }}>
                     <RotateCcw style={{ width: '16px', height: '16px' }} />

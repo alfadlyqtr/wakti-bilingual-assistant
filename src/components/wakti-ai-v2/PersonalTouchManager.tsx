@@ -72,59 +72,107 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
     engineTier: 'speed'
   });
 
-  // Load saved data on mount
-  useEffect(() => {
-    const saved = loadWaktiPersonalTouch();
-    if (saved) {
-      setFormData({
-        ...saved,
-        aiNickname: saved.aiNickname || '',
-        engineTier: saved.engineTier || 'speed'
-      });
-    }
-  }, []);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = () => {
-    saveWaktiPersonalTouch(formData);
-    
-    // Also persist in sessionStorage for immediate availability in this session
-    try {
-      sessionStorage.setItem(PERSONAL_TOUCH_KEY, JSON.stringify({ ...formData }));
-    } catch {}
-    
-    // Clear the cache so settings take effect without refresh
-    WaktiAIV2Service.clearPersonalTouchCache();
-    
-    // Notify the app to refresh Personal Touch immediately
-    try {
-      const latest = loadWaktiPersonalTouch() || formData;
-      window.dispatchEvent(new CustomEvent('wakti-personal-touch-updated', { detail: latest }));
-    } catch {}
-    
-    ;(async () => {
+  // Load from DB first (source of truth), fallback to localStorage
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const existingRaw = localStorage.getItem(PERSONAL_TOUCH_KEY);
-          let existing: any = null;
-          try { existing = existingRaw ? JSON.parse(existingRaw) : null; } catch {}
-          const nextVersion = typeof existing?.pt_version === 'number' ? existing.pt_version : 1;
-          const { error } = await supabase.from('user_personal_touch').upsert({
-            user_id: user.id,
-            nickname: formData.nickname || '',
-            ai_nickname: formData.aiNickname || '',
-            tone: formData.tone || 'neutral',
-            style: formData.style || 'short answers',
-            instruction: formData.instruction || '',
-            pt_version: nextVersion,
-            updated_at: new Date().toISOString()
-          });
-          if (error) console.error('❌ PT DB SAVE ERROR:', error.message, error.code);
+        if (user && !cancelled) {
+          const { data, error } = await supabase
+            .from('user_personal_touch')
+            .select('nickname, ai_nickname, tone, style, instruction, engine_tier, pt_version, updated_at')
+            .eq('user_id', user.id)
+            .maybeSingle();
+          if (!error && data && !cancelled) {
+            const dbData: PersonalTouchData = {
+              nickname: data.nickname || '',
+              aiNickname: data.ai_nickname || '',
+              tone: data.tone || 'neutral',
+              style: data.style || 'short answers',
+              instruction: data.instruction || '',
+              engineTier: (data.engine_tier as 'speed' | 'intelligence') || 'speed',
+              pt_version: data.pt_version,
+              pt_updated_at: data.updated_at
+            };
+            setFormData(dbData);
+            // Sync localStorage from DB
+            try { localStorage.setItem(PERSONAL_TOUCH_KEY, JSON.stringify(dbData)); } catch {}
+            return;
+          }
         }
-      } catch (e) { console.error('❌ PT SAVE EXCEPTION:', e); }
+      } catch {}
+      // Fallback to localStorage if DB load failed or no user yet
+      if (!cancelled) {
+        const saved = loadWaktiPersonalTouch();
+        if (saved) {
+          setFormData({
+            ...saved,
+            aiNickname: saved.aiNickname || '',
+            engineTier: saved.engineTier || 'speed'
+          });
+        }
+      }
     })();
-    
-    showSuccess(language === 'ar' ? 'تم حفظ الإعدادات!' : 'Settings saved!');
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        const { showError } = await import('@/hooks/use-toast-helper').then(m => ({ showError: m.useToastHelper }));
+        console.error('❌ PT SAVE: No authenticated user');
+        setIsSaving(false);
+        return;
+      }
+
+      const existingRaw = localStorage.getItem(PERSONAL_TOUCH_KEY);
+      let existing: any = null;
+      try { existing = existingRaw ? JSON.parse(existingRaw) : null; } catch {}
+      const nextVersion = typeof existing?.pt_version === 'number' ? existing.pt_version + 1 : 1;
+
+      const { error } = await supabase.from('user_personal_touch').upsert({
+        user_id: user.id,
+        nickname: formData.nickname || '',
+        ai_nickname: formData.aiNickname || '',
+        tone: formData.tone || 'neutral',
+        style: formData.style || 'short answers',
+        instruction: formData.instruction || '',
+        engine_tier: formData.engineTier || 'speed',
+        pt_version: nextVersion,
+        updated_at: new Date().toISOString()
+      });
+
+      if (error) {
+        console.error('❌ PT DB SAVE ERROR:', error.message, error.code);
+        const { toast } = await import('@/hooks/use-toast');
+        toast({ title: language === 'ar' ? 'فشل الحفظ' : 'Save failed', description: error.message, variant: 'destructive' });
+        setIsSaving(false);
+        return;
+      }
+
+      // DB save succeeded — sync localStorage
+      const payload: any = { ...formData, pt_version: nextVersion, pt_updated_at: new Date().toISOString() };
+      try { localStorage.setItem(PERSONAL_TOUCH_KEY, JSON.stringify(payload)); } catch {}
+      try { sessionStorage.setItem(PERSONAL_TOUCH_KEY, JSON.stringify(payload)); } catch {}
+
+      WaktiAIV2Service.clearPersonalTouchCache();
+      try {
+        window.dispatchEvent(new CustomEvent('wakti-personal-touch-updated', { detail: payload }));
+      } catch {}
+
+      showSuccess(language === 'ar' ? 'تم حفظ الإعدادات!' : 'Settings saved!');
+    } catch (e) {
+      console.error('❌ PT SAVE EXCEPTION:', e);
+      const { toast } = await import('@/hooks/use-toast');
+      toast({ title: language === 'ar' ? 'فشل الحفظ' : 'Save failed', description: String(e), variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const toneOptions = [
@@ -387,11 +435,12 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
         {/* Save Button */}
         <Button 
           onClick={handleSave}
-          className={compact ? "w-full bg-blue-500 hover:bg-blue-600 text-white h-8 text-[13px]" : "w-full bg-blue-500 hover:bg-blue-600 text-white"}
+          disabled={isSaving}
+          className={compact ? "w-full bg-blue-500 hover:bg-blue-600 text-white h-8 text-[13px] disabled:opacity-60" : "w-full bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-60"}
           size={compact ? 'sm' : 'sm'}
         >
           <Save className={compact ? "h-3.5 w-3.5 mr-2" : "h-4 w-4 mr-2"} />
-          {language === 'ar' ? 'حفظ' : 'Save'}
+          {isSaving ? (language === 'ar' ? 'جاري الحفظ...' : 'Saving...') : (language === 'ar' ? 'حفظ' : 'Save')}
         </Button>
       </CardContent>
     </Card>

@@ -986,7 +986,7 @@ async function streamGemini3WithSearch(
 
 function _promptPersonalSection(pt: Record<string, unknown>): string {
   const userNick = ((pt.nickname as string | undefined) || '').toString().trim();
-  const aiNick = ((pt.ai_nickname as string | undefined) || '').toString().trim();
+  const aiNick = ((pt.aiNickname as string | undefined) || (pt.ai_nickname as string | undefined) || '').toString().trim();
   const tone = ((pt.tone as string | undefined) || '').toString().trim();
   let style = ((pt.style as string | undefined) || '').toString().trim();
 
@@ -1204,7 +1204,7 @@ function buildSystemPrompt(
 ) {
   const pt = (personalTouch || {}) as Record<string, unknown>;
   const userNick = ((pt.nickname as string | undefined) || '').toString().trim();
-  const aiNick  = ((pt.ai_nickname as string | undefined) || '').toString().trim();
+  const aiNick  = ((pt.aiNickname as string | undefined) || (pt.ai_nickname as string | undefined) || '').toString().trim();
   const useSearch   = lazyOpts?.useSearch   ?? (activeTrigger === 'search');
   const _hasReminders = lazyOpts?.hasReminders ?? false;
 
@@ -2478,7 +2478,7 @@ serve(async (req) => {
             // Build search-specific system prompt with Personal Touch
             const pt = (personalTouch || {}) as Record<string, unknown>;
             const userNick = ((pt.nickname as string | undefined) || '').toString().trim();
-            const aiNick = ((pt.ai_nickname as string | undefined) || '').toString().trim();
+            const aiNick = ((pt.aiNickname as string | undefined) || (pt.ai_nickname as string | undefined) || '').toString().trim();
             const toneVal = ((pt.tone as string | undefined) || 'neutral').toString().trim();
             let styleVal = ((pt.style as string | undefined) || '').toString().trim();
             if (styleVal === 'short answers') styleVal = 'Strictly short, concise answers. No fluff or long paragraphs.';

@@ -226,7 +226,7 @@ class WaktiAIV2ServiceClass {
       if (!uid) return;
       const { data, error } = await supabase
         .from('user_personal_touch')
-        .select('nickname, ai_nickname, tone, style, instruction, pt_version, updated_at')
+        .select('nickname, ai_nickname, tone, style, instruction, engine_tier, pt_version, updated_at')
         .eq('user_id', uid)
         .maybeSingle();
       this.lastPTFetchAt = now;
@@ -238,6 +238,7 @@ class WaktiAIV2ServiceClass {
         tone: data.tone || 'neutral',
         style: data.style || 'short answers',
         instruction: data.instruction || '',
+        engineTier: (data as any).engine_tier || 'speed',
         pt_version: typeof data.pt_version === 'number' ? data.pt_version : 1,
         pt_updated_at: data.updated_at || new Date().toISOString()
       };

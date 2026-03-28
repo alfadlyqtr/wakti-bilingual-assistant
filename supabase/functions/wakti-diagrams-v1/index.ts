@@ -20,10 +20,10 @@ const KROKI_BASE_URL = "https://kroki.io";
 // This injects Noto Sans Arabic into the SVG so text renders correctly.
 // ─────────────────────────────────────────────────────────────────────────────
 function injectArabicFontIntoSvg(svgText: string): string {
+  // Use system Arabic fonts only — no external @import (blocked when SVG is loaded as <img>)
   const arabicFontStyle = `<style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;700&display=swap');
     text, tspan, .label, .nodeLabel, .edgeLabel, foreignObject div {
-      font-family: 'Noto Sans Arabic', 'Arial Unicode MS', Arial, sans-serif !important;
+      font-family: 'Segoe UI', 'Tahoma', 'Arial Unicode MS', Arial, sans-serif !important;
     }
   </style>`;
 

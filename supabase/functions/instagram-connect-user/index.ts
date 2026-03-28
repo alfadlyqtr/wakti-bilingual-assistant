@@ -14,8 +14,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const META_APP_ID = Deno.env.get("META_APP_ID")!;
-const META_APP_SECRET = Deno.env.get("META_APP_SECRET")!;
+const META_APP_ID = Deno.env.get("METAA_APP_ID") || Deno.env.get("META_APP_ID")!;
+const META_APP_SECRET = Deno.env.get("METAA_APP_SECRET") || Deno.env.get("META_APP_SECRET")!;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

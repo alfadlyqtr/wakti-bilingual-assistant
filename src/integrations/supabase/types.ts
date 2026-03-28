@@ -4366,6 +4366,7 @@ export type Database = {
       user_personal_touch: {
         Row: {
           ai_nickname: string
+          engine_tier: string
           instruction: string
           nickname: string
           pt_version: number
@@ -4376,6 +4377,7 @@ export type Database = {
         }
         Insert: {
           ai_nickname?: string
+          engine_tier?: string
           instruction?: string
           nickname?: string
           pt_version?: number
@@ -4386,6 +4388,7 @@ export type Database = {
         }
         Update: {
           ai_nickname?: string
+          engine_tier?: string
           instruction?: string
           nickname?: string
           pt_version?: number
