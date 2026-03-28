@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
@@ -105,6 +105,49 @@ const KROKI_STYLE_GROUPS: {
     ],
   },
 ];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inline SVG Renderer — fetches SVG text and renders it directly in the DOM
+// This avoids <img> tag restrictions that block <style> inside SVGs
+// ─────────────────────────────────────────────────────────────────────────────
+
+const InlineSvg: React.FC<{ url: string; className?: string }> = ({ url, className }) => {
+  const [svgContent, setSvgContent] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!url) return;
+    setSvgContent(null);
+    setFailed(false);
+    fetch(url)
+      .then(r => r.ok ? r.text() : Promise.reject(r.status))
+      .then(text => {
+        // Only accept actual SVG content
+        if (text.trim().startsWith('<')) {
+          setSvgContent(text);
+        } else {
+          setFailed(true);
+        }
+      })
+      .catch(() => setFailed(true));
+  }, [url]);
+
+  if (failed) return (
+    <img src={url} className={className} alt="diagram" />
+  );
+  if (!svgContent) return (
+    <div className="flex items-center justify-center w-full h-32">
+      <Loader2 className="w-6 h-6 animate-spin text-violet-500" />
+    </div>
+  );
+  return (
+    <div
+      className={className}
+      dangerouslySetInnerHTML={{ __html: svgContent }}
+      style={{ lineHeight: 0 }}
+    />
+  );
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
@@ -622,9 +665,8 @@ const DiagramsTab: React.FC = () => {
               >
                 {/* Diagram Preview */}
                 <div className="p-6 bg-gradient-to-br from-white to-violet-50 dark:from-gray-900 dark:to-violet-950/20 flex items-center justify-center min-h-[250px]">
-                  <img
-                    src={diagram.imageUrl}
-                    alt={diagram.title}
+                  <InlineSvg
+                    url={diagram.imageUrl}
                     className="max-w-full max-h-[450px] object-contain drop-shadow-lg"
                   />
                 </div>
