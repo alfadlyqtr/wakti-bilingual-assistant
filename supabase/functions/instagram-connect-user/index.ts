@@ -199,14 +199,14 @@ Deno.serve(async (req: Request) => {
       // generate_caption
       if (action === "generate_caption") {
         const { media_url, user_hint = "", language = "en" } = body;
-        const hintLine = user_hint.trim()
-          ? (language === "ar"
-              ? `ملاحظة من المستخدم عن الصورة: "${user_hint.trim()}"\n`
-              : `User's note about this image: "${user_hint.trim()}"\n`)
-          : "";
+        const trimmedHint = user_hint.trim();
         const textPrompt = language === "ar"
-          ? `${hintLine}انظر إلى هذه الصورة واكتب مباشرةً تعليقاً جذاباً لمنشور Instagram. لا تشرح ولا تتحدث معي، فقط اكتب التعليق مباشرة. أضف إيموجي مناسبة وهاشتاقات ذات صلة في النهاية. لا تتجاوز 80 كلمة.`
-          : `${hintLine}Look at this image and write an Instagram caption. Output only the caption text — no explanations, no talking to me. Include relevant emojis and 5-10 hashtags at the end. Keep it under 80 words.`;
+          ? trimmedHint
+            ? `النص الذي كتبه المستخدم هو الأساس والأولوية. مهمتك هي تحسين صياغته فقط لمنشور Instagram مع الحفاظ الكامل على نفس المعنى والرسالة والموقف. لا تغيّر الفكرة، لا تستبدلها بفكرة ألطف أو مختلفة، ولا تخترع رسالة جديدة من الصورة. استخدم الصورة فقط كدعم بسيط للتعبير أو التفاصيل إن كانت متوافقة مع نص المستخدم. أعد كتابة النص بشكل أنظف وأكثر قوة وطبيعية، ويمكنك إضافة إيموجي مناسبة و3 إلى 6 هاشتاقات في النهاية. أخرج التعليق النهائي فقط دون شرح.\n\nنص المستخدم:\n"${trimmedHint}"`
+            : `انظر إلى هذه الصورة واكتب تعليق Instagram مباشر وجذاب. أخرج التعليق النهائي فقط دون شرح. أضف إيموجي مناسبة و3 إلى 6 هاشتاقات في النهاية. لا تتجاوز 80 كلمة.`
+          : trimmedHint
+            ? `The user's typed text is the primary source of truth. Your job is to enhance and polish that text for an Instagram caption while fully preserving the same meaning, message, stance, and intent. Do not replace the user's idea with a different theme. Do not soften, generalize, or reinterpret the core message. Use the image only as secondary supporting context if it matches what the user wrote. Rewrite the user's wording to sound cleaner, stronger, and more natural. You may add fitting emojis and 3-6 relevant hashtags at the end. Output only the final caption text.\n\nUser text:\n"${trimmedHint}"`
+            : `Look at this image and write an Instagram caption. Output only the final caption text. Include relevant emojis and 3-6 hashtags at the end. Keep it under 80 words.`;
 
         const messages: unknown[] = media_url
           ? [{ role: "user", content: [{ type: "image_url", image_url: { url: media_url } }, { type: "text", text: textPrompt }] }]

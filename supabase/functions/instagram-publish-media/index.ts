@@ -86,7 +86,10 @@ async function createMediaContainer(params: {
   console.log("[instagram-publish-media] Container response:", JSON.stringify(data));
 
   if (data.error || !data.id) {
-    const errMsg = (data.error as Record<string, unknown>)?.message as string || "Failed to create media container";
+    const igErr = data.error as Record<string, unknown> | undefined;
+    const errMsg = igErr
+      ? `IG Error ${igErr.code}: ${igErr.message} (type: ${igErr.type}, subcode: ${igErr.error_subcode})`
+      : "Failed to create media container";
     throw new Error(errMsg);
   }
 
