@@ -198,10 +198,15 @@ Deno.serve(async (req: Request) => {
 
       // generate_caption
       if (action === "generate_caption") {
-        const { media_url, language = "en" } = body;
+        const { media_url, user_hint = "", language = "en" } = body;
+        const hintLine = user_hint.trim()
+          ? (language === "ar"
+              ? `ملاحظة من المستخدم عن الصورة: "${user_hint.trim()}"\n`
+              : `User's note about this image: "${user_hint.trim()}"\n`)
+          : "";
         const textPrompt = language === "ar"
-          ? `انظر إلى هذه الصورة واكتب مباشرةً تعليقاً جذاباً لمنشور Instagram يصف ما تراه. لا تشرح ولا تتحدث معي، فقط اكتب التعليق مباشرة. أضف إيموجي مناسبة وهاشتاقات ذات صلة في النهاية. لا تتجاوز 80 كلمة.`
-          : `Look at this image and write an Instagram caption describing what you see. Output only the caption text — no explanations, no talking to me. Include relevant emojis and 5-10 hashtags at the end. Keep it under 80 words.`;
+          ? `${hintLine}انظر إلى هذه الصورة واكتب مباشرةً تعليقاً جذاباً لمنشور Instagram. لا تشرح ولا تتحدث معي، فقط اكتب التعليق مباشرة. أضف إيموجي مناسبة وهاشتاقات ذات صلة في النهاية. لا تتجاوز 80 كلمة.`
+          : `${hintLine}Look at this image and write an Instagram caption. Output only the caption text — no explanations, no talking to me. Include relevant emojis and 5-10 hashtags at the end. Keep it under 80 words.`;
 
         const messages: unknown[] = media_url
           ? [{ role: "user", content: [{ type: "image_url", image_url: { url: media_url } }, { type: "text", text: textPrompt }] }]

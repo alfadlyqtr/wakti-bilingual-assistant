@@ -159,7 +159,7 @@ export default function InstagramPublishButton({
     setGeneratingCaption(true);
     try {
       const { data, error } = await supabase.functions.invoke('instagram-connect-user', {
-        body: { action: 'generate_caption', media_url: mediaUrl, media_type: mediaType, language: ar ? 'ar' : 'en' },
+        body: { action: 'generate_caption', media_url: mediaUrl, media_type: mediaType, user_hint: caption, language: ar ? 'ar' : 'en' },
       });
       if (error || !data?.caption) throw new Error(data?.error || 'No caption generated');
       setCaption(data.caption);
