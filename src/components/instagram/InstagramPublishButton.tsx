@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Instagram, Loader2, Check, X, ExternalLink, Sparkles } from 'lucide-react';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -79,6 +80,7 @@ export default function InstagramPublishButton({
   const [generatingCaption, setGeneratingCaption] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<'feed' | 'reel'>(publishTarget as 'feed' | 'reel');
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(null);
   const [polling, setPolling] = useState(false);
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
 
@@ -290,10 +292,14 @@ export default function InstagramPublishButton({
     <div className="relative">
       {/* Main Instagram button */}
       <button
-        onClick={() => {
+        onClick={(e) => {
           if (!igAccount) {
             handleConnect();
           } else {
+            if (!showPanel) {
+              const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+              setPanelPos({ top: rect.bottom + window.scrollY + 6, left: rect.left + window.scrollX });
+            }
             setShowPanel((p) => !p);
           }
         }}
@@ -314,11 +320,11 @@ export default function InstagramPublishButton({
           : (ar ? 'ربط Instagram' : 'Connect Instagram')}
       </button>
 
-      {/* Publish panel */}
-      {showPanel && igAccount && (
+      {/* Publish panel — rendered via portal so overflow:hidden on parent cards doesn't clip it */}
+      {showPanel && igAccount && panelPos && createPortal(
         <div
-          className="absolute top-full mt-2 left-0 z-50 w-72 rounded-2xl border border-border/60 bg-background/95 backdrop-blur-md shadow-2xl shadow-black/40 p-4 space-y-3"
-          style={{ direction: ar ? 'rtl' : 'ltr' }}
+          className="fixed z-[9999] w-72 rounded-2xl border border-border/60 bg-background/95 backdrop-blur-md shadow-2xl shadow-black/40 p-4 space-y-3"
+          style={{ top: panelPos.top, left: panelPos.left, direction: ar ? 'rtl' : 'ltr' }}
         >
           {/* Account info */}
           <div className="flex items-center justify-between gap-2">
@@ -429,7 +435,8 @@ export default function InstagramPublishButton({
               </>
             )}
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
