@@ -40,7 +40,7 @@ async function fetchSharedConnectionStatus(): Promise<IGAccount | null> {
       } = await supabase.auth.getSession();
 
       if (!session?.access_token) {
-        sharedConnectionCache = { account: null, expiresAt: Date.now() + 10_000 };
+        sharedConnectionCache = { account: null, expiresAt: Date.now() + 5 * 60_000 };
         return null;
       }
 
@@ -53,7 +53,7 @@ async function fetchSharedConnectionStatus(): Promise<IGAccount | null> {
 
       const data = await response.json();
       const account = response.ok && data?.connected ? (data.account as IGAccount) : null;
-      sharedConnectionCache = { account, expiresAt: Date.now() + 10_000 };
+      sharedConnectionCache = { account, expiresAt: Date.now() + 5 * 60_000 };
       return account;
     })().finally(() => {
       sharedConnectionPromise = null;
@@ -96,6 +96,12 @@ export default function InstagramPublishButton({
 
   useEffect(() => {
     checkConnection();
+    const onChanged = (e: Event) => {
+      const account = (e as CustomEvent).detail as IGAccount | null;
+      setIgAccount(account);
+    };
+    window.addEventListener('ig-account-changed', onChanged);
+    return () => window.removeEventListener('ig-account-changed', onChanged);
   }, [checkConnection]);
 
   // Handle OAuth callback code coming back from Meta — only ONE instance should exchange it
@@ -134,8 +140,9 @@ export default function InstagramPublishButton({
         if (error || !data?.success) {
           throw new Error(data?.error || errorDetail || 'Connection failed');
         }
-        sharedConnectionCache = { account: data.account, expiresAt: Date.now() + 10_000 };
+        sharedConnectionCache = { account: data.account, expiresAt: Date.now() + 5 * 60_000 };
         setIgAccount(data.account);
+        window.dispatchEvent(new CustomEvent('ig-account-changed', { detail: data.account }));
         toast.success(ar ? 'تم ربط حساب Instagram!' : 'Instagram connected!');
         setShowPanel(true);
       } catch (err: unknown) {
@@ -181,8 +188,9 @@ export default function InstagramPublishButton({
     await supabase.functions.invoke('instagram-connect-user', {
       body: { action: 'disconnect' },
     });
-    sharedConnectionCache = { account: null, expiresAt: Date.now() + 10_000 };
+    sharedConnectionCache = { account: null, expiresAt: Date.now() + 5 * 60_000 };
     setIgAccount(null);
+    window.dispatchEvent(new CustomEvent('ig-account-changed', { detail: null }));
     setShowPanel(false);
     toast.success(ar ? 'تم قطع الاتصال بـ Instagram' : 'Instagram disconnected');
   };
