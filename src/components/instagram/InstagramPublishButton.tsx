@@ -317,7 +317,7 @@ export default function InstagramPublishButton({
       {/* Publish panel */}
       {showPanel && igAccount && (
         <div
-          className="absolute bottom-full mb-2 right-0 z-50 w-72 rounded-2xl border border-border/60 bg-background/95 backdrop-blur-md shadow-2xl shadow-black/40 p-4 space-y-3"
+          className="absolute top-full mt-2 left-0 z-50 w-72 rounded-2xl border border-border/60 bg-background/95 backdrop-blur-md shadow-2xl shadow-black/40 p-4 space-y-3"
           style={{ direction: ar ? 'rtl' : 'ltr' }}
         >
           {/* Account info */}
