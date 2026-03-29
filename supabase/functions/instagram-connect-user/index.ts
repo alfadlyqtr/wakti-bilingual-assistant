@@ -198,7 +198,7 @@ Deno.serve(async (req: Request) => {
 
       // generate_caption
       if (action === "generate_caption") {
-        const { media_url, user_hint = "", language = "en" } = body;
+        const { media_url, media_type = "image", user_hint = "", language = "en" } = body;
         const trimmedHint = user_hint.trim();
         const textPrompt = language === "ar"
           ? trimmedHint
@@ -208,7 +208,7 @@ Deno.serve(async (req: Request) => {
             ? `The user's typed text is the primary source of truth. Your job is to enhance and polish that text for an Instagram caption while fully preserving the same meaning, message, stance, and intent. Do not replace the user's idea with a different theme. Do not soften, generalize, or reinterpret the core message. Use the image only as secondary supporting context if it matches what the user wrote. Rewrite the user's wording to sound cleaner, stronger, and more natural. You may add fitting emojis and 3-6 relevant hashtags at the end. Output only the final caption text.\n\nUser text:\n"${trimmedHint}"`
             : `Look at this image and write an Instagram caption. Output only the final caption text. Include relevant emojis and 3-6 hashtags at the end. Keep it under 80 words.`;
 
-        const messages: unknown[] = media_url
+        const messages: unknown[] = media_url && media_type === "image"
           ? [{ role: "user", content: [{ type: "image_url", image_url: { url: media_url } }, { type: "text", text: textPrompt }] }]
           : [{ role: "user", content: textPrompt }];
 
