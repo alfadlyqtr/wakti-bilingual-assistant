@@ -48,8 +48,8 @@ async function exchangeCodeForShortToken(code: string, redirectUri: string): Pro
     code,
     grant_type: "authorization_code",
   });
-  // New Instagram Business Login (2024+) uses graph.facebook.com for short-lived token
-  const res = await fetch("https://graph.facebook.com/oauth/access_token", {
+  // Instagram Login: short-lived token exchange
+  const res = await fetch("https://api.instagram.com/oauth/access_token", {
     method: "POST",
     body: params,
   });
@@ -62,45 +62,29 @@ async function exchangeCodeForShortToken(code: string, redirectUri: string): Pro
 }
 
 async function exchangeForLongLivedToken(shortToken: string): Promise<{ access_token: string; expires_in: number }> {
-  // Facebook Login for Business: exchange FB user token for long-lived FB token
   const params = new URLSearchParams({
-    grant_type: "fb_exchange_token",
-    client_id: META_APP_ID,
+    grant_type: "ig_exchange_token",
     client_secret: META_APP_SECRET,
-    fb_exchange_token: shortToken,
+    access_token: shortToken,
   });
-  const res = await fetch(`https://graph.facebook.com/oauth/access_token?${params}`);
+  const res = await fetch(`https://graph.instagram.com/access_token?${params}`);
   const data = await res.json();
   console.log("[instagram-connect-user] Long token response:", JSON.stringify(data));
   if (data.error) throw new Error(data.error.message || "Long-lived token exchange failed");
   return { access_token: data.access_token, expires_in: data.expires_in || 5183944 };
 }
 
-async function fetchIGUserInfo(fbAccessToken: string) {
-  // Facebook Login for Business: get FB pages then their linked Instagram business accounts
-  const pagesRes = await fetch(
-    `https://graph.facebook.com/v21.0/me/accounts?fields=instagram_business_account{id,name,username,profile_picture_url,followers_count}&access_token=${fbAccessToken}`
+async function fetchIGUserInfo(accessToken: string) {
+  const res = await fetch(
+    `https://graph.instagram.com/v21.0/me?fields=id,name,username,profile_picture_url,followers_count,account_type&access_token=${accessToken}`
   );
-  const pagesData = await pagesRes.json();
-  console.log("[instagram-connect-user] FB pages response:", JSON.stringify(pagesData));
-  if (pagesData.error) {
-    console.error("[instagram-connect-user] FB pages error:", JSON.stringify(pagesData.error));
+  const data = await res.json();
+  console.log("[instagram-connect-user] IG user info:", JSON.stringify(data));
+  if (data.error) {
+    console.error("[instagram-connect-user] IG user info error:", JSON.stringify(data.error));
     return null;
   }
-  // Find first page with a linked Instagram business account
-  const pages = pagesData.data || [];
-  for (const page of pages) {
-    if (page.instagram_business_account) {
-      const ig = page.instagram_business_account;
-      return { id: ig.id, name: ig.name, username: ig.username, profile_picture_url: ig.profile_picture_url, followers_count: ig.followers_count };
-    }
-  }
-  // Fallback: try /me directly for Instagram-linked FB user
-  const meRes = await fetch(`https://graph.facebook.com/v21.0/me?fields=id,name&access_token=${fbAccessToken}`);
-  const meData = await meRes.json();
-  console.log("[instagram-connect-user] FB me response:", JSON.stringify(meData));
-  if (meData.error || !meData.id) return null;
-  return { id: meData.id, name: meData.name, username: null, profile_picture_url: null, followers_count: 0 };
+  return data;
 }
 
 Deno.serve(async (req: Request) => {
