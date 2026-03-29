@@ -119,9 +119,19 @@ export default function InstagramPublishButton({
         const { data, error } = await supabase.functions.invoke('instagram-connect-user', {
           body: { action: 'exchange_code', code: igCode, redirect_uri: REDIRECT_URI },
         });
-        console.error('[IG connect] invoke error:', error, 'data:', JSON.stringify(data));
+        // Extract actual error detail from FunctionsHttpError
+        let errorDetail = error?.message || '';
+        if (error && 'context' in error) {
+          try {
+            const ctx = error.context as Response;
+            const txt = await ctx.text();
+            console.error('[IG connect] error body:', txt);
+            errorDetail = txt;
+          } catch { /* ignore */ }
+        }
+        console.error('[IG connect] invoke error:', error, 'detail:', errorDetail, 'data:', JSON.stringify(data));
         if (error || !data?.success) {
-          throw new Error(data?.error || error?.message || 'Connection failed');
+          throw new Error(data?.error || errorDetail || 'Connection failed');
         }
         sharedConnectionCache = { account: data.account, expiresAt: Date.now() + 10_000 };
         setIgAccount(data.account);
