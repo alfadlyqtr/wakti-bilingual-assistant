@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -261,6 +262,16 @@ export default function MyAIVideosTab({ onCreate }: MyAIVideosTabProps) {
                 <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                   <Calendar className="h-3 w-3" />
                   <span>{formatDate(video.created_at)}</span>
+                </div>
+
+                {/* Instagram */}
+                <div className="pt-2" onClick={(e) => e.stopPropagation()}>
+                  <InstagramPublishButton
+                    mediaUrl={video.video_url}
+                    mediaType="reel"
+                    publishTarget="reel"
+                    language={language as 'en' | 'ar'}
+                  />
                 </div>
 
                 {/* Actions */}
