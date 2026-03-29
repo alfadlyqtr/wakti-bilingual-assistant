@@ -298,7 +298,13 @@ export default function InstagramPublishButton({
           } else {
             if (!showPanel) {
               const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
-              setPanelPos({ top: rect.bottom + window.scrollY + 6, left: rect.left + window.scrollX });
+              const panelHeight = 420;
+              const spaceBelow = window.innerHeight - rect.bottom;
+              const top = spaceBelow >= panelHeight
+                ? rect.bottom + window.scrollY + 6
+                : rect.top + window.scrollY - panelHeight - 6;
+              const left = Math.min(rect.left + window.scrollX, window.innerWidth - 290);
+              setPanelPos({ top, left });
             }
             setShowPanel((p) => !p);
           }
