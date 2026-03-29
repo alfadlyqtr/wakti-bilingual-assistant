@@ -346,7 +346,7 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
                   <InstagramPublishButton
                     mediaUrl={img.image_url}
                     mediaType="image"
-                    defaultCaption={img.prompt || ''}
+                    defaultCaption={''}
                     language={language as 'en' | 'ar'}
                   />
                 </div>

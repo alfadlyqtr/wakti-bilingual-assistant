@@ -364,7 +364,7 @@ export default function InstagramPublishButton({
                 ) : (
                   <Sparkles className="h-3 w-3" />
                 )}
-                {ar ? 'توليد AI' : 'AI Generate'}
+                {ar ? 'تعليق AI' : 'AI Caption'}
               </button>
             </div>
             <textarea

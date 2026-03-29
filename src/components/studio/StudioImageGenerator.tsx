@@ -696,7 +696,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         <InstagramPublishButton
           mediaUrl={savedBucketUrl || resultImageUrl}
           mediaType="image"
-          defaultCaption={prompt || ''}
+          defaultCaption={''}
           language={language as 'en' | 'ar'}
         />
       )}
