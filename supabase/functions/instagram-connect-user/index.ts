@@ -89,6 +89,7 @@ async function fetchIGUserInfo(accessToken: string) {
 }
 
 Deno.serve(async (req: Request) => {
+  try {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const userId = await verifyUser(req);
@@ -198,4 +199,9 @@ Deno.serve(async (req: Request) => {
   }
 
   return jsonResponse({ error: "Method not allowed" }, 405);
+  } catch (topErr: unknown) {
+    const msg = topErr instanceof Error ? topErr.message : String(topErr);
+    console.error("[instagram-connect-user] Unhandled top-level error:", msg);
+    return jsonResponse({ error: "Internal error", detail: msg }, 500);
+  }
 });
