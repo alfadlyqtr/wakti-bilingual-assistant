@@ -119,8 +119,9 @@ export default function InstagramPublishButton({
         const { data, error } = await supabase.functions.invoke('instagram-connect-user', {
           body: { action: 'exchange_code', code: igCode, redirect_uri: REDIRECT_URI },
         });
+        console.error('[IG connect] invoke error:', error, 'data:', JSON.stringify(data));
         if (error || !data?.success) {
-          throw new Error(data?.error || 'Connection failed');
+          throw new Error(data?.error || error?.message || 'Connection failed');
         }
         sharedConnectionCache = { account: data.account, expiresAt: Date.now() + 10_000 };
         setIgAccount(data.account);
