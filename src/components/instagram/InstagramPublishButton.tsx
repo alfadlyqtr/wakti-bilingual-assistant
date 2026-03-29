@@ -98,7 +98,7 @@ export default function InstagramPublishButton({
   // Handle OAuth callback code coming back from Meta
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const igCode = params.get('ig_publish_code');
+    const igCode = params.get('ig_publish_code') || localStorage.getItem('ig_publish_code');
     if (!igCode) return;
 
     // Clean URL
@@ -113,11 +113,22 @@ export default function InstagramPublishButton({
         if (error || !data?.success) {
           throw new Error(data?.error || 'Connection failed');
         }
+        try {
+          localStorage.removeItem('ig_publish_code');
+          localStorage.removeItem('ig_publish_return_to');
+        } catch {
+          // ignore
+        }
         sharedConnectionCache = { account: data.account, expiresAt: Date.now() + 10_000 };
         setIgAccount(data.account);
         toast.success(ar ? 'تم ربط حساب Instagram!' : 'Instagram connected!');
         setShowPanel(true);
       } catch (err: unknown) {
+        try {
+          localStorage.removeItem('ig_publish_code');
+        } catch {
+          // ignore
+        }
         const msg = err instanceof Error ? err.message : String(err);
         toast.error(ar ? `فشل الربط: ${msg}` : `Connection failed: ${msg}`);
       }

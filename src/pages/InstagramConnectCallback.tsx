@@ -30,6 +30,12 @@ export default function InstagramConnectCallback() {
       }
     }
 
+    try {
+      localStorage.setItem('ig_publish_return_to', returnTo);
+    } catch {
+      // ignore
+    }
+
     if (error) {
       // User denied — redirect back without code
       navigate(returnTo, { replace: true });
@@ -37,6 +43,12 @@ export default function InstagramConnectCallback() {
     }
 
     if (code) {
+      // Persist code first so it survives auth redirects/app reloads
+      try {
+        localStorage.setItem('ig_publish_code', code);
+      } catch {
+        // ignore
+      }
       // Pass code back via URL param so InstagramPublishButton can pick it up
       navigate(`${returnTo}?ig_publish_code=${encodeURIComponent(code)}`, { replace: true });
     } else {
