@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -656,6 +657,15 @@ function VideoThumbnail({ fallbackDuration }: {
                         {v.is_public ? (language === 'ar' ? 'عام' : 'Public') : (language === 'ar' ? 'خاص' : 'Private')}
                       </span>
                     </div>
+                  </div>
+
+                  <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                    <InstagramPublishButton
+                      mediaUrl={v.signedUrl || v.video_url || ''}
+                      mediaType="reel"
+                      publishTarget="reel"
+                      language={language as 'en' | 'ar'}
+                    />
                   </div>
 
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
