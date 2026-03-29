@@ -64,8 +64,12 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
   // Second reference image for I2I (optional)
   const [uploadedFile2, setUploadedFile2] = useState<UploadedFile | null>(null);
-  const [showSecondImage, setShowSecondImage] = useState(false);
   const fileInputRef2 = useRef<HTMLInputElement>(null);
+  const [uploadedFile3, setUploadedFile3] = useState<UploadedFile | null>(null);
+  const [uploadedFile4, setUploadedFile4] = useState<UploadedFile | null>(null);
+  const fileInputRef3 = useRef<HTMLInputElement>(null);
+  const fileInputRef4 = useRef<HTMLInputElement>(null);
+  const [showExtraReferenceImages, setShowExtraReferenceImages] = useState(false);
 
   // Draw canvas ref
   const drawCanvasRef = useRef<DrawAfterBGCanvasRef>(null);
@@ -223,6 +227,60 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     e.target.value = '';
   };
 
+  const handleFileChange3 = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    if (!file.type.startsWith('image/') && !file.name.toLowerCase().match(/\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff)$/)) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(language === 'ar' ? 'الحد الأقصى 5 ميجابايت' : 'Max 5MB');
+      return;
+    }
+    try {
+      const base64DataUrl = await normalizeImageOrientation(file);
+      setUploadedFile3({
+        id: `${Date.now()}-3`,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        url: base64DataUrl,
+        preview: base64DataUrl,
+        base64: base64DataUrl,
+        imageType: { id: 'general', name: 'General' },
+      });
+    } catch (err) {
+      console.error('Third image upload failed:', err);
+    }
+    e.target.value = '';
+  };
+
+  const handleFileChange4 = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    if (!file.type.startsWith('image/') && !file.name.toLowerCase().match(/\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff)$/)) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(language === 'ar' ? 'الحد الأقصى 5 ميجابايت' : 'Max 5MB');
+      return;
+    }
+    try {
+      const base64DataUrl = await normalizeImageOrientation(file);
+      setUploadedFile4({
+        id: `${Date.now()}-4`,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        url: base64DataUrl,
+        preview: base64DataUrl,
+        base64: base64DataUrl,
+        imageType: { id: 'general', name: 'General' },
+      });
+    } catch (err) {
+      console.error('Fourth image upload failed:', err);
+    }
+    e.target.value = '';
+  };
+
   const handleFileChange2 = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -289,8 +347,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         body: JSON.stringify({ taskId, ...extraBody }),
       });
       const pollJson = await pollResp.json().catch(() => ({} as any));
-      if (pollJson?.status === 'done' && pollJson?.urls?.length) {
+      if (Array.isArray(pollJson?.urls) && pollJson.urls.length > 0) {
         return pollJson.urls as string[];
+      }
+      if (!pollResp.ok || pollJson?.status === 'error') {
+        throw new Error(pollJson?.error || 'KIE poll failed');
       }
       if (pollJson?.status === 'failed') {
         throw new Error(pollJson?.error || 'KIE task failed');
@@ -331,12 +392,15 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error('Authentication required');
     const token = session.access_token;
-    const rawB64 = uploadedFile.base64 || uploadedFile.url || uploadedFile.preview || '';
+    const imageBase64s = [uploadedFile, uploadedFile2, uploadedFile3, uploadedFile4]
+      .filter(Boolean)
+      .map((file) => file!.base64 || file!.url || file!.preview || '')
+      .filter(Boolean);
     // Step 1: submit (uploads reference image + creates KIE task)
     const submitResp = await fetch(`${SUPABASE_URL}/functions/v1/wakti-grok-image2image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ user_prompt: prompt, image_base64: rawB64, user_id: user?.id }),
+      body: JSON.stringify({ user_prompt: prompt, image_base64s: imageBase64s, user_id: user?.id }),
     });
     const submitJson = await submitResp.json().catch(() => ({} as any));
     if (submitJson?.error === 'TRIAL_LIMIT_REACHED') {
@@ -377,12 +441,14 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     if (!uploadedFile) throw new Error(language === 'ar' ? 'الرجاء إرفاق صورة' : 'Please attach an image');
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error('Authentication required');
-    const rawB64 = uploadedFile.base64 || uploadedFile.url || uploadedFile.preview || '';
-    const rawB64_2 = uploadedFile2 ? (uploadedFile2.base64 || uploadedFile2.url || uploadedFile2.preview || '') : undefined;
+    const imageBase64s = [uploadedFile, uploadedFile2, uploadedFile3, uploadedFile4]
+      .filter(Boolean)
+      .map((file) => file!.base64 || file!.url || file!.preview || '')
+      .filter(Boolean);
     const resp = await fetch(`${SUPABASE_URL}/functions/v1/wakti-image2image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-      body: JSON.stringify({ user_prompt: prompt, image_base64: rawB64, image_base64_2: rawB64_2, user_id: user?.id, quality }),
+      body: JSON.stringify({ user_prompt: prompt, image_base64s: imageBase64s, user_id: user?.id, quality }),
     });
     const json = await resp.json().catch(() => ({} as any));
     if (!resp.ok || !json?.success || !json?.url) {
@@ -432,6 +498,31 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     return outUrl as string;
   };
 
+  const importExternalImageToStorage = useCallback(async (imageUrl: string): Promise<{ url: string; storagePath: string }> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Authentication required');
+
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/save-generated-image`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        imageUrl,
+        submode,
+        filenameHint: `${submode}-${quality}`,
+      }),
+    });
+
+    const json = await resp.json().catch(() => ({} as any));
+    if (!resp.ok || !json?.success || !json?.url || !json?.storagePath) {
+      throw new Error(json?.error || 'Server-side image save failed');
+    }
+
+    return { url: sanitizeImageUrl(json.url as string), storagePath: json.storagePath as string };
+  }, [quality, submode]);
+
   const persistGeneratedImage = useCallback(async (
     imageUrl: string,
     options?: {
@@ -464,22 +555,30 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       let storagePath = '';
 
       if (!bucketUrl) {
-        const res = await fetch(imageUrl);
-        const blob = await res.blob();
-        const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
-        const fileName = `${user.id}/${submode}-${Date.now()}.${ext}`;
-        const { error: uploadErr } = await supabase.storage
-          .from('generated-images')
-          .upload(fileName, blob, { contentType: blob.type, upsert: false });
-        if (uploadErr) throw uploadErr;
+        try {
+          const res = await fetch(imageUrl);
+          if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+          const blob = await res.blob();
+          const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+          const fileName = `${user.id}/${submode}-${Date.now()}.${ext}`;
+          const { error: uploadErr } = await supabase.storage
+            .from('generated-images')
+            .upload(fileName, blob, { contentType: blob.type, upsert: false });
+          if (uploadErr) throw uploadErr;
 
-        const { data: urlData } = supabase.storage
-          .from('generated-images')
-          .getPublicUrl(fileName);
-        bucketUrl = sanitizeImageUrl(urlData?.publicUrl || '');
-        if (!bucketUrl) throw new Error('Failed to get public URL');
-        storagePath = fileName;
-        setSavedBucketUrl(bucketUrl);
+          const { data: urlData } = supabase.storage
+            .from('generated-images')
+            .getPublicUrl(fileName);
+          bucketUrl = sanitizeImageUrl(urlData?.publicUrl || '');
+          if (!bucketUrl) throw new Error('Failed to get public URL');
+          storagePath = fileName;
+          setSavedBucketUrl(bucketUrl);
+        } catch {
+          const imported = await importExternalImageToStorage(imageUrl);
+          bucketUrl = imported.url;
+          storagePath = imported.storagePath;
+          setSavedBucketUrl(bucketUrl);
+        }
       } else {
         const parts = bucketUrl.split('/generated-images/');
         if (parts[1]) storagePath = decodeURIComponent(parts[1]);
@@ -519,7 +618,17 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     } finally {
       setIsSaving(false);
     }
-  }, [user?.id, isSaved, savedImageId, savedBucketUrl, submode, prompt, quality, language, onSaveSuccess]);
+  }, [user?.id, isSaved, savedImageId, savedBucketUrl, submode, prompt, quality, language, onSaveSuccess, importExternalImageToStorage]);
+
+  const selectQuickResult = useCallback((index: number) => {
+    const nextUrl = resultUrls[index];
+    if (!nextUrl) return;
+    setPickerIndex(index);
+    setResultImageUrl(nextUrl);
+    setIsSaved(false);
+    setSavedBucketUrl(null);
+    setSavedImageId(null);
+  }, [resultUrls]);
 
   // ─── Main generate handler ───
   const handleGenerate = useCallback(async () => {
@@ -592,7 +701,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         triggerSaveSuccess: false,
       }).catch(() => { /* silent */ });
     }
-  }, [submode, prompt, quality, uploadedFile, language, persistGeneratedImage]);
+  }, [submode, prompt, quality, uploadedFile, uploadedFile2, uploadedFile3, uploadedFile4, language, persistGeneratedImage]);
 
   // ─── Amp prompt ───
   const handleAmp = async () => {
@@ -654,11 +763,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   };
 
   // ─── Submode config ───
-  const submodes: { key: ImageSubmode; labelEn: string; labelAr: string; emoji: string }[] = [
-    { key: 'text2image',         labelEn: 'Text → Image',  labelAr: 'نص ← صورة',      emoji: '✍️🖼️' },
-    { key: 'image2image',        labelEn: 'Image → Image', labelAr: 'صورة ← صورة',     emoji: '🖼️✨' },
-    { key: 'background-removal', labelEn: 'BG Removal',    labelAr: 'إزالة الخلفية',   emoji: '🪄✂️' },
-    { key: 'draw',               labelEn: 'Draw',          labelAr: 'رسم',              emoji: '🎨' },
+  const submodes: { key: ImageSubmode; labelEn: string; labelAr: string; emoji: string; shortEn: string; shortAr: string }[] = [
+    { key: 'text2image',         labelEn: 'Text → Image',  labelAr: 'نص ← صورة',      emoji: '✍️🖼️', shortEn: 'T2I',  shortAr: 'نص-ص' },
+    { key: 'image2image',        labelEn: 'Image → Image', labelAr: 'صورة ← صورة',     emoji: '🖼️✨',  shortEn: 'I2I',  shortAr: 'ص-ص' },
+    { key: 'background-removal', labelEn: 'BG Removal',    labelAr: 'إزالة الخلفية',   emoji: '🪄✂️', shortEn: 'BG-R', shortAr: 'قص' },
+    { key: 'draw',               labelEn: 'Draw',          labelAr: 'رسم',              emoji: '🎨',   shortEn: 'Draw', shortAr: 'رسم' },
   ];
 
   const needsUpload = submode === 'image2image' || submode === 'background-removal';
@@ -704,7 +813,9 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   // Reset saved state when generating new image
   const resetForNewGeneration = () => {
     setUploadedFile2(null);
-    setShowSecondImage(false);
+    setUploadedFile3(null);
+    setUploadedFile4(null);
+    setShowExtraReferenceImages(false);
     setResultImageUrl(null);
     setResultError(null);
     setIsSaved(false);
@@ -715,7 +826,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   // ─── Shared submode tabs component ───
   const SubmodeTabs = () => (
     <div className="overflow-x-auto scrollbar-none -mx-1 px-1">
-    <div className="flex gap-2 p-1.5 rounded-2xl bg-gradient-to-r from-[#0c0f14]/5 via-[#606062]/10 to-[#0c0f14]/5 dark:from-[#0c0f14] dark:via-[#1a1d24] dark:to-[#0c0f14] border border-[#606062]/20 dark:border-[#606062]/30 backdrop-blur-sm shadow-inner min-w-max">
+    <div className="grid grid-cols-4 gap-1 p-1 rounded-2xl bg-gradient-to-r from-[#0c0f14]/5 via-[#606062]/10 to-[#0c0f14]/5 dark:from-[#0c0f14] dark:via-[#1a1d24] dark:to-[#0c0f14] border border-[#606062]/20 dark:border-[#606062]/30 backdrop-blur-sm shadow-inner min-w-full">
       {submodes.map((m) => {
         const isActive = submode === m.key;
         return (
@@ -723,13 +834,16 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             key={m.key}
             onClick={() => { setSubmode(m.key); resetForNewGeneration(); setUploadedFile(null); setPrompt(''); }}
             title={language === 'ar' ? m.labelAr : m.labelEn}
-            className={`relative flex items-center justify-center px-3 py-2.5 rounded-xl text-xl transition-all duration-200 min-h-[44px] min-w-[52px] touch-manipulation ${
+            className={`relative flex flex-col items-center justify-center gap-1 px-1.5 py-2 rounded-xl transition-all duration-200 min-h-[54px] w-full touch-manipulation ${
               isActive
                 ? 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.04]'
                 : 'bg-white/30 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/50 dark:hover:bg-white/15 active:scale-95'
             }`}
           >
-            <span>{m.emoji}</span>
+            <span className="text-base leading-none">{m.emoji}</span>
+            <span className={`text-[9px] font-bold leading-none tracking-tight ${
+              isActive ? 'text-white dark:text-[#060541]' : 'text-[#858384] dark:text-[#606062]'
+            }`}>{language === 'ar' ? m.shortAr : m.shortEn}</span>
             {isActive && (
               <span className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/20 via-amber-500/20 to-orange-500/20 dark:from-transparent dark:via-transparent dark:to-transparent pointer-events-none" />
             )}
@@ -750,7 +864,9 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 active:scale-95 ${
           isSaved
             ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/30'
-            : 'bg-white/80 dark:bg-white/5 border border-border/50 text-foreground'
+            : quality === 'quick' && resultImageUrl && !isSaving
+              ? 'bg-gradient-to-r from-purple-500 to-violet-500 text-white border border-purple-300/40 shadow-[0_0_20px_rgba(168,85,247,0.55),0_0_38px_rgba(59,130,246,0.28)] animate-pulse'
+              : 'bg-white/80 dark:bg-white/5 border border-border/50 text-foreground'
         }`}
       >
         {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : isSaved ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
@@ -795,7 +911,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
       {/* New */}
       <button
-        onClick={() => { resetForNewGeneration(); setPrompt(''); }}
+        onClick={() => { resetForNewGeneration(); setPrompt(''); setUploadedFile(null); }}
         className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/25 transition-all duration-200 active:scale-95 ml-auto"
       >
         <Plus className="h-4 w-4" />
@@ -834,7 +950,17 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             <Download className="h-4 w-4" /> {language === 'ar' ? 'تحميل' : 'Download'}
           </button>
           <div className="w-px h-5 bg-white/20" />
-          <button onClick={handleSave} disabled={isSaved} className="flex items-center gap-1.5 text-white/90 text-sm font-medium active:scale-95 transition-transform">
+          <button
+            onClick={handleSave}
+            disabled={isSaved}
+            className={`flex items-center gap-1.5 text-sm font-medium active:scale-95 transition-transform ${
+              isSaved
+                ? 'text-white/90'
+                : quality === 'quick' && resultImageUrl
+                  ? 'text-purple-200 drop-shadow-[0_0_10px_rgba(168,85,247,0.8)] animate-pulse'
+                  : 'text-white/90'
+            }`}
+          >
             {isSaved ? <Check className="h-4 w-4 text-green-400" /> : <Save className="h-4 w-4" />}
             {isSaved ? (language === 'ar' ? 'تم' : 'Saved') : (language === 'ar' ? 'حفظ' : 'Save')}
           </button>
@@ -934,7 +1060,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                     <button
                       key={i}
                       aria-label={`Image ${i + 1}`}
-                      onClick={() => { setPickerIndex(i); setResultImageUrl(resultUrls[i]); }}
+                      onClick={() => { selectQuickResult(i); }}
                       className={`h-2 rounded-full transition-all duration-200 ${
                         i === pickerIndex ? 'w-6 bg-purple-500' : 'w-2 bg-muted-foreground/30'
                       }`}
@@ -947,7 +1073,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 {resultUrls.map((url, i) => (
                   <button
                     key={i}
-                    onClick={() => { setPickerIndex(i); setResultImageUrl(url); }}
+                    onClick={() => { selectQuickResult(i); }}
                     className={`flex-shrink-0 snap-center rounded-xl overflow-hidden border-2 transition-all duration-200 ${
                       i === pickerIndex
                         ? 'border-purple-500 shadow-lg shadow-purple-500/30 scale-[1.03]'
@@ -1049,7 +1175,6 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         {/* Image upload area (I2I & BG Removal) */}
         {needsUpload && (
           <div className="space-y-3">
-            {/* Main image slot — always visible */}
             <div>
               {uploadedFile ? (
                 <div className="relative rounded-xl border border-border/50 shadow-sm overflow-visible bg-black/5 dark:bg-white/5 max-w-xs mx-auto">
@@ -1088,68 +1213,127 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" hidden />
             </div>
 
-            {/* Toggle for second image (I2I only) — below main image */}
             {submode === 'image2image' && (
-              <div className="flex items-center justify-center gap-3 pt-1">
-                <span className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'إضافة صورة ثانية (اختياري)' : 'Add second image (optional)'}
-                </span>
-                <button
-                  onClick={() => {
-                    setShowSecondImage(!showSecondImage);
-                    if (showSecondImage) setUploadedFile2(null);
-                  }}
-                  className={`relative h-6 w-10 rounded-full transition-colors duration-200 ${showSecondImage ? 'bg-orange-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                  aria-label={language === 'ar' ? 'تبديل الصورة الثانية' : 'Toggle second image'}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${showSecondImage ? 'translate-x-4' : ''}`}
-                  />
-                </button>
-              </div>
-            )}
-
-            {/* Second image slot — appears when toggle is on, half width */}
-            {submode === 'image2image' && showSecondImage && (
-              <div className="max-w-[50%] mx-auto">
-                {uploadedFile2 ? (
-                  <div className="relative rounded-xl border border-border/50 shadow-sm overflow-visible bg-black/5 dark:bg-white/5">
-                    <img
-                      src={uploadedFile2.preview || uploadedFile2.url}
-                      alt="Reference 2"
-                      className="w-full rounded-xl object-contain max-h-32"
-                      style={{ imageOrientation: 'from-image' }}
-                    />
-                    <button
-                      onClick={() => setUploadedFile2(null)}
-                      className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md active:scale-90 transition-transform z-10"
-                      aria-label={language === 'ar' ? 'إزالة الصورة الثانية' : 'Remove image 2'}
-                    >
-                      <X className="h-2.5 w-2.5" />
-                    </button>
-                    <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] font-semibold px-1 py-0.5 rounded-md z-10">
-                      {language === 'ar' ? 'صورة ٢ (اختياري)' : 'Ref 2 (optional)'}
-                    </span>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2 px-1">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {language === 'ar' ? 'حتى ٤ صور مرجعية' : 'Up to 4 reference images'}
                   </div>
-                ) : (
                   <button
-                    onClick={() => fileInputRef2.current?.click()}
-                    className="w-full py-6 border-2 border-dashed border-[#858384]/30 dark:border-[#858384]/20 rounded-xl flex flex-col items-center gap-1.5 text-muted-foreground/70 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:scale-[0.98] transition-all"
+                    onClick={() => setShowExtraReferenceImages((v) => !v)}
+                    className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/70 dark:bg-white/5 border border-border/50 text-muted-foreground active:scale-95 transition-all"
                   >
-                    <ImagePlus className="h-5 w-5 text-[#858384]/60" />
-                    <span className="text-xs font-medium text-[#858384]/70">
-                      {language === 'ar' ? 'اضغط لإضافة صورة' : 'Tap to add image'}
-                    </span>
+                    {showExtraReferenceImages
+                      ? (language === 'ar' ? 'إخفاء' : 'Hide')
+                      : (language === 'ar' ? '+ صور إضافية' : '+ More images')}
                   </button>
+                </div>
+                {(showExtraReferenceImages || uploadedFile2 || uploadedFile3 || uploadedFile4) && (
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    {uploadedFile2 ? (
+                      <div className="relative rounded-xl border border-border/50 shadow-sm overflow-visible bg-black/5 dark:bg-white/5">
+                        <img
+                          src={uploadedFile2.preview || uploadedFile2.url}
+                          alt="Reference 2"
+                          className="w-full rounded-xl object-contain aspect-square"
+                          style={{ imageOrientation: 'from-image' }}
+                        />
+                        <button
+                          onClick={() => setUploadedFile2(null)}
+                          className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md active:scale-90 transition-transform z-10"
+                          aria-label={language === 'ar' ? 'إزالة الصورة الثانية' : 'Remove image 2'}
+                        >
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                        <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] font-semibold px-1 py-0.5 rounded-md z-10">
+                          {language === 'ar' ? '٢' : 'Ref 2'}
+                        </span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => fileInputRef2.current?.click()}
+                        className="w-full aspect-square border-2 border-dashed border-[#858384]/30 dark:border-[#858384]/20 rounded-xl flex flex-col items-center justify-center gap-1.5 text-muted-foreground/70 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:scale-[0.98] transition-all"
+                      >
+                        <ImagePlus className="h-5 w-5 text-[#858384]/60" />
+                        <span className="text-[11px] font-medium text-[#858384]/70">{language === 'ar' ? '٢' : 'Ref 2'}</span>
+                      </button>
+                    )}
+                    <input type="file" ref={fileInputRef2} onChange={handleFileChange2} accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" hidden />
+                  </div>
+
+                  <div>
+                    {uploadedFile3 ? (
+                      <div className="relative rounded-xl border border-border/50 shadow-sm overflow-visible bg-black/5 dark:bg-white/5">
+                        <img
+                          src={uploadedFile3.preview || uploadedFile3.url}
+                          alt="Reference 3"
+                          className="w-full rounded-xl object-contain aspect-square"
+                          style={{ imageOrientation: 'from-image' }}
+                        />
+                        <button
+                          onClick={() => setUploadedFile3(null)}
+                          className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md active:scale-90 transition-transform z-10"
+                          aria-label={language === 'ar' ? 'إزالة الصورة الثالثة' : 'Remove image 3'}
+                        >
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                        <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] font-semibold px-1 py-0.5 rounded-md z-10">
+                          {language === 'ar' ? '٣' : 'Ref 3'}
+                        </span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => fileInputRef3.current?.click()}
+                        className="w-full aspect-square border-2 border-dashed border-[#858384]/30 dark:border-[#858384]/20 rounded-xl flex flex-col items-center justify-center gap-1.5 text-muted-foreground/70 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:scale-[0.98] transition-all"
+                      >
+                        <ImagePlus className="h-5 w-5 text-[#858384]/60" />
+                        <span className="text-[11px] font-medium text-[#858384]/70">{language === 'ar' ? '٣' : 'Ref 3'}</span>
+                      </button>
+                    )}
+                    <input type="file" ref={fileInputRef3} onChange={handleFileChange3} accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" hidden />
+                  </div>
+
+                  <div>
+                    {uploadedFile4 ? (
+                      <div className="relative rounded-xl border border-border/50 shadow-sm overflow-visible bg-black/5 dark:bg-white/5">
+                        <img
+                          src={uploadedFile4.preview || uploadedFile4.url}
+                          alt="Reference 4"
+                          className="w-full rounded-xl object-contain aspect-square"
+                          style={{ imageOrientation: 'from-image' }}
+                        />
+                        <button
+                          onClick={() => setUploadedFile4(null)}
+                          className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md active:scale-90 transition-transform z-10"
+                          aria-label={language === 'ar' ? 'إزالة الصورة الرابعة' : 'Remove image 4'}
+                        >
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                        <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] font-semibold px-1 py-0.5 rounded-md z-10">
+                          {language === 'ar' ? '٤' : 'Ref 4'}
+                        </span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => fileInputRef4.current?.click()}
+                        className="w-full aspect-square border-2 border-dashed border-[#858384]/30 dark:border-[#858384]/20 rounded-xl flex flex-col items-center justify-center gap-1.5 text-muted-foreground/70 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:scale-[0.98] transition-all"
+                      >
+                        <ImagePlus className="h-5 w-5 text-[#858384]/60" />
+                        <span className="text-[11px] font-medium text-[#858384]/70">{language === 'ar' ? '٤' : 'Ref 4'}</span>
+                      </button>
+                    )}
+                    <input type="file" ref={fileInputRef4} onChange={handleFileChange4} accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" hidden />
+                  </div>
+                </div>
                 )}
-                <input type="file" ref={fileInputRef2} onChange={handleFileChange2} accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" hidden />
               </div>
             )}
           </div>
         )}
 
         {/* Quick chips — hidden when 2 images uploaded */}
-        {needsUpload && uploadedFile && !uploadedFile2 && prompt === '' && (
+        {needsUpload && uploadedFile && !uploadedFile2 && !uploadedFile3 && !uploadedFile4 && prompt === '' && (
           <div className="flex gap-2 flex-wrap">
             {getQuickChips().map((chip, i) => (
               <button

@@ -211,12 +211,19 @@ serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const image_base64_raw = body?.image_base64 as string | undefined;
     const image_base64_raw_2 = body?.image_base64_2 as string | undefined;
+    const image_base64s = Array.isArray(body?.image_base64s)
+      ? body.image_base64s.filter((v: unknown) => typeof v === "string" && v.trim().length > 0).slice(0, 4) as string[]
+      : [];
     const user_prompt = body?.user_prompt as string | undefined;
     const user_id = body?.user_id as string | undefined;
     const quality = body?.quality === "best_fast" ? "best_fast" : "fast";
     const selectedModel = quality === "best_fast" ? MODEL_BEST : MODEL_FAST;
 
-    if (!image_base64_raw || !user_prompt || !user_id) {
+    const inputImages = image_base64s.length > 0
+      ? image_base64s
+      : [image_base64_raw, image_base64_raw_2].filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+
+    if (inputImages.length === 0 || !user_prompt || !user_id) {
       return new Response(
         JSON.stringify({ error: "Missing params", code: "BAD_REQUEST_MISSING_PARAMS" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -233,21 +240,16 @@ serve(async (req: Request) => {
     }
     // ── End Trial Token Check ──
 
-    const { base64, mimeHint } = stripDataUrlPrefix(image_base64_raw);
-    const inputBytes = decodeBase64ToUint8Array(base64);
-    const { mime, ext } = detectMimeAndExt(inputBytes, mimeHint);
-    const referenceUrl = await uploadAndSignReferenceImage({ base64, mime, ext, userId: user_id });
-
-    let referenceUrl2: string | undefined;
-    if (image_base64_raw_2) {
-      const { base64: b2, mimeHint: mh2 } = stripDataUrlPrefix(image_base64_raw_2);
-      const bytes2 = decodeBase64ToUint8Array(b2);
-      const { mime: mime2, ext: ext2 } = detectMimeAndExt(bytes2, mh2);
-      referenceUrl2 = await uploadAndSignReferenceImage({ base64: b2, mime: mime2, ext: ext2, userId: user_id });
+    const referenceUrls: string[] = [];
+    for (const rawImage of inputImages) {
+      const { base64, mimeHint } = stripDataUrlPrefix(rawImage);
+      const inputBytes = decodeBase64ToUint8Array(base64);
+      const { mime, ext } = detectMimeAndExt(inputBytes, mimeHint);
+      const referenceUrl = await uploadAndSignReferenceImage({ base64, mime, ext, userId: user_id });
+      referenceUrls.push(referenceUrl);
     }
 
     const finalPrompt = await translateToEnglishIfArabic(user_prompt);
-    const referenceUrls = referenceUrl2 ? [referenceUrl, referenceUrl2] : [referenceUrl];
     const rw = await callRunwareI2I(finalPrompt, referenceUrls, selectedModel);
     const node = (pickFirstResultNode(rw) || rw) as Record<string, unknown>;
 

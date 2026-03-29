@@ -128,9 +128,16 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const prompt: string = (body?.user_prompt || body?.prompt || "").toString().trim();
     const image_base64_raw: string = body?.image_base64 || "";
+    const image_base64s: string[] = Array.isArray(body?.image_base64s)
+      ? body.image_base64s.filter((v: unknown) => typeof v === "string" && v.trim().length > 0).slice(0, 4) as string[]
+      : [];
     const userId: string = body?.user_id || "";
     // If taskId is provided, this is a poll request
     const taskId: string = body?.taskId || "";
+
+    const inputImages = image_base64s.length > 0
+      ? image_base64s
+      : (image_base64_raw ? [image_base64_raw] : []);
 
     if (!KIE_API_KEY) {
       return new Response(JSON.stringify({ success: false, error: "KIE_API_KEY not configured" }), {
@@ -187,6 +194,18 @@ Deno.serve(async (req) => {
         );
       }
 
+      const resultJsonText = typeof j?.data?.resultJson === "string" ? j.data.resultJson : "";
+      const stillPending = rawStatus === "pending" || rawStatus === "processing" || rawStatus === "queued" || rawStatus === "running" || rawStatus === "submitted" || rawStatus === "" || rawStatus === "0" || rawStatus === "1";
+      if (!stillPending && resultJsonText) {
+        const lateUrls = extractImageUrls(j?.data);
+        if (lateUrls.length > 0) {
+          return new Response(
+            JSON.stringify({ success: true, status: "done", urls: lateUrls, count: lateUrls.length, rawStatus }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+
       // Still processing
       return new Response(
         JSON.stringify({ success: true, status: "pending", rawStatus }),
@@ -195,7 +214,7 @@ Deno.serve(async (req) => {
     }
 
     // ── SUBMIT MODE: upload reference image, submit task, return taskId immediately ──
-    if (!image_base64_raw) {
+    if (inputImages.length === 0) {
       return new Response(JSON.stringify({ success: false, error: "Missing image" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -210,12 +229,17 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { base64, mimeHint } = stripDataUrlPrefix(image_base64_raw);
-    const referencePublicUrl = await uploadReferenceImage(base64, mimeHint, userId || "anon");
-    console.log(`[grok-i2i] reference uploaded: ${referencePublicUrl}`);
+    const referencePublicUrls: string[] = [];
+    for (const rawImage of inputImages) {
+      const { base64, mimeHint } = stripDataUrlPrefix(rawImage);
+      const referencePublicUrl = await uploadReferenceImage(base64, mimeHint, userId || "anon");
+      referencePublicUrls.push(referencePublicUrl);
+    }
+    console.log(`[grok-i2i] references uploaded: ${referencePublicUrls.length}`);
 
     const finalPrompt = await translateToEnglishIfArabic(prompt);
-    const promptWithRef = finalPrompt ? `@image1 ${finalPrompt}` : "@image1";
+    const refMentions = referencePublicUrls.map((_, idx) => `@image${idx + 1}`).join(" ");
+    const promptWithRef = finalPrompt ? `${refMentions} ${finalPrompt}` : refMentions;
     console.log(`[grok-i2i] submit prompt="${promptWithRef.slice(0, 100)}"`);
 
     const submitResp = await fetch("https://api.kie.ai/api/v1/jobs/createTask", {
@@ -223,7 +247,7 @@ Deno.serve(async (req) => {
       headers: { Authorization: `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "grok-imagine/image-to-image",
-        input: { prompt: promptWithRef, image_urls: [referencePublicUrl] },
+        input: { prompt: promptWithRef, image_urls: referencePublicUrls },
       }),
     });
     const submitText = await submitResp.text();
