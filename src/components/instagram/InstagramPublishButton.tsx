@@ -372,10 +372,10 @@ export default function InstagramPublishButton({
               onChange={(e) => setCaption(e.target.value)}
               placeholder={ar ? 'اكتب تعليقاً... (اختياري)' : 'Add a caption... (optional)'}
               rows={3}
-              maxLength={2200}
+              maxLength={500}
               className="w-full text-sm rounded-xl border border-border/60 bg-muted/40 px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-pink-500/50 placeholder:text-muted-foreground/50"
             />
-            <p className="text-[10px] text-muted-foreground text-right mt-0.5">{caption.length}/2200</p>
+            <p className="text-[10px] text-muted-foreground text-right mt-0.5">{caption.length}/500</p>
           </div>
 
           {/* Publish target for video */}

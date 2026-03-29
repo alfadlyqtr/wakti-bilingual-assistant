@@ -198,10 +198,10 @@ Deno.serve(async (req: Request) => {
 
       // generate_caption
       if (action === "generate_caption") {
-        const { media_type = "image", language = "en" } = body;
+        const { media_type: _media_type = "image", language = "en" } = body;
         const prompt = language === "ar"
-          ? `اكتب تعليقاً جذاباً لمنشور Instagram عن هذه ${media_type === "video" ? "الفيديو/الريل" : "الصورة"}. اجعله قصيراً وجذاباً مع إيموجي مناسبة. لا تزيد عن 150 كلمة.`
-          : `Write an engaging Instagram caption for this ${media_type}. Keep it short, catchy, with relevant emojis. Max 150 words.`;
+          ? `اكتب مباشرةً تعليقاً جذاباً لمنشور Instagram. لا تشرح ولا تتحدث معي، فقط اكتب التعليق مباشرة. أضف إيموجي مناسبة وهاشتاقات ذات صلة في النهاية. لا تتجاوز 100 كلمة.`
+          : `Write an Instagram caption directly. Do not explain or talk to me — just output the caption text itself. Include relevant emojis and 5-10 hashtags at the end. Keep it under 100 words.`;
         const res = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENAI_API_KEY}` },
