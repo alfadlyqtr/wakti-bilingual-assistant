@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Instagram, Loader2, Check, X, ExternalLink, Sparkles } from 'lucide-react';
-import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 interface IGAccount {
@@ -246,17 +246,24 @@ export default function InstagramPublishButton({
     setPublishing(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('instagram-publish-media', {
-        body: {
+      const { data: { session } } = await supabase.auth.getSession();
+      const rawRes = await fetch(`${SUPABASE_URL}/functions/v1/instagram-publish-media`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
           media_type: mediaType,
           media_url: mediaUrl,
           caption,
           publish_target: selectedTarget,
-        },
+        }),
       });
-
-      if (error || !data?.success) {
-        throw new Error(data?.error || error?.message || 'Publish failed');
+      const data = await rawRes.json().catch(() => ({}));
+      if (!rawRes.ok || !data?.success) {
+        throw new Error(data?.error || `HTTP ${rawRes.status}`);
       }
 
       if (data.status === 'published') {
