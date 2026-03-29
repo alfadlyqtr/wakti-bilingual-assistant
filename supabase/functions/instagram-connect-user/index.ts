@@ -198,14 +198,19 @@ Deno.serve(async (req: Request) => {
 
       // generate_caption
       if (action === "generate_caption") {
-        const { media_type: _media_type = "image", language = "en" } = body;
-        const prompt = language === "ar"
-          ? `اكتب مباشرةً تعليقاً جذاباً لمنشور Instagram. لا تشرح ولا تتحدث معي، فقط اكتب التعليق مباشرة. أضف إيموجي مناسبة وهاشتاقات ذات صلة في النهاية. لا تتجاوز 100 كلمة.`
-          : `Write an Instagram caption directly. Do not explain or talk to me — just output the caption text itself. Include relevant emojis and 5-10 hashtags at the end. Keep it under 100 words.`;
+        const { media_url, language = "en" } = body;
+        const textPrompt = language === "ar"
+          ? `انظر إلى هذه الصورة واكتب مباشرةً تعليقاً جذاباً لمنشور Instagram يصف ما تراه. لا تشرح ولا تتحدث معي، فقط اكتب التعليق مباشرة. أضف إيموجي مناسبة وهاشتاقات ذات صلة في النهاية. لا تتجاوز 80 كلمة.`
+          : `Look at this image and write an Instagram caption describing what you see. Output only the caption text — no explanations, no talking to me. Include relevant emojis and 5-10 hashtags at the end. Keep it under 80 words.`;
+
+        const messages: unknown[] = media_url
+          ? [{ role: "user", content: [{ type: "image_url", image_url: { url: media_url } }, { type: "text", text: textPrompt }] }]
+          : [{ role: "user", content: textPrompt }];
+
         const res = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENAI_API_KEY}` },
-          body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], max_tokens: 200, temperature: 0.8 }),
+          body: JSON.stringify({ model: "gpt-4o-mini", messages, max_tokens: 250, temperature: 0.8 }),
         });
         const aiData = await res.json();
         const caption = aiData?.choices?.[0]?.message?.content?.trim();
