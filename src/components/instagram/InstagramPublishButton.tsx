@@ -77,6 +77,8 @@ export default function InstagramPublishButton({
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
   const [generatingCaption, setGeneratingCaption] = useState(false);
+  const [selectedTarget, setSelectedTarget] = useState<'feed' | 'reel'>(publishTarget as 'feed' | 'reel');
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const [polling, setPolling] = useState(false);
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
 
@@ -247,7 +249,7 @@ export default function InstagramPublishButton({
           media_type: mediaType,
           media_url: mediaUrl,
           caption,
-          publish_target: publishTarget,
+          publish_target: selectedTarget,
         },
       });
 
@@ -315,7 +317,7 @@ export default function InstagramPublishButton({
       {/* Publish panel */}
       {showPanel && igAccount && (
         <div
-          className="absolute bottom-full mb-2 right-0 z-50 w-72 rounded-2xl border border-border/60 bg-background/95 backdrop-blur-md shadow-xl shadow-black/20 p-4 space-y-3"
+          className="absolute bottom-full mb-2 right-0 z-50 w-72 rounded-2xl border border-border/60 bg-background/95 backdrop-blur-md shadow-2xl shadow-black/40 p-4 space-y-3"
           style={{ direction: ar ? 'rtl' : 'ltr' }}
         >
           {/* Account info */}
@@ -378,11 +380,34 @@ export default function InstagramPublishButton({
             <p className="text-[10px] text-muted-foreground text-right mt-0.5">{caption.length}/500</p>
           </div>
 
-          {/* Publish target for video */}
+          {/* Publish target selector for video */}
           {(mediaType === 'video' || mediaType === 'reel') && (
-            <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-              <ExternalLink className="h-3 w-3" />
-              {ar ? 'سيُنشر كـ Reel' : 'Will be published as a Reel'}
+            <div>
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+                {ar ? 'نوع النشر' : 'Publish as'}
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setSelectedTarget('reel')}
+                  className={`flex-1 py-1.5 rounded-lg text-[12px] font-semibold border transition-all ${
+                    selectedTarget === 'reel'
+                      ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white border-transparent'
+                      : 'border-border/60 text-muted-foreground hover:border-pink-500/40'
+                  }`}
+                >
+                  🎬 {ar ? 'ريل' : 'Reel'}
+                </button>
+                <button
+                  onClick={() => setSelectedTarget('feed')}
+                  className={`flex-1 py-1.5 rounded-lg text-[12px] font-semibold border transition-all ${
+                    selectedTarget === 'feed'
+                      ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white border-transparent'
+                      : 'border-border/60 text-muted-foreground hover:border-pink-500/40'
+                  }`}
+                >
+                  📷 {ar ? 'منشور' : 'Post'}
+                </button>
+              </div>
             </div>
           )}
 
