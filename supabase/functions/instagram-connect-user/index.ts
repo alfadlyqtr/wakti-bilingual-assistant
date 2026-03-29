@@ -153,7 +153,7 @@ Deno.serve(async (req: Request) => {
             followers_count: igUser.followers_count || 0,
             access_token: longToken,
             token_expires_at: tokenExpiresAt,
-            scopes: "instagram_basic,instagram_content_publish",
+            scopes: "instagram_business_basic,instagram_business_content_publish",
             is_active: true,
             updated_at: new Date().toISOString(),
           }, { onConflict: "user_id,instagram_user_id" })

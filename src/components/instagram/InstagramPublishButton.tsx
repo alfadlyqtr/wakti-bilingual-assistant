@@ -23,7 +23,7 @@ interface InstagramPublishButtonProps {
 
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || '';
 const REDIRECT_URI = `${window.location.origin}/instagram-connect-callback`;
-const IG_SCOPES = 'instagram_basic,instagram_content_publish';
+const IG_SCOPES = 'instagram_business_basic,instagram_business_content_publish';
 
 async function fetchSharedConnectionStatus(): Promise<IGAccount | null> {
   const now = Date.now();
@@ -135,7 +135,7 @@ export default function InstagramPublishButton({
       source: 'media_publish',
       return_to: `${window.location.pathname}${window.location.search}`,
     }));
-    const oauthUrl = `https://api.instagram.com/oauth/authorize?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${IG_SCOPES}&response_type=code&state=${state}`;
+    const oauthUrl = `https://www.instagram.com/oauth/authorize?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${IG_SCOPES}&response_type=code&state=${state}`;
     window.location.href = oauthUrl;
   };
 
