@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
+import { loadGoogleMaps } from '@/utils/googleMapsLoader';
 
 declare global { interface Window { google?: any } }
 
@@ -36,6 +37,7 @@ export default function LocationPickerModal({ open, onOpenChange, onConfirm, ini
 
     const init = () => {
       if (!window.google || !mapRef.current) return;
+      // Maps SDK is guaranteed loaded by loadGoogleMaps() below
 
       const center = initialCenter || DEFAULT_CENTER;
       const gmap = new window.google.maps.Map(mapRef.current, {
@@ -142,26 +144,30 @@ export default function LocationPickerModal({ open, onOpenChange, onConfirm, ini
       setReady(true);
     };
 
-    // Try to use geolocation for modal center
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          if (!mapRef.current) return;
-          init();
-          try {
-            const posLL = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            gmapRef.current?.setCenter(posLL);
-            markerRef.current?.setPosition(posLL);
-          } catch {}
-        },
-        () => {
-          init();
-        },
-        { enableHighAccuracy: false, timeout: 8000 }
-      );
-    } else {
-      init();
-    }
+    // Load Maps SDK on-demand, then initialize
+    loadGoogleMaps().then(() => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            if (!mapRef.current) return;
+            init();
+            try {
+              const posLL = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+              gmapRef.current?.setCenter(posLL);
+              markerRef.current?.setPosition(posLL);
+            } catch {}
+          },
+          () => {
+            init();
+          },
+          { enableHighAccuracy: false, timeout: 8000 }
+        );
+      } else {
+        init();
+      }
+    }).catch(() => {
+      console.error('[Maps] Failed to load Google Maps SDK');
+    });
   }, [open, initialCenter]);
 
   const useMyLocation = () => {

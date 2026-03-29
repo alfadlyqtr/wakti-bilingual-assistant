@@ -65,21 +65,7 @@
         }
       }
     </script>
-    <!-- Google Maps JavaScript API (Places) -->
-    <!-- Dynamically load with Vite env so the key is correctly injected; use v=beta for vector + Map ID support -->
-    <script type="module">
-      const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-      if (key) {
-        const url = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places,marker&v=beta&loading=async`;
-        const s = document.createElement('script');
-        s.src = url;
-        s.async = true;
-        s.defer = true;
-        document.head.appendChild(s);
-      } else {
-        console.error('VITE_GOOGLE_MAPS_API_KEY is missing');
-      }
-    </script>
+    <!-- Google Maps is loaded on-demand via src/utils/googleMapsLoader.ts -->
     
     <!-- REQUIRED for Apple IAP inside the packaged iOS app -->
     
