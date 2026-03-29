@@ -16,6 +16,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const META_APP_ID = Deno.env.get("METAA_APP_ID") || Deno.env.get("META_APP_ID")!;
 const META_APP_SECRET = Deno.env.get("METAA_APP_SECRET") || Deno.env.get("META_APP_SECRET")!;
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -193,6 +194,23 @@ Deno.serve(async (req: Request) => {
         }
 
         return jsonResponse({ success: true, message: "Instagram disconnected" });
+      }
+
+      // generate_caption
+      if (action === "generate_caption") {
+        const { media_type = "image", language = "en" } = body;
+        const prompt = language === "ar"
+          ? `اكتب تعليقاً جذاباً لمنشور Instagram عن هذه ${media_type === "video" ? "الفيديو/الريل" : "الصورة"}. اجعله قصيراً وجذاباً مع إيموجي مناسبة. لا تزيد عن 150 كلمة.`
+          : `Write an engaging Instagram caption for this ${media_type}. Keep it short, catchy, with relevant emojis. Max 150 words.`;
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENAI_API_KEY}` },
+          body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], max_tokens: 200, temperature: 0.8 }),
+        });
+        const aiData = await res.json();
+        const caption = aiData?.choices?.[0]?.message?.content?.trim();
+        if (!caption) return jsonResponse({ error: "Failed to generate caption" }, 500);
+        return jsonResponse({ caption });
       }
 
       return jsonResponse({ error: "Unknown action" }, 400);

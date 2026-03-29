@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Instagram, Loader2, Check, X, ExternalLink } from 'lucide-react';
+import { Instagram, Loader2, Check, X, ExternalLink, Sparkles } from 'lucide-react';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -76,6 +76,7 @@ export default function InstagramPublishButton({
   const [caption, setCaption] = useState(defaultCaption);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
+  const [generatingCaption, setGeneratingCaption] = useState(false);
   const [polling, setPolling] = useState(false);
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
 
@@ -146,6 +147,21 @@ export default function InstagramPublishButton({
     };
     exchangeCode();
   }, [ar]);
+
+  const handleGenerateCaption = async () => {
+    setGeneratingCaption(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('instagram-connect-user', {
+        body: { action: 'generate_caption', media_type: mediaType, language: ar ? 'ar' : 'en' },
+      });
+      if (error || !data?.caption) throw new Error(data?.error || 'No caption generated');
+      setCaption(data.caption);
+    } catch {
+      toast.error(ar ? 'فشل توليد التعليق' : 'Failed to generate caption');
+    } finally {
+      setGeneratingCaption(false);
+    }
+  };
 
   const handleConnect = () => {
     if (!META_APP_ID) {
@@ -326,9 +342,23 @@ export default function InstagramPublishButton({
 
           {/* Caption */}
           <div>
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
-              {ar ? 'التعليق' : 'Caption'}
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                {ar ? 'التعليق' : 'Caption'}
+              </label>
+              <button
+                onClick={handleGenerateCaption}
+                disabled={generatingCaption}
+                className="flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-gradient-to-r from-pink-500/15 to-purple-500/15 hover:from-pink-500/25 hover:to-purple-500/25 border border-pink-500/20 text-pink-500 dark:text-pink-400 transition-all disabled:opacity-50"
+              >
+                {generatingCaption ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3 w-3" />
+                )}
+                {ar ? 'توليد AI' : 'AI Generate'}
+              </button>
+            </div>
             <textarea
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
