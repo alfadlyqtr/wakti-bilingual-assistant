@@ -356,21 +356,21 @@ export default function InstagramPublishButton({
               </label>
               <button
                 onClick={handleGenerateCaption}
-                disabled={generatingCaption}
-                className="flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-gradient-to-r from-pink-500/15 to-purple-500/15 hover:from-pink-500/25 hover:to-purple-500/25 border border-pink-500/20 text-pink-500 dark:text-pink-400 transition-all disabled:opacity-50"
+                disabled={generatingCaption || !caption.trim()}
+                className="flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-gradient-to-r from-pink-500/15 to-purple-500/15 hover:from-pink-500/25 hover:to-purple-500/25 border border-pink-500/20 text-pink-500 dark:text-pink-400 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {generatingCaption ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
                   <Sparkles className="h-3 w-3" />
                 )}
-                {ar ? 'تعليق AI' : 'AI Caption'}
+                {ar ? 'تحسين التعليق' : 'Enhance Caption'}
               </button>
             </div>
             <textarea
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
-              placeholder={ar ? 'اكتب تعليقاً... (اختياري)' : 'Add a caption... (optional)'}
+              placeholder={ar ? 'اكتب شيئاً عن الصورة... مثال: شعاري الجديد — ثم اضغط تحسين التعليق (اختياري)' : 'Describe the image... e.g. my new logo launch — then hit Enhance Caption (optional)'}
               rows={3}
               maxLength={500}
               className="w-full text-sm rounded-xl border border-border/60 bg-muted/40 px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-pink-500/50 placeholder:text-muted-foreground/50"
