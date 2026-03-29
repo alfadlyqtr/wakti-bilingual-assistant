@@ -15,10 +15,6 @@ import {
   ImagePlus,
   Wand2,
   Download,
-  Paintbrush,
-  Eraser,
-  Layers,
-  Type,
   X,
   Plus,
   Maximize2,
@@ -47,7 +43,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
   // Submode & quality
   const [submode, setSubmode] = useState<ImageSubmode>('text2image');
-  const [quality, setQuality] = useState<'fast' | 'best_fast'>('fast');
+  const [quality, setQuality] = useState<'quick' | 'fast' | 'best_fast'>('quick');
+
+  // Multi-image picker (for Quick/Grok results)
+  const [resultUrls, setResultUrls] = useState<string[]>([]);
+  const [pickerIndex, setPickerIndex] = useState(0);
 
   // Prompt & loading
   const [prompt, setPrompt] = useState('');
@@ -273,6 +273,85 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     setProgress(100);
   };
 
+  // ─── Helper: poll a KIE task via edge function until done ───
+  const pollKieTask = async (
+    fnName: string,
+    taskId: string,
+    extraBody: Record<string, unknown> = {},
+    token: string,
+  ): Promise<string[]> => {
+    const deadline = Date.now() + 3 * 60 * 1000; // 3 minute frontend timeout
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const pollResp = await fetch(`${SUPABASE_URL}/functions/v1/${fnName}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ taskId, ...extraBody }),
+      });
+      const pollJson = await pollResp.json().catch(() => ({} as any));
+      if (pollJson?.status === 'done' && pollJson?.urls?.length) {
+        return pollJson.urls as string[];
+      }
+      if (pollJson?.status === 'failed') {
+        throw new Error(pollJson?.error || 'KIE task failed');
+      }
+      // status === 'pending' — continue polling
+    }
+    throw new Error(language === 'ar' ? 'انتهت مدة الانتظار' : 'Generation timed out — please try again');
+  };
+
+  // ─── Generate: Quick (Grok) Text2Image ───
+  const generateQuickText2Image = async (): Promise<string[]> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Authentication required');
+    const token = session.access_token;
+    // Step 1: submit
+    const submitResp = await fetch(`${SUPABASE_URL}/functions/v1/wakti-grok-text2image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ prompt, user_id: user?.id, aspect_ratio: '9:16' }),
+    });
+    const submitJson = await submitResp.json().catch(() => ({} as any));
+    if (submitJson?.error === 'TRIAL_LIMIT_REACHED') {
+      window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: submitJson?.feature || 't2i' } }));
+      return [];
+    }
+    if (!submitResp.ok || !submitJson?.success) {
+      throw new Error(submitJson?.error || 'Quick submit failed');
+    }
+    const taskId: string = submitJson?.taskId;
+    if (!taskId) throw new Error('No taskId returned from KIE submit');
+    // Step 2: poll from frontend
+    return pollKieTask('wakti-grok-text2image', taskId, { user_id: user?.id }, token);
+  };
+
+  // ─── Generate: Quick (Grok) Image2Image ───
+  const generateQuickImage2Image = async (): Promise<string[]> => {
+    if (!uploadedFile) throw new Error(language === 'ar' ? 'الرجاء إرفاق صورة' : 'Please attach an image');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Authentication required');
+    const token = session.access_token;
+    const rawB64 = uploadedFile.base64 || uploadedFile.url || uploadedFile.preview || '';
+    // Step 1: submit (uploads reference image + creates KIE task)
+    const submitResp = await fetch(`${SUPABASE_URL}/functions/v1/wakti-grok-image2image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ user_prompt: prompt, image_base64: rawB64, user_id: user?.id }),
+    });
+    const submitJson = await submitResp.json().catch(() => ({} as any));
+    if (submitJson?.error === 'TRIAL_LIMIT_REACHED') {
+      window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: submitJson?.feature || 'i2i' } }));
+      return [];
+    }
+    if (!submitResp.ok || !submitJson?.success) {
+      throw new Error(submitJson?.error || 'Quick i2i submit failed');
+    }
+    const taskId: string = submitJson?.taskId;
+    if (!taskId) throw new Error('No taskId returned from KIE i2i submit');
+    // Step 2: poll from frontend
+    return pollKieTask('wakti-grok-image2image', taskId, { user_id: user?.id }, token);
+  };
+
   // ─── Generate: Text2Image ───
   const generateText2Image = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -461,27 +540,42 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     setIsGenerating(true);
     setResultError(null);
     setResultImageUrl(null);
+    setResultUrls([]);
+    setPickerIndex(0);
     startProgress();
 
     let generatedUrl: string | null = null;
     try {
-      let url: string;
-      switch (submode) {
-        case 'text2image':
-          url = await generateText2Image();
-          break;
-        case 'image2image':
-          url = await generateImage2Image();
-          break;
-        case 'background-removal':
-          url = await generateBGRemoval();
-          break;
-        default:
-          throw new Error('Unknown submode');
+      // Quick uses Grok and returns multiple images
+      if (quality === 'quick' && (submode === 'text2image' || submode === 'image2image')) {
+        const urls = submode === 'text2image'
+          ? await generateQuickText2Image()
+          : await generateQuickImage2Image();
+        stopProgress();
+        if (urls.length > 0) {
+          setResultUrls(urls);
+          setResultImageUrl(urls[0]);
+          generatedUrl = urls[0];
+        }
+      } else {
+        let url: string;
+        switch (submode) {
+          case 'text2image':
+            url = await generateText2Image();
+            break;
+          case 'image2image':
+            url = await generateImage2Image();
+            break;
+          case 'background-removal':
+            url = await generateBGRemoval();
+            break;
+          default:
+            throw new Error('Unknown submode');
+        }
+        stopProgress();
+        generatedUrl = url;
+        setResultImageUrl(url);
       }
-      stopProgress();
-      generatedUrl = url;
-      setResultImageUrl(url);
     } catch (err: any) {
       stopProgress();
       const msg = err?.message || (language === 'ar' ? 'فشل إنشاء الصورة' : 'Image generation failed');
@@ -490,8 +584,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     } finally {
       setIsGenerating(false);
     }
-    // Auto-save is fire-and-forget — never surfaces errors to the user
-    if (generatedUrl) {
+    // Auto-save is fire-and-forget — skip for Quick (Grok) since user must choose which image to save
+    if (generatedUrl && quality !== 'quick') {
       persistGeneratedImage(generatedUrl, {
         showSuccessToast: false,
         showAlreadySavedToast: false,
@@ -560,11 +654,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   };
 
   // ─── Submode config ───
-  const submodes: { key: ImageSubmode; labelEn: string; labelAr: string; icon: React.ReactNode }[] = [
-    { key: 'text2image', labelEn: 'Text2Image', labelAr: 'نص إلى صورة', icon: <Type className="h-4 w-4" /> },
-    { key: 'image2image', labelEn: 'Image2Image', labelAr: 'صورة إلى صورة', icon: <Layers className="h-4 w-4" /> },
-    { key: 'background-removal', labelEn: 'BG Removal', labelAr: 'إزالة الخلفية', icon: <Eraser className="h-4 w-4" /> },
-    { key: 'draw', labelEn: 'Draw', labelAr: 'رسم', icon: <Paintbrush className="h-4 w-4" /> },
+  const submodes: { key: ImageSubmode; labelEn: string; labelAr: string; emoji: string }[] = [
+    { key: 'text2image',         labelEn: 'Text → Image',  labelAr: 'نص ← صورة',      emoji: '✍️🖼️' },
+    { key: 'image2image',        labelEn: 'Image → Image', labelAr: 'صورة ← صورة',     emoji: '🖼️✨' },
+    { key: 'background-removal', labelEn: 'BG Removal',    labelAr: 'إزالة الخلفية',   emoji: '🪄✂️' },
+    { key: 'draw',               labelEn: 'Draw',          labelAr: 'رسم',              emoji: '🎨' },
   ];
 
   const needsUpload = submode === 'image2image' || submode === 'background-removal';
@@ -628,16 +722,14 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
           <button
             key={m.key}
             onClick={() => { setSubmode(m.key); resetForNewGeneration(); setUploadedFile(null); setPrompt(''); }}
-            className={`relative flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 min-h-[48px] touch-manipulation whitespace-nowrap ${
+            title={language === 'ar' ? m.labelAr : m.labelEn}
+            className={`relative flex items-center justify-center px-3 py-2.5 rounded-xl text-xl transition-all duration-200 min-h-[44px] min-w-[52px] touch-manipulation ${
               isActive
-                ? 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] text-white dark:text-[#060541] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.02]'
-                : 'bg-white/30 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 text-[#606062] dark:text-[#858384] hover:bg-white/50 dark:hover:bg-white/15 active:scale-95'
+                ? 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.04]'
+                : 'bg-white/30 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/50 dark:hover:bg-white/15 active:scale-95'
             }`}
           >
-            <span className={`${isActive ? 'text-orange-400 dark:text-[#060541]' : 'text-[#858384] dark:text-[#606062]'}`}>
-              {m.icon}
-            </span>
-            <span className="whitespace-nowrap">{language === 'ar' ? m.labelAr : m.labelEn}</span>
+            <span>{m.emoji}</span>
             {isActive && (
               <span className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/20 via-amber-500/20 to-orange-500/20 dark:from-transparent dark:via-transparent dark:to-transparent pointer-events-none" />
             )}
@@ -830,7 +922,47 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       {/* ── Result Display Area ── */}
       {resultImageUrl ? (
         <div className="space-y-3">
-          {/* Image canvas */}
+          {/* Multi-image picker slideshow (Quick/Grok) */}
+          {resultUrls.length > 1 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs font-semibold text-purple-500 dark:text-purple-400">
+                  {language === 'ar' ? `اختر صورة (${pickerIndex + 1}/${resultUrls.length})` : `Choose image (${pickerIndex + 1}/${resultUrls.length})`}
+                </span>
+                <div className="flex gap-1">
+                  {resultUrls.map((_, i) => (
+                    <button
+                      key={i}
+                      aria-label={`Image ${i + 1}`}
+                      onClick={() => { setPickerIndex(i); setResultImageUrl(resultUrls[i]); }}
+                      className={`h-2 rounded-full transition-all duration-200 ${
+                        i === pickerIndex ? 'w-6 bg-purple-500' : 'w-2 bg-muted-foreground/30'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+              {/* Horizontal scroll strip */}
+              <div className="flex gap-2 overflow-x-auto pb-1 snap-x snap-mandatory">
+                {resultUrls.map((url, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { setPickerIndex(i); setResultImageUrl(url); }}
+                    className={`flex-shrink-0 snap-center rounded-xl overflow-hidden border-2 transition-all duration-200 ${
+                      i === pickerIndex
+                        ? 'border-purple-500 shadow-lg shadow-purple-500/30 scale-[1.03]'
+                        : 'border-transparent opacity-60'
+                    }`}
+                    style={{ width: 90, height: 90 }}
+                  >
+                    <img src={url} alt={`Option ${i + 1}`} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Main image canvas */}
           <div
             className="relative rounded-2xl overflow-hidden border border-border/50 shadow-xl bg-gradient-to-br from-black/5 to-black/10 dark:from-white/5 dark:to-white/10 cursor-pointer group"
             onClick={() => setLightboxOpen(true)}
@@ -870,14 +1002,24 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
         {/* Quality toggle (T2I + I2I) */}
         {(submode === 'text2image' || submode === 'image2image') && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               {language === 'ar' ? 'الجودة' : 'Quality'}
             </span>
             <div className="flex bg-muted/50 rounded-lg p-0.5">
               <button
+                onClick={() => setQuality('quick')}
+                className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${
+                  quality === 'quick'
+                    ? 'bg-gradient-to-r from-purple-500 to-violet-500 text-white shadow-md'
+                    : 'text-muted-foreground'
+                }`}
+              >
+                {language === 'ar' ? 'سريع جداً' : 'Quick'}
+              </button>
+              <button
                 onClick={() => setQuality('fast')}
-                className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${
+                className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${
                   quality === 'fast'
                     ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
                     : 'text-muted-foreground'
@@ -887,7 +1029,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               </button>
               <button
                 onClick={() => setQuality('best_fast')}
-                className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${
+                className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${
                   quality === 'best_fast'
                     ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
                     : 'text-muted-foreground'
@@ -896,6 +1038,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 {language === 'ar' ? 'أفضل' : 'Best'}
               </button>
             </div>
+            {quality === 'quick' && (
+              <span className="text-[10px] text-purple-500 dark:text-purple-400 font-medium">
+                {language === 'ar' ? '✦ متعدد الصور' : '✦ Multiple images'}
+              </span>
+            )}
           </div>
         )}
 
