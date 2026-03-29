@@ -48,7 +48,8 @@ async function exchangeCodeForShortToken(code: string, redirectUri: string): Pro
     code,
     grant_type: "authorization_code",
   });
-  const res = await fetch("https://api.instagram.com/oauth/access_token", {
+  // New Instagram Business Login (2024+) uses graph.facebook.com for short-lived token exchange
+  const res = await fetch("https://graph.facebook.com/v21.0/oauth/access_token", {
     method: "POST",
     body: params,
   });
@@ -66,7 +67,7 @@ async function exchangeForLongLivedToken(shortToken: string): Promise<{ access_t
     client_secret: META_APP_SECRET,
     access_token: shortToken,
   });
-  const res = await fetch(`https://graph.instagram.com/access_token?${params}`);
+  const res = await fetch(`https://graph.instagram.com/v21.0/access_token?${params}`);
   const data = await res.json();
   console.log("[instagram-connect-user] Long token response:", JSON.stringify(data));
   if (data.error) throw new Error(data.error.message || "Long-lived token exchange failed");
@@ -74,12 +75,16 @@ async function exchangeForLongLivedToken(shortToken: string): Promise<{ access_t
 }
 
 async function fetchIGUserInfo(accessToken: string) {
+  // New Instagram Business Login — use instagram_business_basic fields
   const res = await fetch(
     `https://graph.instagram.com/v21.0/me?fields=id,name,username,profile_picture_url,followers_count,account_type&access_token=${accessToken}`
   );
   const data = await res.json();
   console.log("[instagram-connect-user] IG user info:", JSON.stringify(data));
-  if (data.error) return null;
+  if (data.error) {
+    console.error("[instagram-connect-user] IG user info error:", JSON.stringify(data.error));
+    return null;
+  }
   return data;
 }
 
