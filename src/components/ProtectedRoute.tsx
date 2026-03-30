@@ -32,8 +32,6 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   // --- Fix #2: hooks moved here (top of component) to satisfy Rules of Hooks ---
   const { isSubscribed, isGracePeriod, isAccessExpired, isNewUser, wasSubscribed, hasTrialStarted, isAdminGifted, profile, loading: isProfileLoading } = useUserProfile();
   const [accessCheckTick, setAccessCheckTick] = useState(0);
-  // NUCLEAR OPTION: direct DB expiry check — bypasses useUserProfile stale state entirely
-  const [directTrialExpired, setDirectTrialExpired] = useState(false);
 
   // Enable subscription/IAP enforcement
   const TEMP_DISABLE_SUBSCRIPTION_CHECKS = false;
@@ -316,41 +314,6 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     return () => clearInterval(interval);
   }, [isSubscribed, profile?.free_access_start_at]);
 
-  // NUCLEAR OPTION: Direct DB fetch to check trial expiry
-  // Runs immediately on mount + every 30s. Bypasses useUserProfile entirely.
-  // This is the last line of defense when Realtime/profile cache is stale.
-  useEffect(() => {
-    if (!user?.id) return;
-    const ownerAccountsCheck = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
-    if (ownerAccountsCheck.includes((user.email || '').toLowerCase())) return;
-
-    const checkDirect = async () => {
-      try {
-        const { data } = await supabase
-          .from('profiles')
-          .select('free_access_start_at, is_subscribed, payment_method, next_billing_date')
-          .eq('id', user.id)
-          .single();
-
-        if (!data) return;
-        if (data.is_subscribed) { setDirectTrialExpired(false); return; }
-        const pm = data.payment_method;
-        if (pm && pm !== 'manual' && data.next_billing_date && new Date(data.next_billing_date) > new Date()) {
-          setDirectTrialExpired(false); return;
-        }
-        if (!data.free_access_start_at) { setDirectTrialExpired(false); return; }
-        const elapsed = (Date.now() - Date.parse(data.free_access_start_at)) / 60000;
-        const expired = elapsed >= 1440;
-        if (DEV) console.log('ProtectedRoute [direct-check]: elapsed', Math.floor(elapsed), 'min | expired:', expired);
-        setDirectTrialExpired(expired);
-      } catch {}
-    };
-
-    checkDirect();
-    const interval = setInterval(checkDirect, 30000);
-    return () => clearInterval(interval);
-  }, [user?.id]);
-
   // Determine paywall variant
   const [paywallVariant, setPaywallVariant] = useState<PaywallVariant>('new_user');
 
@@ -381,8 +344,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     }
 
     // Version 2: Trial expired (pressed skip/X before, 24h ran out, never paid)
-    // directTrialExpired is the nuclear fallback when useUserProfile profile is stale
-    if (isAccessExpired || directTrialExpired) {
+    if (isAccessExpired) {
       if (DEV) console.log("ProtectedRoute: Trial expired - showing final paywall");
       setPaywallVariant('trial_expired');
       setShowPaywall(true);
@@ -399,7 +361,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
 
     // Still in grace period
     setShowPaywall(false);
-  }, [user?.id, isSubscribed, subscriptionStatus.isSubscribed, isAccessExpired, isNewUser, wasSubscribed, location.pathname, accessCheckTick, isProfileLoading, directTrialExpired]);
+  }, [user?.id, isSubscribed, subscriptionStatus.isSubscribed, isAccessExpired, isNewUser, wasSubscribed, location.pathname, accessCheckTick, isProfileLoading]);
 
   let effectiveHasSession = hasAnySession;
   
@@ -496,60 +458,51 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     );
   }
 
-  // ── ZERO-TRUST WHITELIST ──
-  // Access is confirmed ONLY when:
-  //   1. All loading is done
-  //   2. At least one active payment/trial signal is live-verified
-  //   3. User is NOT new (must start trial first)
-  //   4. Trial has NOT expired (isAccessExpired = false)
-  //   5. User has NOT previously cancelled without resubscribing (wasSubscribed = false)
-  // isAccessExpired and wasSubscribed are hard exits — no other signal overrides them.
-  const hasConfirmedAccess = (
-    !isLoading &&
-    !isProfileLoading &&
-    !subscriptionStatus.isLoading &&
-    (isSubscribed || subscriptionStatus.isSubscribed || isAdminGifted || isGracePeriod) &&
-    !isNewUser &&
-    !isAccessExpired &&
-    !wasSubscribed &&
-    !directTrialExpired  // NUCLEAR: direct DB check overrides everything
-  );
+  // ── THE 4 KEYS ──────────────────────────────────────────────────────────
+  // A user gets in if they hold at least ONE of these keys. Nothing else.
+
+  // 1. Admin Account Key
+  const isOwner = user?.email && ownerEmails.includes(user.email.toLowerCase());
+
+  // 2. RevenueCat / Apple / Google Key
+  const hasActivePayment = isSubscribed || subscriptionStatus.isSubscribed;
+
+  // 3. Admin Gift Key
+  const hasAdminGift = isAdminGifted;
+
+  // 4. 24-Hour Timer Key (Timer > 0)
+  const isTimerActive = isGracePeriod;
+
+  // The Gate Check: Do they hold at least one key?
+  const isAllowedIn = !!(isOwner || hasActivePayment || hasAdminGift || isTimerActive);
+
+  // Wait for all loading to finish, then check the keys
+  const hasConfirmedAccess = !isLoading && !isProfileLoading && !subscriptionStatus.isLoading && isAllowedIn;
 
   // Log access decision only when values actually change (not on every render)
-  const accessDecisionSnapshot = DEV ? JSON.stringify({ email: user?.email, hasConfirmedAccess, isNewUser, isSubscribed, subscriptionStatus_isSubscribed: subscriptionStatus.isSubscribed, isAdminGifted, isGracePeriod, showPaywall, paywallVariant }) : '';
+  const accessDecisionSnapshot = DEV ? JSON.stringify({ email: user?.email, hasConfirmedAccess, isOwner: !!isOwner, hasActivePayment, hasAdminGift, isTimerActive, isAllowedIn, showPaywall, paywallVariant }) : '';
   if (DEV && accessDecisionSnapshot !== accessDecisionRef.current) {
     accessDecisionRef.current = accessDecisionSnapshot;
-    console.log('ProtectedRoute: Access decision:', JSON.parse(accessDecisionSnapshot));
+    console.log('ProtectedRoute: Access decision (4 Keys):', JSON.parse(accessDecisionSnapshot));
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // FINAL GATE: All loading is done. Decision time.
+  // hasConfirmedAccess FALSE → BLACK WALL. No children. Only modal above.
+  // hasConfirmedAccess TRUE  → Render the app.
   // ═══════════════════════════════════════════════════════════════════════════
-  // If hasConfirmedAccess is FALSE → BLACK WALL. No exceptions. No children.
-  // If hasConfirmedAccess is TRUE  → Render children (dashboard/app).
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  if (!hasConfirmedAccess) {
-    if (DEV) console.log("ProtectedRoute: ACCESS DENIED - rendering black wall");
-    return (
-      <>
-        {CustomPaywallModal && (
-          <CustomPaywallModal open={showPaywall} onOpenChange={setShowPaywall} variant={paywallVariant} />
-        )}
-        <div className="w-screen h-[100dvh] bg-[#0c0f14] flex flex-col items-center justify-center overflow-hidden">
-          {/* Absolute Black. No icons. No greetings. No leaks. Zero-Trust. */}
-        </div>
-      </>
-    );
-  }
-
-  // ACCESS CONFIRMED - render the app
   return (
     <>
       {CustomPaywallModal && (
         <CustomPaywallModal open={showPaywall} onOpenChange={setShowPaywall} variant={paywallVariant} />
       )}
-      {children}
+      {hasConfirmedAccess ? (
+        children
+      ) : (
+        <div className="w-screen h-[100dvh] bg-[#0c0f14] flex items-center justify-center overflow-hidden">
+          {/* Absolute Black. Blocked users only see the modal above. */}
+        </div>
+      )}
     </>
   );
 }
