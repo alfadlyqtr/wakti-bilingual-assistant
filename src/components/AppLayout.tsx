@@ -24,7 +24,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Sparkles, RefreshCw, LogOut, Home, Shield, Clock, MessageCircle, X } from "lucide-react";
+import { Sparkles, RefreshCw, LogOut, Home, Shield, Clock, MessageCircle, X, GraduationCap } from "lucide-react";
 import type { PaywallVariant } from "@/components/ProtectedRoute";
 import { Logo3D } from "@/components/Logo3D";
 import { toast } from "sonner";
@@ -75,6 +75,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const [step, setStep] = useState(variant === 'new_user' ? 1 : 2);
   // New users go directly to Dashboard via handleSkip — Step 2 is only for expired/cancelled
   const [editingName, setEditingName] = useState(false);
+  const [showFeatures, setShowFeatures] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [usernameInput, setUsernameInput] = useState('');
   const [savingName, setSavingName] = useState(false);
@@ -413,7 +414,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
       { title: 'Voice TTS' },
       { title: 'My Documents' },
       { title: 'Tasks & Reminders' },
-      { title: 'Tasjeel Voice Recorder' },
+      { title: 'Tasjeel Voice Recorder', sublabel: '(meetings • lectures • summarization)' },
       { title: 'Vitality' },
       { title: 'Smart Text Generator' },
       { title: 'AI Games' },
@@ -433,7 +434,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
       { title: 'تحويل النص لصوت' },
       { title: 'مستنداتي' },
       { title: 'المهام والتذكيرات' },
-      { title: 'تسجيل (Tasjeel) مسجل الصوت' },
+      { title: 'تسجيل (Tasjeel) مسجل الصوت', sublabel: '(اجتماعات • محاضرات • تلخيص)' },
       { title: 'الحيوية' },
       { title: 'مولد النص الذكي' },
       { title: 'ألعاب الذكاء الاصطناعي' },
@@ -569,13 +570,23 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                   <span className="sparkle-2 absolute top-1 -left-4 text-sm select-none">⭐</span>
                   <span className="sparkle-3 absolute -bottom-1 right-0 text-sm select-none">💫</span>
                 </div>
-                <h2 className="gradient-text-animated text-2xl font-bold leading-snug">
+                <h2 className="gradient-text-animated text-2xl font-bold leading-snug inline-flex items-center justify-center gap-2">
                   {(() => {
                     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
                     if (language === 'ar') {
-                      return `${isQUUser ? '🎓 ' : ''}أهلاً ${userName ? userName + '،' : ''} مرحباً بك في وقتي!`;
+                      return (
+                        <>
+                          {isQUUser && <GraduationCap className="w-5 h-5 inline" style={{ color: '#8A1538' }} />}
+                          <span>أهلاً {userName ? userName + '،' : ''} مرحباً بك في وقتي!</span>
+                        </>
+                      );
                     }
-                    return `${isQUUser ? '🎓 ' : ''}Hello${userName ? ' ' + userName : ''}, welcome to Wakti!`;
+                    return (
+                      <>
+                        {isQUUser && <GraduationCap className="w-5 h-5 inline" style={{ color: '#8A1538' }} />}
+                        <span>Hello{userName ? ' ' + userName : ''}, welcome to Wakti!</span>
+                      </>
+                    );
                   })()}
                 </h2>
                 {/* Edit profile inline */}
@@ -662,8 +673,12 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                     <p className="text-sm font-semibold text-foreground/95 leading-relaxed">
                       {isQUUser
                         ? (language === 'ar'
-                            ? 'مرحباً بك. وقتي هو تطبيقك الفائق للدراسة والإنتاجية. استمتع الآن بسعر جامعة قطر الحصري.'
-                            : 'Welcome. Wakti is your ultimate academic and productivity AI. Benefit from your exclusive Qatar University rate.')
+                            ? <>
+                                مرحباً بك. وقتي هو تطبيقك الفائق للدراسة والإنتاجية. استمتع الآن بـ<span style={{ color: '#8A1538', fontWeight: '800', fontSize: '1.05em', textShadow: '0 0 8px rgba(138, 21, 56, 0.6), 0 0 16px rgba(138, 21, 56, 0.4)' }}>سعر جامعة قطر الحصري</span>.
+                              </>
+                            : <>
+                                Welcome. Wakti is your ultimate academic and productivity AI. Benefit from your exclusive <span style={{ color: '#8A1538', fontWeight: '800', fontSize: '1.05em', textShadow: '0 0 8px rgba(138, 21, 56, 0.6), 0 0 16px rgba(138, 21, 56, 0.4)' }}>Qatar University rate</span>.
+                              </>)
                         : (language === 'ar'
                             ? '🚀 وقتي هو تطبيق الذكاء الاصطناعي الشامل. لن تحتاج إلى أي تطبيق آخر بعد الآن.'
                             : '🚀 Wakti AI is the ultimate Super AI app — one app for everything. You won\'t need any other AI ever again.')}
@@ -672,28 +687,49 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                 );
               })()}
 
-              {/* Feature grid */}
-              <div className={`hello-float hello-float-3 grid grid-cols-2 gap-1.5 ${
-                user?.email?.toLowerCase().endsWith('@qu.edu.qa') ? 'rounded-xl border border-[#8A1538] p-2' : ''
-              }`}>
-                {featureList.map((feature, i) => {
-                  const item = typeof feature === 'string' ? { title: feature } : feature;
-                  return (
-                    <div
-                      key={i}
-                      className="flex items-center gap-1.5 rounded-md px-2 py-1.5 bg-[hsl(210,100%,65%,0.06)] border border-[hsl(210,100%,65%,0.15)] min-w-0 hover:bg-[hsl(210,100%,65%,0.12)] hover:border-[hsl(210,100%,65%,0.35)] hover:shadow-[0_0_10px_hsl(210,100%,65%,0.2)] transition-all duration-200"
+              {/* Feature grid - Collapsible */}
+              {(() => {
+                const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+                return (
+                  <div className={`hello-float hello-float-3 ${
+                    isQUUser ? 'rounded-xl border border-[#8A1538] p-2' : ''
+                  }`}>
+                    {/* Toggle button */}
+                    <button
+                      onClick={() => setShowFeatures(!showFeatures)}
+                      className="w-full flex items-center justify-center gap-1 py-2 text-xs font-medium text-[hsl(210,100%,65%)] hover:text-[hsl(210,100%,75%)] active:scale-[0.98] transition-all duration-150"
                     >
-                      <div className="w-1.5 h-1.5 rounded-full bg-[hsl(142,76%,55%)] shadow-[0_0_6px_hsl(142,76%,55%)] flex-shrink-0" />
-                      <span className="flex flex-col min-w-0">
-                        <span className="text-xs font-medium text-foreground/90 leading-tight truncate">{item.title}</span>
-                        {item.sublabel ? (
-                          <span className="text-[9px] text-[hsl(210,100%,65%)] leading-tight">{item.sublabel}</span>
-                        ) : null}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+                      {showFeatures
+                        ? (language === 'ar' ? 'إخفاء المميزات ⌃' : 'Hide features ⌃')
+                        : (language === 'ar' ? 'عرض جميع المميزات ⌵' : 'See all features ⌵')
+                      }
+                    </button>
+                    
+                    {/* Feature grid - shown when expanded */}
+                    {showFeatures && (
+                      <div className="grid grid-cols-2 gap-1.5 mt-2">
+                        {featureList.map((feature, i) => {
+                          const item = typeof feature === 'string' ? { title: feature } : feature;
+                          return (
+                            <div
+                              key={i}
+                              className="flex items-center gap-1.5 rounded-md px-2 py-1.5 bg-[hsl(210,100%,65%,0.06)] border border-[hsl(210,100%,65%,0.15)] min-w-0 hover:bg-[hsl(210,100%,65%,0.12)] hover:border-[hsl(210,100%,65%,0.35)] hover:shadow-[0_0_10px_hsl(210,100%,65%,0.2)] transition-all duration-200"
+                            >
+                              <div className="w-1.5 h-1.5 rounded-full bg-[hsl(142,76%,55%)] shadow-[0_0_6px_hsl(142,76%,55%)] flex-shrink-0" />
+                              <span className="flex flex-col min-w-0">
+                                <span className="text-xs font-medium text-foreground/90 leading-tight truncate">{item.title}</span>
+                                {item.sublabel ? (
+                                  <span className="text-[9px] text-[hsl(210,100%,65%)] leading-tight">{item.sublabel}</span>
+                                ) : null}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Promise */}
               <p className="hello-float hello-float-4 text-center text-sm text-[hsl(45,100%,65%)] font-semibold">
