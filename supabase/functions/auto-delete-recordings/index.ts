@@ -47,8 +47,43 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
-    // Delete the recordings
+
+    // Extract storage paths from public URLs
+    // URL format: .../storage/v1/object/public/tasjeel_recordings/USER_ID/filename.ext
+    const extractStoragePath = (url: string | null): string | null => {
+      if (!url) return null;
+      try {
+        const marker = '/object/public/tasjeel_recordings/';
+        const idx = url.indexOf(marker);
+        if (idx === -1) return null;
+        return url.slice(idx + marker.length);
+      } catch {
+        return null;
+      }
+    };
+
+    const storagePathsToDelete: string[] = [];
+    for (const rec of recordingsToDelete) {
+      const original = extractStoragePath(rec.original_recording_path);
+      const summary = extractStoragePath(rec.summary_audio_path);
+      if (original && original !== 'placeholder_for_quick_summary') storagePathsToDelete.push(original);
+      if (summary) storagePathsToDelete.push(summary);
+    }
+
+    if (storagePathsToDelete.length > 0) {
+      console.log(`Deleting ${storagePathsToDelete.length} storage file(s)...`);
+      const { error: storageError } = await supabaseClient
+        .storage
+        .from('tasjeel_recordings')
+        .remove(storagePathsToDelete);
+      if (storageError) {
+        console.warn('Storage deletion error (non-fatal):', storageError.message);
+      } else {
+        console.log('Storage files deleted successfully.');
+      }
+    }
+
+    // Delete the DB records
     const recordingIds = recordingsToDelete.map(rec => rec.id);
     
     const { error: deleteError } = await supabaseClient
@@ -60,13 +95,11 @@ serve(async (req) => {
       throw deleteError;
     }
     
-    // Note: Storage files will be cleaned up by storage lifecycle policies
-    // or could be explicitly deleted here if needed
-    
     return new Response(
       JSON.stringify({ 
         message: `Successfully deleted ${recordingIds.length} old recordings`,
-        deleted_count: recordingIds.length
+        deleted_count: recordingIds.length,
+        storage_files_deleted: storagePathsToDelete.length
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

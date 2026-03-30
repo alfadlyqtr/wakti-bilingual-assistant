@@ -549,7 +549,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const q = data?.[0] || data;
       setQuota({
         used: q?.videos_generated || 0,
-        limit: q?.videos_limit || 60,
+        limit: q?.videos_limit || 80,
         extra: q?.extra_videos || 0,
         canGenerate: q?.can_generate ?? true,
       });
@@ -2179,10 +2179,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
   };
 
-  const remaining = quota ? quota.limit - quota.used + quota.extra : 60;
+  const remaining = quota ? quota.limit - quota.used + quota.extra : 80;
   const used = quota?.used || 0;
-  const limit = quota?.limit || 60;
+  const limit = quota?.limit || 80;
   const limitReached = quota !== null && !quota.canGenerate;
+  const maxAffordableCinemaScenes = Math.max(0, Math.min(6, remaining));
 
   const needsArabicTranslation =
     language === 'ar' &&
@@ -2198,6 +2199,23 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     ? (imagePreview && !needsArabicTranslation && !limitReached && !isGenerating && !loadingQuota)
     : false;
   const showLatestVideo = !generatedVideoUrl && !!(latestVideo?.signedUrl || latestVideo?.video_url);
+
+  useEffect(() => {
+    if (generationMode !== 'cinema') return;
+    if (loadingQuota) return;
+    if (maxAffordableCinemaScenes <= 0) return;
+    if (cinemaSceneCount > maxAffordableCinemaScenes) {
+      setCinemaSceneCount(maxAffordableCinemaScenes);
+    }
+  }, [generationMode, loadingQuota, maxAffordableCinemaScenes, cinemaSceneCount]);
+
+  const getSignedVideoUrl = useCallback(async (storagePath?: string | null) => {
+    if (!storagePath) return null;
+    const { data } = await supabase.storage
+      .from('user-videos')
+      .getPublicUrl(storagePath);
+    return data?.publicUrl;
+  }, [supabase]);
 
   // Map generationMode to trial feature key/limit/label
   const videoTrialMap: Record<string, { key: string; limit: number; en: string; ar: string }> = {
@@ -3080,10 +3098,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                 <span className="ml-1" style={{color:'#E2C7A8'}}>{f4 ? '✓' : '✱'}</span>
                               </p>
                               <div className="flex gap-2">
-                                {[1,2,3,4,5,6].map(n=>(
+                                {[1,2,3,4,5,6].map(n=>{
+                                  const exceedsQuota = !loadingQuota && n > maxAffordableCinemaScenes;
+                                  return (
                                   <button key={n}
-                                    onClick={()=>{setCinemaSceneCount(n);setCinemaSceneCountTouched(true);}}
-                                    disabled={isDirecting}
+                                    onClick={()=>{if (exceedsQuota) return; setCinemaSceneCount(n);setCinemaSceneCountTouched(true);}}
+                                    disabled={isDirecting || exceedsQuota}
                                     className="flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-40"
                                     style={{
                                       background: f4 && cinemaSceneCount===n ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : n===3 && !f4 ? 'rgba(226,199,168,0.1)' : clr.numBg,
@@ -3093,9 +3113,20 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                     <span className="text-sm font-bold">{n}</span>
                                     <span className="text-[9px] opacity-80">{n*10}s</span>
                                   </button>
-                                ))}
+                                )})}
                               </div>
                               {!f4 && <p className="text-[10px] mt-1.5 px-1" style={{color: clr.textSubtle}}>{language==='ar'?'اختر عدداً للمتابعة':'Tap a number to confirm'}</p>}
+                              {!loadingQuota && generationMode === 'cinema' && maxAffordableCinemaScenes < 6 && (
+                                <p className="text-[10px] mt-1.5 px-1" style={{color: 'rgba(226,199,168,0.78)'}}>
+                                  {maxAffordableCinemaScenes > 0
+                                    ? (language === 'ar'
+                                      ? `يمكنك اختيار حتى ${maxAffordableCinemaScenes} ${maxAffordableCinemaScenes === 1 ? 'مشهد' : 'مشاهد'} حسب رصيد الفيديو المتبقي`
+                                      : `You can choose up to ${maxAffordableCinemaScenes} scene${maxAffordableCinemaScenes === 1 ? '' : 's'} based on your remaining video credits`)
+                                    : (language === 'ar'
+                                      ? 'لا توجد أرصدة فيديو متبقية لهذا الشهر'
+                                      : 'No video credits remaining this month')}
+                                </p>
+                              )}
                             </div>
 
                             {/* Platform & Format selector */}

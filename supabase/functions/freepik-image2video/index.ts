@@ -513,7 +513,7 @@ serve(async (req) => {
           error: "Monthly AI video limit reached",
           quota: {
             used: quota?.videos_generated || 0,
-            limit: quota?.videos_limit || 10,
+            limit: quota?.videos_limit || 80,
             extra: quota?.extra_videos || 0,
           },
         }),

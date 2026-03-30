@@ -1024,7 +1024,7 @@ const Tasjeel: React.FC = () => {
     }
   };
   
-  // New function to save quick summary - Updated to add placeholder for original_recording_path
+  // Save quick summary - uploads original audio to storage then saves a proper record
   const saveQuickSummary = async () => {
     if (!quickSummaryTitle || !quickSummaryText) {
       toast(translationTexts.error);
@@ -1033,13 +1033,23 @@ const Tasjeel: React.FC = () => {
     
     try {
       setIsSaving(true);
-      
-      // Save record with quick_summary source type and a placeholder for original_recording_path
+
+      // Upload the original audio file to storage so it can be played back later
+      let originalAudioUrl = "placeholder_for_quick_summary";
+      if (quickAudioFile) {
+        try {
+          originalAudioUrl = await uploadAudioFile({ file: quickAudioFile });
+        } catch (uploadErr) {
+          console.warn("Could not upload quick summary audio to storage:", uploadErr);
+          // Non-fatal: still save the record without a playable original
+        }
+      }
+
       await saveTasjeelRecord({
         title: quickSummaryTitle,
         summary: quickSummaryText,
         transcription: quickTranscript,
-        original_recording_path: "placeholder_for_quick_summary", // Added placeholder instead of null
+        original_recording_path: originalAudioUrl,
         duration: null,
         summary_audio_path: null,
         saved: true,

@@ -1,3 +1,6 @@
+// DEPRECATED: This component is no longer used. SavedRecordings.tsx is the canonical recordings UI.
+// Do not import or extend this file. Safe to delete in a future cleanup pass.
+
 import React, { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";

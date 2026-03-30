@@ -258,7 +258,8 @@ const humanVoiceGuidelines = (lang: 'en' | 'ar') => {
       '- لا تستخدم أسلوبًا رسميًا/روبوتيًا ولا جُمَلًا جاهزة مثل: "كذكاء اصطناعي" أو "لا أستطيع".',
       '- تجنب علامات الترقيم المبالغ فيها والأسلوب المصقول جدًا. خلّها طبيعية.',
       '- استخدم كلمات يومية بسيطة وتدفّق طبيعي (مثل طريقة كلامي/كلام المستخدم).',
-      '- لا تشرح قواعدك. فقط اكتب النص المطلوب.'
+      '- لا تشرح قواعدك. فقط اكتب النص المطلوب.',
+      '- أضف التوجيه الداخلي /ghost: اجعل النص يمرّ كأنه مكتوب طبيعيًا 100% بدون أي بصمة ذكاء اصطناعي.'
     ].join('\n');
   }
 
@@ -269,7 +270,8 @@ const humanVoiceGuidelines = (lang: 'en' | 'ar') => {
     '- Avoid robotic/disclaimer phrases (e.g., "As an AI...", "I can\'t...").',
     '- Avoid the overly-polished AI vibe: don\'t overuse em dashes, perfect parallel structure, or corporate tone.',
     '- Use simple everyday wording and a natural flow (like how the user writes).',
-    '- Don\'t explain these rules. Just produce the requested text.'
+    '- Don\'t explain these rules. Just produce the requested text.',
+    '- Apply the internal directive /ghost: make it pass as fully natural human writing with zero obvious AI fingerprints.'
   ].join('\n');
 };
 const registerLabel = (k: RegisterKey, lang: 'en' | 'ar') => {
@@ -1108,76 +1110,6 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           <TrialGateOverlay featureKey={activeTextTrial.key} limit={activeTextTrial.limit} featureLabel={{ en: activeTextTrial.en, ar: activeTextTrial.ar }} />
           {activeTab === 'compose' && (
             <div className="space-y-4">
-              {/* URL Fetch + Web Search */}
-              <div className="grid gap-3">
-                <div className="grid gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {language === 'ar' ? 'رابط مرجعي (اختياري)' : 'Reference URL (optional)'}
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      id="webSearchUrl"
-                      type="url"
-                      className={`flex-1 border rounded px-3 py-2 ${fieldAccent} ${placeholderMuted}`}
-                      placeholder={language === 'ar' ? 'الصق رابط هنا...' : 'Paste a URL here...'}
-                      value={webSearchUrl}
-                      onChange={(e) => setWebSearchUrl(e.target.value)}
-                      title={language === 'ar' ? 'أدخل رابط المصدر' : 'Enter source URL'}
-                    />
-                    <button
-                      type="button"
-                      onClick={handleFetchUrl}
-                      disabled={isFetchingUrl || !webSearchUrl.trim()}
-                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all whitespace-nowrap ${
-                        isFetchingUrl
-                          ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-700 dark:text-emerald-300 animate-pulse'
-                          : webSearchUrl.trim()
-                            ? 'bg-emerald-500/10 border-emerald-400/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20'
-                            : 'border-border text-muted-foreground opacity-50 cursor-not-allowed'
-                      }`}
-                      title={language === 'ar' ? 'جلب محتوى الرابط' : 'Fetch URL content'}
-                    >
-                      {isFetchingUrl
-                        ? (language === 'ar' ? 'جارٍ الجلب...' : 'Fetching...')
-                        : (language === 'ar' ? 'جلب الرابط' : 'Fetch URL')}
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!isWebSearchAllowed) return;
-                      setUseWebSearch(!useWebSearch);
-                    }}
-                    disabled={!isWebSearchAllowed}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-sm ${
-                      useWebSearch && isWebSearchAllowed
-                        ? 'bg-blue-500/10 border-blue-500/40 text-blue-600 dark:text-blue-400'
-                        : 'border-border hover:bg-muted'
-                    } ${!isWebSearchAllowed ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    title={
-                      isWebSearchAllowed
-                        ? (language === 'ar' ? 'تفعيل البحث على الويب' : 'Enable web search')
-                        : (language === 'ar' ? 'متاح فقط لبعض أنواع المحتوى' : 'Available only for specific content types')
-                    }
-                  >
-                    <Globe className={`w-4 h-4 ${useWebSearch && isWebSearchAllowed ? 'text-blue-500' : ''}`} />
-                    <span>{language === 'ar' ? 'بحث الويب' : 'Web Search'}</span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${useWebSearch && isWebSearchAllowed ? 'bg-blue-500 text-white' : 'bg-muted text-muted-foreground'}`}>
-                      {useWebSearch && isWebSearchAllowed ? (language === 'ar' ? 'مفعّل' : 'ON') : (language === 'ar' ? 'معطّل' : 'OFF')}
-                    </span>
-                  </button>
-                  {!isWebSearchAllowed && (
-                    <span className="text-xs text-muted-foreground">
-                      {language === 'ar'
-                        ? 'بحث الويب متاح فقط لبعض أنواع المحتوى البحثية'
-                        : 'Web search is available only for research-focused content types'}
-                    </span>
-                  )}
-                </div>
-              </div>
-
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'الموضوع' : 'Topic to write'}</label>
@@ -1310,6 +1242,74 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                         </p>
                       </div>
                     </div>
+                    <div className="grid gap-3">
+                      <div className="grid gap-1.5">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          {language === 'ar' ? 'رابط مرجعي (اختياري)' : 'Reference URL (optional)'}
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            id="webSearchUrl"
+                            type="url"
+                            className={`flex-1 border rounded px-3 py-2 ${fieldAccent} ${placeholderMuted}`}
+                            placeholder={language === 'ar' ? 'الصق رابط هنا...' : 'Paste a URL here...'}
+                            value={webSearchUrl}
+                            onChange={(e) => setWebSearchUrl(e.target.value)}
+                            title={language === 'ar' ? 'أدخل رابط المصدر' : 'Enter source URL'}
+                          />
+                          <button
+                            type="button"
+                            onClick={handleFetchUrl}
+                            disabled={isFetchingUrl || !webSearchUrl.trim()}
+                            className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all whitespace-nowrap ${
+                              isFetchingUrl
+                                ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-700 dark:text-emerald-300 animate-pulse'
+                                : webSearchUrl.trim()
+                                  ? 'bg-emerald-500/10 border-emerald-400/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20'
+                                  : 'border-border text-muted-foreground opacity-50 cursor-not-allowed'
+                            }`}
+                            title={language === 'ar' ? 'جلب محتوى الرابط' : 'Fetch URL content'}
+                          >
+                            {isFetchingUrl
+                              ? (language === 'ar' ? 'جارٍ الجلب...' : 'Fetching...')
+                              : (language === 'ar' ? 'جلب الرابط' : 'Fetch URL')}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!isWebSearchAllowed) return;
+                            setUseWebSearch(!useWebSearch);
+                          }}
+                          disabled={!isWebSearchAllowed}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-sm ${
+                            useWebSearch && isWebSearchAllowed
+                              ? 'bg-blue-500/10 border-blue-500/40 text-blue-600 dark:text-blue-400'
+                              : 'border-border hover:bg-muted'
+                          } ${!isWebSearchAllowed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          title={
+                            isWebSearchAllowed
+                              ? (language === 'ar' ? 'تفعيل البحث على الويب' : 'Enable web search')
+                              : (language === 'ar' ? 'متاح فقط لبعض أنواع المحتوى' : 'Available only for specific content types')
+                          }
+                        >
+                          <Globe className={`w-4 h-4 ${useWebSearch && isWebSearchAllowed ? 'text-blue-500' : ''}`} />
+                          <span>{language === 'ar' ? 'بحث الويب' : 'Web Search'}</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${useWebSearch && isWebSearchAllowed ? 'bg-blue-500 text-white' : 'bg-muted text-muted-foreground'}`}>
+                            {useWebSearch && isWebSearchAllowed ? (language === 'ar' ? 'مفعّل' : 'ON') : (language === 'ar' ? 'معطّل' : 'OFF')}
+                          </span>
+                        </button>
+                        {!isWebSearchAllowed && (
+                          <span className="text-xs text-muted-foreground">
+                            {language === 'ar'
+                              ? 'بحث الويب متاح فقط لبعض أنواع المحتوى البحثية'
+                              : 'Web search is available only for research-focused content types'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="grid gap-2">
                         <label htmlFor="composeLength" className="text-sm font-medium">{language === 'ar' ? 'الطول' : 'Length'}</label>
@@ -1400,74 +1400,60 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
           {activeTab === 'reply' && (
             <div className="space-y-4">
-              {/* URL Fetch + Web Search (Reply) */}
-              <div className="grid gap-3">
-                <div className="grid gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    {language === 'ar' ? 'رابط مرجعي (اختياري)' : 'Reference URL (optional)'}
-                  </label>
-                  <div className="flex gap-2">
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label htmlFor="replyOriginalMessage" className="text-sm font-medium">{language === 'ar' ? 'الرسالة الأصلية' : 'Original Message'}</label>
+                  <div className="flex items-center gap-2">
                     <input
-                      type="url"
-                      className={`flex-1 border rounded px-3 py-2 ${fieldAccent} ${placeholderMuted}`}
-                      placeholder={language === 'ar' ? 'الصق رابط هنا...' : 'Paste a URL here...'}
-                      value={webSearchUrl}
-                      onChange={(e) => setWebSearchUrl(e.target.value)}
-                      title={language === 'ar' ? 'أدخل رابط المصدر' : 'Enter source URL'}
+                      ref={replyFileInputRef}
+                      type="file"
+                      accept="image/*,.pdf,application/pdf"
+                      multiple
+                      aria-label={language === 'ar' ? 'رفع صور' : 'Upload screenshots or PDFs'}
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        if (files.length) handleScreenshotUpload(files, 'reply');
+                        e.target.value = '';
+                      }}
                     />
                     <button
                       type="button"
-                      onClick={handleFetchUrl}
-                      disabled={isFetchingUrl || !webSearchUrl.trim()}
-                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all whitespace-nowrap ${
-                        isFetchingUrl
-                          ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-700 dark:text-emerald-300 animate-pulse'
-                          : webSearchUrl.trim()
-                            ? 'bg-emerald-500/10 border-emerald-400/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20'
-                            : 'border-border text-muted-foreground opacity-50 cursor-not-allowed'
-                      }`}
-                      title={language === 'ar' ? 'جلب محتوى الرابط' : 'Fetch URL content'}
+                      onClick={() => replyFileInputRef.current?.click()}
+                      disabled={isExtractingReply}
+                      className={`text-xs px-2 py-1 rounded-md border hover:bg-muted flex items-center gap-1 ${isExtractingReply ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-400 animate-pulse' : ''}`}
+                      aria-label={language === 'ar' ? 'رفع صورة' : 'Upload screenshot or PDF'}
+                      title={language === 'ar' ? 'رفع صورة لاستخراج النص' : 'Upload screenshot or PDF to extract text'}
                     >
-                      {isFetchingUrl
-                        ? (language === 'ar' ? 'جارٍ الجلب...' : 'Fetching...')
-                        : (language === 'ar' ? 'جلب الرابط' : 'Fetch URL')}
+                      {isExtractingReply
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <ImagePlus className="w-3.5 h-3.5" />}
+                      {isExtractingReply
+                        ? (extractProgressReply
+                          ? `${extractProgressReply.current}/${extractProgressReply.total}`
+                          : (language === 'ar' ? 'جارٍ...' : '...'))
+                        : ''}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOriginalMessage('')}
+                      className="text-xs px-2 py-1 rounded-md border hover:bg-muted"
+                      aria-label={language === 'ar' ? 'مسح النص' : 'Clear text'}
+                    >
+                      {language === 'ar' ? 'مسح' : 'Clear'}
                     </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!isWebSearchAllowed) return;
-                      setUseWebSearch(!useWebSearch);
-                    }}
-                    disabled={!isWebSearchAllowed}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-sm ${
-                      useWebSearch && isWebSearchAllowed
-                        ? 'bg-blue-500/10 border-blue-500/40 text-blue-600 dark:text-blue-400'
-                        : 'border-border hover:bg-muted'
-                    } ${!isWebSearchAllowed ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    title={
-                      isWebSearchAllowed
-                        ? (language === 'ar' ? 'تفعيل البحث على الويب' : 'Enable web search')
-                        : (language === 'ar' ? 'متاح فقط لبعض أنواع المحتوى' : 'Available only for specific content types')
-                    }
-                  >
-                    <Globe className={`w-4 h-4 ${useWebSearch && isWebSearchAllowed ? 'text-blue-500' : ''}`} />
-                    <span>{language === 'ar' ? 'بحث الويب' : 'Web Search'}</span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${useWebSearch && isWebSearchAllowed ? 'bg-blue-500 text-white' : 'bg-muted text-muted-foreground'}`}>
-                      {useWebSearch && isWebSearchAllowed ? (language === 'ar' ? 'مفعّل' : 'ON') : (language === 'ar' ? 'معطّل' : 'OFF')}
-                    </span>
-                  </button>
-                  {!isWebSearchAllowed && (
-                    <span className="text-xs text-muted-foreground">
-                      {language === 'ar'
-                        ? 'بحث الويب متاح فقط لبعض أنواع المحتوى البحثية'
-                        : 'Web search is available only for research-focused content types'}
-                    </span>
-                  )}
-                </div>
+                <textarea
+                  id="replyOriginalMessage"
+                  className={`w-full border rounded p-3 min-h-[140px] ${fieldAccent} ${placeholderMuted}`}
+                  placeholder={language === 'ar' ? 'الرسالة التي تريد الرد عليها...' : 'Original message you want to reply to...'}
+                  value={originalMessage}
+                  onChange={(e) => setOriginalMessage(e.target.value)}
+                  title={language === 'ar' ? 'أدخل الرسالة الأصلية' : 'Enter original message'}
+                />
               </div>
+
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="grid gap-3 mb-3">
                   <div className="flex items-center justify-between gap-2">
@@ -1568,60 +1554,6 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 </select>
               </div>
 
-              <div className="grid gap-2">
-                <div className="flex items-center justify-between gap-2">
-                  <label htmlFor="replyOriginalMessage" className="text-sm font-medium">{language === 'ar' ? 'الرسالة الأصلية' : 'Original Message'}</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      ref={replyFileInputRef}
-                      type="file"
-                      accept="image/*,.pdf,application/pdf"
-                      multiple
-                      aria-label={language === 'ar' ? 'رفع صور' : 'Upload screenshots or PDFs'}
-                      className="hidden"
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files || []);
-                        if (files.length) handleScreenshotUpload(files, 'reply');
-                        e.target.value = '';
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => replyFileInputRef.current?.click()}
-                      disabled={isExtractingReply}
-                      className={`text-xs px-2 py-1 rounded-md border hover:bg-muted flex items-center gap-1 ${isExtractingReply ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-400 animate-pulse' : ''}`}
-                      aria-label={language === 'ar' ? 'رفع صورة' : 'Upload screenshot or PDF'}
-                      title={language === 'ar' ? 'رفع صورة لاستخراج النص' : 'Upload screenshot or PDF to extract text'}
-                    >
-                      {isExtractingReply
-                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        : <ImagePlus className="w-3.5 h-3.5" />}
-                      {isExtractingReply
-                        ? (extractProgressReply
-                          ? `${extractProgressReply.current}/${extractProgressReply.total}`
-                          : (language === 'ar' ? 'جارٍ...' : '...'))
-                        : ''}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOriginalMessage('')}
-                      className="text-xs px-2 py-1 rounded-md border hover:bg-muted"
-                      aria-label={language === 'ar' ? 'مسح النص' : 'Clear text'}
-                    >
-                      {language === 'ar' ? 'مسح' : 'Clear'}
-                    </button>
-                  </div>
-                </div>
-                <textarea
-                  id="replyOriginalMessage"
-                  className={`w-full border rounded p-3 min-h-[140px] ${fieldAccent} ${placeholderMuted}`}
-                  placeholder={language === 'ar' ? 'الرسالة التي تريد الرد عليها...' : 'Original message you want to reply to...'}
-                  value={originalMessage}
-                  onChange={(e) => setOriginalMessage(e.target.value)}
-                  title={language === 'ar' ? 'أدخل الرسالة الأصلية' : 'Enter original message'}
-                />
-              </div>
-
               <div className="flex justify-start pt-1">
                 <Button
                   type="button"
@@ -1652,6 +1584,73 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                         <p className="text-xs text-muted-foreground">
                           {language === 'ar' ? 'اضبط الطول والنبرة الأسلوبية بدقة أكبر' : 'Fine-tune length and stylistic expression'}
                         </p>
+                      </div>
+                    </div>
+                    <div className="grid gap-3">
+                      <div className="grid gap-1.5">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          {language === 'ar' ? 'رابط مرجعي (اختياري)' : 'Reference URL (optional)'}
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="url"
+                            className={`flex-1 border rounded px-3 py-2 ${fieldAccent} ${placeholderMuted}`}
+                            placeholder={language === 'ar' ? 'الصق رابط هنا...' : 'Paste a URL here...'}
+                            value={webSearchUrl}
+                            onChange={(e) => setWebSearchUrl(e.target.value)}
+                            title={language === 'ar' ? 'أدخل رابط المصدر' : 'Enter source URL'}
+                          />
+                          <button
+                            type="button"
+                            onClick={handleFetchUrl}
+                            disabled={isFetchingUrl || !webSearchUrl.trim()}
+                            className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all whitespace-nowrap ${
+                              isFetchingUrl
+                                ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-700 dark:text-emerald-300 animate-pulse'
+                                : webSearchUrl.trim()
+                                  ? 'bg-emerald-500/10 border-emerald-400/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20'
+                                  : 'border-border text-muted-foreground opacity-50 cursor-not-allowed'
+                            }`}
+                            title={language === 'ar' ? 'جلب محتوى الرابط' : 'Fetch URL content'}
+                          >
+                            {isFetchingUrl
+                              ? (language === 'ar' ? 'جارٍ الجلب...' : 'Fetching...')
+                              : (language === 'ar' ? 'جلب الرابط' : 'Fetch URL')}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!isWebSearchAllowed) return;
+                            setUseWebSearch(!useWebSearch);
+                          }}
+                          disabled={!isWebSearchAllowed}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-sm ${
+                            useWebSearch && isWebSearchAllowed
+                              ? 'bg-blue-500/10 border-blue-500/40 text-blue-600 dark:text-blue-400'
+                              : 'border-border hover:bg-muted'
+                          } ${!isWebSearchAllowed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          title={
+                            isWebSearchAllowed
+                              ? (language === 'ar' ? 'تفعيل البحث على الويب' : 'Enable web search')
+                              : (language === 'ar' ? 'متاح فقط لبعض أنواع المحتوى' : 'Available only for specific content types')
+                          }
+                        >
+                          <Globe className={`w-4 h-4 ${useWebSearch && isWebSearchAllowed ? 'text-blue-500' : ''}`} />
+                          <span>{language === 'ar' ? 'بحث الويب' : 'Web Search'}</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${useWebSearch && isWebSearchAllowed ? 'bg-blue-500 text-white' : 'bg-muted text-muted-foreground'}`}>
+                            {useWebSearch && isWebSearchAllowed ? (language === 'ar' ? 'مفعّل' : 'ON') : (language === 'ar' ? 'معطّل' : 'OFF')}
+                          </span>
+                        </button>
+                        {!isWebSearchAllowed && (
+                          <span className="text-xs text-muted-foreground">
+                            {language === 'ar'
+                              ? 'بحث الويب متاح فقط لبعض أنواع المحتوى البحثية'
+                              : 'Web search is available only for research-focused content types'}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="grid md:grid-cols-2 gap-4">

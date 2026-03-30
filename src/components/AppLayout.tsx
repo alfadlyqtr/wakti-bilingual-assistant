@@ -171,8 +171,13 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const handleSubscribe = async () => {
     setLoading(true);
     setPurchaseInProgress(true);
-    
-    purchasePackage(activePackageId, async (resp: any) => {
+
+    // QU University Discount: use dedicated product ID if the user has a @qu.edu.qa email.
+    // Falls back to the standard monthly package if not a QU user or package is unavailable.
+    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+    const packageId = isQUUser ? 'wakti_monthly_qu' : activePackageId;
+
+    purchasePackage(packageId, async (resp: any) => {
       console.log('[Purchase] Response:', resp);
       
       // Treat success OR 'already subscribed' (Android) as a successful subscription
@@ -552,6 +557,8 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
               .continue-btn-glow { animation: pulse-glow 2.5s ease-in-out infinite; }
             `}</style>
 
+            {/* QU University track — isolated to Step 1 only */}
+            {(() => { const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa')); return null; })()}
             <div className="space-y-4 py-2">
               {/* Greeting */}
               <div className="text-center space-y-2 pt-1 hello-float hello-float-1">
@@ -563,9 +570,13 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                   <span className="sparkle-3 absolute -bottom-1 right-0 text-sm select-none">💫</span>
                 </div>
                 <h2 className="gradient-text-animated text-2xl font-bold leading-snug">
-                  {language === 'ar'
-                    ? `أهلاً ${userName ? userName + '،' : ''} مرحباً بك في وقتي!`
-                    : `Hello${userName ? ' ' + userName : ''}, welcome to Wakti!`}
+                  {(() => {
+                    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+                    if (language === 'ar') {
+                      return `${isQUUser ? '🎓 ' : ''}أهلاً ${userName ? userName + '،' : ''} مرحباً بك في وقتي!`;
+                    }
+                    return `${isQUUser ? '🎓 ' : ''}Hello${userName ? ' ' + userName : ''}, welcome to Wakti!`;
+                  })()}
                 </h2>
                 {/* Edit profile inline */}
                 {!editingName ? (
@@ -576,7 +587,11 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                       setNameError('');
                       setEditingName(true);
                     }}
-                    className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] rounded-full border border-foreground/20 text-foreground/40 hover:text-foreground/70 hover:border-foreground/35 hover:bg-foreground/5 active:scale-95 transition-all duration-150"
+                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] rounded-full border ${
+                      user?.email?.toLowerCase().endsWith('@qu.edu.qa')
+                        ? 'border-[#8A1538] text-foreground/40 hover:text-foreground/70 hover:border-[#8A1538]/70 hover:bg-[#8A1538]/5'
+                        : 'border-foreground/20 text-foreground/40 hover:text-foreground/70 hover:border-foreground/35 hover:bg-foreground/5'
+                    } active:scale-95 transition-all duration-150`}
                   >
                     <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                     {language === 'ar' ? 'تعديل الملف الشخصي' : 'Set up your profile'}
@@ -638,16 +653,29 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
               </div>
 
               {/* Pitch */}
-              <div className="hello-float hello-float-2 rounded-xl px-4 py-3 text-center bg-gradient-to-br from-[hsl(210,100%,65%,0.12)] to-[hsl(280,70%,65%,0.1)] border border-[hsl(210,100%,65%,0.3)] shadow-[0_0_24px_hsl(210,100%,65%,0.15),inset_0_1px_0_hsl(210,100%,65%,0.2)]">
-                <p className="text-sm font-semibold text-foreground/95 leading-relaxed">
-                  {language === 'ar'
-                    ? '🚀 وقتي هو تطبيق الذكاء الاصطناعي الشامل. لن تحتاج إلى أي تطبيق آخر بعد الآن.'
-                    : '🚀 Wakti AI is the ultimate Super AI app — one app for everything. You won\'t need any other AI ever again.'}
-                </p>
-              </div>
+              {(() => {
+                const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+                return (
+                  <div className={`hello-float hello-float-2 rounded-xl px-4 py-3 text-center bg-gradient-to-br from-[hsl(210,100%,65%,0.12)] to-[hsl(280,70%,65%,0.1)] shadow-[0_0_24px_hsl(210,100%,65%,0.15),inset_0_1px_0_hsl(210,100%,65%,0.2)] border ${
+                    isQUUser ? 'border-[#8A1538]' : 'border-[hsl(210,100%,65%,0.3)]'
+                  }`}>
+                    <p className="text-sm font-semibold text-foreground/95 leading-relaxed">
+                      {isQUUser
+                        ? (language === 'ar'
+                            ? 'مرحباً بك. وقتي هو تطبيقك الفائق للدراسة والإنتاجية. استمتع الآن بسعر جامعة قطر الحصري.'
+                            : 'Welcome. Wakti is your ultimate academic and productivity AI. Benefit from your exclusive Qatar University rate.')
+                        : (language === 'ar'
+                            ? '🚀 وقتي هو تطبيق الذكاء الاصطناعي الشامل. لن تحتاج إلى أي تطبيق آخر بعد الآن.'
+                            : '🚀 Wakti AI is the ultimate Super AI app — one app for everything. You won\'t need any other AI ever again.')}
+                    </p>
+                  </div>
+                );
+              })()}
 
               {/* Feature grid */}
-              <div className="hello-float hello-float-3 grid grid-cols-2 gap-1.5">
+              <div className={`hello-float hello-float-3 grid grid-cols-2 gap-1.5 ${
+                user?.email?.toLowerCase().endsWith('@qu.edu.qa') ? 'rounded-xl border border-[#8A1538] p-2' : ''
+              }`}>
                 {featureList.map((feature, i) => {
                   const item = typeof feature === 'string' ? { title: feature } : feature;
                   return (
@@ -679,7 +707,9 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                 <Button
                   onClick={handleSkip}
                   size="lg"
-                  className="continue-btn-glow w-full min-h-[64px] bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:opacity-95 text-white font-bold text-xl tracking-wide active:scale-[0.98] transition-all duration-150 border-0 rounded-2xl shadow-[0_0_40px_hsl(200,100%,55%,0.6),0_0_80px_hsl(200,100%,55%,0.3),0_4px_20px_hsl(200,100%,55%,0.4)]"
+                  className={`continue-btn-glow w-full min-h-[64px] bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:opacity-95 text-white font-bold text-xl tracking-wide active:scale-[0.98] transition-all duration-150 rounded-2xl shadow-[0_0_40px_hsl(200,100%,55%,0.6),0_0_80px_hsl(200,100%,55%,0.3),0_4px_20px_hsl(200,100%,55%,0.4)] ${
+                    user?.email?.toLowerCase().endsWith('@qu.edu.qa') ? 'border-2 border-[#8A1538]' : 'border-0'
+                  }`}
                 >
                   <Sparkles className="w-5 h-5 mr-2" />
                   {language === 'ar' ? 'ابدأ مجاناً ✨' : 'Start Free ✨'}
@@ -707,27 +737,37 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
               <div className="rounded-lg p-4 text-center space-y-1 border border-[hsl(210,100%,65%,0.2)] bg-[hsl(210,100%,65%,0.05)] shadow-[0_0_20px_hsl(210,100%,65%,0.08)]">
                 {(() => {
                   const normalize = (s?: string) => s || '';
+                  // QU University Discount — isolated price override
+                  const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
                   if (language === 'ar') {
-                    const usdRaw = normalize(price.usd).replace('/month', '/شهر').trim();
-                    const qarRaw = normalize(price.qar).replace('/month', '/شهر').replace('QAR', 'ر.ق').trim();
-                    const usd = usdRaw ? usdRaw.replace('$', '') + ' دولار أمريكي/شهر' : '25 دولار أمريكي/شهر';
-                    const qar = qarRaw || 'ر.ق 92/شهر';
+                    const usd = isQUUser ? '19.99 دولار أمريكي/شهر' : (normalize(price.usd).replace('/month', '/شهر').replace('$', '') + ' دولار أمريكي/شهر') || '25 دولار أمريكي/شهر';
+                    const qar = isQUUser ? 'ر.ق 73.5/شهر' : (normalize(price.qar).replace('/month', '/شهر').replace('QAR', 'ر.ق').trim() || 'ر.ق 92/شهر');
                     return (
-                      <div className="flex items-center justify-center gap-3">
-                        <p className="text-lg text-muted-foreground">{usd}</p>
-                        <span className="text-muted-foreground">•</span>
-                        <p className="text-2xl font-bold text-primary">{qar}</p>
-                      </div>
+                      <>
+                        {isQUUser && (
+                          <p className="text-xs font-semibold text-[hsl(45,100%,60%)] mb-1">🎓 تم تطبيق خصم الجامعة</p>
+                        )}
+                        <div className="flex items-center justify-center gap-3">
+                          <p className="text-lg text-muted-foreground">{usd}</p>
+                          <span className="text-muted-foreground">•</span>
+                          <p className="text-2xl font-bold text-primary">{qar}</p>
+                        </div>
+                      </>
                     );
                   } else {
-                    const qar = normalize(price.qar) || 'QAR 92/month';
-                    const usd = normalize(price.usd) || '$25/month';
+                    const qar = isQUUser ? 'QAR 73.5/month' : (normalize(price.qar) || 'QAR 92/month');
+                    const usd = isQUUser ? '$19.99/month' : (normalize(price.usd) || '$25/month');
                     return (
-                      <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3">
-                        <p className="text-xl sm:text-2xl font-bold text-primary">{qar}</p>
-                        <span className="hidden sm:inline text-muted-foreground">•</span>
-                        <p className="text-xs sm:text-sm text-muted-foreground">{usd} <span className="text-[9px] sm:text-[10px] align-middle opacity-60">USD</span></p>
-                      </div>
+                      <>
+                        {isQUUser && (
+                          <p className="text-xs font-semibold text-[hsl(45,100%,60%)] mb-1">🎓 University Discount Applied</p>
+                        )}
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3">
+                          <p className="text-xl sm:text-2xl font-bold text-primary">{qar}</p>
+                          <span className="hidden sm:inline text-muted-foreground">•</span>
+                          <p className="text-xs sm:text-sm text-muted-foreground">{usd} <span className="text-[9px] sm:text-[10px] align-middle opacity-60">USD</span></p>
+                        </div>
+                      </>
                     );
                   }
                 })()}
