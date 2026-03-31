@@ -1573,7 +1573,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setStitchStatus(language === 'ar' ? '🎬 استوديو Wakti السحابي يُجهّز تحفتك السينمائية...' : '🎬 Wakti Cloud Studio is rendering your Wakti Cinema Masterpiece...');
 
     try {
-      const resp = await fetch('/api/video/stitch', {
+      // On localhost the Vercel serverless runtime isn't available, so always
+      // hit the deployed production endpoint directly.
+      const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+      const stitchBase = isLocal ? 'https://www.wakti.qa' : '';
+      const resp = await fetch(`${stitchBase}/api/video/stitch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
