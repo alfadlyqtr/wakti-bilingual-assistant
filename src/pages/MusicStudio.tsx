@@ -1924,7 +1924,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
         title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
         style: kieStyle || (language === 'ar' ? 'بوب عربي' : 'pop'),
         instrumental,
-        model: 'V4.5', // Hardcoded single model
+        model: 'V4_5', // Hardcoded single model
         duration_seconds: durationTarget,
       };
 

@@ -224,8 +224,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
   // Role 5 — Premiere
   const [isStitching, setIsStitching] = useState(false);
-  const [stitchStatus, setStitchStatus] = useState(''); // e.g. "Waking up server..."
+  const [stitchStatus, setStitchStatus] = useState('');
   const [premiereVideoUrl, setPremiereVideoUrl] = useState<string | null>(null);
+  const [premiereClipIndex, setPremiereClipIndex] = useState(0);
   const [isCinemaSaving, setIsCinemaSaving] = useState(false);
   const [isCinemaSaved, setIsCinemaSaved] = useState(false);
 
@@ -1564,51 +1565,15 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
   }, [user, sceneImages, cinemaScenes, language, loadQuota, visualSupervisorPrompts]);
 
-  // ── Role 5: Premiere — Cloud Studio stitch via Vercel API + FFmpeg ──
-  // Sends clip URLs to /api/video/stitch, which downloads them server-side,
-  // runs FFmpeg xfade+acrossfade for smooth 1s transitions, uploads the final
-  // MP4 to Supabase Storage, and returns the permanent public URL.
-  const handleStitch = useCallback(async () => {
+  // ── Role 5: Premiere — client-side sequential player (no server needed) ──
+  // Clips play one after another in the browser. No stitching, no Vercel.
+  const handleStitch = useCallback(() => {
     const readyClips = videoClips.filter(Boolean) as string[];
-    if (readyClips.length < 1 || isStitching) return;
-    setIsStitching(true);
-    setStitchStatus(language === 'ar' ? '🎬 استوديو Wakti السحابي يُجهّز تحفتك السينمائية...' : '🎬 Wakti Cloud Studio is rendering your Wakti Cinema Masterpiece...');
-
-    try {
-      // On localhost the Vercel serverless runtime isn't available, so always
-      // hit the deployed production endpoint directly.
-      const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-      const stitchBase = isLocal ? 'https://www.wakti.qa' : '';
-      const resp = await fetch(`${stitchBase}/api/video/stitch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          videoUrls: readyClips,
-          userId: user!.id,
-          format: cinemaFormat,
-          clip_durations: sceneClipTrim.slice(0, readyClips.length),
-        }),
-      });
-
-      if (!resp.ok) {
-        const errBody = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
-        throw new Error(errBody.error || `Server error ${resp.status}`);
-      }
-
-      const result = await resp.json();
-      if (!result.url) throw new Error('No URL returned from Cloud Studio');
-
-      setPremiereVideoUrl(result.url);
-      setCinemaStep('premiere');
-      toast.success(language === 'ar' ? 'العرض الأول جاهز! 🎬' : 'Premiere ready! 🎬');
-    } catch (err: any) {
-      console.error('[cinema] Cloud stitch error:', err);
-      toast.error(language === 'ar' ? 'فشل التجميع السحابي: ' + err.message : 'Cloud stitch failed: ' + err.message);
-    } finally {
-      setIsStitching(false);
-      setStitchStatus('');
-    }
-  }, [videoClips, isStitching, language, cinemaFormat, user, sceneClipTrim]);
+    if (readyClips.length < 1) return;
+    setPremiereClipIndex(0);
+    setPremiereVideoUrl(readyClips[0]);
+    setCinemaStep('premiere');
+  }, [videoClips]);
 
   // ── Cinema full reset ──
   const handleCinemaReset = useCallback(() => {
@@ -1644,7 +1609,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setIsCasting(false);
     setIsStitching(false);
     setPremiereVideoUrl(null);
-    setIsCinemaSaved(false);
+    setPremiereClipIndex(0);
+    setIsCinemaSaving(false);
     setIsCinemaSaving(false);
     setCinemaReferenceImages([]);
     setCinemaRefTags([]);
@@ -4064,75 +4030,83 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   </div>
                 )}
 
-                {cinemaStep === 'premiere' && premiereVideoUrl && (
-                  <div className="cinema-player-overlay">
-                    {/* Gold frame video player */}
-                    <div className="relative w-full max-w-2xl mx-auto px-4 flex flex-col gap-4">
-                      <div className="text-center space-y-1">
-                        <p className="text-[#E2C7A8] text-xs font-semibold uppercase tracking-widest opacity-80">
-                          {language === 'ar' ? 'وكتي سينما' : 'Wakti Cinema'}
-                        </p>
-                        <h2 className="text-2xl font-bold text-white">{language === 'ar' ? '🎬 العرض الأول' : '🎬 The Premiere'}</h2>
-                      </div>
-                      <div className="cinema-diamond-border rounded-2xl overflow-hidden w-full"
-                        style={{aspectRatio: cinemaFormat === '16:9' ? '16/9' : '9/16', maxHeight:'70vh'}}>
-                        <video
-                          src={premiereVideoUrl}
-                          controls
-                          autoPlay
-                          playsInline
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      {/* Actions */}
-                      <div className="flex gap-2">
-                        {/* Save to My Videos */}
-                        <button
-                          onClick={handleCinemaSave}
-                          disabled={isCinemaSaving || isCinemaSaved}
-                          className="flex-1 h-12 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
-                          style={{
-                            background: isCinemaSaved
-                              ? 'rgba(34,197,94,0.15)'
-                              : 'linear-gradient(135deg,#E2C7A8 0%,#C5A47E 100%)',
-                            border: isCinemaSaved ? '1px solid rgba(34,197,94,0.4)' : 'none',
-                            color: isCinemaSaved ? '#4ade80' : '#0c0f14',
-                          }}
-                        >
-                          {isCinemaSaving ? (
-                            <><Loader2 className="h-4 w-4 animate-spin" /><span className="hidden sm:inline">{language === 'ar' ? 'جاري الحفظ...' : 'Saving...'}</span></>
-                          ) : isCinemaSaved ? (
-                            <><span>✓</span><span className="hidden sm:inline">{language === 'ar' ? 'تم الحفظ' : 'Saved!'}</span></>
-                          ) : (
-                            <><Download className="h-4 w-4" /><span className="sm:hidden">{language === 'ar' ? 'حفظ' : 'Save'}</span><span className="hidden sm:inline">{language === 'ar' ? 'حفظ في فيديوهاتي' : 'Save to My Videos'}</span></>
-                          )}
-                        </button>
-
-                        {/* Download */}
-                        <a
-                          href={premiereVideoUrl}
-                          download="Wakti-Cinema.mp4"
-                          className="h-12 px-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2 flex-shrink-0 transition-all active:scale-95"
-                          style={{background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.85)'}}
-                        >
-                          <Download className="h-4 w-4" />
-                          <span className="sm:hidden">{language === 'ar' ? 'تنزيل' : 'DL'}</span>
-                          <span className="hidden sm:inline">{language === 'ar' ? 'تنزيل' : 'Download'}</span>
-                        </a>
-
-                        {/* New film */}
-                        <button
-                          onClick={handleCinemaReset}
-                          className="h-12 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 flex-shrink-0"
-                          style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',color:'rgba(255,255,255,0.5)'}}
-                        >
-                          <RefreshCw className="h-4 w-4" />
-                          <span className="hidden sm:inline">{language === 'ar' ? 'جديد' : 'New'}</span>
-                        </button>
+                {cinemaStep === 'premiere' && (() => {
+                  const readyClips = videoClips.filter(Boolean) as string[];
+                  const currentClip = readyClips[premiereClipIndex] || readyClips[0];
+                  if (!currentClip) return null;
+                  return (
+                    <div className="cinema-player-overlay">
+                      <div className="relative w-full max-w-2xl mx-auto px-4 flex flex-col gap-4">
+                        <div className="text-center space-y-1">
+                          <p className="text-[#E2C7A8] text-xs font-semibold uppercase tracking-widest opacity-80">
+                            {language === 'ar' ? 'وكتي سينما' : 'Wakti Cinema'}
+                          </p>
+                          <h2 className="text-2xl font-bold text-white">{language === 'ar' ? '🎬 العرض الأول' : '🎬 The Premiere'}</h2>
+                          <p className="text-xs text-white/40">
+                            {language === 'ar'
+                              ? `المشهد ${premiereClipIndex + 1} من ${readyClips.length}`
+                              : `Scene ${premiereClipIndex + 1} of ${readyClips.length}`}
+                          </p>
+                        </div>
+                        {/* Sequential video player */}
+                        <div className="cinema-diamond-border rounded-2xl overflow-hidden w-full"
+                          style={{aspectRatio: cinemaFormat === '16:9' ? '16/9' : '9/16', maxHeight:'70vh'}}>
+                          <video
+                            key={currentClip}
+                            src={currentClip}
+                            controls
+                            autoPlay
+                            playsInline
+                            className="w-full h-full object-cover"
+                            onEnded={() => {
+                              if (premiereClipIndex < readyClips.length - 1) {
+                                setPremiereClipIndex(i => i + 1);
+                              }
+                            }}
+                          />
+                        </div>
+                        {/* Scene dot nav */}
+                        <div className="flex justify-center gap-2">
+                          {readyClips.map((_, i) => (
+                            <button
+                              key={i}
+                              onClick={() => setPremiereClipIndex(i)}
+                              aria-label={language === 'ar' ? `المشهد ${i + 1}` : `Scene ${i + 1}`}
+                              className="rounded-full transition-all"
+                              style={{
+                                width: i === premiereClipIndex ? '20px' : '8px',
+                                height: '8px',
+                                background: i === premiereClipIndex ? '#E2C7A8' : 'rgba(255,255,255,0.2)',
+                              }}
+                            />
+                          ))}
+                        </div>
+                        {/* Actions */}
+                        <div className="flex gap-2">
+                          {/* Download current clip */}
+                          <a
+                            href={currentClip}
+                            download={`Wakti-Cinema-Scene${premiereClipIndex + 1}.mp4`}
+                            className="flex-1 h-12 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                            style={{background:'linear-gradient(135deg,#E2C7A8 0%,#C5A47E 100%)',color:'#0c0f14'}}
+                          >
+                            <Download className="h-4 w-4" />
+                            <span>{language === 'ar' ? `تنزيل المشهد ${premiereClipIndex + 1}` : `Download Scene ${premiereClipIndex + 1}`}</span>
+                          </a>
+                          {/* New film */}
+                          <button
+                            onClick={handleCinemaReset}
+                            className="h-12 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 flex-shrink-0"
+                            style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',color:'rgba(255,255,255,0.5)'}}
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            <span className="hidden sm:inline">{language === 'ar' ? 'جديد' : 'New'}</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
 
