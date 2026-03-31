@@ -87,10 +87,18 @@ function runFFmpeg(args) {
   });
 }
 
-function buildArgs(inputPaths, outputPath, clipDurationSec) {
+// clipDurations: array of per-clip durations in seconds (e.g. [7, 10, 5, ...])
+function buildArgs(inputPaths, outputPath, clipDurations) {
   const n = inputPaths.length;
   const FADE_DUR = 1;
-  const TOTAL = n * clipDurationSec;
+
+  // Trim each clip to its target duration before stitching
+  // so xfade offsets are based on the TRIMMED length.
+  // We also add a -ss 0 trim per input using setpts+trim filter.
+  const durations = clipDurations.map((d) => Math.max(1, Math.min(10, Number(d) || 10)));
+
+  // Total output duration = sum of trimmed durations minus fade overlaps
+  const TOTAL = durations.reduce((a, b) => a + b, 0) - FADE_DUR * (n - 1);
 
   // Build -i flags
   const inputArgs = [];
@@ -101,7 +109,7 @@ function buildArgs(inputPaths, outputPath, clipDurationSec) {
       ...inputArgs,
       '-c:v', 'libx264', '-preset', 'fast', '-crf', '20',
       '-c:a', 'aac', '-b:a', '192k',
-      '-t', String(TOTAL),
+      '-t', String(durations[0]),
       '-movflags', '+faststart',
       '-y', outputPath,
     ];
@@ -110,17 +118,24 @@ function buildArgs(inputPaths, outputPath, clipDurationSec) {
   // Complex filter graph
   const filterParts = [];
 
-  // Video: chained xfade
-  let prevV = '0:v';
+  // Trim each input to its target duration
+  for (let i = 0; i < n; i++) {
+    filterParts.push(`[${i}:v]trim=0:${durations[i]},setpts=PTS-STARTPTS[tv${i}]`);
+    filterParts.push(`[${i}:a]atrim=0:${durations[i]},asetpts=PTS-STARTPTS[ta${i}]`);
+  }
+
+  // Video: chained xfade using trimmed streams
+  let prevV = 'tv0';
+  let offset = 0;
   for (let i = 1; i < n; i++) {
-    const offset = clipDurationSec * i - FADE_DUR * i;
+    offset += durations[i - 1] - FADE_DUR;
     const out = i === n - 1 ? 'vout' : `vx${i}`;
-    filterParts.push(`[${prevV}][${i}:v]xfade=transition=fade:duration=${FADE_DUR}:offset=${offset}[${out}]`);
+    filterParts.push(`[${prevV}][tv${i}]xfade=transition=fade:duration=${FADE_DUR}:offset=${offset}[${out}]`);
     prevV = out;
   }
 
-  // Audio: amix all N streams
-  const aIn = Array.from({ length: n }, (_, i) => `[${i}:a]`).join('');
+  // Audio: amix all N trimmed streams
+  const aIn = Array.from({ length: n }, (_, i) => `[ta${i}]`).join('');
   filterParts.push(`${aIn}amix=inputs=${n}:duration=longest:normalize=0[aout]`);
 
   const filter = filterParts.join(';');
@@ -188,9 +203,13 @@ module.exports = async function handler(req, res) {
     }
 
     const clipCount = videoUrls.length;
-    const clipDurationSec = 10;
+    // Per-clip durations from frontend slider (default 10s each if not provided)
+    const rawDurations = Array.isArray(body.clip_durations) ? body.clip_durations : [];
+    const clipDurations = Array.from({ length: clipCount }, (_, i) =>
+      Math.max(1, Math.min(10, Number(rawDurations[i]) || 10))
+    );
 
-    console.log(`[cinema-stitch] ${clipCount} clips → user=${userId}`);
+    console.log(`[cinema-stitch] ${clipCount} clips → user=${userId} durations=${clipDurations.join(',')}`);
     console.log(`[cinema-stitch] ffmpeg binary: ${FFMPEG_PATH}`);
 
     // 2. Working directory in /tmp
@@ -206,7 +225,7 @@ module.exports = async function handler(req, res) {
 
     // 4. Run FFmpeg
     const outputPath = path.join(tmpDir, 'stitched.mp4');
-    const args = buildArgs(localPaths, outputPath, clipDurationSec);
+    const args = buildArgs(localPaths, outputPath, clipDurations);
     await runFFmpeg(args);
     console.log('[cinema-stitch] FFmpeg complete');
 

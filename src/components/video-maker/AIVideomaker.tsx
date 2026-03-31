@@ -256,6 +256,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   // Storyboard scene editing state
   const [editingSceneNum, setEditingSceneNum] = useState<number | null>(null); // which scene is being edited
   const [editingSceneText, setEditingSceneText] = useState('');
+  // Per-scene overlay text — short text burned onto the image (phone, email, slogan, CTA)
+  const [sceneOverlayText, setSceneOverlayText] = useState<string[]>(['', '', '', '', '', '']);
+  // Per-scene clip trim duration in seconds (5–10s, default 10)
+  const [sceneClipTrim, setSceneClipTrim] = useState<number[]>([10, 10, 10, 10, 10, 10]);
   const [regenSceneNum, setRegenSceneNum] = useState<number | null>(null); // which scene is regenerating
 
   // Cinema Visionnaire form state
@@ -1584,6 +1588,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           videoUrls: readyClips,
           userId: user!.id,
           format: cinemaFormat,
+          clip_durations: sceneClipTrim.slice(0, readyClips.length),
         }),
       });
 
@@ -1605,7 +1610,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setIsStitching(false);
       setStitchStatus('');
     }
-  }, [videoClips, isStitching, language, cinemaFormat, user]);
+  }, [videoClips, isStitching, language, cinemaFormat, user, sceneClipTrim]);
 
   // ── Cinema full reset ──
   const handleCinemaReset = useCallback(() => {
@@ -1647,6 +1652,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setCinemaRefTags([]);
     setEditingSceneNum(null);
     setRegenSceneNum(null);
+    setSceneOverlayText(['', '', '', '', '', '']);
+    setSceneClipTrim([10, 10, 10, 10, 10, 10]);
     setCinemaOpenSection(0);
     setCinematicSaveFallbackUrl(null);
     setCastingRegenModal(null);
@@ -3367,6 +3374,24 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             </div>
                           );
                             })()}
+
+                            {/* ── Text Overlay field ── */}
+                            {scene && (
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[9px] font-semibold uppercase tracking-wider" style={{color:'rgba(226,199,168,0.5)'}}>
+                                  {language === 'ar' ? '📝 نص على الصورة (اختياري)' : '📝 Text overlay (optional)'}
+                                </label>
+                                <input
+                                  type="text"
+                                  maxLength={60}
+                                  placeholder={language === 'ar' ? 'مثال: اتصل بنا +965 12345678' : 'e.g. Call us +965 12345678'}
+                                  value={sceneOverlayText[sceneNum - 1] || ''}
+                                  onChange={e => setSceneOverlayText(prev => { const n = [...prev]; n[sceneNum - 1] = e.target.value; return n; })}
+                                  className="w-full text-xs px-3 py-1.5 rounded-lg outline-none transition-all"
+                                  style={{background:'rgba(0,0,0,0.3)',border:'1px solid rgba(226,199,168,0.2)',color:'#E2C7A8',caretColor:'#E2C7A8'}}
+                                />
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -3668,6 +3693,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                         <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-full text-[11px] font-bold" style={{background:'rgba(12,15,20,0.88)',color:'#E2C7A8'}}>
                                           {language === 'ar' ? `لقطة ${shotIdx + 1}` : `Shot ${shotIdx + 1}`}
                                         </div>
+                                        {/* Text overlay burn-in */}
+                                        {sceneOverlayText[idx] && (
+                                          <div className="absolute bottom-0 left-0 right-0 px-3 py-2 text-center" style={{background:'linear-gradient(to top,rgba(0,0,0,0.82) 0%,rgba(0,0,0,0.0) 100%)'}}>
+                                            <span className="text-white font-bold text-xs leading-tight drop-shadow-lg" style={{textShadow:'0 1px 4px rgba(0,0,0,0.9)'}}>{sceneOverlayText[idx]}</span>
+                                          </div>
+                                        )}
                                         {/* VS scanning overlay — only on the most recently picked shot */}
                                         {vsStatus[idx] === 'scanning' && (
                                           <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[9px] font-semibold flex items-center gap-1" style={{background:'rgba(12,15,20,0.85)',color:'rgba(226,199,168,0.8)'}}>
@@ -3683,6 +3714,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                 // Single image — show with regen option
                                 <div className="relative rounded-2xl overflow-hidden" style={{border:'1px solid rgba(226,199,168,0.35)'}}>
                                   <img src={img} alt={`Scene ${idx+1}`} className="w-full object-cover" style={{maxHeight:'300px'}} />
+                                  {/* Text overlay burn-in */}
+                                  {sceneOverlayText[idx] && (
+                                    <div className="absolute bottom-0 left-0 right-0 px-3 py-2 text-center" style={{background:'linear-gradient(to top,rgba(0,0,0,0.82) 0%,rgba(0,0,0,0.0) 100%)'}}>
+                                      <span className="text-white font-bold text-xs leading-tight" style={{textShadow:'0 1px 4px rgba(0,0,0,0.9)'}}>{sceneOverlayText[idx]}</span>
+                                    </div>
+                                  )}
                                   {!isCasting && (
                                     <button
                                       onClick={() => { setCastingRegenModal({ sceneIdx: idx }); setCastingRegenNote(''); setCastingRegenUseMaster(true); }}
@@ -3910,35 +3947,77 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       {Array.from({length: cinemaSceneCount}, (_, i) => i).map((idx) => {
                         const prog = animProgress[idx];
                         const clip = videoClips[idx];
+                        const trimVal = sceneClipTrim[idx] ?? 10;
+                        const trimPct = (trimVal / 10) * 100; // 10s = 100%
                         return (
-                          <div key={idx}
-                            className={`relative rounded-xl overflow-hidden flex flex-col items-center justify-center gap-1.5 ${prog === 'rendering' || prog === 'queued' ? 'cinema-gold-pulse' : ''}`}
-                            style={{aspectRatio:'9/16', minHeight:'120px', background:'rgba(12,15,20,0.8)', border: prog === 'error' ? '1px solid rgba(248,113,113,0.5)' : clip ? '1px solid rgba(226,199,168,0.6)' : '1px solid rgba(255,255,255,0.06)'}}>
-                            {clip ? (
-                              <video src={clip} muted playsInline loop autoPlay className="w-full h-full object-cover" />
-                            ) : (
-                              <>
-                                {prog === 'queued' && <div className="w-3 h-3 rounded-full bg-[#E2C7A8]/30 animate-pulse" />}
-                                {prog === 'rendering' && <Loader2 className="h-5 w-5 animate-spin text-[#E2C7A8]" />}
-                                {prog === 'error' && (
-                                  <button
-                                    onClick={() => handleRetryFilm(idx)}
-                                    className="flex flex-col items-center gap-1 px-2 py-2 rounded-xl transition-all active:scale-95"
-                                    style={{background:'rgba(248,113,113,0.15)',border:'1px solid rgba(248,113,113,0.4)'}}
-                                  >
-                                    <RefreshCw className="h-5 w-5" style={{color:'#f87171'}} />
-                                    <span className="text-[8px] font-bold" style={{color:'#f87171'}}>
-                                      {language === 'ar' ? 'إعادة محاولة' : 'Retry'}
-                                    </span>
-                                  </button>
-                                )}
-                                {prog === 'done' && <span className="text-green-400 text-xs">✓</span>}
-                              </>
+                          <div key={idx} className="flex flex-col gap-1.5">
+                            {/* Video card */}
+                            <div
+                              className={`relative rounded-xl overflow-hidden flex flex-col items-center justify-center gap-1.5 ${prog === 'rendering' || prog === 'queued' ? 'cinema-gold-pulse' : ''}`}
+                              style={{aspectRatio:'9/16', minHeight:'120px', background:'rgba(12,15,20,0.8)', border: prog === 'error' ? '1px solid rgba(248,113,113,0.5)' : clip ? '1px solid rgba(226,199,168,0.6)' : '1px solid rgba(255,255,255,0.06)'}}>
+                              {clip ? (
+                                <video src={clip} muted playsInline loop autoPlay className="w-full h-full object-cover" />
+                              ) : (
+                                <>
+                                  {prog === 'queued' && <div className="w-3 h-3 rounded-full bg-[#E2C7A8]/30 animate-pulse" />}
+                                  {prog === 'rendering' && <Loader2 className="h-5 w-5 animate-spin text-[#E2C7A8]" />}
+                                  {prog === 'error' && (
+                                    <button
+                                      onClick={() => handleRetryFilm(idx)}
+                                      className="flex flex-col items-center gap-1 px-2 py-2 rounded-xl transition-all active:scale-95"
+                                      style={{background:'rgba(248,113,113,0.15)',border:'1px solid rgba(248,113,113,0.4)'}}
+                                    >
+                                      <RefreshCw className="h-5 w-5" style={{color:'#f87171'}} />
+                                      <span className="text-[8px] font-bold" style={{color:'#f87171'}}>
+                                        {language === 'ar' ? 'إعادة محاولة' : 'Retry'}
+                                      </span>
+                                    </button>
+                                  )}
+                                  {prog === 'done' && <span className="text-green-400 text-xs">✓</span>}
+                                </>
+                              )}
+                              {/* Chapter label */}
+                              <span className="absolute top-1.5 left-2 text-[9px] font-bold"
+                                style={{color: prog === 'done' ? '#E2C7A8' : prog === 'error' ? '#f87171' : 'rgba(255,255,255,0.3)'}}>
+                                {language === 'ar' ? `م${idx+1}` : `Ch.${idx+1}`}
+                              </span>
+                              {/* Grayout overlay for trimmed-off portion */}
+                              {clip && trimPct < 100 && (
+                                <div
+                                  className="absolute top-0 right-0 bottom-0 pointer-events-none"
+                                  style={{left:`${trimPct}%`, background:'rgba(0,0,0,0.62)', backdropFilter:'grayscale(1)'}}
+                                >
+                                  <div className="absolute left-0 top-0 bottom-0 w-px" style={{background:'rgba(226,199,168,0.7)'}} />
+                                </div>
+                              )}
+                              {/* Trim badge on card */}
+                              {clip && (
+                                <div className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold" style={{background:'rgba(12,15,20,0.88)',color:'#E2C7A8'}}>
+                                  {trimVal}s
+                                </div>
+                              )}
+                            </div>
+                            {/* Trim slider — only when clip ready */}
+                            {clip && (
+                              <div className="flex flex-col gap-0.5 px-0.5">
+                                <input
+                                  type="range"
+                                  min={3}
+                                  max={10}
+                                  step={1}
+                                  value={trimVal}
+                                  title={language === 'ar' ? `مدة المشهد ${idx+1}: ${trimVal} ثانية` : `Scene ${idx+1} duration: ${trimVal}s`}
+                                  aria-label={language === 'ar' ? `مدة المشهد ${idx+1}: ${trimVal} ثانية` : `Scene ${idx+1} duration: ${trimVal}s`}
+                                  onChange={e => setSceneClipTrim(prev => { const n = [...prev]; n[idx] = Number(e.target.value); return n; })}
+                                  className="w-full h-1 rounded-full appearance-none cursor-pointer"
+                                  style={{accentColor:'#E2C7A8'}}
+                                />
+                                <div className="flex justify-between text-[8px]" style={{color:'rgba(226,199,168,0.45)'}}>
+                                  <span>3s</span>
+                                  <span>10s</span>
+                                </div>
+                              </div>
                             )}
-                            <span className="absolute top-1.5 left-2 text-[9px] font-bold"
-                              style={{color: prog === 'done' ? '#E2C7A8' : prog === 'error' ? '#f87171' : 'rgba(255,255,255,0.3)'}}>
-                              {language === 'ar' ? `م${idx+1}` : `Ch.${idx+1}`}
-                            </span>
                           </div>
                         );
                       })}

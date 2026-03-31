@@ -195,7 +195,7 @@ Return exactly ${N} scenes.`;
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0.8,
+        temperature: 0.3,
         max_tokens: 3000,
       }),
     });
