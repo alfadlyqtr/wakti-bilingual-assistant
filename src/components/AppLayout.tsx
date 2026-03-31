@@ -700,10 +700,10 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                       {isQUUser
                         ? (language === 'ar'
                             ? <>
-                                مرحباً بك. وقتي هو تطبيقك الفائق للدراسة والإنتاجية. استمتع الآن بـ<span style={{ color: '#8A1538', fontWeight: '800', fontSize: '1.05em', textShadow: '0 0 8px rgba(138, 21, 56, 0.6), 0 0 16px rgba(138, 21, 56, 0.4)' }}>سعر جامعة قطر الحصري</span>.
+                                مرحباً بك. وقتي هو تطبيقك الفائق للدراسة والإنتاجية. استمتع <span style={{ color: '#8A1538', fontWeight: '800', fontSize: '1.05em', textShadow: '0 0 8px rgba(138, 21, 56, 0.6), 0 0 16px rgba(138, 21, 56, 0.4)' }}>بسعركم الأكاديمي الحصري</span>.
                               </>
                             : <>
-                                Welcome. Wakti is your ultimate academic and productivity AI. Benefit from your exclusive <span style={{ color: '#8A1538', fontWeight: '800', fontSize: '1.05em', textShadow: '0 0 8px rgba(138, 21, 56, 0.6), 0 0 16px rgba(138, 21, 56, 0.4)' }}>Qatar University rate</span>.
+                                Welcome. Wakti is your ultimate academic and productivity AI. Benefit from your exclusive <span style={{ color: '#8A1538', fontWeight: '800', fontSize: '1.05em', textShadow: '0 0 8px rgba(138, 21, 56, 0.6), 0 0 16px rgba(138, 21, 56, 0.4)' }}>academic rate</span>.
                               </>)
                         : (language === 'ar'
                             ? '🚀 وقتي هو تطبيق الذكاء الاصطناعي الشامل. لن تحتاج إلى أي تطبيق آخر بعد الآن.'
@@ -807,7 +807,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                     return (
                       <>
                         {isQUUser && (
-                          <p className="text-xs font-semibold text-[hsl(45,100%,60%)] mb-1">🎓 تم تطبيق خصم الجامعة</p>
+                          <p className="text-xs font-semibold text-[hsl(45,100%,60%)] mb-1">🎓 تم تطبيق الخصم الأكاديمي</p>
                         )}
                         <div className="flex items-center justify-center gap-3">
                           <p className="text-lg text-muted-foreground">{usd}</p>
@@ -822,7 +822,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                     return (
                       <>
                         {isQUUser && (
-                          <p className="text-xs font-semibold text-[hsl(45,100%,60%)] mb-1">🎓 University Discount Applied</p>
+                          <p className="text-xs font-semibold text-[hsl(45,100%,60%)] mb-1">🎓 Academic Discount Applied</p>
                         )}
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3">
                           <p className="text-xl sm:text-2xl font-bold text-primary">{qar}</p>
