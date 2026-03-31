@@ -117,10 +117,23 @@ anchor_tag هو "${effectiveAnchorTag}".
 إذا كان anchor_tag هو "style": جميع المشاهد → "style_extraction".
 إذا كان anchor_tag هو "character": جميع المشاهد → "character_lock".
 
-٥. تنسيق english_prompt — حرج جداً
-قصير: ١٥-٢٥ كلمة. كلمات مفتاحية مفصولة بفواصل. يبدأ بقيمة subject_lock. ممنوع: [VISUAL DNA] أو أي header بين أقواس.
-يجب أن يحتوي كل english_prompt على موقع صريح من هذه القائمة: outdoor, exterior, aerial view, open highway, desert road, city street, mountain road, port, warehouse exterior, rooftop, waterfront, open sky — مطلقاً لا تترك الذكاء الاصطناعي يختار استوديو داخلي أو خلفية داخلية.
-مثال: "blue Merkab semi-truck, open desert highway, golden hour, cinematic wide shot, outdoor, 8k"
+٥. الفصل الحاسم: text مقابل english_prompt
+
+★ حقل "text": ما يراه المستخدم — وصف المشهد بلغة طبيعية.
+★ حقل "english_prompt": ما يراه نموذج الصورة — تركيب بصري ثابت لصورة فوتوغرافية.
+
+قواعد english_prompt:
+  • قصير: ١٥-٢٥ كلمة. كلمات مفتاحية مفصولة بفواصل فقط.
+  • يبدأ بقيمة subject_lock في كل مشهد — هذا يضمن التسلسل البصري (continuity).
+  • محظور تماماً: لغة حركة الكاميرا مثل: drone shot, 360-degree, close-up shot, zooms out, flying between, sweeping rotation, camera captures — هذه تعني للفيديو وليست للصورة.
+  • بدلاً من لغة الحركة، اصف التركيبة البصرية الثابتة: زاوية الكاميرا، الإضاءة، البيئة، المزاج.
+  • يجب أن يحتوي كل english_prompt على بيئة/موقع صريح من: outdoor, exterior, aerial view, open highway, desert road, city street, mountain road, port, warehouse exterior, rooftop, waterfront, open sky.
+
+تحويل لغة الحركة إلى تركيبة ثابتة:
+  drone shot flying between skyscrapers → futuristic blue truck on city boulevard, aerial perspective, glass towers both sides
+  close-up shot of chrome wheels → futuristic blue truck, chrome wheels detail, wet asphalt surface, neon light reflections
+  360-degree rotation captures skyline → futuristic blue truck on elevated overpass, panoramic city skyline, golden hour
+
 لمشاهد الشعار: يبدأ بـ "The provided [brand] logo" ثم يصف المشهد.
 
 ٦. تنسيق الإخراج
@@ -165,16 +178,34 @@ If logo: Scene 1 and Scene ${N} → "logo_integration". Middle scenes → "style
 If style: ALL scenes → "style_extraction".
 If character: ALL scenes → "character_lock".
 
-5. english_prompt FORMAT — CRITICAL
-Fed directly to image AI. MUST be:
-  • SHORT: 15–25 words max.
-  • COMMA-SEPARATED KEYWORDS: subject, action, setting, lighting, style. No sentences. No brackets.
-  • Start with subject_lock value.
-  • For logo scenes: start with "The provided [brand name] logo".
-  • NEVER include: [VISUAL DNA], [CONTENT LOCK], or any bracket headers.
-  • MANDATORY: Every english_prompt MUST include one explicit environment/location word from this list: outdoor, exterior, aerial view, open highway, desert road, city street, mountain road, port, warehouse exterior, rooftop, waterfront, open sky, countryside. WITHOUT THIS the image AI defaults to an indoor studio — which is WRONG.
-  • BAD (no environment): "blue truck, chrome wheels, neon lights, cinematic" ← FORBIDDEN
-  • GOOD: "blue Merkab semi-truck, open desert highway, golden hour, cinematic wide shot, outdoor, 8k"
+5. THE CRITICAL SPLIT: text vs english_prompt
+
+★ "text" field = what the USER SEES — the scene description in natural language.
+★ "english_prompt" field = what the IMAGE AI SEES — a still-photo composition brief.
+
+These are TWO DIFFERENT THINGS. The image AI is NOT a film director. It generates a single photograph. Treat it like briefing a photographer, not a cinematographer.
+
+english_prompt RULES:
+  • SHORT: 15–25 words max. Comma-separated keywords only.
+  • MUST start with the subject_lock value on EVERY single scene — this is how visual continuity is maintained across all images.
+  • BANNED WORDS — these describe VIDEO/CAMERA MOVEMENT, not photos. NEVER use them in english_prompt:
+      drone shot, flying between, 360-degree, rotation, sweeping, zooms out, zooms in, close-up shot of, 
+      camera captures, tracking shot, pan, tilt, dolly, orbiting, spinning, dynamic shot, slow motion
+  • INSTEAD, describe the STILL COMPOSITION using: camera angle, subject position, environment, lighting, mood.
+  • MANDATORY: include one explicit outdoor/location keyword: outdoor, exterior, aerial view, open highway, 
+      desert road, city street, mountain road, port, warehouse exterior, rooftop, waterfront, open sky, countryside.
+
+TRANSLATION EXAMPLES — how to convert scene text into image prompts:
+  text: "drone shot flying between skyscrapers at sunset"
+  english_prompt: "[subject_lock], city boulevard, glass skyscrapers both sides, aerial perspective, golden sunset, outdoor, 8k"
+
+  text: "close-up shot of the truck’s chrome wheels reflecting neon lights on a wet highway"
+  english_prompt: "[subject_lock], chrome wheels detail, wet asphalt reflection, neon city lights, night, low angle, outdoor, 8k"
+
+  text: "sweeping 360-degree rotation captures the entire modern skyline"
+  english_prompt: "[subject_lock], elevated highway overpass, panoramic city skyline all around, golden hour, wide angle, outdoor, 8k"
+
+  For logo scenes: start with "The provided [brand name] logo", then describe the background scene.
 
 6. OUTPUT FORMAT
 Return ONLY valid JSON — no markdown:
