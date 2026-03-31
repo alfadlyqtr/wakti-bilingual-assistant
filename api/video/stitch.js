@@ -1,28 +1,35 @@
+'use strict';
+
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
 const os = require('os');
+const { spawn } = require('child_process');
 const { createClient } = require('@supabase/supabase-js');
-const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
-const ffmpeg = require('fluent-ffmpeg');
 
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+// ffmpeg-static ships the correct binary for the current platform
+// (Linux x64 on Vercel, win32 locally). No fluent-ffmpeg wrapper needed.
+const FFMPEG_PATH = require('ffmpeg-static');
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function downloadFile(url, destPath) {
   return new Promise((resolve, reject) => {
     const proto = url.startsWith('https') ? https : http;
     const file = fs.createWriteStream(destPath);
-    proto.get(url, (res) => {
+    const req = proto.get(url, (res) => {
       if (res.statusCode !== 200) {
+        file.close();
+        fs.unlink(destPath, () => {});
         reject(new Error(`Download failed (${res.statusCode}): ${url}`));
         return;
       }
       res.pipe(file);
       file.on('finish', () => { file.close(); resolve(); });
-    }).on('error', (err) => {
+    });
+    req.on('error', (err) => {
+      file.close();
       fs.unlink(destPath, () => {});
       reject(err);
     });
@@ -44,102 +51,96 @@ function readBody(req) {
   });
 }
 
-// ── Wakti Cinema FFmpeg engine ────────────────────────────────────────────────
+// ── Wakti Cinema FFmpeg engine ─────────────────────────────────────────────────
 // EXCLUSIVELY for the Wakti Cinema workflow: up to 6 scenes × 10 s = 60 s.
 //
 // Filter strategy:
-//   Video : xfade=transition=fade:duration=1  chained across all N clips.
-//           Offset for clip i = i*clipDuration - i*FADE_DUR
-//           (e.g. clip 2 starts its xfade at 9 s, clip 3 at 18 s, …)
-//   Audio : amix=inputs=N:duration=longest normalises and merges all N audio
-//           tracks simultaneously — correct for sequential clips that have
-//           silent periods outside their own window.
-//   Clamp : -t 60  hard-enforces exactly 60.00 s regardless of encode drift.
+//   Video : chained xfade=transition=fade:duration=1 between every pair of clips.
+//           Offset for pair i = i*10 - i*1  (clip 2→9s, clip 3→18s, …)
+//   Audio : amix=inputs=N merges all N audio tracks into one balanced stream.
+//   Clamp : -t <total>  hard-enforces exact duration (60 s for 6 clips).
+//
+// Uses child_process.spawn directly — no fluent-ffmpeg wrapper.
 
-function buildFFmpegCommand(inputPaths, outputPath, clipDurationSec) {
-  const n = inputPaths.length;
-  const FADE_DUR = 1; // seconds
-  const TOTAL_DURATION = n * clipDurationSec; // 60 s for 6 clips
-
+function runFFmpeg(args) {
   return new Promise((resolve, reject) => {
-    const cmd = ffmpeg();
+    console.log('[cinema-stitch] ffmpeg', args.join(' '));
+    const proc = spawn(FFMPEG_PATH, args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
-    // Add all inputs
-    inputPaths.forEach((p) => cmd.input(p));
+    let stderr = '';
+    proc.stderr.on('data', (d) => {
+      stderr += d.toString();
+    });
+    proc.stdout.on('data', (d) => {
+      process.stdout.write(d);
+    });
 
-    if (n === 1) {
-      // Single clip — re-encode to H.264 MP4 and clamp duration
-      cmd
-        .outputOptions([
-          '-c:v libx264',
-          '-preset fast',
-          '-crf 20',
-          '-c:a aac',
-          '-b:a 192k',
-          `-t ${TOTAL_DURATION}`,
-          '-movflags +faststart',
-          '-y',
-        ])
-        .output(outputPath)
-        .on('start', (cmdLine) => console.log('[cinema-stitch] FFmpeg command:', cmdLine))
-        .on('stderr', (line) => console.log('[cinema-stitch]', line))
-        .on('end', () => resolve())
-        .on('error', reject)
-        .run();
-      return;
-    }
-
-    // ── Build complex filter graph ──────────────────────────────────────────
-    // Video : chained xfade
-    // Audio : amix all N tracks → single merged track, then trim to TOTAL_DURATION
-    const filterParts = [];
-
-    // Video xfade chain: [0:v][1:v]xfade=...→[vx1]; [vx1][2:v]xfade=...→[vx2]; …→[vout]
-    let prevVLabel = '0:v';
-    for (let i = 1; i < n; i++) {
-      const offset = (clipDurationSec * i) - (FADE_DUR * i);
-      const outLabel = i === n - 1 ? 'vout' : `vx${i}`;
-      filterParts.push(
-        `[${prevVLabel}][${i}:v]xfade=transition=fade:duration=${FADE_DUR}:offset=${offset}[${outLabel}]`
-      );
-      prevVLabel = outLabel;
-    }
-
-    // Audio amix: merge all N audio streams into one balanced track
-    const audioInputs = Array.from({ length: n }, (_, i) => `[${i}:a]`).join('');
-    filterParts.push(
-      `${audioInputs}amix=inputs=${n}:duration=longest:normalize=0[aout]`
-    );
-
-    const complexFilter = filterParts.join(';');
-
-    cmd
-      .complexFilter(complexFilter)
-      .outputOptions([
-        '-map [vout]',
-        '-map [aout]',
-        '-c:v libx264',
-        '-preset fast',
-        '-crf 20',
-        '-c:a aac',
-        '-b:a 192k',
-        `-t ${TOTAL_DURATION}`,
-        '-movflags +faststart',
-        '-y',
-      ])
-      .output(outputPath)
-      .on('start', (cmdLine) => console.log('[cinema-stitch] FFmpeg command:', cmdLine))
-      .on('stderr', (line) => console.log('[cinema-stitch]', line))
-      .on('end', () => resolve())
-      .on('error', (err) => reject(err))
-      .run();
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        // Return last 2 000 chars of stderr for debugging
+        reject(new Error(`FFmpeg exited ${code}:\n${stderr.slice(-2000)}`));
+      }
+    });
+    proc.on('error', reject);
   });
+}
+
+function buildArgs(inputPaths, outputPath, clipDurationSec) {
+  const n = inputPaths.length;
+  const FADE_DUR = 1;
+  const TOTAL = n * clipDurationSec;
+
+  // Build -i flags
+  const inputArgs = [];
+  inputPaths.forEach((p) => { inputArgs.push('-i', p); });
+
+  if (n === 1) {
+    return [
+      ...inputArgs,
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '20',
+      '-c:a', 'aac', '-b:a', '192k',
+      '-t', String(TOTAL),
+      '-movflags', '+faststart',
+      '-y', outputPath,
+    ];
+  }
+
+  // Complex filter graph
+  const filterParts = [];
+
+  // Video: chained xfade
+  let prevV = '0:v';
+  for (let i = 1; i < n; i++) {
+    const offset = clipDurationSec * i - FADE_DUR * i;
+    const out = i === n - 1 ? 'vout' : `vx${i}`;
+    filterParts.push(`[${prevV}][${i}:v]xfade=transition=fade:duration=${FADE_DUR}:offset=${offset}[${out}]`);
+    prevV = out;
+  }
+
+  // Audio: amix all N streams
+  const aIn = Array.from({ length: n }, (_, i) => `[${i}:a]`).join('');
+  filterParts.push(`${aIn}amix=inputs=${n}:duration=longest:normalize=0[aout]`);
+
+  const filter = filterParts.join(';');
+
+  return [
+    ...inputArgs,
+    '-filter_complex', filter,
+    '-map', '[vout]',
+    '-map', '[aout]',
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', '20',
+    '-c:a', 'aac', '-b:a', '192k',
+    '-t', String(TOTAL),
+    '-movflags', '+faststart',
+    '-y', outputPath,
+  ];
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 module.exports = async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -152,113 +153,121 @@ module.exports = async function handler(req, res) {
 
   if (req.method !== 'POST') {
     res.statusCode = 405;
+    res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ error: 'Method Not Allowed' }));
     return;
   }
 
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cinema-'));
+  let tmpDir = null;
   const localPaths = [];
 
   try {
     // 1. Parse body
     const raw = await readBody(req);
     let body;
-    try { body = JSON.parse(raw); } catch {
+    try { body = JSON.parse(raw); } catch (_) {
       res.statusCode = 400;
-      res.end(JSON.stringify({ error: 'Invalid JSON' }));
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Invalid JSON body' }));
       return;
     }
 
-    const { videoUrls, userId, format } = body || {};
+    const { videoUrls, userId } = body || {};
+
     if (!videoUrls || !Array.isArray(videoUrls) || videoUrls.length < 1) {
       res.statusCode = 400;
+      res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ error: 'videoUrls array is required' }));
       return;
     }
     if (!userId) {
       res.statusCode = 400;
+      res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ error: 'userId is required' }));
       return;
     }
 
     const clipCount = videoUrls.length;
-    const clipDurationSec = 10; // each Freepik clip is exactly 10 seconds
+    const clipDurationSec = 10;
 
-    console.log(`[stitch] Starting stitch for ${clipCount} clips, user=${userId}`);
+    console.log(`[cinema-stitch] ${clipCount} clips → user=${userId}`);
+    console.log(`[cinema-stitch] ffmpeg binary: ${FFMPEG_PATH}`);
 
-    // 2. Download all clips to /tmp
-    for (let i = 0; i < videoUrls.length; i++) {
-      const destPath = path.join(tmpDir, `clip_${i}.mp4`);
-      console.log(`[stitch] Downloading clip ${i + 1}/${clipCount}: ${videoUrls[i]}`);
-      await downloadFile(videoUrls[i], destPath);
-      localPaths.push(destPath);
+    // 2. Working directory in /tmp
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cinema-'));
+
+    // 3. Download all clips
+    for (let i = 0; i < clipCount; i++) {
+      const dest = path.join(tmpDir, `clip_${i}.mp4`);
+      console.log(`[cinema-stitch] Downloading ${i + 1}/${clipCount}: ${videoUrls[i]}`);
+      await downloadFile(videoUrls[i], dest);
+      localPaths.push(dest);
     }
 
-    // 3. Run FFmpeg stitch
+    // 4. Run FFmpeg
     const outputPath = path.join(tmpDir, 'stitched.mp4');
-    console.log('[stitch] Running FFmpeg...');
-    await buildFFmpegCommand(localPaths, outputPath, clipDurationSec);
-    console.log('[stitch] FFmpeg complete');
+    const args = buildArgs(localPaths, outputPath, clipDurationSec);
+    await runFFmpeg(args);
+    console.log('[cinema-stitch] FFmpeg complete');
 
-    // 4. Upload to Supabase Storage
+    // 5. Upload to Supabase
     const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
     if (!supabaseUrl || !supabaseServiceKey) {
       res.statusCode = 500;
-      res.end(JSON.stringify({ error: 'Supabase credentials not configured' }));
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Supabase credentials not configured on server' }));
       return;
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
     const fileBuffer = fs.readFileSync(outputPath);
     const fileName = `cinema/${userId}/${Date.now()}_stitched.mp4`;
 
-    console.log(`[stitch] Uploading to Supabase Storage: ${fileName}`);
+    console.log(`[cinema-stitch] Uploading: ${fileName} (${fileBuffer.length} bytes)`);
+
     const { error: uploadError } = await supabase.storage
       .from('user_videos')
-      .upload(fileName, fileBuffer, {
-        contentType: 'video/mp4',
-        upsert: false,
-      });
+      .upload(fileName, fileBuffer, { contentType: 'video/mp4', upsert: false });
 
     if (uploadError) {
-      console.error('[stitch] Upload error:', uploadError);
+      console.error('[cinema-stitch] Upload error:', uploadError);
       res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ error: 'Storage upload failed: ' + uploadError.message }));
       return;
     }
 
-    // 5. Get public URL
-    const { data: urlData } = supabase.storage
-      .from('user_videos')
-      .getPublicUrl(fileName);
-
+    const { data: urlData } = supabase.storage.from('user_videos').getPublicUrl(fileName);
     const publicUrl = urlData?.publicUrl;
+
     if (!publicUrl) {
       res.statusCode = 500;
-      res.end(JSON.stringify({ error: 'Failed to get public URL' }));
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Failed to get public URL after upload' }));
       return;
     }
 
-    console.log(`[stitch] Done. Public URL: ${publicUrl}`);
+    console.log(`[cinema-stitch] Done → ${publicUrl}`);
 
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ url: publicUrl, clips: clipCount }));
 
   } catch (err) {
-    console.error('[stitch] Fatal error:', err);
+    console.error('[cinema-stitch] Fatal:', err);
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ error: err && err.message ? err.message : 'stitch_error' }));
   } finally {
-    // Clean up /tmp files
-    try {
-      localPaths.forEach(p => { try { fs.unlinkSync(p); } catch (_) {} });
-      const stitchedPath = path.join(tmpDir, 'stitched.mp4');
-      try { fs.unlinkSync(stitchedPath); } catch (_) {}
-      try { fs.rmdirSync(tmpDir); } catch (_) {}
-    } catch (_) {}
+    // Clean up /tmp
+    if (tmpDir) {
+      try {
+        localPaths.forEach((p) => { try { fs.unlinkSync(p); } catch (_) {} });
+        try { fs.unlinkSync(path.join(tmpDir, 'stitched.mp4')); } catch (_) {}
+        try { fs.rmdirSync(tmpDir); } catch (_) {}
+      } catch (_) {}
+    }
   }
 };
