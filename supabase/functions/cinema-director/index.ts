@@ -101,10 +101,15 @@ serve(async (req) => {
   • مشهد 2 text: "تصل إلى المدينة"
   • مشهد 3 text: "يظهر شعار ميركاب"
 
-٢. قفل الموضوع (subject_lock)
-استخرج الموضوع المادي الأساسي. القواعد:
+٢. قفل الهوية البصرية (subject_lock) — الأهم على الإطلاق
+هذا هو مرساة الاستمرارية. يجب أن يصف الموضوع بدقة كافية بحيث يرسم الذكاء الاصطناعي نفس الشيء في كل مشهد.
+
+القواعد:
+  • ١٢-٢٠ كلمة — ليس ٣-٨. يجب أن يكون وصفاً تفصيلياً.
+  • اذكر: اللون الدقيق، شكل الهيكل، التفاصيل المميزة، المواد، أي علامات بصرية مميزة.
+  • مثال ضعيف (محظور): "شاحنة زرقاء مستقبلية"
+  • مثال قوي (مطلوب): "شاحنة نيمي كوبالت-أزرق انسيابية، كابينة منحنية ناعمة، زجاج بانورامي أسود، شرائط LED سيان رفيعة على الجانبين، أغطية عجلات مدمجة، تصميم ممتاز مستقبلي"
   • لا تضمّن كلمات: شعار، لوغو، علامة تجارية، wordmark.
-  • اربط الألوان الدقيقة — ٣ إلى ٨ كلمات.
 
 ٣. قفل الشعار — قاعدة مطلقة
 محظور تماماً إعادة صياغة أو اختراع شعارات العلامة التجارية.
@@ -119,26 +124,40 @@ anchor_tag هو "${effectiveAnchorTag}".
 
 ٥. الفصل الحاسم: text مقابل english_prompt
 
-★ حقل "text": ما يراه المستخدم — وصف المشهد بلغة طبيعية.
-★ حقل "english_prompt": ما يراه نموذج الصورة — تركيب بصري ثابت لصورة فوتوغرافية.
+★ حقل "text": ما يراه المستخدم — وصف المشهد بلغة طبيعية (من كلمات المستخدم).
+★ حقل "english_prompt": ما يراه نموذج الصورة — موجز توجيهي فوتوغرافي كامل.
+
+هذان حقلان مختلفان تماماً.
+نموذج الصورة يولد صورة فوتوغرافية واحدة ثابتة. لا يستطيع التحريك أو التدوير أو التكبير.
+مهمتك في english_prompt: فكر كمدير تصوير يحدد إطار لقطة واحدة.
 
 قواعد english_prompt:
-  • قصير: ١٥-٢٥ كلمة. كلمات مفتاحية مفصولة بفواصل فقط.
-  • يبدأ بقيمة subject_lock في كل مشهد — هذا يضمن التسلسل البصري (continuity).
-  • محظور تماماً: لغة حركة الكاميرا مثل: drone shot, 360-degree, close-up shot, zooms out, flying between, sweeping rotation, camera captures — هذه تعني للفيديو وليست للصورة.
-  • بدلاً من لغة الحركة، اصف التركيبة البصرية الثابتة: زاوية الكاميرا، الإضاءة، البيئة، المزاج.
-  • يجب أن يحتوي كل english_prompt على بيئة/موقع صريح من: outdoor, exterior, aerial view, open highway, desert road, city street, mountain road, port, warehouse exterior, rooftop, waterfront, open sky.
+  • ٤٠-٨٠ كلمة. جمل كاملة أو وصف تفصيلي — ليس مجرد كلمات مفتاحية مقتضبة.
+  • يبدأ دائماً بـ subject_lock الكامل في كل مشهد — هذا يضمن الاستمرارية البصرية.
+  • يتضمن: البيئة الدقيقة، الإضاءة، زاوية الكاميرا، المزاج، الأسلوب البصري.
+  • محظور تماماً: لغة حركة الكاميرا (drone shot, rotation, zooms, sweeping, camera captures).
+  • قاعدة البيئة الواحدة: إما داخلي أو خارجي — لا الاثنين معاً أبداً.
+  • الأسلوب المطلوب دائماً: cinematic commercial photography, photorealistic, high detail.
 
-تحويل لغة الحركة إلى تركيبة ثابتة:
-  drone shot flying between skyscrapers → futuristic blue truck on city boulevard, aerial perspective, glass towers both sides
-  close-up shot of chrome wheels → futuristic blue truck, chrome wheels detail, wet asphalt surface, neon light reflections
-  360-degree rotation captures skyline → futuristic blue truck on elevated overpass, panoramic city skyline, golden hour
+أسلوب الكتابة المطلوب — مثال Grok الرسمي:
+"Cinematic portrait of a woman sitting by a vinyl record player, retro living room background, soft ambient lighting, warm earthy tones, nostalgic 1970s wardrobe, reflective mood, gentle film grain texture, shallow depth of field, vintage editorial photography style."
 
-لمشاهد الشعار: يبدأ بـ "The provided [brand] logo" ثم يصف المشهد.
+تحويل لغة المشاهد إلى موجز فوتوغرافي:
+
+مشهد: "شاحنة تسير في الصحراء"
+english_prompt: "[subject_lock], driving along a vast open desert highway under a blazing midday sun, endless golden sand dunes stretching to the horizon, deep blue sky with scattered clouds, low-angle front view, heat shimmer rising from the asphalt, cinematic wide-angle automotive photography, photorealistic, high detail."
+
+مشهد: "طائرة مسيّرة بين ناطحات السحاب عند الغروب"
+english_prompt: "[subject_lock], parked on a downtown city boulevard flanked by towering glass skyscrapers, warm golden sunset glow reflecting off the building facades, aerial perspective looking down at a slight angle, long shadows across the road, cinematic commercial automotive photography, photorealistic, high detail."
+
+مشهد: "عجلات الشاحنة تعكس أضواء النيون"
+english_prompt: "[subject_lock], stopped on a wet city street at night, chrome wheels macro detail visible in foreground, vivid neon signs and streetlights reflected in rain puddles on the asphalt, low angle ground-level view, dramatic contrast between light and shadow, cinematic automotive photography, photorealistic, high detail."
+
+لمشاهد الشعار: يبدأ بـ "The provided [brand] logo" ثم يصف البيئة الخلفية.
 
 ٦. تنسيق الإخراج
 أعد JSON صالحاً فقط — بدون markdown:
-{"subject_lock": "<٣-٨ كلمات>", "scenes": [{"scene": 1, "text": "...", "english_prompt": "<١٥-٢٥ كلمة>", "scene_pipeline": "..."}, ...]}
+{"subject_lock": "<١٢-٢٠ كلمة>", "scenes": [{"scene": 1, "text": "...", "english_prompt": "<٤٠-٨٠ كلمة>", "scene_pipeline": "..."}, ...]}
 أعد ${N} مشهداً بالضبط.`
       : `⚠️ LANGUAGE LOCK — NON-NEGOTIABLE: "text" field MUST be in ENGLISH only. Violation = task failure.
 
@@ -161,10 +180,16 @@ Example: If user says "truck drives through desert then arrives at city then Mer
   • Scene 2 text: "arrives at city"
   • Scene 3 text: "Merkab logo appears"
 
-2. SUBJECT LOCK
-Extract the core physical subject (e.g., "striking blue Merkab semi-truck"). Rules:
+2. SUBJECT LOCK — THE CONTINUITY ANCHOR (Most important field)
+This is what makes all 6 images look like they belong to the same film.
+If this is weak, every scene generates a different-looking subject. That is the continuity failure.
+
+Rules:
+  • 12-20 words — NOT 3-8. Must be a rich identity description.
+  • Include: exact color, body shape, defining design details, materials, any distinctive visual markers.
+  • WEAK (forbidden): "futuristic blue semi-truck"
+  • STRONG (required): "cobalt-blue aerodynamic semi-truck, smooth curved cab, black panoramic windshield band, thin cyan LED accent strips on both sides, flush integrated wheel covers, premium futuristic design"
   • NEVER include: logo, brand, emblem, wordmark, insignia.
-  • Lock exact colors. Keep it 3-8 words.
 
 3. SLOGAN LOCK — ABSOLUTE RULE
 You are STRICTLY FORBIDDEN from paraphrasing, summarizing, or inventing brand slogans.
@@ -180,36 +205,49 @@ If character: ALL scenes → "character_lock".
 
 5. THE CRITICAL SPLIT: text vs english_prompt
 
-★ "text" field = what the USER SEES — the scene description in natural language.
-★ "english_prompt" field = what the IMAGE AI SEES — a still-photo composition brief.
+★ "text" = what the USER SEES — scene description in natural language (verbatim from their input).
+★ "english_prompt" = what the IMAGE AI SEES — a full photographic art-direction brief.
 
-These are TWO DIFFERENT THINGS. The image AI is NOT a film director. It generates a single photograph. Treat it like briefing a photographer, not a cinematographer.
+THESE ARE TWO COMPLETELY DIFFERENT THINGS.
+The image AI generates ONE still photograph. It cannot move, rotate, zoom, or fly.
+Think of yourself as a photographer's art director writing a detailed shot brief.
 
 english_prompt RULES:
-  • SHORT: 15–25 words max. Comma-separated keywords only.
-  • MUST start with the subject_lock value on EVERY single scene — this is how visual continuity is maintained across all images.
-  • BANNED WORDS — these describe VIDEO/CAMERA MOVEMENT, not photos. NEVER use them in english_prompt:
-      drone shot, flying between, 360-degree, rotation, sweeping, zooms out, zooms in, close-up shot of, 
-      camera captures, tracking shot, pan, tilt, dolly, orbiting, spinning, dynamic shot, slow motion
-  • INSTEAD, describe the STILL COMPOSITION using: camera angle, subject position, environment, lighting, mood.
-  • MANDATORY: include one explicit outdoor/location keyword: outdoor, exterior, aerial view, open highway, 
-      desert road, city street, mountain road, port, warehouse exterior, rooftop, waterfront, open sky, countryside.
+  • 40-80 words. Write full descriptive sentences or rich detail — NOT thin keyword lists.
+  • MUST start with the full subject_lock value on EVERY scene — this is the continuity anchor.
+  • Include ALL of: specific environment, specific lighting, camera angle/framing, mood, visual style.
+  • ONE ENVIRONMENT RULE: pick either indoor OR outdoor. NEVER both in the same prompt. Never contradict yourself.
+  • BANNED — video/camera motion terms, useless to a still image:
+      drone shot, flying between, 360-degree, rotation, sweeping, zooms out, zooms in,
+      close-up shot of, camera captures, tracking shot, pan, tilt, dolly, orbiting, spinning
+  • Always end with: cinematic commercial photography, photorealistic, high detail.
 
-TRANSLATION EXAMPLES — how to convert scene text into image prompts:
+WRITE PROMPTS LIKE GROK'S OWN EXAMPLE:
+  "Cinematic portrait of a woman sitting by a vinyl record player, retro living room background, soft ambient lighting, warm earthy tones, nostalgic 1970s wardrobe, reflective mood, gentle film grain texture, shallow depth of field, vintage editorial photography style."
+  — Notice: specific subject, specific environment, specific lighting, specific mood, specific style. That is the standard.
+
+TRANSLATION EXAMPLES — convert scene text into proper photo briefs:
+
+  text: "truck drives through open desert highway"
+  english_prompt: "[subject_lock], driving along a vast open desert highway under blazing midday sun, endless golden sand dunes stretching to the horizon, deep blue sky with scattered clouds, low-angle front view, heat shimmer rising from hot asphalt, cinematic wide-angle automotive photography, photorealistic, high detail."
+
   text: "drone shot flying between skyscrapers at sunset"
-  english_prompt: "[subject_lock], city boulevard, glass skyscrapers both sides, aerial perspective, golden sunset, outdoor, 8k"
+  english_prompt: "[subject_lock], parked on a downtown city boulevard flanked by towering glass skyscrapers, warm golden sunset light reflecting off building facades, aerial perspective slightly above street level, long shadows cast across the road, cinematic commercial automotive photography, photorealistic, high detail."
 
-  text: "close-up shot of the truck’s chrome wheels reflecting neon lights on a wet highway"
-  english_prompt: "[subject_lock], chrome wheels detail, wet asphalt reflection, neon city lights, night, low angle, outdoor, 8k"
+  text: "close-up of truck's chrome wheels reflecting neon lights on wet highway"
+  english_prompt: "[subject_lock], stationary on a rain-soaked city street at night, chrome wheel detail prominent in foreground, vivid neon signs and streetlights reflected in puddles on wet asphalt, low ground-level angle, dramatic neon color contrast, cinematic automotive photography, photorealistic, high detail."
 
   text: "sweeping 360-degree rotation captures the entire modern skyline"
-  english_prompt: "[subject_lock], elevated highway overpass, panoramic city skyline all around, golden hour, wide angle, outdoor, 8k"
+  english_prompt: "[subject_lock], positioned on an elevated highway overpass at golden hour, full panoramic city skyline visible in all directions, warm amber and orange sunset hues, wide-angle establishing shot, dramatic sky with layered clouds, cinematic commercial photography, photorealistic, high detail."
 
-  For logo scenes: start with "The provided [brand name] logo", then describe the background scene.
+  text: "truck drives through indoor distribution center"
+  english_prompt: "[subject_lock], inside a massive modern logistics warehouse, crisp white LED industrial lighting from high bay ceiling, rows of storage shelving receding into background, ground-level front angle, clean industrial atmosphere, cinematic commercial automotive photography, photorealistic, high detail."
+
+  For logo scenes: start with "The provided [brand name] logo", then describe the full background scene in the same detail.
 
 6. OUTPUT FORMAT
 Return ONLY valid JSON — no markdown:
-{"subject_lock": "<3-8 words>", "scenes": [{"scene": 1, "text": "...", "english_prompt": "<15-25 keywords>", "scene_pipeline": "..."}, ...]}
+{"subject_lock": "<12-20 word rich identity description>", "scenes": [{"scene": 1, "text": "...", "english_prompt": "<40-80 word photo brief>", "scene_pipeline": "..."}, ...]}
 Return exactly ${N} scenes.`;
 
     const userPrompt = language === 'ar'
