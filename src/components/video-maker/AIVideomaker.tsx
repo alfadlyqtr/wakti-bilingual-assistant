@@ -1576,7 +1576,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       // On localhost the Vercel serverless runtime isn't available, so always
       // hit the deployed production endpoint directly.
       const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-      const stitchBase = isLocal ? 'https://wakti.qa' : '';
+      const stitchBase = isLocal ? 'https://www.wakti.qa' : '';
       const resp = await fetch(`${stitchBase}/api/video/stitch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

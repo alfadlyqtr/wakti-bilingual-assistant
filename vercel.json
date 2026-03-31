@@ -29,6 +29,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/video/stitch", "destination": "/api/video/stitch" },
     { "source": "/apple-app-site-association", "destination": "/apple-app-site-association" },
     { "source": "/.well-known/apple-app-site-association", "destination": "/.well-known/apple-app-site-association" },
     { "source": "/preview/:subdomain", "destination": "/index.html" },
