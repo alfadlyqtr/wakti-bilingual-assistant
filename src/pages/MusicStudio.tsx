@@ -44,6 +44,7 @@ import {
   Zap,
   ArrowRight,
   Palette,
+  Mic,
 } from 'lucide-react';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import StudioImageGenerator from '@/components/studio/StudioImageGenerator';
@@ -1235,6 +1236,16 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   const [songsUsed, setSongsUsed] = useState(0);
   const [songsLimit, setSongsLimit] = useState(5);
   const [songsRemaining, setSongsRemaining] = useState(5);
+  const [generatingTask, setGeneratingTask] = useState<{ taskId: string; recordId: string } | null>(null);
+  const [generatedTracks, setGeneratedTracks] = useState<Array<{ id: string; audioUrl: string; coverUrl: string | null; duration: number | null; title: string | null; variantIndex: number }>>([]);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string>('V5_5');
+  const [customMode, setCustomMode] = useState<boolean>(true);
+  const [negativeTags, setNegativeTags] = useState<string>('');
+  const [styleWeight, setStyleWeight] = useState<number>(0.65);
+  const [weirdnessConstraint, setWeirdnessConstraint] = useState<number>(0.5);
+  const [audioWeight, setAudioWeight] = useState<number>(0.65);
+  const [showAdvancedSliders, setShowAdvancedSliders] = useState<boolean>(false);
 
   // Guard to ensure monthly usage loads only once (avoids StrictMode double-run logs)
   const usageLoadedRef = useRef(false);
@@ -1817,205 +1828,131 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     }
   }
 
+  // Cleanup poll interval on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, []);
+
+  // Build style string from chips + styleText
+  function buildKieStyleString(): string {
+    const parts: string[] = [];
+    if (styleText.trim()) parts.push(styleText.trim());
+    if (includeTags.length) parts.push(includeTags.join(', '));
+    if (instrumentTags.length) parts.push(instrumentTags.join(', '));
+    if (moodTags.length) parts.push(moodTags.join(', '));
+    return parts.join(', ');
+  }
+
+  const startPolling = (taskId: string, recordId: string) => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    let attempts = 0;
+    const MAX_ATTEMPTS = 60; // 5 minutes at 5s intervals
+    pollIntervalRef.current = setInterval(async () => {
+      attempts++;
+      if (attempts > MAX_ATTEMPTS) {
+        clearInterval(pollIntervalRef.current!);
+        setSubmitting(false);
+        setGeneratingTask(null);
+        setLastError(language === 'ar' ? 'انتهت مهلة الإنشاء' : 'Generation timed out');
+        toast.error(language === 'ar' ? 'انتهت مهلة الإنشاء' : 'Generation timed out');
+        return;
+      }
+      try {
+        const { data: statusData, error: statusError } = await supabase.functions.invoke('music-status', {
+          body: { taskId, recordId }
+        });
+        if (statusError) return;
+        if (statusData?.status === 'completed' && statusData?.tracks?.length > 0) {
+          clearInterval(pollIntervalRef.current!);
+          setSubmitting(false);
+          setGeneratingTask(null);
+          setGeneratedTracks(statusData.tracks);
+          setSongsUsed((v) => v + 1);
+          setSongsRemaining((v) => Math.max(0, v - 1));
+          setLastError(null);
+          toast.success(language === 'ar' ? '🎵 موسيقاك جاهزة!' : '🎵 Your music is ready!');
+          onSaved?.();
+        } else if (statusData?.status === 'failed') {
+          clearInterval(pollIntervalRef.current!);
+          setSubmitting(false);
+          setGeneratingTask(null);
+          const errMsg = statusData?.error || (language === 'ar' ? 'فشل الإنشاء' : 'Generation failed');
+          setLastError(errMsg);
+          toast.error(errMsg);
+        }
+      } catch (e) {
+        console.error('[poll] status check error:', e);
+      }
+    }, 5000);
+  };
+
   const handleGenerate = async () => {
     if (overLimit) return;
     setSubmitting(true);
-    let placeholderRecordId: string | null = null;
-    let savedOk = false;
-    
+    setGeneratedTracks([]);
+    setLastError(null);
+
     try {
-      // Check music generation quota via RPC
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-      
+
       const { data: quotaCheck, error: quotaError } = await (supabase as any).rpc('can_generate_music');
       if (quotaError) throw quotaError;
-      
+
       if (!quotaCheck?.can_generate) {
         const used = quotaCheck?.generated || 0;
         const limit = quotaCheck?.limit || 5;
         toast.error(
-          language === 'ar' 
+          language === 'ar'
             ? `لقد وصلت إلى الحد الأقصى: ${used} من ${limit} أغاني هذا الشهر`
             : `Monthly limit reached: ${used} of ${limit} songs this month`
         );
+        setSubmitting(false);
         return;
       }
-      
-      // Compose final prompt from split fields and chips (reusable)
-      const wantsArabicGen = langChoice === 'ar' || (langChoice === 'auto' && language === 'ar');
-      const stylesLineGen = buildStylesSuffix();
-      const titleLineGen = title ? (wantsArabicGen ? `العنوان: ${title}` : `Title: ${title}`) : '';
-      const durationTargetGen = Math.min(120, duration);
-      const durationLineGen = wantsArabicGen ? `المدة المستهدفة: ${durationTargetGen} ثانية` : `Target duration: ${durationTargetGen}s`;
-      const arrangementLineGen = getArrangementBrief(durationTargetGen, wantsArabicGen);
-      const contentLineGen = styleText ? (wantsArabicGen ? `ملخص الأسلوب: ${styleText}` : `Style brief: ${styleText}`) : '';
-      const lyricsContentGen = lyricsText ? (wantsArabicGen ? `الكلمات:\n${lyricsText}` : `Lyrics:\n${lyricsText}`) : '';
-      // Apply vocals rule for generation: none forbids vocals, female/male encourage; auto = no constraint
-      const vocalsLineGen = vocalType === 'none'
-        ? (wantsArabicGen ? 'لا تستخدم غناء/صوت بشري.' : 'Do not use vocals/lead voice.')
-        : vocalType === 'female'
-          ? (wantsArabicGen ? 'استخدم صوتًا أنثويًا للغناء الرئيسي.' : 'Use a female lead vocal.')
-          : vocalType === 'male'
-            ? (wantsArabicGen ? 'استخدم صوتًا ذكوريًا للغناء الرئيسي.' : 'Use a male lead vocal.')
-            : '';
-      const producerNotesGen = wantsArabicGen
-        ? 'ملاحظات المنتج: موتيف لَيد واضح، انتقالات بين الأقسام (فِلز/رايزر)، وتباين ديناميكي قوي. اجعل اللازمة أوسع وأعلى إدراكًا للصوت.'
-        : 'Producer notes: clear lead motif, transitions between sections (fills/risers), and strong dynamic contrast. Make the chorus wider and louder in perception.';
-      const prodIntensityGen = wantsArabicGen
-        ? `شدة المنتج: ${producerIntensity} من 5`
-        : `Producer intensity: ${producerIntensity} of 5`;
-      const languageQualityGen = wantsArabicGen
-        ? 'استخدم العربية الفصحى الواضحة فقط بدون كلمات غير مفهومة أو مختلقة.'
-        : '';
-      const hookLineGen = hookEmphasis
-        ? (wantsArabicGen ? 'ركّز على لازمـة قوية وواضحة.' : 'Emphasize a strong, clear hook.')
-        : '';
-      const honorChipsGen = wantsArabicGen
-        ? 'التزم بالأنماط والآلات والمزاج المحدد. لا تضف عناصر جديدة إذا كانت السلامة مفعلة.'
-        : 'Honor the selected styles, instruments, and mood. Do not add new elements if safety is on.';
-      const fullPrompt = [
-        titleLineGen,
-        contentLineGen,
-        stylesLineGen,
-        honorChipsGen,
-        producerNotesGen,
-        hookLineGen,
-        prodIntensityGen,
-        arrangementLineGen,
-        durationLineGen,
-        vocalsLineGen,
-        languageQualityGen,
-        lyricsContentGen
-      ].filter(Boolean).join('\n');
 
-      // INSERT PLACEHOLDER RECORD FIRST - ensures the generation counts toward limit
-      const placeholderFileName = `${user.id}/${Date.now()}_pending.mp3`;
-      const { data: placeholderData, error: placeholderError } = await (supabase as any)
-        .from('user_music_tracks')
-        .insert({
-          user_id: user.id,
-          prompt: fullPrompt,
-          include_styles: includeTags.length ? includeTags : null,
-          requested_duration_seconds: Math.min(120, duration),
-          provider: 'elevenlabs',
-          model: 'music_v1',
-          storage_path: placeholderFileName,
-          signed_url: null,
-          mime: 'audio/mpeg',
-          meta: {
-            status: 'generating',
-            ...(instrumentTags.length ? { instruments: instrumentTags } : {}),
-            ...(moodTags.length ? { mood: moodTags } : {})
-          } as any
-        })
-        .select('id')
-        .single();
-      
-      if (placeholderError) throw placeholderError;
-      placeholderRecordId = placeholderData?.id;
-      
-      // Update UI counter immediately
-      setSongsUsed((v) => v + 1);
-      setSongsRemaining((v) => Math.max(0, v - 1));
-      
-      // fullPrompt already composed above
+      // Build KIE.ai parameters (simplified - always uses V4.5)
+      const instrumental = vocalType === 'none';
+      const vocalGender: 'm' | 'f' | undefined =
+        vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
+      const kieStyle = buildKieStyleString();
+      const durationTarget = Math.min(120, duration);
 
-      // Call ElevenLabs music generation via Edge Function
+      const invokeBody: Record<string, unknown> = {
+        title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
+        style: kieStyle || (language === 'ar' ? 'بوب عربي' : 'pop'),
+        instrumental,
+        model: 'V4.5', // Hardcoded single model
+        duration_seconds: durationTarget,
+      };
+
+      if (!instrumental) invokeBody.prompt = lyricsText.trim() || styleText.trim();
+      if (vocalGender) invokeBody.vocalGender = vocalGender;
+
       const { data: genData, error: genError } = await supabase.functions.invoke('music-generate', {
-        body: {
-          prompt: fullPrompt,
-          duration_seconds: Math.min(120, duration),
-          output_format: 'mp3_44100_128',
-          model_id: 'music_v1',
-          force_instrumental: vocalType === 'none'
-        }
+        body: invokeBody,
       });
 
-      if (genError) {
-        if (genError?.message?.includes?.('TRIAL_LIMIT_REACHED') || genData?.error === 'TRIAL_LIMIT_REACHED') {
-          window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: 'music' } }));
-          return;
-        }
-        throw genError;
-      }
-      if (genData?.error === 'TRIAL_LIMIT_REACHED') {
+      if (genError?.message?.includes('TRIAL_LIMIT_REACHED') || genData?.error === 'TRIAL_LIMIT_REACHED') {
         window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: 'music' } }));
+        setSubmitting(false);
         return;
       }
-      if (!genData?.publicUrl) throw new Error('No audio returned from ElevenLabs');
+      if (genError) throw genError;
+      if (!genData?.taskId) throw new Error(language === 'ar' ? 'لم يتم الحصول على معرف المهمة' : 'No task ID returned');
 
-      const storedUrl = genData.publicUrl as string;
-      const storagePath = genData.storagePath as string | null;
-      const mime = (genData.mime as string) || 'audio/mpeg';
+      const { taskId, recordId } = genData as { taskId: string; recordId: string };
+      setGeneratingTask({ taskId, recordId });
+      startPolling(taskId, recordId);
+      toast.info(language === 'ar' ? '🎵 جارٍ إنشاء موسيقاك...' : '🎵 Creating your music...');
 
-      try {
-        // UPDATE the placeholder record with actual data
-        if (placeholderRecordId) {
-          const { error: updateError } = await (supabase as any)
-            .from('user_music_tracks')
-            .update({
-              storage_path: storagePath || null,
-              signed_url: storedUrl,
-              mime,
-              meta: {
-                status: 'completed',
-                ...(instrumentTags.length ? { instruments: instrumentTags } : {}),
-                ...(moodTags.length ? { mood: moodTags } : {})
-              } as any
-            })
-            .eq('id', placeholderRecordId);
-
-          if (updateError) throw updateError;
-        }
-
-        // Reflect saved state (counter already updated above)
-        setAudios((prev) => [{ url: storedUrl, mime, meta: {}, createdAt: Date.now(), saved: true }, ...prev]);
-        savedOk = true;
-        onSaved?.();
-      } catch (saveError) {
-        console.error('Storage/DB save error:', saveError);
-        // Even if save fails, the placeholder record exists and counts toward limit
-        // Mark as failed in DB
-        if (placeholderRecordId) {
-          await (supabase as any)
-            .from('user_music_tracks')
-            .update({
-              meta: { status: 'failed', error: String(saveError) } as any
-            })
-            .eq('id', placeholderRecordId);
-        }
-        // Still show playable result
-        setAudios((prev) => [{ url: storedUrl, mime: mime || 'audio/mpeg', meta: {}, createdAt: Date.now(), saved: false }, ...prev]);
-      }
-
-      setLastError(null);
-
-      toast.success(
-        savedOk
-          ? (language === 'ar' ? 'تم الحفظ. انتقل إلى المحفوظات أو مشاريعي.' : 'Saved. Go to Saved or My Projects.')
-          : (language === 'ar' ? 'تم الإنشاء' : 'Generated')
-      );
     } catch (e: any) {
       const msg = e?.message || String(e);
-      console.error('Music generate error:', e);
       setLastError(msg);
-      
-      // Mark placeholder as failed if it exists
-      // Keep the record so it counts toward monthly limit (user consumed an API attempt)
-      if (placeholderRecordId) {
-        await (supabase as any)
-          .from('user_music_tracks')
-          .update({
-            meta: { status: 'failed', error: msg } as any
-          })
-          .eq('id', placeholderRecordId)
-          .catch((err: any) => console.error('Failed to update placeholder:', err));
-      }
-      
-      toast.error((language==='ar' ? 'فشل العملية: ' : 'Operation failed: ') + msg);
-    } finally {
       setSubmitting(false);
+      toast.error((language === 'ar' ? 'فشل العملية: ' : 'Operation failed: ') + msg);
     }
   };
 
@@ -2077,44 +2014,70 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     return () => document.removeEventListener('mousedown', handleDocClick);
   }, [showIncludePicker, showInstrumentPicker, showMoodPicker]);
 
+  const isAr = language === 'ar';
+
   return (
     <div className="space-y-4">
       {ampModal}
-      <Card className="p-4 md:p-5 space-y-4 overflow-visible">
-        <div className="grid md:grid-cols-3 gap-3">
+
+      {/* ── Title (First) ── */}
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] dark:bg-white/[0.02] p-4 space-y-3">
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isAr ? 'العنوان' : 'Title'}</label>
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value.slice(0, 80))}
+            placeholder={isAr ? 'اسم الأغنية...' : 'Track title...'}
+            className="bg-white/[0.04] border-white/10 focus:border-sky-400/50 focus:ring-sky-400/20 rounded-xl h-11"
+            maxLength={80}
+          />
+          <div className="text-right text-[10px] text-muted-foreground/50">{title.length}/80</div>
+        </div>
+      </div>
+
+      {/* ── Unified Music Style Section ── */}
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] dark:bg-white/[0.02] p-4 space-y-4 overflow-visible">
+        {/* Section Header */}
+        <div className="flex items-center gap-2 pb-2 border-b border-white/5">
+          <Palette className="h-4 w-4 text-sky-400" />
+          <span className="text-xs font-semibold text-sky-300 uppercase tracking-wider">{isAr ? 'أسلوب الموسيقى' : 'Music Style'}</span>
+        </div>
+
+        {/* Three compact picker rows in a grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* Styles */}
           <div className="space-y-2 relative" ref={includeAnchorRef}>
-            <label className="text-xs font-medium block">{language === 'ar' ? 'الأنماط' : 'Styles'}</label>
-            <div className="flex flex-wrap gap-2">
-              {includeTags.map((tag) => (
-                <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-sm">
+            <span className="text-[10px] font-medium text-muted-foreground/70 uppercase">{isAr ? 'الأنماط' : 'Styles'}</span>
+            <div className="flex flex-wrap gap-1.5">
+              {includeTags.slice(0, 3).map((tag) => (
+                <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/30 text-sky-300 text-[10px] font-medium">
                   {tag}
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={() => setIncludeTags((prev) => prev.filter((t) => t !== tag))}
-                  >×</button>
+                  <button type="button" className="hover:text-white" onClick={() => setIncludeTags((prev) => prev.filter((t) => t !== tag))}>×</button>
                 </span>
               ))}
-              <Button type="button" variant="outline" size="sm" onClick={() => { setShowIncludePicker((v)=>!v); setShowInstrumentPicker(false); }}>
-                {language==='ar' ? 'إضافة أنماط' : 'Add styles'}
-              </Button>
+              {includeTags.length > 3 && (
+                <span className="text-[10px] text-muted-foreground/50">+{includeTags.length - 3}</span>
+              )}
+              <button type="button"
+                onClick={() => { setShowIncludePicker((v)=>!v); setShowInstrumentPicker(false); setShowMoodPicker(false); }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-white/20 text-muted-foreground text-[10px] hover:border-sky-400/50 hover:text-sky-300 transition-colors"
+              >
+                <Plus className="h-3 w-3" />{isAr ? 'إضافة' : 'Add'}
+              </button>
             </div>
             {showIncludePicker && includeRect && createPortal(
-              <div
-                id="include-picker-menu"
-                style={{ position: 'fixed', top: includeRect.top, left: includeRect.left, width: includeRect.width, zIndex: 2147483647 }}
-                className="max-h-56 overflow-auto rounded-md border bg-background shadow"
-              >
-                <ul className="p-2 space-y-1 text-sm">
+              <div id="style-picker-menu" style={{ position: 'fixed', top: includeRect.top, left: includeRect.left, width: Math.max(220, includeRect.width), zIndex: 2147483647 }}
+                className="max-h-56 overflow-auto rounded-xl border border-white/10 bg-[#0c0f14] shadow-2xl backdrop-blur-xl">
+                <ul className="p-2 space-y-0.5 text-sm">
                   {STYLE_PRESETS.map((opt) => {
                     const checked = includeTags.includes(opt);
                     return (
-                      <li key={opt} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded px-2 py-1"
-                        onClick={() => setIncludeTags((prev) => checked ? prev.filter(t=>t!==opt) : [...prev, opt])}
-                      >
-                        <input type="checkbox" readOnly checked={checked} />
-                        <span>{opt}</span>
+                      <li key={opt} className={`flex items-center gap-2 cursor-pointer rounded-lg px-3 py-1.5 transition-colors ${checked ? 'bg-sky-500/20 text-sky-300' : 'hover:bg-white/[0.06] text-foreground/80'}`}
+                        onClick={() => setIncludeTags((prev) => checked ? prev.filter(t=>t!==opt) : [...prev, opt])}>
+                        <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${checked ? 'bg-sky-500 border-sky-500' : 'border-white/20'}`}>
+                          {checked && <span className="text-white text-[8px] font-bold">✓</span>}
+                        </span>
+                        {opt}
                       </li>
                     );
                   })}
@@ -2125,37 +2088,37 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
 
           {/* Instruments */}
           <div className="space-y-2 relative" ref={instrumentAnchorRef}>
-            <label className="text-xs font-medium block">{language === 'ar' ? 'الآلات' : 'Instruments'}</label>
-            <div className="flex flex-wrap gap-2">
-              {instrumentTags.map((tag) => (
-                <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-sm">
+            <span className="text-[10px] font-medium text-muted-foreground/70 uppercase">{isAr ? 'الآلات' : 'Instruments'}</span>
+            <div className="flex flex-wrap gap-1.5">
+              {instrumentTags.slice(0, 3).map((tag) => (
+                <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/15 border border-purple-400/30 text-purple-300 text-[10px] font-medium">
                   {tag}
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={() => setInstrumentTags((prev) => prev.filter((t) => t !== tag))}
-                  >×</button>
+                  <button type="button" className="hover:text-white" onClick={() => setInstrumentTags((prev) => prev.filter((t) => t !== tag))}>×</button>
                 </span>
               ))}
-              <Button type="button" variant="outline" size="sm" onClick={() => { setShowInstrumentPicker((v)=>!v); setShowIncludePicker(false); }}>
-                {language==='ar' ? 'إضافة آلات' : 'Add instruments'}
-              </Button>
+              {instrumentTags.length > 3 && (
+                <span className="text-[10px] text-muted-foreground/50">+{instrumentTags.length - 3}</span>
+              )}
+              <button type="button"
+                onClick={() => { setShowInstrumentPicker((v)=>!v); setShowIncludePicker(false); setShowMoodPicker(false); }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-white/20 text-muted-foreground text-[10px] hover:border-purple-400/50 hover:text-purple-300 transition-colors"
+              >
+                <Plus className="h-3 w-3" />{isAr ? 'إضافة' : 'Add'}
+              </button>
             </div>
             {showInstrumentPicker && instrumentRect && createPortal(
-              <div
-                id="instrument-picker-menu"
-                style={{ position: 'fixed', top: instrumentRect.top, left: instrumentRect.left, width: instrumentRect.width, zIndex: 2147483647 }}
-                className="max-h-56 overflow-auto rounded-md border bg-background shadow"
-              >
-                <ul className="p-2 space-y-1 text-sm">
+              <div id="instrument-picker-menu" style={{ position: 'fixed', top: instrumentRect.top, left: instrumentRect.left, width: Math.max(220, instrumentRect.width), zIndex: 2147483647 }}
+                className="max-h-56 overflow-auto rounded-xl border border-white/10 bg-[#0c0f14] shadow-2xl backdrop-blur-xl">
+                <ul className="p-2 space-y-0.5 text-sm">
                   {INSTRUMENT_PRESETS.map((opt) => {
                     const checked = instrumentTags.includes(opt);
                     return (
-                      <li key={opt} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded px-2 py-1"
-                        onClick={() => setInstrumentTags((prev) => checked ? prev.filter(t=>t!==opt) : [...prev, opt])}
-                      >
-                        <input type="checkbox" readOnly checked={checked} />
-                        <span>{opt}</span>
+                      <li key={opt} className={`flex items-center gap-2 cursor-pointer rounded-lg px-3 py-1.5 transition-colors ${checked ? 'bg-purple-500/20 text-purple-300' : 'hover:bg-white/[0.06] text-foreground/80'}`}
+                        onClick={() => setInstrumentTags((prev) => checked ? prev.filter(t=>t!==opt) : [...prev, opt])}>
+                        <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${checked ? 'bg-purple-500 border-purple-500' : 'border-white/20'}`}>
+                          {checked && <span className="text-white text-[8px] font-bold">✓</span>}
+                        </span>
+                        {opt}
                       </li>
                     );
                   })}
@@ -2164,39 +2127,39 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
             }
           </div>
 
-          {/* Mode/Mood */}
+          {/* Mood */}
           <div className="space-y-2 relative" ref={moodAnchorRef}>
-            <label className="text-xs font-medium block">{language === 'ar' ? 'المزاج' : 'Mode'}</label>
-            <div className="flex flex-wrap gap-2">
-              {moodTags.map((tag) => (
-                <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-sm">
+            <span className="text-[10px] font-medium text-muted-foreground/70 uppercase">{isAr ? 'المزاج' : 'Mood'}</span>
+            <div className="flex flex-wrap gap-1.5">
+              {moodTags.slice(0, 3).map((tag) => (
+                <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-amber-300 text-[10px] font-medium">
                   {tag}
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={() => setMoodTags((prev) => prev.filter((t) => t !== tag))}
-                  >×</button>
+                  <button type="button" className="hover:text-white" onClick={() => setMoodTags((prev) => prev.filter((t) => t !== tag))}>×</button>
                 </span>
               ))}
-              <Button type="button" variant="outline" size="sm" onClick={() => { setShowMoodPicker((v)=>!v); setShowIncludePicker(false); setShowInstrumentPicker(false); }}>
-                {language==='ar' ? 'إضافة مزاج' : 'Add mode'}
-              </Button>
+              {moodTags.length > 3 && (
+                <span className="text-[10px] text-muted-foreground/50">+{moodTags.length - 3}</span>
+              )}
+              <button type="button"
+                onClick={() => { setShowMoodPicker((v)=>!v); setShowIncludePicker(false); setShowInstrumentPicker(false); }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-white/20 text-muted-foreground text-[10px] hover:border-amber-400/50 hover:text-amber-300 transition-colors"
+              >
+                <Plus className="h-3 w-3" />{isAr ? 'إضافة' : 'Add'}
+              </button>
             </div>
             {showMoodPicker && moodRect && createPortal(
-              <div
-                id="mood-picker-menu"
-                style={{ position: 'fixed', top: moodRect.top, left: moodRect.left, width: moodRect.width, zIndex: 2147483647 }}
-                className="max-h-56 overflow-auto rounded-md border bg-background shadow"
-              >
-                <ul className="p-2 space-y-1 text-sm">
+              <div id="mood-picker-menu" style={{ position: 'fixed', top: moodRect.top, left: moodRect.left, width: Math.max(220, moodRect.width), zIndex: 2147483647 }}
+                className="max-h-56 overflow-auto rounded-xl border border-white/10 bg-[#0c0f14] shadow-2xl backdrop-blur-xl">
+                <ul className="p-2 space-y-0.5 text-sm">
                   {MODE_PRESETS.map((opt) => {
                     const checked = moodTags.includes(opt);
                     return (
-                      <li key={opt} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded px-2 py-1"
-                        onClick={() => setMoodTags((prev) => checked ? prev.filter(t=>t!==opt) : [...prev, opt])}
-                      >
-                        <input type="checkbox" readOnly checked={checked} />
-                        <span>{opt}</span>
+                      <li key={opt} className={`flex items-center gap-2 cursor-pointer rounded-lg px-3 py-1.5 transition-colors ${checked ? 'bg-amber-500/20 text-amber-300' : 'hover:bg-white/[0.06] text-foreground/80'}`}
+                        onClick={() => setMoodTags((prev) => checked ? prev.filter(t=>t!==opt) : [...prev, opt])}>
+                        <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${checked ? 'bg-amber-500 border-amber-500' : 'border-white/20'}`}>
+                          {checked && <span className="text-white text-[8px] font-bold">✓</span>}
+                        </span>
+                        {opt}
                       </li>
                     );
                   })}
@@ -2204,267 +2167,252 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
               </div>, document.body)
             }
           </div>
+        </div>
 
-          {/* Vocals selector (moved into main card) */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium block">{language === 'ar' ? 'الصوت' : 'Vocals'}</label>
-            <div className="flex flex-wrap gap-3 text-sm">
-              <label className="inline-flex items-center gap-2">
-                <input type="radio" name="vocalType" checked={vocalType==='auto'} onChange={()=>setVocalType('auto')} />
-                {language==='ar' ? 'تلقائي' : 'Auto'}
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input type="radio" name="vocalType" checked={vocalType==='none'} onChange={()=>setVocalType('none')} />
-                {language==='ar' ? 'بدون' : 'None'}
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input type="radio" name="vocalType" checked={vocalType==='female'} onChange={()=>setVocalType('female')} />
-                {language==='ar' ? 'صوت أنثوي' : 'Female voice'}
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input type="radio" name="vocalType" checked={vocalType==='male'} onChange={()=>setVocalType('male')} />
-                {language==='ar' ? 'صوت ذكوري' : 'Male voice'}
-              </label>
-            </div>
+        {/* Style of Music textarea - unified with the style section */}
+        <div className="space-y-1.5 pt-1">
+          <label className="text-[10px] font-medium text-muted-foreground/70 uppercase">
+            {isAr ? 'وصف الأسلوب (اختياري)' : 'Style Description (optional)'}
+          </label>
+          <Textarea
+            value={styleText}
+            onChange={(e) => setStyleText(Array.from(e.target.value).slice(0, styleCap).join(''))}
+            placeholder={isAr ? 'أضف تفاصيل إضافية: خليجي بطيء، عود، حنين...' : 'Add more details: arabic GCC slow, oud, dreamy...'}
+            rows={2}
+            className="bg-white/[0.04] border-white/10 focus:border-sky-400/50 focus:ring-sky-400/20 rounded-xl resize-none text-sm"
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground/50">
+            <span>{Array.from(styleText).length}/{styleCap}</span>
+            <span className="text-sky-400/70">{isAr ? 'يتم دمج هذا مع الأنماط المختارة' : 'Merges with selected tags'}</span>
           </div>
         </div>
-        {(includeTags.length>0 || instrumentTags.length>0 || moodTags.length>0 || vocalType!=='auto') && (
-          <Button
-            type="button"
-            className="w-full btn-enhanced h-10"
-            onClick={insertChipsIntoStyle}
-          >
-            {language==='ar' ? 'إدراج في الأسلوب' : 'Insert into Style'}
-          </Button>
-        )}
-      </Card>
+      </div>
 
-      <Card className="p-4 md:p-5 space-y-3">
-        <div className="space-y-3">
-          <div className="flex flex-col md:flex-row gap-3">
-            <Input
-              value={title}
-              onChange={(e)=> setTitle(e.target.value.slice(0,100))}
-              placeholder={language==='ar' ? 'العنوان (مطلوب)' : 'Title (required)'}
-              required
-              className="md:w-1/3"
+      {/* ── Vocals ── */}
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] dark:bg-white/[0.02] p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Mic className="h-4 w-4 text-emerald-400" />
+          <span className="text-xs font-semibold text-emerald-300 uppercase tracking-wider">{isAr ? 'الصوت' : 'Vocals'}</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(['auto', 'none', 'female', 'male'] as const).map((v) => {
+            const labels: Record<string, { en: string; ar: string }> = {
+              auto: { en: 'Auto', ar: 'تلقائي' }, none: { en: 'Instrumental', ar: 'موسيقى فقط' },
+              female: { en: 'Female', ar: 'أنثوي' }, male: { en: 'Male', ar: 'ذكوري' },
+            };
+            const isActive = vocalType === v;
+            return (
+              <button key={v} type="button" onClick={() => setVocalType(v)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${
+                  isActive
+                    ? 'bg-gradient-to-r from-emerald-500/30 to-teal-500/20 border-emerald-400/50 text-emerald-300 shadow-[0_0_12px_hsla(142,76%,55%,0.3)]'
+                    : 'border-white/10 text-muted-foreground hover:border-white/20 hover:text-foreground'
+                }`}
+              >
+                {isAr ? labels[v].ar : labels[v].en}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Compose Form ── */}
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] dark:bg-white/[0.02] p-4 space-y-4">
+
+        {/* Lyrics (only when not instrumental) */}
+        {vocalType !== 'none' && (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isAr ? 'الكلمات' : 'Lyrics'}</label>
+              <button
+                type="button"
+                disabled={amping || submitting}
+                onClick={handleAmp}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border border-purple-400/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 active:scale-95 transition-all disabled:opacity-50"
+              >
+                {amping
+                  ? <><Loader2 className="h-3 w-3 animate-spin" />{isAr ? 'تحسين...' : 'Amping...'}</>
+                  : <><Sparkles className="h-3 w-3" />{isAr ? 'تحسين Amp' : 'Amp'}</>
+                }
+              </button>
+            </div>
+            <Textarea
+              value={lyricsText}
+              onChange={(e) => {
+                const raw = e.target.value || '';
+                const lines = raw.split(/\r?\n/);
+                const capped = Array.from(lines.slice(0, maxLyricLines).join('\n')).slice(0, lyricsCap).join('');
+                setLyricsText(capped);
+              }}
+              placeholder={isAr ? 'أكتب الكلمات هنا أو استخدم Amp لإنشائها...' : 'Write lyrics here or use Amp to generate...'}
+              rows={5}
+              className="bg-white/[0.04] border-white/10 focus:border-purple-400/50 focus:ring-purple-400/20 rounded-xl resize-none"
             />
-            <div className="flex-1 flex flex-col gap-2">
-              <Textarea
-                value={styleText}
-                onChange={(e) => setStyleText(Array.from(e.target.value).slice(0, styleCap).join(''))}
-                placeholder={language === 'ar' ? 'وصف الأسلوب/الفكرة (حتى 350 حرفًا)' : 'Style/idea brief (up to 350 chars)'}
-                rows={3}
-                className="w-full"
-              />
-              <div className="text-xs text-muted-foreground flex justify-start">
-                <span>{language==='ar' ? 'الأسلوب' : 'Style'}: {Array.from(styleText).length} / {styleCap}</span>
-              </div>
-              {(includeTags.length>0 || instrumentTags.length>0 || moodTags.length>0 || vocalType!=='auto') && (
-                <div className="text-xs text-muted-foreground flex items-start justify-between gap-2">
-                  <div className="truncate" title={includedSummary}>
-                    <span className="font-medium">{language==='ar' ? 'المضمَّن:' : 'Included:'}</span> {includedSummary}
+            <div className="flex justify-between text-[10px] text-muted-foreground/50">
+              <span>{Array.from(lyricsText).length}/{lyricsCap}</span>
+              <span>{isAr ? `الأسطر: ${lyricLineCount}/${maxLyricLines}` : `Lines: ${lyricLineCount}/${maxLyricLines}`}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Duration + Generate */}
+        <div className="flex items-center gap-3 pt-1">
+          <select
+            value={duration}
+            onChange={(e) => setDuration(Math.min(120, Math.max(10, parseInt(e.target.value || '30'))))}
+            title={isAr ? 'المدة' : 'Duration'}
+            className="flex-shrink-0 px-3 py-2 rounded-xl border border-white/10 bg-white/[0.04] text-foreground text-sm focus:border-sky-400/50 focus:outline-none"
+          >
+            <option value={10}>0:10</option>
+            <option value={30}>0:30</option>
+            <option value={60}>1:00</option>
+            <option value={90}>1:30</option>
+            <option value={120}>2:00</option>
+          </select>
+          <button
+            type="button"
+            disabled={overLimit || submitting}
+            onClick={handleGenerate}
+            className="flex-1 relative overflow-hidden h-12 rounded-2xl font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-sky-500 via-blue-600 to-purple-600 text-white shadow-[0_4px_24px_hsla(210,100%,65%,0.4)]"
+          >
+            {submitting ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {isAr ? 'جارٍ الإنشاء...' : 'Creating...'}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-2">
+                <Music className="h-4 w-4" />
+                {isAr ? 'إنشاء موسيقى' : 'Generate Music'}
+              </span>
+            )}
+            <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+          </button>
+        </div>
+
+        {/* Quota bar */}
+        <div className="flex items-center justify-between text-xs">
+          <span className={`font-semibold ${overLimit ? 'text-red-400' : 'text-emerald-400'}`}>
+            {isAr ? `المتبقي: ${songsRemaining} من ${songsLimit}` : `Remaining: ${songsRemaining} / ${songsLimit}`}
+          </span>
+          <span className="text-muted-foreground/60">
+            {isAr ? `تم الاستخدام: ${songsUsed} هذا الشهر` : `Used ${songsUsed} this month`}
+          </span>
+        </div>
+
+        {lastError && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-400/20 text-red-300 text-xs">
+            <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+            {lastError}
+          </div>
+        )}
+      </div>
+
+      {/* ── Generating State ── */}
+      {submitting && generatingTask && (
+        <div className="rounded-2xl border border-sky-400/20 bg-sky-500/5 p-6 flex flex-col items-center gap-4">
+          <div className="relative w-16 h-16">
+            <div className="absolute inset-0 rounded-full border-2 border-sky-400/20" />
+            <div className="absolute inset-0 rounded-full border-2 border-t-sky-400 animate-spin" />
+            <div className="absolute inset-3 rounded-full bg-sky-500/10 flex items-center justify-center">
+              <Music className="h-5 w-5 text-sky-400" />
+            </div>
+          </div>
+          <div className="text-center space-y-1">
+            <p className="font-semibold text-sm text-sky-300">{isAr ? 'جارٍ إنشاء موسيقاك...' : 'Creating your music...'}</p>
+            <p className="text-xs text-muted-foreground">{isAr ? 'قد يستغرق ذلك دقيقة أو دقيقتين' : 'This usually takes 1-2 minutes'}</p>
+          </div>
+          <div className="w-full max-w-48 h-1 rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-sky-400 to-purple-400 rounded-full animate-pulse" style={{ width: '60%' }} />
+          </div>
+        </div>
+      )}
+
+      {/* ── Results: Two Variations ── */}
+      {generatedTracks.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-sky-400/30 to-transparent" />
+            <span className="text-xs font-semibold text-sky-300 uppercase tracking-widest">{isAr ? 'نتائجك' : 'Your Results'}</span>
+            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-sky-400/30 to-transparent" />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            {generatedTracks.map((track, idx) => (
+              <div key={track.id + '-' + idx}
+                className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.02] backdrop-blur-sm shadow-[0_4px_24px_rgba(0,0,0,0.4)]"
+              >
+                {/* Ambient glow */}
+                <div className="absolute inset-0 pointer-events-none opacity-30"
+                  style={{ background: `radial-gradient(ellipse 80% 60% at 20% 50%, hsla(210,100%,65%,0.15), transparent)` }} />
+
+                <div className="relative p-4 flex gap-4 items-start">
+                  {/* Cover art */}
+                  <div className="flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden bg-gradient-to-br from-sky-900/50 to-purple-900/50 border border-white/10 shadow-lg">
+                    {track.coverUrl ? (
+                      <img src={track.coverUrl} alt={track.title || 'cover'} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Music className="h-7 w-7 text-sky-400/60" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-bold text-sm text-foreground truncate">{track.title || (isAr ? 'موسيقى وقتي' : 'Wakti Music')}</p>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/10 text-muted-foreground">
+                          V{idx + 1}
+                        </span>
+                        {track.duration && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-400/20">
+                            {Math.floor(track.duration / 60)}:{String(Math.round(track.duration % 60)).padStart(2, '0')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {track.audioUrl && (
+                      <AudioPlayer src={track.audioUrl} className="w-full" />
+                    )}
                   </div>
                 </div>
-              )}
 
-              <Textarea
-                value={lyricsText}
-                onChange={(e) => {
-                  // First enforce line budget, then char cap
-                  const raw = e.target.value || '';
-                  const lines = raw.split(/\r?\n/);
-                  const limitedLines = lines.slice(0, maxLyricLines);
-                  const joined = limitedLines.join('\n');
-                  const capped = Array.from(joined).slice(0, lyricsCap).join('');
-                  setLyricsText(capped);
-                }}
-                placeholder={language === 'ar' ? 'الكلمات (حتى 450 حرفًا)' : 'Lyrics (up to 450 chars)'}
-                rows={4}
-                className="w-full"
-              />
-              <div className="text-xs text-muted-foreground flex justify-between">
-                <span>
-                  {language==='ar'
-                    ? `الكلمات: ${Array.from(lyricsText).length} / ${lyricsCap}`
-                    : `Lyrics: ${Array.from(lyricsText).length} / ${lyricsCap}`}
-                </span>
-                <span>
-                  {language==='ar'
-                    ? `الأسطر: ${lyricLineCount} / ${maxLyricLines}`
-                    : `Lines: ${lyricLineCount} / ${maxLyricLines}`}
-                </span>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={amping || submitting || !title.trim()}
-              onClick={handleAmp}
-              aria-busy={amping}
-            >
-              {amping ? (
-                <span className="inline-flex items-center gap-1"><span className="animate-spin">✨</span><span>{language==='ar'?'تحسين…':'Amp…'}</span></span>
-              ) : (
-                <span className="inline-flex items-center gap-1"><Wand2 className="h-4 w-4" />{language==='ar'?'تحسين':'Amp'}</span>
-              )}
-            </Button>
-            <Button
-              disabled={overLimit || submitting || !title.trim()}
-              onClick={handleGenerate}
-              className=""
-              aria-busy={submitting}
-            >
-              {submitting ? (
-                <span className="inline-flex items-center gap-2">
-                  <span className="animate-spin">🎵</span>
-                  <span>{language==='ar' ? 'جارٍ الإنشاء...' : 'Generating…'}</span>
-                </span>
-              ) : (
-                <span>{language === 'ar' ? 'إنشاء' : 'Generate'}</span>
-              )}
-            </Button>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-          <div className="inline-flex items-center gap-2">
-            <select
-              className="px-3 py-1 rounded-full border bg-background text-foreground shadow-sm"
-              value={duration}
-              onChange={(e)=> setDuration(Math.min(120, Math.max(10, parseInt(e.target.value||'30'))))}
-            >
-              <option value={10}>↔ 0:10</option>
-              <option value={30}>↔ 0:30</option>
-              <option value={60}>↔ 1:00</option>
-              <option value={90}>↔ 1:30</option>
-              <option value={120}>↔ 2:00</option>
-            </select>
-            
-            {submitting && <span className="text-emerald-600 animate-spin">🎵</span>}
-          </div>
-          <div className={`ml-auto font-medium ${overLimit ? 'text-red-600' : 'text-emerald-600'}`}>
-            {language === 'ar' ? `المتبقي الكلي ${remainingOverall} من ${songsLimit}` : `Total remaining ${remainingOverall} / ${songsLimit}`}
-          </div>
-          <div className="font-medium">
-            {language === 'ar' ? `تم الاستخدام: ${songsUsed} من ${songsLimit} هذا الشهر` : `Used ${songsUsed} of ${songsLimit} this month`}
-          </div>
-        </div>
-      </Card>
-
-      <Card className="p-4 md:p-5 space-y-3">
-        {audios.length === 0 ? (
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              {language==='ar' ? 'سيتم حفظ الموسيقى المُنشأة كمشاريع في علامة التبويب المحفوظات' : 'generated music will be saved as projects in the Save tab'}
-            </p>
-            {lastError && (
-              <p className="text-sm text-red-600">{lastError}</p>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Save Reminder */}
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 border border-muted">
-              <Info className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-              <p className="text-xs text-muted-foreground">
-                {language === 'ar' 
-                  ? 'تذكير: احفظ الموسيقى للوصول إليها لاحقاً من علامة التبويب "المحفوظات" وتنزيلها.'
-                  : 'Reminder: Save your music to access it later from the "Saved" tab and download it.'}
-              </p>
-            </div>
-
-            {audios.map((a, idx) => (
-              <div key={a.createdAt + '-' + idx} className="space-y-3 p-3 md:p-4 rounded-lg border bg-card">
-                <AudioPlayer src={a.url} className="w-full" />
-                <div className="flex items-center gap-2 justify-end flex-wrap">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onPointerUp={() => handleDownload(a.url, `wakti-music-${a.createdAt}.mp3`)}
+                {/* Actions */}
+                <div className="relative px-4 pb-4 flex items-center gap-2 justify-end flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(track.audioUrl, `wakti-music-v${idx + 1}.mp3`)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/[0.05] text-muted-foreground hover:text-foreground hover:border-white/20 active:scale-95 transition-all"
                   >
-                    {language==='ar' ? 'تنزيل' : 'Download'}
-                  </Button>
-                  <Button
-                    variant="outline"
+                    <RefreshCw className="h-3 w-3" />{isAr ? 'تنزيل' : 'Download'}
+                  </button>
+                  <ShareButton
                     size="sm"
-                    onClick={() => {
-                      navigator.clipboard.writeText(a.url);
-                      toast.success(language==='ar' ? 'تم نسخ الرابط' : 'URL copied');
-                    }}
-                  >
-                    {language==='ar' ? 'نسخ الرابط' : 'Copy URL'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={a.saved}
-                    onClick={async () => {
-                      try {
-                        const { data: { user } } = await supabase.auth.getUser();
-                        if (!user) throw new Error(language==='ar' ? 'سجّل الدخول للحفظ' : 'Sign in to save');
-                        let storagePath: string | null = null;
-                        let publicUrl = a.url;
-                        // If already a public URL within our bucket, derive storage path
-                        const marker = '/storage/v1/object/public/music/';
-                        if (publicUrl.includes(marker)) {
-                          storagePath = publicUrl.split(marker)[1] || null;
-                        }
-                        // Otherwise, fetch and upload
-                        if (!storagePath) {
-                          const response = await fetch(a.url);
-                          const blob = await response.blob();
-                          const fileName = `${user.id}/${Date.now()}.mp3`;
-                          const up = await supabase.storage.from('music').upload(fileName, blob, { contentType: 'audio/mpeg', upsert: false });
-                          if (up.error) throw up.error;
-                          const { data: urlData } = supabase.storage.from('music').getPublicUrl(fileName);
-                          publicUrl = urlData.publicUrl;
-                          storagePath = fileName;
-                        }
-                        // Avoid duplicates: check existing by storage_path
-                        if (storagePath) {
-                          const { count } = await (supabase as any)
-                            .from('user_music_tracks')
-                            .select('*', { count: 'exact', head: true })
-                            .eq('user_id', user.id)
-                            .eq('storage_path', storagePath);
-
-                          if (!count || count === 0) {
-                            const wantsArabic = langChoice === 'ar' || (langChoice === 'auto' && language === 'ar');
-                            const stylesLine = buildStylesSuffix();
-                            const titleLine = title ? (wantsArabic ? `العنوان: ${title}` : `Title: ${title}`) : '';
-                            const contentLine = styleText ? (wantsArabic ? `ملخص الأسلوب: ${styleText}` : `Style brief: ${styleText}`) : '';
-                            const lyricsContent = lyricsText ? (wantsArabic ? `الكلمات:\n${lyricsText}` : `Lyrics:\n${lyricsText}`) : '';
-                            const savePrompt = [titleLine, contentLine, stylesLine, lyricsContent].filter(Boolean).join('\n');
-                            await (supabase as any).from('user_music_tracks').insert({
-                              user_id: user.id,
-                              title: (title || (styleText + ' ' + (lyricsText ? lyricsText.slice(0,40) : ''))).substring(0, 100),
-                              storage_path: storagePath,
-                              signed_url: publicUrl,
-                              duration_sec: Math.min(120, duration),
-                              prompt: savePrompt,
-                            });
-                          }
-                        }
-                        setAudios((prev) => prev.map((it, i) => i===idx ? { ...it, url: publicUrl, saved: true } : it));
-                        toast.success(
-                          language === 'ar'
-                            ? 'تم الحفظ. انتقل إلى المحفوظات أو مشاريعي.'
-                            : 'Saved. Go to Saved or My Projects.'
-                        );
-                        onSaved?.();
-                      } catch (e: any) {
-                        toast.error((language==='ar'?'تعذر الحفظ: ':'Save failed: ') + (e?.message || String(e)));
-                      }
-                    }}
-                  >
-                    {a.saved ? (language==='ar' ? 'تم الحفظ' : 'Saved') : (language==='ar' ? 'حفظ' : 'Save')}
-                  </Button>
+                    shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${track.id}` : ''}
+                    shareTitle={isAr ? 'استمع إلى موسيقى من وقتي' : 'Listen to my Wakti music'}
+                    shareDescription={track.title || undefined}
+                  />
                 </div>
               </div>
             ))}
           </div>
-        )}
-      </Card>
+
+          <p className="text-center text-xs text-muted-foreground/60">
+            {isAr ? '✓ تم الحفظ تلقائياً في المحفوظات' : '✓ Auto-saved to your Saved tab'}
+          </p>
+        </div>
+      )}
+
+      {/* Empty state before first generation */}
+      {generatedTracks.length === 0 && !submitting && (
+        <div className="text-center py-6">
+          <p className="text-xs text-muted-foreground/50">
+            {isAr ? 'سيتم حفظ موسيقاك تلقائياً في المحفوظات' : 'Your music will be auto-saved to the Saved tab'}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -2472,55 +2420,58 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
 function EditorTab() {
   const { language } = useTheme();
   const { user } = useAuth();
+  const isAr = language === 'ar';
   const [loading, setLoading] = useState(false);
-  const [tracks, setTracks] = useState<Array<{ id: string; created_at: string; prompt: string | null; include_styles: string[] | null; exclude_styles: string[] | null; requested_duration_seconds: number | null; signed_url: string | null; storage_path: string | null; mime: string | null; play_url?: string | null }>>([]);
+  const [tracks, setTracks] = useState<Array<{
+    id: string;
+    created_at: string;
+    title: string | null;
+    prompt: string | null;
+    include_styles: string[] | null;
+    requested_duration_seconds: number | null;
+    duration: number | null;
+    cover_url: string | null;
+    signed_url: string | null;
+    storage_path: string | null;
+    mime: string | null;
+    meta: Record<string, unknown> | null;
+    play_url?: string | null;
+  }>>([]);
   const [deleteTrackTarget, setDeleteTrackTarget] = useState<{ id: string; storagePath: string | null } | null>(null);
 
   const load = async () => {
-    if (!user) {
-      setTracks([]);
-      return;
-    }
+    if (!user) { setTracks([]); return; }
     setLoading(true);
     try {
       const { data, error } = await (supabase as any)
         .from('user_music_tracks')
-        .select('id, created_at, prompt, include_styles, exclude_styles, requested_duration_seconds, signed_url, storage_path, mime, meta')
+        .select('id, created_at, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(60);
 
       if (error) throw error;
-      
-      // Filter out failed/generating records and build playable URLs
+
       const withUrls = (data || [])
         .filter((t: any) => {
-          // Skip records that are still generating or failed
           const status = t.meta?.status;
-          if (status === 'generating' || status === 'failed') {
-            console.log('[MusicStudio] Skipping track with status:', status, t.id);
-            return false;
-          }
-          // Skip records with placeholder paths (never completed)
-          if (t.storage_path?.includes('_pending.mp3')) {
-            console.log('[MusicStudio] Skipping pending track:', t.id);
-            return false;
-          }
+          if (status === 'generating' || status === 'failed') return false;
+          if (t.storage_path?.includes('_pending.mp3')) return false;
+          if (!t.signed_url && !t.storage_path) return false;
           return true;
         })
         .map((t: any) => {
-          // Use signed_url directly if available, otherwise construct from storage_path as fallback
           let playUrl: string | null = t.signed_url;
           if (!playUrl && t.storage_path) {
             const base = SUPABASE_URL.replace(/\/$/, '');
             const path = t.storage_path.startsWith('/') ? t.storage_path.slice(1) : t.storage_path;
             playUrl = `${base}/storage/v1/object/public/music/${path}`;
           }
-          return { ...t, play_url: playUrl } as typeof t & { play_url: string | null };
+          return { ...t, play_url: playUrl };
         });
       setTracks(withUrls);
     } catch (e) {
-      console.error('[MusicStudio] Load error:', e);
+      console.error('[EditorTab] Load error:', e);
     } finally {
       setLoading(false);
     }
@@ -2528,113 +2479,150 @@ function EditorTab() {
 
   useEffect(() => { load(); }, [user?.id]);
 
-  const handleDeleteClick = (trackId: string, storagePath: string | null) => {
-    setDeleteTrackTarget({ id: trackId, storagePath });
-  };
-
   const handleDeleteConfirm = async () => {
     if (!deleteTrackTarget) return;
     const { id: trackId, storagePath } = deleteTrackTarget;
     setDeleteTrackTarget(null);
     try {
-      // Delete from database
-      const { error: dbError } = await (supabase as any)
-        .from('user_music_tracks')
-        .delete()
-        .eq('id', trackId);
-
+      const { error: dbError } = await (supabase as any).from('user_music_tracks').delete().eq('id', trackId);
       if (dbError) throw dbError;
-
-      // Delete from storage if storage_path exists
       if (storagePath) {
-        const { error: storageError } = await supabase.storage
-          .from('music')
-          .remove([storagePath]);
-        
-        if (storageError) {
-          console.warn('Storage deletion failed:', storageError);
-          // Don't throw - DB deletion succeeded
-        }
+        await supabase.storage.from('music').remove([storagePath]).catch(() => {});
       }
-
-      // Update UI
       setTracks(prev => prev.filter(t => t.id !== trackId));
-      toast.success(language === 'ar' ? 'تم الحذف بنجاح' : 'Deleted successfully');
+      toast.success(isAr ? 'تم الحذف بنجاح' : 'Deleted successfully');
     } catch (e: any) {
-      toast.error((language === 'ar' ? 'فشل الحذف: ' : 'Delete failed: ') + (e?.message || String(e)));
+      toast.error((isAr ? 'فشل الحذف: ' : 'Delete failed: ') + (e?.message || String(e)));
     }
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">{language==='ar' ? 'مشاريعي' : 'My Projects'}</h2>
-        <Button size="sm" variant="outline" onClick={load} disabled={loading}>{loading ? (language==='ar'?'يُحدَّث...':'Refreshing...') : (language==='ar'?'تحديث':'Refresh')}</Button>
+        <h2 className="text-base font-bold">{isAr ? 'مشاريعي' : 'My Tracks'}</h2>
+        <button
+          type="button"
+          onClick={load}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/[0.04] text-muted-foreground hover:text-foreground hover:border-white/20 active:scale-95 transition-all disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
+          {loading ? (isAr ? 'تحديث...' : 'Loading...') : (isAr ? 'تحديث' : 'Refresh')}
+        </button>
       </div>
 
-      {tracks.length === 0 ? (
-        <Card className="p-4 md:p-5">
-          <p className="text-sm text-muted-foreground">{language==='ar' ? 'لا توجد عناصر محفوظة بعد.' : 'No saved items yet.'}</p>
-        </Card>
+      {tracks.length === 0 && !loading ? (
+        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 flex flex-col items-center gap-3 text-center">
+          <div className="w-12 h-12 rounded-full bg-white/[0.05] flex items-center justify-center">
+            <Music className="h-6 w-6 text-muted-foreground/40" />
+          </div>
+          <p className="text-sm text-muted-foreground/60">{isAr ? 'لا توجد مقاطع محفوظة بعد.' : 'No saved tracks yet.'}</p>
+          <p className="text-xs text-muted-foreground/40">{isAr ? 'أنشئ موسيقى وستُحفظ هنا تلقائياً.' : 'Generate music and it will auto-save here.'}</p>
+        </div>
       ) : (
-        <div className="space-y-4 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
-          {tracks.map((t) => (
-            <Card key={t.id} className="p-3 md:p-5 space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-xs text-muted-foreground">{new Date(t.created_at).toLocaleString()}</div>
-                <div className="text-xs text-muted-foreground">{t.requested_duration_seconds ? `${t.requested_duration_seconds}s` : ''}</div>
-              </div>
-              {t.prompt && <div className="text-sm truncate" title={t.prompt}>{t.prompt}</div>}
-              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                {(t.include_styles||[]).map((s)=> <span key={s} className="px-2 py-0.5 rounded-full bg-muted">{s}</span>)}
-              </div>
-              {t.play_url && (
-                <div className="space-y-3">
-                  <AudioPlayer src={t.play_url} className="w-full" />
-                  <div className="flex items-center gap-2 justify-end flex-wrap">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onPointerUp={() => handleDownload(t.play_url || '', `wakti-music-${t.id}.mp3`)}
-                    >
-                      {language==='ar' ? 'تنزيل' : 'Download'}
-                    </Button>
-                    <ShareButton
-                      size="sm"
-                      shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${t.id}` : ''}
-                      shareTitle={language==='ar' ? 'استمع إلى موسيقى من Wakti' : 'Listen to my Wakti music track'}
-                      shareDescription={t.prompt || undefined}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDeleteClick(t.id, t.storage_path)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+        <div className="space-y-3">
+          {tracks.map((t) => {
+            const durationSec = t.duration ?? t.requested_duration_seconds ?? null;
+            const durationLabel = durationSec
+              ? `${Math.floor(durationSec / 60)}:${String(Math.round(durationSec % 60)).padStart(2, '0')}`
+              : null;
+            const trackTitle = t.title || (t.prompt ? t.prompt.slice(0, 40) : (isAr ? 'مقطع موسيقي' : 'Music Track'));
+            const styleTags: string[] = t.include_styles ?? [];
+            const metaTags = (t.meta as any)?.tags as string | null;
+
+            return (
+              <div key={t.id}
+                className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.02] shadow-[0_4px_24px_rgba(0,0,0,0.3)]"
+              >
+                <div className="p-4 flex gap-4 items-start">
+                  {/* Cover art */}
+                  <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-gradient-to-br from-sky-900/40 to-purple-900/40 border border-white/10 shadow-md">
+                    {t.cover_url ? (
+                      <img src={t.cover_url} alt={trackTitle} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Music className="h-6 w-6 text-sky-400/50" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-bold text-sm text-foreground truncate leading-tight">{trackTitle}</p>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {durationLabel && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-400/20">
+                            {durationLabel}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          aria-label={isAr ? 'حذف' : 'Delete'}
+                          onClick={() => setDeleteTrackTarget({ id: t.id, storagePath: t.storage_path })}
+                          className="p-1 rounded-lg text-muted-foreground/40 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Tags */}
+                    {(styleTags.length > 0 || metaTags) && (
+                      <div className="flex flex-wrap gap-1">
+                        {(metaTags ? [metaTags] : styleTags).slice(0, 3).map((tag, i) => (
+                          <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.06] text-muted-foreground/70 border border-white/[0.06]">
+                            {typeof tag === 'string' ? tag.slice(0, 20) : tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <p className="text-[10px] text-muted-foreground/40">
+                      {new Date(t.created_at).toLocaleDateString(isAr ? 'ar' : 'en', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
                   </div>
                 </div>
-              )}
-            </Card>
-          ))}
+
+                {/* Player + actions */}
+                {t.play_url && (
+                  <div className="px-4 pb-4 space-y-3">
+                    <AudioPlayer src={t.play_url} className="w-full" />
+                    <div className="flex items-center gap-2 justify-end flex-wrap">
+                      <button
+                        type="button"
+                        onPointerUp={() => handleDownload(t.play_url || '', `wakti-music-${t.id}.mp3`)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/[0.04] text-muted-foreground hover:text-foreground hover:border-white/20 active:scale-95 transition-all"
+                      >
+                        <RefreshCw className="h-3 w-3" />{isAr ? 'تنزيل' : 'Download'}
+                      </button>
+                      <ShareButton
+                        size="sm"
+                        shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${t.id}` : ''}
+                        shareTitle={isAr ? 'استمع إلى موسيقى من وقتي' : 'Listen to my Wakti music'}
+                        shareDescription={t.prompt || undefined}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
       <AlertDialog open={!!deleteTrackTarget} onOpenChange={(open) => !open && setDeleteTrackTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {language === 'ar' ? 'حذف المقطع' : 'Delete Track'}
-            </AlertDialogTitle>
+            <AlertDialogTitle>{isAr ? 'حذف المقطع' : 'Delete Track'}</AlertDialogTitle>
             <AlertDialogDescription>
-              {language === 'ar' ? 'هل أنت متأكد من حذف هذا المقطع؟' : 'Are you sure you want to delete this track?'}
+              {isAr ? 'هل أنت متأكد من حذف هذا المقطع؟ لا يمكن التراجع.' : 'Are you sure? This cannot be undone.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{language === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogCancel>{isAr ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {language === 'ar' ? 'حذف' : 'Delete'}
+              {isAr ? 'حذف' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
