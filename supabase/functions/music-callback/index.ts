@@ -8,10 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 };
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-const supabaseService = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+// env vars moved inside handler — do NOT read at module level in Deno edge functions
 
 interface SunoTrack {
   id: string;
@@ -44,7 +41,9 @@ interface KieCallbackPayload {
   createTime?: number;
 }
 
+// deno-lint-ignore no-explicit-any
 async function downloadAndStore(
+  svc: any,
   url: string,
   storageBucket: string,
   filePath: string,
@@ -59,7 +58,7 @@ async function downloadAndStore(
     const buffer = await resp.arrayBuffer();
     const blob = new Blob([buffer], { type: contentType });
 
-    const { error: uploadError } = await supabaseService.storage
+    const { error: uploadError } = await svc.storage
       .from(storageBucket)
       .upload(filePath, blob, { contentType, upsert: true });
 
@@ -68,7 +67,7 @@ async function downloadAndStore(
       return null;
     }
 
-    const { data: urlData } = supabaseService.storage
+    const { data: urlData } = svc.storage
       .from(storageBucket)
       .getPublicUrl(filePath);
 
@@ -84,13 +83,35 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+  const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    console.error("[music-callback] Missing env vars");
+    return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+
+  const supabaseService = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
   try {
-    const payload = await req.json() as KieCallbackPayload;
+    const rawBody = await req.text();
+    console.log("[music-callback] RAW BODY:", rawBody.slice(0, 600));
+
+    let parsed: any;
+    try { parsed = JSON.parse(rawBody); } catch {
+      console.error("[music-callback] JSON parse failed");
+      return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // KIE wraps payload in { code, msg, data: {...} } OR sends directly
+    const payload: KieCallbackPayload = parsed.data ?? parsed;
 
     const taskId = payload.taskId;
+    // KIE uses 'type' for stage (text/first/complete) AND 'status' (SUCCESS/FAILED)
     const status = (payload.status || "").toUpperCase();
+    const type = (payload.type || "").toLowerCase();
 
-    console.log(`[music-callback] Received callback for taskId=${taskId}, status=${status}`);
+    console.log(`[music-callback] taskId=${taskId}, status=${status}, type=${type}`);
 
     if (!taskId) {
       return new Response(JSON.stringify({ ok: false, error: "Missing taskId" }), {
@@ -102,7 +123,10 @@ serve(async (req) => {
     // Always acknowledge quickly — KIE.ai expects a fast 200
     // We process async after this point
 
-    if (status === "SUCCESS" || status === "COMPLETE") {
+    // 'complete' is the final type stage; 'SUCCESS' is the status value
+    const isDone = status === "SUCCESS" || status === "COMPLETE" || type === "complete";
+
+    if (isDone) {
       const sunoData: SunoTrack[] = payload.response?.sunoData ?? [];
 
       if (sunoData.length === 0) {
@@ -146,6 +170,7 @@ serve(async (req) => {
         // Download audio to our bucket
         const audioFileName = `${userId}/${timestamp}_${taskId.slice(0, 8)}_v${i}.mp3`;
         const publicAudioUrl = await downloadAndStore(
+          supabaseService,
           track.audioUrl,
           "music",
           audioFileName,
@@ -157,6 +182,7 @@ serve(async (req) => {
         if (track.imageUrl) {
           const coverFileName = `${userId}/${timestamp}_${taskId.slice(0, 8)}_v${i}.jpeg`;
           publicCoverUrl = await downloadAndStore(
+            supabaseService,
             track.imageUrl,
             "music-covers",
             coverFileName,
@@ -229,7 +255,7 @@ serve(async (req) => {
         }
       }
 
-    } else if (status === "FAILED" || status === "ERROR") {
+    } else if (status === "FAILED" || status === "ERROR" || type === "failed") {
       console.error(`[music-callback] Task failed taskId=${taskId}:`, payload.errorMessage);
 
       await supabaseService
@@ -243,8 +269,8 @@ serve(async (req) => {
         .eq("task_id", taskId);
 
     } else {
-      // Intermediate stages: text, first — just log, don't fail
-      console.log(`[music-callback] Intermediate stage status=${status} for taskId=${taskId}`);
+      // Intermediate stages: text, first — just log
+      console.log(`[music-callback] Intermediate stage status=${status} type=${type} for taskId=${taskId}`);
     }
 
     return new Response(JSON.stringify({ ok: true }), {
