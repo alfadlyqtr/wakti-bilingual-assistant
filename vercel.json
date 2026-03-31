@@ -8,6 +8,14 @@
   },
   "headers": [
     {
+      "source": "/api/video/stitch",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+      ]
+    },
+    {
       "source": "/apple-app-site-association",
       "headers": [
         { "key": "Content-Type", "value": "application/json" }
