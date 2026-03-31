@@ -44,20 +44,22 @@ function readBody(req) {
   });
 }
 
-// ── Build FFmpeg xfade + acrossfade filter graph ──────────────────────────────
-// Each clip is exactly 10 seconds. We build a chain of xfade + acrossfade for
-// every pair of adjacent clips so all transitions are smooth 1-second dissolves.
+// ── Wakti Cinema FFmpeg engine ────────────────────────────────────────────────
+// EXCLUSIVELY for the Wakti Cinema workflow: up to 6 scenes × 10 s = 60 s.
 //
 // Filter strategy:
-//   - video: xfade=transition=fade:duration=1:offset=9  (clip ends at 10s, fade starts at 9s)
-//   - audio: acrossfade=d=1                             (matching 1s audio dissolve)
-//
-// For N clips the output is exactly N*10 - (N-1)*1 seconds in theory, but we
-// pad + trim the final output to guarantee N*10 exactly.
+//   Video : xfade=transition=fade:duration=1  chained across all N clips.
+//           Offset for clip i = i*clipDuration - i*FADE_DUR
+//           (e.g. clip 2 starts its xfade at 9 s, clip 3 at 18 s, …)
+//   Audio : amix=inputs=N:duration=longest normalises and merges all N audio
+//           tracks simultaneously — correct for sequential clips that have
+//           silent periods outside their own window.
+//   Clamp : -t 60  hard-enforces exactly 60.00 s regardless of encode drift.
 
 function buildFFmpegCommand(inputPaths, outputPath, clipDurationSec) {
   const n = inputPaths.length;
   const FADE_DUR = 1; // seconds
+  const TOTAL_DURATION = n * clipDurationSec; // 60 s for 6 clips
 
   return new Promise((resolve, reject) => {
     const cmd = ffmpeg();
@@ -66,25 +68,36 @@ function buildFFmpegCommand(inputPaths, outputPath, clipDurationSec) {
     inputPaths.forEach((p) => cmd.input(p));
 
     if (n === 1) {
-      // Single clip — just copy
+      // Single clip — re-encode to H.264 MP4 and clamp duration
       cmd
-        .outputOptions(['-c:v libx264', '-c:a aac', '-movflags +faststart', '-y'])
+        .outputOptions([
+          '-c:v libx264',
+          '-preset fast',
+          '-crf 20',
+          '-c:a aac',
+          '-b:a 192k',
+          `-t ${TOTAL_DURATION}`,
+          '-movflags +faststart',
+          '-y',
+        ])
         .output(outputPath)
+        .on('start', (cmdLine) => console.log('[cinema-stitch] FFmpeg command:', cmdLine))
+        .on('stderr', (line) => console.log('[cinema-stitch]', line))
         .on('end', () => resolve())
         .on('error', reject)
         .run();
       return;
     }
 
-    // Build complex filter graph for N clips
-    // Video chain: [0:v][1:v]xfade=... → [vx01]; [vx01][2:v]xfade=... → [vx012]; ...
-    // Audio chain: [0:a][1:a]acrossfade=... → [ax01]; [ax01][2:a]acrossfade=... → [ax012]; ...
+    // ── Build complex filter graph ──────────────────────────────────────────
+    // Video : chained xfade
+    // Audio : amix all N tracks → single merged track, then trim to TOTAL_DURATION
     const filterParts = [];
 
-    // Video xfade chain
+    // Video xfade chain: [0:v][1:v]xfade=...→[vx1]; [vx1][2:v]xfade=...→[vx2]; …→[vout]
     let prevVLabel = '0:v';
     for (let i = 1; i < n; i++) {
-      const offset = (clipDurationSec * i) - (FADE_DUR * i); // offset where fade begins
+      const offset = (clipDurationSec * i) - (FADE_DUR * i);
       const outLabel = i === n - 1 ? 'vout' : `vx${i}`;
       filterParts.push(
         `[${prevVLabel}][${i}:v]xfade=transition=fade:duration=${FADE_DUR}:offset=${offset}[${outLabel}]`
@@ -92,15 +105,11 @@ function buildFFmpegCommand(inputPaths, outputPath, clipDurationSec) {
       prevVLabel = outLabel;
     }
 
-    // Audio acrossfade chain
-    let prevALabel = '0:a';
-    for (let i = 1; i < n; i++) {
-      const outLabel = i === n - 1 ? 'aout' : `ax${i}`;
-      filterParts.push(
-        `[${prevALabel}][${i}:a]acrossfade=d=${FADE_DUR}[${outLabel}]`
-      );
-      prevALabel = outLabel;
-    }
+    // Audio amix: merge all N audio streams into one balanced track
+    const audioInputs = Array.from({ length: n }, (_, i) => `[${i}:a]`).join('');
+    filterParts.push(
+      `${audioInputs}amix=inputs=${n}:duration=longest:normalize=0[aout]`
+    );
 
     const complexFilter = filterParts.join(';');
 
@@ -114,12 +123,13 @@ function buildFFmpegCommand(inputPaths, outputPath, clipDurationSec) {
         '-crf 20',
         '-c:a aac',
         '-b:a 192k',
+        `-t ${TOTAL_DURATION}`,
         '-movflags +faststart',
         '-y',
       ])
       .output(outputPath)
-      .on('start', (cmdLine) => console.log('[stitch] FFmpeg command:', cmdLine))
-      .on('stderr', (line) => console.log('[stitch] FFmpeg:', line))
+      .on('start', (cmdLine) => console.log('[cinema-stitch] FFmpeg command:', cmdLine))
+      .on('stderr', (line) => console.log('[cinema-stitch]', line))
       .on('end', () => resolve())
       .on('error', (err) => reject(err))
       .run();

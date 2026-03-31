@@ -1570,7 +1570,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     const readyClips = videoClips.filter(Boolean) as string[];
     if (readyClips.length < 1 || isStitching) return;
     setIsStitching(true);
-    setStitchStatus(language === 'ar' ? '🎬 جاري التجميع في الاستوديو السحابي...' : '🎬 Finalizing cinematic transitions in the Cloud Studio...');
+    setStitchStatus(language === 'ar' ? '🎬 استوديو Wakti السحابي يُجهّز تحفتك السينمائية...' : '🎬 Wakti Cloud Studio is rendering your Wakti Cinema Masterpiece...');
 
     try {
       const resp = await fetch('/api/video/stitch', {
