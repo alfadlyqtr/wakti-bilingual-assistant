@@ -178,8 +178,16 @@ export function useUserProfile() {
   useEffect(() => {
     if (!user?.id) return;
 
+    const channelName = `profile-changes-${user.id}`;
+
+    // Remove any existing channel with this name before subscribing
+    // This prevents the StrictMode double-invoke error:
+    // "cannot add postgres_changes callbacks after subscribe()"
+    const existing = supabase.getChannels().find(c => c.topic === `realtime:${channelName}`);
+    if (existing) supabase.removeChannel(existing);
+
     const channel = supabase
-      .channel(`profile-changes-${user.id}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -189,7 +197,6 @@ export function useUserProfile() {
           filter: `id=eq.${user.id}`
         },
         (payload) => {
-          // Gate verbose logs in production to avoid exposing profile payload in user consoles
           if (IS_DEV) console.debug('Profile updated (realtime):', { eventType: payload.eventType, when: payload.commit_timestamp });
           if (payload.new) {
             setProfile(payload.new as UserProfile);
