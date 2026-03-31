@@ -3384,7 +3384,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                 <input
                                   type="text"
                                   maxLength={60}
-                                  placeholder={language === 'ar' ? 'مثال: اتصل بنا +965 12345678' : 'e.g. Call us +965 12345678'}
+                                  placeholder={language === 'ar' ? 'مثال: اتصل بنا • info@company.com' : 'e.g. Call us • info@company.com'}
                                   value={sceneOverlayText[sceneNum - 1] || ''}
                                   onChange={e => setSceneOverlayText(prev => { const n = [...prev]; n[sceneNum - 1] = e.target.value; return n; })}
                                   className="w-full text-xs px-3 py-1.5 rounded-lg outline-none transition-all"

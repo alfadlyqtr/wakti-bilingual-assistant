@@ -119,7 +119,8 @@ anchor_tag هو "${effectiveAnchorTag}".
 
 ٥. تنسيق english_prompt — حرج جداً
 قصير: ١٥-٢٥ كلمة. كلمات مفتاحية مفصولة بفواصل. يبدأ بقيمة subject_lock. ممنوع: [VISUAL DNA] أو أي header بين أقواس.
-مثال: "blue Merkab semi-truck, open desert highway, golden hour, cinematic wide shot, 8k"
+يجب أن يحتوي كل english_prompt على موقع صريح من هذه القائمة: outdoor, exterior, aerial view, open highway, desert road, city street, mountain road, port, warehouse exterior, rooftop, waterfront, open sky — مطلقاً لا تترك الذكاء الاصطناعي يختار استوديو داخلي أو خلفية داخلية.
+مثال: "blue Merkab semi-truck, open desert highway, golden hour, cinematic wide shot, outdoor, 8k"
 لمشاهد الشعار: يبدأ بـ "The provided [brand] logo" ثم يصف المشهد.
 
 ٦. تنسيق الإخراج
@@ -171,7 +172,9 @@ Fed directly to image AI. MUST be:
   • Start with subject_lock value.
   • For logo scenes: start with "The provided [brand name] logo".
   • NEVER include: [VISUAL DNA], [CONTENT LOCK], or any bracket headers.
-  • GOOD: "blue Merkab semi-truck, open desert highway, golden hour, cinematic wide shot, 8k"
+  • MANDATORY: Every english_prompt MUST include one explicit environment/location word from this list: outdoor, exterior, aerial view, open highway, desert road, city street, mountain road, port, warehouse exterior, rooftop, waterfront, open sky, countryside. WITHOUT THIS the image AI defaults to an indoor studio — which is WRONG.
+  • BAD (no environment): "blue truck, chrome wheels, neon lights, cinematic" ← FORBIDDEN
+  • GOOD: "blue Merkab semi-truck, open desert highway, golden hour, cinematic wide shot, outdoor, 8k"
 
 6. OUTPUT FORMAT
 Return ONLY valid JSON — no markdown:

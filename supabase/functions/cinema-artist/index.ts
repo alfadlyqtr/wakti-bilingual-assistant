@@ -125,7 +125,11 @@ serve(async (req) => {
     if (mode === 't2i_create') {
       if (!prompt) return new Response(JSON.stringify({ error: 'prompt required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       console.log(`[cinema-artist] T2I create scene ${scene_index}, aspect_ratio=${aspect_ratio}`);
-      const id = await kieCreateTask('grok-imagine/text-to-image', { prompt: prompt.slice(0, 2500), aspect_ratio });
+      // Append cinematic quality suffix — prevents image AI from defaulting to indoor/studio
+      const OUTDOOR_SUFFIX = ', exterior location, outdoor natural light, cinematic photography, photorealistic, high detail, 8k';
+      const hasEnvKeyword = /\b(outdoor|exterior|aerial|highway|desert|street|mountain|port|rooftop|waterfront|sky|countryside|open road|open field|open sea)\b/i.test(prompt);
+      const finalPrompt = (hasEnvKeyword ? prompt : prompt + OUTDOOR_SUFFIX).slice(0, 2500);
+      const id = await kieCreateTask('grok-imagine/text-to-image', { prompt: finalPrompt, aspect_ratio });
       return new Response(JSON.stringify({ ok: true, task_id: id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
