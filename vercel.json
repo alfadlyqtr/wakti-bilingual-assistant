@@ -1,5 +1,11 @@
 
 {
+  "functions": {
+    "api/video/stitch.js": {
+      "maxDuration": 300,
+      "memory": 2048
+    }
+  },
   "headers": [
     {
       "source": "/apple-app-site-association",

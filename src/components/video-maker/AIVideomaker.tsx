@@ -1254,17 +1254,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             created = await artistCall({ mode: 't2i_create', prompt: ep1, aspect_ratio: cinemaFormat });
           }
           const { url: s1url, options: s1opts } = await pollTask(created.task_id, 0);
-          if (s1opts.length >= 2) {
-            // Multiple takes — let user pick, same as scenes 2-N
-            setSceneImageOptions(prev => { const n = [...prev]; n[0] = s1opts; return n; });
-            setSceneImages(prev => { const n = [...prev]; n[0] = null; return n; });
-            // Don't set anchorImageUrl yet — wait for user pick
-          } else {
-            // Single image — auto-select and use as anchor
-            setSceneImages(prev => { const n = [...prev]; n[0] = s1url; return n; });
-            setSceneImageOptions(prev => { const n = [...prev]; n[0] = null; return n; });
-            setAnchorImageUrl(s1url);
-          }
+          // Always store in options — never auto-pick, even for single image.
+          // User must tap "Pick your shot" just like Scenes 2-N.
+          const optsToShow = s1opts.length >= 1 ? s1opts : [s1url];
+          setSceneImageOptions(prev => { const n = [...prev]; n[0] = optsToShow; return n; });
+          setSceneImages(prev => { const n = [...prev]; n[0] = null; return n; });
+          // Don't set anchorImageUrl yet — wait for user pick
           setCastingProgress(prev => { const n = [...prev]; n[0] = 'done'; for (let i = 1; i < cinemaSceneCount; i++) n[i] = 'loading'; return n; });
         } catch (s1err: any) {
           console.error('[cinema] Scene 1 failed:', s1err);
@@ -1567,220 +1562,46 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
   }, [user, sceneImages, cinemaScenes, language, loadQuota, visualSupervisorPrompts]);
 
-  // ── Role 5: Premiere — browser-side stitch via canvas + MediaRecorder ──
-  // No external server needed. Each clip is fetched as a blob, played into a hidden
-  // <video> element, drawn frame-by-frame onto a <canvas>, and recorded by MediaRecorder.
+  // ── Role 5: Premiere — Cloud Studio stitch via Vercel API + FFmpeg ──
+  // Sends clip URLs to /api/video/stitch, which downloads them server-side,
+  // runs FFmpeg xfade+acrossfade for smooth 1s transitions, uploads the final
+  // MP4 to Supabase Storage, and returns the permanent public URL.
   const handleStitch = useCallback(async () => {
     const readyClips = videoClips.filter(Boolean) as string[];
-    if (readyClips.length < 2 || isStitching) return;
+    if (readyClips.length < 1 || isStitching) return;
     setIsStitching(true);
-    setStitchStatus(language === 'ar' ? 'جاري تحميل المقاطع...' : 'Loading clips...');
+    setStitchStatus(language === 'ar' ? '🎬 جاري التجميع في الاستوديو السحابي...' : '🎬 Finalizing cinematic transitions in the Cloud Studio...');
 
     try {
-      // Step 1: Fetch all clips as object URLs (bypass CORS by going through blob)
-      const blobUrls: string[] = [];
-      for (let i = 0; i < readyClips.length; i++) {
-        setStitchStatus(language === 'ar' ? `جاري التحميل ${i + 1}/${readyClips.length}...` : `Downloading ${i + 1}/${readyClips.length}...`);
-        const resp = await fetch(readyClips[i]);
-        if (!resp.ok) throw new Error(`Clip ${i + 1} download failed: ${resp.status}`);
-        const blob = await resp.blob();
-        blobUrls.push(URL.createObjectURL(blob));
-      }
-
-      setStitchStatus(language === 'ar' ? 'تجهيز المشاهد للمونتاج...' : 'Preparing scenes for final cut...');
-
-      // Step 2: Set up canvas + hidden video element
-      const canvas = document.createElement('canvas');
-      canvas.width = cinemaFormat === '16:9' ? 1280 : 720;
-      canvas.height = cinemaFormat === '16:9' ? 720 : 1280;
-      const ctx = canvas.getContext('2d')!;
-
-      const videoEl = document.createElement('video');
-      videoEl.playsInline = true;
-      videoEl.crossOrigin = 'anonymous';
-      videoEl.style.display = 'none';
-      document.body.appendChild(videoEl);
-
-      // Step 3: Build the stream for MediaRecorder (with or without audio based on cinemaAudio toggle)
-      const canvasVideoTrack = canvas.captureStream(30).getVideoTracks()[0];
-      let combinedStream: MediaStream;
-      let audioCtx: AudioContext | null = null;
-      let mediaElSource: MediaElementAudioSourceNode | null = null;
-
-      if (cinemaAudio) {
-        // WITH AUDIO: AudioContext + createMediaStreamDestination gives us a stable, persistent
-        // audio track that we can pipe each clip into. We connect the videoEl as a source
-        // (reconnecting per clip by setting src) — the AudioContext node stays alive across
-        // all clips so MediaRecorder sees a continuous, uninterrupted audio track.
-        audioCtx = new AudioContext();
-        const audioDest = audioCtx.createMediaStreamDestination();
-        // Connect videoEl as a media element source once — it stays connected as src changes
-        mediaElSource = audioCtx.createMediaElementSource(videoEl);
-        mediaElSource.connect(audioDest);
-        // Also connect to destination so audio plays to speakers during stitch preview
-        mediaElSource.connect(audioCtx.destination);
-
-        // Brand new clean MediaStream with both video and audio tracks
-        const audioTrack = audioDest.stream.getAudioTracks()[0];
-        combinedStream = new MediaStream([canvasVideoTrack, audioTrack]);
-      } else {
-        // WITHOUT AUDIO: Only canvas video track — no AudioContext initialization
-        combinedStream = new MediaStream([canvasVideoTrack]);
-      }
-
-      // Force explicit codec: vp9+opus is the gold standard for WebM with audio.
-      // Fall back only if the browser truly doesn't support it.
-      let mimeType = 'video/webm; codecs=vp9,opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        console.warn('[cinema] vp9,opus not supported, trying vp8,opus');
-        mimeType = 'video/webm; codecs=vp8,opus';
-      }
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        console.warn('[cinema] vp8,opus not supported, falling back to video/webm');
-        mimeType = 'video/webm';
-      }
-      console.log('[cinema] MediaRecorder mimeType:', mimeType);
-
-      const chunks: Blob[] = [];
-      const recorder = new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: 4_000_000 });
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-
-      const recordingDone = new Promise<Blob>((resolve) => {
-        recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
+      const resp = await fetch('/api/video/stitch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoUrls: readyClips,
+          userId: user!.id,
+          format: cinemaFormat,
+        }),
       });
 
-      recorder.start(100); // collect in 100ms chunks
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+        throw new Error(errBody.error || `Server error ${resp.status}`);
+      }
 
-      // Step 4: Hard-clock frame renderer — exactly N×10 seconds at 30fps with 1-second crossfades
-      const CLIP_DURATION_S = 10;        // each clip is exactly 10 seconds
-      const FPS = 30;
-      const FRAME_MS = 1000 / FPS;       // ~33.33ms per frame
-      const CROSSFADE_S = 1;             // 1-second dissolve
-      const totalFrames = blobUrls.length * CLIP_DURATION_S * FPS; // e.g. 6×10×30 = 1800
+      const result = await resp.json();
+      if (!result.url) throw new Error('No URL returned from Cloud Studio');
 
-      // Second hidden video element for the next clip during crossfade
-      const videoNext = document.createElement('video');
-      videoNext.playsInline = true;
-      videoNext.crossOrigin = 'anonymous';
-      videoNext.muted = true; // next clip is visual-only during overlap; audio handled by primary
-      videoNext.style.display = 'none';
-      document.body.appendChild(videoNext);
-
-      // Pre-load a video into an element and wait until it can play
-      const loadVideo = (el: HTMLVideoElement, src: string): Promise<void> =>
-        new Promise((resolve, reject) => {
-          el.src = src;
-          el.oncanplay = () => resolve();
-          el.onerror = () => reject(new Error(`Failed to load video: ${src}`));
-          el.load();
-        });
-
-      // Load and start clip 0 on primary element
-      await loadVideo(videoEl, blobUrls[0]);
-      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
-      await videoEl.play();
-
-      setStitchStatus(language === 'ar' ? '🎬 تحرير الانتقالات السينمائية...' : '🎬 Finalizing Cinematic Transitions...');
-
-      let currentClipIdx = 0;
-      let nextLoaded = false; // tracks whether videoNext is preloaded for the upcoming clip
-
-      await new Promise<void>((resolve) => {
-        let frameCount = 0;
-        let lastFrameTime = performance.now();
-
-        const renderFrame = async () => {
-          if (frameCount >= totalFrames) {
-            resolve();
-            return;
-          }
-
-          const now = performance.now();
-          const elapsed = now - lastFrameTime;
-
-          // Throttle to ~30fps
-          if (elapsed < FRAME_MS - 1) {
-            requestAnimationFrame(renderFrame);
-            return;
-          }
-          lastFrameTime = now - (elapsed % FRAME_MS);
-
-          // Position within the current clip (in seconds)
-          const clipFrame = frameCount % (CLIP_DURATION_S * FPS);
-          const clipTimeSec = clipFrame / FPS;
-
-          // ── Crossfade window: last CROSSFADE_S seconds of every clip except the last ──
-          const inCrossfade = clipTimeSec >= (CLIP_DURATION_S - CROSSFADE_S) && currentClipIdx < blobUrls.length - 1;
-
-          // Preload next clip as soon as we enter the crossfade window
-          if (inCrossfade && !nextLoaded) {
-            nextLoaded = true;
-            const nextIdx = currentClipIdx + 1;
-            loadVideo(videoNext, blobUrls[nextIdx])
-              .then(() => videoNext.play().catch(() => {}))
-              .catch(() => {});
-          }
-
-          // Alpha for current clip: 1.0 → 0.0 over the crossfade window
-          if (inCrossfade) {
-            const t = (clipTimeSec - (CLIP_DURATION_S - CROSSFADE_S)) / CROSSFADE_S; // 0→1
-            // Draw current clip at fading-out alpha
-            ctx.globalAlpha = 1 - t;
-            ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-            // Draw next clip at fading-in alpha
-            ctx.globalAlpha = t;
-            if (videoNext.readyState >= 2) {
-              ctx.drawImage(videoNext, 0, 0, canvas.width, canvas.height);
-            }
-            ctx.globalAlpha = 1;
-          } else {
-            ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-          }
-
-          frameCount++;
-
-          // At exact clip boundary, advance to the next clip
-          if (frameCount % (CLIP_DURATION_S * FPS) === 0 && currentClipIdx < blobUrls.length - 1) {
-            currentClipIdx++;
-            nextLoaded = false;
-
-            // Swap: next becomes current on the primary audio track
-            videoEl.pause();
-            await loadVideo(videoEl, blobUrls[currentClipIdx]);
-            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
-            videoEl.currentTime = videoNext.currentTime; // sync to where next already is
-            await videoEl.play().catch(() => {});
-            videoNext.pause();
-          }
-
-          requestAnimationFrame(renderFrame);
-        };
-
-        requestAnimationFrame(renderFrame);
-      });
-
-      recorder.stop();
-      if (audioCtx) audioCtx.close().catch(() => {});
-      document.body.removeChild(videoEl);
-      document.body.removeChild(videoNext);
-
-      // Revoke blob URLs
-      blobUrls.forEach(u => URL.revokeObjectURL(u));
-
-      setStitchStatus(language === 'ar' ? 'تسليم النسخة النهائية...' : 'Delivering the master copy...');
-      const finalBlob = await recordingDone;
-      const url = URL.createObjectURL(finalBlob);
-      setPremiereVideoUrl(url);
+      setPremiereVideoUrl(result.url);
       setCinemaStep('premiere');
       toast.success(language === 'ar' ? 'العرض الأول جاهز! 🎬' : 'Premiere ready! 🎬');
     } catch (err: any) {
-      console.error('[cinema] Stitch error:', err);
-      toast.error(language === 'ar' ? 'فشل تجميع الفيديو: ' + err.message : 'Stitch failed: ' + err.message);
+      console.error('[cinema] Cloud stitch error:', err);
+      toast.error(language === 'ar' ? 'فشل التجميع السحابي: ' + err.message : 'Cloud stitch failed: ' + err.message);
     } finally {
       setIsStitching(false);
       setStitchStatus('');
     }
-  }, [videoClips, isStitching, language, cinemaFormat, cinemaAudio]);
+  }, [videoClips, isStitching, language, cinemaFormat, user]);
 
   // ── Cinema full reset ──
   const handleCinemaReset = useCallback(() => {
@@ -1918,31 +1739,14 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     if (!premiereVideoUrl || !user || isCinemaSaved || isCinemaSaving) return;
     setIsCinemaSaving(true);
     try {
-      // Direct upload: fetch the local blob URL, upload raw bytes to Supabase Storage.
-      // This avoids passing a local blob:// URL to any edge function (which can't access it).
-      const blobResp = await fetch(premiereVideoUrl);
-      if (!blobResp.ok) throw new Error('Failed to read local video blob');
-      const videoBlob = await blobResp.blob();
-
-      const ext = videoBlob.type.includes('mp4') ? 'mp4' : 'webm';
-      // Path must start with {userId}/ to satisfy the 'videos' bucket RLS policy
-      const fileName = `${user.id}/cinema/${Date.now()}-${(cinemaVision.trim().slice(0, 30) || 'premiere').replace(/[^a-z0-9]/gi, '-')}.${ext}`;
-
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('videos')
-        .upload(fileName, videoBlob, { contentType: videoBlob.type, upsert: false });
-      if (uploadError) throw uploadError;
-
-      const storagePath = uploadData.path;
-      const { data: publicData } = supabase.storage.from('videos').getPublicUrl(storagePath);
-      const publicUrl = publicData?.publicUrl || null;
-
+      // The cloud stitch API already uploaded the final MP4 to Supabase Storage
+      // and returned a permanent public URL. We only need to insert the DB record.
       const { error: dbError } = await (supabase as any).from('user_videos').insert({
         user_id: user.id,
         title: cinemaVision.trim().slice(0, 60) || 'Wakti Cinema',
         description: cinemaVision.trim() || null,
-        storage_path: storagePath,
-        video_url: publicUrl,
+        storage_path: null,
+        video_url: premiereVideoUrl,
         thumbnail_url: sceneImages[0] || null,
         duration_seconds: cinemaSceneCount * 10,
         aspect_ratio: cinemaFormat,

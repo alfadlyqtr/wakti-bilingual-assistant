@@ -104,8 +104,35 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
 
   useEffect(() => {
     if (!open) return;
+    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     getOfferings((resp) => {
-      if (resp?.status === 'SUCCESS' && resp?.offerings?.current) {
+      if (resp?.status !== 'SUCCESS') return;
+      const allOfferings: any[] = resp?.offerings?.all
+        ? Object.values(resp.offerings.all)
+        : [];
+
+      // --- QU path: try university_exclusive → qatar_university package ---
+      if (isQUUser) {
+        const quOffering = allOfferings.find(
+          (o: any) => o.identifier === 'university_exclusive'
+        );
+        const quPkg = quOffering?.availablePackages?.find(
+          (p: any) => p.identifier === 'qatar_university'
+        );
+        if (quPkg?.product) {
+          console.log('[Offerings] QU offering found:', quPkg.identifier, quPkg.product.priceString);
+          setActivePackageId(quPkg.identifier);
+          setPrice({
+            qar: quPkg.product.priceString || 'QAR 73.5/month',
+            usd: quPkg.product.priceUSD || '$19.99/month',
+          });
+          return;
+        }
+        console.warn('[Offerings] university_exclusive / qatar_university not found, falling back to default');
+      }
+
+      // --- Standard / fallback path: use current offering → $rc_monthly ---
+      if (resp?.offerings?.current) {
         const pkg = resp.offerings.current.availablePackages?.find(
           (p: any) => p.identifier === '$rc_monthly'
         ) || resp.offerings.current.availablePackages?.[0];
@@ -118,7 +145,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
         }
       }
     });
-  }, [open]);
+  }, [open, user?.email]);
 
   // Android fix: Detect app re-foreground after Google Play purchase
   useEffect(() => {
@@ -173,12 +200,11 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     setLoading(true);
     setPurchaseInProgress(true);
 
-    // QU University Discount: use dedicated product ID if the user has a @qu.edu.qa email.
-    // Falls back to the standard monthly package if not a QU user or package is unavailable.
-    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const packageId = isQUUser ? 'wakti_monthly_qu' : activePackageId;
-
-    purchasePackage(packageId, async (resp: any) => {
+    // activePackageId is set by the offerings fetch:
+    //   QU users  → 'qatar_university' (from university_exclusive offering)
+    //   Standard  → '$rc_monthly' (from default offering)
+    // Falls back to '$rc_monthly' if QU offering was not found.
+    purchasePackage(activePackageId, async (resp: any) => {
       console.log('[Purchase] Response:', resp);
       
       // Treat success OR 'already subscribed' (Android) as a successful subscription
