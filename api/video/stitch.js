@@ -14,11 +14,22 @@ const FFMPEG_PATH = require('ffmpeg-static');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function downloadFile(url, destPath) {
+function downloadFile(url, destPath, redirectCount = 0) {
   return new Promise((resolve, reject) => {
+    if (redirectCount > 5) {
+      reject(new Error(`Too many redirects: ${url}`));
+      return;
+    }
     const proto = url.startsWith('https') ? https : http;
     const file = fs.createWriteStream(destPath);
     const req = proto.get(url, (res) => {
+      // Follow redirects (301, 302, 307, 308)
+      if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location) {
+        file.close();
+        fs.unlink(destPath, () => {});
+        downloadFile(res.headers.location, destPath, redirectCount + 1).then(resolve).catch(reject);
+        return;
+      }
       if (res.statusCode !== 200) {
         file.close();
         fs.unlink(destPath, () => {});

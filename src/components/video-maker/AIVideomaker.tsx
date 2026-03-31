@@ -1302,13 +1302,15 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           const directorMode = scene.generation_mode || (scene.scene === 2 ? 't2i' : 'i2i_chain');
 
           const isLogoMode = effectiveTag === 'logo' && brandAnchor;
-          const isLastScene = scene.scene === cinemaSceneCount;
+          // S6 only gets logo treatment if Director explicitly tagged it logo_integration
+          // Never override the i2i chain just because it's the last scene
+          const isExplicitLogoScene = scenePipeline === 'logo_integration';
 
-          if (isLogoMode && !isLastScene) {
-            // Logo mode middle scenes: pure T2I — no anchor leak
+          if (isLogoMode && !isExplicitLogoScene && directorMode !== 'i2i_chain') {
+            // Logo mode non-chain scenes: pure T2I — no anchor leak
             created = await artistCall({ mode: 't2i_create', prompt: epScene, aspect_ratio: cinemaFormat, scene_index: idx });
-          } else if ((scenePipeline === 'logo_integration' || isLastScene) && isLogoMode) {
-            // Logo bookend: I2I with brand logo anchor
+          } else if (isExplicitLogoScene && isLogoMode) {
+            // Explicit logo_integration tag: I2I with brand logo anchor
             created = await artistCall({ mode: 'i2i_create', prompt: epScene, anchor_url: brandAnchor, anchor_pipeline: 'logo', scene_index: idx });
           } else if (scenePipeline === 'character_lock' && brandAnchor) {
             // Character lock: I2I with face/body anchor
