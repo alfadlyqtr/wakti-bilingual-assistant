@@ -18,6 +18,8 @@ interface Scene {
   english_prompt: string; // always-English prompt for AI image generation
   scene_pipeline?: 'logo_integration' | 'style_extraction' | 'character_lock';
   subject_lock?: string; // locked subject description for consistency
+  generation_mode?: 't2i' | 'i2i_chain'; // t2i = fresh generation, i2i_chain = use previous scene image as anchor
+  story_state?: string; // what must stay the same + what changes from previous scene
 }
 
 interface DirectorResponse {
@@ -245,9 +247,36 @@ TRANSLATION EXAMPLES — convert scene text into proper photo briefs:
 
   For logo scenes: start with "The provided [brand name] logo", then describe the full background scene in the same detail.
 
-6. OUTPUT FORMAT
+6. GENERATION MODE — HYBRID T2I / I2I CHAIN
+For story continuity, assign each scene a generation mode:
+  • "t2i" = fresh text-to-image generation (no previous image needed)
+  • "i2i_chain" = image-to-image from the PREVIOUS scene's output (chains the story)
+
+MANDATORY GENERATION MODE RULES:
+  • Scene 1: always "t2i" (opening tableau, no previous image)
+  • Scene 2: always "t2i" — THIS IS THE MASTER ANCHOR. This scene defines the canonical look of the subject for all following scenes.
+  • Scene 3: always "i2i_chain" from Scene 2 — inherits exact truck/subject form
+  • Scene 4: always "i2i_chain" from Scene 3 — continues the story state
+  • Scene 5: always "i2i_chain" from Scene 4 — escalation beat
+  • Scene 6: always "i2i_chain" from Scene 5 — resolution/ending
+  EXCEPTION: If Scene 1 is a logo/brand tableau (no truck visible), keep Scene 2 as "t2i" master anchor.
+
+7. STORY STATE — WHAT STAYS, WHAT CHANGES
+For EVERY scene, define the story_state field. This is a short English description of:
+  • What remains fixed from the previous scene (subject form, trailer state, etc.)
+  • What changes (environment, lighting, camera focus, time of day)
+  • What is the narrative purpose of this scene beat
+
+Example story_state values:
+  Scene 2: "Master anchor — full truck with attached trailer established in warehouse, crisp white lighting, hero front angle. All following scenes inherit this exact truck form."
+  Scene 3: "Same truck, same trailer attached, same body proportions. Environment changes to downtown city boulevard at sunset. Escalation in scale."
+  Scene 4: "Same truck, same trailer, scene continues from city boulevard. Camera focus shifts to chrome wheel detail and wet neon reflections. Intimate texture beat."
+  Scene 5: "Same truck, same trailer. Environment opens to full city skyline panorama. Epic payoff wide shot."
+  Scene 6: "Same truck, same trailer, enters tunnel. Brand resolution moment. Logo presence and tagline."
+
+8. OUTPUT FORMAT
 Return ONLY valid JSON — no markdown:
-{"subject_lock": "<12-20 word rich identity description>", "scenes": [{"scene": 1, "text": "...", "english_prompt": "<40-80 word photo brief>", "scene_pipeline": "..."}, ...]}
+{"subject_lock": "<12-20 word rich identity description>", "scenes": [{"scene": 1, "text": "...", "english_prompt": "<40-80 word photo brief>", "scene_pipeline": "...", "generation_mode": "t2i", "story_state": "..."}]}
 Return exactly ${N} scenes.`;
 
     const userPrompt = language === 'ar'
@@ -336,6 +365,8 @@ Return exactly ${N} scenes.`;
         text: s.text || '',
         english_prompt: s.english_prompt || s.text || '',
         scene_pipeline: s.scene_pipeline || 'style_extraction',
+        generation_mode: s.generation_mode || (i < 2 ? 't2i' : 'i2i_chain'),
+        story_state: s.story_state || '',
       }))
     };
 

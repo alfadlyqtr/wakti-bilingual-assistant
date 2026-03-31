@@ -186,7 +186,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
   // Cinema mode state
   const [cinemaVision, setCinemaVision] = useState('');
-  const [cinemaScenes, setCinemaScenes] = useState<{scene: number; text: string; english_prompt: string; scene_pipeline?: string}[]>([]);
+  const [cinemaScenes, setCinemaScenes] = useState<{scene: number; text: string; english_prompt: string; scene_pipeline?: string; generation_mode?: string; story_state?: string}[]>([]);
+  const [prevSceneImages, setPrevSceneImages] = useState<Record<number, string>>({});
   const [isDirecting, setIsDirecting] = useState(false);
   const [isCinemaAmping, setIsCinemaAmping] = useState(false);
   const [cinemaStep, setCinemaStep] = useState<'desk' | 'storyboard' | 'casting' | 'filming' | 'premiere'>('desk');
@@ -1271,82 +1272,77 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         }
       }
 
-      // ── Scenes 2-N: PARALLEL pipeline-aware generation using Director's Production Contract ──
-      // IDENTITY MUTE: When anchorTag === 'logo', only the bookend scenes (S1 & SN) use I2I.
-      // Middle scenes (S2..SN-1) are muted to T2I with the subject lock text — this prevents
-      // the logo pixels from ghosting onto trucks, people, and backgrounds.
+      // ── Scenes 2-N: HYBRID sequential chain ──
+      // S2 = T2I master anchor (defines canonical subject look for all following scenes)
+      // S3-SN = i2i_chain from previous scene's generated image (story continuity)
+      // EXCEPTION: logo mode overrides chain logic for bookend scenes
       const remainingScenes = cinemaScenes
         .filter(s => s.scene >= 2 && s.scene <= cinemaSceneCount)
         .sort((a, b) => a.scene - b.scene);
 
-      await Promise.allSettled(remainingScenes.map(async (scene) => {
+      // Track the last generated image URL for i2i_chain handoff
+      const chainImageMap: Record<number, string> = {}; // scene_number → first generated image URL
+
+      for (const scene of remainingScenes) {
         const idx = scene.scene - 1;
         if (sceneSlotMap[idx]) {
           setSceneImages(prev => { const n = [...prev]; n[idx] = sceneSlotMap[idx]; return n; });
           setCastingProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
-          return;
+          chainImageMap[scene.scene] = sceneSlotMap[idx];
+          continue;
         }
         try {
           let created;
-          // Subject Lock enforcement: prepend the locked subject string to every prompt
-          // LOGO FILTER: If subjectLock contains branding words, skip it for style_extraction scenes
           const rawPrompt = scene.english_prompt || scene.text;
           const scenePipelineTag = scene.scene_pipeline || 'style_extraction';
           const lockIsPoisoned = subjectLock && /\b(logo|brand|emblem|wordmark|insignia)\b/i.test(subjectLock);
           const useSubjectLock = subjectLock && !lockIsPoisoned && scenePipelineTag !== 'logo_integration';
           const epScene = useSubjectLock && !rawPrompt.startsWith(subjectLock) ? `${subjectLock}. ${rawPrompt}` : rawPrompt;
-          // Director's scene_pipeline tag
           const scenePipeline = scene.scene_pipeline || 'style_extraction';
+          const directorMode = scene.generation_mode || (scene.scene === 2 ? 't2i' : 'i2i_chain');
 
-          // Identity Mute: middle scenes in logo mode are pure T2I (no anchor sent to KIE)
-          // S1-3: S2..SN-1 muted. S1-4: SN (last scene) treated as bookend — I2I like S1.
           const isLogoMode = effectiveTag === 'logo' && brandAnchor;
           const isLastScene = scene.scene === cinemaSceneCount;
-          const isMuted = isLogoMode && !isLastScene; // middle scenes muted
 
-          if (isMuted) {
-            // MUTED: pure T2I — subject lock text keeps subject consistent, zero logo leak
-            created = await artistCall({
-              mode: 't2i_create',
-              prompt: epScene,
-              aspect_ratio: cinemaFormat,
-              scene_index: idx,
-            });
+          if (isLogoMode && !isLastScene) {
+            // Logo mode middle scenes: pure T2I — no anchor leak
+            created = await artistCall({ mode: 't2i_create', prompt: epScene, aspect_ratio: cinemaFormat, scene_index: idx });
           } else if ((scenePipeline === 'logo_integration' || isLastScene) && isLogoMode) {
-            // S1-4: Last scene bookend OR explicit logo_integration tag — I2I with brand anchor
-            created = await artistCall({
-              mode: 'i2i_create',
-              prompt: epScene,
-              anchor_url: brandAnchor,
-              anchor_pipeline: 'logo',
-              scene_index: idx,
-            });
+            // Logo bookend: I2I with brand logo anchor
+            created = await artistCall({ mode: 'i2i_create', prompt: epScene, anchor_url: brandAnchor, anchor_pipeline: 'logo', scene_index: idx });
           } else if (scenePipeline === 'character_lock' && brandAnchor) {
-            // Character lock: high-strength I2I for face/body consistency
-            created = await artistCall({
-              mode: 'i2i_create',
-              prompt: epScene,
-              anchor_url: brandAnchor,
-              anchor_pipeline: 'character',
-              scene_index: idx,
-            });
+            // Character lock: I2I with face/body anchor
+            created = await artistCall({ mode: 'i2i_create', prompt: epScene, anchor_url: brandAnchor, anchor_pipeline: 'character', scene_index: idx });
+          } else if (directorMode === 'i2i_chain') {
+            // ── STORY CHAIN: use previous scene's generated image as anchor ──
+            // Walk back to find the nearest available previous scene image
+            const prevImg = chainImageMap[scene.scene - 1]
+              || chainImageMap[scene.scene - 2]
+              || brandAnchor
+              || null;
+            if (prevImg) {
+              // i2i_chain: change the scene environment while keeping subject identity
+              const chainPrompt = `Maintain the exact same subject identity, body form, and proportions from the reference image. Change only the environment and lighting to match this new scene: ${epScene}`;
+              created = await artistCall({ mode: 'i2i_create', prompt: chainPrompt.slice(0, 2500), anchor_url: prevImg, anchor_pipeline: 'style', scene_index: idx });
+            } else {
+              // No previous image available yet — fall back to T2I
+              created = await artistCall({ mode: 't2i_create', prompt: epScene, aspect_ratio: cinemaFormat, scene_index: idx });
+            }
           } else {
-            // style_extraction (default): always T2I — never send anchor to KIE for style scenes
-            created = await artistCall({
-              mode: 't2i_create',
-              prompt: epScene,
-              aspect_ratio: cinemaFormat,
-              scene_index: idx,
-            });
+            // T2I master anchor (S2) or fallback
+            created = await artistCall({ mode: 't2i_create', prompt: epScene, aspect_ratio: cinemaFormat, scene_index: idx });
           }
+
           const { url: imgUrl, options: imgOptions } = await pollTask(created.task_id, idx);
+          // Store the first image from this scene for the next scene's i2i_chain
+          chainImageMap[scene.scene] = imgUrl;
+          setPrevSceneImages(prev => ({ ...prev, [scene.scene]: imgUrl }));
+
           if (imgOptions.length >= 2) {
-            // BD-3: 2 images returned — store options, do NOT auto-select, wait for user pick
             setSceneImageOptions(prev => { const n = [...prev]; n[idx] = imgOptions; return n; });
             setSceneImages(prev => { const n = [...prev]; n[idx] = null; return n; });
             setCastingProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
           } else {
-            // Only 1 image — auto-select as before
             setSceneImages(prev => { const n = [...prev]; n[idx] = imgUrl; return n; });
             setSceneImageOptions(prev => { const n = [...prev]; n[idx] = null; return n; });
             setCastingProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
@@ -1355,7 +1351,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           console.error(`[cinema] scene ${idx + 1} failed:`, err);
           setCastingProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
         }
-      }));
+      }
 
       toast.success(language === 'ar' ? 'تم إنشاء الصور!' : 'Scenes cast!');
     } catch (err: any) {
