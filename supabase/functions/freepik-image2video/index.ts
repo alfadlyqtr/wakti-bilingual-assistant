@@ -10,8 +10,22 @@ const corsHeaders = {
 };
 
 // ============================================================
-// Provider: KIE.ai  |  Models per generation type
+// Video generation provider config
 // ============================================================
+
+// Strip provider names from errors before sending to client
+function sanitizeError(msg: string): string {
+  return msg
+    .replace(/KIE[\s.]*/gi, '')
+    .replace(/grok[\s-]*/gi, '')
+    .replace(/Shotstack[\s.]*/gi, '')
+    .replace(/OpenAI[\s.]*/gi, '')
+    .replace(/GPT[\s-]*/gi, '')
+    .replace(/api\.kie\.ai[^\s]*/gi, 'provider')
+    .replace(/createTask\s*/gi, '')
+    .replace(/^[:\s-]+/, '')
+    .trim() || 'Video generation failed';
+}
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY") || "";
 const KIE_IMAGE2VIDEO_MODEL = "grok-imagine/image-to-video";
 const KIE_TEXT2VIDEO_MODEL = "grok-imagine/text-to-video";
@@ -160,14 +174,14 @@ async function createTextToVideoTask(
   if (!response.ok) {
     const errorText = await response.text();
     console.error("[kie-text2video] Create task failed:", response.status, errorText);
-    throw new Error(`KIE API error: ${response.status} - ${errorText}`);
+    throw new Error(`Video generation service error ${response.status}`);
   }
 
   const result: KieCreateResponse = await response.json();
   console.log("[kie-text2video] Create response:", JSON.stringify(result));
 
   if (result.code !== 200 || !result.data?.taskId) {
-    throw new Error(`KIE API error: ${result.msg || result.message || "Failed to create task"}`);
+    throw new Error(sanitizeError(result.msg || result.message || "Failed to create task"));
   }
 
   console.log("[kie-text2video] Task created, taskId:", result.data.taskId);
@@ -248,14 +262,14 @@ async function createVideoTask(
   if (!response.ok) {
     const errorText = await response.text();
     console.error("[kie-image2video] Create task failed:", response.status, errorText);
-    throw new Error(`KIE API error: ${response.status} - ${errorText}`);
+    throw new Error(`Video generation service error ${response.status}`);
   }
 
   const result: KieCreateResponse = await response.json();
   console.log("[kie-image2video] Create response:", JSON.stringify(result));
 
   if (result.code !== 200 || !result.data?.taskId) {
-    throw new Error(`KIE API error: ${result.msg || result.message || "Failed to create task"}`);
+    throw new Error(sanitizeError(result.msg || result.message || "Failed to create task"));
   }
 
   console.log("[kie-image2video] Task created, taskId:", result.data.taskId);
@@ -291,14 +305,14 @@ async function getTaskStatus(taskId: string): Promise<TaskStatusData> {
   if (!statusRes.ok) {
     const errorText = await statusRes.text();
     console.error("[kie-image2video] Get status failed:", statusRes.status, errorText);
-    throw new Error(`KIE API error: ${statusRes.status} - ${errorText}`);
+    throw new Error(`Video status check error ${statusRes.status}`);
   }
 
   const statusData: KieStatusResponse = await statusRes.json();
   console.log("[kie-image2video] Status response state:", statusData.data?.state, "resultJson:", statusData.data?.resultJson?.substring(0, 200));
 
   if (statusData.code !== 200 || !statusData.data) {
-    throw new Error(`KIE API error: ${statusData.msg || statusData.message || "Failed to get status"}`);
+    throw new Error(sanitizeError(statusData.msg || statusData.message || "Failed to get status"));
   }
 
   const kieState = statusData.data.state?.toLowerCase() || "generating";
@@ -647,8 +661,9 @@ serve(async (req) => {
       durationMs: Date.now() - startTime,
     });
     
+    const rawMsg = error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ error: sanitizeError(rawMsg) }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

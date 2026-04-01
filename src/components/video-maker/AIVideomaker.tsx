@@ -217,6 +217,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   );
   const [isFilming, setIsFilming] = useState(false);
   const animPollRef = useRef<NodeJS.Timeout | null>(null);
+  const [clipOrder, setClipOrder] = useState<number[]>([]);   // indices into videoClips for reorder
+  const [swapClipIdx, setSwapClipIdx] = useState<number | null>(null); // first clip selected for swap
+  const [clipsReady, setClipsReady] = useState(false); // true when all clips done, before stitch
 
   // Visual Supervisor — per-scene spatial motion briefs from Gemini Flash-Lite
   const [visualSupervisorPrompts, setVisualSupervisorPrompts] = useState<(string | null)[]>([null, null, null, null, null, null]);
@@ -245,8 +248,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [anchorTag, setAnchorTag] = useState<'logo' | 'style' | 'character'>('style');
 
   // Casting: per-scene regen modal
-  const [castingRegenModal, setCastingRegenModal] = useState<{ sceneIdx: number } | null>(null);
+  const [castingRegenModal, setCastingRegenModal] = useState<{ sceneIdx: number; mode?: 'regen' | 'new' } | null>(null);
   const [castingRegenNote, setCastingRegenNote] = useState('');
+  const [castingNewScenePrompt, setCastingNewScenePrompt] = useState('');
   const [castingRegenUseMaster, setCastingRegenUseMaster] = useState(true);
   const [isRegenningScene, setIsRegenningScene] = useState(false);
   const [castingRegenSceneAnchor, setCastingRegenSceneAnchor] = useState<string | null>(null);
@@ -1187,7 +1191,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         body: JSON.stringify(body),
       });
       const json = await resp.json();
-      if (!resp.ok || !json.ok) throw new Error(json.error || `cinema-artist ${resp.status}`);
+      if (!resp.ok || !json.ok) throw new Error(json.error || `Image generation failed (${resp.status})`);
       return json;
     };
 
@@ -1312,14 +1316,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           // Never override the i2i chain just because it's the last scene
           const isExplicitLogoScene = scenePipeline === 'logo_integration';
 
-          if (isLogoMode && !isExplicitLogoScene && directorMode !== 'i2i_chain') {
+          if (effectiveTag === 'character' && brandAnchor) {
+            // Character mode: ALWAYS use I2I with character anchor — every scene must match the uploaded character
+            created = await artistCall({ mode: 'i2i_create', prompt: epScene, anchor_url: brandAnchor, anchor_pipeline: 'character', scene_index: idx });
+          } else if (isLogoMode && !isExplicitLogoScene && directorMode !== 'i2i_chain') {
             // Logo mode non-chain scenes: pure T2I — no anchor leak
             created = await artistCall({ mode: 't2i_create', prompt: epScene, aspect_ratio: cinemaFormat, scene_index: idx });
           } else if (isExplicitLogoScene && isLogoMode) {
             // Explicit logo_integration tag: I2I with brand logo anchor
             created = await artistCall({ mode: 'i2i_create', prompt: epScene, anchor_url: brandAnchor, anchor_pipeline: 'logo', scene_index: idx });
           } else if (scenePipeline === 'character_lock' && brandAnchor) {
-            // Character lock: I2I with face/body anchor
+            // Character lock fallback: I2I with face/body anchor
             created = await artistCall({ mode: 'i2i_create', prompt: epScene, anchor_url: brandAnchor, anchor_pipeline: 'character', scene_index: idx });
           } else if (directorMode === 'i2i_chain') {
             // ── STORY CHAIN: use previous scene's generated image as anchor ──
@@ -1399,9 +1406,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
   }, []);
 
-  // ── Role 4: Producer — Shotstack ──
-  // Sends all approved keyframe images to Shotstack for animation + stitching.
-  // Returns a renderId immediately; UI polls status every 5s until done.
+  // ── Role 4: Producer — Grok (video gen per scene) + Shotstack (stitch) ──
+  // Step 1: For each scene, send keyframe image to Grok via freepik-image2video
+  // Step 2: Poll each scene's video task until all clips are ready
+  // Step 3: Send all video URLs to Shotstack cinema-producer for stitching
+  // Step 4: Poll Shotstack until final stitched video is ready
   const handleFilm = useCallback(async () => {
     if (!user || isFilming) return;
     const images = sceneImages;
@@ -1413,55 +1422,137 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setIsFilming(true);
     setAnimProgress(Array(cinemaSceneCount).fill('rendering'));
     setCinemaStep('filming');
-    setStitchStatus(language === 'ar' ? '🎬 Shotstack يُحضّر مشاهدك...' : '🎬 Shotstack is producing your film...');
+    setStitchStatus(language === 'ar' ? '🎬 جاري إنشاء مقاطع الفيديو...' : '🎬 Generating video clips...');
 
     try {
       const imageUrls = images.slice(0, cinemaSceneCount) as string[];
       const scripts = cinemaScenes.slice(0, cinemaSceneCount).map(s => s?.text || '');
 
-      // Submit render via Supabase Edge Function
-      const { data: result, error: invokeErr } = await supabase.functions.invoke('cinema-producer', {
+      // ── Step 1: Create Grok video tasks for each scene ──
+      const taskIds: string[] = [];
+      for (let idx = 0; idx < imageUrls.length; idx++) {
+        setStitchStatus(
+          language === 'ar'
+            ? `🎬 بدء مشهد ${idx + 1}/${imageUrls.length}...`
+            : `🎬 Starting scene ${idx + 1}/${imageUrls.length}...`
+        );
+        const { data, error } = await supabase.functions.invoke('freepik-image2video', {
+          body: {
+            generation_type: 'image_to_video',
+            image: imageUrls[idx],
+            prompt: scripts[idx] || undefined,
+            duration: '10',
+            aspect_ratio: cinemaFormat === '16:9' ? '16:9' : '9:16',
+            resolution: '720p',
+            video_style_mode: 'normal',
+            mode: 'async',
+          },
+        });
+        if (error) throw new Error(`Scene ${idx + 1}: ${error.message}`);
+        if (!data?.ok || !data?.task_id) throw new Error(data?.error || `Scene ${idx + 1}: No task_id`);
+        taskIds.push(data.task_id);
+        console.log(`[cinema] Scene ${idx + 1} Grok task: ${data.task_id}`);
+      }
+
+      // ── Step 2: Poll all Grok tasks until all clips are ready ──
+      const clipUrls: string[] = new Array(taskIds.length).fill('');
+      const MAX_CLIP_POLLS = 80; // ~6.5 min per clip
+      for (let poll = 0; poll < MAX_CLIP_POLLS; poll++) {
+        await new Promise(r => setTimeout(r, 5000));
+        for (let idx = 0; idx < taskIds.length; idx++) {
+          if (clipUrls[idx]) continue; // already done
+          try {
+            const { data: statusData } = await supabase.functions.invoke('freepik-image2video', {
+              body: { mode: 'status', task_id: taskIds[idx], increment_usage: false },
+            });
+            const s = statusData?.data;
+            if (s?.status === 'COMPLETED' && (s?.video?.url || s?.generated?.[0])) {
+              clipUrls[idx] = s.video?.url || s.generated[0];
+              setVideoClips(prev => { const n = [...prev]; n[idx] = clipUrls[idx]; return n; });
+              setAnimProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
+              console.log(`[cinema] Scene ${idx + 1} video ready: ${clipUrls[idx].slice(0, 60)}...`);
+            } else if (s?.status === 'FAILED') {
+              throw new Error(s?.error || `Scene ${idx + 1} video generation failed`);
+            }
+          } catch (pollErr: any) {
+            console.warn(`[cinema] Scene ${idx + 1} poll error:`, pollErr);
+          }
+        }
+        const doneCount = clipUrls.filter(Boolean).length;
+        setStitchStatus(
+          language === 'ar'
+            ? `🎬 إنشاء المقاطع... ${doneCount}/${taskIds.length} جاهز`
+            : `🎬 Generating clips... ${doneCount}/${taskIds.length} ready`
+        );
+        if (clipUrls.every(Boolean)) break;
+      }
+
+      // Check all clips are ready
+      if (!clipUrls.every(Boolean)) {
+        const missing = clipUrls.map((u, i) => u ? null : i + 1).filter(Boolean);
+        throw new Error(`Timed out waiting for scenes: ${missing.join(', ')}`);
+      }
+
+      // All clips ready — stop here so user can preview & reorder before stitching
+      setClipOrder(clipUrls.map((_, i) => i));
+      setClipsReady(true);
+      setStitchStatus('');
+      toast.success(language === 'ar' ? '🎬 المقاطع جاهزة! راجع وأعد الترتيب ثم اضغط تجميع' : '🎬 Clips ready! Review, reorder, then tap Stitch');
+    } catch (err: any) {
+      console.error('[cinema] Film produce error:', err);
+      setAnimProgress(prev => prev.map(p => p === 'rendering' ? 'error' : p));
+      toast.error(language === 'ar' ? 'فشل الإنتاج: ' + err.message : 'Production failed: ' + err.message);
+    } finally {
+      setIsFilming(false);
+      setStitchStatus('');
+    }
+  }, [user, isFilming, sceneImages, cinemaScenes, cinemaSceneCount, language, cinemaFormat]);
+
+  // ── Role 4b: Retry — re-trigger full Grok + Shotstack produce ──
+  const handleRetryFilm = useCallback(async (_idx: number) => {
+    setClipsReady(false);
+    setClipOrder([]);
+    setSwapClipIdx(null);
+    await handleFilm();
+  }, [handleFilm]);
+
+  // ── Role 4c: Stitch clips in user-chosen order via Shotstack ──
+  const handleStitchClips = useCallback(async () => {
+    if (!user || isStitching) return;
+    const orderedUrls = clipOrder.map(i => videoClips[i]).filter(Boolean) as string[];
+    if (orderedUrls.length < 1) return;
+    setIsStitching(true);
+    setStitchStatus(language === 'ar' ? '🎬 جاري تجميع الفيلم...' : '🎬 Stitching your film...');
+    try {
+      const { data: stitchResult, error: stitchErr } = await supabase.functions.invoke('cinema-producer', {
         body: {
-          imageUrls,
-          scripts,
+          videoUrls: orderedUrls,
           logoUrl: brandAnchor || null,
-          contactInfo: null,
           format: cinemaFormat,
           clipDuration: 10,
         },
       });
-      if (invokeErr) throw new Error(invokeErr.message || 'cinema-producer invoke failed');
-      if (!result?.renderId) throw new Error(result?.error || 'No renderId returned');
+      if (stitchErr) throw new Error(stitchErr.message || 'Stitch invoke failed');
+      if (!stitchResult?.renderId) throw new Error(stitchResult?.error || 'No renderId returned');
+      const { renderId } = stitchResult;
+      console.log('[cinema] Shotstack stitch renderId:', renderId);
 
-      const { renderId } = result;
-      console.log('[cinema] Shotstack renderId:', renderId);
-      setStitchStatus(language === 'ar' ? `⏳ Render ID: ${renderId} — جاري المعالجة...` : `⏳ Rendering… (${renderId})`);
-
-      // Poll Shotstack every 5s until done or failed (max 10 min)
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
-      const MAX_POLLS = 120;
-      for (let i = 0; i < MAX_POLLS; i++) {
+      const MAX_STITCH_POLLS = 60;
+      for (let i = 0; i < MAX_STITCH_POLLS; i++) {
         await new Promise(r => setTimeout(r, 5000));
         const pollResp = await fetch(
           `${SUPABASE_URL}/functions/v1/cinema-producer?renderId=${renderId}`,
-          {
-            method: 'GET',
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              apikey: SUPABASE_ANON_KEY,
-            },
-          }
+          { method: 'GET', headers: { Authorization: `Bearer ${accessToken}`, apikey: SUPABASE_ANON_KEY } }
         );
         const pollResult = await pollResp.json();
         const { status, url, progress } = pollResult;
-
         setStitchStatus(
           language === 'ar'
-            ? `🎬 Shotstack: ${status} ${progress ? `(${progress}%)` : ''}`
-            : `🎬 Shotstack: ${status} ${progress ? `(${progress}%)` : ''}`
+            ? `🎬 تجميع الفيلم... ${progress ? `(${progress}%)` : ''}`
+            : `🎬 Stitching... ${progress ? `(${progress}%)` : ''}`
         );
-
         if (status === 'done' && url) {
           setPremiereVideoUrl(url);
           setPremiereClipIndex(0);
@@ -1472,25 +1563,18 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           return;
         }
         if (status === 'failed') {
-          throw new Error(pollResult.error || 'Shotstack render failed');
+          throw new Error(pollResult.error || 'Stitch render failed');
         }
       }
-      throw new Error('Render timed out after 10 minutes');
+      throw new Error('Stitch timed out after 5 minutes');
     } catch (err: any) {
-      console.error('[cinema] Shotstack produce error:', err);
-      setAnimProgress(prev => prev.map(p => p === 'rendering' ? 'error' : p));
-      toast.error(language === 'ar' ? 'فشل الإنتاج: ' + err.message : 'Production failed: ' + err.message);
+      console.error('[cinema] Stitch error:', err);
+      toast.error(language === 'ar' ? 'فشل التجميع: ' + err.message : 'Stitch failed: ' + err.message);
     } finally {
-      setIsFilming(false);
+      setIsStitching(false);
       setStitchStatus('');
     }
-  }, [user, isFilming, sceneImages, cinemaScenes, cinemaSceneCount, language, loadQuota, brandAnchor, cinemaFormat]);
-
-  // ── Role 4b: Retry — re-trigger full Shotstack produce ──
-  const handleRetryFilm = useCallback(async (_idx: number) => {
-    // Shotstack produces the whole film at once — retry = re-run handleFilm
-    await handleFilm();
-  }, [handleFilm]);
+  }, [user, isStitching, clipOrder, videoClips, brandAnchor, cinemaFormat, cinemaSceneCount, language, loadQuota]);
 
   // ── Role 5: Premiere — client-side sequential player (no server needed) ──
   // Clips play one after another in the browser. No stitching, no Vercel.
@@ -1530,6 +1614,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setVideoClips([null, null, null, null, null, null]);
     setAnimTaskIds([null, null, null, null, null, null]);
     setAnimProgress(['idle', 'idle', 'idle', 'idle', 'idle', 'idle']);
+    setClipOrder([]);
+    setSwapClipIdx(null);
+    setClipsReady(false);
     setCinemaSceneCount(3);
     setCinemaSceneCountTouched(false);
     setIsFilming(false);
@@ -1597,7 +1684,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         }
       } else throw new Error(result?.error || 'No scene returned');
     } catch (err: any) {
-      toast.error(language === 'ar' ? 'فشل إعادة الكتابة' : 'Regen failed: ' + err.message);
+      toast.error(language === 'ar' ? 'فشل إعادة الكتابة' : 'Regen failed — please try again');
     } finally {
       setRegenSceneNum(null);
     }
@@ -1688,7 +1775,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   };
 
   // ── Casting: regenerate a single scene image with optional note and master style ──
-  const handleCastingRegenScene = useCallback(async (sceneIdx: number, note: string, useMaster: boolean, sceneAnchor: string | null = null) => {
+  const handleCastingRegenScene = useCallback(async (sceneIdx: number, note: string, useMaster: boolean, sceneAnchor: string | null = null, promptOverride: string | null = null) => {
     if (!user) return;
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData?.session?.access_token;
@@ -1704,7 +1791,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           body: JSON.stringify(body),
         });
         const json = await resp.json();
-        if (!resp.ok || !json.ok) throw new Error(json.error || `cinema-artist ${resp.status}`);
+        if (!resp.ok || !json.ok) throw new Error(json.error || `Image generation failed (${resp.status})`);
         return json;
       };
       const regenPollTask = async (task_id: string): Promise<string> => {
@@ -1718,31 +1805,28 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       };
 
       // Build the effective prompt (subject lock + scene text + optional note)
-      const rawPrompt = scene.english_prompt || scene.text;
+      const rawPrompt = (promptOverride && promptOverride.trim()) || scene.english_prompt || scene.text;
       const lockedPrompt = subjectLock && !rawPrompt.startsWith(subjectLock) ? `${subjectLock}. ${rawPrompt}` : rawPrompt;
       const finalPrompt = note ? `${lockedPrompt}. Director note: ${note}` : lockedPrompt;
 
-      // Identity Mute: logo mode middle scenes always use T2I (same rule as handleCast)
-      const isLogoMode = anchorTag === 'logo' && brandAnchor;
-      const isLastScene = scene.scene === cinemaSceneCount;
-      const isMuted = isLogoMode && scene.scene > 1 && !isLastScene;
-
-      // sceneAnchor (from modal upload) overrides the mute — explicit upload = intentional
-      const effectiveAnchor = sceneAnchor || ((!isMuted && useMaster && brandAnchor) ? brandAnchor : null);
+      // Retry strategy: if this is a quick-retry (no note, no explicit sceneAnchor upload),
+      // always use T2I for maximum reliability — the original I2I may have been the failure cause.
+      // Only use I2I when the user explicitly uploaded a scene-specific anchor image.
+      const forceT2I = !note && !sceneAnchor;
 
       let imgUrl: string;
-      if (effectiveAnchor) {
-        const pipeline = sceneAnchor ? 'style' : (anchorTag === 'character' ? 'character' : anchorTag === 'logo' ? 'logo' : 'style');
+      if (!forceT2I && sceneAnchor) {
+        // User explicitly uploaded a scene anchor — use I2I with it
         const created = await regenArtistCall({
           mode: 'i2i_create',
           prompt: finalPrompt,
-          anchor_url: effectiveAnchor,
-          anchor_pipeline: pipeline,
+          anchor_url: sceneAnchor,
+          anchor_pipeline: 'style',
           scene_index: sceneIdx,
         });
         imgUrl = await regenPollTask(created.task_id);
       } else {
-        // T2I — either muted or no anchor available
+        // T2I — reliable fresh generation with a new prompt
         const created = await regenArtistCall({
           mode: 't2i_create',
           prompt: finalPrompt,
@@ -1755,16 +1839,18 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setCastingProgress(prev => { const n = [...prev]; n[sceneIdx] = 'done'; return n; });
       toast.success(language === 'ar' ? `تم إعادة توليد المشهد ${sceneIdx + 1}` : `Scene ${sceneIdx + 1} regenerated!`);
     } catch (err: any) {
+      console.error('[cinema] regen scene failed:', sceneIdx, err?.message || err);
       setCastingProgress(prev => { const n = [...prev]; n[sceneIdx] = 'error'; return n; });
-      toast.error(language === 'ar' ? 'فشل إعادة التوليد' : 'Regen failed: ' + err.message);
+      toast.error(language === 'ar' ? 'فشل إعادة التوليد' : 'Regen failed — please try again');
     } finally {
       setIsRegenningScene(false);
       setCastingRegenModal(null);
       setCastingRegenNote('');
+      setCastingNewScenePrompt('');
       setCastingRegenUseMaster(true);
       setCastingRegenSceneAnchor(null);
     }
-  }, [user, cinemaScenes, sceneImages, brandAnchor, cinemaFormat, language, anchorTag, cinemaSceneCount, subjectLock]);
+  }, [user, cinemaScenes, cinemaFormat, language, subjectLock]);
 
   const handleCinemaRefUpload = async (file: File, slotIdx: number, tag: string) => {
     if (!user) return;
@@ -3591,16 +3677,27 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                     : (language === 'ar' ? `مشهد ${idx + 1}` : `Scene ${idx + 1}`)}
                                 </p>
                                 {prog === 'error' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCastingRegenScene(idx, '', true, null)}
-                                    disabled={isRegenningScene}
-                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-bold transition-all active:scale-95 disabled:opacity-40 flex-shrink-0"
-                                    style={{background:'rgba(239,68,68,0.15)',border:'1px solid rgba(239,68,68,0.4)',color:'#f87171'}}
-                                  >
-                                    <RefreshCw className="h-2.5 w-2.5" />
-                                    <span>{language === 'ar' ? 'إعادة' : 'Retry'}</span>
-                                  </button>
+                                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => setCastingRegenModal({ sceneIdx: idx, mode: 'new' })}
+                                      disabled={isRegenningScene}
+                                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-bold transition-all active:scale-95 disabled:opacity-40"
+                                      style={{background:'rgba(226,199,168,0.12)',border:'1px solid rgba(226,199,168,0.35)',color:'#E2C7A8'}}
+                                    >
+                                      <span>{language === 'ar' ? 'مشهد جديد' : 'New Scene'}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCastingRegenScene(idx, '', true, null)}
+                                      disabled={isRegenningScene}
+                                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-bold transition-all active:scale-95 disabled:opacity-40"
+                                      style={{background:'rgba(239,68,68,0.15)',border:'1px solid rgba(239,68,68,0.4)',color:'#f87171'}}
+                                    >
+                                      <RefreshCw className="h-2.5 w-2.5" />
+                                      <span>{language === 'ar' ? 'إعادة' : 'Retry'}</span>
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             );
@@ -3699,16 +3796,27 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               ) : prog === 'error' ? (
                                 <div className="flex flex-col items-center gap-3 py-6">
                                   <span className="text-red-400 text-2xl">✗</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCastingRegenScene(idx, '', true, null)}
-                                    disabled={isRegenningScene}
-                                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 disabled:opacity-40"
-                                    style={{background:'rgba(239,68,68,0.15)',border:'1px solid rgba(239,68,68,0.5)',color:'#f87171'}}
-                                  >
-                                    <RefreshCw className="h-3.5 w-3.5" />
-                                    <span>{language === 'ar' ? 'إعادة محاولة' : 'Retry Scene'}</span>
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setCastingRegenModal({ sceneIdx: idx, mode: 'new' })}
+                                      disabled={isRegenningScene}
+                                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 disabled:opacity-40"
+                                      style={{background:'rgba(226,199,168,0.12)',border:'1px solid rgba(226,199,168,0.35)',color:'#E2C7A8'}}
+                                    >
+                                      <span>{language === 'ar' ? 'مشهد جديد' : 'New Scene'}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCastingRegenScene(idx, '', true, null)}
+                                      disabled={isRegenningScene}
+                                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 disabled:opacity-40"
+                                      style={{background:'rgba(239,68,68,0.15)',border:'1px solid rgba(239,68,68,0.5)',color:'#f87171'}}
+                                    >
+                                      <RefreshCw className="h-3.5 w-3.5" />
+                                      <span>{language === 'ar' ? 'إعادة محاولة' : 'Retry Scene'}</span>
+                                    </button>
+                                  </div>
                                 </div>
                               ) : (
                                 // Loading state inside active card
@@ -3730,104 +3838,131 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       <div
                         className="fixed inset-0 z-50 flex items-center justify-center p-4"
                         style={{background:'rgba(0,0,0,0.85)',backdropFilter:'blur(12px) saturate(0.4)'}}
-                        onPointerDown={(e) => { if (e.target === e.currentTarget) { setCastingRegenModal(null); setCastingRegenNote(''); setCastingRegenSceneAnchor(null); } }}
+                        onPointerDown={(e) => { if (e.target === e.currentTarget) { setCastingRegenModal(null); setCastingRegenNote(''); setCastingNewScenePrompt(''); setCastingRegenSceneAnchor(null); } }}
                       >
                         <div className="w-full max-w-sm rounded-2xl p-5 flex flex-col gap-4"
                           style={{background:'rgba(12,15,20,0.97)',border:'1px solid rgba(226,199,168,0.3)',boxShadow:'0 24px 60px rgba(0,0,0,0.8)'}}>
                           <div className="flex items-center justify-between">
                             <h4 className="text-sm font-bold text-[#E2C7A8]">
-                              {language === 'ar' ? `إعادة توليد المشهد ${castingRegenModal.sceneIdx + 1}` : `Regenerate Scene ${castingRegenModal.sceneIdx + 1}`}
+                              {(castingRegenModal.mode || 'regen') === 'new'
+                                ? (language === 'ar' ? `مشهد جديد للمشهد ${castingRegenModal.sceneIdx + 1}` : `New Scene for Scene ${castingRegenModal.sceneIdx + 1}`)
+                                : (language === 'ar' ? `إعادة توليد المشهد ${castingRegenModal.sceneIdx + 1}` : `Regenerate Scene ${castingRegenModal.sceneIdx + 1}`)}
                             </h4>
-                            <button onClick={() => { setCastingRegenModal(null); setCastingRegenNote(''); setCastingRegenSceneAnchor(null); }}
+                            <button onClick={() => { setCastingRegenModal(null); setCastingRegenNote(''); setCastingNewScenePrompt(''); setCastingRegenSceneAnchor(null); }}
                               className="text-white/40 hover:text-white/70 text-sm transition-colors">✕</button>
                           </div>
-                          <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-semibold uppercase tracking-wider text-white/50">
-                              {language === 'ar' ? 'تغييرات محددة (اختياري)' : 'Director\'s note (optional)'}
-                            </label>
-                            <input
-                              type="text"
-                              value={castingRegenNote}
-                              onChange={(e) => setCastingRegenNote(e.target.value)}
-                              placeholder={language === 'ar' ? 'مثال: أضف ضوءاً ذهبياً، غيّر الخلفية...' : 'e.g., Add golden light, change background...'}
-                              className="w-full bg-transparent rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/25 outline-none"
-                              style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.1)'}}
-                            />
-                          </div>
-                          {/* Scene-specific reference upload — overrides brandAnchor for this scene only */}
-                          <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-semibold uppercase tracking-wider text-white/50">
-                              {language === 'ar' ? 'مرجع مشهد مخصص (يستبدل الهوية العامة لهذا المشهد فقط)' : 'Scene-specific reference (overrides brand anchor for this scene only)'}
-                            </label>
-                            <div className="flex items-center gap-3">
-                              {castingRegenSceneAnchor ? (
-                                <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0" style={{border:'1px solid rgba(226,199,168,0.5)'}}>
-                                  <img src={castingRegenSceneAnchor} alt="scene ref" className="w-full h-full object-cover" />
-                                  <button
-                                    onClick={() => setCastingRegenSceneAnchor(null)}
-                                    className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/80 text-white text-[9px] flex items-center justify-center hover:bg-red-500/80 transition-colors"
-                                  >✕</button>
-                                </div>
-                              ) : (
-                                <label className="w-14 h-14 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0 transition-all hover:opacity-80"
-                                  style={{background:'rgba(255,255,255,0.04)',border:'2px dashed rgba(226,199,168,0.25)'}}>
-                                  <input type="file" accept="image/*" className="hidden"
-                                    onChange={async (e) => {
-                                      const file = e.target.files?.[0];
-                                      if (!file || !user) return;
-                                      setIsUploadingRegenAnchor(true);
-                                      try {
-                                        const ext = file.name.split('.').pop() || 'jpg';
-                                        const path = `${user.id}/cinema-refs/regen-${Date.now()}.${ext}`;
-                                        await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
-                                        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-                                        if (urlData?.publicUrl) setCastingRegenSceneAnchor(urlData.publicUrl);
-                                      } catch { toast.error(language === 'ar' ? 'فشل رفع الصورة' : 'Upload failed'); }
-                                      finally { setIsUploadingRegenAnchor(false); }
-                                    }}
-                                  />
-                                  {isUploadingRegenAnchor ? <Loader2 className="h-4 w-4 animate-spin text-white/30" /> : <span className="text-xl leading-none text-white/25">+</span>}
+                          {(castingRegenModal.mode || 'regen') === 'new' && (
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-[10px] font-semibold uppercase tracking-wider text-white/50">
+                                {language === 'ar' ? 'وصف المشهد الجديد' : 'New scene prompt'}
+                              </label>
+                              <textarea
+                                value={castingNewScenePrompt}
+                                onChange={(e) => setCastingNewScenePrompt(e.target.value)}
+                                placeholder={language === 'ar' ? 'اكتب وصف المشهد الذي تريد توليده...' : 'Type the new scene you want to generate...'}
+                                className="w-full bg-transparent rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/25 outline-none min-h-[96px] resize-none"
+                                style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.1)'}}
+                              />
+                            </div>
+                          )}
+                          {(castingRegenModal.mode || 'regen') !== 'new' && (
+                            <>
+                              <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-semibold uppercase tracking-wider text-white/50">
+                                  {language === 'ar' ? 'تغييرات محددة (اختياري)' : 'Director\'s note (optional)'}
                                 </label>
-                              )}
-                              <p className="text-[9px] text-white/35 leading-relaxed">
-                                {castingRegenSceneAnchor
-                                  ? (language === 'ar' ? 'هذه الصورة ستُستخدم كمرجع حصري لهذا المشهد فقط (قوة ٧٠٪)' : 'This image overrides the brand anchor for this scene at 70% strength')
-                                  : (language === 'ar' ? 'اتركها فارغة لاستخدام أساس النمط العام' : 'Leave empty to use the global Style & Brand Foundation')}
-                              </p>
-                            </div>
-                          </div>
-                          <label className="flex items-center gap-3 cursor-pointer">
-                            <div
-                              onClick={() => setCastingRegenUseMaster(prev => !prev)}
-                              className="relative w-9 h-5 rounded-full transition-all flex-shrink-0"
-                              style={{background: castingRegenUseMaster ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : 'rgba(255,255,255,0.12)'}}>
-                              <div className="absolute top-0.5 rounded-full w-4 h-4 bg-white transition-all"
-                                style={{left: castingRegenUseMaster ? '18px' : '2px'}} />
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold text-white/80">
-                                {language === 'ar' ? 'الحفاظ على النمط الرئيسي' : 'Maintain Master Style'}
-                              </p>
-                              <p className="text-[10px] text-white/40">
-                                {language === 'ar' ? 'يستخدم مرساة العلامة كمرجع أساسي' : 'Uses brand anchor as primary style reference'}
-                              </p>
-                            </div>
-                          </label>
+                                <input
+                                  type="text"
+                                  value={castingRegenNote}
+                                  onChange={(e) => setCastingRegenNote(e.target.value)}
+                                  placeholder={language === 'ar' ? 'مثال: أضف ضوءاً ذهبياً، غيّر الخلفية...' : 'e.g., Add golden light, change background...'}
+                                  className="w-full bg-transparent rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/25 outline-none"
+                                  style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.1)'}}
+                                />
+                              </div>
+                              <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-semibold uppercase tracking-wider text-white/50">
+                                  {language === 'ar' ? 'مرجع مشهد مخصص (يستبدل الهوية العامة لهذا المشهد فقط)' : 'Scene-specific reference (overrides brand anchor for this scene only)'}
+                                </label>
+                                <div className="flex items-center gap-3">
+                                  {castingRegenSceneAnchor ? (
+                                    <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0" style={{border:'1px solid rgba(226,199,168,0.5)'}}>
+                                      <img src={castingRegenSceneAnchor} alt="scene ref" className="w-full h-full object-cover" />
+                                      <button
+                                        onClick={() => setCastingRegenSceneAnchor(null)}
+                                        className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/80 text-white text-[9px] flex items-center justify-center hover:bg-red-500/80 transition-colors"
+                                      >✕</button>
+                                    </div>
+                                  ) : (
+                                    <label className="w-14 h-14 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0 transition-all hover:opacity-80"
+                                      style={{background:'rgba(255,255,255,0.04)',border:'2px dashed rgba(226,199,168,0.25)'}}>
+                                      <input type="file" accept="image/*" className="hidden"
+                                        onChange={async (e) => {
+                                          const file = e.target.files?.[0];
+                                          if (!file || !user) return;
+                                          setIsUploadingRegenAnchor(true);
+                                          try {
+                                            const ext = file.name.split('.').pop() || 'jpg';
+                                            const path = `${user.id}/cinema-refs/regen-${Date.now()}.${ext}`;
+                                            await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
+                                            const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+                                            if (urlData?.publicUrl) setCastingRegenSceneAnchor(urlData.publicUrl);
+                                          } catch { toast.error(language === 'ar' ? 'فشل رفع الصورة' : 'Upload failed'); }
+                                          finally { setIsUploadingRegenAnchor(false); }
+                                        }}
+                                      />
+                                      {isUploadingRegenAnchor ? <Loader2 className="h-4 w-4 animate-spin text-white/30" /> : <span className="text-xl leading-none text-white/25">+</span>}
+                                    </label>
+                                  )}
+                                  <p className="text-[9px] text-white/35 leading-relaxed">
+                                    {castingRegenSceneAnchor
+                                      ? (language === 'ar' ? 'هذه الصورة ستُستخدم كمرجع حصري لهذا المشهد فقط (قوة ٧٠٪)' : 'This image overrides the brand anchor for this scene at 70% strength')
+                                      : (language === 'ar' ? 'اتركها فارغة لاستخدام أساس النمط العام' : 'Leave empty to use the global Style & Brand Foundation')}
+                                  </p>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                          {(castingRegenModal.mode || 'regen') !== 'new' && (
+                            <label className="flex items-center gap-3 cursor-pointer">
+                              <div
+                                onClick={() => setCastingRegenUseMaster(prev => !prev)}
+                                className="relative w-9 h-5 rounded-full transition-all flex-shrink-0"
+                                style={{background: castingRegenUseMaster ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : 'rgba(255,255,255,0.12)'}}>
+                                <div className="absolute top-0.5 rounded-full w-4 h-4 bg-white transition-all"
+                                  style={{left: castingRegenUseMaster ? '18px' : '2px'}} />
+                              </div>
+                              <div>
+                                <p className="text-xs font-semibold text-white/80">
+                                  {language === 'ar' ? 'الحفاظ على النمط الرئيسي' : 'Maintain Master Style'}
+                                </p>
+                                <p className="text-[10px] text-white/40">
+                                  {language === 'ar' ? 'يستخدم مرساة العلامة كمرجع أساسي' : 'Uses brand anchor as primary style reference'}
+                                </p>
+                              </div>
+                            </label>
+                          )}
                           <div className="flex gap-2 pt-1">
-                            <button onClick={() => { setCastingRegenModal(null); setCastingRegenNote(''); setCastingRegenSceneAnchor(null); }}
+                            <button onClick={() => { setCastingRegenModal(null); setCastingRegenNote(''); setCastingNewScenePrompt(''); setCastingRegenSceneAnchor(null); }}
                               className="flex-1 h-10 rounded-xl text-sm font-semibold transition-all active:scale-95"
                               style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',color:'rgba(255,255,255,0.6)'}}>
                               {language === 'ar' ? 'إلغاء' : 'Cancel'}
                             </button>
                             <button
-                              onClick={() => handleCastingRegenScene(castingRegenModal.sceneIdx, castingRegenNote, castingRegenUseMaster, castingRegenSceneAnchor)}
-                              disabled={isRegenningScene}
+                              onClick={() => handleCastingRegenScene(
+                                castingRegenModal.sceneIdx,
+                                (castingRegenModal.mode || 'regen') === 'new' ? '' : castingRegenNote,
+                                (castingRegenModal.mode || 'regen') === 'new' ? false : castingRegenUseMaster,
+                                (castingRegenModal.mode || 'regen') === 'new' ? null : castingRegenSceneAnchor,
+                                (castingRegenModal.mode || 'regen') === 'new' ? castingNewScenePrompt : null,
+                              )}
+                              disabled={isRegenningScene || ((castingRegenModal.mode || 'regen') === 'new' && !castingNewScenePrompt.trim())}
                               className="flex-1 h-10 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
                               style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14'}}>
                               {isRegenningScene ? (
                                 <><Loader2 className="h-4 w-4 animate-spin" /><span>{language === 'ar' ? 'جاري التوليد...' : 'Generating...'}</span></>
                               ) : (
-                                <><RefreshCw className="h-4 w-4" /><span>{language === 'ar' ? 'إعادة توليد المشهد' : 'Regenerate Scene'}</span></>
+                                <><RefreshCw className="h-4 w-4" /><span>{(castingRegenModal.mode || 'regen') === 'new' ? (language === 'ar' ? 'توليد مشهد جديد' : 'Generate New Scene') : (language === 'ar' ? 'إعادة توليد المشهد' : 'Regenerate Scene')}</span></>
                               )}
                             </button>
                           </div>
@@ -3861,6 +3996,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                 {cinemaStep === 'filming' && (() => {
                   const hasError = animProgress.slice(0, cinemaSceneCount).some(p => p === 'error');
+                  const allClipsDone = clipsReady && clipOrder.length > 0;
                   return (
                     <div className="flex flex-col gap-6 pb-4">
                       {/* Header */}
@@ -3869,19 +4005,29 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           <h3 className="text-base font-bold" style={{color:'#f87171'}}>
                             {language === 'ar' ? '⚠️ فشل الإنتاج — اضغط إعادة المحاولة' : '⚠️ Production failed — tap Retry'}
                           </h3>
+                        ) : allClipsDone && !isStitching ? (
+                          <h3 className="text-lg font-bold text-white">
+                            {language === 'ar' ? '🎬 راجع مقاطعك' : '🎬 Review Your Clips'}
+                          </h3>
+                        ) : isStitching ? (
+                          <h3 className="text-lg font-bold text-white">
+                            {language === 'ar' ? '🎬 جاري تجميع الفيلم...' : '🎬 Stitching your film...'}
+                          </h3>
                         ) : (
                           <h3 className="text-lg font-bold text-white">
-                            {language === 'ar' ? '🎬 Shotstack يُنتج فيلمك...' : '🎬 Shotstack is producing your film...'}
+                            {language === 'ar' ? '🎬 جاري إنتاج فيلمك...' : '🎬 Producing your film...'}
                           </h3>
                         )}
                         <p className="text-xs text-white/50">
-                          {language === 'ar'
-                            ? `${cinemaSceneCount} مشاهد • ${cinemaSceneCount * 10} ثانية إجمالياً`
-                            : `${cinemaSceneCount} scenes • ${cinemaSceneCount * 10}s total`}
+                          {allClipsDone && !isStitching
+                            ? (language === 'ar' ? 'اضغط مقطعين لتبديلهم • ثم اضغط تجميع' : 'Tap two clips to swap • then tap Stitch')
+                            : (language === 'ar'
+                              ? `${cinemaSceneCount} مشاهد • ${cinemaSceneCount * 10} ثانية إجمالياً`
+                              : `${cinemaSceneCount} scenes • ${cinemaSceneCount * 10}s total`)}
                         </p>
                       </div>
 
-                      {/* Shotstack status message */}
+                      {/* Status message */}
                       {stitchStatus && (
                         <div className="mx-4 px-4 py-3 rounded-xl text-center text-xs font-medium"
                           style={{background:'rgba(226,199,168,0.08)',border:'1px solid rgba(226,199,168,0.2)',color:'rgba(226,199,168,0.9)'}}>
@@ -3889,8 +4035,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         </div>
                       )}
 
-                      {/* Animated pulse bar */}
-                      {!hasError && (
+                      {/* Animated pulse bar — only during generation or stitching */}
+                      {!hasError && !allClipsDone && (
                         <div className="space-y-2 px-1">
                           <div className="h-2 rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.06)'}}>
                             <div
@@ -3900,29 +4046,118 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           </div>
                         </div>
                       )}
-
-                      {/* Scene keyframe thumbnails — shows what's going in */}
-                      <div className="grid grid-cols-3 gap-2 px-1">
-                        {sceneImages.slice(0, cinemaSceneCount).map((img, idx) => (
-                          <div key={idx} className="relative rounded-xl overflow-hidden"
-                            style={{aspectRatio:'9/16', minHeight:'100px', background:'rgba(12,15,20,0.8)', border:'1px solid rgba(226,199,168,0.2)'}}>
-                            {img && <img src={img} alt={`S${idx+1}`} className="w-full h-full object-cover" />}
-                            <div className="absolute inset-0 flex items-center justify-center"
-                              style={{background: img ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.6)'}}>
-                              {!hasError && <Loader2 className="h-4 w-4 animate-spin text-[#E2C7A8]/60" />}
-                            </div>
-                            <span className="absolute top-1 left-1.5 text-[9px] font-bold" style={{color:'#E2C7A8'}}>
-                              {language === 'ar' ? `م${idx+1}` : `Ch.${idx+1}`}
-                            </span>
+                      {isStitching && (
+                        <div className="space-y-2 px-1">
+                          <div className="h-2 rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.06)'}}>
+                            <div
+                              className="h-full rounded-full cinema-progress-bar"
+                              style={{width:'100%', background:'linear-gradient(90deg,hsl(210,100%,60%),hsl(280,70%,65%),hsl(210,100%,60%))', animation:'cinema-progress-scroll 2s linear infinite'}}
+                            />
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      )}
+
+                      {/* ── Clips ready: show VIDEO previews with tap-to-swap ── */}
+                      {allClipsDone && !isStitching ? (
+                        <div className="flex gap-2 px-1 overflow-x-auto pb-2" style={{scrollSnapType:'x mandatory'}}>
+                          {clipOrder.map((origIdx, pos) => {
+                            const clipUrl = videoClips[origIdx];
+                            const isSelected = swapClipIdx === pos;
+                            return (
+                              <div
+                                key={pos}
+                                onClick={() => {
+                                  if (swapClipIdx === null) {
+                                    setSwapClipIdx(pos);
+                                  } else if (swapClipIdx === pos) {
+                                    setSwapClipIdx(null);
+                                  } else {
+                                    // Swap the two clips
+                                    setClipOrder(prev => {
+                                      const n = [...prev];
+                                      const tmp = n[swapClipIdx!];
+                                      n[swapClipIdx!] = n[pos];
+                                      n[pos] = tmp;
+                                      return n;
+                                    });
+                                    setSwapClipIdx(null);
+                                    toast.success(language === 'ar' ? 'تم التبديل!' : 'Swapped!');
+                                  }
+                                }}
+                                className="relative rounded-xl overflow-hidden flex-shrink-0 cursor-pointer transition-all"
+                                style={{
+                                  width: cinemaSceneCount <= 3 ? 'calc(33.33% - 6px)' : '140px',
+                                  aspectRatio: '9/16',
+                                  minHeight: '160px',
+                                  scrollSnapAlign: 'start',
+                                  border: isSelected ? '2px solid hsl(210,100%,65%)' : '1px solid rgba(226,199,168,0.3)',
+                                  boxShadow: isSelected ? '0 0 12px hsla(210,100%,65%,0.4)' : 'none',
+                                  transform: isSelected ? 'scale(1.03)' : 'scale(1)',
+                                }}
+                              >
+                                {clipUrl && (
+                                  <video
+                                    src={clipUrl}
+                                    muted
+                                    playsInline
+                                    autoPlay
+                                    loop
+                                    className="w-full h-full object-cover"
+                                  />
+                                )}
+                                <span className="absolute top-1.5 left-2 px-1.5 py-0.5 rounded-md text-[10px] font-bold"
+                                  style={{background:'rgba(0,0,0,0.6)', color: isSelected ? 'hsl(210,100%,65%)' : '#E2C7A8'}}>
+                                  {pos + 1}
+                                </span>
+                                {isSelected && (
+                                  <div className="absolute inset-0 flex items-center justify-center"
+                                    style={{background:'rgba(0,0,0,0.3)'}}>
+                                    <span className="text-xs font-bold px-2 py-1 rounded-lg"
+                                      style={{background:'hsl(210,100%,65%)',color:'#fff'}}>
+                                      {language === 'ar' ? 'اختر مقطع للتبديل' : 'Tap another to swap'}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        /* ── Still generating: show keyframe thumbnails with progress ── */
+                        <div className="grid grid-cols-3 gap-2 px-1">
+                          {sceneImages.slice(0, cinemaSceneCount).map((img, idx) => {
+                            const sceneDone = animProgress[idx] === 'done';
+                            const clipUrl = videoClips[idx];
+                            return (
+                              <div key={idx} className="relative rounded-xl overflow-hidden"
+                                style={{aspectRatio:'9/16', minHeight:'100px', background:'rgba(12,15,20,0.8)', border: sceneDone ? '1px solid rgba(34,197,94,0.5)' : '1px solid rgba(226,199,168,0.2)'}}>
+                                {sceneDone && clipUrl ? (
+                                  <video src={clipUrl} muted playsInline autoPlay loop className="w-full h-full object-cover" />
+                                ) : img ? (
+                                  <img src={img} alt={`S${idx+1}`} className="w-full h-full object-cover" />
+                                ) : null}
+                                <div className="absolute inset-0 flex items-center justify-center"
+                                  style={{background: sceneDone ? 'rgba(0,0,0,0.15)' : img ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.6)'}}>
+                                  {sceneDone ? (
+                                    <span className="text-green-400 text-lg font-bold">✓</span>
+                                  ) : !hasError ? (
+                                    <Loader2 className="h-4 w-4 animate-spin text-[#E2C7A8]/60" />
+                                  ) : null}
+                                </div>
+                                <span className="absolute top-1 left-1.5 text-[9px] font-bold" style={{color: sceneDone ? '#4ade80' : '#E2C7A8'}}>
+                                  {language === 'ar' ? `م${idx+1}` : `Ch.${idx+1}`}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
 
                       {/* Footer */}
                       <div className="cinema-sticky-footer px-4 py-3 flex gap-3">
                         <button
                           onClick={handleCinemaReset}
-                          disabled={isFilming}
+                          disabled={isFilming || isStitching}
                           className="h-12 px-4 rounded-xl text-sm font-semibold text-white/60 flex-shrink-0 transition-all active:scale-[0.97] disabled:opacity-40"
                           style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)'}}
                         >
@@ -3938,6 +4173,23 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             <RefreshCw className="h-4 w-4" />
                             <span>{language === 'ar' ? 'إعادة المحاولة' : 'Retry Production'}</span>
                           </button>
+                        ) : allClipsDone && !isStitching ? (
+                          <button
+                            onClick={handleStitchClips}
+                            disabled={isStitching}
+                            className="flex-1 h-12 text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-40"
+                            style={{background:'linear-gradient(135deg,#E2C7A8 0%,#C5A47E 100%)',color:'#0c0f14',boxShadow:'0 6px 24px rgba(226,199,168,0.35)'}}
+                          >
+                            <span>{language === 'ar' ? '🎬 تجميع الفيلم' : '🎬 Stitch Film'}</span>
+                          </button>
+                        ) : isStitching ? (
+                          <div
+                            className="flex-1 h-12 text-sm font-bold rounded-xl flex items-center justify-center gap-2 opacity-60"
+                            style={{background:'linear-gradient(135deg,hsl(210,100%,60%),hsl(280,70%,65%))',color:'#fff'}}
+                          >
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>{language === 'ar' ? 'جاري التجميع...' : 'Stitching...'}</span>
+                          </div>
                         ) : (
                           <div
                             className="flex-1 h-12 text-sm font-bold rounded-xl flex items-center justify-center gap-2 opacity-60"
@@ -3966,7 +4218,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             : `${cinemaSceneCount} scenes • ${cinemaSceneCount * 10}s`}
                         </p>
                       </div>
-                      {/* Single stitched Shotstack video */}
+                      {/* Final stitched video */}
                       <div className="cinema-diamond-border rounded-2xl overflow-hidden w-full"
                         style={{aspectRatio: cinemaFormat === '16:9' ? '16/9' : '9/16', maxHeight:'70vh'}}>
                         <video

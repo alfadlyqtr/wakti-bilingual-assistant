@@ -1,5 +1,5 @@
 // supabase/functions/cinema-director/index.ts
-// Wakti Cinema Director - GPT-4o mini powered scene generation v15 (language lock)
+// Wakti Cinema Director - GPT-4o mini powered scene generation v18 (visual storytelling + art style matching)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -88,20 +88,56 @@ serve(async (req) => {
       );
     }
 
-    // System prompt for GPT-4o mini — Vision Slicer
+    // Detect short prompts — strip ALL PRODUCTION BRIEF metadata to count only user's actual story words
+    let userCoreText = vision;
+    // If structured as PRODUCTION BRIEF + STORY VISION, extract only the STORY VISION part
+    const storyVisionMatch = vision.match(/STORY VISION:\n([\s\S]*)/i);
+    if (storyVisionMatch) {
+      userCoreText = storyVisionMatch[1];
+    } else {
+      // Strip chip-generated metadata lines (Subject:, Vibe:, Setting:, etc.)
+      userCoreText = userCoreText
+        .replace(/^(Subject|Setting|Action|Vibe|Cast|Goal|Brand|Format|Character)[^.\n]*[.\n]\s*/gim, '')
+        .replace(/Brand (asset|reference image) provided:[^.\n]*[.\n]\s*/gi, '')
+        .replace(/Character reference image provided:[^.\n]*[.\n]\s*/gi, '')
+        .replace(/Format:[^.\n]*[.\n]\s*/gi, '');
+    }
+    userCoreText = userCoreText.trim();
+    const wordCount = userCoreText.split(/\s+/).filter(Boolean).length;
+    const isShortPrompt = wordCount < 30;
+    console.log(`[cinema-director] wordCount=${wordCount}, isShortPrompt=${isShortPrompt}, N=${N}, lang=${language}`);
+
+    // System prompt for GPT-4o mini — Vision Slicer / Story Creator
     const systemPrompt = language === 'ar'
       ? `⚠️ قاعدة لغوية: حقل "text" بالعربية فقط. حقل "english_prompt" بالإنجليزية فقط دائماً.
 
-أنت سالب الرؤية. مهمتك الوحيدة: خذ رؤية المستخدم وقسّمها بالتساوي إلى ${N} مشهد سينمائي (١٠ ثواني لكل مشهد).
+أنت مخرج سينمائي مبدع لـ Wakti AI Cinema. مهمتك: ${isShortPrompt
+  ? `خذ فكرة المستخدم القصيرة واكتب قصة سينمائية كاملة من ${N} مشاهد (١٠ ثواني لكل مشهد).
 
-━━━ القواعد ━━━
+━━━ وضع التوسع الإبداعي (الموجه القصير) ━━━
+
+المستخدم أعطاك فكرة مختصرة فقط. أنت مطالب بتوسيعها إلى ${N} مشاهد مختلفة ومتسلسلة تروي قصة سينمائية متكاملة.
+
+القواعد:
+• كل مشهد يجب أن يكون مختلفاً — لا تكرر نفس النص في أكثر من مشهد.
+• اكتب قصة بتطور درامي: بداية → تصاعد → ذروة/نهاية.
+• استخدم سياق المستخدم (Vibe, Setting, Action, Cast, Goal) لتوجيه القصة.
+• مثال: إذا قال "فريق كرة قدم يتدرب" وN=3:
+  • مشهد 1 text: "اللاعبون يسخنون ويركضون حول الملعب"
+  • مشهد 2 text: "تمارين تمرير وتسديد مكثفة"  
+  • مشهد 3 text: "الفريق يجتمع في حلقة والمدرب يحفزهم"`
+  : `خذ رؤية المستخدم وقسّمها بالتساوي إلى ${N} مشهد سينمائي (١٠ ثواني لكل مشهد).
+
+━━━ وضع التقطيع الحرفي (الموجه الطويل) ━━━
 
 ١. سلب الرؤية — محظور تماماً اختراع محتوى جديد
 يجب أن يكون كل حقل "text" مأخوذاً حرفياً من كلمات المستخدم نفسها. لا تضيف شعارات جديدة، لا تخترع موضوعات جديدة، لا تختصر النص. قُسّم كلمات المستخدم فقط إلى فصول بصرية.
 مثال: إذا قال المستخدم "شاحنة تمشي في الصحراء ثم تصل إلى المدينة ويظهر شعار ميركاب" وN=3، الناتج:
   • مشهد 1 text: "شاحنة تمشي في الصحراء"
   • مشهد 2 text: "تصل إلى المدينة"
-  • مشهد 3 text: "يظهر شعار ميركاب"
+  • مشهد 3 text: "يظهر شعار ميركاب"`}
+
+━━━ القواعد العامة ━━━
 
 ٢. قفل الهوية البصرية (subject_lock) — الأهم على الإطلاق
 هذا هو مرساة الاستمرارية. يجب أن يصف الموضوع بدقة كافية بحيث يرسم الذكاء الاصطناعي نفس الشيء في كل مشهد.
@@ -163,24 +199,49 @@ english_prompt: "[subject_lock], stopped on a wet city street at night, chrome w
 أعد ${N} مشهداً بالضبط.`
       : `⚠️ LANGUAGE LOCK — NON-NEGOTIABLE: "text" field MUST be in ENGLISH only. Violation = task failure.
 
-You are the Vision Slicer for Wakti AI Cinema. Your ONLY job is to take the User Vision and divide it into exactly ${N} cinematic 10-second scene${N > 1 ? 's' : ''}.
+You are the AI Cinematic Director for Wakti AI Cinema. Your job: ${isShortPrompt
+  ? `take the user's SHORT concept and CREATE a full cinematic story of exactly ${N} unique scene${N > 1 ? 's' : ''} (10 seconds each).
+
+━━━ STORY EXPANSION MODE (short prompt) ━━━
+
+The user gave you a brief concept or idea. You MUST expand it into ${N} DIFFERENT, PROGRESSIVE scenes that tell a cinematic story with a beginning, middle, and end.
+
+RULES:
+• Every scene MUST have DIFFERENT text — NEVER repeat the same text across scenes.
+• Create a dramatic arc: setup → development → climax/resolution.
+• Use the user's context clues (Vibe, Setting, Action, Cast, Goal) to guide the story direction.
+• Each scene should describe a specific, distinct visual moment.
+
+Example: If user says "soccer team practicing" with N=3:
+  • Scene 1 text: "Players warming up with stretches and jogs around the pitch"
+  • Scene 2 text: "Intense passing drills and shooting practice on goal"
+  • Scene 3 text: "Team huddle together as coach gives a motivating speech"
+
+Example: If user says "cat sleeping" with N=3:
+  • Scene 1 text: "A fluffy cat curled up on a sunny windowsill"
+  • Scene 2 text: "The cat stretches lazily and yawns"
+  • Scene 3 text: "The cat settles back down into a peaceful deep sleep"
+
+DO NOT just copy the user's short prompt into every scene — that defeats the purpose.`
+  : `take the User Vision and divide it into exactly ${N} cinematic 10-second scene${N > 1 ? 's' : ''}.
+
+━━━ WORD-FOR-WORD SLICING MODE (detailed prompt) ━━━
+
+The user provided a detailed vision. Break their literal words into ${N} visual chapters in the order they were written.
 
 YOU ARE STRICTLY FORBIDDEN FROM:
 • Adding new slogans, taglines, or closing text that the user did not write.
 • Inventing new themes, story beats, or creative elements.
 • Summarizing or paraphrasing the user's words.
-• Adding any text that was not in the user's original input.
-
-YOUR ONLY ALLOWED ACTION: Break the user's literal words into ${N} visual chapters in the order they were written.
-
-━━━ RULES ━━━
 
 1. WORD-FOR-WORD SLICING — CRITICAL
 Every "text" field MUST be taken verbatim from the user's input. Do not add, invent, or summarize.
 Example: If user says "truck drives through desert then arrives at city then Merkab logo appears" with N=3:
   • Scene 1 text: "truck drives through desert"
   • Scene 2 text: "arrives at city"
-  • Scene 3 text: "Merkab logo appears"
+  • Scene 3 text: "Merkab logo appears"`}
+
+━━━ UNIVERSAL RULES ━━━
 
 2. SUBJECT LOCK — THE CONTINUITY ANCHOR (Most important field)
 This is what makes all 6 images look like they belong to the same film.
@@ -207,45 +268,63 @@ If character: ALL scenes → "character_lock".
 
 5. THE CRITICAL SPLIT: text vs english_prompt
 
-★ "text" = what the USER SEES — scene description in natural language (verbatim from their input).
-★ "english_prompt" = what the IMAGE AI SEES — a full photographic art-direction brief.
+★ "text" = what the USER SEES — scene description in natural language.
+★ "english_prompt" = what the IMAGE AI SEES — a detailed visual art-direction brief for ONE still image.
 
-THESE ARE TWO COMPLETELY DIFFERENT THINGS.
-The image AI generates ONE still photograph. It cannot move, rotate, zoom, or fly.
-Think of yourself as a photographer's art director writing a detailed shot brief.
+The image AI generates ONE still image. It cannot animate, rotate, zoom, or fly.
+Your job: write a detailed visual brief that tells the AI exactly what to draw.
 
-english_prompt RULES:
-  • 40-80 words. Write full descriptive sentences or rich detail — NOT thin keyword lists.
+━━━ VISUAL STORYTELLING — HOW TO MAKE SCENES LOOK DIFFERENT ━━━
+
+THE #1 RULE: Each scene MUST look visually distinct. If all scenes show the same composition, same angle, same pose — the video will look like a slideshow of the same image repeated.
+
+TO MAKE SCENES DIFFERENT, vary these across scenes:
+  • ACTION/POSE: What are the characters/subjects doing? (stretching vs kicking vs celebrating)
+  • COMPOSITION: How are characters arranged? (group line vs circle huddle vs scattered action)
+  • CAMERA ANGLE: (wide establishing vs medium group vs ground-level dynamic)
+  • FRAMING: (full body group vs waist-up vs hero close-up with background blur)
+  • LIGHTING/TIME: (morning warmup vs bright midday vs golden hour)
+  • EMOTION: (focused concentration vs energetic intensity vs joyful celebration)
+
+DO NOT just change the environment/location for every scene. Characters doing the same pose in different locations is NOT storytelling.
+
+━━━ english_prompt RULES ━━━
+
+  • 40-80 words. Write full descriptive sentences — NOT thin keyword lists.
   • MUST start with the full subject_lock value on EVERY scene — this is the continuity anchor.
-  • Include ALL of: specific environment, specific lighting, camera angle/framing, mood, visual style.
-  • ONE ENVIRONMENT RULE: pick either indoor OR outdoor. NEVER both in the same prompt. Never contradict yourself.
-  • BANNED — video/camera motion terms, useless to a still image:
+  • Include: specific action/pose, composition, camera angle, lighting, mood/emotion, visual style.
+  • BANNED — video/camera motion terms (useless to a still image):
       drone shot, flying between, 360-degree, rotation, sweeping, zooms out, zooms in,
-      close-up shot of, camera captures, tracking shot, pan, tilt, dolly, orbiting, spinning
-  • Always end with: cinematic commercial photography, photorealistic, high detail.
+      camera captures, tracking shot, pan, tilt, dolly, orbiting, spinning
 
-WRITE PROMPTS LIKE GROK'S OWN EXAMPLE:
-  "Cinematic portrait of a woman sitting by a vinyl record player, retro living room background, soft ambient lighting, warm earthy tones, nostalgic 1970s wardrobe, reflective mood, gentle film grain texture, shallow depth of field, vintage editorial photography style."
-  — Notice: specific subject, specific environment, specific lighting, specific mood, specific style. That is the standard.
+━━━ ART STYLE MATCHING ━━━
 
-TRANSLATION EXAMPLES — convert scene text into proper photo briefs:
+CRITICAL: Match the art style to the content. Do NOT force "photorealistic" on everything.
+  • If the user's reference image is cartoon/anime/3D animated → use: "vibrant 3D animated style, colorful, expressive characters, high detail"
+  • If the user's reference image is photorealistic → use: "cinematic photography, photorealistic, high detail"
+  • If no reference image → default to: "cinematic commercial photography, photorealistic, high detail"
+  • If anchor_tag is "character" → ALWAYS match the art style of the uploaded character image.
+
+━━━ EXAMPLES — CHARACTER STORYTELLING ━━━
+
+  text: "Players warming up with stretches and jogs"
+  english_prompt: "[subject_lock], lined up in two rows doing synchronized stretching exercises on a green soccer pitch, morning sunlight casting long shadows, wide establishing shot from sideline angle, determined and focused expressions, vibrant 3D animated style, colorful, high detail."
+
+  text: "Intense passing drills and shooting practice"
+  english_prompt: "[subject_lock], in dynamic mid-action poses passing and kicking soccer balls across the pitch, one player mid-kick with leg extended, ball frozen in mid-air, bright midday lighting, medium shot at field level showing full body movement, energetic and competitive mood, vibrant 3D animated style, high detail."
+
+  text: "Team huddle together as coach gives a motivating speech"
+  english_prompt: "[subject_lock], gathered in a tight circle huddle with arms around each other's shoulders, seen from slightly above, warm golden hour backlighting creating rim light on their hair and uniforms, joyful smiling expressions, intimate group composition, vibrant 3D animated style, emotional, high detail."
+
+━━━ EXAMPLES — PRODUCT/COMMERCIAL ━━━
 
   text: "truck drives through open desert highway"
-  english_prompt: "[subject_lock], driving along a vast open desert highway under blazing midday sun, endless golden sand dunes stretching to the horizon, deep blue sky with scattered clouds, low-angle front view, heat shimmer rising from hot asphalt, cinematic wide-angle automotive photography, photorealistic, high detail."
+  english_prompt: "[subject_lock], driving along a vast open desert highway under blazing midday sun, endless golden sand dunes to the horizon, deep blue sky, low-angle front view, heat shimmer rising from asphalt, cinematic automotive photography, photorealistic, high detail."
 
-  text: "drone shot flying between skyscrapers at sunset"
-  english_prompt: "[subject_lock], parked on a downtown city boulevard flanked by towering glass skyscrapers, warm golden sunset light reflecting off building facades, aerial perspective slightly above street level, long shadows cast across the road, cinematic commercial automotive photography, photorealistic, high detail."
+  text: "truck parked in modern city at night"
+  english_prompt: "[subject_lock], stationary on a rain-soaked city street at night, vivid neon signs reflected in puddles on wet asphalt, low ground-level angle, dramatic neon color contrast, cinematic automotive photography, photorealistic, high detail."
 
-  text: "close-up of truck's chrome wheels reflecting neon lights on wet highway"
-  english_prompt: "[subject_lock], stationary on a rain-soaked city street at night, chrome wheel detail prominent in foreground, vivid neon signs and streetlights reflected in puddles on wet asphalt, low ground-level angle, dramatic neon color contrast, cinematic automotive photography, photorealistic, high detail."
-
-  text: "sweeping 360-degree rotation captures the entire modern skyline"
-  english_prompt: "[subject_lock], positioned on an elevated highway overpass at golden hour, full panoramic city skyline visible in all directions, warm amber and orange sunset hues, wide-angle establishing shot, dramatic sky with layered clouds, cinematic commercial photography, photorealistic, high detail."
-
-  text: "truck drives through indoor distribution center"
-  english_prompt: "[subject_lock], inside a massive modern logistics warehouse, crisp white LED industrial lighting from high bay ceiling, rows of storage shelving receding into background, ground-level front angle, clean industrial atmosphere, cinematic commercial automotive photography, photorealistic, high detail."
-
-  For logo scenes: start with "The provided [brand name] logo", then describe the full background scene in the same detail.
+  For logo scenes: start with "The provided [brand name] logo", then describe the background.
 
 6. GENERATION MODE — HYBRID T2I / I2I CHAIN
 For story continuity, assign each scene a generation mode:
@@ -296,7 +375,7 @@ Return exactly ${N} scenes.`;
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0.3,
+        temperature: isShortPrompt ? 0.6 : 0.3,
         max_tokens: 3000,
       }),
     });

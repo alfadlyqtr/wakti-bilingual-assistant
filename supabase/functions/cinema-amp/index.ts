@@ -55,18 +55,23 @@ serve(async (req) => {
       ? `\n\nMOVIE SETUP CONTEXT (use this to tailor your enhancement):\n${ctxParts.join('\n')}`
       : '';
 
-    const systemPrompt = `You are a Cinematic Prompt Engineer for a high-end AI Video Studio. Enhance the user's idea into a visually rich, cinematic description.
+    const systemPrompt = `You are an ad prompt refiner for AI video generation.
 
-You will receive the user's raw idea AND their movie setup selections (scene count, vibe, cast, platform, goals, etc.). Your job is to WEAVE all of that context naturally into one cohesive cinematic description. Do NOT list the selections — absorb them into the visual storytelling.
+Your job is to make the user's prompt clearer and more visually usable while staying EXTREMELY faithful to what they actually asked for.
+
+You will receive the user's raw idea and movie setup context. Use the context only to sharpen the brief, not to replace it.
 
 STRICT RULES:
-1. Language Lock: Match the user's language EXACTLY. English in = English out. Arabic in = Arabic out. ZERO tolerance for any other language — Spanish, French, or any other language is a critical failure.
-2. Visuals Only: Add cinematic language — lighting, camera angles, mood, lens types, time of day. Make it visual poetry.
-3. POSITIVE DESCRIPTIONS ONLY: Describe what IS in the frame. NEVER write "without", "no", "avoid", "not", or any negative phrase. Only affirmative visual descriptions.
-4. Keep the core subjects. Do not add new characters, dialogue, or plot twists.
-5. INTEGRATE THE CONTEXT: If the user selected "Epic & Grand" vibe, the description should FEEL epic. If they chose "Solo Hero" cast, feature one protagonist. If the platform is TikTok vertical, think fast-paced vertical framing. Absorb every piece of context into the visual language.
-6. LENGTH — CRITICAL: Your output MUST be between 500 and 650 characters. This is the sweet spot — rich enough to be cinematic, short enough to fit the UI. Stop at 650. Do not pad or repeat to reach 500; quality over quantity.
-7. Output Format: Return ONLY the enhanced text. No intro, no explanation, no quotes.`;
+1. Language Lock: Match the user's language EXACTLY. English in = English out. Arabic in = Arabic out.
+2. Preserve the user's nouns, places, business type, and action beats. If they say trucking company, dry docks, company building, semi truck, highway — keep those exact ideas central.
+3. Preserve sequence. If the user describes two beats or two scenes, keep that order. Example: company building at dry docks first, truck driving on highway second.
+4. Do NOT invent generic cinematic filler like dawn, horizon, golden rays, cerulean sky, orchestral music, heroic poetry, or random emotional language unless the user explicitly asked for that.
+5. Do NOT add extra plot, characters, symbolism, or story twists.
+6. Keep it literal, commercial, and visual. Think: clean production brief for an ad, not a dramatic screenplay paragraph.
+7. Use short concrete camera language only when helpful: wide shot, aerial shot, tracking shot, close-up, vertical framing.
+8. If the user's input is already clear, improve wording lightly instead of rewriting heavily.
+9. LENGTH: Keep output between 180 and 320 characters when possible. Never exceed 420 characters.
+10. Output Format: Return ONLY the refined prompt text. No intro, no explanation, no quotes.`;
 
     const userMessage = text.trim() + contextBlock;
 
@@ -79,7 +84,7 @@ STRICT RULES:
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage },
         ],
-        temperature: 0.72,
+        temperature: 0.25,
         max_tokens: 380,
       }),
     });
@@ -94,7 +99,7 @@ STRICT RULES:
     if (!enhanced) throw new Error('No content returned from OpenAI');
 
     // Hard server-side cap: truncate at last word boundary at or before 650 chars
-    const HARD_CAP = 650;
+    const HARD_CAP = 420;
     if (enhanced.length > HARD_CAP) {
       const cut = enhanced.slice(0, HARD_CAP);
       const lastSpace = cut.lastIndexOf(' ');
