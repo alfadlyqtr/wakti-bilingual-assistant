@@ -1576,9 +1576,11 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   // Build style string from chips + styleText
   function buildKieStyleString(): string {
-    const parts = [...includeTags, ...instrumentTags, ...moodTags].filter(Boolean);
+    const parts = [...includeTags, ...instrumentTags, ...moodTags]
+      .map((part) => part.trim())
+      .filter(Boolean);
     if (styleText.trim()) parts.push(styleText.trim());
-    return parts.join(', ');
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
   }
 
   const handleGenerate = async () => {
@@ -1634,8 +1636,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         style: kieStyle || (language === 'ar' ? 'بوب عربي' : 'pop'),
         customMode: true,
         instrumental,
-        model: 'V4_5', // Hardcoded single model
+        model: 'V5_5',
         duration_seconds: durationTarget,
+        personaModel: 'style_persona',
+        audioWeight: 1,
       };
 
       if (!instrumental) invokeBody.prompt = lyricsText.trim() || styleText.trim();
@@ -2273,7 +2277,7 @@ function EditorTab() {
             <Music className="h-6 w-6 text-muted-foreground/40" />
           </div>
           <p className="text-sm text-muted-foreground/60">{isAr ? 'لا توجد مقاطع محفوظة بعد.' : 'No saved tracks yet.'}</p>
-          <p className="text-xs text-muted-foreground/40">{isAr ? 'أنشئ موسيقى وستُحفظ هنا تلقائياً.' : 'Generate music and it will auto-save here.'}</p>
+          <p className="text-xs text-muted-foreground/40">{isAr ? 'أنشئ موسيقى ثم احفظ المقاطع التي تريدها هنا.' : 'Generate music, then save the tracks you want here.'}</p>
         </div>
       ) : (
         <div className="space-y-3">

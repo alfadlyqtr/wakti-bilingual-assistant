@@ -188,6 +188,7 @@ serve(async (req) => {
     if (customMode) {
       kiePayload.style = style;
       kiePayload.title = title;
+      if (durationHint) kiePayload.duration = Math.round(durationHint);
       if (negativeTags) kiePayload.negativeTags = negativeTags;
       if (vocalGender && !instrumental) kiePayload.vocalGender = vocalGender;
       if (styleWeight !== undefined) kiePayload.styleWeight = styleWeight;
@@ -240,6 +241,7 @@ serve(async (req) => {
         meta: {
           status: "generating",
           saved: false,
+          is_generation_root: true,
           customMode,
           instrumental,
           style: style || null,
@@ -342,6 +344,7 @@ serve(async (req) => {
       const trackMeta = {
         status: "completed",
         saved: false,
+        is_generation_root: isFirst,
         customMode,
         instrumental,
         style: style || null,

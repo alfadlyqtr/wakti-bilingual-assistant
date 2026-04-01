@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Play, Pause, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -11,45 +11,32 @@ interface AudioPlayerProps {
 export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
   const { language } = useTheme();
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const initializedSrcRef = useRef<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!src) {
-      setError(language === 'ar' ? 'لا يوجد ملف صوتي' : 'No audio URL');
-      return;
-    }
-
-    // Normalize and clean the URL to avoid issues like leading spaces or encoded prefixes
-    // (Same sanitization as Tasjeel's AudioControls)
+  const cleanSrc = useMemo(() => {
     let cleanUrl = (src || '').trim();
     try {
-      // Decode once to handle cases like '%20https://...'
       cleanUrl = decodeURIComponent(cleanUrl).trim();
     } catch {
-      // If decode fails, continue with trimmed version
     }
-    // Explicitly strip a leading space marker if it survived encoding
     if (cleanUrl.startsWith(' ')) {
       cleanUrl = cleanUrl.trimStart();
     }
-    // Also handle a raw '%20' prefix that wasn't part of normal encoding
     if (cleanUrl.startsWith('%20')) {
       cleanUrl = cleanUrl.slice(3).trimStart();
     }
+    return cleanUrl;
+  }, [src]);
 
-    console.log('[AudioPlayer] Loading audio:', { original: src, cleaned: cleanUrl });
-
-    // Create audio element with the cleaned URL
-    const audio = new Audio(cleanUrl);
-    audioRef.current = audio;
-
-    // Set up event listeners
+  const attachAudio = useCallback((audio: HTMLAudioElement) => {
     const handlePlay = () => {
       setIsPlaying(true);
+      setIsLoading(false);
     };
 
     const handlePause = () => {
@@ -71,11 +58,16 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
       setError(null);
     };
 
+    const handleCanPlay = () => {
+      setIsLoading(false);
+      setError(null);
+    };
+
     const handleError = () => {
       const audioError = audio.error;
       console.error('[AudioPlayer] Error loading audio:', {
         src,
-        cleanUrl,
+        cleanUrl: audio.src,
         errorCode: audioError?.code,
         errorMessage: audioError?.message
       });
@@ -89,12 +81,9 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('canplay', handleCanPlay);
     audio.addEventListener('error', handleError);
 
-    // Load the audio
-    audio.load();
-
-    // Cleanup
     return () => {
       audio.pause();
       audio.removeEventListener('play', handlePlay);
@@ -102,25 +91,74 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('error', handleError);
     };
-  }, [src, language]);
+  }, [language, src]);
+
+  const cleanupRef = useRef<(() => void) | null>(null);
+
+  const ensureAudio = useCallback(() => {
+    if (!cleanSrc) {
+      setError(language === 'ar' ? 'لا يوجد ملف صوتي' : 'No audio URL');
+      return null;
+    }
+
+    if (audioRef.current && initializedSrcRef.current === cleanSrc) {
+      return audioRef.current;
+    }
+
+    cleanupRef.current?.();
+
+    const audio = new Audio(cleanSrc);
+    audioRef.current = audio;
+    initializedSrcRef.current = cleanSrc;
+    cleanupRef.current = attachAudio(audio);
+    setCurrentTime(0);
+    setDuration(0);
+    setError(null);
+    setIsLoading(true);
+    audio.load();
+    return audio;
+  }, [attachAudio, cleanSrc, language]);
+
+  useEffect(() => {
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    setIsLoading(false);
+    setError(cleanSrc ? null : (language === 'ar' ? 'لا يوجد ملف صوتي' : 'No audio URL'));
+    cleanupRef.current?.();
+    cleanupRef.current = null;
+    audioRef.current = null;
+    initializedSrcRef.current = null;
+
+    return () => {
+      cleanupRef.current?.();
+      cleanupRef.current = null;
+      audioRef.current = null;
+      initializedSrcRef.current = null;
+    };
+  }, [cleanSrc, language]);
 
   const togglePlay = () => {
-    if (!audioRef.current) return;
+    const audio = ensureAudio();
+    if (!audio) return;
 
     if (isPlaying) {
-      audioRef.current.pause();
+      audio.pause();
     } else {
-      audioRef.current.play().catch(err => {
+      setIsLoading(true);
+      audio.play().catch(err => {
         console.error('[AudioPlayer] Play error:', err);
+        setIsLoading(false);
         setError(language === 'ar' ? 'فشل تشغيل الصوت' : 'Failed to play audio');
       });
     }
   };
 
   const rewind = () => {
-    const audio = audioRef.current;
+    const audio = ensureAudio() || audioRef.current;
     if (!audio) return;
     audio.currentTime = Math.max(0, audio.currentTime - 10);
   };
