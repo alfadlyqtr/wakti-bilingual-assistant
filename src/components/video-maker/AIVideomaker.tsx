@@ -1394,8 +1394,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
   }, []);
 
-  // ── Role 4: Animator ──
-  // Fires 6 parallel I2V tasks then polls until all done
+  // ── Role 4: Producer — Shotstack ──
+  // Sends all approved keyframe images to Shotstack for animation + stitching.
+  // Returns a renderId immediately; UI polls status every 5s until done.
   const handleFilm = useCallback(async () => {
     if (!user || isFilming) return;
     const images = sceneImages;
@@ -1403,167 +1404,81 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       toast.error(language === 'ar' ? 'لم تكتمل جميع الصور بعد' : 'Not all scene images are ready');
       return;
     }
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData?.session?.access_token;
-    if (!accessToken) return;
 
     setIsFilming(true);
-    setVideoClips(Array(cinemaSceneCount).fill(null));
-    setAnimTaskIds(Array(cinemaSceneCount).fill(null));
-    setAnimProgress(Array(cinemaSceneCount).fill('queued'));
+    setAnimProgress(Array(cinemaSceneCount).fill('rendering'));
     setCinemaStep('filming');
+    setStitchStatus(language === 'ar' ? '🎬 Shotstack يُحضّر مشاهدك...' : '🎬 Shotstack is producing your film...');
 
-    const callAnimator = async (body: Record<string, unknown>) => {
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/cinema-animator`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-          apikey: SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify(body),
-      });
-      const json = await resp.json();
-      if (!resp.ok || !json.ok) throw new Error(json.error || `cinema-animator ${resp.status}`);
-      return json;
-    };
+    const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+    const produceBase = isLocal ? 'https://www.wakti.qa' : '';
 
     try {
-      // Fire all N I2V tasks in parallel
-      const taskResults = await Promise.allSettled(
-        images.slice(0, cinemaSceneCount).map(async (imgUrl, idx) => {
-          const scene = cinemaScenes[idx];
-          // Visual Supervisor brief takes priority — it maps actual pixel physics.
-          // Fallback chain: VS brief → english_prompt → scene text
-          const motionPrompt = visualSupervisorPrompts[idx] || scene?.english_prompt || scene?.text || '';
-          const result = await callAnimator({
-            mode: 'create',
-            image_url: imgUrl,
-            prompt: motionPrompt,
-            scene_index: idx,
-          });
-          setAnimTaskIds(prev => { const n = [...prev]; n[idx] = result.task_id; return n; });
-          setAnimProgress(prev => { const n = [...prev]; n[idx] = 'rendering'; return n; });
-          return { idx, task_id: result.task_id };
-        })
-      );
+      const imageUrls = images.slice(0, cinemaSceneCount) as string[];
+      const scripts = cinemaScenes.slice(0, cinemaSceneCount).map(s => s?.text || '');
 
-      // Collect successful task ids
-      const activeTasks: { idx: number; task_id: string }[] = [];
-      taskResults.forEach((r, idx) => {
-        if (r.status === 'fulfilled') {
-          activeTasks.push(r.value);
-        } else {
-          setAnimProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
-        }
-      });
-
-      // Poll all active tasks every 6s until all done
-      const pollTasks = async () => {
-        const pending = [...activeTasks];
-        while (pending.length > 0) {
-          await new Promise(r => setTimeout(r, 6000));
-          const toRemove: number[] = [];
-          await Promise.allSettled(
-            pending.map(async ({ idx, task_id }) => {
-              try {
-                const status = await callAnimator({ mode: 'status', task_id, scene_index: idx });
-                if (status.status === 'COMPLETED' && status.video_url) {
-                  setVideoClips(prev => { const n = [...prev]; n[idx] = status.video_url; return n; });
-                  setAnimProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
-                  toRemove.push(idx);
-                  // Deduct 1 credit per completed scene
-                  supabase.rpc('increment_ai_video_usage', { p_user_id: user!.id }).then(() => loadQuota());
-                } else if (status.status === 'FAILED') {
-                  setAnimProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
-                  toRemove.push(idx);
-                }
-              } catch (e) {
-                console.error(`[cinema] Poll scene ${idx} failed:`, e);
-              }
-            })
-          );
-          toRemove.forEach(idx => {
-            const pos = pending.findIndex(t => t.idx === idx);
-            if (pos !== -1) pending.splice(pos, 1);
-          });
-        }
-      };
-
-      await pollTasks();
-      toast.success(language === 'ar' ? 'تم تصوير جميع المشاهد!' : 'All scenes filmed!');
-    } catch (err: any) {
-      console.error('[cinema] Film error:', err);
-      toast.error(language === 'ar' ? 'فشل التصوير: ' + err.message : 'Filming failed: ' + err.message);
-    } finally {
-      setIsFilming(false);
-    }
-  }, [user, isFilming, sceneImages, cinemaScenes, language, loadQuota, visualSupervisorPrompts]);
-
-  // ── Role 4b: Retry single failed animation ──
-  const handleRetryFilm = useCallback(async (idx: number) => {
-    const imgUrl = sceneImages[idx];
-    if (!imgUrl || !user) return;
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData?.session?.access_token;
-    if (!accessToken) return;
-
-    setAnimProgress(prev => { const n = [...prev]; n[idx] = 'queued'; return n; });
-    setVideoClips(prev => { const n = [...prev]; n[idx] = null; return n; });
-    setAnimTaskIds(prev => { const n = [...prev]; n[idx] = null; return n; });
-
-    const callAnimator = async (body: Record<string, unknown>) => {
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/cinema-animator`, {
+      const resp = await fetch(`${produceBase}/api/video/produce`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-          apikey: SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify(body),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrls,
+          scripts,
+          logoUrl: brandAnchor || null,
+          contactInfo: null,
+          format: cinemaFormat,
+          clipDuration: 10,
+        }),
       });
-      const json = await resp.json();
-      if (!resp.ok || !json.ok) throw new Error(json.error || `cinema-animator ${resp.status}`);
-      return json;
-    };
+      const result = await resp.json();
+      if (!resp.ok || !result.renderId) throw new Error(result.error || `Produce failed ${resp.status}`);
 
-    try {
-      const scene = cinemaScenes[idx];
-      const motionPrompt = visualSupervisorPrompts[idx] || scene?.english_prompt || scene?.text || '';
-      const result = await callAnimator({
-        mode: 'create',
-        image_url: imgUrl,
-        prompt: motionPrompt,
-        scene_index: idx,
-      });
-      setAnimTaskIds(prev => { const n = [...prev]; n[idx] = result.task_id; return n; });
-      setAnimProgress(prev => { const n = [...prev]; n[idx] = 'rendering'; return n; });
+      const { renderId } = result;
+      console.log('[cinema] Shotstack renderId:', renderId);
+      setStitchStatus(language === 'ar' ? `⏳ Render ID: ${renderId} — جاري المعالجة...` : `⏳ Rendering… (${renderId})`);
 
-      // Poll this single task
-      let done = false;
-      while (!done) {
-        await new Promise(r => setTimeout(r, 6000));
-        try {
-          const status = await callAnimator({ mode: 'status', task_id: result.task_id, scene_index: idx });
-          if (status.status === 'COMPLETED' && status.video_url) {
-            setVideoClips(prev => { const n = [...prev]; n[idx] = status.video_url; return n; });
-            setAnimProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
-            supabase.rpc('increment_ai_video_usage', { p_user_id: user.id }).then(() => loadQuota());
-            done = true;
-          } else if (status.status === 'FAILED') {
-            setAnimProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
-            done = true;
-          }
-        } catch (e) {
-          console.error(`[cinema] Retry poll scene ${idx} failed:`, e);
+      // Poll Shotstack every 5s until done or failed (max 10 min)
+      const MAX_POLLS = 120;
+      for (let i = 0; i < MAX_POLLS; i++) {
+        await new Promise(r => setTimeout(r, 5000));
+        const poll = await fetch(`${produceBase}/api/video/produce?renderId=${renderId}`);
+        const pollData = await poll.json();
+        const { status, url, progress } = pollData;
+
+        setStitchStatus(
+          language === 'ar'
+            ? `🎬 Shotstack: ${status} ${progress ? `(${progress}%)` : ''}`
+            : `🎬 Shotstack: ${status} ${progress ? `(${progress}%)` : ''}`
+        );
+
+        if (status === 'done' && url) {
+          setPremiereVideoUrl(url);
+          setPremiereClipIndex(0);
+          setAnimProgress(Array(cinemaSceneCount).fill('done'));
+          setCinemaStep('premiere');
+          supabase.rpc('increment_ai_video_usage', { p_user_id: user!.id }).then(() => loadQuota());
+          toast.success(language === 'ar' ? '🎬 الفيلم جاهز!' : '🎬 Film ready!');
+          return;
+        }
+        if (status === 'failed') {
+          throw new Error(pollData.error || 'Shotstack render failed');
         }
       }
+      throw new Error('Render timed out after 10 minutes');
     } catch (err: any) {
-      console.error(`[cinema] Retry scene ${idx} error:`, err);
-      setAnimProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
-      toast.error(language === 'ar' ? `فشل تحريك المشهد ${idx + 1}` : `Scene ${idx + 1} animation failed`);
+      console.error('[cinema] Shotstack produce error:', err);
+      setAnimProgress(prev => prev.map(p => p === 'rendering' ? 'error' : p));
+      toast.error(language === 'ar' ? 'فشل الإنتاج: ' + err.message : 'Production failed: ' + err.message);
+    } finally {
+      setIsFilming(false);
+      setStitchStatus('');
     }
-  }, [user, sceneImages, cinemaScenes, language, loadQuota, visualSupervisorPrompts]);
+  }, [user, isFilming, sceneImages, cinemaScenes, cinemaSceneCount, language, loadQuota, brandAnchor, cinemaFormat]);
+
+  // ── Role 4b: Retry — re-trigger full Shotstack produce ──
+  const handleRetryFilm = useCallback(async (_idx: number) => {
+    // Shotstack produces the whole film at once — retry = re-run handleFilm
+    await handleFilm();
+  }, [handleFilm]);
 
   // ── Role 5: Premiere — client-side sequential player (no server needed) ──
   // Clips play one after another in the browser. No stitching, no Vercel.
@@ -3859,254 +3774,168 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   </div>
                 )}
 
-                {cinemaStep === 'filming' && (
-                  <div className="flex flex-col gap-5 pb-4">
-                    {/* Header */}
-                    {(() => {
-                      const errorIdxs = animProgress.slice(0, cinemaSceneCount).map((p, i) => p === 'error' ? i : -1).filter(i => i !== -1);
-                      const hasError = errorIdxs.length > 0;
-                      return (
-                        <div className="text-center space-y-1">
-                          {hasError ? (
-                            <>
-                              <h3 className="text-base font-bold" style={{color:'#f87171'}}>
-                                {language === 'ar'
-                                  ? `⚠️ فشل تحريك المشهد ${errorIdxs.map(i => i + 1).join(', ')}. اضغط لإعادة المحاولة.`
-                                  : `⚠️ Animation error in Chapter ${errorIdxs.map(i => i + 1).join(', ')}. Tap to retry.`}
-                              </h3>
-                              <p className="text-xs text-white/40">{language === 'ar' ? `${cinemaSceneCount} مشاهد • ١٠ ثوانٍ كل مشهد` : `${cinemaSceneCount} chapters • 10s each`}</p>
-                            </>
-                          ) : (
-                            <>
-                              <h3 className="text-lg font-bold text-white">{language === 'ar' ? 'الإنتاج جارٍ...' : 'Production in Progress'}</h3>
-                              <p className="text-xs text-white/50">{language === 'ar' ? `${cinemaSceneCount} مشاهد • ١٠ ثوانٍ كل مشهد` : `${cinemaSceneCount} chapters • 10s each`}</p>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })()}
+                {cinemaStep === 'filming' && (() => {
+                  const hasError = animProgress.slice(0, cinemaSceneCount).some(p => p === 'error');
+                  return (
+                    <div className="flex flex-col gap-6 pb-4">
+                      {/* Header */}
+                      <div className="text-center space-y-1 pt-2">
+                        {hasError ? (
+                          <h3 className="text-base font-bold" style={{color:'#f87171'}}>
+                            {language === 'ar' ? '⚠️ فشل الإنتاج — اضغط إعادة المحاولة' : '⚠️ Production failed — tap Retry'}
+                          </h3>
+                        ) : (
+                          <h3 className="text-lg font-bold text-white">
+                            {language === 'ar' ? '🎬 Shotstack يُنتج فيلمك...' : '🎬 Shotstack is producing your film...'}
+                          </h3>
+                        )}
+                        <p className="text-xs text-white/50">
+                          {language === 'ar'
+                            ? `${cinemaSceneCount} مشاهد • ${cinemaSceneCount * 10} ثانية إجمالياً`
+                            : `${cinemaSceneCount} scenes • ${cinemaSceneCount * 10}s total`}
+                        </p>
+                      </div>
 
-                    {/* Production progress bar */}
-                    {(() => {
-                      const score = animProgress.slice(0, cinemaSceneCount).reduce((acc, p) => acc + (p === 'done' ? 1 : p === 'rendering' ? 0.4 : p === 'queued' ? 0.05 : 0), 0);
-                      const pct = Math.min(100, Math.round((score / cinemaSceneCount) * 100));
-                      return (
+                      {/* Shotstack status message */}
+                      {stitchStatus && (
+                        <div className="mx-4 px-4 py-3 rounded-xl text-center text-xs font-medium"
+                          style={{background:'rgba(226,199,168,0.08)',border:'1px solid rgba(226,199,168,0.2)',color:'rgba(226,199,168,0.9)'}}>
+                          {stitchStatus}
+                        </div>
+                      )}
+
+                      {/* Animated pulse bar */}
+                      {!hasError && (
                         <div className="space-y-2 px-1">
-                          <div className="flex justify-between text-xs text-white/60">
-                            <span>{language === 'ar' ? 'تقدم الإنتاج' : 'Production progress'}</span>
-                            <span className="text-[#E2C7A8] font-bold">{pct}%</span>
-                          </div>
                           <div className="h-2 rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.06)'}}>
                             <div
-                              className="h-full rounded-full cinema-progress-bar transition-all duration-700"
-                              style={{width:`${pct}%`, background:'linear-gradient(90deg,#E2C7A8,#C5A47E,hsl(210,100%,65%))'}}
+                              className="h-full rounded-full cinema-progress-bar"
+                              style={{width:'100%', background:'linear-gradient(90deg,#E2C7A8,#C5A47E,hsl(210,100%,65%))', animation:'cinema-progress-scroll 2s linear infinite'}}
                             />
                           </div>
                         </div>
-                      );
-                    })()}
+                      )}
 
-                    {/* N scene clip status grid */}
-                    <div className="grid grid-cols-3 gap-3">
-                      {Array.from({length: cinemaSceneCount}, (_, i) => i).map((idx) => {
-                        const prog = animProgress[idx];
-                        const clip = videoClips[idx];
-                        const trimVal = sceneClipTrim[idx] ?? 10;
-                        const trimPct = (trimVal / 10) * 100; // 10s = 100%
-                        return (
-                          <div key={idx} className="flex flex-col gap-1.5">
-                            {/* Video card */}
-                            <div
-                              className={`relative rounded-xl overflow-hidden flex flex-col items-center justify-center gap-1.5 ${prog === 'rendering' || prog === 'queued' ? 'cinema-gold-pulse' : ''}`}
-                              style={{aspectRatio:'9/16', minHeight:'120px', background:'rgba(12,15,20,0.8)', border: prog === 'error' ? '1px solid rgba(248,113,113,0.5)' : clip ? '1px solid rgba(226,199,168,0.6)' : '1px solid rgba(255,255,255,0.06)'}}>
-                              {clip ? (
-                                <video src={clip} muted playsInline loop autoPlay className="w-full h-full object-cover" />
-                              ) : (
-                                <>
-                                  {prog === 'queued' && <div className="w-3 h-3 rounded-full bg-[#E2C7A8]/30 animate-pulse" />}
-                                  {prog === 'rendering' && <Loader2 className="h-5 w-5 animate-spin text-[#E2C7A8]" />}
-                                  {prog === 'error' && (
-                                    <button
-                                      onClick={() => handleRetryFilm(idx)}
-                                      className="flex flex-col items-center gap-1 px-2 py-2 rounded-xl transition-all active:scale-95"
-                                      style={{background:'rgba(248,113,113,0.15)',border:'1px solid rgba(248,113,113,0.4)'}}
-                                    >
-                                      <RefreshCw className="h-5 w-5" style={{color:'#f87171'}} />
-                                      <span className="text-[8px] font-bold" style={{color:'#f87171'}}>
-                                        {language === 'ar' ? 'إعادة محاولة' : 'Retry'}
-                                      </span>
-                                    </button>
-                                  )}
-                                  {prog === 'done' && <span className="text-green-400 text-xs">✓</span>}
-                                </>
-                              )}
-                              {/* Chapter label */}
-                              <span className="absolute top-1.5 left-2 text-[9px] font-bold"
-                                style={{color: prog === 'done' ? '#E2C7A8' : prog === 'error' ? '#f87171' : 'rgba(255,255,255,0.3)'}}>
-                                {language === 'ar' ? `م${idx+1}` : `Ch.${idx+1}`}
-                              </span>
-                              {/* Grayout overlay for trimmed-off portion */}
-                              {clip && trimPct < 100 && (
-                                <div
-                                  className="absolute top-0 right-0 bottom-0 pointer-events-none"
-                                  style={{left:`${trimPct}%`, background:'rgba(0,0,0,0.62)', backdropFilter:'grayscale(1)'}}
-                                >
-                                  <div className="absolute left-0 top-0 bottom-0 w-px" style={{background:'rgba(226,199,168,0.7)'}} />
-                                </div>
-                              )}
-                              {/* Trim badge on card */}
-                              {clip && (
-                                <div className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold" style={{background:'rgba(12,15,20,0.88)',color:'#E2C7A8'}}>
-                                  {trimVal}s
-                                </div>
-                              )}
+                      {/* Scene keyframe thumbnails — shows what's going in */}
+                      <div className="grid grid-cols-3 gap-2 px-1">
+                        {sceneImages.slice(0, cinemaSceneCount).map((img, idx) => (
+                          <div key={idx} className="relative rounded-xl overflow-hidden"
+                            style={{aspectRatio:'9/16', minHeight:'100px', background:'rgba(12,15,20,0.8)', border:'1px solid rgba(226,199,168,0.2)'}}>
+                            {img && <img src={img} alt={`S${idx+1}`} className="w-full h-full object-cover" />}
+                            <div className="absolute inset-0 flex items-center justify-center"
+                              style={{background: img ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.6)'}}>
+                              {!hasError && <Loader2 className="h-4 w-4 animate-spin text-[#E2C7A8]/60" />}
                             </div>
-                            {/* Trim slider — only when clip ready */}
-                            {clip && (
-                              <div className="flex flex-col gap-0.5 px-0.5">
-                                <input
-                                  type="range"
-                                  min={3}
-                                  max={10}
-                                  step={1}
-                                  value={trimVal}
-                                  title={language === 'ar' ? `مدة المشهد ${idx+1}: ${trimVal} ثانية` : `Scene ${idx+1} duration: ${trimVal}s`}
-                                  aria-label={language === 'ar' ? `مدة المشهد ${idx+1}: ${trimVal} ثانية` : `Scene ${idx+1} duration: ${trimVal}s`}
-                                  onChange={e => setSceneClipTrim(prev => { const n = [...prev]; n[idx] = Number(e.target.value); return n; })}
-                                  className="w-full h-1 rounded-full appearance-none cursor-pointer"
-                                  style={{accentColor:'#E2C7A8'}}
-                                />
-                                <div className="flex justify-between text-[8px]" style={{color:'rgba(226,199,168,0.45)'}}>
-                                  <span>3s</span>
-                                  <span>10s</span>
-                                </div>
-                              </div>
-                            )}
+                            <span className="absolute top-1 left-1.5 text-[9px] font-bold" style={{color:'#E2C7A8'}}>
+                              {language === 'ar' ? `م${idx+1}` : `Ch.${idx+1}`}
+                            </span>
                           </div>
-                        );
-                      })}
-                    </div>
+                        ))}
+                      </div>
 
-                    {/* Sticky footer — PREMIERE */}
-                    {(() => {
-                      const doneCount = animProgress.slice(0, cinemaSceneCount).filter(p => p === 'done').length;
-                      const allDone = doneCount === cinemaSceneCount;
-                      const premiereDisabled = isStitching || !allDone;
-                      return (
-                        <div className="cinema-sticky-footer px-4 py-3 flex gap-3">
+                      {/* Footer */}
+                      <div className="cinema-sticky-footer px-4 py-3 flex gap-3">
+                        <button
+                          onClick={handleCinemaReset}
+                          disabled={isFilming}
+                          className="h-12 px-4 rounded-xl text-sm font-semibold text-white/60 flex-shrink-0 transition-all active:scale-[0.97] disabled:opacity-40"
+                          style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)'}}
+                        >
+                          {language === 'ar' ? 'إعادة' : 'Reset'}
+                        </button>
+                        {hasError ? (
                           <button
-                            onClick={handleCinemaReset}
-                            className="h-12 px-4 rounded-xl text-sm font-semibold text-white/60 flex-shrink-0 transition-all active:scale-[0.97]"
-                            style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)'}}
-                          >
-                            {language === 'ar' ? 'إعادة' : 'Reset'}
-                          </button>
-                          <button
-                            onClick={handleStitch}
-                            disabled={premiereDisabled}
-                            className="flex-1 h-12 text-sm font-bold rounded-xl transition-all active:scale-[0.98] disabled:opacity-40 cinema-glow-pulse"
-                            style={{background:'linear-gradient(135deg,hsl(210,100%,60%),hsl(280,70%,65%))',color:'#fff',boxShadow:'0 6px 28px hsla(210,100%,65%,0.4)'}}
-                          >
-                            {isStitching ? (
-                              <div className="flex items-center justify-center gap-2">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                <span>{stitchStatus || (language === 'ar' ? 'جاري التجميع...' : 'Stitching...')}</span>
-                              </div>
-                            ) : !allDone ? (
-                              <div className="flex items-center justify-center gap-2">
-                                <Loader2 className="h-4 w-4 animate-spin opacity-60" />
-                                <span>{language === 'ar' ? `جاري المعالجة... (${doneCount}/${cinemaSceneCount})` : `Processing... (${doneCount}/${cinemaSceneCount})`}</span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-center gap-2">
-                                <Sparkles className="h-4 w-4" />
-                                <span>{language === 'ar' ? `العرض الأول (${doneCount}/${cinemaSceneCount})` : `PREMIERE (${doneCount}/${cinemaSceneCount} ready)`}</span>
-                              </div>
-                            )}
-                          </button>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                {cinemaStep === 'premiere' && (() => {
-                  const readyClips = videoClips.filter(Boolean) as string[];
-                  const currentClip = readyClips[premiereClipIndex] || readyClips[0];
-                  if (!currentClip) return null;
-                  return (
-                    <div className="cinema-player-overlay">
-                      <div className="relative w-full max-w-2xl mx-auto px-4 flex flex-col gap-4">
-                        <div className="text-center space-y-1">
-                          <p className="text-[#E2C7A8] text-xs font-semibold uppercase tracking-widest opacity-80">
-                            {language === 'ar' ? 'وكتي سينما' : 'Wakti Cinema'}
-                          </p>
-                          <h2 className="text-2xl font-bold text-white">{language === 'ar' ? '🎬 العرض الأول' : '🎬 The Premiere'}</h2>
-                          <p className="text-xs text-white/40">
-                            {language === 'ar'
-                              ? `المشهد ${premiereClipIndex + 1} من ${readyClips.length}`
-                              : `Scene ${premiereClipIndex + 1} of ${readyClips.length}`}
-                          </p>
-                        </div>
-                        {/* Sequential video player */}
-                        <div className="cinema-diamond-border rounded-2xl overflow-hidden w-full"
-                          style={{aspectRatio: cinemaFormat === '16:9' ? '16/9' : '9/16', maxHeight:'70vh'}}>
-                          <video
-                            key={currentClip}
-                            src={currentClip}
-                            controls
-                            autoPlay
-                            playsInline
-                            className="w-full h-full object-cover"
-                            onEnded={() => {
-                              if (premiereClipIndex < readyClips.length - 1) {
-                                setPremiereClipIndex(i => i + 1);
-                              }
-                            }}
-                          />
-                        </div>
-                        {/* Scene dot nav */}
-                        <div className="flex justify-center gap-2">
-                          {readyClips.map((_, i) => (
-                            <button
-                              key={i}
-                              onClick={() => setPremiereClipIndex(i)}
-                              aria-label={language === 'ar' ? `المشهد ${i + 1}` : `Scene ${i + 1}`}
-                              className="rounded-full transition-all"
-                              style={{
-                                width: i === premiereClipIndex ? '20px' : '8px',
-                                height: '8px',
-                                background: i === premiereClipIndex ? '#E2C7A8' : 'rgba(255,255,255,0.2)',
-                              }}
-                            />
-                          ))}
-                        </div>
-                        {/* Actions */}
-                        <div className="flex gap-2">
-                          {/* Download current clip */}
-                          <a
-                            href={currentClip}
-                            download={`Wakti-Cinema-Scene${premiereClipIndex + 1}.mp4`}
-                            className="flex-1 h-12 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-                            style={{background:'linear-gradient(135deg,#E2C7A8 0%,#C5A47E 100%)',color:'#0c0f14'}}
-                          >
-                            <Download className="h-4 w-4" />
-                            <span>{language === 'ar' ? `تنزيل المشهد ${premiereClipIndex + 1}` : `Download Scene ${premiereClipIndex + 1}`}</span>
-                          </a>
-                          {/* New film */}
-                          <button
-                            onClick={handleCinemaReset}
-                            className="h-12 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 flex-shrink-0"
-                            style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',color:'rgba(255,255,255,0.5)'}}
+                            onClick={() => handleRetryFilm(0)}
+                            disabled={isFilming}
+                            className="flex-1 h-12 text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-40"
+                            style={{background:'rgba(248,113,113,0.15)',border:'1px solid rgba(248,113,113,0.4)',color:'#f87171'}}
                           >
                             <RefreshCw className="h-4 w-4" />
-                            <span className="hidden sm:inline">{language === 'ar' ? 'جديد' : 'New'}</span>
+                            <span>{language === 'ar' ? 'إعادة المحاولة' : 'Retry Production'}</span>
                           </button>
-                        </div>
+                        ) : (
+                          <div
+                            className="flex-1 h-12 text-sm font-bold rounded-xl flex items-center justify-center gap-2 opacity-60"
+                            style={{background:'linear-gradient(135deg,hsl(210,100%,60%),hsl(280,70%,65%))',color:'#fff'}}
+                          >
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>{language === 'ar' ? 'جاري الإنتاج...' : 'Producing...'}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
                 })()}
+
+                {cinemaStep === 'premiere' && premiereVideoUrl && (
+                  <div className="cinema-player-overlay">
+                    <div className="relative w-full max-w-2xl mx-auto px-4 flex flex-col gap-4">
+                      <div className="text-center space-y-1">
+                        <p className="text-[#E2C7A8] text-xs font-semibold uppercase tracking-widest opacity-80">
+                          {language === 'ar' ? 'وكتي سينما' : 'Wakti Cinema'}
+                        </p>
+                        <h2 className="text-2xl font-bold text-white">{language === 'ar' ? '🎬 العرض الأول' : '🎬 The Premiere'}</h2>
+                        <p className="text-xs text-white/40">
+                          {language === 'ar'
+                            ? `${cinemaSceneCount} مشاهد • ${cinemaSceneCount * 10}s`
+                            : `${cinemaSceneCount} scenes • ${cinemaSceneCount * 10}s`}
+                        </p>
+                      </div>
+                      {/* Single stitched Shotstack video */}
+                      <div className="cinema-diamond-border rounded-2xl overflow-hidden w-full"
+                        style={{aspectRatio: cinemaFormat === '16:9' ? '16/9' : '9/16', maxHeight:'70vh'}}>
+                        <video
+                          src={premiereVideoUrl}
+                          controls
+                          autoPlay
+                          playsInline
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      {/* Actions */}
+                      <div className="flex gap-2">
+                        {/* Save to My Videos */}
+                        <button
+                          onClick={handleCinemaSave}
+                          disabled={isCinemaSaving || isCinemaSaved}
+                          className="flex-1 h-12 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+                          style={{
+                            background: isCinemaSaved ? 'rgba(34,197,94,0.15)' : 'linear-gradient(135deg,#E2C7A8 0%,#C5A47E 100%)',
+                            border: isCinemaSaved ? '1px solid rgba(34,197,94,0.4)' : 'none',
+                            color: isCinemaSaved ? '#4ade80' : '#0c0f14',
+                          }}
+                        >
+                          {isCinemaSaving ? (
+                            <><Loader2 className="h-4 w-4 animate-spin" /><span>{language === 'ar' ? 'جاري الحفظ...' : 'Saving...'}</span></>
+                          ) : isCinemaSaved ? (
+                            <><span>✓</span><span>{language === 'ar' ? 'تم الحفظ' : 'Saved!'}</span></>
+                          ) : (
+                            <><Download className="h-4 w-4" /><span>{language === 'ar' ? 'حفظ في فيديوهاتي' : 'Save to My Videos'}</span></>
+                          )}
+                        </button>
+                        {/* Download */}
+                        <a
+                          href={premiereVideoUrl}
+                          download="Wakti-Cinema.mp4"
+                          className="h-12 px-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2 flex-shrink-0 transition-all active:scale-95"
+                          style={{background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.85)'}}
+                        >
+                          <Download className="h-4 w-4" />
+                          <span>{language === 'ar' ? 'تنزيل' : 'DL'}</span>
+                        </a>
+                        {/* New film */}
+                        <button
+                          onClick={handleCinemaReset}
+                          className="h-12 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 flex-shrink-0"
+                          style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',color:'rgba(255,255,255,0.5)'}}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          <span className="hidden sm:inline">{language === 'ar' ? 'جديد' : 'New'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
