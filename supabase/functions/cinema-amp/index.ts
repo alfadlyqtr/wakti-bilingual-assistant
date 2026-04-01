@@ -35,22 +35,40 @@ serve(async (req) => {
       });
     }
 
-    const { text } = await req.json();
+    const { text, context } = await req.json();
     if (!text || !text.trim()) {
       return new Response(JSON.stringify({ ok: false, error: 'text is required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
+    // Build context block from all selected movie setup fields
+    const ctxParts: string[] = [];
+    if (context?.sceneCount) ctxParts.push(`Scenes: ${context.sceneCount} scenes × 10s each`);
+    if (context?.vibe) ctxParts.push(`Vibe/Mood: ${context.vibe}`);
+    if (context?.characters) ctxParts.push(`Cast: ${context.characters}`);
+    if (context?.platform) ctxParts.push(`Platform: ${context.platform}`);
+    if (context?.cta) ctxParts.push(`Goal: ${context.cta}`);
+    if (context?.setting) ctxParts.push(`Setting: ${context.setting}`);
+    if (context?.action) ctxParts.push(`Action: ${context.action}`);
+    const contextBlock = ctxParts.length > 0
+      ? `\n\nMOVIE SETUP CONTEXT (use this to tailor your enhancement):\n${ctxParts.join('\n')}`
+      : '';
+
     const systemPrompt = `You are a Cinematic Prompt Engineer for a high-end AI Video Studio. Enhance the user's idea into a visually rich, cinematic description.
+
+You will receive the user's raw idea AND their movie setup selections (scene count, vibe, cast, platform, goals, etc.). Your job is to WEAVE all of that context naturally into one cohesive cinematic description. Do NOT list the selections — absorb them into the visual storytelling.
 
 STRICT RULES:
 1. Language Lock: Match the user's language EXACTLY. English in = English out. Arabic in = Arabic out. ZERO tolerance for any other language — Spanish, French, or any other language is a critical failure.
 2. Visuals Only: Add cinematic language — lighting, camera angles, mood, lens types, time of day. Make it visual poetry.
 3. POSITIVE DESCRIPTIONS ONLY: Describe what IS in the frame. NEVER write "without", "no", "avoid", "not", or any negative phrase. Only affirmative visual descriptions.
 4. Keep the core subjects. Do not add new characters, dialogue, or plot twists.
-5. LENGTH — CRITICAL: Your output MUST be between 500 and 650 characters. This is the sweet spot — rich enough to be cinematic, short enough to fit the UI. Stop at 650. Do not pad or repeat to reach 500; quality over quantity.
-6. Output Format: Return ONLY the enhanced text. No intro, no explanation, no quotes.`;
+5. INTEGRATE THE CONTEXT: If the user selected "Epic & Grand" vibe, the description should FEEL epic. If they chose "Solo Hero" cast, feature one protagonist. If the platform is TikTok vertical, think fast-paced vertical framing. Absorb every piece of context into the visual language.
+6. LENGTH — CRITICAL: Your output MUST be between 500 and 650 characters. This is the sweet spot — rich enough to be cinematic, short enough to fit the UI. Stop at 650. Do not pad or repeat to reach 500; quality over quantity.
+7. Output Format: Return ONLY the enhanced text. No intro, no explanation, no quotes.`;
+
+    const userMessage = text.trim() + contextBlock;
 
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -59,7 +77,7 @@ STRICT RULES:
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: text.trim() },
+          { role: 'user', content: userMessage },
         ],
         temperature: 0.72,
         max_tokens: 380,

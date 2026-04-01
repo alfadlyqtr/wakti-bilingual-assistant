@@ -747,7 +747,7 @@ export default function MusicStudio() {
   const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor'>('compose');
   const [videoMode, setVideoMode] = useState<'ai' | 'saved'>('ai');
   const [imageMode, setImageMode] = useState<'create' | 'saved'>('create');
-  const [musicQuotaHeader, setMusicQuotaHeader] = useState({ remaining: 5, limit: 5, used: 0 });
+  const [musicQuotaHeader, setMusicQuotaHeader] = useState({ remaining: 30, limit: 30, used: 0 });
   const location = useLocation();
 
   useEffect(() => {
@@ -1033,10 +1033,10 @@ export default function MusicStudio() {
             <h1 className="text-xl md:text-2xl font-bold">{language === 'ar' ? 'استوديو الموسيقى' : 'Music Studio'}</h1>
             <div className="text-right space-y-0.5 pt-0.5">
               <div className="text-[11px] font-semibold text-emerald-500 dark:text-emerald-400">
-                {language === 'ar' ? `المتبقي: ${musicQuotaHeader.remaining} / ${musicQuotaHeader.limit}` : `Remaining: ${musicQuotaHeader.remaining} / ${musicQuotaHeader.limit}`}
+                {language === 'ar' ? `المستخدم: ${musicQuotaHeader.used} / ${musicQuotaHeader.limit}` : `Used: ${musicQuotaHeader.used} / ${musicQuotaHeader.limit}`}
               </div>
               <div className="text-[11px] text-muted-foreground/80 dark:text-muted-foreground/60">
-                {language === 'ar' ? `تم الاستخدام: ${musicQuotaHeader.used} هذا الشهر` : `Used ${musicQuotaHeader.used} this month`}
+                {language === 'ar' ? `المتبقي: ${musicQuotaHeader.remaining} هذا الشهر` : `Remaining ${musicQuotaHeader.remaining} this month`}
               </div>
             </div>
           </div>
@@ -1268,7 +1268,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const { data, error } = await (supabase as any).rpc('can_generate_music');
       if (!error && data) {
         const used = data.generated ?? 0;
-        const limit = data.limit ?? 5;
+        const limit = data.limit ?? 30;
         setSongsUsed(used);
         setSongsLimit(limit);
         setSongsRemaining(Math.max(0, limit - used));
@@ -1276,7 +1276,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     } catch {}
   };
 
-  // Load current month's music usage and dynamic limit (base 5 + gifted extras)
+  // Load current month's music usage and dynamic limit (base 30 + gifted extras)
   useEffect(() => {
     if (usageLoadedRef.current) return;
     usageLoadedRef.current = true;

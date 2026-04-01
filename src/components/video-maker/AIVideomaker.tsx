@@ -265,7 +265,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [regenSceneNum, setRegenSceneNum] = useState<number | null>(null); // which scene is regenerating
 
   // Cinema Visionnaire form state
+  const [cinemaSetupOpen, setCinemaSetupOpen] = useState(true);
   const [cinemaOpenSection, setCinemaOpenSection] = useState(0); // accordion open section index
+  const [prevF4, setPrevF4] = useState(false);
+  const [prevF2, setPrevF2] = useState(false);
+  const [prevF3, setPrevF3] = useState(false);
+  const [prevPlatformDone, setPrevPlatformDone] = useState(false);
   const [cinemaSubject, setCinemaSubject] = useState('');
   const [cinemaSetting, setCinemaSetting] = useState<string[]>([]);
   const [cinemaSettingCustom, setCinemaSettingCustom] = useState('');
@@ -1540,6 +1545,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setRegenSceneNum(null);
     setSceneOverlayText(['', '', '', '', '', '']);
     setSceneClipTrim([10, 10, 10, 10, 10, 10]);
+    setCinemaSetupOpen(true);
     setCinemaOpenSection(0);
     setCinematicSaveFallbackUrl(null);
     setCastingRegenModal(null);
@@ -1606,10 +1612,27 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) throw new Error('Not authenticated');
+
+      // Build context from all selected movie setup fields
+      const effectVibeAmp = cinemaVibe.includes('Custom') ? cinemaVibeCustom : cinemaVibe.filter(v => v !== 'Custom').join(', ');
+      const effectCharsAmp = cinemaCharacters.includes('Custom') ? (cinemaRelationship || 'custom characters') : cinemaCharacters.filter(v => v !== 'Custom').join(', ');
+      const effectSettingAmp = cinemaSetting.includes('Custom') ? cinemaSettingCustom : cinemaSetting.filter(v => v !== 'Custom').join(', ');
+      const effectActionAmp = cinemaAction.includes('Custom') ? cinemaActionCustom : cinemaAction.filter(v => v !== 'Custom').join(', ');
+      const effectCTAAmp = cinemaCTA.filter(v => v !== 'Custom').join(', ');
+
+      const context: Record<string, string | number> = {};
+      if (cinemaSceneCountTouched) context.sceneCount = cinemaSceneCount;
+      if (effectVibeAmp) context.vibe = effectVibeAmp;
+      if (effectCharsAmp) context.characters = effectCharsAmp;
+      if (selectedSubFormat) context.platform = selectedSubFormat;
+      if (effectCTAAmp) context.cta = effectCTAAmp;
+      if (effectSettingAmp) context.setting = effectSettingAmp;
+      if (effectActionAmp) context.action = effectActionAmp;
+
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/cinema-amp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}`, apikey: SUPABASE_ANON_KEY },
-        body: JSON.stringify({ text: raw }),
+        body: JSON.stringify({ text: raw, context }),
       });
       const result = await resp.json().catch(() => ({}));
       if (result?.ok && result.enhanced) {
@@ -1623,7 +1646,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       setIsCinemaAmping(false);
     }
-  }, [cinemaSubject, isCinemaAmping, user, language]);
+  }, [cinemaSubject, isCinemaAmping, user, language, cinemaVibe, cinemaVibeCustom, cinemaCharacters, cinemaRelationship, cinemaSetting, cinemaSettingCustom, cinemaAction, cinemaActionCustom, cinemaCTA, cinemaSceneCount, cinemaSceneCountTouched, selectedSubFormat]);
 
   // ── Storyboard: save inline scene text edit ──
   const handleSaveSceneEdit = useCallback((sceneNum: number, newText: string) => {
@@ -2398,7 +2421,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             {/* Cinema mode - Director's Desk */}
             {generationMode === 'cinema' && (
               <div className="relative col-span-full flex flex-col">
-                {cinemaStep === 'desk' && (() => {
+                {cinemaStep === 'desk' ? (() => {
                   // Multi-select → comma-separated string helpers
                   const effectiveVibe = cinemaVibe.includes('Custom') ? cinemaVibeCustom : cinemaVibe.filter(v => v !== 'Custom').join(', ');
                   const effectiveSetting = cinemaSetting.includes('Custom') ? cinemaSettingCustom : cinemaSetting.filter(v => v !== 'Custom').join(', ');
@@ -2420,6 +2443,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   const sec1Done = f1;
                   const sec2Done = f2 && f3 && f4;
                   const sec3Done = false; // section 3 is optional — never blocks
+                  const platformDone = !!selectedSubFormat;
 
                   const openSection = cinemaOpenSection;
 
@@ -2482,6 +2506,36 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             {language==='ar'?'اختياري':'optional'}
                           </span>
                         )}
+                      </div>
+                      <span className="flex-shrink-0 text-xs" style={{color: clr.textMuted, transform: openSection === idx ? 'rotate(180deg)' : 'rotate(0deg)', transition:'transform 0.2s'}}>▼</span>
+                    </button>
+                  );
+
+                  const SetupHeader = ({ idx, label, done, summary, optional }: { idx: number; label: string; done: boolean; summary?: string; optional?: boolean }) => (
+                    <button
+                      type="button"
+                      onClick={() => setCinemaOpenSection(openSection === idx ? -1 : idx)}
+                      className="w-full flex items-center justify-between gap-3 text-left px-3 py-3 rounded-xl transition-all"
+                      style={{background: openSection === idx ? 'rgba(226,199,168,0.08)' : 'rgba(255,255,255,0.02)', border: `1px solid ${openSection === idx ? 'rgba(226,199,168,0.3)' : clr.cardBorder}`}}
+                    >
+                      <div className="min-w-0 flex items-center gap-2">
+                        <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
+                          style={{background: done ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : optional ? clr.optBadgeBg : clr.secNumBg, color: done ? '#0c0f14' : clr.textMuted}}>
+                          {done ? '✓' : (idx + 1)}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-[11px] font-bold uppercase tracking-wider truncate" style={{color: done ? '#C5A47E' : clr.text}}>{label}</span>
+                            {optional && !done && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold" style={{background: clr.optBadgeBg, color: clr.textMuted}}>
+                                {language==='ar'?'اختياري':'optional'}
+                              </span>
+                            )}
+                          </div>
+                          {summary && openSection !== idx && (
+                            <p className="text-[10px] truncate mt-0.5" style={{color: clr.textMuted}}>{summary}</p>
+                          )}
+                        </div>
                       </div>
                       <span className="flex-shrink-0 text-xs" style={{color: clr.textMuted, transform: openSection === idx ? 'rotate(180deg)' : 'rotate(0deg)', transition:'transform 0.2s'}}>▼</span>
                     </button>
@@ -2556,287 +2610,173 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     </div>
 
                     <div className="flex flex-col gap-2 max-w-lg mx-auto w-full">
-
-                      {/* ── SECTION 1: What is your movie about? ── */}
                       <div className="rounded-2xl px-4 py-3 transition-all"
-                        style={{background: openSection===0 ? clr.cardBgOpen : clr.cardBg, border: `1px solid ${openSection===0 ? clr.cardBorderOpen : clr.cardBorder}`}}>
-                        <SecHeader idx={0} label={language==='ar'?'عم يدور فيلمك؟':'What is your movie about?'} done={sec1Done} summary={cinemaSubject} />
-                        {openSection === 0 && (
-                          <div className="mt-3 flex flex-col gap-2">
-                            <div className="rounded-xl overflow-hidden" style={{background: clr.inputBg, border:`1px solid ${clr.inputBorder(f1)}`}}>
-                              <textarea
-                                value={cinemaSubject}
-                                onChange={(e) => setCinemaSubject(e.target.value.slice(0,800))}
-                                onInput={(e) => { const t=e.currentTarget; t.style.height='auto'; t.style.height=`${Math.min(t.scrollHeight,220)}px`; t.style.overflowY=t.scrollHeight>220?'auto':'hidden'; }}
-                                disabled={isDirecting} autoFocus rows={5} maxLength={800}
-                                placeholder={language==='ar'?'مثال: رجل أعمال يطلق منتجه الجديد في مؤتمر كبير...':'e.g., An entrepreneur launching a new product at a major conference...'}
-                                className="w-full resize-none bg-transparent px-4 py-3 text-base placeholder:text-black/25 outline-none min-h-[120px] max-h-[220px] leading-7" style={{color: clr.text}}
-                              />
-                            </div>
-                            <div className="flex items-center justify-between px-1">
-                              <span className="text-[10px]" style={{color: cinemaSubject.length > 720 ? '#f97316' : clr.textSubtle}}>{cinemaSubject.length}/800</span>
-                              <div className="flex items-center gap-2">
-                                {/* AMP ⚡️ — cinematic prompt enhancer */}
-                                {cinemaSubject.trim().length > 3 && (
-                                  <button
-                                    type="button"
-                                    onClick={handleCinemaAmp}
-                                    disabled={isCinemaAmping}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 disabled:opacity-50"
-                                    style={{background:'rgba(99,102,241,0.15)',border:'1px solid rgba(99,102,241,0.35)',color:'rgba(165,167,255,0.95)'}}
-                                  >
-                                    {isCinemaAmping
-                                      ? <><Loader2 className="h-3 w-3 animate-spin" /><span>{language==='ar'?'جاري التحسين...':'Enhancing...'}</span></>
-                                      : <><span>⚡️</span><span>{language==='ar'?'تحسين':'AMP'}</span></>
-                                    }
-                                  </button>
-                                )}
-                                {f1 && (
-                                  <button type="button" onClick={()=>setCinemaOpenSection(1)}
-                                    className="px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
-                                    style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
-                                    {language==='ar'?'التالي ›':'Next ›'}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Brand / Anchor Image Upload — hidden in Custom mode */}
-                            {cinemaMode === 'auto' && <div className="mt-1 rounded-xl p-3 flex flex-col gap-2" style={{background: brandAnchor ? 'rgba(226,199,168,0.08)' : clr.cardBg, border: `1px solid ${brandAnchor ? 'rgba(226,199,168,0.35)' : clr.cardBorder}`}}>
-                              <p className="text-[10px] font-bold uppercase tracking-wider" style={{color: brandAnchor ? '#C5A47E' : clr.textMuted}}>
-                                {language==='ar' ? '🎨 أساس النمط والعلامة التجارية (اختياري)' : '🎨 Style & Brand Foundation (Optional)'}
-                                {brandAnchor && <span className="ml-1 text-[#E2C7A8]">✓</span>}
+                        style={{background: cinemaSetupOpen ? clr.cardBgOpen : clr.cardBg, border: `1px solid ${cinemaSetupOpen ? 'rgba(226,199,168,0.45)' : clr.cardBorder}`}}>
+                        <button
+                          type="button"
+                          onClick={() => setCinemaSetupOpen(prev => !prev)}
+                          className="w-full flex items-center justify-between gap-3 text-left"
+                        >
+                          <div className="min-w-0 flex items-center gap-2">
+                            <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
+                              style={{background: isFormReady ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : clr.secNumBg, color: isFormReady ? '#0c0f14' : clr.textMuted}}>
+                              {isFormReady ? '✓' : '1'}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold uppercase tracking-wider" style={{color: isFormReady ? '#C5A47E' : clr.text}}>{language==='ar'?'إعداد الفيلم':'Movie Setup'}</p>
+                              <p className="text-[10px] truncate mt-0.5" style={{color: clr.textMuted}}>
+                                {language==='ar' ? 'المشاهد، المزاج، الشخصيات، المنصة، الوصف، والتحسين' : 'Scenes, mood, cast, platform, prompt, and AMP'}
                               </p>
-                              <p className="text-[9px]" style={{color: clr.textSubtle}}>
-                                {language==='ar' ? 'شعار، صورة منتج، أو مرجع بصري — يُثبِّت الهوية البصرية في جميع المشاهد' : 'Logo, product shot, or visual reference — locks brand identity across all scenes'}
-                              </p>
-                              <div className="flex items-center gap-3">
-                                {brandAnchor ? (
-                                  <div className="relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0" style={{border:'1px solid rgba(226,199,168,0.5)'}}>
-                                    <img src={brandAnchor} alt="brand anchor" className="w-full h-full object-cover" />
-                                    <button
-                                      onClick={() => setBrandAnchor(null)}
-                                      className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/80 text-white text-[9px] flex items-center justify-center hover:bg-red-500/80 transition-colors"
-                                    >✕</button>
-                                  </div>
-                                ) : (
-                                  <div className="flex flex-col gap-2">
-                                    <label className="w-16 h-16 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0 transition-all hover:opacity-80"
-                                      style={{background: clr.numBg, border:`2px dashed rgba(226,199,168,0.3)`}}>
-                                      <input type="file" accept="image/*" className="hidden"
-                                        onChange={async (e) => {
-                                          const file = e.target.files?.[0];
-                                          if (!file || !user) return;
-                                          setIsUploadingBrand(true);
-                                          try {
-                                            const ext = file.name.split('.').pop() || 'jpg';
-                                            const path = `${user.id}/cinema-refs/brand-${Date.now()}.${ext}`;
-                                            await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
-                                            const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-                                            if (urlData?.publicUrl) setBrandAnchor(urlData.publicUrl);
-                                          } catch { toast.error(language==='ar'?'فشل رفع الصورة':'Upload failed'); }
-                                          finally { setIsUploadingBrand(false); }
-                                        }}
-                                      />
-                                      {isUploadingBrand ? <Loader2 className="h-4 w-4 animate-spin" style={{color:clr.textMuted}} /> : <span className="text-xl leading-none" style={{color:clr.textSubtle}}>+</span>}
-                                    </label>
-                                    <button
-                                      type="button"
-                                      onClick={() => setShowBrandSavedPicker(true)}
-                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-all active:scale-95"
-                                      style={{background:'rgba(226,199,168,0.1)', border:'1px solid rgba(226,199,168,0.3)', color:'#E2C7A8', whiteSpace:'nowrap'}}
-                                    >
-                                      <Images className="h-3 w-3 flex-shrink-0" />
-                                      {language === 'ar' ? 'من المحفوظة' : 'From Saved'}
-                                    </button>
-                                  </div>
-                                )}
-                                <p className="text-[9px] leading-relaxed" style={{color: clr.textMuted}}>
-                                  {brandAnchor
-                                    ? (language==='ar' ? 'المخرج والمصور سيحافظان على هذا النمط في كل مشهد' : 'The Director & Artist will maintain this style across all scenes')
-                                    : (language==='ar' ? 'إذا لم ترفع صورة، سيبتكر الذكاء الاصطناعي نمطه الخاص' : 'Without one, the AI will invent its own visual style')}
-                                </p>
-                              </div>
+                            </div>
+                          </div>
+                          <span className="flex-shrink-0 text-xs" style={{color: clr.textMuted, transform: cinemaSetupOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition:'transform 0.2s'}}>▼</span>
+                        </button>
 
-                              {/* Saved Images Picker modal */}
-              {showBrandSavedPicker && (
-                <SavedImagesPicker
-                  onSelect={(url) => { setBrandAnchor(url); setShowBrandSavedPicker(false); }}
-                  onClose={() => setShowBrandSavedPicker(false)}
-                />
-              )}
-
-              {/* ── Smart-Tag Selector — shown after upload ── */}
-                              {brandAnchor && (
-                                <div className="mt-2 flex flex-col gap-1.5">
-                                  <p className="text-[9px] font-bold uppercase tracking-wider" style={{color: clr.textMuted}}>
-                                    {language==='ar' ? '🏷 ما هذه الصورة؟' : '🏷 What is this?'}
-                                  </p>
-                                  <div className="flex gap-1.5 flex-wrap">
-                                    {([
-                                      { value: 'logo',      labelEn: 'Logo / Text',       labelAr: 'شعار / نص',         descEn: 'AI Background Integration', descAr: 'تكامل الخلفية بالذكاء' },
-                                      { value: 'style',     labelEn: 'Style / Colors',    labelAr: 'نمط / ألوان',       descEn: 'Mood & palette guide',     descAr: 'مرشد المزاج واللون' },
-                                      { value: 'character', labelEn: 'Character / Person', labelAr: 'شخصية / وجه',       descEn: 'Identity consistency',     descAr: 'تناسق الهوية البصرية' },
-                                    ] as const).map(opt => {
-                                      const isActive = anchorTag === opt.value;
+                        {cinemaSetupOpen && (
+                          <div className="mt-4 flex flex-col gap-3">
+                            <div>
+                              <SetupHeader idx={0} label={language==='ar'?'عدد المشاهد':'How many scenes?'} done={f4} summary={f4 ? `${cinemaSceneCount} × 10s` : undefined} />
+                              {openSection === 0 && (
+                                <div className="mt-3 px-1">
+                                  <div className="flex gap-2">
+                                    {[1,2,3,4,5,6].map(n=>{
+                                      const exceedsQuota = !loadingQuota && n > maxAffordableCinemaScenes;
                                       return (
-                                        <button
-                                          key={opt.value}
-                                          type="button"
-                                          onClick={() => setAnchorTag(opt.value)}
-                                          className="flex flex-col items-start px-2.5 py-2 rounded-xl text-left transition-all active:scale-95 flex-1 min-w-[80px] relative"
-                                          style={{
-                                            background: isActive ? 'linear-gradient(135deg,rgba(226,199,168,0.22),rgba(197,164,126,0.14))' : clr.numBg,
-                                            border: `2px solid ${isActive ? '#C5A47E' : clr.cardBorder}`,
-                                            boxShadow: isActive ? '0 0 0 3px rgba(226,199,168,0.15), 0 4px 16px rgba(226,199,168,0.2)' : 'none',
-                                          }}
-                                        >
-                                          {isActive && (
-                                            <span className="absolute top-1 right-1.5 text-[8px] font-black" style={{color:'#C5A47E'}}>✓</span>
-                                          )}
-                                          <span className="text-[10px] font-bold leading-tight" style={{color: isActive ? '#E2C7A8' : clr.textMuted}}>
-                                            {language==='ar' ? opt.labelAr : opt.labelEn}
-                                          </span>
-                                          <span className="text-[8px] leading-tight mt-0.5" style={{color: isActive ? 'rgba(226,199,168,0.7)' : clr.textSubtle}}>
-                                            {language==='ar' ? opt.descAr : opt.descEn}
-                                          </span>
-                                        </button>
-                                      );
-                                    })}
+                                      <button key={n}
+                                        onClick={()=>{if (exceedsQuota) return; setCinemaSceneCount(n);setCinemaSceneCountTouched(true); setTimeout(() => setCinemaOpenSection(1), 300);}}
+                                        disabled={isDirecting || exceedsQuota}
+                                        className="flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-40"
+                                        style={{
+                                          background: f4 && cinemaSceneCount===n ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : n===3 && !f4 ? 'rgba(226,199,168,0.1)' : clr.numBg,
+                                          border: f4 && cinemaSceneCount===n ? '1px solid rgba(226,199,168,0.8)' : n===3 && !f4 ? '1px solid rgba(226,199,168,0.25)' : `1px solid ${clr.numBorder}`,
+                                          color: f4 && cinemaSceneCount===n ? '#0c0f14' : clr.numText,
+                                        }}>
+                                        <span className="text-sm font-bold">{n}</span>
+                                        <span className="text-[9px] opacity-80">{n*10}s</span>
+                                      </button>
+                                    )})}
                                   </div>
+                                  {!f4 && <p className="text-[10px] mt-1.5 px-1" style={{color: clr.textSubtle}}>{language==='ar'?'اختر عدداً للمتابعة':'Tap a number to confirm'}</p>}
+                                  {!loadingQuota && generationMode === 'cinema' && maxAffordableCinemaScenes < 6 && (
+                                    <p className="text-[10px] mt-1.5 px-1" style={{color: 'rgba(226,199,168,0.78)'}}>
+                                      {maxAffordableCinemaScenes > 0
+                                        ? (language === 'ar'
+                                          ? `يمكنك اختيار حتى ${maxAffordableCinemaScenes} ${maxAffordableCinemaScenes === 1 ? 'مشهد' : 'مشاهد'} حسب رصيد الفيديو المتبقي`
+                                          : `You can choose up to ${maxAffordableCinemaScenes} scene${maxAffordableCinemaScenes === 1 ? '' : 's'} based on your remaining video credits`)
+                                        : (language === 'ar'
+                                          ? 'لا توجد أرصدة فيديو متبقية لهذا الشهر'
+                                          : 'No video credits remaining this month')}
+                                    </p>
+                                  )}
                                 </div>
                               )}
-                            </div>}
+                            </div>
 
-                          </div>
-                        )}
-                      </div>
-
-                      {/* ── SECTION 2: Style & Cast (all required) ── */}
-                      <div className="rounded-2xl px-4 py-3 transition-all"
-                        style={{background: openSection===1 ? clr.cardBgOpen : clr.cardBg, border: `1px solid ${openSection===1 ? clr.cardBorderOpen : clr.cardBorder}`}}>
-                        <SecHeader idx={1} label={language==='ar'?'الأسلوب والممثلون':'Style & Cast'} done={sec2Done}
-                          summary={effectiveVibe ? effectiveVibe.split('—')[0].trim() : undefined} />
-                        {openSection === 1 && (
-                          <div className="mt-3 flex flex-col gap-5">
-
-                            {/* Vibe & Mood — required, multi-select */}
                             <div>
-                              <p className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{color: f2 ? '#C5A47E' : clr.text}}>
-                                {language==='ar'?'المزاج والأجواء':'Vibe & Mood'}
-                                <span className="ml-1" style={{color:'#E2C7A8'}}>{f2 ? '✓' : '✱'}</span>
-                              </p>
-                              <p className="text-[9px] mb-2" style={{color: clr.textMuted}}>{language==='ar'?'اختر واحداً أو أكثر':'Select one or more'}</p>
-                              <div className="flex flex-wrap gap-2">
-                                {([
-                                  {e:'🔥',en:'Epic & Grand',ar:'ملحمي وعظيم',v:'Epic and grand — cinematic score, wide establishing shots, larger than life'},
-                                  {e:'✨',en:'Luxurious',ar:'فاخر وراقي',v:'Luxurious and prestigious — slow motion, rich textures, gold tones'},
-                                  {e:'⚡',en:'Dramatic',ar:'درامي مكثف',v:'Dramatic and intense — high contrast, deep shadows, powerful tension'},
-                                  {e:'💛',en:'Emotional',ar:'عاطفي مؤثر',v:'Emotional and heartfelt — soft light, intimate close-ups, stirring music'},
-                                  {e:'🌅',en:'Inspiring',ar:'ملهم',v:'Inspiring and uplifting — bright light, rising motion, hopeful tone'},
-                                  {e:'💥',en:'High Energy',ar:'طاقة عالية',v:'Exciting and high energy — fast cuts, dynamic movement, adrenaline'},
-                                  {e:'🌿',en:'Peaceful',ar:'هادئ',v:'Peaceful and serene — slow camera, nature, stillness, gentle pace'},
-                                  {e:'📺',en:'Nostalgic / Retro',ar:'نوستالژيا / ريترو',v:'Nostalgic and retro — warm film grain, faded colors, childhood memory aesthetic'},
-                                  {e:'🎞️',en:'Vintage Film',ar:'فيلم كلاسيكي',v:'Vintage film look — heavy grain, muted tones, old-money cinematic quality'},
-                                  {e:'🛸',en:'Futuristic',ar:'مستقبلي',v:'Futuristic and hi-tech — neon accents, sleek surfaces, modern urban atmosphere'},
-                                  {e:'⬛',en:'Minimalist',ar:'بسيط هادئ',v:'Minimalist and clean — negative space, simple geometry, silent elegance'},
-
-                                ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
-                                  <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaVibe.includes(v)}
-                                    onSelect={()=>{
-                                      setCinemaVibe(prev => { if (prev.includes(v)) return prev.filter(x=>x!==v); const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; });
-                                    }} disabled={isDirecting} />
-                                ))}
-                                <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                                  selected={cinemaVibe.includes('Custom')}
-                                  onSelect={()=>setCinemaVibe(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])}
-                                  disabled={isDirecting} />
-                              </div>
-                              {cinemaVibe.includes('Custom') && (
-                                <input type="text" value={cinemaVibeCustom} onChange={(e)=>setCinemaVibeCustom(e.target.value)}
-                                  disabled={isDirecting} placeholder={language==='ar'?'صف المزاج...':'Describe the mood...'}
-                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
-                                  style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
+                              <SetupHeader idx={1} label={language==='ar'?'المزاج والأجواء':'Vibe & Mood'} done={f2} summary={effectiveVibe ? effectiveVibe.split('—')[0].trim() : undefined} />
+                              {openSection === 1 && (
+                                <div className="mt-3 px-1">
+                                  <p className="text-[9px] mb-2" style={{color: clr.textMuted}}>{language==='ar'?'اختر واحداً أو أكثر':'Select one or more'}</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {([
+                                      {e:'🔥',en:'Epic & Grand',ar:'ملحمي وعظيم',v:'Epic and grand — cinematic score, wide establishing shots, larger than life'},
+                                      {e:'✨',en:'Luxurious',ar:'فاخر وراقي',v:'Luxurious and prestigious — slow motion, rich textures, gold tones'},
+                                      {e:'⚡',en:'Dramatic',ar:'درامي مكثف',v:'Dramatic and intense — high contrast, deep shadows, powerful tension'},
+                                      {e:'💛',en:'Emotional',ar:'عاطفي مؤثر',v:'Emotional and heartfelt — soft light, intimate close-ups, stirring music'},
+                                      {e:'🌅',en:'Inspiring',ar:'ملهم',v:'Inspiring and uplifting — bright light, rising motion, hopeful tone'},
+                                      {e:'💥',en:'High Energy',ar:'طاقة عالية',v:'Exciting and high energy — fast cuts, dynamic movement, adrenaline'},
+                                      {e:'🌿',en:'Peaceful',ar:'هادئ',v:'Peaceful and serene — slow camera, nature, stillness, gentle pace'},
+                                      {e:'📺',en:'Nostalgic / Retro',ar:'نوستالژيا / ريترو',v:'Nostalgic and retro — warm film grain, faded colors, childhood memory aesthetic'},
+                                      {e:'🎞️',en:'Vintage Film',ar:'فيلم كلاسيكي',v:'Vintage film look — heavy grain, muted tones, old-money cinematic quality'},
+                                      {e:'🛸',en:'Futuristic',ar:'مستقبلي',v:'Futuristic and hi-tech — neon accents, sleek surfaces, modern urban atmosphere'},
+                                      {e:'⬛',en:'Minimalist',ar:'بسيط هادئ',v:'Minimalist and clean — negative space, simple geometry, silent elegance'},
+                                    ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
+                                      <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaVibe.includes(v)}
+                                        onSelect={()=>{
+                                          setCinemaVibe(prev => { 
+                                            const newVal = prev.includes(v) ? prev.filter(x=>x!==v) : (() => { const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })();
+                                            const nonCustomCount = newVal.filter(x=>x!=='Custom').length;
+                                            if (nonCustomCount === 3) setTimeout(() => setCinemaOpenSection(2), 300);
+                                            return newVal;
+                                          });
+                                        }} disabled={isDirecting} />
+                                    ))}
+                                    <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
+                                      selected={cinemaVibe.includes('Custom')}
+                                      onSelect={()=>setCinemaVibe(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])}
+                                      disabled={isDirecting} />
+                                  </div>
+                                  {cinemaVibe.includes('Custom') && (
+                                    <input type="text" value={cinemaVibeCustom} onChange={(e)=>setCinemaVibeCustom(e.target.value)}
+                                      disabled={isDirecting} placeholder={language==='ar'?'صف المزاج...':'Describe the mood...'}
+                                      className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
+                                      style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
+                                  )}
+                                  {f2 && (
+                                    <div className="flex justify-end mt-3">
+                                      <button type="button" onClick={()=>setCinemaOpenSection(2)}
+                                        className="px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
+                                        style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
+                                        {language==='ar'?'التالي ›':'Next ›'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               )}
                             </div>
 
-                            {/* Characters — required */}
                             <div>
-                              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{color: f3 ? '#C5A47E' : clr.text}}>
-                                {language==='ar'?'من يظهر في الفيلم؟':'Who is in the movie?'}
-                                <span className="ml-1" style={{color:'#E2C7A8'}}>{f3 ? '✓' : '✱'}</span>
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {([
-                                  {e:'📦',en:'No People',ar:'بدون أشخاص',v:'no people — product, object, or creature only'},
-                                  {e:'👤',en:'Solo Hero',ar:'بطل واحد',v:'one solo person — the hero, the protagonist'},
-                                  {e:'👥',en:'Two People',ar:'شخصان',v:'two people'},
-                                  {e:'👨‍👩‍👧‍👦',en:'Family',ar:'العائلة',v:'a family — warm, authentic moments between family members'},
-                                  {e:'💼',en:'Professionals',ar:'محترفون',v:'a group of professionals — confident, competent, business-ready'},
-                                  {e:'🦅',en:'Animals',ar:'حيوانات',v:'animals or wildlife — majestic creatures as the visual subject'},
-                                  {e:'📦',en:'Objects',ar:'منتجات / مجسمات',v:'objects or products — hero product shots, no people'},
-                                  {e:'🏟️',en:'Crowd',ar:'حشد',v:'a crowd or community — many people united'},
-                                ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
-                                  <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaCharacters.includes(v)}
-                                    onSelect={()=>setCinemaCharacters(prev => { if (prev.includes(v)) return prev.filter(x=>x!==v); const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })} disabled={isDirecting} />
-                                ))}
-                                <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                                  selected={cinemaCharacters.includes('Custom')} onSelect={()=>setCinemaCharacters(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])} disabled={isDirecting} />
-                              </div>
-                              {(cinemaCharacters.includes('Custom') || cinemaCharacters.includes('\u0645\u062e\u0635\u0635')) && (
-                                <input type="text" value={cinemaRelationship} onChange={(e)=>setCinemaRelationship(e.target.value)}
-                                  disabled={isDirecting}
-                                  placeholder={cinemaCharacters.includes('Custom')?(language==='ar'?'صف الشخصيات...':'Describe characters...'):(language==='ar'?'العلاقة بينهم...':'Relationship between them...')}
-                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
-                                  style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
+                              <SetupHeader idx={2} label={language==='ar'?'من يظهر في الفيلم؟':'Who is in the movie?'} done={f3} summary={cinemaCharacters.length ? `${cinemaCharacters.length} selected` : undefined} />
+                              {openSection === 2 && (
+                                <div className="mt-3 px-1">
+                                  <div className="flex flex-wrap gap-2">
+                                    {([
+                                      {e:'📦',en:'No People',ar:'بدون أشخاص',v:'no people — product, object, or creature only'},
+                                      {e:'👤',en:'Solo Hero',ar:'بطل واحد',v:'one solo person — the hero, the protagonist'},
+                                      {e:'👥',en:'Two People',ar:'شخصان',v:'two people'},
+                                      {e:'👨‍👩‍👧‍👦',en:'Family',ar:'العائلة',v:'a family — warm, authentic moments between family members'},
+                                      {e:'💼',en:'Professionals',ar:'محترفون',v:'a group of professionals — confident, competent, business-ready'},
+                                      {e:'🦅',en:'Animals',ar:'حيوانات',v:'animals or wildlife — majestic creatures as the visual subject'},
+                                      {e:'📦',en:'Objects',ar:'منتجات / مجسمات',v:'objects or products — hero product shots, no people'},
+                                      {e:'🏟️',en:'Crowd',ar:'حشد',v:'a crowd or community — many people united'},
+                                    ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
+                                      <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaCharacters.includes(v)}
+                                        onSelect={()=>setCinemaCharacters(prev => { 
+                                          const newVal = prev.includes(v) ? prev.filter(x=>x!==v) : (() => { const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })();
+                                          const nonCustomCount = newVal.filter(x=>x!=='Custom').length;
+                                          if (nonCustomCount === 3) setTimeout(() => setCinemaOpenSection(3), 300);
+                                          return newVal;
+                                        })} disabled={isDirecting} />
+                                    ))}
+                                    <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
+                                      selected={cinemaCharacters.includes('Custom')} onSelect={()=>setCinemaCharacters(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])} disabled={isDirecting} />
+                                  </div>
+                                  {(cinemaCharacters.includes('Custom') || cinemaCharacters.includes('\u0645\u062e\u0635\u0635')) && (
+                                    <input type="text" value={cinemaRelationship} onChange={(e)=>setCinemaRelationship(e.target.value)}
+                                      disabled={isDirecting}
+                                      placeholder={cinemaCharacters.includes('Custom')?(language==='ar'?'صف الشخصيات...':'Describe characters...'):(language==='ar'?'العلاقة بينهم...':'Relationship between them...')}
+                                      className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
+                                      style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
+                                  )}
+                                  {f3 && (
+                                    <div className="flex justify-end mt-3">
+                                      <button type="button" onClick={()=>setCinemaOpenSection(3)}
+                                        className="px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
+                                        style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
+                                        {language==='ar'?'التالي ›':'Next ›'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               )}
                             </div>
 
-                            {/* Scene count — required, user must tap */}
                             <div>
-                              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{color: f4 ? '#C5A47E' : clr.text}}>
-                                {language==='ar'?'عدد المشاهد':'How many scenes?'}
-                                <span className="ml-1" style={{color:'#E2C7A8'}}>{f4 ? '✓' : '✱'}</span>
-                              </p>
-                              <div className="flex gap-2">
-                                {[1,2,3,4,5,6].map(n=>{
-                                  const exceedsQuota = !loadingQuota && n > maxAffordableCinemaScenes;
-                                  return (
-                                  <button key={n}
-                                    onClick={()=>{if (exceedsQuota) return; setCinemaSceneCount(n);setCinemaSceneCountTouched(true);}}
-                                    disabled={isDirecting || exceedsQuota}
-                                    className="flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-40"
-                                    style={{
-                                      background: f4 && cinemaSceneCount===n ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : n===3 && !f4 ? 'rgba(226,199,168,0.1)' : clr.numBg,
-                                      border: f4 && cinemaSceneCount===n ? '1px solid rgba(226,199,168,0.8)' : n===3 && !f4 ? '1px solid rgba(226,199,168,0.25)' : `1px solid ${clr.numBorder}`,
-                                      color: f4 && cinemaSceneCount===n ? '#0c0f14' : clr.numText,
-                                    }}>
-                                    <span className="text-sm font-bold">{n}</span>
-                                    <span className="text-[9px] opacity-80">{n*10}s</span>
-                                  </button>
-                                )})}
-                              </div>
-                              {!f4 && <p className="text-[10px] mt-1.5 px-1" style={{color: clr.textSubtle}}>{language==='ar'?'اختر عدداً للمتابعة':'Tap a number to confirm'}</p>}
-                              {!loadingQuota && generationMode === 'cinema' && maxAffordableCinemaScenes < 6 && (
-                                <p className="text-[10px] mt-1.5 px-1" style={{color: 'rgba(226,199,168,0.78)'}}>
-                                  {maxAffordableCinemaScenes > 0
-                                    ? (language === 'ar'
-                                      ? `يمكنك اختيار حتى ${maxAffordableCinemaScenes} ${maxAffordableCinemaScenes === 1 ? 'مشهد' : 'مشاهد'} حسب رصيد الفيديو المتبقي`
-                                      : `You can choose up to ${maxAffordableCinemaScenes} scene${maxAffordableCinemaScenes === 1 ? '' : 's'} based on your remaining video credits`)
-                                    : (language === 'ar'
-                                      ? 'لا توجد أرصدة فيديو متبقية لهذا الشهر'
-                                      : 'No video credits remaining this month')}
-                                </p>
-                              )}
-                            </div>
-
-                            {/* Platform & Format selector */}
-                            <div>
-                              <p className="text-[10px] mb-1 font-semibold uppercase tracking-wider" style={{color: clr.textMuted}}>
-                                {language==='ar'?'المنصة والتنسيق':'Platform & Format'}{selectedSubFormat && <span className="text-[#E2C7A8] ml-1">✓</span>}
-                              </p>
-                              <p className="text-[9px] mb-2" style={{color: clr.textSubtle}}>{language==='ar'?'اختر منصة النشر':'Choose your publishing platform'}</p>
-                              <div className="flex flex-wrap gap-2">
+                              <SetupHeader idx={3} label={language==='ar'?'المنصة والتنسيق':'Platform & Format'} done={platformDone} summary={selectedSubFormat || undefined} />
+                              {openSection === 3 && (
+                                <div className="mt-3 px-1">
+                                  <p className="text-[9px] mb-2" style={{color: clr.textSubtle}}>{language==='ar'?'اختر منصة النشر':'Choose your publishing platform'}</p>
+                                  <div className="flex flex-wrap gap-2">
 
                                 {/* YouTube — real dropdown */}
                                 <div className="relative">
@@ -2859,7 +2799,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                         {label:language==='ar'?'يوتيوب شورتس':'YouTube Shorts', sub:'9:16', fmt:'9:16' as const, sfName:'YouTube Shorts (9:16)'},
                                       ]).map(({label,sub,fmt,sfName})=>(
                                         <button key={sfName} type="button"
-                                          onClick={()=>{setCinemaFormat(fmt);setSelectedSubFormat(sfName);setSelectedPlatform(null);}}
+                                          onClick={()=>{setCinemaFormat(fmt);setSelectedSubFormat(sfName);setSelectedPlatform(null); setTimeout(() => setCinemaOpenSection(4), 300);}}
                                           className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium transition-all hover:bg-red-900/30 active:scale-[0.98]"
                                           style={{color: selectedSubFormat===sfName ? '#fff' : 'rgba(255,255,255,0.75)', background: selectedSubFormat===sfName ? 'rgba(255,0,0,0.2)' : 'transparent'}}>
                                           <span>{label}</span>
@@ -2870,10 +2810,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   )}
                                 </div>
 
-                                {/* TikTok — instant select */}
                                 <button
                                   type="button" disabled={isDirecting}
-                                  onClick={()=>{setSelectedPlatform('tiktok');setCinemaFormat('9:16');setSelectedSubFormat('TikTok Vertical (9:16)');}}
+                                  onClick={()=>{setSelectedPlatform('tiktok');setCinemaFormat('9:16');setSelectedSubFormat('TikTok Vertical (9:16)'); setTimeout(() => setCinemaOpenSection(4), 300);}}
                                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 disabled:opacity-40"
                                   style={selectedSubFormat?.includes('TikTok')
                                     ? {background:'rgba(0,0,0,0.5)',border:'1.5px solid #69C9D0',color:'#fff',boxShadow:'0 0 8px rgba(105,201,208,0.4)'}
@@ -2883,7 +2822,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   <span>{language==='ar'?'تيك توك':'TikTok'}</span>
                                 </button>
 
-                                {/* Instagram — real dropdown */}
                                 <div className="relative">
                                   <button
                                     type="button" disabled={isDirecting}
@@ -2905,7 +2843,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                         {label:language==='ar'?'ستوري':'Story', sub:'9:16', fmt:'9:16' as const, sfName:'Instagram Story (9:16)'},
                                       ]).map(({label,sub,fmt,sfName})=>(
                                         <button key={sfName} type="button"
-                                          onClick={()=>{setCinemaFormat(fmt);setSelectedSubFormat(sfName);setSelectedPlatform(null);}}
+                                          onClick={()=>{setCinemaFormat(fmt);setSelectedSubFormat(sfName);setSelectedPlatform(null); setTimeout(() => setCinemaOpenSection(4), 300);}}
                                           className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium transition-all hover:bg-pink-900/30 active:scale-[0.98]"
                                           style={{color: selectedSubFormat===sfName ? '#fff' : 'rgba(255,255,255,0.75)', background: selectedSubFormat===sfName ? 'rgba(188,24,136,0.25)' : 'transparent'}}>
                                           <span>{label}</span>
@@ -2916,10 +2854,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   )}
                                 </div>
 
-                                {/* Snapchat — instant select */}
                                 <button
                                   type="button" disabled={isDirecting}
-                                  onClick={()=>{setSelectedPlatform('snapchat');setCinemaFormat('9:16');setSelectedSubFormat('Snapchat Story (9:16)');}}
+                                  onClick={()=>{setSelectedPlatform('snapchat');setCinemaFormat('9:16');setSelectedSubFormat('Snapchat Story (9:16)'); setTimeout(() => setCinemaOpenSection(4), 300);}}
                                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 disabled:opacity-40"
                                   style={selectedSubFormat?.includes('Snapchat')
                                     ? {background:'rgba(255,252,0,0.15)',border:'1.5px solid rgba(255,252,0,0.7)',color:'#fff',boxShadow:'0 0 8px rgba(255,252,0,0.3)'}
@@ -2928,34 +2865,175 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   <svg viewBox="0 0 24 24" width="13" height="13" fill="#FFFC00"><path d="M12.166.006c.94-.006 4.55.26 6.22 3.79.56 1.17.44 3.14.35 4.73l-.02.3c-.01.21-.02.41-.03.58.24-.09.5-.22.74-.39.3-.21.61-.3.9-.27.5.05.95.43.98.85.03.38-.2.79-.73 1.1-.09.05-.21.11-.35.17-.44.19-1.07.43-1.27 1.01-.1.3.01.64.34 1.03.02.02 1.93 2.44 4.55 2.86.18.03.31.19.29.37-.02.16-.14.29-.29.32-.03.01-.05.01-.08.02-.45.09-2.18.46-2.48 1.5-.06.2-.22.31-.43.26-.11-.02-.22-.04-.36-.07-.56-.12-1.29-.28-2.29-.28-.42 0-.86.03-1.29.1-.87.14-1.62.61-2.42 1.11-.97.59-1.96 1.21-3.27 1.21s-2.3-.62-3.27-1.21c-.8-.5-1.55-.97-2.42-1.11-.43-.07-.87-.1-1.29-.1-1 0-1.73.16-2.29.28-.13.03-.25.05-.36.07-.21.05-.37-.06-.43-.26-.3-1.04-2.03-1.41-2.48-1.5-.03 0-.05-.01-.08-.02-.15-.03-.27-.16-.29-.32-.02-.18.11-.34.29-.37 2.62-.42 4.52-2.82 4.55-2.86.33-.39.44-.73.34-1.03-.2-.58-.83-.82-1.27-1.01-.14-.06-.26-.12-.35-.17-.48-.28-.74-.68-.73-1.1.03-.42.48-.8.98-.85.29-.03.6.06.9.27.24.17.5.3.74.39-.01-.17-.02-.37-.03-.58l-.02-.3c-.09-1.59-.21-3.56.35-4.73C7.616.272 11.17.012 12.116.006h.05z"/></svg>
                                   <span>{language==='ar'?'سناب شات':'Snapchat'}</span>
                                 </button>
-
-                              </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
 
-                            {sec2Done && (
-                              <button type="button" onClick={()=>setCinemaOpenSection(2)}
-                                className="self-end px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
-                                style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
-                                {language==='ar'?'التالي ›':'Next ›'}
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* ── SECTION 3: All optionals together ── */}
-                      <div className="rounded-2xl px-4 py-3 transition-all"
-                        style={{background: clr.cardBg, border: `1px solid ${clr.cardBorder}`}}>
-                        <SecHeader idx={2} optional
-                          label={language==='ar'?'تفاصيل إضافية':'Extra Details'}
-                          done={!!(effectiveSetting || effectiveAction || effectiveCTA)}
-                          summary={effectiveSetting || effectiveAction || effectiveCTA || undefined} />
-                        {openSection === 2 && (
-                          <div className="mt-3 flex flex-col gap-5">
-
-                            {/* Setting — multi-select */}
                             <div>
-                              <p className="text-[10px] mb-1 font-semibold uppercase tracking-wider" style={{color: clr.textMuted}}>
+                              <SetupHeader idx={4} label={language==='ar'?'عم يدور فيلمك؟':'What is your movie about?'} done={sec1Done} summary={cinemaSubject ? (cinemaSubject.length > 40 ? cinemaSubject.slice(0,40)+'...' : cinemaSubject) : undefined} />
+                              {openSection === 4 && (
+                                <div className="mt-3 flex flex-col gap-2 px-1">
+                                  <div className="rounded-xl overflow-hidden" style={{background: clr.inputBg, border:`1px solid ${clr.inputBorder(f1)}`}}>
+                                    <textarea
+                                      value={cinemaSubject}
+                                      onChange={(e) => setCinemaSubject(e.target.value.slice(0,800))}
+                                      onInput={(e) => { const t=e.currentTarget; t.style.height='auto'; t.style.height=`${Math.min(t.scrollHeight,220)}px`; t.style.overflowY=t.scrollHeight>220?'auto':'hidden'; }}
+                                      disabled={isDirecting} autoFocus rows={5} maxLength={800}
+                                      placeholder={language==='ar'?'مثال: رجل أعمال يطلق منتجه الجديد في مؤتمر كبير...':'e.g., An entrepreneur launching a new product at a major conference...'}
+                                      className="w-full resize-none bg-transparent px-4 py-3 text-base placeholder:text-black/25 outline-none min-h-[120px] max-h-[220px] leading-7" style={{color: clr.text}}
+                                    />
+                                  </div>
+                                  <div className="flex items-center justify-between px-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px]" style={{color: cinemaSubject.length > 720 ? '#f97316' : clr.textSubtle}}>{cinemaSubject.length}/800</span>
+                                      {cinemaSubject.trim().length > 3 && (
+                                        <button
+                                          type="button"
+                                          onClick={handleCinemaAmp}
+                                          disabled={isCinemaAmping}
+                                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-95 disabled:opacity-50"
+                                          style={{background:'rgba(99,102,241,0.15)',border:'1px solid rgba(99,102,241,0.35)',color:'rgba(165,167,255,0.95)'}}
+                                        >
+                                          {isCinemaAmping
+                                            ? <><Loader2 className="h-3 w-3 animate-spin" /><span>{language==='ar'?'...':'AMP...'}</span></>
+                                            : <><span>⚡</span><span>{language==='ar'?'تحسين':'AMP'}</span></>
+                                          }
+                                        </button>
+                                      )}
+                                    </div>
+                                    {f1 && (
+                                      <button type="button" onClick={()=>setCinemaOpenSection(5)}
+                                        className="px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
+                                        style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
+                                        {language==='ar'?'التالي ›':'Next ›'}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <div>
+                              <SetupHeader idx={5} label={language==='ar'?'المرجع البصري':'Brand Foundation'} done={!!brandAnchor} summary={brandAnchor ? (language==='ar'?'تمت الإضافة':'Added') : undefined} optional />
+                              {openSection === 5 && (
+                                <div className="mt-3 flex flex-col gap-3 px-1">
+                                  {cinemaMode === 'auto' && (
+                                    <div className="mt-1 rounded-xl p-3 flex flex-col gap-2" style={{background: brandAnchor ? 'rgba(226,199,168,0.08)' : clr.cardBg, border: `1px solid ${brandAnchor ? 'rgba(226,199,168,0.35)' : clr.cardBorder}`}}>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider" style={{color: brandAnchor ? '#C5A47E' : clr.textMuted}}>
+                                      {language==='ar' ? '🎨 أساس النمط والعلامة التجارية (اختياري)' : '🎨 Style & Brand Foundation (Optional)'}
+                                      {brandAnchor && <span className="ml-1 text-[#E2C7A8]">✓</span>}
+                                    </p>
+                                    <p className="text-[9px]" style={{color: clr.textSubtle}}>
+                                      {language==='ar' ? 'شعار، صورة منتج، أو مرجع بصري — يُثبِّت الهوية البصرية في جميع المشاهد' : 'Logo, product shot, or visual reference — locks brand identity across all scenes'}
+                                    </p>
+                                    <div className="flex items-center gap-3">
+                                      {brandAnchor ? (
+                                        <div className="relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0" style={{border:'1px solid rgba(226,199,168,0.5)'}}>
+                                          <img src={brandAnchor} alt="brand anchor" className="w-full h-full object-cover" />
+                                          <button
+                                            onClick={() => setBrandAnchor(null)}
+                                            className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/80 text-white text-[9px] flex items-center justify-center hover:bg-red-500/80 transition-colors"
+                                          >✕</button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex flex-col gap-2">
+                                          <label className="w-16 h-16 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0 transition-all hover:opacity-80"
+                                            style={{background: clr.numBg, border:`2px dashed rgba(226,199,168,0.3)`}}>
+                                            <input type="file" accept="image/*" className="hidden"
+                                              onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (!file || !user) return;
+                                                setIsUploadingBrand(true);
+                                                try {
+                                                  const ext = file.name.split('.').pop() || 'jpg';
+                                                  const path = `${user.id}/cinema-refs/brand-${Date.now()}.${ext}`;
+                                                  await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
+                                                  const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+                                                  if (urlData?.publicUrl) setBrandAnchor(urlData.publicUrl);
+                                                } catch { toast.error(language==='ar'?'فشل رفع الصورة':'Upload failed'); }
+                                                finally { setIsUploadingBrand(false); }
+                                              }}
+                                            />
+                                            {isUploadingBrand ? <Loader2 className="h-4 w-4 animate-spin" style={{color:clr.textMuted}} /> : <span className="text-xl leading-none" style={{color:clr.textSubtle}}>+</span>}
+                                          </label>
+                                          <button
+                                            type="button"
+                                            onClick={() => setShowBrandSavedPicker(true)}
+                                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-all active:scale-95"
+                                            style={{background:'rgba(226,199,168,0.1)', border:'1px solid rgba(226,199,168,0.3)', color:'#E2C7A8', whiteSpace:'nowrap'}}
+                                          >
+                                            <Images className="h-3 w-3 flex-shrink-0" />
+                                            {language === 'ar' ? 'من المحفوظة' : 'From Saved'}
+                                          </button>
+                                        </div>
+                                      )}
+                                      <p className="text-[9px] leading-relaxed" style={{color: clr.textMuted}}>
+                                        {brandAnchor
+                                          ? (language==='ar' ? 'المخرج والمصور سيحافظان على هذا النمط في كل مشهد' : 'The Director & Artist will maintain this style across all scenes')
+                                          : (language==='ar' ? 'إذا لم ترفع صورة، سيبتكر الذكاء الاصطناعي نمطه الخاص' : 'Without one, the AI will invent its own visual style')}
+                                      </p>
+                                    </div>
+
+            {showBrandSavedPicker && (
+              <SavedImagesPicker
+                onSelect={(url) => { setBrandAnchor(url); setShowBrandSavedPicker(false); }}
+                onClose={() => setShowBrandSavedPicker(false)}
+              />
+            )}
+
+                                    {brandAnchor && (
+                                      <div className="mt-2 flex flex-col gap-1.5">
+                                        <p className="text-[9px] font-bold uppercase tracking-wider" style={{color: clr.textMuted}}>
+                                          {language==='ar' ? '🏷 ما هذه الصورة؟' : '🏷 What is this?'}
+                                        </p>
+                                        <div className="flex gap-1.5 flex-wrap">
+                                          {([
+                                            { value: 'logo',      labelEn: 'Logo / Text',       labelAr: 'شعار / نص',         descEn: 'AI Background Integration', descAr: 'تكامل الخلفية بالذكاء' },
+                                            { value: 'style',     labelEn: 'Style / Colors',    labelAr: 'نمط / ألوان',       descEn: 'Mood & palette guide',     descAr: 'مرشد المزاج واللون' },
+                                            { value: 'character', labelEn: 'Character / Person', labelAr: 'شخصية / وجه',       descEn: 'Identity consistency',     descAr: 'تناسق الهوية البصرية' },
+                                          ] as const).map(opt => {
+                                            const isActive = anchorTag === opt.value;
+                                            return (
+                                              <button
+                                                key={opt.value}
+                                                type="button"
+                                                onClick={() => setAnchorTag(opt.value)}
+                                                className="flex flex-col items-start px-2.5 py-2 rounded-xl text-left transition-all active:scale-95 flex-1 min-w-[80px] relative"
+                                                style={{
+                                                  background: isActive ? 'linear-gradient(135deg,rgba(226,199,168,0.22),rgba(197,164,126,0.14))' : clr.numBg,
+                                                  border: `2px solid ${isActive ? '#C5A47E' : clr.cardBorder}`,
+                                                  boxShadow: isActive ? '0 0 0 3px rgba(226,199,168,0.15), 0 4px 16px rgba(226,199,168,0.2)' : 'none',
+                                                }}
+                                              >
+                                                {isActive && (
+                                                  <span className="absolute top-1 right-1.5 text-[8px] font-black" style={{color:'#C5A47E'}}>✓</span>
+                                                )}
+                                                <span className="text-[10px] font-bold leading-tight" style={{color: isActive ? '#E2C7A8' : clr.textMuted}}>
+                                                  {language==='ar' ? opt.labelAr : opt.labelEn}
+                                                </span>
+                                                <span className="text-[8px] leading-tight mt-0.5" style={{color: isActive ? 'rgba(226,199,168,0.7)' : clr.textSubtle}}>
+                                                  {language==='ar' ? opt.descAr : opt.descEn}
+                                                </span>
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            <div>
+                              <SetupHeader idx={6} label={language==='ar'?'تفاصيل إضافية':'Extra Details'} done={!!(effectiveSetting || effectiveAction || effectiveCTA)} summary={effectiveSetting || effectiveAction || effectiveCTA || undefined} optional />
+                              {openSection === 6 && (
+                                <div className="mt-3 flex flex-col gap-5 px-1">
+
+                            <div>
+                              <p className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{color: f2 ? '#C5A47E' : clr.text}}>
                                 {language==='ar'?'الموقع':'Setting'}{effectiveSetting && <span className="text-[#E2C7A8] ml-1">✓</span>}
                               </p>
                               <p className="text-[9px] mb-2" style={{color: clr.textSubtle}}>{language==='ar'?'اختر واحداً أو أكثر':'Select one or more'}</p>
@@ -2972,7 +3050,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   {e:'🕌',en:'Heritage / Traditional',ar:'تراثي / تقليدي',v:'a traditional GCC heritage setting — old market, wind towers, traditional architecture, warm earth tones'},
                                   {e:'🏢',en:'Modern Office',ar:'مكتب عصري',v:'a sleek modern corporate office — glass walls, open plan, professional lighting'},
                                   {e:'🛣️',en:'Highway / Road',ar:'طريق سريعة',v:'a long open highway stretching into the horizon, heat haze, dramatic sky'},
-
                                 ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
                                   <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaSetting.includes(v)}
                                     onSelect={()=>setCinemaSetting(prev => { if (prev.includes(v)) return prev.filter(x=>x!==v); const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })}
@@ -2991,7 +3068,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               )}
                             </div>
 
-                            {/* Main Action — multi-select */}
                             <div>
                               <p className="text-[10px] mb-1 font-semibold uppercase tracking-wider" style={{color: clr.textMuted}}>
                                 {language==='ar'?'الحدث الرئيسي':'Main Action'}{effectiveAction && <span className="text-[#E2C7A8] ml-1">✓</span>}
@@ -3008,7 +3084,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   {e:'🔍',en:'Product Close-up',ar:'لقطة مقربة للمنتج',v:'a detailed product close-up — macro lens, texture and craftsmanship, slow rotation'},
                                   {e:'🚶‍♂️',en:'Cinematic Walk',ar:'مشي سينمائي',v:'a confident cinematic walk — hero strides forward, camera tracks alongside or follows from behind'},
                                   {e:'⚡',en:'Fast Motion / Speed',ar:'حركة سريعة',v:'fast motion and speed — blurred streaks, rapid movement, adrenaline-fueled energy'},
-
                                 ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
                                   <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaAction.includes(v)}
                                     onSelect={()=>setCinemaAction(prev => { if (prev.includes(v)) return prev.filter(x=>x!==v); const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })}
@@ -3027,7 +3102,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               )}
                             </div>
 
-                            {/* Goal */}
                             <div>
                               <p className="text-[10px] mb-2 font-semibold uppercase tracking-wider" style={{color: clr.textMuted}}>
                                 {language==='ar'?'هدف الفيديو':'Video Goal'}{effectiveCTA && <span className="text-[#E2C7A8] ml-1">✓</span>}
@@ -3056,6 +3130,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   disabled={isDirecting} placeholder={language==='ar'?'صف الهدف...':'Describe the goal...'}
                                   className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
                                   style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
+                              )}
+                            </div>
+
+                                </div>
                               )}
                             </div>
                           </div>
@@ -3112,7 +3190,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     </div>
                   </div>
                   );
-                })()}
+                })() : null}
 
                 {cinemaStep === 'storyboard' && (
                   <div className="flex flex-col gap-4 pb-4">
