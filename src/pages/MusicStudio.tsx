@@ -1807,7 +1807,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
             {(includeTags.length > 0 || instrumentTags.length > 0 || moodTags.length > 0) && (
               <div className="flex flex-wrap gap-1.5 pb-2 border-b border-[#eceef5] dark:border-white/5">
                 {includeTags.map((tag) => (
-                  <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-50 dark:bg-sky-500/20 border border-sky-200 dark:border-sky-400/30 text-sky-600 dark:text-sky-300 text-[10px] shadow-[0_2px_8px_rgba(59,130,246,0.10)] dark:shadow-none">
+                  <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-sky-50 dark:bg-sky-500/20 border border-sky-200 dark:border-sky-400/30 text-sky-600 dark:text-sky-300 text-xs shadow-[0_2px_8px_rgba(59,130,246,0.10)] dark:shadow-none">
                     {tag}
                     <button type="button" aria-label={isAr ? 'إزالة' : 'Remove'} onClick={() => setIncludeTags(p => p.filter(t => t !== tag))} className="hover:text-white p-0.5">
                       <X className="h-2.5 w-2.5" />
@@ -1815,7 +1815,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                   </span>
                 ))}
                 {instrumentTags.map((tag) => (
-                  <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-500/20 border border-purple-200 dark:border-purple-400/30 text-purple-600 dark:text-purple-300 text-[10px] shadow-[0_2px_8px_rgba(147,51,234,0.10)] dark:shadow-none">
+                  <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-50 dark:bg-purple-500/20 border border-purple-200 dark:border-purple-400/30 text-purple-600 dark:text-purple-300 text-xs shadow-[0_2px_8px_rgba(147,51,234,0.10)] dark:shadow-none">
                     {tag}
                     <button type="button" aria-label={isAr ? 'إزالة' : 'Remove'} onClick={() => setInstrumentTags(p => p.filter(t => t !== tag))} className="hover:text-white p-0.5">
                       <X className="h-2.5 w-2.5" />
@@ -1823,7 +1823,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                   </span>
                 ))}
                 {moodTags.map((tag) => (
-                  <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/20 border border-amber-200 dark:border-amber-400/30 text-amber-600 dark:text-amber-300 text-[10px] shadow-[0_2px_8px_rgba(245,158,11,0.10)] dark:shadow-none">
+                  <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-500/20 border border-amber-200 dark:border-amber-400/30 text-amber-600 dark:text-amber-300 text-xs shadow-[0_2px_8px_rgba(245,158,11,0.10)] dark:shadow-none">
                     {tag}
                     <button type="button" aria-label={isAr ? 'إزالة' : 'Remove'} onClick={() => setMoodTags(p => p.filter(t => t !== tag))} className="hover:text-white p-0.5">
                       <X className="h-2.5 w-2.5" />
@@ -1850,7 +1850,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                       key={style}
                       type="button"
                       onClick={() => setIncludeTags(p => p.includes(style) ? p.filter(t => t !== style) : [...p, style])}
-                      className={`px-2 py-1 rounded-full text-[11px] border transition-all active:scale-95 ${
+                      className={`px-2.5 py-1 rounded-full text-xs border transition-all active:scale-95 ${
                         includeTags.includes(style)
                           ? 'bg-sky-50 dark:bg-sky-500/25 border-sky-300 dark:border-sky-400/40 text-sky-700 dark:text-sky-200 shadow-[0_4px_12px_rgba(59,130,246,0.12)] dark:shadow-none'
                           : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-sky-300 dark:hover:border-sky-400/30 hover:text-sky-600 dark:hover:text-sky-300'
@@ -1880,7 +1880,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                       key={inst}
                       type="button"
                       onClick={() => setInstrumentTags(p => p.includes(inst) ? p.filter(t => t !== inst) : [...p, inst])}
-                      className={`px-2 py-1 rounded-full text-[11px] border transition-all active:scale-95 ${
+                      className={`px-2.5 py-1 rounded-full text-xs border transition-all active:scale-95 ${
                         instrumentTags.includes(inst)
                           ? 'bg-purple-50 dark:bg-purple-500/25 border-purple-300 dark:border-purple-400/40 text-purple-700 dark:text-purple-200 shadow-[0_4px_12px_rgba(147,51,234,0.12)] dark:shadow-none'
                           : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-purple-300 dark:hover:border-purple-400/30 hover:text-purple-600 dark:hover:text-purple-300'
@@ -1910,7 +1910,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                       key={mood}
                       type="button"
                       onClick={() => setMoodTags(p => p.includes(mood) ? p.filter(t => t !== mood) : [...p, mood])}
-                      className={`px-2 py-1 rounded-full text-[11px] border transition-all active:scale-95 ${
+                      className={`px-2.5 py-1 rounded-full text-xs border transition-all active:scale-95 ${
                         moodTags.includes(mood)
                           ? 'bg-amber-50 dark:bg-amber-500/25 border-amber-300 dark:border-amber-400/40 text-amber-700 dark:text-amber-200 shadow-[0_4px_12px_rgba(245,158,11,0.12)] dark:shadow-none'
                           : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-amber-300 dark:hover:border-amber-400/30 hover:text-amber-600 dark:hover:text-amber-300'
