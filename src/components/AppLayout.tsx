@@ -73,6 +73,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const [purchaseInProgress, setPurchaseInProgress] = useState(false);
   const [activePackageId, setActivePackageId] = useState<string>('$rc_monthly');
   const [activePackageObj, setActivePackageObj] = useState<any>(null);
+  const [debugInfo, setDebugInfo] = useState<string>('waiting...');
   const [step, setStep] = useState(variant === 'new_user' ? 1 : 2);
   // New users go directly to Dashboard via handleSkip — Step 2 is only for expired/cancelled
   const [editingName, setEditingName] = useState(false);
@@ -233,22 +234,15 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     setLoading(true);
     setPurchaseInProgress(true);
 
-    // activePackageId holds the STORE product identifier set by the offerings fetch:
-    //   QU users  → 'wakti_monthly_qu'           (from university_exclusive offering)
-    //   Standard  → 'qa.wakti.ai.monthly'         (from default offering)
-    // Natively's purchasePackage passes this directly to Apple/Google.
-    // Using the RC package name ('qatar_university') instead would resolve against
-    // the default offering only and silently charge the standard QAR 92 price.
+    // Natively SDK purchasePackage() takes a RevenueCat PACKAGE identifier,
+    // NOT an App Store / Play Store product ID. Passing store product IDs causes silent failure.
+    // For QU users: 'qatar_university' (from university_exclusive offering)
+    // For standard: '$rc_monthly' (from Default offering)
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const os = getDeviceOS();
-    // Always use exact store product IDs — never rely on SDK offering lookup for the purchase call.
-    // Apple iOS: wakti_monthly_qu  |  Android: wakti_monthly_qu:monthly-academic
-    // Standard Apple: qa.wakti.ai.monthly  |  Standard Android: qa.wakti.ai.monthly:qa-wakti-ai-monthly
-    const productIdToPurchase = isQUUser
-      ? (os === 'android' ? 'wakti_monthly_qu:monthly-academic' : 'wakti_monthly_qu')
-      : (os === 'android' ? 'qa.wakti.ai.monthly:qa-wakti-ai-monthly' : 'qa.wakti.ai.monthly');
-    console.log('[Purchase] Initiating purchase with store product ID:', productIdToPurchase, '| os:', os, '| isQUUser:', isQUUser);
-    purchasePackage(productIdToPurchase, async (resp: any) => {
+    const rcPackageId = isQUUser ? 'qatar_university' : '$rc_monthly';
+    setDebugInfo(`PURCHASE: pkg=${rcPackageId} qu=${isQUUser} email=${user?.email}`);
+    console.log('[Purchase] Initiating purchase — RC package:', rcPackageId, '| isQUUser:', isQUUser, '| email:', user?.email);
+    purchasePackage(rcPackageId, async (resp: any) => {
       console.log('[Purchase] Response:', resp);
       
       // Treat success OR 'already subscribed' (Android) as a successful subscription
@@ -895,6 +889,14 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                   )}
                   {language === 'ar' ? 'اشترك الآن' : 'Subscribe Now'}
                 </Button>
+
+                {/* TEMP DEBUG — remove after fixing purchase */}
+                <div className="rounded bg-black/80 border border-yellow-500/50 p-2 text-[10px] text-yellow-300 font-mono break-all">
+                  <div>activePackageId: {activePackageId}</div>
+                  <div>debug: {debugInfo}</div>
+                  <div>email: {user?.email}</div>
+                  <div>isQU: {String(!!(user?.email?.toLowerCase().endsWith('@qu.edu.qa')))}</div>
+                </div>
 
                 {showRestorePurchases && (
                   <Button
