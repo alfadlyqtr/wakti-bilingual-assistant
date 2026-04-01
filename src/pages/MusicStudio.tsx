@@ -1487,36 +1487,34 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     return CLICHE_PATTERNS.some((re) => re.test(s));
   }
 
-  const chipsSummaryText = useMemo(() => {
-    const bits: string[] = [];
-    if (includeTags.length) bits.push(includeTags.join(', '));
-    if (instrumentTags.length) bits.push(instrumentTags.join(', '));
-    if (moodTags.length) bits.push(moodTags.join(', '));
-    return bits.join(', ');
-  }, [includeTags, instrumentTags, moodTags]);
+  function toggleMusicSubsection(section: 'styles' | 'instruments' | 'mood') {
+    if (section === 'styles') {
+      setStylesOpen((prev) => {
+        const next = !prev;
+        setInstrumentsOpen(false);
+        setMoodOpen(false);
+        return next;
+      });
+      return;
+    }
 
-  // Insert chips into style text on demand (optional)
-  function insertChipsIntoStyle() {
-    const toInsert = buildStylesSuffix();
-    if (!toInsert) return;
-    const exists = (styleText || '').includes(toInsert);
-    const base = exists ? styleText : (styleText ? `${styleText}\n${toInsert}` : toInsert);
-    const capped = Array.from(base).slice(0, styleCap).join('');
-    setStyleText(capped);
-  }
+    if (section === 'instruments') {
+      setInstrumentsOpen((prev) => {
+        const next = !prev;
+        setStylesOpen(false);
+        setMoodOpen(false);
+        return next;
+      });
+      return;
+    }
 
-  useEffect(() => {
-    if (!chipsSummaryText) return;
-    setStyleText((prev) => {
-      const manual = prev
-        .split(',')
-        .map((part) => part.trim())
-        .filter(Boolean)
-        .filter((part) => !includeTags.includes(part) && !instrumentTags.includes(part) && !moodTags.includes(part));
-      const next = [...chipsSummaryText.split(',').map((part) => part.trim()).filter(Boolean), ...manual].join(', ');
-      return Array.from(next).slice(0, styleCap).join('');
+    setMoodOpen((prev) => {
+      const next = !prev;
+      setStylesOpen(false);
+      setInstrumentsOpen(false);
+      return next;
     });
-  }, [chipsSummaryText, includeTags, instrumentTags, moodTags, styleCap]);
+  }
 
   const handleSaveGeneratedTrack = async (trackId: string) => {
     if (!user || savingTrackIds.includes(trackId)) return;
@@ -1786,7 +1784,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
             <div>
               <button 
                 type="button"
-                onClick={() => setStylesOpen(!stylesOpen)}
+                onClick={() => toggleMusicSubsection('styles')}
                 className="flex items-center justify-between w-full text-[10px] font-medium text-muted-foreground/60 uppercase mb-1.5"
               >
                 <span>{isAr ? 'الأنماط' : 'Styles'}</span>
@@ -1816,7 +1814,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
             <div>
               <button 
                 type="button"
-                onClick={() => setInstrumentsOpen(!instrumentsOpen)}
+                onClick={() => toggleMusicSubsection('instruments')}
                 className="flex items-center justify-between w-full text-[10px] font-medium text-muted-foreground/60 uppercase mb-1.5"
               >
                 <span>{isAr ? 'الآلات' : 'Instruments'}</span>
@@ -1846,7 +1844,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
             <div>
               <button 
                 type="button"
-                onClick={() => setMoodOpen(!moodOpen)}
+                onClick={() => toggleMusicSubsection('mood')}
                 className="flex items-center justify-between w-full text-[10px] font-medium text-muted-foreground/60 uppercase mb-1.5"
               >
                 <span>{isAr ? 'المزاج' : 'Mood'}</span>

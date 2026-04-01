@@ -136,8 +136,14 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
         );
         console.log('[Offerings] qatar_university package:', quPkg ? 'FOUND' : 'NOT FOUND', quPkg?.product?.priceString);
         if (quPkg?.product) {
-          console.log('[Offerings] ✅ QU package set — id:', quPkg.identifier, 'price:', quPkg.product.priceString);
-          setActivePackageId(quPkg.identifier);
+          // CRITICAL: pass the STORE product identifier (e.g. 'wakti_monthly_qu'),
+          // NOT the RevenueCat package identifier ('qatar_university').
+          // Natively's purchasePackage resolves against the App Store / Play Store product,
+          // not the RC offering/package name. Passing the RC name causes it to silently
+          // fall back to the default offering product (qa.wakti.ai.monthly = QAR 92).
+          const storeProductId = quPkg.product.identifier;
+          console.log('[Offerings] ✅ QU package set — RC pkg:', quPkg.identifier, '| Store product:', storeProductId, '| price:', quPkg.product.priceString);
+          setActivePackageId(storeProductId);
           setActivePackageObj(quPkg);
           setPrice({
             qar: quPkg.product.priceString || 'QAR 73.5/month',
@@ -154,8 +160,9 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
           (p: any) => p.identifier === '$rc_monthly'
         ) || resp.offerings.current.availablePackages?.[0];
         if (pkg?.product) {
-          console.log('[Offerings] ✅ Standard package set — id:', pkg.identifier, 'price:', pkg.product.priceString);
-          setActivePackageId(pkg.identifier);
+          const storeProductId = pkg.product.identifier;
+          console.log('[Offerings] ✅ Standard package set — RC pkg:', pkg.identifier, '| Store product:', storeProductId, '| price:', pkg.product.priceString);
+          setActivePackageId(storeProductId);
           setActivePackageObj(pkg);
           setPrice({
             qar: pkg.product.priceString || 'QAR 92/month',
@@ -219,15 +226,14 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     setLoading(true);
     setPurchaseInProgress(true);
 
-    // activePackageObj holds the full package object from the offerings fetch.
-    // activePackageId is the string identifier fallback.
-    //   QU users  → 'qatar_university' package object (from university_exclusive offering)
-    //   Standard  → '$rc_monthly' package object (from default offering)
-    // The Natively SDK's purchasePackage may accept either the full object or the identifier.
-    // We pass the full object when available (correct RevenueCat behaviour), id as fallback.
-    const pkgToUse = activePackageObj || activePackageId;
-    console.log('[Purchase] Initiating purchase with package:', typeof pkgToUse === 'object' ? pkgToUse?.identifier : pkgToUse);
-    purchasePackage(pkgToUse, async (resp: any) => {
+    // activePackageId holds the STORE product identifier set by the offerings fetch:
+    //   QU users  → 'wakti_monthly_qu'           (from university_exclusive offering)
+    //   Standard  → 'qa.wakti.ai.monthly'         (from default offering)
+    // Natively's purchasePackage passes this directly to Apple/Google.
+    // Using the RC package name ('qatar_university') instead would resolve against
+    // the default offering only and silently charge the standard QAR 92 price.
+    console.log('[Purchase] Initiating purchase with store product ID:', activePackageId);
+    purchasePackage(activePackageId, async (resp: any) => {
       console.log('[Purchase] Response:', resp);
       
       // Treat success OR 'already subscribed' (Android) as a successful subscription
