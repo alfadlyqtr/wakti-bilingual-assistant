@@ -73,7 +73,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const [purchaseInProgress, setPurchaseInProgress] = useState(false);
   const [activePackageId, setActivePackageId] = useState<string>('$rc_monthly');
   const [activePackageObj, setActivePackageObj] = useState<any>(null);
-  const [debugInfo, setDebugInfo] = useState<string>('waiting...');
   const [step, setStep] = useState(variant === 'new_user' ? 1 : 2);
   // New users go directly to Dashboard via handleSkip — Step 2 is only for expired/cancelled
   const [editingName, setEditingName] = useState(false);
@@ -154,7 +153,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
           setActivePackageId(storeProductId);
           setActivePackageObj(quPkg);
           setPrice({
-            qar: quPkg.product.priceString || 'QAR 73.5/month',
+            qar: quPkg.product.priceString || 'QAR 73/month',
             usd: quPkg.product.priceUSD || '$19.99/month',
           });
           return;
@@ -240,7 +239,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     // For standard: '$rc_monthly' (from Default offering)
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     const rcPackageId = isQUUser ? 'qatar_university' : '$rc_monthly';
-    setDebugInfo(`PURCHASE: pkg=${rcPackageId} qu=${isQUUser} email=${user?.email}`);
     console.log('[Purchase] Initiating purchase — RC package:', rcPackageId, '| isQUUser:', isQUUser, '| email:', user?.email);
     purchasePackage(rcPackageId, async (resp: any) => {
       console.log('[Purchase] Response:', resp);
@@ -889,14 +887,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                   )}
                   {language === 'ar' ? 'اشترك الآن' : 'Subscribe Now'}
                 </Button>
-
-                {/* TEMP DEBUG — remove after fixing purchase */}
-                <div className="rounded bg-black/80 border border-yellow-500/50 p-2 text-[10px] text-yellow-300 font-mono break-all">
-                  <div>activePackageId: {activePackageId}</div>
-                  <div>debug: {debugInfo}</div>
-                  <div>email: {user?.email}</div>
-                  <div>isQU: {String(!!(user?.email?.toLowerCase().endsWith('@qu.edu.qa')))}</div>
-                </div>
 
                 {showRestorePurchases && (
                   <Button
