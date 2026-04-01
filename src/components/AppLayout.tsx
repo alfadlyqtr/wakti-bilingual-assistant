@@ -241,12 +241,12 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     // the default offering only and silently charge the standard QAR 92 price.
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     const os = getDeviceOS();
-    const forcedProductId = isQUUser
+    // Always use exact store product IDs — never rely on SDK offering lookup for the purchase call.
+    // Apple iOS: wakti_monthly_qu  |  Android: wakti_monthly_qu:monthly-academic
+    // Standard Apple: qa.wakti.ai.monthly  |  Standard Android: qa.wakti.ai.monthly:qa-wakti-ai-monthly
+    const productIdToPurchase = isQUUser
       ? (os === 'android' ? 'wakti_monthly_qu:monthly-academic' : 'wakti_monthly_qu')
       : (os === 'android' ? 'qa.wakti.ai.monthly:qa-wakti-ai-monthly' : 'qa.wakti.ai.monthly');
-    const productIdToPurchase = activePackageId && activePackageId !== '$rc_monthly'
-      ? activePackageId
-      : forcedProductId;
     console.log('[Purchase] Initiating purchase with store product ID:', productIdToPurchase, '| os:', os, '| isQUUser:', isQUUser);
     purchasePackage(productIdToPurchase, async (resp: any) => {
       console.log('[Purchase] Response:', resp);
