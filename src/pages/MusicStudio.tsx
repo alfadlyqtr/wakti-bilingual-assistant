@@ -1696,9 +1696,84 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     }
   };
 
-  // Load monthly usage on mount is now handled by refreshMusicQuota() in the earlier useEffect
-  // This duplicate useEffect was counting ALL rows (including failed ones) and causing false quota blocks
-  // Removed to rely solely on the backend can_generate_music() RPC which correctly filters by status
+  // Poll music-status when a generation task is active
+  useEffect(() => {
+    if (!generatingTask) return;
+
+    const { taskId, recordId } = generatingTask;
+    let cancelled = false;
+    let pollCount = 0;
+    const maxPolls = 36; // 36 × 5s = 3 minutes max
+
+    const poll = async () => {
+      if (cancelled) return;
+      pollCount++;
+      try {
+        const { data, error } = await supabase.functions.invoke('music-status', {
+          body: { taskId, recordId },
+        });
+
+        if (cancelled) return;
+
+        if (error) {
+          console.warn('[MusicStudio] music-status poll error:', error);
+          if (pollCount >= maxPolls) {
+            setGeneratingTask(null);
+            setSubmitting(false);
+            setLastError(language === 'ar' ? 'انتهت مهلة الانتظار. حاول التحقق من المحفوظات.' : 'Generation timed out. Check your Saved tab.');
+            toast.error(language === 'ar' ? 'انتهت مهلة الانتظار' : 'Generation timed out');
+          }
+          return;
+        }
+
+        if (data?.status === 'completed' && data?.tracks?.length) {
+          setGeneratingTask(null);
+          setSubmitting(false);
+          setGeneratedTracks(data.tracks);
+          setSavedTrackIds([]);
+          setTitleOpen(false);
+          setMusicStyleOpen(false);
+          setVocalsOpen(false);
+          setLyricsOpen(false);
+          setSongsUsed((v) => v + 1);
+          setSongsRemaining((v) => Math.max(0, v - 1));
+          setLastError(null);
+          toast.success(language === 'ar' ? 'تم إنشاء الموسيقى بنجاح!' : 'Music generated successfully!');
+          return;
+        }
+
+        if (data?.status === 'failed') {
+          setGeneratingTask(null);
+          setSubmitting(false);
+          const failMsg = data?.error || (language === 'ar' ? 'فشل الإنشاء' : 'Generation failed');
+          setLastError(failMsg);
+          toast.error(failMsg);
+          return;
+        }
+
+        // Still generating — keep polling
+        if (pollCount >= maxPolls) {
+          setGeneratingTask(null);
+          setSubmitting(false);
+          setLastError(language === 'ar' ? 'انتهت مهلة الانتظار. حاول التحقق من المحفوظات.' : 'Generation timed out. Check your Saved tab.');
+          toast.error(language === 'ar' ? 'انتهت مهلة الانتظار' : 'Generation timed out');
+        }
+      } catch (e) {
+        console.warn('[MusicStudio] music-status poll exception:', e);
+      }
+    };
+
+    // First poll after 5 seconds
+    const interval = setInterval(poll, 5000);
+    // Also do an immediate first poll after 3s (KIE sometimes finishes fast)
+    const initialTimeout = setTimeout(poll, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      clearTimeout(initialTimeout);
+    };
+  }, [generatingTask, language]);
 
   // Position and outside-click handling for pickers
   useEffect(() => {
