@@ -1410,39 +1410,46 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setCinemaStep('filming');
     setStitchStatus(language === 'ar' ? '🎬 Shotstack يُحضّر مشاهدك...' : '🎬 Shotstack is producing your film...');
 
-    const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-    const produceBase = isLocal ? 'https://wakti.qa' : '';
-
     try {
       const imageUrls = images.slice(0, cinemaSceneCount) as string[];
       const scripts = cinemaScenes.slice(0, cinemaSceneCount).map(s => s?.text || '');
 
-      const resp = await fetch(`${produceBase}/api/video/produce`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // Submit render via Supabase Edge Function
+      const { data: result, error: invokeErr } = await supabase.functions.invoke('cinema-producer', {
+        body: {
           imageUrls,
           scripts,
           logoUrl: brandAnchor || null,
           contactInfo: null,
           format: cinemaFormat,
           clipDuration: 10,
-        }),
+        },
       });
-      const result = await resp.json();
-      if (!resp.ok || !result.renderId) throw new Error(result.error || `Produce failed ${resp.status}`);
+      if (invokeErr) throw new Error(invokeErr.message || 'cinema-producer invoke failed');
+      if (!result?.renderId) throw new Error(result?.error || 'No renderId returned');
 
       const { renderId } = result;
       console.log('[cinema] Shotstack renderId:', renderId);
       setStitchStatus(language === 'ar' ? `⏳ Render ID: ${renderId} — جاري المعالجة...` : `⏳ Rendering… (${renderId})`);
 
       // Poll Shotstack every 5s until done or failed (max 10 min)
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
       const MAX_POLLS = 120;
       for (let i = 0; i < MAX_POLLS; i++) {
         await new Promise(r => setTimeout(r, 5000));
-        const poll = await fetch(`${produceBase}/api/video/produce?renderId=${renderId}`);
-        const pollData = await poll.json();
-        const { status, url, progress } = pollData;
+        const pollResp = await fetch(
+          `${SUPABASE_URL}/functions/v1/cinema-producer?renderId=${renderId}`,
+          {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              apikey: SUPABASE_ANON_KEY,
+            },
+          }
+        );
+        const pollResult = await pollResp.json();
+        const { status, url, progress } = pollResult;
 
         setStitchStatus(
           language === 'ar'
@@ -1460,7 +1467,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           return;
         }
         if (status === 'failed') {
-          throw new Error(pollData.error || 'Shotstack render failed');
+          throw new Error(pollResult.error || 'Shotstack render failed');
         }
       }
       throw new Error('Render timed out after 10 minutes');
