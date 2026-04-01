@@ -45,6 +45,7 @@ import {
   ArrowRight,
   Palette,
   Mic,
+  X,
 } from 'lucide-react';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import StudioImageGenerator from '@/components/studio/StudioImageGenerator';
@@ -1137,6 +1138,8 @@ export default function MusicStudio() {
 
 function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   const { language } = useTheme();
+  const { user } = useAuth();
+  const isAr = language === 'ar';
 
   // Inputs (split prompt)
   const [title, setTitle] = useState('');
@@ -1149,11 +1152,17 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   const STYLE_PRESETS = useMemo<string[]>(() => {
     if (language === 'ar') {
       return [
-        'آر آند بي','بوب','بوب الثمانينات','بوب التسعينات','روك','روك آند رول','سوفت روك','ميتال ثقيل','كانتري','جاز','سول','هيب هوب','راب','خليجي بوب','لاتين','ريغيتون','أفروبيتس','سينث بوب','إندي بوب','لوفاي','هاوس','ديب هاوس','ترانس','تيكنو','دبسْتِب','درَم آند بَيس','كي-بوب','بوليوود'
+        'آر آند بي','بوب','بوب الثمانينات','بوب التسعينات','روك','روك آند رول','سوفت روك','ميتال ثقيل','كانتري','جاز','سول','هيب هوب','راب',
+        // GCC/Khaleeji focus
+        'خليجي بوب','خليجي تراث','شيلات','سامري','ليوان','بحريني','كويتي','سعودي','إماراتي','قطري','عماني',
+        'مهرجانات','لاتين','ريغيتون','أفروبيتس','سينث بوب','إندي بوب','لوفاي','هاوس','ديب هاوس','ترانس','تيكنو','دبسْتِب','درَم آند بَيس','كي-بوب','بوليوود'
       ];
     }
     return [
-      'R&B','pop','80s pop','90s pop','rock','rock and roll','soft rock','heavy metal','country','jazz','soul','hip hop','rap','khaleeji pop','latin','reggaeton','afrobeats','synthpop','indie pop','lofi','house','deep house','trance','techno','dubstep','drum & bass','k-pop','bollywood'
+      'R&B','pop','80s pop','90s pop','rock','rock and roll','soft rock','heavy metal','country','jazz','soul','hip hop','rap',
+      // GCC/Khaleeji focus
+      'Khaleeji Pop','Khaleeji Traditional','Sheilat','Samri','Liwa','Bahraini','Kuwaiti','Saudi','Emirati','Qatari','Omani',
+      'Shaabi','Latin','Reggaeton','Afrobeats','Synthpop','Indie Pop','Lo-Fi','House','Deep House','Trance','Techno','Dubstep','Drum & Bass','K-Pop','Bollywood'
     ];
   }, [language]);
 
@@ -1196,7 +1205,11 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     ];
   }, [language]);
 
-  // Include/Exclude as chip lists
+      // Collapse states for Music Style section
+  const [musicStyleOpen, setMusicStyleOpen] = useState(false);
+  const [stylesOpen, setStylesOpen] = useState(false);
+  const [instrumentsOpen, setInstrumentsOpen] = useState(false);
+  const [moodOpen, setMoodOpen] = useState(false);
   const [includeTags, setIncludeTags] = useState<string[]>([]);
   const [instrumentTags, setInstrumentTags] = useState<string[]>([]);
   const [moodTags, setMoodTags] = useState<string[]>([]);
@@ -1212,25 +1225,8 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   // Minimal mode only: styles include/exclude + prompt + duration
   const [submitting, setSubmitting] = useState(false);
   const [amping, setAmping] = useState(false);
-  // Amp options modal state
-  const [showAmpModal, setShowAmpModal] = useState(false);
-  const [lyricsMode, setLyricsMode] = useState<'preserve'|'continue'|'generate'>('preserve');
-  const [includeTempo, setIncludeTempo] = useState(true);
-  const [includeKey, setIncludeKey] = useState(false);
-  const [includeTimeSig, setIncludeTimeSig] = useState(false);
-  const [includeStructure, setIncludeStructure] = useState(true);
-  const [includeInstrumentsOpt, setIncludeInstrumentsOpt] = useState(true);
-  const [includeVocalsOpt, setIncludeVocalsOpt] = useState(true);
-  const [langChoice, setLangChoice] = useState<'auto'|'en'|'ar'>('auto');
-  const [noGenreDrift, setNoGenreDrift] = useState(true);
-  const [noNewInstruments, setNoNewInstruments] = useState(true);
   const [vocalType, setVocalType] = useState<'auto'|'none'|'female'|'male'>('auto');
-  // Tuning controls
-  const [creativity, setCreativity] = useState<number>(50); // 0-100
-  const [rhymeMode, setRhymeMode] = useState<'off'|'rhyme'|'syllables'|'both'>('off');
-  const [hookEmphasis, setHookEmphasis] = useState<boolean>(true);
-  const [producerIntensity, setProducerIntensity] = useState<number>(3); // 1-5
-  const [advancedOpen, setAdvancedOpen] = useState<boolean>(false);
+  const [vocalsOpen, setVocalsOpen] = useState(false);
   const [audios, setAudios] = useState<Array<{ url: string; mime: string; meta?: any; createdAt: number; saved?: boolean }>>([]);
   const [lastError, setLastError] = useState<string | null>(null);
   const [songsUsed, setSongsUsed] = useState(0);
@@ -1238,7 +1234,8 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   const [songsRemaining, setSongsRemaining] = useState(5);
   const [generatingTask, setGeneratingTask] = useState<{ taskId: string; recordId: string } | null>(null);
   const [generatedTracks, setGeneratedTracks] = useState<Array<{ id: string; audioUrl: string; coverUrl: string | null; duration: number | null; title: string | null; variantIndex: number }>>([]);
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [savedTrackIds, setSavedTrackIds] = useState<string[]>([]);
+  const [savingTrackIds, setSavingTrackIds] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('V5_5');
   const [customMode, setCustomMode] = useState<boolean>(true);
   const [negativeTags, setNegativeTags] = useState<string>('');
@@ -1279,133 +1276,50 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     };
   }, []);
 
-  // Open the Amp options modal
-  function handleAmp() {
-    if (!styleText.trim() && !lyricsText.trim() && !title.trim()) return;
-    if (hasBannedInput()) {
-      toast.error(language==='ar' ? 'تحتوي المدخلات على ألفاظ غير مسموحة.' : 'Inputs contain disallowed words.');
+  // Simple Amp - expand user lyrics into structured song
+  async function handleAmp() {
+    const userInput = lyricsText.trim() || styleText.trim() || title.trim();
+    if (!userInput) {
+      toast.error(isAr ? 'اكتب كلمات أولاً' : 'Write some lyrics first');
       return;
     }
-    setShowAmpModal(true);
+    if (hasBannedInput()) {
+      toast.error(isAr ? 'تحتوي المدخلات على ألفاظ غير مسموحة.' : 'Inputs contain disallowed words.');
+      return;
+    }
+    
+    setAmping(true);
+    try {
+      // Build the input for Amp - include style/mood/instruments context
+      const contextParts: string[] = [];
+      if (includeTags.length > 0) contextParts.push(`Styles: ${includeTags.join(', ')}`);
+      if (instrumentTags.length > 0) contextParts.push(`Instruments: ${instrumentTags.join(', ')}`);
+      if (moodTags.length > 0) contextParts.push(`Mood: ${moodTags.join(', ')}`);
+      if (title.trim()) contextParts.push(`Title: ${title.trim()}`);
+      
+      const context = contextParts.length > 0 ? contextParts.join('\n') + '\n\n' : '';
+      const fullInput = context + `User lyrics:\n${userInput}`;
+      
+      const { data, error } = await supabase.functions.invoke('music-amp', {
+        body: { 
+          text: fullInput, 
+          mode: 'lyrics',
+          duration: duration 
+        }
+      });
+      
+      if (error) throw error;
+      const expandedLyrics = (data?.text || '').toString();
+      if (!expandedLyrics) throw new Error(isAr ? 'تعذّر التوسيع' : 'Expansion failed');
+      
+      setLyricsText(expandedLyrics);
+      toast.success(isAr ? 'تم توسيع الكلمات' : 'Lyrics expanded');
+    } catch (e: any) {
+      toast.error((isAr ? 'فشل: ' : 'Failed: ') + (e?.message || String(e)));
+    } finally {
+      setAmping(false);
+    }
   }
-
-  // Amp options modal (lives inside ComposeTab)
-  const ampModal = (
-    showAmpModal && createPortal(
-      <div className="fixed inset-0 z-[2147483647] flex items-center justify-center">
-        <div className="absolute inset-0 bg-black/50" onClick={()=>setShowAmpModal(false)} />
-        <div className="relative w-[92vw] max-w-md rounded-lg border bg-background p-4 shadow-xl">
-          <h3 className="font-semibold mb-3">{language==='ar'?'إعدادات التحسين (AMP)':'Amp options'}</h3>
-          <div className="space-y-3 text-sm">
-            <div>
-              <div className="font-medium mb-1">{language==='ar'?'وضع الكلمات':'Lyrics mode'}</div>
-              <div className="grid grid-cols-3 gap-2">
-                <label className="inline-flex items-center gap-2"><input type="radio" name="lyricsMode" checked={lyricsMode==='preserve'} onChange={()=>setLyricsMode('preserve')} />{language==='ar'?'حفظ':'Preserve'}</label>
-                <label className="inline-flex items-center gap-2"><input type="radio" name="lyricsMode" checked={lyricsMode==='continue'} onChange={()=>setLyricsMode('continue')} />{language==='ar'?'متابعة':'Continue'}</label>
-                <label className="inline-flex items-center gap-2"><input type="radio" name="lyricsMode" checked={lyricsMode==='generate'} onChange={()=>setLyricsMode('generate')} />{language==='ar'?'توليد كامل':'Generate full'}</label>
-              </div>
-            </div>
-            {/* Basic: Language, Safety master, Producer intensity, Creativity */}
-            <div>
-              <div className="font-medium mb-1">{language==='ar'?'اللغة':'Language'}</div>
-              <div className="grid grid-cols-3 gap-2">
-                <label className="inline-flex items-center gap-2"><input type="radio" name="langChoice" checked={langChoice==='auto'} onChange={()=>setLangChoice('auto')} />Auto</label>
-                <label className="inline-flex items-center gap-2"><input type="radio" name="langChoice" checked={langChoice==='en'} onChange={()=>setLangChoice('en')} />English</label>
-                <label className="inline-flex items-center gap-2"><input type="radio" name="langChoice" checked={langChoice==='ar'} onChange={()=>setLangChoice('ar')} />العربية</label>
-              </div>
-            </div>
-
-            <div>
-              <div className="font-medium mb-1">{language==='ar'?'السلامة (مبسّطة)':'Safety (simple)'}</div>
-              <label className="inline-flex items-center gap-2"><input type="checkbox" checked={noGenreDrift && noNewInstruments} onChange={(e)=>{setNoGenreDrift(e.target.checked); setNoNewInstruments(e.target.checked);}} />{language==='ar'?'ثبّت النوع والآلات المختارة':'Lock style and instruments'}</label>
-            </div>
-
-            <div className="space-y-2">
-              <div className="font-medium">{language==='ar'?'شدة الإنتاج':'Producer preset'}</div>
-              <div className="flex items-center gap-3">
-                <label className="min-w-28 text-muted-foreground text-xs">{language==='ar'?'القيمة':'Value'}</label>
-                <input type="range" min={1} max={5} step={1} value={producerIntensity} onChange={(e)=>setProducerIntensity(parseInt(e.target.value||'3'))} />
-                <span className="text-xs">{producerIntensity}</span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="font-medium">{language==='ar'?'إبداع الكلمات':'Lyrics creativity'}</div>
-              <div className="flex items-center gap-3">
-                <label className="min-w-28 text-muted-foreground text-xs">{language==='ar'?'الإبداع':'Creativity'}</label>
-                <input type="range" min={0} max={100} step={5} value={creativity} onChange={(e)=>setCreativity(parseInt(e.target.value||'50'))} />
-                <span className="text-xs">{creativity}</span>
-              </div>
-            </div>
-
-            {/* Advanced drawer toggle */}
-            <button type="button" className="text-sm underline" onClick={()=>setAdvancedOpen(v=>!v)}>
-              {advancedOpen ? (language==='ar'?'إخفاء الإعدادات المتقدمة':'Hide advanced') : (language==='ar'?'إظهار الإعدادات المتقدمة':'Show advanced')}
-            </button>
-
-            {advancedOpen && (
-              <div className="mt-2 space-y-3">
-                <div>
-                  <div className="font-medium mb-1">{language==='ar'?'تضمين في السطر':'Include in line'}</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeTempo} onChange={(e)=>setIncludeTempo(e.target.checked)} />{language==='ar'?'السرعة/BPM':'Tempo/BPM'}</label>
-                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeKey} onChange={(e)=>setIncludeKey(e.target.checked)} />{language==='ar'?'المقام/السلم':'Key/Scale/Mode'}</label>
-                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeTimeSig} onChange={(e)=>setIncludeTimeSig(e.target.checked)} />{language==='ar'?'الميزان':'Time signature'}</label>
-                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeStructure} onChange={(e)=>setIncludeStructure(e.target.checked)} />{language==='ar'?'البنية':'Structure'}</label>
-                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeInstrumentsOpt} onChange={(e)=>setIncludeInstrumentsOpt(e.target.checked)} />{language==='ar'?'الآلات':'Instrumentation'}</label>
-                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeVocalsOpt} onChange={(e)=>setIncludeVocalsOpt(e.target.checked)} />{language==='ar'?'الغناء/الصوت':'Vocals'}</label>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="font-medium mb-1">{language==='ar'?'السلامة (تفصيلي)':'Safety (advanced)'}</div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={noGenreDrift} onChange={(e)=>setNoGenreDrift(e.target.checked)} />{language==='ar'?'ممنوع انحراف النوع/الأسلوب':'No genre drift'}</label>
-                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={noNewInstruments} onChange={(e)=>setNoNewInstruments(e.target.checked)} />{language==='ar'?'لا آلات جديدة غير مذكورة':'No new instruments'}</label>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="font-medium">{language==='ar'?'الكورس':'Hook/chorus'}</div>
-                  <label className="inline-flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={hookEmphasis} onChange={(e)=>setHookEmphasis(e.target.checked)} />
-                    {language==='ar'?'تركيز على اللازمة/الكورس':'Hook emphasis'}
-                  </label>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="font-medium">{language==='ar'?'قافية ومقاطع':'Rhyme & Syllables'}</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="inline-flex items-center gap-2"><input type="radio" name="rhymeMode" checked={rhymeMode==='off'} onChange={()=>setRhymeMode('off')} />{language==='ar'?'بدون':'Off'}</label>
-                    <label className="inline-flex items-center gap-2"><input type="radio" name="rhymeMode" checked={rhymeMode==='rhyme'} onChange={()=>setRhymeMode('rhyme')} />{language==='ar'?'قافية':'Rhyme'}</label>
-                    <label className="inline-flex items-center gap-2"><input type="radio" name="rhymeMode" checked={rhymeMode==='syllables'} onChange={()=>setRhymeMode('syllables')} />{language==='ar'?'مقاطع محكمة':'Tight syllables'}</label>
-                    <label className="inline-flex items-center gap-2"><input type="radio" name="rhymeMode" checked={rhymeMode==='both'} onChange={()=>setRhymeMode('both')} />{language==='ar'?'قافية + مقاطع':'Rhyme + Syllables'}</label>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="mt-4 flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={()=>setShowAmpModal(false)} disabled={amping}>
-              {language==='ar'?'إلغاء':'Cancel'}
-            </Button>
-            <Button size="sm" onClick={handleAmpSubmit} disabled={amping} aria-busy={amping}>
-              {amping ? (
-                <span className="inline-flex items-center gap-2">
-                  <span className="animate-spin">✨</span>
-                  <span>{language==='ar'?'...يجري التحسين':'Amping...'}</span>
-                </span>
-              ) : (
-                <span>{language==='ar'?'تحسين':'Amp'}</span>
-              )}
-            </Button>
-          </div>
-        </div>
-      </div>,
-      document.body
-    )
-  );
 
   // Caps: style max 350, lyrics gets remaining up to overall 800 (title excluded from cap)
   const limit = 800;
@@ -1573,17 +1487,13 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     return CLICHE_PATTERNS.some((re) => re.test(s));
   }
 
-  // Compact, read-only summary for UI display
-  const includedSummary = useMemo(() => {
+  const chipsSummaryText = useMemo(() => {
     const bits: string[] = [];
-    if (includeTags.length) bits.push(`${language==='ar' ? 'الأنماط' : 'Styles'}: ${includeTags.join(', ')}`);
-    if (instrumentTags.length) bits.push(`${language==='ar' ? 'الآلات' : 'Instruments'}: ${instrumentTags.join(', ')}`);
-    if (moodTags.length) bits.push(`${language==='ar' ? 'المزاج' : 'Mode'}: ${moodTags.join(', ')}`);
-    if (vocalType === 'female') bits.push(`${language==='ar' ? 'الصوت' : 'Vocals'}: ${language==='ar' ? 'أنثوي' : 'Female voice'}`);
-    if (vocalType === 'male') bits.push(`${language==='ar' ? 'الصوت' : 'Vocals'}: ${language==='ar' ? 'ذكوري' : 'Male voice'}`);
-    if (vocalType === 'none') bits.push(`${language==='ar' ? 'الصوت' : 'Vocals'}: ${language==='ar' ? 'بدون' : 'None'}`);
-    return bits.join(' · ');
-  }, [includeTags, instrumentTags, moodTags, vocalType, language]);
+    if (includeTags.length) bits.push(includeTags.join(', '));
+    if (instrumentTags.length) bits.push(instrumentTags.join(', '));
+    if (moodTags.length) bits.push(moodTags.join(', '));
+    return bits.join(', ');
+  }, [includeTags, instrumentTags, moodTags]);
 
   // Insert chips into style text on demand (optional)
   function insertChipsIntoStyle() {
@@ -1594,6 +1504,44 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     const capped = Array.from(base).slice(0, styleCap).join('');
     setStyleText(capped);
   }
+
+  useEffect(() => {
+    if (!chipsSummaryText) return;
+    setStyleText((prev) => {
+      const manual = prev
+        .split(',')
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .filter((part) => !includeTags.includes(part) && !instrumentTags.includes(part) && !moodTags.includes(part));
+      const next = [...chipsSummaryText.split(',').map((part) => part.trim()).filter(Boolean), ...manual].join(', ');
+      return Array.from(next).slice(0, styleCap).join('');
+    });
+  }, [chipsSummaryText, includeTags, instrumentTags, moodTags, styleCap]);
+
+  const handleSaveGeneratedTrack = async (trackId: string) => {
+    if (!user || savingTrackIds.includes(trackId)) return;
+    setSavingTrackIds((prev) => [...prev, trackId]);
+    try {
+      const track = generatedTracks.find((item) => item.id === trackId);
+      const existing = track ? trackId : null;
+      if (!existing) throw new Error(isAr ? 'لم يتم العثور على المقطع' : 'Track not found');
+
+      const { error } = await (supabase as any)
+        .from('user_music_tracks')
+        .update({ meta: { status: 'completed', saved: true } })
+        .eq('id', existing)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setSavedTrackIds((prev) => prev.includes(trackId) ? prev : [...prev, trackId]);
+      toast.success(isAr ? 'تم الحفظ في المحفوظات' : 'Saved to your Saved tab');
+    } catch (e: any) {
+      toast.error((isAr ? 'فشل الحفظ: ' : 'Save failed: ') + (e?.message || String(e)));
+    } finally {
+      setSavingTrackIds((prev) => prev.filter((id) => id !== trackId));
+    }
+  };
 
   // No more mirroring chips into a single prompt; we compose at send-time
 
@@ -1614,279 +1562,12 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     if (capped !== lyricsText) setLyricsText(capped);
   }, [maxLyricLines, lyricsCap]);
 
-  // New: AMP submit with options
-  async function handleAmpSubmit() {
-    if (!styleText.trim() && !lyricsText.trim() && !title.trim()) return;
-    setAmping(true);
-    try {
-      const baseSummary = stripStylesSuffix(styleText);
-      const baseLyrics = stripStylesSuffix(lyricsText);
-      // Build an intent-preserving directive for music with selected options
-      const wantsArabic = langChoice === 'ar' || (langChoice === 'auto' && language === 'ar');
-      const includeBits: string[] = [];
-      if (includeTempo) includeBits.push(wantsArabic ? 'السرعة/BPM' : 'tempo/BPM');
-      if (includeKey) includeBits.push(wantsArabic ? 'المقام/السلم' : 'key/scale/mode');
-      if (includeTimeSig) includeBits.push(wantsArabic ? 'الميزان' : 'time signature');
-      if (includeStructure) includeBits.push(wantsArabic ? 'البنية' : 'structure');
-      if (includeInstrumentsOpt) includeBits.push(wantsArabic ? 'الآلات' : 'instrumentation');
-      if (includeVocalsOpt) includeBits.push(wantsArabic ? 'الغناء/الصوت' : 'vocals');
-      const includeLine = includeBits.length ? (wantsArabic ? `ضمّن في السطر: ${includeBits.join(', ')}` : `Include in line: ${includeBits.join(', ')}`) : '';
-
-      const safetyBits: string[] = [];
-      if (noGenreDrift) safetyBits.push(wantsArabic ? 'ممنوع الانحراف عن النوع/الأسلوب' : 'no genre/style drift');
-      if (noNewInstruments) safetyBits.push(wantsArabic ? 'لا تضف آلات غير مذكورة' : 'no adding new instruments unless missing');
-      const safetyLine = safetyBits.length ? (wantsArabic ? `سلامة: ${safetyBits.join(', ')}` : `Safety: ${safetyBits.join(', ')}`) : '';
-
-      const lyricsLine = (
-        lyricsMode === 'preserve'
-          ? (wantsArabic ? 'الكلمات: إن وجدت فاحفظها حرفيًا.' : 'Lyrics: if provided, preserve verbatim.')
-          : lyricsMode === 'continue'
-            ? (wantsArabic ? 'الكلمات: إن كانت موجودة فأكملها بنفس اللغة والمزاج والوزن.' : 'Lyrics: if provided, continue in same language, mood, and meter.')
-            : (wantsArabic ? 'الكلمات: أنشئ كلمات كاملة موجزة قابلة للغناء تتماشى مع الأسلوب والمزاج والآلات.' : 'Lyrics: generate concise, singable full lyrics aligned to style, mood, and instruments.')
-      );
-
-      // Vocals constraint: auto = no constraint; none = forbid; female/male = require
-      const vocalsLine = (
-        vocalType === 'none'
-          ? (wantsArabic ? 'لا تستخدم غناء/صوت بشري.' : 'Do not use vocals/lead voice.')
-          : vocalType === 'female'
-            ? (wantsArabic ? 'استخدم صوتًا أنثويًا للغناء الرئيسي.' : 'Use a female lead vocal.')
-            : vocalType === 'male'
-              ? (wantsArabic ? 'استخدم صوتًا ذكوريًا للغناء الرئيسي.' : 'Use a male lead vocal.')
-              : ''
-      );
-
-      const languageHint = langChoice === 'auto' ? '' : (wantsArabic ? 'استخدم العربية.' : 'Use English.');
-
-      const directiveCore = wantsArabic
-        ? 'مهمة: حسّن هذا التوجيه لتوليد موسيقى فقط دون انحراف عن نية المستخدم. أعد صياغته كسطر موجز بأسلوب منتج موسيقي (ملخص موسيقي طبيعي وليس قائمة متطلبات). ركّز على الأسلوب والمزاج والبنية والإيقاع والسرعة والمقامات والآلات. تجنب اقتباس نص المستخدم أو العنوان حرفيًا.'
-        : 'Task: Improve this strictly for music generation without drifting from user intent. Rewrite as a concise producer-style musical brief (natural, not a requirements list). Focus on style, mood, structure, tempo, scales/modes, and instruments. Avoid quoting the user text or title verbatim.';
-
-      const durationTarget = Math.min(120, duration);
-      const durationLine = wantsArabic ? `المدة المستهدفة: ${durationTarget} ثانية` : `Target duration: ${durationTarget}s`;
-      const arrangementLine = getArrangementBrief(durationTarget, wantsArabic);
-      const titleLine = title ? (wantsArabic ? `العنوان: ${title}` : `Title: ${title}`) : '';
-      const stylesLine = buildStylesSuffix();
-      const mustUseChips = wantsArabic
-        ? 'التزم بالأنماط والآلات والمزاج المحدد أعلاه. لا تضف عناصر جديدة إذا كانت السلامة مفعلة.'
-        : 'Honor the selected styles, instruments, and mood above. Do not add new elements if safety is on.';
-      const prodIntensityLine = wantsArabic
-        ? `شدة المنتج: ${producerIntensity} من 5`
-        : `Producer intensity: ${producerIntensity} of 5`;
-      const hookLine = hookEmphasis
-        ? (wantsArabic ? 'ركز على لازمـة/كورَس قوي وواضح وأوسع من باقي المقاطع.' : 'Emphasize a strong, clear hook/chorus that is wider than other sections.')
-        : '';
-      const producerNotes = wantsArabic
-        ? 'سلوك المنتج: أعطِ إيقاعًا واضحًا (كِك/سنير محدد)، تحكمًا في كثافة الهاتس، سلوك الباس (808 بزحلقة أو لحنية)، لَيد ذو موتيف واضح وملء المساحات بين العبارات، انتقالات (فِلز/رايزر/دروب)، وتباين ديناميكي بين المقاطع. اجعل اللازمة أوسع وأعلى إدراكًا للصوت.'
-        : 'Producer behavior: clear groove (defined kick/snare), controllable hat density, bass behavior (808 with glide or melodic), a lead with a clear motif and inter-phrase fills, transitions (fills/risers/drops), and dynamic contrast between sections. Make the chorus wider and ~+2–3 dB perceived.';
-      const contentLine = wantsArabic ? `ملخص الأسلوب: ${baseSummary}` : `Style brief: ${baseSummary}`;
-      const lyricsContent = baseLyrics ? (wantsArabic ? `الكلمات:\n${baseLyrics}` : `Lyrics:\n${baseLyrics}`) : '';
-      const directive = [
-        directiveCore,
-        includeLine,
-        safetyLine,
-        mustUseChips,
-        producerNotes,
-        hookLine,
-        prodIntensityLine,
-        arrangementLine,
-        // Intentionally omit lyricsLine from music brief to avoid lyric leakage
-        vocalsLine,
-        languageHint,
-        durationLine
-      ].filter(Boolean).join('\n');
-      // Do NOT pass lyrics into the brief step to avoid echoing lyrics in style line
-      const composed = [directive, titleLine, contentLine, stylesLine].filter(Boolean).join('\n');
-      const { data, error } = await supabase.functions.invoke('prompt-amp', {
-        body: { text: composed, mode: 'music' }
-      });
-      if (error) throw error;
-      const improved = (data?.text || '').toString();
-      if (!improved) throw new Error(language==='ar' ? 'تعذّر التحسين' : 'Amp failed');
-      // Sanitize: strip lyric-like constructs (quotes, slash-separated lines, newlines to spaces)
-      const sanitized = improved
-        .replace(/\"[^\"\\]*(?:\\.[^\"\\]*)*\"/g, '')
-        .replace(/\s*\/\s*/g, ', ')
-        .replace(/\n{2,}/g, '\n')
-        .replace(/\n/g, ' ')
-        .replace(/\s{2,}/g, ' ')
-        .trim();
-      const capped = sanitized.slice(0, styleCap);
-      setShowAmpModal(false);
-      setStyleText(capped);
-      toast.success(language==='ar' ? 'تم تحسين التوجيه' : 'Prompt enhanced');
-
-      // New: handle lyrics actions
-      // Prefer continue if user provided seed lyrics
-      // If user provided seed lyrics: Preserve -> Continue, else if no lyrics: force Generate
-      const effectiveLyricsMode = baseLyrics
-        ? (lyricsMode === 'preserve' ? 'continue' : lyricsMode)
-        : 'generate';
-      if (effectiveLyricsMode === 'continue' || effectiveLyricsMode === 'generate') {
-        // Build a focused lyrics directive
-        const wantsArabicL = langChoice === 'ar' || (langChoice === 'auto' && language === 'ar');
-        const vocHeader = '';
-        const titleLineL = title ? (wantsArabicL ? `العنوان: ${title}` : `Title: ${title}`) : '';
-        const stylesLineL = buildStylesSuffix();
-        const chipsLyricHint = (includeTags.length || instrumentTags.length || moodTags.length)
-          ? (wantsArabicL
-              ? 'ادمج الأنماط والآلات والمزاج المحدد بوضوح داخل الكلمات دون مخالفتها.'
-              : 'Explicitly weave the selected styles, instruments, and mood into the lyrics without contradicting them.')
-          : '';
-        const seedLyrics = effectiveLyricsMode === 'continue' ? (baseLyrics || '') : '';
-        const taskLine = effectiveLyricsMode === 'continue'
-          ? (wantsArabicL
-              ? 'أكمل هذه الكلمات بنفس اللغة والمزاج والإيقاع مع احترام موضوع العنوان. احتفظ بالأسطر المقدَّمة كما هي دون تعديل، وابنِ عليها. اجعل كل سطر واضحًا وقابلًا للغناء دون تكرار. أعد فقط النص النهائي للكلمات.'
-              : 'Continue these lyrics in the same language, mood, and meter, honoring the title theme. Preserve any provided lines verbatim and build upon them. Make each line clear and singable with no repetition. Return only the final lyrics text.')
-          : (wantsArabicL
-              ? 'أنشئ كلمات كاملة موجزة قابلة للغناء مستوحاة من العنوان/الأسلوب/الآلات/المزاج. احترم موضوع العنوان، وادمج الاختيارات أعلاه داخل المعاني دون مخالفة. اجعل كل سطر مميزًا دون تكرار. أعِد فقط النص النهائي للكلمات.'
-              : 'Generate concise, singable full lyrics inspired by the title/style/instrumentation/mood. Honor the title theme and integrate the above choices into the meaning without contradicting them. Ensure each line is distinct with no repetition. Return only the final lyrics text.');
-        const langHintL = langChoice === 'auto' ? '' : (wantsArabicL ? 'استخدم العربية.' : 'Use English.');
-        const creativityLine = wantsArabicL
-          ? `الإبداع: ${creativity}/100 — زد الجرأة المجازية تدريجيًا مع الحفاظ على الوضوح.`
-          : `Creativity: ${creativity}/100 — increase metaphorical boldness while staying clear.`;
-        const poetLine = wantsArabicL
-          ? 'اكتب بصوت شاعر/كاتب أغاني ماهر: صور جديدة، مجازات رشيقة، لغة طبيعية قابلة للغناء.'
-          : 'Write in the voice of a skilled poet‑songwriter: fresh imagery, elegant metaphors, natural singable language.';
-        const rhymeLine = (
-          rhymeMode === 'rhyme' ? (wantsArabicL ? 'فضّل قوافي خفيفة في نهايات الأسطر (AABB/ABAB).' : 'Prefer light end rhymes (AABB/ABAB).') :
-          rhymeMode === 'syllables' ? (wantsArabicL ? 'حافظ على نافذة مقاطع 7–10 لكل سطر.' : 'Keep a 7–10 syllable window per line.') :
-          rhymeMode === 'both' ? (wantsArabicL ? 'قافية خفيفة مع نافذة مقاطع 7–10 لكل سطر.' : 'Use light end rhymes and keep 7–10 syllables per line.') :
-          ''
-        );
-        const durationSeconds = Math.min(120, duration);
-        const durationLineL = wantsArabicL ? `المدة المستهدفة: ${durationSeconds} ثانية` : `Target duration: ${durationSeconds}s`;
-        const noRepeatL = wantsArabicL
-          ? 'لا تكرر أي سطر، ولا تعكس العنوان أو الملخص حرفيًا. تجنب الحشو والكليشيهات إلا إذا طُلب.'
-          : 'Do not repeat any line, and do not echo the title or brief verbatim. Avoid filler/clichés unless requested.';
-        const lineBudget = wantsArabicL
-          ? `أعد بالضبط ${maxLyricLines} أسطر قصيرة قابلة للغناء.`
-          : `Return exactly ${maxLyricLines} lines, using short, singable lines.`;
-        const outShape = wantsArabicL
-          ? 'أعِد الأسطر فقط مفصولة بأسطر جديدة، دون عناوين أقسام أو شروح.'
-          : 'Output ONLY those lines separated by newlines; no headings or commentary.';
-        const titleOnce = wantsArabicL
-          ? 'اذكر عبارة العنوان مرة واحدة فقط كسطر اللازمة/الكورس.'
-          : 'Mention the title phrase exactly once as a hook/chorus line.';
-        const homeDetail = wantsArabicL
-          ? 'ضمّن تفصيلاً منزليًا ملموسًا واحدًا على الأقل (مثال: ضوء الشرفة، مفاتيح في الوعاء، ألواح أرضية مهترئة).'
-          : 'Include at least one concrete home detail (e.g., porch light, keys in the bowl, worn floorboards).';
-        // Build FACTS block (English markers to match server prompt expectations)
-        const arrangementHint = getArrangementBrief(durationSeconds, wantsArabicL);
-        const factsLines: string[] = [];
-        if (title) factsLines.push(`Title: ${title}`);
-        if (includeTags.length) factsLines.push(`Styles: ${includeTags.join(', ')}`);
-        if (instrumentTags.length) factsLines.push(`Instruments: ${instrumentTags.join(', ')}`);
-        if (moodTags.length) factsLines.push(`Mood: ${moodTags.join(', ')}`);
-        factsLines.push(`Duration: ${durationSeconds}s`);
-        factsLines.push(`Arrangement: ${arrangementHint}`);
-        const factsBlock = `FACTS:\n${factsLines.join('\n')}`;
-
-        // Optional SEED block (English marker)
-        const seedBlock = seedLyrics ? `\n\nSEED LYRICS:\n${seedLyrics}` : '';
-
-        // Final lyric prompt: start with FACTS, then directives, then optional SEED block
-        const directives = [taskLine, noRepeatL, chipsLyricHint, creativityLine, poetLine, rhymeLine, langHintL, lineBudget, outShape, titleOnce, homeDetail].filter(Boolean).join('\n');
-        const lyricPrompt = [factsBlock, '', directives].join('\n') + seedBlock;
-
-        const { data: ldata, error: lerror } = await supabase.functions.invoke('prompt-amp', {
-          body: { text: lyricPrompt, mode: 'lyrics' }
-        });
-        if (!lerror) {
-          const generated = (ldata?.text || '').toString().trim();
-          if (generated) {
-            // Split, trim, drop lines that start with the title words, de-duplicate, enforce line budget, then char cap
-            const rawLines = generated.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-            const titleStart = title ? firstNWords(normalizeLine(title), 3) : '';
-            let processed: string[] = [];
-            if (rawLines.length > 0 && titleStart) {
-              // Only block the first generated line from starting with the title words; allow later chorus to use it
-              const first = rawLines[0];
-              const rest = rawLines.slice(1);
-              const firstOk = firstNWords(normalizeLine(first), 3) !== titleStart;
-              processed = (firstOk ? [first] : []).concat(rest);
-            } else {
-              processed = rawLines;
-            }
-            const uniqueLines = dedupeLines(processed).slice(0, maxLyricLines);
-            const limited = uniqueLines.join('\n');
-            if (effectiveLyricsMode === 'continue' && baseLyrics) {
-              const appended = `${baseLyrics}\n${limited}`;
-              const cappedLyrics = Array.from(appended).slice(0, lyricsCap).join('');
-              setLyricsText(cappedLyrics);
-            } else {
-              const cappedLyrics = Array.from(limited).slice(0, lyricsCap).join('');
-              setLyricsText(cappedLyrics);
-            }
-          }
-        }
-      }
-    } catch (e: any) {
-      toast.error((language==='ar' ? 'فشل التحسين: ' : 'Amp failed: ') + (e?.message || String(e)));
-    } finally {
-      setAmping(false);
-    }
-  }
-
-  // Cleanup poll interval on unmount
-  useEffect(() => {
-    return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    };
-  }, []);
-
   // Build style string from chips + styleText
   function buildKieStyleString(): string {
-    const parts: string[] = [];
+    const parts = [...includeTags, ...instrumentTags, ...moodTags].filter(Boolean);
     if (styleText.trim()) parts.push(styleText.trim());
-    if (includeTags.length) parts.push(includeTags.join(', '));
-    if (instrumentTags.length) parts.push(instrumentTags.join(', '));
-    if (moodTags.length) parts.push(moodTags.join(', '));
     return parts.join(', ');
   }
-
-  const startPolling = (taskId: string, recordId: string) => {
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    let attempts = 0;
-    const MAX_ATTEMPTS = 60; // 5 minutes at 5s intervals
-    pollIntervalRef.current = setInterval(async () => {
-      attempts++;
-      if (attempts > MAX_ATTEMPTS) {
-        clearInterval(pollIntervalRef.current!);
-        setSubmitting(false);
-        setGeneratingTask(null);
-        setLastError(language === 'ar' ? 'انتهت مهلة الإنشاء' : 'Generation timed out');
-        toast.error(language === 'ar' ? 'انتهت مهلة الإنشاء' : 'Generation timed out');
-        return;
-      }
-      try {
-        const { data: statusData, error: statusError } = await supabase.functions.invoke('music-status', {
-          body: { taskId, recordId }
-        });
-        if (statusError) return;
-        if (statusData?.status === 'completed' && statusData?.tracks?.length > 0) {
-          clearInterval(pollIntervalRef.current!);
-          setSubmitting(false);
-          setGeneratingTask(null);
-          setGeneratedTracks(statusData.tracks);
-          setSongsUsed((v) => v + 1);
-          setSongsRemaining((v) => Math.max(0, v - 1));
-          setLastError(null);
-          toast.success(language === 'ar' ? '🎵 موسيقاك جاهزة!' : '🎵 Your music is ready!');
-          onSaved?.();
-        } else if (statusData?.status === 'failed') {
-          clearInterval(pollIntervalRef.current!);
-          setSubmitting(false);
-          setGeneratingTask(null);
-          const errMsg = statusData?.error || (language === 'ar' ? 'فشل الإنشاء' : 'Generation failed');
-          setLastError(errMsg);
-          toast.error(errMsg);
-        }
-      } catch (e) {
-        console.error('[poll] status check error:', e);
-      }
-    }, 5000);
-  };
 
   const handleGenerate = async () => {
     if (overLimit) return;
@@ -1923,6 +1604,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       const invokeBody: Record<string, unknown> = {
         title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
         style: kieStyle || (language === 'ar' ? 'بوب عربي' : 'pop'),
+        customMode: true,
         instrumental,
         model: 'V4_5', // Hardcoded single model
         duration_seconds: durationTarget,
@@ -1943,10 +1625,32 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       if (genError) throw genError;
       if (!genData?.taskId) throw new Error(language === 'ar' ? 'لم يتم الحصول على معرف المهمة' : 'No task ID returned');
 
-      const { taskId, recordId } = genData as { taskId: string; recordId: string };
+      const { taskId, recordId, status, tracks, error } = genData as {
+        taskId: string;
+        recordId: string;
+        status?: string;
+        tracks?: Array<{ id: string; audioUrl: string; coverUrl: string | null; duration: number | null; title: string | null; variantIndex: number }>;
+        error?: string;
+      };
+
+      if (status === 'completed' && tracks?.length) {
+        setSubmitting(false);
+        setGeneratingTask(null);
+        setGeneratedTracks(tracks);
+        setSavedTrackIds([]);
+        setSongsUsed((v) => v + 1);
+        setSongsRemaining((v) => Math.max(0, v - 1));
+        setLastError(null);
+        toast.success(language === 'ar' ? 'تم إنشاء الموسيقى بنجاح' : 'Music generated successfully');
+        return;
+      }
+
+      if (status === 'failed') {
+        throw new Error(error || (language === 'ar' ? 'فشل الإنشاء' : 'Generation failed'));
+      }
+
       setGeneratingTask({ taskId, recordId });
-      startPolling(taskId, recordId);
-      toast.info(language === 'ar' ? '🎵 جارٍ إنشاء موسيقاك...' : '🎵 Creating your music...');
+      toast.info(language === 'ar' ? '🎵 ما زال إنشاء الموسيقى جارياً...' : '🎵 Music is still generating...');
 
     } catch (e: any) {
       const msg = e?.message || String(e);
@@ -2014,12 +1718,8 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     return () => document.removeEventListener('mousedown', handleDocClick);
   }, [showIncludePicker, showInstrumentPicker, showMoodPicker]);
 
-  const isAr = language === 'ar';
-
   return (
     <div className="space-y-4">
-      {ampModal}
-
       {/* ── Title (First) ── */}
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] dark:bg-white/[0.02] p-4 space-y-3">
         <div className="space-y-1.5">
@@ -2035,185 +1735,193 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
         </div>
       </div>
 
-      {/* ── Unified Music Style Section ── */}
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] dark:bg-white/[0.02] p-4 space-y-4 overflow-visible">
-        {/* Section Header */}
-        <div className="flex items-center gap-2 pb-2 border-b border-white/5">
-          <Palette className="h-4 w-4 text-sky-400" />
-          <span className="text-xs font-semibold text-sky-300 uppercase tracking-wider">{isAr ? 'أسلوب الموسيقى' : 'Music Style'}</span>
-        </div>
+      {/* ── Music Style ── */}
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
+        {/* Header with collapse toggle */}
+        <button 
+          type="button"
+          onClick={() => setMusicStyleOpen(!musicStyleOpen)}
+          className="flex items-center justify-between w-full"
+        >
+          <div className="flex items-center gap-2">
+            <Palette className="h-4 w-4 text-sky-400" />
+            <span className="text-xs font-semibold text-sky-300 uppercase">{isAr ? 'أسلوب الموسيقى' : 'Music Style'}</span>
+          </div>
+          <span className="text-xs text-sky-400/80">{musicStyleOpen ? '−' : '+'}</span>
+        </button>
 
-        {/* Three compact picker rows in a grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Styles */}
-          <div className="space-y-2 relative" ref={includeAnchorRef}>
-            <span className="text-[10px] font-medium text-muted-foreground/70 uppercase">{isAr ? 'الأنماط' : 'Styles'}</span>
-            <div className="flex flex-wrap gap-1.5">
-              {includeTags.slice(0, 3).map((tag) => (
-                <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/30 text-sky-300 text-[10px] font-medium">
-                  {tag}
-                  <button type="button" className="hover:text-white" onClick={() => setIncludeTags((prev) => prev.filter((t) => t !== tag))}>×</button>
-                </span>
-              ))}
-              {includeTags.length > 3 && (
-                <span className="text-[10px] text-muted-foreground/50">+{includeTags.length - 3}</span>
-              )}
-              <button type="button"
-                onClick={() => { setShowIncludePicker((v)=>!v); setShowInstrumentPicker(false); setShowMoodPicker(false); }}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-white/20 text-muted-foreground text-[10px] hover:border-sky-400/50 hover:text-sky-300 transition-colors"
+        {musicStyleOpen && (
+          <>
+            {/* Selected tags - compact row */}
+            {(includeTags.length > 0 || instrumentTags.length > 0 || moodTags.length > 0) && (
+              <div className="flex flex-wrap gap-1.5 pb-2 border-b border-white/5">
+                {includeTags.map((tag) => (
+                  <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/20 border border-sky-400/30 text-sky-300 text-[10px]">
+                    {tag}
+                    <button type="button" aria-label={isAr ? 'إزالة' : 'Remove'} onClick={() => setIncludeTags(p => p.filter(t => t !== tag))} className="hover:text-white p-0.5">
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </span>
+                ))}
+                {instrumentTags.map((tag) => (
+                  <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-400/30 text-purple-300 text-[10px]">
+                    {tag}
+                    <button type="button" aria-label={isAr ? 'إزالة' : 'Remove'} onClick={() => setInstrumentTags(p => p.filter(t => t !== tag))} className="hover:text-white p-0.5">
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </span>
+                ))}
+                {moodTags.map((tag) => (
+                  <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-300 text-[10px]">
+                    {tag}
+                    <button type="button" aria-label={isAr ? 'إزالة' : 'Remove'} onClick={() => setMoodTags(p => p.filter(t => t !== tag))} className="hover:text-white p-0.5">
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Category: Styles */}
+            <div>
+              <button 
+                type="button"
+                onClick={() => setStylesOpen(!stylesOpen)}
+                className="flex items-center justify-between w-full text-[10px] font-medium text-muted-foreground/60 uppercase mb-1.5"
               >
-                <Plus className="h-3 w-3" />{isAr ? 'إضافة' : 'Add'}
+                <span>{isAr ? 'الأنماط' : 'Styles'}</span>
+                <span className="text-sky-400/80">{stylesOpen ? '−' : '+'}</span>
               </button>
-            </div>
-            {showIncludePicker && includeRect && createPortal(
-              <div id="style-picker-menu" style={{ position: 'fixed', top: includeRect.top, left: includeRect.left, width: Math.max(220, includeRect.width), zIndex: 2147483647 }}
-                className="max-h-56 overflow-auto rounded-xl border border-white/10 bg-[#0c0f14] shadow-2xl backdrop-blur-xl">
-                <ul className="p-2 space-y-0.5 text-sm">
-                  {STYLE_PRESETS.map((opt) => {
-                    const checked = includeTags.includes(opt);
-                    return (
-                      <li key={opt} className={`flex items-center gap-2 cursor-pointer rounded-lg px-3 py-1.5 transition-colors ${checked ? 'bg-sky-500/20 text-sky-300' : 'hover:bg-white/[0.06] text-foreground/80'}`}
-                        onClick={() => setIncludeTags((prev) => checked ? prev.filter(t=>t!==opt) : [...prev, opt])}>
-                        <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${checked ? 'bg-sky-500 border-sky-500' : 'border-white/20'}`}>
-                          {checked && <span className="text-white text-[8px] font-bold">✓</span>}
-                        </span>
-                        {opt}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>, document.body)
-            }
-          </div>
-
-          {/* Instruments */}
-          <div className="space-y-2 relative" ref={instrumentAnchorRef}>
-            <span className="text-[10px] font-medium text-muted-foreground/70 uppercase">{isAr ? 'الآلات' : 'Instruments'}</span>
-            <div className="flex flex-wrap gap-1.5">
-              {instrumentTags.slice(0, 3).map((tag) => (
-                <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/15 border border-purple-400/30 text-purple-300 text-[10px] font-medium">
-                  {tag}
-                  <button type="button" className="hover:text-white" onClick={() => setInstrumentTags((prev) => prev.filter((t) => t !== tag))}>×</button>
-                </span>
-              ))}
-              {instrumentTags.length > 3 && (
-                <span className="text-[10px] text-muted-foreground/50">+{instrumentTags.length - 3}</span>
+              {stylesOpen && (
+                <div className="flex flex-wrap gap-1.5">
+                  {STYLE_PRESETS.map((style) => (
+                    <button
+                      key={style}
+                      type="button"
+                      onClick={() => setIncludeTags(p => p.includes(style) ? p.filter(t => t !== style) : [...p, style])}
+                      className={`px-2 py-1 rounded-full text-[11px] border transition-all active:scale-95 ${
+                        includeTags.includes(style)
+                          ? 'bg-sky-500/25 border-sky-400/40 text-sky-200'
+                          : 'bg-transparent border-white/[0.08] text-muted-foreground/80 hover:border-sky-400/30 hover:text-sky-300'
+                      }`}
+                    >
+                      {style}
+                    </button>
+                  ))}
+                </div>
               )}
-              <button type="button"
-                onClick={() => { setShowInstrumentPicker((v)=>!v); setShowIncludePicker(false); setShowMoodPicker(false); }}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-white/20 text-muted-foreground text-[10px] hover:border-purple-400/50 hover:text-purple-300 transition-colors"
-              >
-                <Plus className="h-3 w-3" />{isAr ? 'إضافة' : 'Add'}
-              </button>
             </div>
-            {showInstrumentPicker && instrumentRect && createPortal(
-              <div id="instrument-picker-menu" style={{ position: 'fixed', top: instrumentRect.top, left: instrumentRect.left, width: Math.max(220, instrumentRect.width), zIndex: 2147483647 }}
-                className="max-h-56 overflow-auto rounded-xl border border-white/10 bg-[#0c0f14] shadow-2xl backdrop-blur-xl">
-                <ul className="p-2 space-y-0.5 text-sm">
-                  {INSTRUMENT_PRESETS.map((opt) => {
-                    const checked = instrumentTags.includes(opt);
-                    return (
-                      <li key={opt} className={`flex items-center gap-2 cursor-pointer rounded-lg px-3 py-1.5 transition-colors ${checked ? 'bg-purple-500/20 text-purple-300' : 'hover:bg-white/[0.06] text-foreground/80'}`}
-                        onClick={() => setInstrumentTags((prev) => checked ? prev.filter(t=>t!==opt) : [...prev, opt])}>
-                        <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${checked ? 'bg-purple-500 border-purple-500' : 'border-white/20'}`}>
-                          {checked && <span className="text-white text-[8px] font-bold">✓</span>}
-                        </span>
-                        {opt}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>, document.body)
-            }
-          </div>
 
-          {/* Mood */}
-          <div className="space-y-2 relative" ref={moodAnchorRef}>
-            <span className="text-[10px] font-medium text-muted-foreground/70 uppercase">{isAr ? 'المزاج' : 'Mood'}</span>
-            <div className="flex flex-wrap gap-1.5">
-              {moodTags.slice(0, 3).map((tag) => (
-                <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-amber-300 text-[10px] font-medium">
-                  {tag}
-                  <button type="button" className="hover:text-white" onClick={() => setMoodTags((prev) => prev.filter((t) => t !== tag))}>×</button>
-                </span>
-              ))}
-              {moodTags.length > 3 && (
-                <span className="text-[10px] text-muted-foreground/50">+{moodTags.length - 3}</span>
+            {/* Category: Instruments */}
+            <div>
+              <button 
+                type="button"
+                onClick={() => setInstrumentsOpen(!instrumentsOpen)}
+                className="flex items-center justify-between w-full text-[10px] font-medium text-muted-foreground/60 uppercase mb-1.5"
+              >
+                <span>{isAr ? 'الآلات' : 'Instruments'}</span>
+                <span className="text-purple-400/80">{instrumentsOpen ? '−' : '+'}</span>
+              </button>
+              {instrumentsOpen && (
+                <div className="flex flex-wrap gap-1.5">
+                  {INSTRUMENT_PRESETS.map((inst) => (
+                    <button
+                      key={inst}
+                      type="button"
+                      onClick={() => setInstrumentTags(p => p.includes(inst) ? p.filter(t => t !== inst) : [...p, inst])}
+                      className={`px-2 py-1 rounded-full text-[11px] border transition-all active:scale-95 ${
+                        instrumentTags.includes(inst)
+                          ? 'bg-purple-500/25 border-purple-400/40 text-purple-200'
+                          : 'bg-transparent border-white/[0.08] text-muted-foreground/80 hover:border-purple-400/30 hover:text-purple-300'
+                      }`}
+                    >
+                      {inst}
+                    </button>
+                  ))}
+                </div>
               )}
-              <button type="button"
-                onClick={() => { setShowMoodPicker((v)=>!v); setShowIncludePicker(false); setShowInstrumentPicker(false); }}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-white/20 text-muted-foreground text-[10px] hover:border-amber-400/50 hover:text-amber-300 transition-colors"
-              >
-                <Plus className="h-3 w-3" />{isAr ? 'إضافة' : 'Add'}
-              </button>
             </div>
-            {showMoodPicker && moodRect && createPortal(
-              <div id="mood-picker-menu" style={{ position: 'fixed', top: moodRect.top, left: moodRect.left, width: Math.max(220, moodRect.width), zIndex: 2147483647 }}
-                className="max-h-56 overflow-auto rounded-xl border border-white/10 bg-[#0c0f14] shadow-2xl backdrop-blur-xl">
-                <ul className="p-2 space-y-0.5 text-sm">
-                  {MODE_PRESETS.map((opt) => {
-                    const checked = moodTags.includes(opt);
-                    return (
-                      <li key={opt} className={`flex items-center gap-2 cursor-pointer rounded-lg px-3 py-1.5 transition-colors ${checked ? 'bg-amber-500/20 text-amber-300' : 'hover:bg-white/[0.06] text-foreground/80'}`}
-                        onClick={() => setMoodTags((prev) => checked ? prev.filter(t=>t!==opt) : [...prev, opt])}>
-                        <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${checked ? 'bg-amber-500 border-amber-500' : 'border-white/20'}`}>
-                          {checked && <span className="text-white text-[8px] font-bold">✓</span>}
-                        </span>
-                        {opt}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>, document.body)
-            }
-          </div>
-        </div>
 
-        {/* Style of Music textarea - unified with the style section */}
-        <div className="space-y-1.5 pt-1">
-          <label className="text-[10px] font-medium text-muted-foreground/70 uppercase">
-            {isAr ? 'وصف الأسلوب (اختياري)' : 'Style Description (optional)'}
-          </label>
-          <Textarea
-            value={styleText}
-            onChange={(e) => setStyleText(Array.from(e.target.value).slice(0, styleCap).join(''))}
-            placeholder={isAr ? 'أضف تفاصيل إضافية: خليجي بطيء، عود، حنين...' : 'Add more details: arabic GCC slow, oud, dreamy...'}
-            rows={2}
-            className="bg-white/[0.04] border-white/10 focus:border-sky-400/50 focus:ring-sky-400/20 rounded-xl resize-none text-sm"
-          />
-          <div className="flex justify-between text-[10px] text-muted-foreground/50">
-            <span>{Array.from(styleText).length}/{styleCap}</span>
-            <span className="text-sky-400/70">{isAr ? 'يتم دمج هذا مع الأنماط المختارة' : 'Merges with selected tags'}</span>
-          </div>
-        </div>
+            {/* Category: Mood */}
+            <div>
+              <button 
+                type="button"
+                onClick={() => setMoodOpen(!moodOpen)}
+                className="flex items-center justify-between w-full text-[10px] font-medium text-muted-foreground/60 uppercase mb-1.5"
+              >
+                <span>{isAr ? 'المزاج' : 'Mood'}</span>
+                <span className="text-amber-400/80">{moodOpen ? '−' : '+'}</span>
+              </button>
+              {moodOpen && (
+                <div className="flex flex-wrap gap-1.5">
+                  {MODE_PRESETS.map((mood) => (
+                    <button
+                      key={mood}
+                      type="button"
+                      onClick={() => setMoodTags(p => p.includes(mood) ? p.filter(t => t !== mood) : [...p, mood])}
+                      className={`px-2 py-1 rounded-full text-[11px] border transition-all active:scale-95 ${
+                        moodTags.includes(mood)
+                          ? 'bg-amber-500/25 border-amber-400/40 text-amber-200'
+                          : 'bg-transparent border-white/[0.08] text-muted-foreground/80 hover:border-amber-400/30 hover:text-amber-300'
+                      }`}
+                    >
+                      {mood}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Extra details input - compact */}
+            <div className="pt-1">
+              <input
+                type="text"
+                value={styleText}
+                onChange={(e) => setStyleText(e.target.value.slice(0, 150))}
+                placeholder={isAr ? 'تفاصيل إضافية... (اختياري)' : 'Extra details... (optional)'}
+                className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/10 text-xs placeholder:text-muted-foreground/40 focus:border-sky-400/50 focus:outline-none"
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Vocals ── */}
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] dark:bg-white/[0.02] p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <Mic className="h-4 w-4 text-emerald-400" />
-          <span className="text-xs font-semibold text-emerald-300 uppercase tracking-wider">{isAr ? 'الصوت' : 'Vocals'}</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {(['auto', 'none', 'female', 'male'] as const).map((v) => {
-            const labels: Record<string, { en: string; ar: string }> = {
-              auto: { en: 'Auto', ar: 'تلقائي' }, none: { en: 'Instrumental', ar: 'موسيقى فقط' },
-              female: { en: 'Female', ar: 'أنثوي' }, male: { en: 'Male', ar: 'ذكوري' },
-            };
-            const isActive = vocalType === v;
-            return (
-              <button key={v} type="button" onClick={() => setVocalType(v)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${
-                  isActive
-                    ? 'bg-gradient-to-r from-emerald-500/30 to-teal-500/20 border-emerald-400/50 text-emerald-300 shadow-[0_0_12px_hsla(142,76%,55%,0.3)]'
-                    : 'border-white/10 text-muted-foreground hover:border-white/20 hover:text-foreground'
-                }`}
-              >
-                {isAr ? labels[v].ar : labels[v].en}
-              </button>
-            );
-          })}
-        </div>
+        <button 
+          type="button"
+          onClick={() => setVocalsOpen(!vocalsOpen)}
+          className="flex items-center justify-between w-full"
+        >
+          <div className="flex items-center gap-2">
+            <Mic className="h-4 w-4 text-emerald-400" />
+            <span className="text-xs font-semibold text-emerald-300 uppercase tracking-wider">{isAr ? 'الصوت' : 'Vocals'}</span>
+          </div>
+          <span className="text-xs text-emerald-400/80">{vocalsOpen ? '−' : '+'}</span>
+        </button>
+        
+        {vocalsOpen && (
+          <div className="flex flex-wrap gap-2">
+            {(['auto', 'none', 'female', 'male'] as const).map((v) => {
+              const labels: Record<string, { en: string; ar: string }> = {
+                auto: { en: 'Auto', ar: 'تلقائي' }, none: { en: 'Instrumental', ar: 'موسيقى فقط' },
+                female: { en: 'Female', ar: 'أنثوي' }, male: { en: 'Male', ar: 'ذكوري' },
+              };
+              const isActive = vocalType === v;
+              return (
+                <button key={v} type="button" onClick={() => setVocalType(v)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-emerald-500/30 to-teal-500/20 border-emerald-400/50 text-emerald-300 shadow-[0_0_12px_hsla(142,76%,55%,0.3)]'
+                      : 'border-white/10 text-muted-foreground hover:border-white/20 hover:text-foreground'
+                  }`}
+                >
+                  {isAr ? labels[v].ar : labels[v].en}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── Compose Form ── */}
@@ -2383,6 +2091,19 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
                 <div className="relative px-4 pb-4 flex items-center gap-2 justify-end flex-wrap">
                   <button
                     type="button"
+                    onClick={() => handleSaveGeneratedTrack(track.id)}
+                    disabled={savedTrackIds.includes(track.id) || savingTrackIds.includes(track.id)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-emerald-400/20 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 active:scale-95 transition-all disabled:opacity-60"
+                  >
+                    {savingTrackIds.includes(track.id)
+                      ? <Loader2 className="h-3 w-3 animate-spin" />
+                      : <Save className="h-3 w-3" />}
+                    {savedTrackIds.includes(track.id)
+                      ? (isAr ? 'تم الحفظ' : 'Saved')
+                      : (isAr ? 'حفظ' : 'Save')}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => handleDownload(track.audioUrl, `wakti-music-v${idx + 1}.mp3`)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/[0.05] text-muted-foreground hover:text-foreground hover:border-white/20 active:scale-95 transition-all"
                   >
@@ -2400,7 +2121,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
           </div>
 
           <p className="text-center text-xs text-muted-foreground/60">
-            {isAr ? '✓ تم الحفظ تلقائياً في المحفوظات' : '✓ Auto-saved to your Saved tab'}
+            {isAr ? 'اختر المقاطع التي تريد حفظها في تبويب المحفوظات.' : 'Choose which tracks you want to save to the Saved tab.'}
           </p>
         </div>
       )}
@@ -2409,7 +2130,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       {generatedTracks.length === 0 && !submitting && (
         <div className="text-center py-6">
           <p className="text-xs text-muted-foreground/50">
-            {isAr ? 'سيتم حفظ موسيقاك تلقائياً في المحفوظات' : 'Your music will be auto-saved to the Saved tab'}
+            {isAr ? 'يمكنك حفظ المقاطع التي تعجبك في تبويب المحفوظات.' : 'You can save the tracks you like to the Saved tab.'}
           </p>
         </div>
       )}
@@ -2455,7 +2176,9 @@ function EditorTab() {
       const withUrls = (data || [])
         .filter((t: any) => {
           const status = t.meta?.status;
+          const saved = t.meta?.saved;
           if (status === 'generating' || status === 'failed') return false;
+          if (saved === false) return false;
           if (t.storage_path?.includes('_pending.mp3')) return false;
           if (!t.signed_url && !t.storage_path) return false;
           return true;

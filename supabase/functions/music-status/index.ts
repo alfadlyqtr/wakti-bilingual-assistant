@@ -8,14 +8,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 };
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const KIE_API_KEY = Deno.env.get("KIE_API_KEY");
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const supabaseService = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-
 interface SunoTrack {
   id: string;
   audioUrl: string;
@@ -29,7 +21,9 @@ interface SunoTrack {
   duration?: number;
 }
 
+// deno-lint-ignore no-explicit-any
 async function downloadAndStore(
+  supabaseService: any,
   url: string,
   storageBucket: string,
   filePath: string,
@@ -64,6 +58,14 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+  const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const KIE_API_KEY = Deno.env.get("KIE_API_KEY") ?? "";
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const supabaseService = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
     if (!KIE_API_KEY) throw new Error("KIE_API_KEY not configured");
@@ -129,10 +131,11 @@ serve(async (req) => {
     }
 
     const kieData = await kieResp.json();
-    const kieStatus = (kieData.data?.status || "").toUpperCase();
-    const sunoData: SunoTrack[] = kieData.data?.response?.sunoData ?? [];
+    const rawStatus = (kieData?.data?.status ?? kieData?.data?.musicStatus ?? "").toString();
+    const kieStatus = rawStatus.toLowerCase();
+    const sunoData: SunoTrack[] = kieData?.data?.response?.sunoData ?? kieData?.data?.sunoData ?? [];
 
-    if (kieStatus === "SUCCESS" && sunoData.length > 0) {
+    if ((kieStatus === "success" || kieStatus === "complete" || kieStatus === "completed") && sunoData.length > 0) {
       // Grab placeholder row metadata
       const placeholderRow = (dbRows ?? []).find((r: any) => r.id === recordId) ?? (dbRows ?? [])[0];
 
@@ -150,12 +153,12 @@ serve(async (req) => {
         const isFirst = i === 0;
 
         const audioFileName = `${user.id}/${timestamp}_${taskId.slice(0, 8)}_v${i}.mp3`;
-        const publicAudioUrl = await downloadAndStore(track.audioUrl, "music", audioFileName, "audio/mpeg");
+        const publicAudioUrl = await downloadAndStore(supabaseService, track.audioUrl, "music", audioFileName, "audio/mpeg");
 
         let publicCoverUrl: string | null = null;
         if (track.imageUrl) {
           const coverFileName = `${user.id}/${timestamp}_${taskId.slice(0, 8)}_v${i}.jpeg`;
-          publicCoverUrl = await downloadAndStore(track.imageUrl, "music-covers", coverFileName, "image/jpeg");
+          publicCoverUrl = await downloadAndStore(supabaseService, track.imageUrl, "music-covers", coverFileName, "image/jpeg");
         }
 
         const trackMeta = {
@@ -218,7 +221,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
 
-    } else if (kieStatus === "FAILED" || kieStatus === "ERROR") {
+    } else if (kieStatus === "failed" || kieStatus === "error") {
       if (recordId) {
         await supabaseService
           .from("user_music_tracks")

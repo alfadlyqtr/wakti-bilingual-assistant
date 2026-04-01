@@ -273,11 +273,86 @@ function buildSystemPrompt(preferArabic: boolean, mode?: string) {
   }
 }
 
+// ─── Music/Lyrics Amp (OpenAI gpt-4o-mini) ───
+const MUSIC_LYRICS_SYSTEM_PROMPT = `You are a song structure assistant. Your ONLY job is to take the user's lyrics and expand them into a complete song with proper sections.
+
+CRITICAL RULES:
+1. NEVER rewrite or change the user's words. Use their lyrics EXACTLY as written.
+2. Your ONLY job is to organize and expand into song sections (Verse, Chorus, Bridge, Outro).
+3. If the user provides a short line or phrase, expand it into a full song using their style and theme.
+4. Track duration determines structure:
+   - 30s: Verse + Chorus + Outro (minimal)
+   - 60s: Verse 1 + Chorus + Verse 2 + Chorus + Outro
+   - 90s+: Full structure with Bridge
+
+5. Output ONLY the structured lyrics with section labels like:
+   (Verse 1)
+   [lyrics here]
+   
+   (Chorus)
+   [lyrics here]
+
+6. If style/mood/instruments are provided, weave them into the expansion naturally.
+7. Keep the user's original language (Arabic or English).
+8. Never add explanations, only return the song sections.`;
+
+async function ampMusicLyricsWithOpenAI(
+  input: string,
+  durationSeconds: number
+): Promise<string> {
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
+
+  const payload = {
+    model: "gpt-4o-mini",
+    temperature: 0.4,
+    max_tokens: 1200,
+    messages: [
+      {
+        role: "system",
+        content: MUSIC_LYRICS_SYSTEM_PROMPT,
+      },
+      {
+        role: "user",
+        content: `Track duration: ${durationSeconds}s\n\nUser lyrics:\n${input}`,
+      },
+    ],
+  };
+
+  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await resp.json().catch(() => null);
+  if (!resp.ok) {
+    throw new Error(
+      JSON.stringify({
+        stage: "openai-music-lyrics",
+        status: resp.status,
+        body: data || null,
+      }),
+    );
+  }
+
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== "string" || content.trim().length === 0) {
+    throw new Error("openai_empty_response");
+  }
+
+  return content.trim();
+}
+
+// DEPRECATED: Old DeepSeek implementation for non-music modes
 async function ampPromptWithDeepSeek(
   input: string,
   preferArabic: boolean,
   mode?: string
-) {
+): Promise<string> {
   const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
   if (!DEEPSEEK_API_KEY) throw new Error("CONFIG: Missing DEEPSEEK_API_KEY");
 
@@ -694,6 +769,56 @@ serve(async (req) => {
     const text = (body?.text ?? "").toString();
     mode = typeof body?.mode === "string" ? (body.mode as string) : undefined;
     inputText = text;
+
+    // ─── Music/Lyrics Amp route (OpenAI gpt-4o-mini) ───
+    if (mode === "music" || mode === "lyrics") {
+      const durationSeconds = typeof body?.duration === "number" ? body.duration : 30;
+      
+      if (!text || text.trim().length === 0) {
+        return new Response(
+          JSON.stringify({
+            error: "Missing 'text' for lyrics expansion",
+            code: "BAD_REQUEST_MISSING_TEXT",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      const improved = await ampMusicLyricsWithOpenAI(text, durationSeconds);
+
+      await logAI({
+        functionName: "prompt-amp",
+        userId,
+        model: "gpt-4o-mini",
+        inputText: text,
+        outputText: improved,
+        durationMs: Date.now() - startTime,
+        status: "success",
+        metadata: {
+          provider: "openai",
+          mode: "music-lyrics",
+          duration: durationSeconds,
+          language: hasArabic(text) ? "ar" : "en",
+        },
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          text: improved,
+          language: hasArabic(text) ? "ar" : "en",
+          mode: "music-lyrics",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    // ─── End Music/Lyrics route ───
 
     // ─── Image-to-Video Amp route ───
     if (mode === "image2video") {

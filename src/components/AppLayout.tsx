@@ -72,6 +72,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const [price, setPrice] = useState<{ qar?: string; usd?: string }>({});
   const [purchaseInProgress, setPurchaseInProgress] = useState(false);
   const [activePackageId, setActivePackageId] = useState<string>('$rc_monthly');
+  const [activePackageObj, setActivePackageObj] = useState<any>(null);
   const [step, setStep] = useState(variant === 'new_user' ? 1 : 2);
   // New users go directly to Dashboard via handleSkip — Step 2 is only for expired/cancelled
   const [editingName, setEditingName] = useState(false);
@@ -106,29 +107,45 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     if (!open) return;
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     getOfferings((resp) => {
-      if (resp?.status !== 'SUCCESS') return;
-      const allOfferings: any[] = resp?.offerings?.all
-        ? Object.values(resp.offerings.all)
-        : [];
+      console.log('[Offerings] Raw SDK response:', JSON.stringify(resp));
+      if (resp?.status !== 'SUCCESS') {
+        console.warn('[Offerings] SDK returned non-SUCCESS status:', resp?.status);
+        return;
+      }
+
+      // The Natively SDK may return offerings.all as an object (keyed by identifier)
+      // OR as an array OR expose them via offerings.all differently.
+      // We try all known shapes.
+      const allRaw = resp?.offerings?.all;
+      let allOfferings: any[] = [];
+      if (Array.isArray(allRaw)) {
+        allOfferings = allRaw;
+      } else if (allRaw && typeof allRaw === 'object') {
+        allOfferings = Object.values(allRaw);
+      }
+      console.log('[Offerings] All offerings parsed:', allOfferings.map((o: any) => o?.identifier));
 
       // --- QU path: try university_exclusive → qatar_university package ---
       if (isQUUser) {
         const quOffering = allOfferings.find(
           (o: any) => o.identifier === 'university_exclusive'
         );
+        console.log('[Offerings] university_exclusive offering:', quOffering ? 'FOUND' : 'NOT FOUND');
         const quPkg = quOffering?.availablePackages?.find(
           (p: any) => p.identifier === 'qatar_university'
         );
+        console.log('[Offerings] qatar_university package:', quPkg ? 'FOUND' : 'NOT FOUND', quPkg?.product?.priceString);
         if (quPkg?.product) {
-          console.log('[Offerings] QU offering found:', quPkg.identifier, quPkg.product.priceString);
+          console.log('[Offerings] ✅ QU package set — id:', quPkg.identifier, 'price:', quPkg.product.priceString);
           setActivePackageId(quPkg.identifier);
+          setActivePackageObj(quPkg);
           setPrice({
             qar: quPkg.product.priceString || 'QAR 73.5/month',
             usd: quPkg.product.priceUSD || '$19.99/month',
           });
           return;
         }
-        console.warn('[Offerings] university_exclusive / qatar_university not found, falling back to default');
+        console.warn('[Offerings] ⚠️ university_exclusive / qatar_university not found, falling back to default');
       }
 
       // --- Standard / fallback path: use current offering → $rc_monthly ---
@@ -137,7 +154,9 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
           (p: any) => p.identifier === '$rc_monthly'
         ) || resp.offerings.current.availablePackages?.[0];
         if (pkg?.product) {
+          console.log('[Offerings] ✅ Standard package set — id:', pkg.identifier, 'price:', pkg.product.priceString);
           setActivePackageId(pkg.identifier);
+          setActivePackageObj(pkg);
           setPrice({
             qar: pkg.product.priceString || 'QAR 92/month',
             usd: pkg.product.priceUSD || '$25/month',
@@ -200,11 +219,15 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     setLoading(true);
     setPurchaseInProgress(true);
 
-    // activePackageId is set by the offerings fetch:
-    //   QU users  → 'qatar_university' (from university_exclusive offering)
-    //   Standard  → '$rc_monthly' (from default offering)
-    // Falls back to '$rc_monthly' if QU offering was not found.
-    purchasePackage(activePackageId, async (resp: any) => {
+    // activePackageObj holds the full package object from the offerings fetch.
+    // activePackageId is the string identifier fallback.
+    //   QU users  → 'qatar_university' package object (from university_exclusive offering)
+    //   Standard  → '$rc_monthly' package object (from default offering)
+    // The Natively SDK's purchasePackage may accept either the full object or the identifier.
+    // We pass the full object when available (correct RevenueCat behaviour), id as fallback.
+    const pkgToUse = activePackageObj || activePackageId;
+    console.log('[Purchase] Initiating purchase with package:', typeof pkgToUse === 'object' ? pkgToUse?.identifier : pkgToUse);
+    purchasePackage(pkgToUse, async (resp: any) => {
       console.log('[Purchase] Response:', resp);
       
       // Treat success OR 'already subscribed' (Android) as a successful subscription

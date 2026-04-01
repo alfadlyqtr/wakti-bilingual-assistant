@@ -9,20 +9,93 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 };
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const KIE_API_KEY = Deno.env.get("KIE_API_KEY");
+ interface SunoTrack {
+   id: string;
+   audioUrl: string;
+   streamAudioUrl?: string;
+   imageUrl?: string;
+   prompt?: string;
+   modelName?: string;
+   title?: string;
+   tags?: string;
+   createTime?: string | number;
+   duration?: number;
+ }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const supabaseService = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+function getModelLimits(model: string) {
+  if (model === "V4") {
+    return { prompt: 3000, style: 200 };
+  }
 
-const CALLBACK_URL = `${SUPABASE_URL}/functions/v1/music-callback`;
+  return { prompt: 5000, style: 1000 };
+}
+
+ function sleep(ms: number) {
+   return new Promise((resolve) => setTimeout(resolve, ms));
+ }
+
+ // deno-lint-ignore no-explicit-any
+ async function downloadAndStore(
+   supabaseService: any,
+   url: string,
+   storageBucket: string,
+   filePath: string,
+   contentType: string,
+ ) {
+   try {
+     const resp = await fetch(url);
+     if (!resp.ok) return null;
+     const buffer = await resp.arrayBuffer();
+     const blob = new Blob([buffer], { type: contentType });
+
+     const { error: uploadError } = await supabaseService.storage
+       .from(storageBucket)
+       .upload(filePath, blob, { contentType, upsert: true });
+
+     if (uploadError) {
+       console.error("[music-generate] Upload error:", uploadError);
+       return null;
+     }
+
+     const { data: urlData } = supabaseService.storage
+       .from(storageBucket)
+       .getPublicUrl(filePath);
+
+     return urlData?.publicUrl ?? null;
+   } catch {
+     return null;
+   }
+ }
+
+ async function fetchKieRecordInfo(taskId: string, apiKey: string) {
+   const kieResp = await fetch(
+     `https://api.kie.ai/api/v1/generate/record-info?taskId=${encodeURIComponent(taskId)}`,
+     {
+       headers: { "Authorization": `Bearer ${apiKey}` },
+     },
+   );
+
+   if (!kieResp.ok) {
+     const errText = await kieResp.text();
+     throw new Error(`KIE.ai poll error: ${kieResp.status} ${errText}`);
+   }
+
+   return await kieResp.json();
+ }
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+  const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const KIE_API_KEY = Deno.env.get("KIE_API_KEY") ?? "";
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const supabaseService = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+  const CALLBACK_URL = `${SUPABASE_URL}/functions/v1/music-callback`;
 
   try {
     if (!KIE_API_KEY) {
@@ -68,7 +141,26 @@ serve(async (req) => {
     const styleWeight = typeof body?.styleWeight === "number" ? body.styleWeight : undefined;
     const weirdnessConstraint = typeof body?.weirdnessConstraint === "number" ? body.weirdnessConstraint : undefined;
     const audioWeight = typeof body?.audioWeight === "number" ? body.audioWeight : undefined;
+    const personaId = (body?.personaId || "").toString().trim();
+    const personaModel = (body?.personaModel || "").toString().trim();
     const durationHint = typeof body?.duration_seconds === "number" ? body.duration_seconds : null;
+    const { prompt: promptLimit, style: styleLimit } = getModelLimits(model);
+
+    if (title.length > 80) {
+      throw new Error("Title exceeds 80 characters");
+    }
+
+    if (customMode) {
+      if (style.length > styleLimit) {
+        throw new Error(`Style exceeds ${styleLimit} characters for model ${model}`);
+      }
+
+      if (!instrumental && prompt.length > promptLimit) {
+        throw new Error(`Prompt exceeds ${promptLimit} characters for model ${model}`);
+      }
+    } else if (prompt.length > 500) {
+      throw new Error("Non-custom mode prompt exceeds 500 characters");
+    }
 
     // Validation per API rules
     if (customMode) {
@@ -101,13 +193,9 @@ serve(async (req) => {
       if (styleWeight !== undefined) kiePayload.styleWeight = styleWeight;
       if (weirdnessConstraint !== undefined) kiePayload.weirdnessConstraint = weirdnessConstraint;
       if (audioWeight !== undefined) kiePayload.audioWeight = audioWeight;
+      if (personaId) kiePayload.personaId = personaId;
+      if (personaModel) kiePayload.personaModel = personaModel;
     }
-
-    // Add duration hint to prompt in non-custom mode if provided
-    const finalPrompt = (!customMode && durationHint)
-      ? `${prompt} [target duration: ${durationHint}s]`
-      : prompt;
-    kiePayload.prompt = finalPrompt;
 
     console.log("[music-generate] Calling KIE.ai generate", { model, customMode, instrumental });
 
@@ -135,7 +223,6 @@ serve(async (req) => {
 
     console.log("[music-generate] KIE.ai taskId received", taskId);
 
-    // Insert placeholder DB row — will be updated by music-callback when audio is ready
     const { data: placeholderData, error: placeholderError } = await supabaseService
       .from("user_music_tracks")
       .insert({
@@ -152,6 +239,7 @@ serve(async (req) => {
         mime: "audio/mpeg",
         meta: {
           status: "generating",
+          saved: false,
           customMode,
           instrumental,
           style: style || null,
@@ -171,10 +259,171 @@ serve(async (req) => {
 
     console.log("[music-generate] Placeholder row created", recordId);
 
+    let finalKieData: any = null;
+    let finalStatus = "pending";
+    const maxAttempts = 30;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (attempt > 0) {
+        await sleep(3000);
+      }
+
+      const polledData = await fetchKieRecordInfo(taskId, KIE_API_KEY);
+      const polledStatus = (polledData?.data?.status ?? "").toString().toUpperCase();
+
+      console.log("[music-generate] Poll result", { taskId, attempt: attempt + 1, status: polledStatus });
+
+      if (polledStatus === "SUCCESS") {
+        finalKieData = polledData;
+        finalStatus = "completed";
+        break;
+      }
+
+      if (polledStatus === "FAILED" || polledStatus === "ERROR") {
+        finalKieData = polledData;
+        finalStatus = "failed";
+        break;
+      }
+    }
+
+    if (finalStatus === "failed") {
+      const failureMessage = finalKieData?.data?.errorMessage || "Generation failed";
+      await supabaseService
+        .from("user_music_tracks")
+        .update({
+          meta: {
+            status: "failed",
+            error: failureMessage,
+          },
+        })
+        .eq("id", recordId);
+
+      return new Response(JSON.stringify({
+        taskId,
+        recordId,
+        status: "failed",
+        error: failureMessage,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (finalStatus !== "completed") {
+      return new Response(JSON.stringify({
+        taskId,
+        recordId,
+        status: "generating",
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const sunoData: SunoTrack[] = finalKieData?.data?.response?.sunoData ?? [];
+
+    if (sunoData.length === 0) {
+      throw new Error("KIE.ai returned success without tracks");
+    }
+
+    const timestamp = Date.now();
+    const savedTracks: Array<{ id: string; audioUrl: string; coverUrl: string | null; duration: number | null; title: string | null; variantIndex: number }> = [];
+
+    for (let i = 0; i < sunoData.length; i++) {
+      const track = sunoData[i];
+      const isFirst = i === 0;
+      const audioFileName = `${user.id}/${timestamp}_${taskId.slice(0, 8)}_v${i}.mp3`;
+      const publicAudioUrl = await downloadAndStore(supabaseService, track.audioUrl, "music", audioFileName, "audio/mpeg");
+
+      let publicCoverUrl: string | null = null;
+      if (track.imageUrl) {
+        const coverFileName = `${user.id}/${timestamp}_${taskId.slice(0, 8)}_v${i}.jpeg`;
+        publicCoverUrl = await downloadAndStore(supabaseService, track.imageUrl, "music-covers", coverFileName, "image/jpeg");
+      }
+
+      const trackMeta = {
+        status: "completed",
+        saved: false,
+        customMode,
+        instrumental,
+        style: style || null,
+        negativeTags: negativeTags || null,
+        vocalGender: vocalGender || null,
+        kie_track_id: track.id,
+        model_name: track.modelName,
+        tags: track.tags,
+      };
+
+      if (isFirst) {
+        const { error: updateError } = await supabaseService
+          .from("user_music_tracks")
+          .update({
+            storage_path: audioFileName,
+            signed_url: publicAudioUrl,
+            cover_url: publicCoverUrl,
+            source_audio_url: track.audioUrl,
+            duration: track.duration ?? null,
+            title: track.title || title || null,
+            variant_index: 0,
+            mime: "audio/mpeg",
+            meta: trackMeta,
+          })
+          .eq("id", recordId);
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        savedTracks.push({
+          id: recordId,
+          audioUrl: publicAudioUrl ?? track.audioUrl,
+          coverUrl: publicCoverUrl,
+          duration: track.duration ?? null,
+          title: track.title || title || null,
+          variantIndex: 0,
+        });
+      } else {
+        const { data: insertedRow, error: insertError } = await supabaseService
+          .from("user_music_tracks")
+          .insert({
+            user_id: user.id,
+            task_id: taskId,
+            title: track.title || title || null,
+            prompt: track.prompt || prompt || null,
+            include_styles: style ? [style] : null,
+            requested_duration_seconds: durationHint ? Math.round(durationHint) : null,
+            provider: "kie",
+            model: model,
+            storage_path: audioFileName,
+            signed_url: publicAudioUrl,
+            cover_url: publicCoverUrl,
+            source_audio_url: track.audioUrl,
+            duration: track.duration ?? null,
+            variant_index: i,
+            mime: "audio/mpeg",
+            meta: trackMeta,
+          })
+          .select("id")
+          .single();
+
+        if (insertError) {
+          throw insertError;
+        }
+
+        savedTracks.push({
+          id: insertedRow.id,
+          audioUrl: publicAudioUrl ?? track.audioUrl,
+          coverUrl: publicCoverUrl,
+          duration: track.duration ?? null,
+          title: track.title || title || null,
+          variantIndex: i,
+        });
+      }
+    }
+
     return new Response(JSON.stringify({
       taskId,
       recordId,
-      status: "generating",
+      status: "completed",
+      tracks: savedTracks,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
