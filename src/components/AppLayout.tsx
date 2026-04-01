@@ -85,6 +85,13 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const rawName = profile?.display_name || (profile as any)?.first_name || profile?.username || user?.email || '';
   const userName = rawName.includes('@') ? rawName.split('@')[0] : rawName;
 
+  const getDeviceOS = (): 'ios' | 'android' | 'other' => {
+    const ua = navigator.userAgent;
+    if (/iPad|iPhone|iPod/.test(ua)) return 'ios';
+    if (/Android/.test(ua)) return 'android';
+    return 'other';
+  };
+
   useEffect(() => {
     // When paywall is open, allow header popovers to appear above overlay
     if (open) {
@@ -232,8 +239,16 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     // Natively's purchasePackage passes this directly to Apple/Google.
     // Using the RC package name ('qatar_university') instead would resolve against
     // the default offering only and silently charge the standard QAR 92 price.
-    console.log('[Purchase] Initiating purchase with store product ID:', activePackageId);
-    purchasePackage(activePackageId, async (resp: any) => {
+    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+    const os = getDeviceOS();
+    const forcedProductId = isQUUser
+      ? (os === 'android' ? 'wakti_monthly_qu:monthly-academic' : 'wakti_monthly_qu')
+      : (os === 'android' ? 'qa.wakti.ai.monthly:qa-wakti-ai-monthly' : 'qa.wakti.ai.monthly');
+    const productIdToPurchase = activePackageId && activePackageId !== '$rc_monthly'
+      ? activePackageId
+      : forcedProductId;
+    console.log('[Purchase] Initiating purchase with store product ID:', productIdToPurchase, '| os:', os, '| isQUUser:', isQUUser);
+    purchasePackage(productIdToPurchase, async (resp: any) => {
       console.log('[Purchase] Response:', resp);
       
       // Treat success OR 'already subscribed' (Android) as a successful subscription

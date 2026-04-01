@@ -747,6 +747,7 @@ export default function MusicStudio() {
   const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor'>('compose');
   const [videoMode, setVideoMode] = useState<'ai' | 'saved'>('ai');
   const [imageMode, setImageMode] = useState<'create' | 'saved'>('create');
+  const [musicQuotaHeader, setMusicQuotaHeader] = useState({ remaining: 5, limit: 5, used: 0 });
   const location = useLocation();
 
   useEffect(() => {
@@ -1028,9 +1029,16 @@ export default function MusicStudio() {
       {/* Music Tab Content */}
       {mainTab === 'music' && (
         <>
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between gap-3">
             <h1 className="text-xl md:text-2xl font-bold">{language === 'ar' ? 'استوديو الموسيقى' : 'Music Studio'}</h1>
-            <div />
+            <div className="text-right space-y-0.5 pt-0.5">
+              <div className="text-[11px] font-semibold text-emerald-400">
+                {language === 'ar' ? `المتبقي: ${musicQuotaHeader.remaining} / ${musicQuotaHeader.limit}` : `Remaining: ${musicQuotaHeader.remaining} / ${musicQuotaHeader.limit}`}
+              </div>
+              <div className="text-[11px] text-muted-foreground/60">
+                {language === 'ar' ? `تم الاستخدام: ${musicQuotaHeader.used} هذا الشهر` : `Used ${musicQuotaHeader.used} this month`}
+              </div>
+            </div>
           </div>
 
           <nav className="flex gap-2 p-1.5 rounded-2xl bg-gradient-to-r from-[#0c0f14]/5 via-[#606062]/10 to-[#0c0f14]/5 dark:from-[#0a0d12] dark:via-[#1a1d24] dark:to-[#0a0d12] border border-[#606062]/20 dark:border-[#606062]/30 backdrop-blur-sm shadow-inner">
@@ -1055,7 +1063,12 @@ export default function MusicStudio() {
             })}
           </nav>
 
-          {musicSubTab === 'compose' ? <ComposeTab onSaved={()=>setMusicSubTab('editor')} /> : <EditorTab />}
+          {musicSubTab === 'compose' ? (
+            <ComposeTab
+              onSaved={()=>setMusicSubTab('editor')}
+              onQuotaChange={setMusicQuotaHeader}
+            />
+          ) : <EditorTab />}
         </>
       )}
 
@@ -1136,7 +1149,7 @@ export default function MusicStudio() {
   );
  }
 
-function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
+function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaChange?: (quota: { remaining: number; limit: number; used: number }) => void }) {
   const { language } = useTheme();
   const { user } = useAuth();
   const isAr = language === 'ar';
@@ -1206,6 +1219,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   }, [language]);
 
       // Collapse states for Music Style section
+  const [titleOpen, setTitleOpen] = useState(false);
   const [musicStyleOpen, setMusicStyleOpen] = useState(false);
   const [stylesOpen, setStylesOpen] = useState(false);
   const [instrumentsOpen, setInstrumentsOpen] = useState(false);
@@ -1227,6 +1241,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   const [amping, setAmping] = useState(false);
   const [vocalType, setVocalType] = useState<'auto'|'none'|'female'|'male'>('auto');
   const [vocalsOpen, setVocalsOpen] = useState(false);
+  const [lyricsOpen, setLyricsOpen] = useState(false);
   const [audios, setAudios] = useState<Array<{ url: string; mime: string; meta?: any; createdAt: number; saved?: boolean }>>([]);
   const [lastError, setLastError] = useState<string | null>(null);
   const [songsUsed, setSongsUsed] = useState(0);
@@ -1276,6 +1291,10 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     };
   }, []);
 
+  useEffect(() => {
+    onQuotaChange?.({ remaining: songsRemaining, limit: songsLimit, used: songsUsed });
+  }, [onQuotaChange, songsRemaining, songsLimit, songsUsed]);
+
   // Simple Amp - expand user lyrics into structured song
   async function handleAmp() {
     const userInput = lyricsText.trim() || styleText.trim() || title.trim();
@@ -1322,9 +1341,9 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   }
 
   // Caps: style max 350, lyrics gets remaining up to overall 800 (title excluded from cap)
-  const limit = 800;
+  const limit = 2350;
   const styleCap = 350;
-  const lyricsFixedCap = 450;
+  const lyricsFixedCap = 2000;
   const totalChars = useMemo(() => {
     const count = (s: string) => Array.from(s || '').length;
     return count(styleText || '') + count(lyricsText || '');
@@ -1352,16 +1371,6 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     if (vocalType === 'male') parts.push(`${language==='ar' ? 'الصوت' : 'Vocals'}: ${language==='ar' ? 'صوت ذكوري' : 'Male voice'}`);
     return parts.join('. ');
   }
-
-  // Duration-aware max lyric lines
-  function getMaxLyricLines(sec: number) {
-    if (sec <= 30) return 6;      // short hook/verse
-    if (sec <= 60) return 10;     // verse + hook
-    if (sec <= 90) return 14;     // verse + hook + bridge (short)
-    return 18;                    // up to 2:00
-  }
-  const maxLyricLines = useMemo(() => getMaxLyricLines(Math.min(120, Math.max(10, duration || 30))), [duration]);
-  const lyricLineCount = useMemo(() => (lyricsText ? lyricsText.split(/\r?\n/).filter(l => l.trim()).length : 0), [lyricsText]);
 
   // Arrangement mapping per duration (producer-style roadmap)
   function getArrangementBrief(sec: number, wantsAr: boolean) {
@@ -1411,8 +1420,8 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       const start = firstNWords(norm, 3);
       const isExactRepeat = seen.has(norm);
       const startsRepeat = start && seenStarts.has(start);
-      // Allow ONE non-adjacent repeat (probable chorus), only if line budget big enough (>=6)
-      const allowChorus = maxLyricLines >= 6;
+      // Allow ONE non-adjacent repeat (probable chorus)
+      const allowChorus = true;
       if ((isExactRepeat || startsRepeat)) {
         if (!repeatUsed && allowChorus && lastKept && normalizeLine(lastKept) !== norm) {
           repeatUsed = true;
@@ -1516,6 +1525,13 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     });
   }
 
+  function toggleMainSection(section: 'title' | 'style' | 'vocals' | 'lyrics') {
+    setTitleOpen(section === 'title' ? !titleOpen : false);
+    setMusicStyleOpen(section === 'style' ? !musicStyleOpen : false);
+    setVocalsOpen(section === 'vocals' ? !vocalsOpen : false);
+    setLyricsOpen(section === 'lyrics' ? !lyricsOpen : false);
+  }
+
   const handleSaveGeneratedTrack = async (trackId: string) => {
     if (!user || savingTrackIds.includes(trackId)) return;
     setSavingTrackIds((prev) => [...prev, trackId]);
@@ -1551,14 +1567,12 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     }
   }, [styleText, lyricsCap]);
 
-  // Ensure lyrics respect current duration line budget when duration changes
+  // Ensure lyrics respect the current character cap when duration changes
   useEffect(() => {
     if (!lyricsText) return;
-    const lines = lyricsText.split(/\r?\n/);
-    const limited = lines.slice(0, maxLyricLines).join('\n');
-    const capped = Array.from(limited).slice(0, lyricsCap).join('');
+    const capped = Array.from(lyricsText).slice(0, lyricsCap).join('');
     if (capped !== lyricsText) setLyricsText(capped);
-  }, [maxLyricLines, lyricsCap]);
+  }, [lyricsCap, lyricsText]);
 
   // Build style string from chips + styleText
   function buildKieStyleString(): string {
@@ -1569,6 +1583,22 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
 
   const handleGenerate = async () => {
     if (overLimit) return;
+    if (!title.trim()) {
+      toast.error(isAr ? 'العنوان مطلوب' : 'Title is required');
+      setTitleOpen(true);
+      setMusicStyleOpen(false);
+      setVocalsOpen(false);
+      setLyricsOpen(false);
+      return;
+    }
+    if (!lyricsText.trim()) {
+      toast.error(isAr ? 'الكلمات مطلوبة' : 'Lyrics are required');
+      setTitleOpen(false);
+      setMusicStyleOpen(false);
+      setVocalsOpen(false);
+      setLyricsOpen(true);
+      return;
+    }
     setSubmitting(true);
     setGeneratedTracks([]);
     setLastError(null);
@@ -1636,6 +1666,10 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
         setGeneratingTask(null);
         setGeneratedTracks(tracks);
         setSavedTrackIds([]);
+        setTitleOpen(false);
+        setMusicStyleOpen(false);
+        setVocalsOpen(false);
+        setLyricsOpen(false);
         setSongsUsed((v) => v + 1);
         setSongsRemaining((v) => Math.max(0, v - 1));
         setLastError(null);
@@ -1720,17 +1754,30 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     <div className="space-y-4">
       {/* ── Title (First) ── */}
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] dark:bg-white/[0.02] p-4 space-y-3">
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isAr ? 'العنوان' : 'Title'}</label>
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value.slice(0, 80))}
-            placeholder={isAr ? 'اسم الأغنية...' : 'Track title...'}
-            className="bg-white/[0.04] border-white/10 focus:border-sky-400/50 focus:ring-sky-400/20 rounded-xl h-11"
-            maxLength={80}
-          />
-          <div className="text-right text-[10px] text-muted-foreground/50">{title.length}/80</div>
-        </div>
+        <button
+          type="button"
+          onClick={() => toggleMainSection('title')}
+          className="flex items-center justify-between w-full"
+        >
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-1 text-[10px] font-bold text-muted-foreground">1</span>
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isAr ? 'العنوان' : 'Title'}</span>
+            <span className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-rose-300">{isAr ? 'مطلوب' : 'Must'}</span>
+          </div>
+          <span className="text-xs text-sky-400/80">{titleOpen ? '−' : '+'}</span>
+        </button>
+        {titleOpen && (
+          <div className="space-y-1.5">
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value.slice(0, 80))}
+              placeholder={isAr ? 'اسم الأغنية...' : 'Track title...'}
+              className="bg-white/[0.04] border-white/10 focus:border-sky-400/50 focus:ring-sky-400/20 rounded-xl h-11"
+              maxLength={80}
+            />
+            <div className="text-right text-[10px] text-muted-foreground/50">{title.length}/80</div>
+          </div>
+        )}
       </div>
 
       {/* ── Music Style ── */}
@@ -1738,12 +1785,14 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
         {/* Header with collapse toggle */}
         <button 
           type="button"
-          onClick={() => setMusicStyleOpen(!musicStyleOpen)}
+          onClick={() => toggleMainSection('style')}
           className="flex items-center justify-between w-full"
         >
           <div className="flex items-center gap-2">
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-sky-400/20 bg-sky-500/10 px-1 text-[10px] font-bold text-sky-300">2</span>
             <Palette className="h-4 w-4 text-sky-400" />
             <span className="text-xs font-semibold text-sky-300 uppercase">{isAr ? 'أسلوب الموسيقى' : 'Music Style'}</span>
+            <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-300">{isAr ? 'اختياري' : 'Optional'}</span>
           </div>
           <span className="text-xs text-sky-400/80">{musicStyleOpen ? '−' : '+'}</span>
         </button>
@@ -1888,12 +1937,14 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] dark:bg-white/[0.02] p-4 space-y-3">
         <button 
           type="button"
-          onClick={() => setVocalsOpen(!vocalsOpen)}
+          onClick={() => toggleMainSection('vocals')}
           className="flex items-center justify-between w-full"
         >
           <div className="flex items-center gap-2">
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-emerald-400/20 bg-emerald-500/10 px-1 text-[10px] font-bold text-emerald-300">3</span>
             <Mic className="h-4 w-4 text-emerald-400" />
             <span className="text-xs font-semibold text-emerald-300 uppercase tracking-wider">{isAr ? 'الصوت' : 'Vocals'}</span>
+            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300">{isAr ? 'اختياري' : 'Optional'}</span>
           </div>
           <span className="text-xs text-emerald-400/80">{vocalsOpen ? '−' : '+'}</span>
         </button>
@@ -1924,12 +1975,22 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
 
       {/* ── Compose Form ── */}
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] dark:bg-white/[0.02] p-4 space-y-4">
+        <button
+          type="button"
+          onClick={() => toggleMainSection('lyrics')}
+          className="flex items-center justify-between w-full"
+        >
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-purple-400/20 bg-purple-500/10 px-1 text-[10px] font-bold text-purple-300">4</span>
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isAr ? 'الكلمات' : 'Lyrics'}</span>
+            <span className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-rose-300">{isAr ? 'مطلوب' : 'Must'}</span>
+          </div>
+          <span className="text-xs text-purple-400/80">{lyricsOpen ? '−' : '+'}</span>
+        </button>
 
-        {/* Lyrics (only when not instrumental) */}
-        {vocalType !== 'none' && (
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isAr ? 'الكلمات' : 'Lyrics'}</label>
+        {lyricsOpen && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-end">
               <button
                 type="button"
                 disabled={amping || submitting}
@@ -1946,65 +2007,52 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
               value={lyricsText}
               onChange={(e) => {
                 const raw = e.target.value || '';
-                const lines = raw.split(/\r?\n/);
-                const capped = Array.from(lines.slice(0, maxLyricLines).join('\n')).slice(0, lyricsCap).join('');
+                const capped = Array.from(raw).slice(0, lyricsCap).join('');
                 setLyricsText(capped);
               }}
               placeholder={isAr ? 'أكتب الكلمات هنا أو استخدم Amp لإنشائها...' : 'Write lyrics here or use Amp to generate...'}
               rows={5}
               className="bg-white/[0.04] border-white/10 focus:border-purple-400/50 focus:ring-purple-400/20 rounded-xl resize-none"
             />
-            <div className="flex justify-between text-[10px] text-muted-foreground/50">
+            <div className="flex justify-end text-[10px] text-muted-foreground/50">
               <span>{Array.from(lyricsText).length}/{lyricsCap}</span>
-              <span>{isAr ? `الأسطر: ${lyricLineCount}/${maxLyricLines}` : `Lines: ${lyricLineCount}/${maxLyricLines}`}</span>
+            </div>
+
+            <div className="flex items-center gap-3 pt-1">
+              <select
+                value={duration}
+                onChange={(e) => setDuration(Math.min(120, Math.max(10, parseInt(e.target.value || '30'))))}
+                title={isAr ? 'المدة' : 'Duration'}
+                className="flex-shrink-0 px-3 py-2 rounded-xl border border-white/10 bg-white/[0.04] text-foreground text-sm focus:border-sky-400/50 focus:outline-none"
+              >
+                <option value={10}>0:10</option>
+                <option value={30}>0:30</option>
+                <option value={60}>1:00</option>
+                <option value={90}>1:30</option>
+                <option value={120}>2:00</option>
+              </select>
+              <button
+                type="button"
+                disabled={overLimit || submitting || !title.trim() || !lyricsText.trim()}
+                onClick={handleGenerate}
+                className="flex-1 relative overflow-hidden h-12 rounded-2xl font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-sky-500 via-blue-600 to-purple-600 text-white shadow-[0_4px_24px_hsla(210,100%,65%,0.4)]"
+              >
+                {submitting ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {isAr ? 'جارٍ الإنشاء...' : 'Creating...'}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-2">
+                    <Music className="h-4 w-4" />
+                    {isAr ? 'إنشاء موسيقى' : 'Generate Music'}
+                  </span>
+                )}
+                <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+              </button>
             </div>
           </div>
         )}
-
-        {/* Duration + Generate */}
-        <div className="flex items-center gap-3 pt-1">
-          <select
-            value={duration}
-            onChange={(e) => setDuration(Math.min(120, Math.max(10, parseInt(e.target.value || '30'))))}
-            title={isAr ? 'المدة' : 'Duration'}
-            className="flex-shrink-0 px-3 py-2 rounded-xl border border-white/10 bg-white/[0.04] text-foreground text-sm focus:border-sky-400/50 focus:outline-none"
-          >
-            <option value={10}>0:10</option>
-            <option value={30}>0:30</option>
-            <option value={60}>1:00</option>
-            <option value={90}>1:30</option>
-            <option value={120}>2:00</option>
-          </select>
-          <button
-            type="button"
-            disabled={overLimit || submitting}
-            onClick={handleGenerate}
-            className="flex-1 relative overflow-hidden h-12 rounded-2xl font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-sky-500 via-blue-600 to-purple-600 text-white shadow-[0_4px_24px_hsla(210,100%,65%,0.4)]"
-          >
-            {submitting ? (
-              <span className="inline-flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {isAr ? 'جارٍ الإنشاء...' : 'Creating...'}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-2">
-                <Music className="h-4 w-4" />
-                {isAr ? 'إنشاء موسيقى' : 'Generate Music'}
-              </span>
-            )}
-            <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-          </button>
-        </div>
-
-        {/* Quota bar */}
-        <div className="flex items-center justify-between text-xs">
-          <span className={`font-semibold ${overLimit ? 'text-red-400' : 'text-emerald-400'}`}>
-            {isAr ? `المتبقي: ${songsRemaining} من ${songsLimit}` : `Remaining: ${songsRemaining} / ${songsLimit}`}
-          </span>
-          <span className="text-muted-foreground/60">
-            {isAr ? `تم الاستخدام: ${songsUsed} هذا الشهر` : `Used ${songsUsed} this month`}
-          </span>
-        </div>
 
         {lastError && (
           <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-400/20 text-red-300 text-xs">
@@ -2100,19 +2148,6 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
                       ? (isAr ? 'تم الحفظ' : 'Saved')
                       : (isAr ? 'حفظ' : 'Save')}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDownload(track.audioUrl, `wakti-music-v${idx + 1}.mp3`)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/[0.05] text-muted-foreground hover:text-foreground hover:border-white/20 active:scale-95 transition-all"
-                  >
-                    <RefreshCw className="h-3 w-3" />{isAr ? 'تنزيل' : 'Download'}
-                  </button>
-                  <ShareButton
-                    size="sm"
-                    shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${track.id}` : ''}
-                    shareTitle={isAr ? 'استمع إلى موسيقى من وقتي' : 'Listen to my Wakti music'}
-                    shareDescription={track.title || undefined}
-                  />
                 </div>
               </div>
             ))}
