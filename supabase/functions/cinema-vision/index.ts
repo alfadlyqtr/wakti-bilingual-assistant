@@ -64,8 +64,14 @@ serve(async (req) => {
     const imgResp = await fetch(image_url);
     if (!imgResp.ok) throw new Error(`Failed to fetch image: ${imgResp.status}`);
     const imgBuffer = await imgResp.arrayBuffer();
-    const imgBase64 = btoa(String.fromCharCode(...new Uint8Array(imgBuffer)));
     const mimeType = imgResp.headers.get('content-type') || 'image/jpeg';
+    const uint8 = new Uint8Array(imgBuffer);
+    let binary = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < uint8.length; i += chunkSize) {
+      binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
+    }
+    const imgBase64 = btoa(binary);
 
     // Call Gemini Flash-Lite with image + text
     const geminiBody = {

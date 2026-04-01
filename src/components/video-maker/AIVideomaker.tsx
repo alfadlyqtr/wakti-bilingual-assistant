@@ -1411,7 +1411,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setStitchStatus(language === 'ar' ? '🎬 Shotstack يُحضّر مشاهدك...' : '🎬 Shotstack is producing your film...');
 
     const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-    const produceBase = isLocal ? 'https://www.wakti.qa' : '';
+    const produceBase = isLocal ? 'https://wakti.qa' : '';
 
     try {
       const imageUrls = images.slice(0, cinemaSceneCount) as string[];
