@@ -10,15 +10,32 @@ const corsHeaders = {
 
 interface SunoTrack {
   id: string;
-  audioUrl: string;
+  audioUrl?: string;
+  audio_url?: string;
   sourceAudioUrl?: string;
   imageUrl?: string;
+  image_url?: string;
   prompt?: string;
   modelName?: string;
+  model_name?: string;
   title?: string;
   tags?: string;
-  createTime?: number;
+  createTime?: number | string;
   duration?: number;
+}
+
+function normalizeTrack(track: SunoTrack) {
+  return {
+    id: track.id,
+    audioUrl: track.audioUrl || track.audio_url || "",
+    imageUrl: track.imageUrl || track.image_url,
+    prompt: track.prompt,
+    modelName: track.modelName || track.model_name,
+    title: track.title,
+    tags: track.tags,
+    createTime: track.createTime,
+    duration: track.duration,
+  };
 }
 
 // deno-lint-ignore no-explicit-any
@@ -131,11 +148,17 @@ serve(async (req) => {
     }
 
     const kieData = await kieResp.json();
-    const rawStatus = (kieData?.data?.status ?? kieData?.data?.musicStatus ?? "").toString();
+    const rawStatus = (
+      kieData?.data?.status ??
+      kieData?.data?.musicStatus ??
+      kieData?.data?.callbackType ??
+      ""
+    ).toString();
     const kieStatus = rawStatus.toLowerCase();
-    const sunoData: SunoTrack[] = kieData?.data?.response?.sunoData ?? kieData?.data?.sunoData ?? [];
+    const sunoData: SunoTrack[] = kieData?.data?.data ?? kieData?.data?.response?.sunoData ?? kieData?.data?.sunoData ?? [];
+    const normalizedTracks = sunoData.map(normalizeTrack).filter((track) => track.audioUrl);
 
-    if ((kieStatus === "success" || kieStatus === "complete" || kieStatus === "completed") && sunoData.length > 0) {
+    if ((kieStatus === "success" || kieStatus === "complete" || kieStatus === "completed") && normalizedTracks.length > 0) {
       // Grab placeholder row metadata
       const placeholderRow = (dbRows ?? []).find((r: any) => r.id === recordId) ?? (dbRows ?? [])[0];
 
@@ -148,8 +171,8 @@ serve(async (req) => {
       const timestamp = Date.now();
       const savedTracks: Array<{ id: string; audioUrl: string; coverUrl: string | null; duration: number | null; title: string | null; variantIndex: number }> = [];
 
-      for (let i = 0; i < sunoData.length; i++) {
-        const track = sunoData[i];
+      for (let i = 0; i < normalizedTracks.length; i++) {
+        const track = normalizedTracks[i];
         const isFirst = i === 0;
 
         const audioFileName = `${user.id}/${timestamp}_${taskId.slice(0, 8)}_v${i}.mp3`;
@@ -164,6 +187,7 @@ serve(async (req) => {
         const trackMeta = {
           ...(placeholderRow.meta as Record<string, unknown> ?? {}),
           status: "completed",
+          saved: true,
           kie_track_id: track.id,
           model_name: track.modelName,
           tags: track.tags,
@@ -223,12 +247,13 @@ serve(async (req) => {
 
     } else if (kieStatus === "failed" || kieStatus === "error") {
       if (recordId) {
+        const failureMessage = kieData?.data?.errorMessage || kieData?.data?.error_message || kieData?.msg || "Failed";
         await supabaseService
           .from("user_music_tracks")
-          .update({ meta: { status: "failed", error: kieData.data?.errorMessage || "Failed" } })
+          .update({ meta: { status: "failed", error: failureMessage } })
           .eq("id", recordId);
       }
-      return new Response(JSON.stringify({ status: "failed", error: kieData.data?.errorMessage || "Generation failed" }), {
+      return new Response(JSON.stringify({ status: "failed", error: kieData?.data?.errorMessage || kieData?.data?.error_message || kieData?.msg || "Generation failed" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

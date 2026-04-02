@@ -12,21 +12,26 @@ const corsHeaders = {
 
 interface SunoTrack {
   id: string;
-  audioUrl: string;
+  audioUrl?: string;
+  audio_url?: string;
   sourceAudioUrl?: string;
   streamAudioUrl?: string;
+  stream_audio_url?: string;
   imageUrl?: string;
+  image_url?: string;
   sourceImageUrl?: string;
   prompt?: string;
   modelName?: string;
+  model_name?: string;
   title?: string;
   tags?: string;
-  createTime?: number;
+  createTime?: number | string;
   duration?: number;
 }
 
 interface KieCallbackPayload {
-  taskId: string;
+  taskId?: string;
+  task_id?: string;
   parentMusicId?: string;
   param?: string;
   response?: {
@@ -35,10 +40,27 @@ interface KieCallbackPayload {
   };
   status?: string;
   type?: string;
+  callbackType?: string;
   operationType?: string;
   errorCode?: string | null;
   errorMessage?: string | null;
   createTime?: number;
+  data?: SunoTrack[];
+}
+
+function normalizeTrack(track: SunoTrack) {
+  return {
+    id: track.id,
+    audioUrl: track.audioUrl || track.audio_url || "",
+    streamAudioUrl: track.streamAudioUrl || track.stream_audio_url,
+    imageUrl: track.imageUrl || track.image_url,
+    prompt: track.prompt,
+    modelName: track.modelName || track.model_name,
+    title: track.title,
+    tags: track.tags,
+    createTime: track.createTime,
+    duration: track.duration,
+  };
 }
 
 // deno-lint-ignore no-explicit-any
@@ -106,10 +128,9 @@ serve(async (req) => {
     // KIE wraps payload in { code, msg, data: {...} } OR sends directly
     const payload: KieCallbackPayload = parsed.data ?? parsed;
 
-    const taskId = payload.taskId;
-    // KIE uses 'type' for stage (text/first/complete) AND 'status' (SUCCESS/FAILED)
-    const status = (payload.status || "").toUpperCase();
-    const type = (payload.type || "").toLowerCase();
+    const taskId = payload.taskId || payload.task_id || payload.response?.taskId;
+    const status = ((parsed.status || payload.status || "") as string).toUpperCase();
+    const type = ((payload.callbackType || payload.type || "") as string).toLowerCase();
 
     console.log(`[music-callback] taskId=${taskId}, status=${status}, type=${type}`);
 
@@ -123,13 +144,14 @@ serve(async (req) => {
     // Always acknowledge quickly — KIE.ai expects a fast 200
     // We process async after this point
 
-    // 'complete' is the final type stage; 'SUCCESS' is the status value
-    const isDone = status === "SUCCESS" || status === "COMPLETE" || type === "complete";
+    // KIE docs: callbackType = text | first | complete, wrapped in parsed.data
+    const isDone = type === "complete" || status === "SUCCESS" || status === "COMPLETE";
 
     if (isDone) {
-      const sunoData: SunoTrack[] = payload.response?.sunoData ?? [];
+      const sunoData: SunoTrack[] = payload.data ?? payload.response?.sunoData ?? [];
+      const normalizedTracks = sunoData.map(normalizeTrack).filter((track) => track.audioUrl);
 
-      if (sunoData.length === 0) {
+      if (normalizedTracks.length === 0) {
         console.warn(`[music-callback] SUCCESS but no sunoData for taskId=${taskId}`);
         await supabaseService
           .from("user_music_tracks")
@@ -161,8 +183,8 @@ serve(async (req) => {
       const timestamp = Date.now();
 
       // Process each variation
-      for (let i = 0; i < sunoData.length; i++) {
-        const track = sunoData[i];
+      for (let i = 0; i < normalizedTracks.length; i++) {
+        const track = normalizedTracks[i];
         const isFirst = i === 0;
 
         console.log(`[music-callback] Processing variant ${i} for taskId=${taskId}`);
@@ -206,6 +228,7 @@ serve(async (req) => {
               meta: {
                 ...(placeholderRow.meta as Record<string, unknown> ?? {}),
                 status: "completed",
+                saved: true,
                 kie_track_id: track.id,
                 model_name: track.modelName,
                 tags: track.tags,
@@ -241,6 +264,7 @@ serve(async (req) => {
               meta: {
                 ...(placeholderRow.meta as Record<string, unknown> ?? {}),
                 status: "completed",
+                saved: true,
                 kie_track_id: track.id,
                 model_name: track.modelName,
                 tags: track.tags,
@@ -256,14 +280,15 @@ serve(async (req) => {
       }
 
     } else if (status === "FAILED" || status === "ERROR" || type === "failed") {
-      console.error(`[music-callback] Task failed taskId=${taskId}:`, payload.errorMessage);
+      const failureMessage = payload.errorMessage || payload.errorCode || parsed?.msg || "Generation failed";
+      console.error(`[music-callback] Task failed taskId=${taskId}:`, failureMessage);
 
       await supabaseService
         .from("user_music_tracks")
         .update({
           meta: {
             status: "failed",
-            error: payload.errorMessage || payload.errorCode || "Generation failed",
+            error: failureMessage,
           },
         })
         .eq("task_id", taskId);
