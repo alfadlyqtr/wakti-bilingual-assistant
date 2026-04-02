@@ -1167,15 +1167,13 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       return [
         'آر آند بي','بوب','بوب الثمانينات','بوب التسعينات','روك','روك آند رول','سوفت روك','ميتال ثقيل','كانتري','جاز','سول','هيب هوب','راب',
         // GCC/Khaleeji focus
-        'خليجي بوب','خليجي تراث','شيلات','سامري','ليوان','بحريني','كويتي','سعودي','إماراتي','قطري','عماني',
-        'مهرجانات','لاتين','ريغيتون','أفروبيتس','سينث بوب','إندي بوب','لوفاي','هاوس','ديب هاوس','ترانس','تيكنو','دبسْتِب','درَم آند بَيس','كي-بوب','بوليوود'
+        'خليجي بوب','خليجي تراث','شيلات','سامري','ليوان','GCC','مهرجانات','لاتين','ريغيتون','أفروبيتس','سينث بوب','إندي بوب','لوفاي','هاوس','ديب هاوس','ترانس','تيكنو','دبسْتِب','درَم آند بَيس','كي-بوب','بوليوود'
       ];
     }
     return [
       'R&B','pop','80s pop','90s pop','rock','rock and roll','soft rock','heavy metal','country','jazz','soul','hip hop','rap',
       // GCC/Khaleeji focus
-      'Khaleeji Pop','Khaleeji Traditional','Sheilat','Samri','Liwa','Bahraini','Kuwaiti','Saudi','Emirati','Qatari','Omani',
-      'Shaabi','Latin','Reggaeton','Afrobeats','Synthpop','Indie Pop','Lo-Fi','House','Deep House','Trance','Techno','Dubstep','Drum & Bass','K-Pop','Bollywood'
+      'Khaleeji Pop','Khaleeji Traditional','Sheilat','Samri','Liwa','GCC','Shaabi','Latin','Reggaeton','Afrobeats','Synthpop','Indie Pop','Lo-Fi','House','Deep House','Trance','Techno','Dubstep','Drum & Bass','K-Pop','Bollywood'
     ];
   }, [language]);
 
@@ -1832,18 +1830,18 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   return (
     <div className="space-y-4">
       {/* ── Title (First) ── */}
-      <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-4 space-y-3">
+      <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4 space-y-4 sm:space-y-3">
         <button
           type="button"
           onClick={() => toggleMainSection('title')}
-          className="flex items-center justify-between w-full"
+          className="flex items-center justify-between w-full py-1"
         >
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-[#d9dde7] dark:border-white/10 bg-[#f7f8fc] dark:bg-white/[0.04] px-1 text-[10px] font-bold text-[#606062] dark:text-muted-foreground">1</span>
-            <span className="text-xs font-semibold text-[#4b4d63] dark:text-muted-foreground uppercase tracking-wider">{isAr ? 'العنوان' : 'Title'}</span>
-            <span className="rounded-full border border-rose-300/60 dark:border-rose-400/30 bg-rose-50 dark:bg-rose-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-rose-500 dark:text-rose-300">{isAr ? 'مطلوب' : 'Must'}</span>
+          <div className="flex items-center gap-3 sm:gap-2">
+            <span className="inline-flex h-7 w-7 sm:h-5 sm:min-w-5 items-center justify-center rounded-full border border-[#d9dde7] dark:border-white/10 bg-[#f7f8fc] dark:bg-white/[0.04] text-sm sm:text-[10px] font-bold text-[#606062] dark:text-muted-foreground">1</span>
+            <span className="text-sm sm:text-xs font-semibold text-[#4b4d63] dark:text-muted-foreground uppercase tracking-wider">{isAr ? 'العنوان' : 'Title'}</span>
+            <span className="rounded-full border border-rose-300/60 dark:border-rose-400/30 bg-rose-50 dark:bg-rose-500/10 px-2.5 py-1 sm:px-2 sm:py-0.5 text-xs sm:text-[9px] font-bold uppercase tracking-wider text-rose-500 dark:text-rose-300">{isAr ? 'مطلوب' : 'Must'}</span>
           </div>
-          <span className="text-xs text-sky-500 dark:text-sky-400/80">{titleOpen ? '−' : '+'}</span>
+          <span className="text-xl sm:text-lg text-sky-500 dark:text-sky-400/80">{titleOpen ? '−' : '+'}</span>
         </button>
         {titleOpen && (
           <div className="space-y-1.5">
@@ -1860,20 +1858,20 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       </div>
 
       {/* ── Music Style ── */}
-      <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-4 space-y-3">
+      <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4 space-y-4 sm:space-y-3">
         {/* Header with collapse toggle */}
         <button 
           type="button"
           onClick={() => toggleMainSection('style')}
-          className="flex items-center justify-between w-full"
+          className="flex items-center justify-between w-full py-1"
         >
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-sky-400/20 bg-sky-500/10 px-1 text-[10px] font-bold text-sky-300">2</span>
-            <Palette className="h-4 w-4 text-sky-400" />
-            <span className="text-xs font-semibold text-sky-300 uppercase">{isAr ? 'أسلوب الموسيقى' : 'Music Style'}</span>
-            <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-300">{isAr ? 'اختياري' : 'Optional'}</span>
+          <div className="flex items-center gap-3 sm:gap-2">
+            <span className="inline-flex h-7 w-7 sm:h-5 sm:min-w-5 items-center justify-center rounded-full border border-sky-400/20 bg-sky-500/10 text-sm sm:text-[10px] font-bold text-sky-300">2</span>
+            <Music className="h-6 w-6 sm:h-4 sm:w-4 text-sky-400" />
+            <span className="text-sm sm:text-xs font-semibold text-sky-300 uppercase">{isAr ? 'أسلوب الموسيقى' : 'Music Style'}</span>
+            <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 sm:px-2 sm:py-0.5 text-xs sm:text-[9px] font-bold uppercase tracking-wider text-sky-300">{isAr ? 'اختياري' : 'Optional'}</span>
           </div>
-          <span className="text-xs text-sky-400/80">{musicStyleOpen ? '−' : '+'}</span>
+          <span className="text-xl sm:text-lg text-sky-400/80">{musicStyleOpen ? '−' : '+'}</span>
         </button>
 
         {musicStyleOpen && (
@@ -1915,17 +1913,17 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 onClick={() => toggleMusicSubsection('styles')}
                 className="flex items-center justify-between w-full text-[10px] font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase mb-1.5"
               >
-                <span>{isAr ? 'الأنماط' : 'Styles'}</span>
-                <span className="text-sky-500 dark:text-sky-400/80">{stylesOpen ? '−' : '+'}</span>
+                <span className="text-sm sm:text-xs font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase">{isAr ? 'الأنماط' : 'Styles'}</span>
+                <span className="text-xl sm:text-lg text-sky-500 dark:text-sky-400/80">{stylesOpen ? '−' : '+'}</span>
               </button>
               {stylesOpen && (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {STYLE_PRESETS.map((style) => (
                     <button
                       key={style}
                       type="button"
                       onClick={() => setIncludeTags(p => p.includes(style) ? p.filter(t => t !== style) : [...p, style])}
-                      className={`px-2.5 py-1 rounded-full text-xs border transition-all active:scale-95 ${
+                      className={`px-4 py-2 rounded-full text-sm border transition-all active:scale-95 ${
                         includeTags.includes(style)
                           ? 'bg-sky-50 dark:bg-sky-500/25 border-sky-300 dark:border-sky-400/40 text-sky-700 dark:text-sky-200 shadow-[0_4px_12px_rgba(59,130,246,0.12)] dark:shadow-none'
                           : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-sky-300 dark:hover:border-sky-400/30 hover:text-sky-600 dark:hover:text-sky-300'
@@ -1945,17 +1943,17 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 onClick={() => toggleMusicSubsection('instruments')}
                 className="flex items-center justify-between w-full text-[10px] font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase mb-1.5"
               >
-                <span>{isAr ? 'الآلات' : 'Instruments'}</span>
-                <span className="text-purple-500 dark:text-purple-400/80">{instrumentsOpen ? '−' : '+'}</span>
+                <span className="text-sm sm:text-xs font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase">{isAr ? 'الآلات' : 'Instruments'}</span>
+                <span className="text-xl sm:text-lg text-purple-500 dark:text-purple-400/80">{instrumentsOpen ? '−' : '+'}</span>
               </button>
               {instrumentsOpen && (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {INSTRUMENT_PRESETS.map((inst) => (
                     <button
                       key={inst}
                       type="button"
                       onClick={() => setInstrumentTags(p => p.includes(inst) ? p.filter(t => t !== inst) : [...p, inst])}
-                      className={`px-2.5 py-1 rounded-full text-xs border transition-all active:scale-95 ${
+                      className={`px-4 py-2 rounded-full text-sm border transition-all active:scale-95 ${
                         instrumentTags.includes(inst)
                           ? 'bg-purple-50 dark:bg-purple-500/25 border-purple-300 dark:border-purple-400/40 text-purple-700 dark:text-purple-200 shadow-[0_4px_12px_rgba(147,51,234,0.12)] dark:shadow-none'
                           : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-purple-300 dark:hover:border-purple-400/30 hover:text-purple-600 dark:hover:text-purple-300'
@@ -1975,17 +1973,17 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 onClick={() => toggleMusicSubsection('mood')}
                 className="flex items-center justify-between w-full text-[10px] font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase mb-1.5"
               >
-                <span>{isAr ? 'المزاج' : 'Mood'}</span>
-                <span className="text-amber-500 dark:text-amber-400/80">{moodOpen ? '−' : '+'}</span>
+                <span className="text-sm sm:text-xs font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase">{isAr ? 'المزاج' : 'Mood'}</span>
+                <span className="text-xl sm:text-lg text-amber-500 dark:text-amber-400/80">{moodOpen ? '−' : '+'}</span>
               </button>
               {moodOpen && (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {MODE_PRESETS.map((mood) => (
                     <button
                       key={mood}
                       type="button"
                       onClick={() => setMoodTags(p => p.includes(mood) ? p.filter(t => t !== mood) : [...p, mood])}
-                      className={`px-2.5 py-1 rounded-full text-xs border transition-all active:scale-95 ${
+                      className={`px-4 py-2 rounded-full text-sm border transition-all active:scale-95 ${
                         moodTags.includes(mood)
                           ? 'bg-amber-50 dark:bg-amber-500/25 border-amber-300 dark:border-amber-400/40 text-amber-700 dark:text-amber-200 shadow-[0_4px_12px_rgba(245,158,11,0.12)] dark:shadow-none'
                           : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-amber-300 dark:hover:border-amber-400/30 hover:text-amber-600 dark:hover:text-amber-300'
@@ -2013,19 +2011,19 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       </div>
 
       {/* ── Vocals ── */}
-      <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-4 space-y-3">
+      <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4 space-y-4 sm:space-y-3">
         <button 
           type="button"
           onClick={() => toggleMainSection('vocals')}
-          className="flex items-center justify-between w-full"
+          className="flex items-center justify-between w-full py-1"
         >
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-emerald-400/20 bg-emerald-500/10 px-1 text-[10px] font-bold text-emerald-300">3</span>
-            <Mic className="h-4 w-4 text-emerald-400" />
-            <span className="text-xs font-semibold text-emerald-300 uppercase tracking-wider">{isAr ? 'الصوت' : 'Vocals'}</span>
-            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300">{isAr ? 'اختياري' : 'Optional'}</span>
+          <div className="flex items-center gap-3 sm:gap-2">
+            <span className="inline-flex h-7 w-7 sm:h-5 sm:min-w-5 items-center justify-center rounded-full border border-emerald-400/20 bg-emerald-500/10 text-sm sm:text-[10px] font-bold text-emerald-300">3</span>
+            <Mic className="h-6 w-6 sm:h-4 sm:w-4 text-emerald-400" />
+            <span className="text-sm sm:text-xs font-semibold text-emerald-300 uppercase tracking-wider">{isAr ? 'الصوت' : 'Vocals'}</span>
+            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 sm:px-2 sm:py-0.5 text-xs sm:text-[9px] font-bold uppercase tracking-wider text-emerald-300">{isAr ? 'اختياري' : 'Optional'}</span>
           </div>
-          <span className="text-xs text-emerald-400/80">{vocalsOpen ? '−' : '+'}</span>
+          <span className="text-xl sm:text-lg text-emerald-400/80">{vocalsOpen ? '−' : '+'}</span>
         </button>
         
         {vocalsOpen && (
@@ -2053,18 +2051,18 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       </div>
 
       {/* ── Compose Form ── */}
-      <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-4 space-y-4">
+      <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4 space-y-4">
         <button
           type="button"
           onClick={() => toggleMainSection('lyrics')}
-          className="flex items-center justify-between w-full"
+          className="flex items-center justify-between w-full py-1"
         >
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-purple-400/20 bg-purple-500/10 px-1 text-[10px] font-bold text-purple-300">4</span>
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isAr ? 'الكلمات' : 'Lyrics'}</span>
-            <span className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-rose-300">{isAr ? 'مطلوب' : 'Must'}</span>
+          <div className="flex items-center gap-3 sm:gap-2">
+            <span className="inline-flex h-7 w-7 sm:h-5 sm:min-w-5 items-center justify-center rounded-full border border-purple-400/20 bg-purple-500/10 text-sm sm:text-[10px] font-bold text-purple-300">4</span>
+            <span className="text-sm sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isAr ? 'الكلمات' : 'Lyrics'}</span>
+            <span className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2.5 py-1 sm:px-2 sm:py-0.5 text-xs sm:text-[9px] font-bold uppercase tracking-wider text-rose-300">{isAr ? 'مطلوب' : 'Must'}</span>
           </div>
-          <span className="text-xs text-purple-400/80">{lyricsOpen ? '−' : '+'}</span>
+          <span className="text-xl sm:text-lg text-purple-400/80">{lyricsOpen ? '−' : '+'}</span>
         </button>
 
         {lyricsOpen && (
@@ -2089,7 +2087,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 const capped = Array.from(raw).slice(0, lyricsCap).join('');
                 setLyricsText(capped);
               }}
-              placeholder={isAr ? 'أكتب الكلمات هنا أو استخدم Amp لإنشائها...' : 'Write lyrics here or use Amp to generate...'}
+              placeholder={isAr ? 'اكتب فكرة أو كلمات أولاً، ثم اضغط Amp...' : 'Write an idea or some lyrics first, then click Amp →'}
               rows={5}
               className="bg-[#fcfefd] dark:bg-white/[0.04] border-[#d9dde7] dark:border-white/10 shadow-[0_4px_12px_rgba(6,5,65,0.04)] dark:shadow-none focus:border-purple-400/50 focus:ring-purple-400/20 rounded-xl resize-none"
             />
