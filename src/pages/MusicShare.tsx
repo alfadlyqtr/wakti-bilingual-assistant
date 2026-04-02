@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { AudioPlayer } from '@/components/music/AudioPlayer';
 import { useTheme } from '@/providers/ThemeProvider';
 import InAppWaktiEscape from '@/components/public/InAppWaktiEscape';
+import { Logo3D } from '@/components/Logo3D';
 
 interface TrackRecord {
   id: string;
@@ -165,11 +166,9 @@ export default function MusicShare() {
                 href="https://wakti.qa"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-[#060541]/5 via-[#e9ceb0]/20 to-[#060541]/5 dark:from-white/5 dark:via-white/10 dark:to-white/5 hover:from-[#060541]/10 hover:via-[#e9ceb0]/30 hover:to-[#060541]/10 dark:hover:from-white/10 dark:hover:via-white/15 dark:hover:to-white/10 transition-all duration-300 group"
+                className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-gradient-to-r from-[#060541]/5 via-[#e9ceb0]/20 to-[#060541]/5 dark:from-white/5 dark:via-white/10 dark:to-white/5 hover:from-[#060541]/10 hover:via-[#e9ceb0]/30 hover:to-[#060541]/10 dark:hover:from-white/10 dark:hover:via-white/15 dark:hover:to-white/10 transition-all duration-300 group"
               >
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#060541] to-[#e9ceb0] flex items-center justify-center shadow-sm">
-                  <span className="text-white text-xs font-bold">W</span>
-                </div>
+                <Logo3D size="sm" />
                 <span className="text-xs font-medium bg-gradient-to-r from-[#060541] to-[#4a4a8a] dark:from-[#f2f2f2] dark:to-[#858384] bg-clip-text text-transparent">
                   {isAr ? 'تم الإنشاء بواسطة وقتي AI' : 'Created with Wakti AI'}
                 </span>
