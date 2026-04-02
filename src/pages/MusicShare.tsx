@@ -160,14 +160,27 @@ export default function MusicShare() {
 
             <AudioPlayer src={playUrl} className="w-full" />
 
-            <div className="pt-1 text-center">
+            <div className="pt-4 text-center">
               <a
                 href="https://wakti.qa"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[10px] text-muted-foreground/40 hover:text-muted-foreground/60 transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-[#060541]/5 via-[#e9ceb0]/20 to-[#060541]/5 dark:from-white/5 dark:via-white/10 dark:to-white/5 hover:from-[#060541]/10 hover:via-[#e9ceb0]/30 hover:to-[#060541]/10 dark:hover:from-white/10 dark:hover:via-white/15 dark:hover:to-white/10 transition-all duration-300 group"
               >
-                {isAr ? 'تم الإنشاء بواسطة وقتي AI' : 'Created with Wakti AI'}
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#060541] to-[#e9ceb0] flex items-center justify-center shadow-sm">
+                  <span className="text-white text-xs font-bold">W</span>
+                </div>
+                <span className="text-xs font-medium bg-gradient-to-r from-[#060541] to-[#4a4a8a] dark:from-[#f2f2f2] dark:to-[#858384] bg-clip-text text-transparent">
+                  {isAr ? 'تم الإنشاء بواسطة وقتي AI' : 'Created with Wakti AI'}
+                </span>
+                <svg 
+                  className="w-3 h-3 text-[#060541]/40 dark:text-white/40 group-hover:text-[#060541]/60 dark:group-hover:text-white/60 transition-colors" 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
               </a>
             </div>
           </div>
