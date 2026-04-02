@@ -1,20 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { AudioPlayer } from '@/components/music/AudioPlayer';
 import { useTheme } from '@/providers/ThemeProvider';
 import InAppWaktiEscape from '@/components/public/InAppWaktiEscape';
-
-// Create a clean anonymous client for public share pages (no session restoration)
-const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false
-  }
-});
 
 interface TrackRecord {
   id: string;
@@ -49,31 +39,27 @@ export default function MusicShare() {
       }
 
       try {
-        const { data, error: fetchError } = await anonClient
-          .from('user_music_tracks')
-          .select('id, created_at, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta')
-          .eq('id', id)
-          .maybeSingle();
+        const response = await fetch(
+          `${SUPABASE_URL.replace(/\/$/, '')}/functions/v1/music-share-public?id=${encodeURIComponent(id)}`,
+          {
+            method: 'GET',
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            },
+          }
+        );
 
-        if (fetchError || !data) {
-          setError(isAr ? 'هذا المقطع غير موجود' : 'Track not found');
+        const payload = await response.json().catch(() => null);
+
+        if (!response.ok || !payload?.track) {
+          setError(payload?.error || (isAr ? 'هذا المقطع غير موجود' : 'Track not found'));
           setLoading(false);
           return;
         }
 
-        const status = data.meta?.status;
-        if (status === 'generating' || status === 'failed' || data.storage_path?.includes('_pending.mp3')) {
-          setError(isAr ? 'هذا المقطع غير جاهز للمشاركة' : 'This track is not ready to share');
-          setLoading(false);
-          return;
-        }
-
-        let url: string | null = data.signed_url;
-        if (!url && data.storage_path) {
-          const base = SUPABASE_URL.replace(/\/$/, '');
-          const path = data.storage_path.startsWith('/') ? data.storage_path.slice(1) : data.storage_path;
-          url = `${base}/storage/v1/object/public/music/${path}`;
-        }
+        const data = payload.track as TrackRecord;
+        const url = payload.playUrl as string | null;
 
         if (!url) {
           setError(isAr ? 'لم يتم العثور على رابط الصوت' : 'No audio URL found');
