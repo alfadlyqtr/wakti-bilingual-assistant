@@ -53,8 +53,6 @@ import SavedImagesTab from '@/components/studio/SavedImagesTab';
 import QRCodeCreator from '@/components/studio/QRCodeCreator';
 import { useLocation } from 'react-router-dom';
 
-const PUBLIC_BASE_URL = 'https://www.wakti.qa';
-
 const normalizeAudioUrl = (url: string) => {
   if (!url) return '';
   let cleanUrl = url.trim();
@@ -2435,7 +2433,7 @@ function EditorTab() {
                       </button>
                       <ShareButton
                         size="sm"
-                        shareUrl={`${PUBLIC_BASE_URL}/music/share/${t.id}`}
+                        shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${t.id}` : ''}
                         shareTitle={isAr ? 'استمع إلى موسيقى من وقتي' : 'Listen to my Wakti music'}
                         shareDescription={t.prompt || undefined}
                       />

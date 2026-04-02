@@ -1,10 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { SUPABASE_URL } from '@/integrations/supabase/client';
+import { createClient } from '@supabase/supabase-js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { AudioPlayer } from '@/components/music/AudioPlayer';
 import { useTheme } from '@/providers/ThemeProvider';
 import InAppWaktiEscape from '@/components/public/InAppWaktiEscape';
+
+// Create a clean anonymous client for public share pages (no session restoration)
+const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false
+  }
+});
 
 interface TrackRecord {
   id: string;
@@ -39,16 +49,17 @@ export default function MusicShare() {
       }
 
       try {
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/music-share-public?id=${encodeURIComponent(id)}`);
-        const json = await res.json();
+        const { data, error: fetchError } = await anonClient
+          .from('user_music_tracks')
+          .select('id, created_at, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta')
+          .eq('id', id)
+          .maybeSingle();
 
-        if (!res.ok || !json?.ok || !json?.track) {
+        if (fetchError || !data) {
           setError(isAr ? 'هذا المقطع غير موجود' : 'Track not found');
           setLoading(false);
           return;
         }
-
-        const data = json.track as TrackRecord;
 
         const status = data.meta?.status;
         if (status === 'generating' || status === 'failed' || data.storage_path?.includes('_pending.mp3')) {
@@ -57,7 +68,7 @@ export default function MusicShare() {
           return;
         }
 
-        let url: string | null = json.play_url || data.signed_url;
+        let url: string | null = data.signed_url;
         if (!url && data.storage_path) {
           const base = SUPABASE_URL.replace(/\/$/, '');
           const path = data.storage_path.startsWith('/') ? data.storage_path.slice(1) : data.storage_path;
