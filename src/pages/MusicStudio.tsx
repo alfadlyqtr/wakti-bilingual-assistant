@@ -1167,52 +1167,13 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       return [
         'آر آند بي','بوب','بوب الثمانينات','بوب التسعينات','روك','روك آند رول','سوفت روك','ميتال ثقيل','كانتري','جاز','سول','هيب هوب','راب',
         // GCC/Khaleeji focus
-        'خليجي بوب','خليجي تراث','شيلات','سامري','ليوان','GCC','مهرجانات','لاتين','ريغيتون','أفروبيتس','سينث بوب','إندي بوب','لوفاي','هاوس','ديب هاوس','ترانس','تيكنو','دبسْتِب','درَم آند بَيس','كي-بوب','بوليوود'
+        'خليجي بوب','خليجي تراث','شيلات','سامري','ليوان','GCC','خليجي حماسي','خليجي أنيق','خليجي رومانسي','خليجي حفلات','شيلات / سامري','مهرجانات','لاتين','ريغيتون','أفروبيتس','سينث بوب','إندي بوب','لوفاي','هاوس','ديب هاوس','ترانس','تيكنو','دبسْتِب','درَم آند بَيس','كي-بوب','بوليوود'
       ];
     }
     return [
       'R&B','pop','80s pop','90s pop','rock','rock and roll','soft rock','heavy metal','country','jazz','soul','hip hop','rap',
       // GCC/Khaleeji focus
-      'Khaleeji Pop','Khaleeji Traditional','Sheilat','Samri','Liwa','GCC','Shaabi','Latin','Reggaeton','Afrobeats','Synthpop','Indie Pop','Lo-Fi','House','Deep House','Trance','Techno','Dubstep','Drum & Bass','K-Pop','Bollywood'
-    ];
-  }, [language]);
-
-  // Mode/Mood presets (unique values only)
-  const MODE_PRESETS = useMemo<string[]>(() => {
-    if (language === 'ar') {
-      return [
-        'سعيد', 'حزين', 'هادئ', 'مفعم بالطاقة', 'رومانسي', 'مظلم', 'ساطع', 'نوستالجي', 'تأملي', 'استرخاء', 'تركيز', 'ملحمي', 'مثير', 'غامض', 'مبهج'
-      ];
-    }
-    return [
-      'happy', 'sad', 'calm', 'energetic', 'romantic', 'dark', 'bright', 'nostalgic', 'meditative', 'relaxing', 'focus', 'epic', 'exciting', 'mysterious', 'uplifting'
-    ];
-  }, [language]);
-
-  const INSTRUMENT_PRESETS = useMemo<string[]>(() => {
-    if (language === 'ar') {
-      return [
-        'عود','قانون','ناي','رق','دربوكة','طبلة','طار','مزمار','رباب',
-        'كمان','فيولا','تشيلو','كونترباص','فرقة أوتار',
-        'بيانو','بيانو كهربائي','أورغ','أكورديون',
-        'جيتار أكوستيك','جيتار كهربائي','جيتار 12 وتر','جيتار كلاسيكي','جيتار نايلون',
-        'باص جيتار','باص وترى','سينث باص',
-        'طقم درامز','إيقاع','تومز','سنير','هاي-هات','صنجات','تصفيق يدوي',
-        'فلوت','كلارينيت','أوبوا','باسون','ساكسفون','ترومبيت','ترومبون','هورن فرنسي',
-        'هارب','سيليستا','فيبرفون','ماريمبا','زيلوفون',
-        'سينث ليد','سينث باد','باد دافئ','باد تناظري','باد أوتار','بلاك','أربجياتور'
-      ];
-    }
-    return [
-      'oud','qanun','ney','riq','darbuka','tabla','frame drum','mizmar','rebab',
-      'violin','viola','cello','contrabass','string ensemble',
-      'piano','electric piano','organ','accordion',
-      'acoustic guitar','electric guitar','12‑string guitar','classical guitar','nylon guitar',
-      'bass guitar','upright bass','synth bass',
-      'drum kit','percussion','toms','snare','hi-hat','cymbals','hand claps',
-      'flute','clarinet','oboe','bassoon','saxophone','trumpet','trombone','french horn',
-      'harp','celesta','vibraphone','marimba','xylophone',
-      'synth lead','synth pad','warm pad','analog pad','string pad','pluck','arpeggiator'
+      'Khaleeji Pop','Khaleeji Traditional','Sheilat','Samri','Liwa','GCC','GCC Upbeat','GCC Elegant','GCC Romantic','GCC Party','Sheilat / Samri vibe','Shaabi','Latin','Reggaeton','Afrobeats','Synthpop','Indie Pop','Lo-Fi','House','Deep House','Trance','Techno','Dubstep','Drum & Bass','K-Pop','Bollywood'
     ];
   }, [language]);
 
@@ -1256,6 +1217,89 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [weirdnessConstraint, setWeirdnessConstraint] = useState<number>(0.5);
   const [audioWeight, setAudioWeight] = useState<number>(0.65);
   const [showAdvancedSliders, setShowAdvancedSliders] = useState<boolean>(false);
+
+  // Style to recommended instruments mapping
+  const STYLE_INSTRUMENT_MAPPING = useMemo<Record<string, string[]>>(() => {
+    if (language === 'ar') {
+      return {
+        'GCC': ['عود', 'طبلة', 'دربوكة', 'طار', 'مزمار', 'رق'],
+        'خليجي حماسي': ['عود', 'طبلة', 'دربوكة', 'طار', 'مزمار', 'رق'],
+        'خليجي أنيق': ['عود', 'قانون', 'ناي', 'كمان', 'بيانو'],
+        'خليجي رومانسي': ['عود', 'قانون', 'ناي', 'كمان', 'بيانو', 'تشيلو'],
+        'خليجي حفلات': ['عود', 'طبلة', 'دربوكة', 'طار', 'مزمار', 'إيقاع', 'جيتار كهربائي'],
+        'شيلات / سامري': ['عود', 'طبلة', 'دربوكة', 'طار', 'مزمار', 'إيقاع'],
+        'خليجي بوب': ['عود', 'طبلة', 'دربوكة', 'بيانو', 'جيتار كهربائي', 'سينث باد'],
+        'خليجي تراث': ['عود', 'قانون', 'ناي', 'رق', 'طبلة', 'رباب'],
+        'شيلات': ['عود', 'طبلة', 'دربوكة', 'طار', 'مزمار', 'إيقاع'],
+        'سامري': ['عود', 'طبلة', 'دربوكة', 'طار', 'رباب'],
+        'ليوان': ['عود', 'طبلة', 'دربوكة', 'طار'],
+      };
+    }
+    return {
+      'GCC': ['oud', 'tabla', 'darbuka', 'frame drum', 'mizmar', 'riq'],
+      'GCC Upbeat': ['oud', 'tabla', 'darbuka', 'frame drum', 'mizmar', 'riq'],
+      'GCC Elegant': ['oud', 'qanun', 'ney', 'violin', 'piano'],
+      'GCC Romantic': ['oud', 'qanun', 'ney', 'violin', 'piano', 'cello'],
+      'GCC Party': ['oud', 'tabla', 'darbuka', 'frame drum', 'mizmar', 'percussion', 'electric guitar'],
+      'Sheilat / Samri vibe': ['oud', 'tabla', 'darbuka', 'frame drum', 'mizmar', 'percussion'],
+      'Khaleeji Pop': ['oud', 'tabla', 'darbuka', 'piano', 'electric guitar', 'synth pad'],
+      'Khaleeji Traditional': ['oud', 'qanun', 'ney', 'riq', 'tabla', 'rebab'],
+      'Sheilat': ['oud', 'tabla', 'darbuka', 'frame drum', 'mizmar', 'percussion'],
+      'Samri': ['oud', 'tabla', 'darbuka', 'frame drum', 'rebab'],
+      'Liwa': ['oud', 'tabla', 'darbuka', 'frame drum'],
+    };
+  }, [language]);
+
+  // Get recommended instruments for current style selection
+  const recommendedInstruments = useMemo(() => {
+    const recommended: string[] = [];
+    for (const style of includeTags) {
+      const mapped = STYLE_INSTRUMENT_MAPPING[style];
+      if (mapped) {
+        recommended.push(...mapped);
+      }
+    }
+    return [...new Set(recommended)]; // deduplicate
+  }, [includeTags, STYLE_INSTRUMENT_MAPPING]);
+
+  // Mode/Mood presets
+  const MODE_PRESETS = useMemo<string[]>(() => {
+    if (language === 'ar') {
+      return [
+        'سعيد', 'حزين', 'هادئ', 'مفعم بالطاقة', 'رومانسي', 'مظلم', 'ساطع', 'نوستالجي', 'تأملي', 'استرخاء', 'تركيز', 'ملحمي', 'مثير', 'غامض', 'مبهج'
+      ];
+    }
+    return [
+      'happy', 'sad', 'calm', 'energetic', 'romantic', 'dark', 'bright', 'nostalgic', 'meditative', 'relaxing', 'focus', 'epic', 'exciting', 'mysterious', 'uplifting'
+    ];
+  }, [language]);
+
+  const INSTRUMENT_PRESETS = useMemo<string[]>(() => {
+    if (language === 'ar') {
+      return [
+        'عود','قانون','ناي','رق','دربوكة','طبلة','طار','مزمار','رباب',
+        'كمان','فيولا','تشيلو','كونترباص','فرقة أوتار',
+        'بيانو','بيانو كهربائي','أورغ','أكورديون',
+        'جيتار أكوستيك','جيتار كهربائي','جيتار 12 وتر','جيتار كلاسيكي','جيتار نايلون',
+        'باص جيتار','باص وترى','سينث باص',
+        'طقم درامز','إيقاع','تومز','سنير','هاي-هات','صنجات','تصفيق يدوي',
+        'فلوت','كلارينيت','أوبوا','باسون','ساكسفون','ترومبيت','ترومبون','هورن فرنسي',
+        'هارب','سيليستا','فيبرفون','ماريمبا','زيلوفون',
+        'سينث ليد','سينث باد','باد دافئ','باد تناظري','باد أوتار','بلاك','أربجياتور'
+      ];
+    }
+    return [
+      'oud','qanun','ney','riq','darbuka','tabla','frame drum','mizmar','rebab',
+      'violin','viola','cello','contrabass','string ensemble',
+      'piano','electric piano','organ','accordion',
+      'acoustic guitar','electric guitar','12‑string guitar','classical guitar','nylon guitar',
+      'bass guitar','upright bass','synth bass',
+      'drum kit','percussion','toms','snare','hi-hat','cymbals','hand claps',
+      'flute','clarinet','oboe','bassoon','saxophone','trumpet','trombone','french horn',
+      'harp','celesta','vibraphone','marimba','xylophone',
+      'synth lead','synth pad','warm pad','analog pad','string pad','pluck','arpeggiator'
+    ];
+  }, [language]);
 
   // Guard to ensure monthly usage loads only once (avoids StrictMode double-run logs)
   const usageLoadedRef = useRef(false);
@@ -1523,6 +1567,127 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     });
   }
 
+  function handleStyleToggle(style: string) {
+    setIncludeTags((prev) => {
+      if (prev.includes(style)) {
+        return prev.filter((tag) => tag !== style);
+      }
+
+      if (prev.length >= 3) {
+        toast.error(isAr ? 'يمكنك اختيار 3 أنماط كحد أقصى' : 'You can select up to 3 styles');
+        return prev;
+      }
+
+      const next = [...prev, style];
+
+      if (next.length === 3) {
+        setTimeout(() => {
+          setStylesOpen(false);
+          setInstrumentsOpen(true);
+          setMoodOpen(false);
+        }, 0);
+      }
+
+      return next;
+    });
+  }
+
+  function handleStylesNext() {
+    setStylesOpen(false);
+    setInstrumentsOpen(true);
+    setMoodOpen(false);
+  }
+
+  function handleSelectRecommendedInstruments() {
+    if (recommendedInstruments.length === 0) return;
+    setInstrumentTags((prev) => {
+      const merged = [...new Set([...prev, ...recommendedInstruments])];
+      const limited = merged.slice(0, 15);
+
+      if (merged.length > 15) {
+        toast.error(isAr ? 'يمكنك اختيار 15 آلة كحد أقصى' : 'You can select up to 15 instruments');
+      }
+
+      if (limited.length === 15) {
+        setTimeout(() => {
+          setInstrumentsOpen(false);
+          setMoodOpen(true);
+          setStylesOpen(false);
+        }, 0);
+      }
+
+      return limited;
+    });
+  }
+
+  function handleInstrumentToggle(inst: string) {
+    setInstrumentTags((prev) => {
+      if (prev.includes(inst)) {
+        return prev.filter((tag) => tag !== inst);
+      }
+
+      if (prev.length >= 15) {
+        toast.error(isAr ? 'يمكنك اختيار 15 آلة كحد أقصى' : 'You can select up to 15 instruments');
+        return prev;
+      }
+
+      const next = [...prev, inst];
+
+      if (next.length === 15) {
+        setTimeout(() => {
+          setInstrumentsOpen(false);
+          setMoodOpen(true);
+          setStylesOpen(false);
+        }, 0);
+      }
+
+      return next;
+    });
+  }
+
+  function handleInstrumentsNext() {
+    setInstrumentsOpen(false);
+    setMoodOpen(true);
+    setStylesOpen(false);
+  }
+
+  function handleMoodToggle(mood: string) {
+    setMoodTags((prev) => {
+      if (prev.includes(mood)) {
+        return prev.filter((tag) => tag !== mood);
+      }
+
+      if (prev.length >= 3) {
+        toast.error(isAr ? 'يمكنك اختيار 3 حالات كحد أقصى' : 'You can select up to 3 moods');
+        return prev;
+      }
+
+      const next = [...prev, mood];
+
+      if (next.length === 3) {
+        setTimeout(() => {
+          setMoodOpen(false);
+          setMusicStyleOpen(false);
+          setVocalsOpen(true);
+        }, 0);
+      }
+
+      return next;
+    });
+  }
+
+  function handleMoodNext() {
+    setMoodOpen(false);
+    setMusicStyleOpen(false);
+    setVocalsOpen(true);
+  }
+
+  function handleVocalSelect(v: 'auto'|'none'|'female'|'male') {
+    setVocalType(v);
+    setVocalsOpen(false);
+    setLyricsOpen(true);
+  }
+
   function toggleMainSection(section: 'title' | 'style' | 'vocals' | 'lyrics') {
     setTitleOpen(section === 'title' ? !titleOpen : false);
     setMusicStyleOpen(section === 'style' ? !musicStyleOpen : false);
@@ -1574,8 +1739,29 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   // Build style string from chips + styleText
   function buildKieStyleString(): string {
+    const expandStyleTag = (part: string): string => {
+      const value = part.trim();
+      if (!value) return '';
+
+      const mappings: Record<string, string> = {
+        GCC: 'Khaleeji pop, Gulf Arabic style, modern commercial khaliji, upbeat gulf rhythm, khaleeji percussion, oud, catchy chorus, polished production, elegant energetic vibe',
+        'GCC Upbeat': 'Khaleeji upbeat pop, Gulf Arabic commercial style, energetic khaliji rhythm, driving gulf percussion, oud accents, catchy hook, lively celebratory vibe',
+        'GCC Elegant': 'Elegant Khaleeji pop, refined Gulf Arabic style, smooth rhythmic groove, classy polished production, graceful melody, oud and soft arabic instrumentation',
+        'GCC Romantic': 'Romantic Khaleeji pop, warm Gulf Arabic melody, emotional elegant delivery, soft oud phrases, smooth percussion, heartfelt commercial ballad vibe',
+        'GCC Party': 'Khaleeji party anthem, festive Gulf Arabic pop, big celebratory chorus, energetic khaliji drums, danceable groove, modern commercial production',
+        'Sheilat / Samri vibe': 'Khaleeji sheilat and samri inspired rhythm, traditional Gulf groove, strong percussion patterns, call-and-response energy, authentic Gulf identity',
+        'خليجي حماسي': 'خليجي حماسي، بوب خليجي عصري، إيقاع خليجي سريع، طبول خليجية واضحة، عود، لحن جذاب، طاقة عالية، كورس قوي',
+        'خليجي أنيق': 'خليجي أنيق، طابع عربي خليجي راقٍ، إنتاج نظيف واحترافي، لحن ناعم، إيقاع متزن، عود ولمسات عربية فاخرة',
+        'خليجي رومانسي': 'خليجي رومانسي، لحن دافئ، إحساس عاطفي، إيقاع خليجي هادئ، عود ناعم، أداء أنيق، طابع تجاري جميل',
+        'خليجي حفلات': 'خليجي حفلات، جو احتفالي، إيقاع خليجي راقص، طبول خليجية قوية، كورس جماهيري، طاقة عالية، إنتاج عصري',
+        'شيلات / سامري': 'إيقاع شيلات وسامري، روح خليجية واضحة، طبول وإيقاعات خليجية، طابع تراثي عصري، طاقة جماعية، هوية خليجية أصيلة',
+      };
+
+      return mappings[value] ?? value;
+    };
+
     const parts = [...includeTags, ...instrumentTags, ...moodTags]
-      .map((part) => part.trim())
+      .map((part) => expandStyleTag(part))
       .filter(Boolean);
     if (styleText.trim()) parts.push(styleText.trim());
     return parts.join(' ').replace(/\s+/g, ' ').trim();
@@ -1917,21 +2103,41 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 <span className="text-xl sm:text-lg text-sky-500 dark:text-sky-400/80">{stylesOpen ? '−' : '+'}</span>
               </button>
               {stylesOpen && (
-                <div className="flex flex-wrap gap-2">
-                  {STYLE_PRESETS.map((style) => (
-                    <button
-                      key={style}
-                      type="button"
-                      onClick={() => setIncludeTags(p => p.includes(style) ? p.filter(t => t !== style) : [...p, style])}
-                      className={`px-4 py-2 rounded-full text-sm border transition-all active:scale-95 ${
-                        includeTags.includes(style)
-                          ? 'bg-sky-50 dark:bg-sky-500/25 border-sky-300 dark:border-sky-400/40 text-sky-700 dark:text-sky-200 shadow-[0_4px_12px_rgba(59,130,246,0.12)] dark:shadow-none'
-                          : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-sky-300 dark:hover:border-sky-400/30 hover:text-sky-600 dark:hover:text-sky-300'
-                      }`}
-                    >
-                      {style}
-                    </button>
-                  ))}
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {STYLE_PRESETS.map((style) => (
+                      <button
+                        key={style}
+                        type="button"
+                        onClick={() => handleStyleToggle(style)}
+                        className={`px-4 py-2 rounded-full text-sm border transition-all active:scale-95 ${
+                          includeTags.includes(style)
+                            ? 'bg-sky-50 dark:bg-sky-500/25 border-sky-300 dark:border-sky-400/40 text-sky-700 dark:text-sky-200 shadow-[0_4px_12px_rgba(59,130,246,0.12)] dark:shadow-none'
+                            : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-sky-300 dark:hover:border-sky-400/30 hover:text-sky-600 dark:hover:text-sky-300'
+                        }`}
+                      >
+                        {style}
+                      </button>
+                    ))}
+                  </div>
+                  {includeTags.length > 0 && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[10px] sm:text-xs text-muted-foreground/70 dark:text-muted-foreground/60">
+                        {isAr
+                          ? `${includeTags.length}/3 أنماط مختارة`
+                          : `${includeTags.length}/3 styles selected`}
+                      </span>
+                      {includeTags.length < 3 && (
+                        <button
+                          type="button"
+                          onClick={handleStylesNext}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-sky-300 dark:border-sky-400/30 bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-500/20 active:scale-95 transition-all"
+                        >
+                          {isAr ? 'التالي' : 'Next'}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1943,25 +2149,71 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 onClick={() => toggleMusicSubsection('instruments')}
                 className="flex items-center justify-between w-full text-[10px] font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase mb-1.5"
               >
-                <span className="text-sm sm:text-xs font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase">{isAr ? 'الآلات' : 'Instruments'}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm sm:text-xs font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase">{isAr ? 'الآلات' : 'Instruments'}</span>
+                  {recommendedInstruments.length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-medium border border-emerald-400/30">
+                      <Sparkles className="h-2.5 w-2.5" />
+                      {isAr ? 'مقترحة' : 'Recommended'}
+                    </span>
+                  )}
+                </div>
                 <span className="text-xl sm:text-lg text-purple-500 dark:text-purple-400/80">{instrumentsOpen ? '−' : '+'}</span>
               </button>
               {instrumentsOpen && (
-                <div className="flex flex-wrap gap-2">
-                  {INSTRUMENT_PRESETS.map((inst) => (
-                    <button
-                      key={inst}
-                      type="button"
-                      onClick={() => setInstrumentTags(p => p.includes(inst) ? p.filter(t => t !== inst) : [...p, inst])}
-                      className={`px-4 py-2 rounded-full text-sm border transition-all active:scale-95 ${
-                        instrumentTags.includes(inst)
-                          ? 'bg-purple-50 dark:bg-purple-500/25 border-purple-300 dark:border-purple-400/40 text-purple-700 dark:text-purple-200 shadow-[0_4px_12px_rgba(147,51,234,0.12)] dark:shadow-none'
-                          : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-purple-300 dark:hover:border-purple-400/30 hover:text-purple-600 dark:hover:text-purple-300'
-                      }`}
-                    >
-                      {inst}
-                    </button>
-                  ))}
+                <div className="space-y-3">
+                  {recommendedInstruments.length > 0 && (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleSelectRecommendedInstruments}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-emerald-300 dark:border-emerald-400/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 active:scale-95 transition-all"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        {isAr ? 'اختيار المقترح' : 'Select recommended'}
+                      </button>
+                    </div>
+                  )}
+                  {instrumentTags.length > 0 && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[10px] sm:text-xs text-muted-foreground/70 dark:text-muted-foreground/60">
+                        {isAr
+                          ? `${instrumentTags.length}/15 آلات مختارة`
+                          : `${instrumentTags.length}/15 instruments selected`}
+                      </span>
+                      {instrumentTags.length < 15 && (
+                        <button
+                          type="button"
+                          onClick={handleInstrumentsNext}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-purple-300 dark:border-purple-400/30 bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-500/20 active:scale-95 transition-all"
+                        >
+                          {isAr ? 'التالي' : 'Next'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {INSTRUMENT_PRESETS.map((inst) => {
+                      const isRecommended = recommendedInstruments.includes(inst);
+                      const isSelected = instrumentTags.includes(inst);
+                      return (
+                        <button
+                          key={inst}
+                          type="button"
+                          onClick={() => handleInstrumentToggle(inst)}
+                          className={`px-4 py-2 rounded-full text-sm border transition-all active:scale-95 ${
+                            isSelected
+                              ? 'bg-purple-50 dark:bg-purple-500/25 border-purple-300 dark:border-purple-400/40 text-purple-700 dark:text-purple-200 shadow-[0_4px_12px_rgba(147,51,234,0.12)] dark:shadow-none'
+                              : isRecommended
+                                ? 'bg-emerald-50 dark:bg-emerald-500/20 border-emerald-300 dark:border-emerald-400/30 text-emerald-700 dark:text-emerald-300 shadow-[0_4px_12px_rgba(16,185,129,0.10)] dark:shadow-none ring-1 ring-emerald-400/30'
+                                : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-purple-300 dark:hover:border-purple-400/30 hover:text-purple-600 dark:hover:text-purple-300'
+                          }`}
+                        >
+                          {inst}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
@@ -1977,21 +2229,39 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 <span className="text-xl sm:text-lg text-amber-500 dark:text-amber-400/80">{moodOpen ? '−' : '+'}</span>
               </button>
               {moodOpen && (
-                <div className="flex flex-wrap gap-2">
-                  {MODE_PRESETS.map((mood) => (
-                    <button
-                      key={mood}
-                      type="button"
-                      onClick={() => setMoodTags(p => p.includes(mood) ? p.filter(t => t !== mood) : [...p, mood])}
-                      className={`px-4 py-2 rounded-full text-sm border transition-all active:scale-95 ${
-                        moodTags.includes(mood)
-                          ? 'bg-amber-50 dark:bg-amber-500/25 border-amber-300 dark:border-amber-400/40 text-amber-700 dark:text-amber-200 shadow-[0_4px_12px_rgba(245,158,11,0.12)] dark:shadow-none'
-                          : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-amber-300 dark:hover:border-amber-400/30 hover:text-amber-600 dark:hover:text-amber-300'
-                      }`}
-                    >
-                      {mood}
-                    </button>
-                  ))}
+                <div className="space-y-3">
+                  {moodTags.length < 3 && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[10px] sm:text-xs text-muted-foreground/70 dark:text-muted-foreground/60">
+                        {isAr
+                          ? `${moodTags.length}/3 حالات مختارة`
+                          : `${moodTags.length}/3 moods selected`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleMoodNext}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-300 dark:border-amber-400/30 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/20 active:scale-95 transition-all"
+                      >
+                        {isAr ? 'التالي' : 'Next'}
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {MODE_PRESETS.map((mood) => (
+                      <button
+                        key={mood}
+                        type="button"
+                        onClick={() => handleMoodToggle(mood)}
+                        className={`px-4 py-2 rounded-full text-sm border transition-all active:scale-95 ${
+                          moodTags.includes(mood)
+                            ? 'bg-amber-50 dark:bg-amber-500/25 border-amber-300 dark:border-amber-400/40 text-amber-700 dark:text-amber-200 shadow-[0_4px_12px_rgba(245,158,11,0.12)] dark:shadow-none'
+                            : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-amber-300 dark:hover:border-amber-400/30 hover:text-amber-600 dark:hover:text-amber-300'
+                        }`}
+                      >
+                        {mood}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -2035,7 +2305,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               };
               const isActive = vocalType === v;
               return (
-                <button key={v} type="button" onClick={() => setVocalType(v)}
+                <button key={v} type="button" onClick={() => handleVocalSelect(v)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${
                     isActive
                       ? 'bg-gradient-to-r from-emerald-100 to-teal-100 dark:from-emerald-500/30 dark:to-teal-500/20 border-emerald-300 dark:border-emerald-400/50 text-emerald-700 dark:text-emerald-300 shadow-[0_8px_18px_rgba(16,185,129,0.15)] dark:shadow-[0_0_12px_hsla(142,76%,55%,0.3)]'
