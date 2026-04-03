@@ -1961,100 +1961,108 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     })();
   }, [user?.id]);
 
+  // ── Load ALL homescreen settings from Supabase on every login ──
+  // Supabase is the single source of truth for cross-device sync.
+  // localStorage is only a write-cache for instant UI restore on the same device.
   useEffect(() => {
     if (!user) return;
-    // localStorage is the source of truth — only pull from Supabase if we have NO local data
-    const hasLocalWidgets = !!localStorage.getItem(LS_WIDGETS_KEY());
-    const hasLocalGrid    = !!localStorage.getItem(LS_UNIFIED_KEY());
-    const hasLocalDock    = !!localStorage.getItem(LS_DOCK_KEY());
-    if (_hasLoadedFromSupabase.current && (hasLocalWidgets || hasLocalGrid || hasLocalDock)) return;
+    if (_hasLoadedFromSupabase.current) return; // already ran for this user session
     _hasLoadedFromSupabase.current = true;
     (async () => {
       try {
         const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
         const s = (data?.settings as any);
-        if (s?.homescreenWidgets && !hasLocalWidgets) {
+
+        // ── Widgets ──
+        if (s?.homescreenWidgets) {
           const clamped = clampHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false, ...s.homescreenWidgets });
-          // Only update if different
           const clampedJson = JSON.stringify(clamped);
           setHsWidgets(prev => JSON.stringify(prev) === clampedJson ? prev : clamped);
           localStorage.setItem(LS_WIDGETS_KEY(), clampedJson);
-          // Build/restore unified grid
-          if (Array.isArray(s?.homescreen?.unifiedGrid) && s.homescreen.unifiedGrid.length > 0) {
-            const saved: string[] = s.homescreen.unifiedGrid;
-            const enabledWidgets = new Set(WIDGET_IDS.filter(k => clamped[k]).map(k => `widget::${k}`));
-            // Keep saved order, filter disabled widgets, invalid apps, but KEEP empties to preserve layout
-            const seen = new Set<string>();
-            const grid: string[] = [];
-            for (const id of saved) {
-              if (seen.has(id)) continue;
-              seen.add(id);
-              if (id.startsWith('widget::')) {
-                if (enabledWidgets.has(id)) grid.push(id);
-              } else if (id.startsWith('app::')) {
-                if (VALID_IDS.has(id.replace('app::',''))) grid.push(id);
-              } else if (id.startsWith('empty-w::') || id.startsWith('empty-i::')) {
-                grid.push(id);
-              }
-            }
-            // Append any missing enabled widgets at end
-            for (const w of enabledWidgets) { if (!seen.has(w)) grid.push(w); }
-            // Append any missing apps at end
-            for (const appId of DEFAULT_ORDER) {
-              const key = `app::${appId}`;
-              if (!seen.has(key)) grid.push(key);
-            }
-            const gridJson = JSON.stringify(grid);
-            const cachedGrid = localStorage.getItem(LS_UNIFIED_KEY());
-            if (gridJson !== cachedGrid) {
-              setUnifiedGrid(prev => JSON.stringify(prev) === gridJson ? prev : grid);
-              localStorage.setItem(LS_UNIFIED_KEY(), gridJson);
-            }
-          } else if (!localStorage.getItem(LS_UNIFIED_KEY())) {
-            const grid = buildDefaultUnifiedGrid(clamped);
-            setUnifiedGrid(prev => JSON.stringify(prev) === JSON.stringify(grid) ? prev : grid);
-            localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(grid));
-          }
         }
+
+        // ── Unified grid ──
+        if (Array.isArray(s?.homescreen?.unifiedGrid) && s.homescreen.unifiedGrid.length > 0) {
+          const widgetState = s.homescreenWidgets
+            ? clampHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false, ...s.homescreenWidgets })
+            : { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
+          const saved: string[] = s.homescreen.unifiedGrid;
+          const enabledWidgets = new Set(WIDGET_IDS.filter(k => widgetState[k as keyof typeof widgetState]).map(k => `widget::${k}`));
+          const seen = new Set<string>();
+          const grid: string[] = [];
+          for (const id of saved) {
+            if (seen.has(id)) continue;
+            seen.add(id);
+            if (id.startsWith('widget::')) {
+              if (enabledWidgets.has(id)) grid.push(id);
+            } else if (id.startsWith('app::')) {
+              if (VALID_IDS.has(id.replace('app::',''))) grid.push(id);
+            } else if (id.startsWith('empty-w::') || id.startsWith('empty-i::')) {
+              grid.push(id);
+            }
+          }
+          for (const w of enabledWidgets) { if (!seen.has(w)) grid.push(w); }
+          for (const appId of DEFAULT_ORDER) {
+            const key = `app::${appId}`;
+            if (!seen.has(key)) grid.push(key);
+          }
+          const gridJson = JSON.stringify(grid);
+          setUnifiedGrid(prev => JSON.stringify(prev) === gridJson ? prev : grid);
+          localStorage.setItem(LS_UNIFIED_KEY(), gridJson);
+        }
+
         const hs = s?.homescreen;
         if (!hs) return;
+
+        // ── Dock ──
         if (Array.isArray(hs.dockIds)) {
           const d = sanitizeDock(hs.dockIds);
-          const dJson = JSON.stringify(d);
-          const cachedDock = localStorage.getItem(LS_DOCK_KEY());
-          if (dJson !== cachedDock) {
-            setDockIds(prev => JSON.stringify(prev) === dJson ? prev : d);
-            localStorage.setItem(LS_DOCK_KEY(), dJson);
-          }
-          if (Array.isArray(hs.iconOrder)) {
-            const o = sanitizeOrder(hs.iconOrder);
-            const oJson = JSON.stringify(o);
-            const cachedOrder = localStorage.getItem(LS_ORDER_KEY());
-            if (oJson !== cachedOrder) {
-              setIconOrder(prev => JSON.stringify(prev) === oJson ? prev : o);
-              localStorage.setItem(LS_ORDER_KEY(), oJson);
-            }
-          }
-        } else if (Array.isArray(hs.iconOrder)) {
-          const o = sanitizeOrder(hs.iconOrder);
-          const oJson = JSON.stringify(o);
-          const cachedOrder = localStorage.getItem(LS_ORDER_KEY());
-          if (oJson !== cachedOrder) {
-            setIconOrder(prev => JSON.stringify(prev) === oJson ? prev : o);
-            localStorage.setItem(LS_ORDER_KEY(), oJson);
-          }
+          setDockIds(prev => JSON.stringify(prev) === JSON.stringify(d) ? prev : d);
+          localStorage.setItem(LS_DOCK_KEY(), JSON.stringify(d));
         }
-        if (typeof hs.showQuote === "boolean" && String(hs.showQuote) !== localStorage.getItem(LS_QUOTE_KEY())) { setShowQuote(prev => prev === hs.showQuote ? prev : hs.showQuote); localStorage.setItem(LS_QUOTE_KEY(), String(hs.showQuote)); }
-        if (hs.bgImage && hs.bgImage !== localStorage.getItem(LS_BG_KEY())) { setBgImage(prev => prev === hs.bgImage ? prev : hs.bgImage); localStorage.setItem(LS_BG_KEY(), hs.bgImage); }
+
+        // ── Icon order ──
+        if (Array.isArray(hs.iconOrder)) {
+          const o = sanitizeOrder(hs.iconOrder);
+          setIconOrder(prev => JSON.stringify(prev) === JSON.stringify(o) ? prev : o);
+          localStorage.setItem(LS_ORDER_KEY(), JSON.stringify(o));
+        }
+
+        // ── Quote toggle ──
+        if (typeof hs.showQuote === "boolean") {
+          setShowQuote(prev => prev === hs.showQuote ? prev : hs.showQuote);
+          localStorage.setItem(LS_QUOTE_KEY(), String(hs.showQuote));
+        }
+
+        // ── BG image (only if no gradient BG is active) ──
+        if (hs.bgImage && !s?.homescreenBg) {
+          setBgImage(prev => prev === hs.bgImage ? prev : hs.bgImage);
+          localStorage.setItem(LS_BG_KEY(), hs.bgImage);
+        }
+
+        // ── BG position ──
         if (typeof hs.bgPositionY === "number") {
           const nextPos = Math.max(0, Math.min(100, hs.bgPositionY));
           setBgPositionY(prev => prev === nextPos ? prev : nextPos);
           localStorage.setItem(LS_BG_POS_Y_KEY(), String(nextPos));
         }
-        if (hs.headerColor && hs.headerColor !== localStorage.getItem(LS_HEADER_COLOR_KEY())) { setHeaderColor(prev => prev === hs.headerColor ? prev : hs.headerColor); localStorage.setItem(LS_HEADER_COLOR_KEY(), hs.headerColor); }
+
+        // ── Header color ──
+        if (typeof hs.headerColor === "string") {
+          setHeaderColor(prev => prev === hs.headerColor ? prev : hs.headerColor);
+          if (hs.headerColor) localStorage.setItem(LS_HEADER_COLOR_KEY(), hs.headerColor);
+          else localStorage.removeItem(LS_HEADER_COLOR_KEY());
+        }
+
+        // ── Dock color ──
+        if (typeof hs.dockColor === "string") {
+          setDockColor(prev => prev === hs.dockColor ? prev : hs.dockColor);
+          try { if (hs.dockColor) localStorage.setItem(lsKey(user.id, LS_DOCK_COLOR_BASE), hs.dockColor); else localStorage.removeItem(lsKey(user.id, LS_DOCK_COLOR_BASE)); } catch {}
+        }
+
       } catch { /* silent */ }
     })();
-  }, [user]);
+  }, [user?.id]);
 
   // Live update from Settings page widget toggle events
   useEffect(() => {
@@ -2347,6 +2355,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           if (prev.includes(`app::${id}`)) return prev;
           const updated = [...prev, `app::${id}`];
           localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(updated));
+          syncToSupabase({ dockIds: nextDock, unifiedGrid: updated });
           return updated;
         });
       } else {
@@ -2362,15 +2371,15 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             return updated;
           });
         }
-        // Remove from unified grid
+        // Remove from unified grid and sync both dock + grid together
         setUnifiedGrid(prev => {
           const updated = prev.filter(x => x !== `app::${id}`);
           localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(updated));
+          syncToSupabase({ dockIds: nextDock, unifiedGrid: updated });
           return updated;
         });
       }
       localStorage.setItem(LS_DOCK_KEY(), JSON.stringify(nextDock));
-      syncToSupabase({ dockIds: nextDock });
       _pendingDock.current = nextDock;
       return nextDock;
     });
@@ -3160,10 +3169,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               <div className="mt-4 flex items-center justify-between rounded-xl border border-border/40 px-3 py-2.5">
                 <span className="text-xs font-semibold">{language === 'ar' ? 'لون خلفية الدوك' : 'Dock Background'}</span>
                 <div className="flex items-center gap-2">
-                  <input type="color" title="Dock background color" value={dockColor || (isDark ? '#0c0f14' : '#060541')} onChange={e => { setDockColor(e.target.value); localStorage.setItem(lsKey(_cachedUid(), LS_DOCK_COLOR_BASE), e.target.value); }}
+                  <input type="color" title="Dock background color" value={dockColor || (isDark ? '#0c0f14' : '#060541')} onChange={e => { setDockColor(e.target.value); localStorage.setItem(lsKey(_cachedUid(), LS_DOCK_COLOR_BASE), e.target.value); syncToSupabase({ dockColor: e.target.value }); }}
                     className="w-7 h-7 rounded-lg cursor-pointer border border-border/30 p-0.5 bg-transparent" />
                   {dockColor && (
-                    <button onClick={() => { setDockColor(''); localStorage.removeItem(lsKey(_cachedUid(), LS_DOCK_COLOR_BASE)); }}
+                    <button onClick={() => { setDockColor(''); localStorage.removeItem(lsKey(_cachedUid(), LS_DOCK_COLOR_BASE)); syncToSupabase({ dockColor: '' }); }}
                       className="text-[10px] px-2 py-1 rounded-full bg-red-500/20 text-red-500 border border-red-500/30 font-semibold">
                       {language === 'ar' ? 'إعادة' : 'Reset'}
                     </button>

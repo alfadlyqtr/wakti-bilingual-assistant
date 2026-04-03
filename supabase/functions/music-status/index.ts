@@ -110,8 +110,11 @@ serve(async (req) => {
     const completedRows = (dbRows ?? []).filter(
       (r: any) => r.meta?.status === "completed" && r.signed_url
     );
+    const totalRows = (dbRows ?? []).length;
 
-    if (completedRows.length > 0) {
+    // Only return completed if ALL rows for this task are done
+    // (KIE generates 2 variants — wait for both before resolving)
+    if (completedRows.length > 0 && completedRows.length >= totalRows && totalRows > 0) {
       return new Response(JSON.stringify({
         status: "completed",
         tracks: completedRows.map((r: any) => ({
@@ -193,6 +196,8 @@ serve(async (req) => {
           tags: track.tags,
         };
 
+        let savedRowId = placeholderRow.id;
+
         if (isFirst) {
           await supabaseService
             .from("user_music_tracks")
@@ -209,7 +214,7 @@ serve(async (req) => {
             })
             .eq("id", placeholderRow.id);
         } else {
-          await supabaseService
+          const { data: insertedRows } = await supabaseService
             .from("user_music_tracks")
             .insert({
               user_id: user.id,
@@ -228,11 +233,14 @@ serve(async (req) => {
               variant_index: i,
               mime: "audio/mpeg",
               meta: trackMeta,
-            });
+            })
+            .select("id")
+            .single();
+          if (insertedRows?.id) savedRowId = insertedRows.id;
         }
 
         savedTracks.push({
-          id: placeholderRow.id,
+          id: savedRowId,
           audioUrl: publicAudioUrl ?? track.audioUrl,
           coverUrl: publicCoverUrl,
           duration: track.duration ?? null,

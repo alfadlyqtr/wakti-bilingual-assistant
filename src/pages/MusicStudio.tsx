@@ -1224,8 +1224,28 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     if (language === 'ar') {
       return [
         {
-          title: 'عربي',
-          items: ['GCC','خليجي حماسي','خليجي أنيق','خليجي رومانسي','خليجي حفلات','خليجي بوب','خليجي تراث','شيلات','سامري','ليوان','شيلات / سامري','مصري','مهرجانات']
+          title: 'خليجي — أساسي',
+          items: ['بوب خليجي','خليجي رومانسي','خليجي أنيق','خليجي حفلات','خليجي أعراس']
+        },
+        {
+          title: 'خليجي — راديو وكروس أوفر',
+          items: ['خليجي إذاعي','خليجي دانس','خليجي إلكتروني','خليجي سينث بوب','فيوجن خليجي','إنجليزي بطابع خليجي']
+        },
+        {
+          title: 'خليجي — ريتش وإيفنت',
+          items: ['خليجي آر أند بي','خليجي فاخر','خليجي سينمائي','خليجي جماهيري','مناسبات وطنية خليجية']
+        },
+        {
+          title: 'خليجي — تراثي',
+          items: ['خليجي تراثي','شيلات','سامري','جلسة','ليوان','شعبي خليجي']
+        },
+        {
+          title: 'عربي آخر',
+          items: ['مصري','شعبي مصري','مهرجانات','شامي','بوب عربي']
+        },
+        {
+          title: 'إسلامي',
+          items: ['أناشيد']
         },
         {
           title: 'بوب وحديث',
@@ -1247,8 +1267,28 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     }
     return [
       {
-        title: 'Arabic',
-        items: ['GCC','GCC Upbeat','GCC Elegant','GCC Romantic','GCC Party','Khaleeji Pop','Khaleeji Traditional','Sheilat','Samri','Liwa','Sheilat / Samri vibe','Egyptian','Shaabi']
+        title: 'GCC — Core',
+        items: ['GCC Pop','GCC Romantic','GCC Elegant','GCC Party','GCC Wedding']
+      },
+      {
+        title: 'GCC — Radio & Crossover',
+        items: ['GCC Radio Pop','GCC Dance Pop','GCC Electro Pop','GCC Synth Pop','Modern Khaleeji Fusion','English GCC Pop']
+      },
+      {
+        title: 'GCC — Rich & Event',
+        items: ['GCC R&B Pop','Luxury GCC Pop','Cinematic GCC','GCC Anthem','National Event GCC']
+      },
+      {
+        title: 'GCC — Heritage',
+        items: ['GCC Traditional','Sheilat','Samri','Jalsa','Liwa','GCC Shaabi']
+      },
+      {
+        title: 'Other Arabic',
+        items: ['Egyptian','Egyptian Shaabi','Levant Pop','Arabic Pop']
+      },
+      {
+        title: 'Islamic',
+        items: ['Anasheed']
       },
       {
         title: 'Pop',
@@ -1278,9 +1318,11 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [musicStyleOpen, setMusicStyleOpen] = useState(false);
   const [stylesOpen, setStylesOpen] = useState(false);
   const [instrumentsOpen, setInstrumentsOpen] = useState(false);
+  const [rhythmOpen, setRhythmOpen] = useState(false);
   const [moodOpen, setMoodOpen] = useState(false);
   const [includeTags, setIncludeTags] = useState<string[]>([]);
   const [instrumentTags, setInstrumentTags] = useState<string[]>([]);
+  const [rhythmTags, setRhythmTags] = useState<string[]>([]);
   const [moodTags, setMoodTags] = useState<string[]>([]);
   const [showIncludePicker, setShowIncludePicker] = useState(false);
   const [showInstrumentPicker, setShowInstrumentPicker] = useState(false);
@@ -1306,7 +1348,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [generatedTracks, setGeneratedTracks] = useState<Array<{ id: string; audioUrl: string; coverUrl: string | null; duration: number | null; title: string | null; variantIndex: number }>>([]);
   const [savedTrackIds, setSavedTrackIds] = useState<string[]>([]);
   const [savingTrackIds, setSavingTrackIds] = useState<string[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>('V5_5');
   const [customMode, setCustomMode] = useState<boolean>(true);
   const [negativeTags, setNegativeTags] = useState<string>('');
   const [styleWeight, setStyleWeight] = useState<number>(0.65);
@@ -1314,38 +1355,95 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [audioWeight, setAudioWeight] = useState<number>(0.65);
   const [showAdvancedSliders, setShowAdvancedSliders] = useState<boolean>(false);
 
+  // Rhythm / Beat groups
+  const RHYTHM_GROUPS = useMemo<Array<{ title: string; items: string[] }>>(() => {
+    if (language === 'ar') {
+      return [
+        { title: 'خليجي', items: ['إيقاع خليجي','خليجي متمايل','عدني','سامري','إيقاع أعراس','إيقاع تصفيق','إيقاع الليوان','مقسوم'] },
+        { title: 'عالمي', items: ['٦/٨ فيوجن','أفرو خليجي','بوب ٤/٤','بالاد هادئ','إيقاع جماهيري','إيقاع نادي','والتز ٣/٤','تراب بيت','دريل بيت'] },
+      ];
+    }
+    return [
+      { title: 'Gulf Rhythms', items: ['Gulf Groove','Khaleeji Shuffle','Adani','Samri Rhythm','Wedding Beat','Clap-Driven Groove','Leiwah Rhythm','Maqsoum'] },
+      { title: 'Universal', items: ['6/8 Fusion','Afro-Gulf Groove','Pop 4/4','Ballad Slow Groove','Marching Anthem','Club Beat','Waltz 3/4','Trap Beat','Drill Beat'] },
+    ];
+  }, [language]);
+
+  const RHYTHM_PRESETS = useMemo<string[]>(() => {
+    return RHYTHM_GROUPS.flatMap((g) => g.items);
+  }, [RHYTHM_GROUPS]);
+
   // Style to recommended instruments mapping
   const STYLE_INSTRUMENT_MAPPING = useMemo<Record<string, string[]>>(() => {
     if (language === 'ar') {
       return {
-        'GCC': ['طبلة', 'دربوكة', 'طار', 'مزمار', 'رق'],
-        'خليجي حماسي': ['طبلة', 'دربوكة', 'طار', 'مزمار', 'رق'],
-        'خليجي أنيق': ['قانون', 'ناي', 'كمان', 'بيانو'],
+        // GCC Core
+        'بوب خليجي': ['طبلة', 'دربوكة', 'طار', 'جيتار كهربائي', 'سينث باد'],
+        'خليجي عصري': ['طبلة', 'دربوكة', 'جيتار كهربائي', 'سينث باد', 'باص جيتار'],
         'خليجي رومانسي': ['قانون', 'ناي', 'كمان', 'بيانو', 'تشيلو'],
-        'خليجي حفلات': ['طبلة', 'دربوكة', 'طار', 'مزمار', 'إيقاع', 'جيتار كهربائي'],
-        'شيلات / سامري': ['طبلة', 'دربوكة', 'طار', 'مزمار', 'إيقاع'],
-        'خليجي بوب': ['طبلة', 'دربوكة', 'بيانو', 'جيتار كهربائي', 'سينث باد'],
-        'خليجي تراث': ['قانون', 'ناي', 'رق', 'طبلة', 'رباب'],
-        'شيلات': ['طبلة', 'دربوكة', 'طار', 'مزمار', 'إيقاع'],
+        'خليجي أنيق': ['قانون', 'ناي', 'كمان', 'بيانو'],
+        'خليجي حفلات': ['طبلة', 'دربوكة', 'طار', 'تصفيق يدوي', 'سينث باد'],
+        'خليجي أعراس': ['طبلة', 'دربوكة', 'دف', 'تصفيق يدوي', 'هتاف جماعي'],
+        // GCC Radio & Crossover
+        'خليجي إذاعي': ['جيتار كهربائي', 'باص جيتار', 'طقم درامز', 'سينث باد', 'بيانو'],
+        'خليجي دانس': ['طقم درامز', 'باص جيتار', 'سينث ليد', 'طبلة', 'تصفيق يدوي'],
+        'خليجي إلكتروني': ['سينث ليد', 'سينث باد', 'طقم درامز', 'باص جيتار', 'طبلة'],
+        'خليجي سينث بوب': ['سينث ليد', 'سينث باد', 'طقم درامز', 'باص جيتار'],
+        'فيوجن خليجي': ['جيتار كهربائي', 'باص جيتار', 'طقم درامز', 'سينث باد', 'طبلة'],
+        'إنجليزي بطابع خليجي': ['سينث ليد', 'جيتار كهربائي', 'باص جيتار', 'طقم درامز', 'إيقاع خليجي'],
+        // GCC Rich & Event
+        'خليجي آر أند بي': ['بيانو كهربائي', 'باص جيتار', 'طقم درامز', 'سينث باد', 'طبلة'],
+        'خليجي فاخر': ['بيانو', 'وتريات', 'باص جيتار', 'سينث باد', 'طبلة ناعمة'],
+        'خليجي سينمائي': ['وتريات', 'بيانو', 'سينث باد', 'طقم درامز', 'كورس'],
+        'خليجي جماهيري': ['طبلة', 'دربوكة', 'تصفيق يدوي', 'كورس', 'سينث باد'],
+        'مناسبات وطنية خليجية': ['طقم درامز', 'كورس', 'وتريات', 'تصفيق يدوي', 'سينث باد'],
+        // GCC Heritage
+        'خليجي تراثي': ['قانون', 'ناي', 'رق', 'طبلة', 'رباب'],
+        'شيلات': ['طبلة', 'دربوكة', 'طار', 'هتاف جماعي'],
         'سامري': ['طبلة', 'دربوكة', 'طار', 'رباب'],
+        'جلسة': ['عود', 'قانون', 'طبلة', 'رق', 'ناي'],
         'ليوان': ['طبلة', 'دربوكة', 'طار'],
+        'شعبي خليجي': ['طار', 'طبلة', 'دربوكة', 'رباب', 'هتاف جماعي'],
+        // Other Arabic
         'مصري': ['عود', 'قانون', 'ناي', 'طبلة', 'دربوكة', 'رق'],
+        'شعبي مصري': ['طقم درامز', 'سينث ليد', 'باص جيتار', 'جيتار كهربائي', 'دربوكة'],
+        'مهرجانات': ['طقم درامز', 'سينث ليد', 'باص جيتار', 'إيقاع'],
+        'أناشيد': ['دف'],
       };
     }
     return {
-      // GCC/Khaleeji styles
-      'GCC': ['tabla', 'darbuka', 'frame drum', 'mizmar', 'riq'],
-      'GCC Upbeat': ['tabla', 'darbuka', 'frame drum', 'mizmar', 'riq'],
-      'GCC Elegant': ['qanun', 'ney', 'violin', 'piano'],
-      'GCC Romantic': ['qanun', 'ney', 'violin', 'piano', 'cello'],
-      'GCC Party': ['tabla', 'darbuka', 'frame drum', 'mizmar', 'percussion', 'electric guitar'],
-      'Sheilat / Samri vibe': ['tabla', 'darbuka', 'frame drum', 'mizmar', 'percussion'],
-      'Khaleeji Pop': ['tabla', 'darbuka', 'piano', 'electric guitar', 'synth pad'],
-      'Khaleeji Traditional': ['qanun', 'ney', 'riq', 'tabla', 'rebab'],
-      'Sheilat': ['tabla', 'darbuka', 'frame drum', 'mizmar', 'percussion'],
-      'Samri': ['tabla', 'darbuka', 'frame drum', 'rebab'],
-      'Liwa': ['tabla', 'darbuka', 'frame drum'],
+      // GCC Core — instruments match style prompt exactly
+      'GCC Pop': ['tabla', 'darbuka', 'frame drum', 'electric guitar', 'synth pad'],
+      'GCC Romantic': ['ney', 'violin', 'piano', 'cello', 'soft percussion'],
+      'GCC Elegant': ['qanun', 'ney', 'violin', 'piano', 'soft percussion'],
+      'GCC Party': ['tabla', 'darbuka', 'frame drum', 'hand claps', 'synth pad'],
+      'GCC Wedding': ['tabla', 'darbuka', 'daff', 'hand claps', 'group chant'],
+      // GCC Radio & Crossover
+      'GCC Radio Pop': ['electric guitar', 'bass guitar', 'drum kit', 'synth pad', 'piano'],
+      'GCC Dance Pop': ['synth lead', 'bass guitar', 'drum kit', 'tabla', 'hand claps'],
+      'GCC Electro Pop': ['synth lead', 'synth pad', 'drum kit', 'bass guitar', 'tabla'],
+      'GCC Synth Pop': ['synth lead', 'synth pad', 'drum kit', 'bass guitar'],
+      'Modern Khaleeji Fusion': ['electric guitar', 'bass guitar', 'drum kit', 'synth pad', 'tabla'],
+      'English GCC Pop': ['synth lead', 'bass guitar', 'drum kit', 'gulf percussion', 'electric guitar'],
+      // GCC Rich & Event
+      'GCC R&B Pop': ['electric piano', 'bass guitar', 'drum kit', 'synth pad', 'tabla'],
+      'Luxury GCC Pop': ['piano', 'strings', 'bass guitar', 'synth pad', 'soft percussion'],
+      'Cinematic GCC': ['strings', 'piano', 'synth pad', 'drum kit', 'choir'],
+      'GCC Anthem': ['hand claps', 'choir', 'tabla', 'drum kit', 'synth pad'],
+      'National Event GCC': ['choir', 'strings', 'drum kit', 'hand claps', 'synth pad'],
+      // GCC Heritage
+      'GCC Traditional': ['qanun', 'ney', 'tabla', 'riq', 'rebab'],
+      'Sheilat': ['frame drum', 'tabla', 'darbuka', 'group chant'],
+      'Samri': ['frame drum', 'tabla', 'darbuka', 'rebab'],
+      'Jalsa': ['oud', 'qanun', 'tabla', 'riq', 'ney'],
+      'Liwa': ['frame drum', 'tabla', 'darbuka', 'gulf percussion'],
+      'GCC Shaabi': ['frame drum', 'tabla', 'darbuka', 'rebab', 'group chant'],
+      // Other Arabic
       'Egyptian': ['oud', 'qanun', 'ney', 'tabla', 'darbuka', 'riq'],
+      'Egyptian Shaabi': ['drum machine', 'synth lead', 'bass guitar', 'electric guitar', 'darbuka'],
+      'Anasheed': ['daff'],
+      'Arabic Pop': ['piano', 'violin', 'tabla', 'electric guitar', 'synth pad'],
+      'Levant Pop': ['piano', 'violin', 'acoustic guitar', 'drum kit', 'synth pad'],
       // Western styles
       'R&B': ['electric piano', 'bass guitar', 'drum kit', 'synth pad', 'saxophone'],
       'pop': ['piano', 'electric guitar', 'bass guitar', 'drum kit', 'synth pad'],
@@ -1382,28 +1480,136 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const recommended: string[] = [];
     for (const style of includeTags) {
       const mapped = STYLE_INSTRUMENT_MAPPING[style];
-      if (mapped) {
-        recommended.push(...mapped);
-      }
+      if (mapped) recommended.push(...mapped);
     }
-    return [...new Set(recommended)]; // deduplicate
+    return [...new Set(recommended)];
   }, [includeTags, STYLE_INSTRUMENT_MAPPING]);
+
+  // Style → recommended rhythms (top 2)
+  const STYLE_RHYTHM_MAPPING: Record<string, string[]> = {
+    'GCC Pop': ['Gulf Groove', 'Khaleeji Shuffle'],
+    'Khaleeji Pop': ['Gulf Groove', 'Khaleeji Shuffle'],
+    'GCC Romantic': ['Adani', 'Ballad Slow Groove'],
+    'GCC Elegant': ['Adani', 'Khaleeji Shuffle'],
+    'GCC Party': ['Gulf Groove', 'Clap-Driven Groove'],
+    'GCC Wedding': ['Wedding Beat', 'Clap-Driven Groove'],
+    'GCC Radio Pop': ['Gulf Groove', 'Pop 4/4'],
+    'GCC Dance Pop': ['Club Beat', 'Gulf Groove'],
+    'GCC Electro Pop': ['Club Beat', 'Pop 4/4'],
+    'GCC Synth Pop': ['Pop 4/4', 'Club Beat'],
+    'Modern Khaleeji Fusion': ['Gulf Groove', 'Pop 4/4'],
+    'English GCC Pop': ['Pop 4/4', 'Club Beat'],
+    'GCC R&B Pop': ['Ballad Slow Groove', 'Gulf Groove'],
+    'Luxury GCC Pop': ['Adani', 'Ballad Slow Groove'],
+    'Cinematic GCC': ['Marching Anthem', '6/8 Fusion'],
+    'GCC Anthem': ['Marching Anthem', 'Clap-Driven Groove'],
+    'National Event GCC': ['Marching Anthem', 'Clap-Driven Groove'],
+    'GCC Traditional': ['Adani', 'Gulf Groove'],
+    'Sheilat': ['Samri Rhythm', 'Clap-Driven Groove'],
+    'Samri': ['Samri Rhythm', 'Wedding Beat'],
+    'Jalsa': ['Adani', 'Gulf Groove'],
+    'Liwa': ['Leiwah Rhythm', '6/8 Fusion'],
+    'GCC Shaabi': ['Samri Rhythm', 'Clap-Driven Groove'],
+    'Egyptian': ['Maqsoum', 'Ballad Slow Groove'],
+    'Egyptian Shaabi': ['Maqsoum', 'Club Beat'],
+    'Arabic Pop': ['Maqsoum', 'Pop 4/4'],
+    'Levant Pop': ['Maqsoum', 'Ballad Slow Groove'],
+    'Anasheed': ['Clap-Driven Groove', 'Ballad Slow Groove'],
+    'pop': ['Pop 4/4', 'Ballad Slow Groove'],
+    'R&B': ['Ballad Slow Groove', 'Pop 4/4'],
+    'hip hop': ['Trap Beat', 'Pop 4/4'],
+    'rap': ['Trap Beat', 'Drill Beat'],
+    'Afrobeats': ['Afro-Gulf Groove', 'Pop 4/4'],
+    'Reggaeton': ['Club Beat', 'Pop 4/4'],
+    'Latin': ['6/8 Fusion', 'Pop 4/4'],
+    'jazz': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'soul': ['Ballad Slow Groove', 'Pop 4/4'],
+    'rock': ['Pop 4/4', 'Marching Anthem'],
+    'heavy metal': ['Pop 4/4', 'Marching Anthem'],
+    'country': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'House': ['Club Beat', 'Pop 4/4'],
+    'Trance': ['Club Beat', 'Pop 4/4'],
+    'K-Pop': ['Pop 4/4', 'Club Beat'],
+    'Bollywood': ['Maqsoum', '6/8 Fusion'],
+  };
+
+  // Style → recommended moods (top 3)
+  const STYLE_MOOD_MAPPING: Record<string, string[]> = {
+    'GCC Pop': ['energetic', 'confident', 'happy'],
+    'Khaleeji Pop': ['energetic', 'confident', 'happy'],
+    'GCC Romantic': ['romantic', 'emotional', 'tender'],
+    'GCC Elegant': ['luxurious', 'confident', 'radiant'],
+    'GCC Party': ['energetic', 'party', 'happy'],
+    'GCC Wedding': ['celebratory', 'wedding', 'happy'],
+    'GCC Radio Pop': ['energetic', 'happy', 'uplifting'],
+    'GCC Dance Pop': ['energetic', 'party', 'groovy'],
+    'GCC Electro Pop': ['energetic', 'exciting', 'club'],
+    'GCC Synth Pop': ['energetic', 'exciting', 'bright'],
+    'Modern Khaleeji Fusion': ['energetic', 'confident', 'uplifting'],
+    'English GCC Pop': ['happy', 'energetic', 'uplifting'],
+    'GCC R&B Pop': ['romantic', 'soulful', 'emotional'],
+    'Luxury GCC Pop': ['luxurious', 'confident', 'radiant'],
+    'Cinematic GCC': ['epic', 'dramatic', 'grand'],
+    'GCC Anthem': ['proud', 'anthemic', 'powerful'],
+    'National Event GCC': ['national', 'proud', 'grand'],
+    'GCC Traditional': ['nostalgic', 'spiritual', 'proud'],
+    'Sheilat': ['proud', 'bold', 'powerful'],
+    'Samri': ['proud', 'energetic', 'bold'],
+    'Jalsa': ['romantic', 'nostalgic', 'intimate'],
+    'Liwa': ['energetic', 'celebratory', 'bold'],
+    'GCC Shaabi': ['bold', 'energetic', 'proud'],
+    'Egyptian': ['romantic', 'emotional', 'nostalgic'],
+    'Egyptian Shaabi': ['energetic', 'party', 'exciting'],
+    'Arabic Pop': ['romantic', 'emotional', 'happy'],
+    'Levant Pop': ['romantic', 'emotional', 'tender'],
+    'Anasheed': ['spiritual', 'calm', 'proud'],
+    'pop': ['happy', 'energetic', 'uplifting'],
+    'R&B': ['romantic', 'soulful', 'emotional'],
+    'hip hop': ['confident', 'bold', 'energetic'],
+    'rap': ['confident', 'angry', 'bold'],
+    'Afrobeats': ['happy', 'energetic', 'groovy'],
+    'Reggaeton': ['energetic', 'party', 'groovy'],
+    'Latin': ['happy', 'energetic', 'romantic'],
+    'jazz': ['soulful', 'nostalgic', 'calm'],
+    'soul': ['soulful', 'emotional', 'romantic'],
+    'rock': ['energetic', 'powerful', 'bold'],
+    'heavy metal': ['intense', 'angry', 'powerful'],
+    'country': ['nostalgic', 'tender', 'sad'],
+    'House': ['energetic', 'club', 'groovy'],
+    'Trance': ['energetic', 'epic', 'cinematic'],
+    'K-Pop': ['happy', 'energetic', 'playful'],
+    'Bollywood': ['happy', 'romantic', 'energetic'],
+  };
+
+  const recommendedRhythms = useMemo(() => {
+    for (const style of includeTags) {
+      const mapped = STYLE_RHYTHM_MAPPING[style];
+      if (mapped) return mapped.slice(0, 2);
+    }
+    return [];
+  }, [includeTags]);
+
+  const recommendedMoods = useMemo(() => {
+    for (const style of includeTags) {
+      const mapped = STYLE_MOOD_MAPPING[style];
+      if (mapped) return mapped.slice(0, 3);
+    }
+    return [];
+  }, [includeTags]);
  
   // Mode/Mood presets
   const MODE_GROUPS = useMemo<Array<{ title: string; items: string[] }>>(() => {
     if (language === 'ar') {
       return [
-        { title: 'المشاعر', items: ['سعيد', 'حزين', 'رومانسي', 'مبهج', 'حنون', 'واثق'] },
-        { title: 'الطاقة', items: ['هادئ', 'مفعم بالطاقة', 'مثير', 'ملحمي', 'حماسي', 'قوي', 'فاخر', 'مشع'] },
-        { title: 'الأجواء', items: ['مظلم', 'ساطع', 'نوستالجي', 'غامض', 'حالم', 'سينمائي'] },
-        { title: 'التركيز', items: ['تأملي', 'استرخاء', 'تركيز'] },
+        { title: 'المشاعر', items: ['سعيد', 'حزين', 'كئيب', 'رومانسي', 'حنون', 'واثق', 'عاطفي', 'نوستالجي', 'حالم', 'جريء', 'فخور', 'روحاني', 'درامي', 'مشع', 'فاخر', 'عميق', 'مرح', 'غاضب', 'محفز', 'متمايل'] },
+        { title: 'الطاقة', items: ['هادئ', 'مفعم بالطاقة', 'مثير', 'ملحمي', 'حماسي', 'قوي', 'مظلم', 'ساطع', 'غامض', 'سينمائي', 'مكثف'] },
+        { title: 'المناسبة', items: ['حفلة', 'احتفالي', 'أعراس', 'وطني', 'مهرجاني', 'نادي', 'صيفي', 'سفر', 'ضخم', 'جماهيري', 'حميمي', 'استرخاء', 'تركيز'] },
       ];
     }
     return [
-      { title: 'Feeling', items: ['happy', 'sad', 'romantic', 'uplifting', 'tender', 'confident'] },
-      { title: 'Energy', items: ['calm', 'energetic', 'exciting', 'epic', 'anthemic', 'powerful', 'luxurious', 'radiant'] },
-      { title: 'Atmosphere', items: ['dark', 'bright', 'nostalgic', 'mysterious', 'dreamy', 'cinematic'] },
-      { title: 'Focus', items: ['meditative', 'relaxing', 'focus'] },
+      { title: 'Emotion', items: ['happy', 'sad', 'melancholic', 'romantic', 'tender', 'confident', 'emotional', 'nostalgic', 'dreamy', 'bold', 'proud', 'spiritual', 'dramatic', 'radiant', 'luxurious', 'soulful', 'playful', 'angry', 'uplifting', 'groovy'] },
+      { title: 'Energy', items: ['calm', 'energetic', 'exciting', 'epic', 'anthemic', 'powerful', 'dark', 'bright', 'mysterious', 'cinematic', 'intense'] },
+      { title: 'Scene', items: ['party', 'celebratory', 'wedding', 'national', 'festival', 'club', 'summer', 'road trip', 'grand', 'anthemic crowd', 'intimate', 'relaxing', 'focus'] },
     ];
   }, [language]);
 
@@ -1414,25 +1620,27 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const INSTRUMENT_GROUPS = useMemo<Array<{ title: string; items: string[] }>>(() => {
     if (language === 'ar') {
       return [
-        { title: 'عربي', items: ['عود','قانون','ناي','رق','دربوكة','طبلة','طار','مزمار','رباب'] },
-        { title: 'أوتار', items: ['كمان','فيولا','تشيلو','كونترباص','فرقة أوتار'] },
-        { title: 'مفاتيح', items: ['بيانو','بيانو كهربائي','أورغ','أكورديون'] },
-        { title: 'جيتارات وباص', items: ['جيتار أكوستيك','جيتار كهربائي','جيتار 12 وتر','جيتار كلاسيكي','جيتار نايلون','باص جيتار','باص وترى','سينث باص'] },
-        { title: 'إيقاع', items: ['طقم درامز','إيقاع','تومز','سنير','هاي-هات','صنجات','تصفيق يدوي'] },
-        { title: 'نفخ', items: ['فلوت','كلارينيت','أوبوا','باسون','ساكسفون','ترومبيت','ترومبون','هورن فرنسي'] },
-        { title: 'ألوان', items: ['هارب','سيليستا','فيبرفون','ماريمبا','زيلوفون'] },
-        { title: 'سينث', items: ['سينث ليد','سينث باد','باد دافئ','باد تناظري','باد أوتار','بلاك','أربجياتور'] },
+        { title: 'تراثي عربي وخليجي', items: ['عود','قانون','ناي','رق','دربوكة','طبلة','طار','دف','مجوز','رباب','إيقاع خليجي'] },
+        { title: 'أوتار', items: ['كمان','فيولا','تشيلو','كونترباص','وتريات'] },
+        { title: 'مفاتيح', items: ['بيانو','بيانو كهربائي','بيانو ناعم','أورغ','أكورديون'] },
+        { title: 'جيتارات وباص', items: ['جيتار أكوستيك','جيتار كهربائي','باص جيتار','باص وترى','سينث باص'] },
+        { title: 'إيقاع وطبول', items: ['طقم درامز','إيقاع','تصفيق يدوي','سنير','هاي-هات','صنجات','درام ماشين','808 باص'] },
+        { title: 'نفخ ونحاس', items: ['فلوت','كلارينيت','ساكسفون','ترومبيت','ترومبون','هورن فرنسي','قسم النحاس','هارمونيكا','صفارة'] },
+        { title: 'عالمي', items: ['سيتار','طبول ستيل','مزمار قربة','بانجو','ماندولين'] },
+        { title: 'سينث وجو', items: ['سينث ليد','سينث باد','باد دافئ','باد تناظري','باد أوتار','بلاك','أربجياتور'] },
+        { title: 'صوت وجماعي', items: ['كورس','هتاف جماعي','ساب باص','مؤثرات جوية'] },
       ];
     }
     return [
-      { title: 'Arabic', items: ['oud','qanun','ney','riq','darbuka','tabla','frame drum','mizmar','rebab'] },
-      { title: 'Strings', items: ['violin','viola','cello','contrabass','string ensemble'] },
-      { title: 'Keys', items: ['piano','electric piano','organ','accordion'] },
-      { title: 'Guitars & Bass', items: ['acoustic guitar','electric guitar','12‑string guitar','classical guitar','nylon guitar','bass guitar','upright bass','synth bass'] },
-      { title: 'Drums & Percussion', items: ['drum kit','percussion','toms','snare','hi-hat','cymbals','hand claps'] },
-      { title: 'Winds & Brass', items: ['flute','clarinet','oboe','bassoon','saxophone','trumpet','trombone','french horn'] },
-      { title: 'Textures', items: ['harp','celesta','vibraphone','marimba','xylophone'] },
-      { title: 'Synth', items: ['synth lead','synth pad','warm pad','analog pad','string pad','pluck','arpeggiator'] },
+      { title: 'Arabic & Gulf Traditional', items: ['oud','qanun','ney','riq','darbuka','tabla','frame drum','daff','mijwiz','rebab','gulf percussion'] },
+      { title: 'Strings', items: ['violin','viola','cello','contrabass','strings'] },
+      { title: 'Keys', items: ['piano','electric piano','soft piano','organ','accordion'] },
+      { title: 'Guitars & Bass', items: ['acoustic guitar','electric guitar','bass guitar','upright bass','synth bass'] },
+      { title: 'Drums & Percussion', items: ['drum kit','percussion','hand claps','snare','hi-hat','cymbals','drum machine','808 bass'] },
+      { title: 'Winds & Brass', items: ['flute','clarinet','saxophone','trumpet','trombone','french horn','brass section','harmonica','whistle'] },
+      { title: 'World', items: ['sitar','steel drums','bagpipe','banjo','mandolin'] },
+      { title: 'Synth & Texture', items: ['synth lead','synth pad','warm pad','analog pad','string pad','pluck','arpeggiator'] },
+      { title: 'Vocal & Group', items: ['choir','group chant','sub bass','atmospheric fx'] },
     ];
   }, [language]);
 
@@ -1493,6 +1701,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       // Build the input for Amp - include style/mood/instruments context
       const contextParts: string[] = [];
       if (includeTags.length > 0) contextParts.push(`Styles: ${includeTags.join(', ')}`);
+      if (rhythmTags.length > 0) contextParts.push(`Rhythm: ${rhythmTags.join(', ')}`);
       if (instrumentTags.length > 0) contextParts.push(`Instruments: ${instrumentTags.join(', ')}`);
       if (moodTags.length > 0) contextParts.push(`Mood: ${moodTags.join(', ')}`);
       if (title.trim()) contextParts.push(`Title: ${title.trim()}`);
@@ -1677,11 +1886,12 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     return CLICHE_PATTERNS.some((re) => re.test(s));
   }
 
-  function toggleMusicSubsection(section: 'styles' | 'instruments' | 'mood') {
+  function toggleMusicSubsection(section: 'styles' | 'instruments' | 'rhythm' | 'mood') {
     if (section === 'styles') {
       setStylesOpen((prev) => {
         const next = !prev;
         setInstrumentsOpen(false);
+        setRhythmOpen(false);
         setMoodOpen(false);
         return next;
       });
@@ -1692,6 +1902,18 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       setInstrumentsOpen((prev) => {
         const next = !prev;
         setStylesOpen(false);
+        setRhythmOpen(false);
+        setMoodOpen(false);
+        return next;
+      });
+      return;
+    }
+
+    if (section === 'rhythm') {
+      setRhythmOpen((prev) => {
+        const next = !prev;
+        setStylesOpen(false);
+        setInstrumentsOpen(false);
         setMoodOpen(false);
         return next;
       });
@@ -1702,6 +1924,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const next = !prev;
       setStylesOpen(false);
       setInstrumentsOpen(false);
+      setRhythmOpen(false);
       return next;
     });
   }
@@ -1711,30 +1934,63 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       if (prev.includes(style)) {
         return prev.filter((tag) => tag !== style);
       }
-
-      if (prev.length >= 3) {
-        toast.error(isAr ? 'يمكنك اختيار 3 أنماط كحد أقصى' : 'You can select up to 3 styles');
-        return prev;
+      if (prev.length >= 1) {
+        return [style]; // replace with new selection
       }
-
-      const next = [...prev, style];
-
-      if (next.length === 3) {
-        setTimeout(() => {
-          setStylesOpen(false);
-          setInstrumentsOpen(true);
-          setMoodOpen(false);
-        }, 0);
-      }
-
+      const next = [style];
+      setTimeout(() => {
+        setStylesOpen(false);
+        setRhythmOpen(true);
+        setInstrumentsOpen(false);
+        setMoodOpen(false);
+      }, 0);
       return next;
     });
   }
 
   function handleStylesNext() {
     setStylesOpen(false);
-    setInstrumentsOpen(true);
+    setRhythmOpen(true);
+    setInstrumentsOpen(false);
     setMoodOpen(false);
+  }
+
+  function handleRhythmToggle(rhythm: string) {
+    setRhythmTags((prev) => {
+      if (prev.includes(rhythm)) return prev.filter((t) => t !== rhythm);
+      if (prev.length >= 2) {
+        toast.error(isAr ? 'يمكنك اختيار إيقاعين كحد أقصى' : 'You can select up to 2 rhythms');
+        return prev;
+      }
+      const next = [...prev, rhythm];
+      if (next.length === 2) {
+        setTimeout(() => { setRhythmOpen(false); setMoodOpen(true); }, 0);
+      }
+      return next;
+    });
+  }
+
+  function handleRhythmNext() {
+    setRhythmOpen(false);
+    setMoodOpen(true);
+  }
+
+  function handleSelectRecommendedRhythms() {
+    if (recommendedRhythms.length === 0) return;
+    setRhythmTags(recommendedRhythms.slice(0, 2));
+    setTimeout(() => {
+      setRhythmOpen(false);
+      setMoodOpen(true);
+    }, 150);
+  }
+
+  function handleSelectRecommendedMoods() {
+    if (recommendedMoods.length === 0) return;
+    setMoodTags(recommendedMoods.slice(0, 3));
+    setTimeout(() => {
+      setMoodOpen(false);
+      setInstrumentsOpen(true);
+    }, 150);
   }
 
   function handleSelectRecommendedInstruments() {
@@ -1786,8 +2042,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   function handleInstrumentsNext() {
     setInstrumentsOpen(false);
-    setMoodOpen(true);
-    setStylesOpen(false);
   }
 
   function handleMoodToggle(mood: string) {
@@ -1806,8 +2060,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       if (next.length === 3) {
         setTimeout(() => {
           setMoodOpen(false);
-          setMusicStyleOpen(false);
-          setVocalsOpen(true);
+          setInstrumentsOpen(true);
         }, 0);
       }
 
@@ -1817,8 +2070,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   function handleMoodNext() {
     setMoodOpen(false);
-    setMusicStyleOpen(false);
-    setVocalsOpen(true);
+    setInstrumentsOpen(true);
   }
 
   function handleVocalSelect(v: 'auto'|'none'|'female'|'male') {
@@ -1883,25 +2135,108 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       if (!value) return '';
 
       const mappings: Record<string, string> = {
-        GCC: 'Khaleeji pop, Gulf Arabic style, modern commercial khaliji, upbeat gulf rhythm, khaleeji percussion, catchy chorus, polished production, elegant energetic vibe, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'GCC Upbeat': 'Khaleeji upbeat pop, Gulf Arabic commercial style, energetic khaliji rhythm, driving gulf percussion, catchy hook, lively celebratory vibe, Gulf Arabic accent, Khaleeji dialect',
-        'GCC Elegant': 'Elegant Khaleeji pop, refined Gulf Arabic style, smooth rhythmic groove, classy polished production, graceful melody, soft arabic instrumentation, Gulf Arabic accent, Khaleeji dialect',
-        'GCC Romantic': 'Romantic Khaleeji pop, warm Gulf Arabic melody, emotional elegant delivery, smooth percussion, heartfelt commercial ballad vibe, Gulf Arabic accent, Khaleeji dialect',
-        'GCC Party': 'Khaleeji party anthem, festive Gulf Arabic pop, big celebratory chorus, energetic khaliji drums, danceable groove, modern commercial production, Gulf Arabic accent, Khaleeji dialect',
-        'Sheilat / Samri vibe': 'Khaleeji sheilat and samri inspired rhythm, traditional Gulf groove, strong percussion patterns, call-and-response energy, authentic Gulf identity, Gulf Arabic accent, Khaleeji dialect',
-        'Egyptian': 'Egyptian pop, authentic Egyptian Arabic style, modern Egyptian commercial production, Egyptian dialect pronunciation, Egyptian accent, oud and qanun, tabla and riq percussion, warm Egyptian melody, catchy Egyptian chorus, polished Egyptian sound',
-        'خليجي حماسي': 'خليجي حماسي، بوب خليجي عصري، إيقاع خليجي سريع، طبول خليجية واضحة، لحن جذاب، طاقة عالية، كورس قوي، لهجة خليجية، نطق خليجي',
+        // ── GCC Core ──
+        'GCC Pop': 'Khaleeji pop, modern commercial Gulf Arabic style, upbeat gulf rhythm, khaleeji percussion, catchy chorus, polished production, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Khaleeji Pop': 'Khaleeji pop, authentic Gulf Arabic sound, khaleeji rhythmic groove, modern commercial production, catchy hook, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Romantic': 'Romantic Khaleeji pop, warm Gulf Arabic melody, emotional elegant delivery, adani groove, ney flute, violin, piano, cello, soft percussion, heartfelt commercial ballad vibe, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Elegant': 'Elegant Khaleeji pop, refined Gulf Arabic style, qanun, ney, violin, piano, soft percussion, smooth rhythmic groove, classy polished production, graceful melody, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Party': 'Khaleeji party anthem, festive Gulf Arabic pop, tabla, darbuka, frame drum, hand claps, synth pad, big celebratory chorus, energetic khaleeji drums, danceable groove, modern commercial production, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Wedding': 'Khaleeji wedding song, festive Gulf celebration, tabla, darbuka, daff, hand claps, group chant, wedding beat, joyful crowd-friendly vibe, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        // ── GCC Radio & Crossover ──
+        'GCC Radio Pop': 'Gulf Arabic radio pop, mainstream commercial khaleeji, electric guitar, bass guitar, drum kit, synth pad, piano, polished pop production, catchy hook, radio-friendly, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Dance Pop': 'Khaleeji dance pop, uptempo Gulf groove, synth lead, bass guitar, drum kit, tabla, hand claps, danceable beat, modern commercial finish, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Electro Pop': 'Gulf Arabic electro pop, synth lead, synth pad, drum kit, bass guitar, tabla, electronic textures with khaleeji rhythm, catchy electronic hook, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Synth Pop': 'Gulf Arabic synth pop, synth lead, synth pad, drum kit, bass guitar, glossy synthesizer-led production, khaleeji phrasing, radio-ready hook, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Modern Khaleeji Fusion': 'Modern Khaleeji fusion, electric guitar, bass guitar, drum kit, synth pad, tabla, hybrid Gulf Arabic sound, western pop production with Gulf rhythmic identity, youth-oriented, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'English GCC Pop': 'English language pop song with clear Gulf Arabic Khaleeji flavor, synth lead, bass guitar, drum kit, gulf percussion, electric guitar, khaleeji rhythmic bed, catchy English hook, Gulf accent flavor, minimal traditional instrumentation',
+        // ── GCC Rich & Event ──
+        'GCC R&B Pop': 'Gulf Arabic R&B pop, electric piano, bass guitar, drum kit, synth pad, tabla, smooth modern groove, vocal-forward khaleeji R&B, polished urban production, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Luxury GCC Pop': 'Luxury Gulf Arabic pop, piano, strings, bass guitar, synth pad, soft percussion, premium elegant khaleeji production, rich orchestral touches, confident luxurious vibe, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Cinematic GCC': 'Cinematic Gulf Arabic music, strings, piano, synth pad, drum kit, choir, dramatic orchestral khaleeji, large emotional sound, sweeping strings, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Anthem': 'Khaleeji anthem, hand claps, choir, tabla, drum kit, synth pad, crowd-unifying Gulf Arabic song, strong chorus, marching anthem feel, proud bold energy, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'National Event GCC': 'Gulf national event music, choir, strings, drum kit, hand claps, synth pad, ceremonial proud khaleeji, patriotic anthem vibe, majestic production, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        // ── GCC Heritage ──
+        'GCC Traditional': 'Traditional Khaleeji music, acoustic Gulf Arabic instrumentation, qanun, ney, tabla, riq, rebab, authentic Gulf identity, purist khaleeji approach, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Sheilat': 'Khaleeji sheilat, chant-driven Gulf Arabic folk tradition, strong masculine energy, call-and-response vocal style, frame drums, tabla, darbuka, group chant, percussion-driven, authentic Gulf identity, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Samri': 'Samri rhythm, Gulf Arabic folk tradition from Najd, martial driving beat, frame drums, tabla, darbuka, rebab, traditional sword-dance energy, authentic Gulf Arabic sound, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Jalsa': 'Khaleeji jalsa, intimate Gulf Arabic sitting session, acoustic oud-led arrangement, qanun, tabla, soft riq, ney, warm conversational musical atmosphere, authentic Gulf Arabic sound, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Liwa': 'Liwa rhythm, Afro-Gulf coastal tradition, 6/8 polyrhythmic feel, East African influenced Gulf music, frame drums, tabla, darbuka, gulf percussion, authentic Gulf identity, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Shaabi': 'Gulf Arabic shaabi, raw Saudi-Gulf street folk music, masculine group energy, frame drums, tabla, darbuka, rebab, call-and-response chant, unpolished authentic Gulf street sound, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        // ── Other Arabic ──
+        'Egyptian': 'Egyptian pop, authentic Egyptian Arabic style, modern Egyptian commercial production, oud and qanun, tabla and riq percussion, warm Egyptian melody, catchy Egyptian chorus, polished Egyptian sound, Egyptian dialect pronunciation, Egyptian Arabic accent',
+        'Egyptian Shaabi': 'Egyptian shaabi street pop, Cairo street music energy, fast-paced beat, drum machine, synth lead, bass guitar, electric guitar, darbuka, high energy compressed sound, Egyptian street dialect pronunciation, Egyptian Arabic accent',
+        'Arabic Pop': 'Modern Arabic pop, pan-Arabic commercial sound, western influenced Arabic production, piano, electric guitar, drum kit, synth pad, catchy Arabic melody, polished radio-ready finish, Modern Standard Arabic pronunciation, clear Arabic accent',
+        'Levant Pop': 'Levantine Arabic pop, Syrian-Lebanese commercial style, piano, violin, acoustic guitar, drum kit, smooth Arabic melody, modern production, emotional vocal delivery, Levantine Arabic dialect pronunciation, Lebanese-Syrian accent',
+        'Anasheed': 'Islamic nasheed, strictly a cappella, zero melodic instruments, no strings, no keys, no electronic instruments, multi-layered human vocal harmonies only, deep spiritual choral arrangements, optional duff frame drum only, heavy spatial reverb and echo on vocals, pure vocal textures, Islamic spiritual energy, Arabic pronunciation, elevated poetic Arabic language',
+        // ── Rhythm chips ──
+        'Gulf Groove': 'khaleeji groove, gulf rhythmic pattern, syncopated Gulf beat',
+        'Khaleeji Shuffle': 'khaleeji shuffle rhythm, swing feel Gulf beat',
+        'Adani': 'adani rhythm, swaying romantic Gulf groove, hypnotic 4-beat Gulf feel',
+        'Samri Rhythm': 'samri rhythm, martial driving Gulf beat, frame drums',
+        'Wedding Beat': 'wedding festive beat, celebratory Gulf rhythm, hand clap driven',
+        'Clap-Driven Groove': 'hand clap driven groove, crowd rhythm, celebratory pulse',
+        '6/8 Fusion': '6/8 time feel, dramatic crossover fusion rhythm',
+        'Afro-Gulf Groove': 'afro-gulf groove, coastal syncopated rhythm, polyrhythmic feel',
+        'Pop 4/4': 'standard pop 4/4 beat, accessible mainstream rhythm',
+        'Ballad Slow Groove': 'slow ballad groove, spacious emotional rhythm',
+        'Marching Anthem': 'marching anthem beat, ceremonial proud rhythm',
+        'Club Beat': 'club dance beat, high energy electronic rhythm',
+        'Leiwah Rhythm': 'leiwah rhythm, Afro-Gulf polyrhythmic feel, 6/8 coastal Gulf beat, frame drums, East African Gulf tradition',
+        'Maqsoum': 'maqsoum rhythm, classic Arabic percussion pattern, 4/4 Egyptian-Arabic beat, tabla driven, widely used Arabic groove',
+        'Waltz 3/4': 'waltz time signature, 3/4 flowing romantic rhythm, graceful sweeping groove',
+        'Trap Beat': 'trap beat, modern hip hop trap rhythm, 808 bass, hi-hat rolls, punchy snare',
+        'Drill Beat': 'drill beat, dark urban drill rhythm, sliding 808 bass, fast hi-hats, street energy',
+        // ── Arabic rhythm chips ──
+        'إيقاع خليجي': 'إيقاع خليجي أصيل، نبضة خليجية',
+        'خليجي متمايل': 'إيقاع خليجي متمايل، نبضة هادئة متدفقة',
+        'عدني': 'إيقاع عدني، تمايل رومانسي خليجي',
+        'إيقاع أعراس': 'إيقاع أفراح خليجية، نبضة احتفالية',
+        'إيقاع تصفيق': 'إيقاع تصفيق يدوي، حماس جماعي',
+        '٦/٨ فيوجن': 'إيقاع ٦/٨ فيوجن، طابع درامي متقاطع',
+        'أفرو خليجي': 'إيقاع أفرو خليجي، ساحلي متشعب',
+        'بوب ٤/٤': 'بيت بوب ٤/٤ اعتيادي، إيقاع شائع',
+        'بالاد هادئ': 'بالاد هادئ، إيقاع عاطفي فسيح',
+        'إيقاع الليوان': 'إيقاع الليوان، أفرو خليجي ٦/٨، طبول ساحلية خليجية',
+        'مقسوم': 'إيقاع مقسوم، نبضة عربية كلاسيكية ٤/٤، طبلة مصرية عربية',
+        'والتز ٣/٤': 'إيقاع والتز ٣/٤، تدفق رومانسي راقٍ',
+        'تراب بيت': 'تراب بيت، إيقاع هيب هوب حديث، 808 باص، هاي هات سريع',
+        'دريل بيت': 'دريل بيت، إيقاع درامي حضري، 808 متحرك، طاقة شارع',
+        'إيقاع جماهيري': 'إيقاع جماهيري، مسيرة أنشودة',
+        'إيقاع نادي': 'بيت نادي راقص، إيقاع إلكتروني',
+        // ── Arabic style chips ──
+        'بوب خليجي': 'بوب خليجي عصري، أسلوب خليجي تجاري حديث، إيقاع خليجي، كورس جذاب، إنتاج احترافي، لهجة خليجية، نطق خليجي',
+        'خليجي عصري': 'خليجي عصري، بوب خليجي حديث، إيقاع خليجي راقٍ، إنتاج عصري، لحن جذاب، لهجة خليجية',
+        'خليجي رومانسي': 'خليجي رومانسي، لحن دافئ، إحساس عاطفي، إيقاع عدني هادئ، أداء أنيق، طابع تجاري جميل، لهجة خليجية، نطق خليجي',
         'خليجي أنيق': 'خليجي أنيق، طابع عربي خليجي راقٍ، إنتاج نظيف واحترافي، لحن ناعم، إيقاع متزن، لمسات عربية فاخرة، لهجة خليجية، نطق خليجي',
-        'خليجي رومانسي': 'خليجي رومانسي، لحن دافئ، إحساس عاطفي، إيقاع خليجي هادئ، أداء أنيق، طابع تجاري جميل، لهجة خليجية، نطق خليجي',
         'خليجي حفلات': 'خليجي حفلات، جو احتفالي، إيقاع خليجي راقص، طبول خليجية قوية، كورس جماهيري، طاقة عالية، إنتاج عصري، لهجة خليجية، نطق خليجي',
-        'شيلات / سامري': 'إيقاع شيلات وسامري، روح خليجية واضحة، طبول وإيقاعات خليجية، طابع تراثي عصري، طاقة جماعية، هوية خليجية أصيلة، لهجة خليجية، نطق خليجي',
+        'خليجي أعراس': 'أغنية أعراس خليجية، فرح خليجي، إيقاع أعراس، تصفيق يدوي، دربوكة، هتاف جماعي، جو احتفالي عائلي، لهجة خليجية',
+        'خليجي إذاعي': 'خليجي إذاعي، بوب خليجي تجاري، إنتاج مصقول، جيتار كهربائي، سينث، كورس جذاب، صالح للإذاعة، لهجة خليجية',
+        'خليجي دانس': 'خليجي دانس بوب، إيقاع خليجي سريع راقص، سينث، باص، طبلة، إنتاج عصري، لهجة خليجية',
+        'خليجي إلكتروني': 'خليجي إلكتروني، ملمس إلكتروني مع إيقاع خليجي، سينث درايفن، إنتاج خليجي عصري، لهجة خليجية',
+        'خليجي سينث بوب': 'خليجي سينث بوب، إنتاج سينث مصقول، نطق خليجي، ترتيب بوب عصري، هوك راديوي، لهجة خليجية',
+        'فيوجن خليجي': 'فيوجن خليجي عصري، صوت خليجي هجين، إنتاج بوب غربي مع هوية إيقاعية خليجية، موجه للشباب، لهجة خليجية',
+        'إنجليزي بطابع خليجي': 'أغنية بوب إنجليزية بنكهة خليجية واضحة، إيقاع خليجي، آلات بوب عصرية، سينث ليد، باص جيتار، طقم درامز، هوك إنجليزي جذاب، حد أدنى من الآلات التراثية',
+        'خليجي آر أند بي': 'خليجي آر أند بي، نبضة ناعمة عصرية، خليجي صوتي، إيقاع ناعم، بيانو كهربائي، باص، إنتاج حضري مصقول، لهجة خليجية',
+        'خليجي فاخر': 'خليجي فاخر، إنتاج خليجي راقٍ مميز، وتريات، بيانو، إيقاع ناعم، أجواء واثقة ومضيئة، لهجة خليجية',
+        'خليجي سينمائي': 'موسيقى خليجية سينمائية، درامية أوركسترالية خليجية، صوت عاطفي ضخم، وتريات كاسحة، إيقاع قوي، لهجة خليجية',
+        'خليجي جماهيري': 'أنشودة خليجية جماهيرية، أغنية خليجية موحدة، كورس قوي، تصفيق، كورال، طاقة فخورة جريئة، لهجة خليجية',
+        'مناسبات وطنية خليجية': 'موسيقى مناسبات وطنية خليجية، احتفال فخور، نشيد وطني، كورال، وتريات، إيقاع، إنتاج ضخم مهيب، لهجة خليجية',
+        'خليجي تراثي': 'خليجي تراثي، موسيقى خليجية عريقة، آلات أكوستيك خليجية، قانون وناي وطبلة ورق، هوية خليجية أصيلة، لهجة خليجية',
+        'شيلات': 'شيلات خليجية، أغنية شعبية خليجية، طاقة ذكورية قوية، أسلوب صوتي نداء واستجابة، مدفوعة بالإيقاع، هوية خليجية أصيلة، لهجة خليجية',
+        'سامري': 'إيقاع سامري، تراث شعبي خليجي من نجد، نبضة قوية حازمة، طبول الإطار، طاقة رقصة السيف التقليدية، عربي خليجي أصيل، لهجة خليجية',
+        'جلسة': 'جلسة خليجية، جلسة عربية خليجية حميمة، ترتيب أكوستيكي بالعود، قانون وطبلة، رق ناعم، جو موسيقي حواري دافئ، صوت خليجي أصيل، لهجة خليجية',
+        'ليوان': 'إيقاع الليوان، تراث خليجي أفريقي ساحلي، إيقاع ٦/٨ متعدد، تأثير أفريقي شرقي خليجي، طبول الإطار',
         'مصري': 'بوب مصري، أسلوب عربي مصري أصيل، إنتاج مصري تجاري عصري، نطق باللهجة المصرية، لهجة مصرية واضحة، عود وقانون، طبلة ورق، لحن مصري دافئ، كورس مصري جذاب، صوت مصري مصقول',
+        'أناشيد': 'أناشيد إسلامية، صوت بشري بحت، لا آلات موسيقية إطلاقاً، تحوك صوتي متعدد الطبقات، انسجام صوتي عميق، صدى وترديد، طاقة روحانية إسلامية، دف اختياري فقط، لغة عربية فصيحة شعرية رفيعة',
+        'مهرجانات': 'مهرجانات مصرية، بوب شعبي إلكتروني، إيقاع مهرجانات سريع، طاقة عالية، صوت مضغوط، شارع مصري',
+        'شامي': 'بوب شامي، أسلوب عربي لبناني سوري، لحن عربي ناعم، إنتاج عصري، أداء صوتي عاطفي، لهجة شامية',
+        'بوب عربي': 'بوب عربي حديث، صوت عربي تجاري، إنتاج بوب غربي متأثر، لحن عربي جذاب، إنهاء راديوي مصقول، لهجة عربية',
       };
 
       return mappings[value] ?? value;
     };
 
-    const parts = [...includeTags, ...instrumentTags, ...moodTags]
+    const parts = [...includeTags, ...rhythmTags, ...instrumentTags, ...moodTags]
       .map((part) => expandStyleTag(part))
       .filter(Boolean);
     if (styleText.trim()) parts.push(styleText.trim());
@@ -1918,8 +2253,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       setLyricsOpen(false);
       return;
     }
-    if (!lyricsText.trim()) {
-      toast.error(isAr ? 'الكلمات مطلوبة' : 'Lyrics are required');
+    if (vocalType !== 'none' && !lyricsText.trim()) {
+      toast.error(isAr ? 'الكلمات مطلوبة أو اختر موسيقى بدون كلمات' : 'Lyrics are required, or choose Instrumental');
       setTitleOpen(false);
       setMusicStyleOpen(false);
       setVocalsOpen(false);
@@ -1949,7 +2284,27 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         return;
       }
 
-      // Build KIE.ai parameters (simplified - always uses V4.5)
+      // Auto-select model: V4 for Arabic/GCC styles (better vocals + pronunciation), V5 for everything else
+      const ARABIC_GCC_STYLES = new Set([
+        // GCC Core
+        'GCC Pop','Khaleeji Pop','GCC Romantic','GCC Elegant','GCC Party','GCC Wedding',
+        // GCC Radio & Crossover
+        'GCC Radio Pop','GCC Dance Pop','GCC Electro Pop','GCC Synth Pop','Modern Khaleeji Fusion','English GCC Pop',
+        // GCC Rich & Event
+        'GCC R&B Pop','Luxury GCC Pop','Cinematic GCC','GCC Anthem','National Event GCC',
+        // GCC Heritage
+        'GCC Traditional','Sheilat','Samri','Jalsa','Liwa','GCC Shaabi',
+        // Other Arabic
+        'Egyptian','Egyptian Shaabi','Levant Pop','Arabic Pop','Anasheed',
+        // Arabic UI labels
+        'بوب خليجي','خليجي عصري','خليجي رومانسي','خليجي أنيق','خليجي حفلات','خليجي أعراس',
+        'خليجي إذاعي','خليجي دانس','خليجي إلكتروني','خليجي سينث بوب','فيوجن خليجي','إنجليزي بطابع خليجي',
+        'خليجي آر أند بي','خليجي فاخر','خليجي سينمائي','خليجي جماهيري','مناسبات وطنية خليجية',
+        'خليجي تراثي','شيلات','سامري','جلسة','ليوان','شعبي خليجي',
+        'مصري','شعبي مصري','مهرجانات','شامي','بوب عربي','أناشيد',
+      ]);
+      const autoModel = includeTags.some((t) => ARABIC_GCC_STYLES.has(t)) ? 'V4' : 'V5';
+
       const instrumental = vocalType === 'none';
       const vocalGender: 'm' | 'f' | undefined =
         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
@@ -1961,7 +2316,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         style: kieStyle || (language === 'ar' ? 'بوب عربي' : 'pop'),
         customMode: true,
         instrumental,
-        model: 'V5_5',
+        model: autoModel,
         duration_seconds: durationTarget,
         personaModel: 'style_persona',
         audioWeight: 1,
@@ -2170,8 +2525,11 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
           </div>
           <span className="text-xl sm:text-lg text-sky-500 dark:text-sky-400/80">{titleOpen ? '−' : '+'}</span>
         </button>
+        {!titleOpen && title.trim() && (
+          <p className="text-sm text-sky-600 dark:text-sky-300 font-medium truncate mt-1">{title}</p>
+        )}
         {titleOpen && (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value.slice(0, 80))}
@@ -2179,7 +2537,25 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               className="bg-[#fcfefd] dark:bg-white/[0.04] border-[#d9dde7] dark:border-white/10 shadow-[0_4px_12px_rgba(6,5,65,0.04)] dark:shadow-none focus:border-sky-400/50 focus:ring-sky-400/20 rounded-xl h-11"
               maxLength={80}
             />
-            <div className="text-right text-[10px] text-muted-foreground/70 dark:text-muted-foreground/50">{title.length}/80</div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-muted-foreground/70 dark:text-muted-foreground/50">{title.length}/80</span>
+              {title.trim().length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTitleOpen(false);
+                    setMusicStyleOpen(true);
+                    setStylesOpen(true);
+                    setRhythmOpen(false);
+                    setMoodOpen(false);
+                    setInstrumentsOpen(false);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-sky-500 hover:bg-sky-600 text-white active:scale-95 transition-all shadow-[0_4px_12px_rgba(59,130,246,0.3)]"
+                >
+                  {isAr ? 'التالي' : 'Next'} →
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -2222,6 +2598,14 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                     </button>
                   </span>
                 ))}
+                {rhythmTags.map((tag) => (
+                  <span key={tag} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-50 dark:bg-orange-500/20 border border-orange-200 dark:border-orange-400/30 text-orange-600 dark:text-orange-300 text-sm shadow-[0_2px_8px_rgba(249,115,22,0.10)] dark:shadow-none">
+                    {tag}
+                    <button type="button" aria-label={isAr ? 'إزالة' : 'Remove'} onClick={() => setRhythmTags(p => p.filter(t => t !== tag))} className="hover:text-white p-0.5">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
                 {moodTags.map((tag) => (
                   <span key={tag} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-500/20 border border-amber-200 dark:border-amber-400/30 text-amber-600 dark:text-amber-300 text-sm shadow-[0_2px_8px_rgba(245,158,11,0.10)] dark:shadow-none">
                     {tag}
@@ -2240,7 +2624,12 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 onClick={() => toggleMusicSubsection('styles')}
                 className="flex items-center justify-between w-full text-[10px] font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase mb-1.5"
               >
-                <span className="text-sm sm:text-xs font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase">{isAr ? 'الأنماط' : 'Styles'}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm sm:text-xs font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase">{isAr ? 'الأنماط' : 'Styles'}</span>
+                  {!stylesOpen && includeTags.length > 0 && (
+                    <span className="text-xs font-medium text-sky-600 dark:text-sky-300 normal-case">{includeTags[0]}</span>
+                  )}
+                </div>
                 <span className="text-xl sm:text-lg text-sky-500 dark:text-sky-400/80">{stylesOpen ? '−' : '+'}</span>
               </button>
               {stylesOpen && (
@@ -2248,10 +2637,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-[10px] sm:text-xs text-muted-foreground/70 dark:text-muted-foreground/60">
                       {isAr
-                        ? `${includeTags.length}/3 أنماط مختارة`
-                        : `${includeTags.length}/3 styles selected`}
+                        ? includeTags.length > 0 ? `تم اختيار: ${includeTags[0]}` : 'اختر نمطًا واحدًا'
+                        : includeTags.length > 0 ? `Selected: ${includeTags[0]}` : 'Pick one style'}
                     </span>
-                    {includeTags.length > 0 && includeTags.length < 3 && (
+                    {includeTags.length > 0 && (
                       <button
                         type="button"
                         onClick={handleStylesNext}
@@ -2288,16 +2677,212 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               )}
             </div>
 
-            {/* Category: Instruments */}
+            {/* Category: Rhythm / Beat */}
+            <div>
+              <button
+                type="button"
+                onClick={() => toggleMusicSubsection('rhythm')}
+                className="flex items-center justify-between w-full text-[10px] font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase mb-1.5"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm sm:text-xs font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase">{isAr ? 'الإيقاع / البيت' : 'Rhythm / Beat'}</span>
+                  {!rhythmOpen && rhythmTags.length > 0 && (
+                    <span className="text-xs font-medium text-orange-600 dark:text-orange-300 normal-case">{rhythmTags.join(', ')}</span>
+                  )}
+                </div>
+                <span className="text-xl sm:text-lg text-orange-500 dark:text-orange-400/80">{rhythmOpen ? '−' : '+'}</span>
+              </button>
+              {rhythmOpen && (
+                <div className="space-y-3">
+                  {/* Recommended rhythms row */}
+                  {recommendedRhythms.length > 0 && (
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] sm:text-xs font-medium uppercase tracking-wide text-orange-500/80 dark:text-orange-400/70 flex items-center gap-1">
+                        <Sparkles className="h-2.5 w-2.5" />
+                        {isAr ? 'مقترح لهذا النمط' : 'Recommended for this style'}
+                      </div>
+                      <div className="flex gap-2">
+                        {recommendedRhythms.map((rhythm) => (
+                          <button
+                            key={rhythm}
+                            type="button"
+                            onClick={() => handleRhythmToggle(rhythm)}
+                            className={`flex-1 min-h-[44px] px-3 py-2 rounded-2xl text-xs sm:text-sm leading-tight text-center border transition-all active:scale-95 ${
+                              rhythmTags.includes(rhythm)
+                                ? 'bg-orange-50 dark:bg-orange-500/25 border-orange-300 dark:border-orange-400/40 text-orange-700 dark:text-orange-200'
+                                : 'bg-orange-50/60 dark:bg-orange-500/10 border-orange-200 dark:border-orange-400/25 text-orange-600 dark:text-orange-300 ring-1 ring-orange-300/40'
+                            }`}
+                          >
+                            {rhythm}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[10px] sm:text-xs text-muted-foreground/70 dark:text-muted-foreground/60">
+                      {isAr ? `${rhythmTags.length}/2 إيقاعات مختارة` : `${rhythmTags.length}/2 rhythms selected`}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {recommendedRhythms.length > 0 && rhythmTags.length === 0 && (
+                        <button
+                          type="button"
+                          onClick={handleSelectRecommendedRhythms}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-orange-300 dark:border-orange-400/30 bg-orange-50 dark:bg-orange-500/10 text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-500/20 active:scale-95 transition-all"
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          {isAr ? 'اختيار المقترح' : 'Select recommended'}
+                        </button>
+                      )}
+                      {rhythmTags.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleRhythmNext}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-orange-300 dark:border-orange-400/30 bg-orange-50 dark:bg-orange-500/10 text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-500/20 active:scale-95 transition-all"
+                        >
+                          {isAr ? 'التالي' : 'Next'} →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {RHYTHM_GROUPS.map((group) => (
+                    <div key={group.title} className="space-y-2">
+                      <div className="text-[10px] sm:text-xs font-medium uppercase tracking-wide text-muted-foreground/60 dark:text-muted-foreground/50">
+                        {group.title}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {group.items.map((rhythm) => (
+                          <button
+                            key={rhythm}
+                            type="button"
+                            onClick={() => handleRhythmToggle(rhythm)}
+                            className={`w-full min-h-[52px] px-3 py-2.5 rounded-2xl text-xs sm:text-sm leading-tight text-center border transition-all active:scale-95 whitespace-normal break-words flex items-center justify-center ${
+                              rhythmTags.includes(rhythm)
+                                ? 'bg-orange-50 dark:bg-orange-500/25 border-orange-300 dark:border-orange-400/40 text-orange-700 dark:text-orange-200 shadow-[0_4px_12px_rgba(249,115,22,0.12)] dark:shadow-none'
+                                : recommendedRhythms.includes(rhythm)
+                                  ? 'bg-orange-50/40 dark:bg-orange-500/8 border-orange-200 dark:border-orange-400/20 text-orange-500 dark:text-orange-400/80'
+                                  : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-orange-300 dark:hover:border-orange-400/30 hover:text-orange-600 dark:hover:text-orange-300'
+                            }`}
+                          >
+                            {rhythm}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Category: Mood */}
             <div>
               <button 
+                type="button"
+                onClick={() => toggleMusicSubsection('mood')}
+                className="flex items-center justify-between w-full text-[10px] font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase mb-1.5"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm sm:text-xs font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase">{isAr ? 'المزاج' : 'Mood'}</span>
+                  {!moodOpen && moodTags.length > 0 && (
+                    <span className="text-xs font-medium text-amber-600 dark:text-amber-300 normal-case">{moodTags.join(', ')}</span>
+                  )}
+                </div>
+                <span className="text-xl sm:text-lg text-amber-500 dark:text-amber-400/80">{moodOpen ? '−' : '+'}</span>
+              </button>
+              {moodOpen && (
+                <div className="space-y-3">
+                  {/* Recommended moods row */}
+                  {recommendedMoods.length > 0 && (
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] sm:text-xs font-medium uppercase tracking-wide text-amber-500/80 dark:text-amber-400/70 flex items-center gap-1">
+                        <Sparkles className="h-2.5 w-2.5" />
+                        {isAr ? 'مقترح لهذا النمط' : 'Recommended for this style'}
+                      </div>
+                      <div className="flex gap-2">
+                        {recommendedMoods.map((mood) => (
+                          <button
+                            key={mood}
+                            type="button"
+                            onClick={() => handleMoodToggle(mood)}
+                            className={`flex-1 min-h-[44px] px-3 py-2 rounded-2xl text-xs sm:text-sm leading-tight text-center border transition-all active:scale-95 ${
+                              moodTags.includes(mood)
+                                ? 'bg-amber-50 dark:bg-amber-500/25 border-amber-300 dark:border-amber-400/40 text-amber-700 dark:text-amber-200'
+                                : 'bg-amber-50/60 dark:bg-amber-500/10 border-amber-200 dark:border-amber-400/25 text-amber-600 dark:text-amber-300 ring-1 ring-amber-300/40'
+                            }`}
+                          >
+                            {mood}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[10px] sm:text-xs text-muted-foreground/70 dark:text-muted-foreground/60">
+                      {isAr
+                        ? `${moodTags.length}/3 حالات مختارة`
+                        : `${moodTags.length}/3 moods selected`}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {recommendedMoods.length > 0 && moodTags.length === 0 && (
+                        <button
+                          type="button"
+                          onClick={handleSelectRecommendedMoods}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-300 dark:border-amber-400/30 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/20 active:scale-95 transition-all"
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          {isAr ? 'اختيار المقترح' : 'Select recommended'}
+                        </button>
+                      )}
+                      {moodTags.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleMoodNext}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-300 dark:border-amber-400/30 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/20 active:scale-95 transition-all"
+                        >
+                          {isAr ? 'التالي' : 'Next'} →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {MODE_GROUPS.map((group) => (
+                    <div key={group.title} className="space-y-2">
+                      <div className="text-[10px] sm:text-xs font-medium uppercase tracking-wide text-muted-foreground/60 dark:text-muted-foreground/50">
+                        {group.title}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {group.items.map((mood) => (
+                          <button
+                            key={mood}
+                            type="button"
+                            onClick={() => handleMoodToggle(mood)}
+                            className={`w-full min-h-[52px] px-3 py-2.5 rounded-2xl text-xs sm:text-sm leading-tight text-center border transition-all active:scale-95 whitespace-normal break-words flex items-center justify-center ${
+                              moodTags.includes(mood)
+                                ? 'bg-amber-50 dark:bg-amber-500/25 border-amber-300 dark:border-amber-400/40 text-amber-700 dark:text-amber-200 shadow-[0_4px_12px_rgba(245,158,11,0.12)] dark:shadow-none'
+                                : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-amber-300 dark:hover:border-amber-400/30 hover:text-amber-600 dark:hover:text-amber-300'
+                            }`}
+                          >
+                            {mood}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Category: Instruments */}
+            <div>
+              <button
                 type="button"
                 onClick={() => toggleMusicSubsection('instruments')}
                 className="flex items-center justify-between w-full text-[10px] font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase mb-1.5"
               >
                 <div className="flex items-center gap-2">
                   <span className="text-sm sm:text-xs font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase">{isAr ? 'الآلات' : 'Instruments'}</span>
-                  {recommendedInstruments.length > 0 && (
+                  {!instrumentsOpen && instrumentTags.length > 0 ? (
+                    <span className="text-xs font-medium text-purple-600 dark:text-purple-300 normal-case">{instrumentTags.slice(0, 3).join(', ')}{instrumentTags.length > 3 ? ` +${instrumentTags.length - 3}` : ''}</span>
+                  ) : recommendedInstruments.length > 0 && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-medium border border-emerald-400/30">
                       <Sparkles className="h-2.5 w-2.5" />
                       {isAr ? 'مقترحة' : 'Recommended'}
@@ -2314,18 +2899,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                         ? `${instrumentTags.length}/13 آلات مختارة`
                         : `${instrumentTags.length}/13 instruments selected`}
                     </span>
-                    {instrumentTags.length > 0 && instrumentTags.length < 13 && (
-                      <button
-                        type="button"
-                        onClick={handleInstrumentsNext}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-purple-300 dark:border-purple-400/30 bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-500/20 active:scale-95 transition-all"
-                      >
-                        {isAr ? 'التالي' : 'Next'}
-                      </button>
-                    )}
-                  </div>
-                  {recommendedInstruments.length > 0 && (
-                    <div className="flex justify-end">
+                    <div className="flex items-center gap-2">
+                    {recommendedInstruments.length > 0 && (
                       <button
                         type="button"
                         onClick={handleSelectRecommendedInstruments}
@@ -2334,8 +2909,18 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                         <Sparkles className="h-3 w-3" />
                         {isAr ? 'اختيار المقترح' : 'Select recommended'}
                       </button>
-                    </div>
-                  )}
+                    )}
+                    {instrumentTags.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleInstrumentsNext}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-purple-300 dark:border-purple-400/30 bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-500/20 active:scale-95 transition-all"
+                      >
+                        {isAr ? 'التالي' : 'Next'} →
+                      </button>
+                    )}
+                  </div>
+                  </div>
                   {INSTRUMENT_GROUPS.map((group) => (
                     <div key={group.title} className="space-y-2">
                       <div className="text-[10px] sm:text-xs font-medium uppercase tracking-wide text-muted-foreground/60 dark:text-muted-foreground/50">
@@ -2362,61 +2947,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                             </button>
                           );
                         })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Category: Mood */}
-            <div>
-              <button 
-                type="button"
-                onClick={() => toggleMusicSubsection('mood')}
-                className="flex items-center justify-between w-full text-[10px] font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase mb-1.5"
-              >
-                <span className="text-sm sm:text-xs font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase">{isAr ? 'المزاج' : 'Mood'}</span>
-                <span className="text-xl sm:text-lg text-amber-500 dark:text-amber-400/80">{moodOpen ? '−' : '+'}</span>
-              </button>
-              {moodOpen && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[10px] sm:text-xs text-muted-foreground/70 dark:text-muted-foreground/60">
-                      {isAr
-                        ? `${moodTags.length}/3 حالات مختارة`
-                        : `${moodTags.length}/3 moods selected`}
-                    </span>
-                    {moodTags.length > 0 && moodTags.length < 3 && (
-                      <button
-                        type="button"
-                        onClick={handleMoodNext}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-300 dark:border-amber-400/30 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/20 active:scale-95 transition-all"
-                      >
-                        {isAr ? 'التالي' : 'Next'}
-                      </button>
-                    )}
-                  </div>
-                  {MODE_GROUPS.map((group) => (
-                    <div key={group.title} className="space-y-2">
-                      <div className="text-[10px] sm:text-xs font-medium uppercase tracking-wide text-muted-foreground/60 dark:text-muted-foreground/50">
-                        {group.title}
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {group.items.map((mood) => (
-                          <button
-                            key={mood}
-                            type="button"
-                            onClick={() => handleMoodToggle(mood)}
-                            className={`w-full min-h-[52px] px-3 py-2.5 rounded-2xl text-xs sm:text-sm leading-tight text-center border transition-all active:scale-95 whitespace-normal break-words flex items-center justify-center ${
-                              moodTags.includes(mood)
-                                ? 'bg-amber-50 dark:bg-amber-500/25 border-amber-300 dark:border-amber-400/40 text-amber-700 dark:text-amber-200 shadow-[0_4px_12px_rgba(245,158,11,0.12)] dark:shadow-none'
-                                : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-amber-300 dark:hover:border-amber-400/30 hover:text-amber-600 dark:hover:text-amber-300'
-                            }`}
-                          >
-                            {mood}
-                          </button>
-                        ))}
                       </div>
                     </div>
                   ))}
@@ -2845,8 +3375,7 @@ function EditorTab() {
                       <ShareButton
                         size="sm"
                         shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${t.id}` : ''}
-                        shareTitle={isAr ? 'استمع إلى موسيقى من وقتي' : 'Listen to my Wakti music'}
-                        shareDescription={t.prompt || undefined}
+                        shareTitle={isAr ? 'استمع إلى موسيقى من وقتي 🎵' : 'Listen to my Wakti music 🎵'}
                       />
                     </div>
                   </div>

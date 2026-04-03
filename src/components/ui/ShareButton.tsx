@@ -82,7 +82,6 @@ const ShareButton: React.FC<ShareButtonProps> = ({
       try {
         await navigator.share({
           title: shareTitle,
-          text: shareDescription || shareTitle,
           url: shareUrl,
         });
         onShare?.(platform);
