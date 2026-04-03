@@ -7,134 +7,137 @@ import type {
   LocalNotificationTapHandler,
 } from '@/types/localNotifications';
 
-declare global {
-  interface Window {
-    NativelyLocalNotifications?: any;
-    NativelyNotifications?: any;
-  }
-}
-
 const LOG = '[LocalNotificationsBridge]';
+const SW_PATH = '/sw-local-notifications.js';
 
-function getInstance(): any | null {
+let _swRegistration: ServiceWorkerRegistration | null = null;
+let _tapHandler: LocalNotificationTapHandler | null = null;
+
+// ─── Service Worker registration ─────────────────────────────────────────────
+
+async function getSwRegistration(): Promise<ServiceWorkerRegistration | null> {
+  if (_swRegistration) return _swRegistration;
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return null;
+
   try {
-    if (typeof window === 'undefined') return null;
-    const Ctor =
-      (window as any).NativelyLocalNotifications ||
-      (window as any).NativelyNotifications;
-    if (!Ctor) return null;
-    return new Ctor();
-  } catch {
+    _swRegistration = await navigator.serviceWorker.register(SW_PATH, { scope: '/' });
+    console.log(LOG, '✅ Service Worker registered');
+
+    // Listen for tap messages from the SW
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data?.type === 'LOCAL_NOTIF_TAP' && _tapHandler) {
+        const data = event.data.payload || {};
+        const tapPayload: LocalNotificationTapPayload = {
+          id: data.id || '',
+          kind: data.kind,
+          entityId: data.entityId || '',
+          entityType: data.entityType || 'reminder',
+          deepLink: data.deepLink || '/',
+          userId: data.userId || '',
+        };
+        console.log(LOG, '📲 Notification tapped:', tapPayload);
+        _tapHandler(tapPayload);
+      }
+    });
+
+    return _swRegistration;
+  } catch (err) {
+    console.error(LOG, 'Service Worker registration failed:', err);
     return null;
   }
 }
 
-export function isLocalNotificationsSupported(): boolean {
-  const n = getInstance();
-  if (!n) return false;
-  return (
-    typeof n.scheduleLocalNotification === 'function' ||
-    typeof n.schedule === 'function' ||
-    typeof n.scheduleNotification === 'function'
-  );
+function sendToSW(
+  type: string,
+  payload: unknown
+): Promise<{ success: boolean; error?: string; id?: string }> {
+  return new Promise(async (resolve) => {
+    const reg = await getSwRegistration();
+    if (!reg || !reg.active) {
+      resolve({ success: false, error: 'Service Worker not active' });
+      return;
+    }
+
+    const channel = new MessageChannel();
+    channel.port1.onmessage = (e) => resolve(e.data || { success: false });
+
+    try {
+      reg.active.postMessage({ type, payload }, [channel.port2]);
+    } catch (err) {
+      resolve({ success: false, error: String(err) });
+    }
+  });
 }
 
-export function requestLocalNotificationPermission(
-  callback: (status: LocalNotificationPermissionStatus) => void
-): void {
-  const n = getInstance();
-  if (!n) {
-    console.warn(LOG, 'SDK not available — cannot request permission');
-    callback({ granted: false, denied: false, unknown: true });
-    return;
-  }
+// ─── Public API ───────────────────────────────────────────────────────────────
 
-  const tryRequest = n.requestLocalNotificationPermission
-    || n.requestPermission
-    || null;
-
-  if (typeof tryRequest === 'function') {
-    try {
-      tryRequest.call(n, (resp: any) => {
-        const status = resp?.status || resp?.permission || '';
-        const granted = status === 'authorized' || status === 'granted' || resp?.granted === true;
-        const denied = status === 'denied' || resp?.denied === true;
-        callback({ granted, denied, unknown: !granted && !denied });
-      });
-    } catch (err) {
-      console.error(LOG, 'Error requesting permission:', err);
-      callback({ granted: false, denied: false, unknown: true });
-    }
-  } else {
-    console.warn(LOG, 'requestPermission not found on SDK');
-    callback({ granted: false, denied: false, unknown: true });
-  }
+export function isLocalNotificationsSupported(): boolean {
+  if (typeof window === 'undefined') return false;
+  return 'Notification' in window && 'serviceWorker' in navigator;
 }
 
 export function checkLocalNotificationPermission(
   callback: (status: LocalNotificationPermissionStatus) => void
 ): void {
-  const n = getInstance();
-  if (!n) {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    callback({ granted: false, denied: false, unknown: true });
+    return;
+  }
+  const p = Notification.permission;
+  callback({
+    granted: p === 'granted',
+    denied: p === 'denied',
+    unknown: p === 'default',
+  });
+}
+
+export function requestLocalNotificationPermission(
+  callback: (status: LocalNotificationPermissionStatus) => void
+): void {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
     callback({ granted: false, denied: false, unknown: true });
     return;
   }
 
-  const tryCheck =
-    n.checkLocalNotificationPermission ||
-    n.getPermissionStatus ||
-    n.checkPermission ||
-    null;
-
-  if (typeof tryCheck === 'function') {
-    try {
-      tryCheck.call(n, (resp: any) => {
-        const status = resp?.status || resp?.permission || '';
-        const granted = status === 'authorized' || status === 'granted' || resp?.granted === true;
-        const denied = status === 'denied' || resp?.denied === true;
-        callback({ granted, denied, unknown: !granted && !denied });
-      });
-    } catch (err) {
-      console.error(LOG, 'Error checking permission:', err);
-      callback({ granted: false, denied: false, unknown: true });
-    }
-  } else {
-    console.warn(LOG, 'checkPermission not found on SDK — assuming unknown');
-    callback({ granted: false, denied: false, unknown: true });
+  if (Notification.permission === 'granted') {
+    callback({ granted: true, denied: false, unknown: false });
+    return;
   }
+
+  Notification.requestPermission()
+    .then((result) => {
+      callback({
+        granted: result === 'granted',
+        denied: result === 'denied',
+        unknown: result === 'default',
+      });
+    })
+    .catch(() => callback({ granted: false, denied: false, unknown: true }));
 }
 
 export function scheduleLocalNotification(
   payload: LocalNotificationPayload,
   callback?: (result: LocalNotificationScheduleResult) => void
 ): void {
-  const n = getInstance();
-  if (!n) {
-    console.warn(LOG, 'SDK not available — cannot schedule:', payload.id);
-    callback?.({ success: false, error: 'SDK not available' });
+  if (Notification.permission !== 'granted') {
+    console.warn(LOG, 'Notification permission not granted — cannot schedule:', payload.id);
+    callback?.({ success: false, error: 'Permission not granted' });
     return;
   }
 
-  const trySchedule =
-    n.scheduleLocalNotification ||
-    n.schedule ||
-    n.scheduleNotification ||
-    null;
-
-  if (typeof trySchedule !== 'function') {
-    console.warn(LOG, 'schedule method not found on SDK');
-    callback?.({ success: false, error: 'schedule method not available' });
+  const fireAt = new Date(payload.scheduledAt).getTime();
+  if (isNaN(fireAt) || fireAt <= Date.now()) {
+    callback?.({ success: false, error: 'Invalid or past scheduled time' });
     return;
   }
 
-  const nativePayload = {
+  const swPayload = {
     id: payload.id,
     title: payload.title,
     body: payload.body,
-    fireDate: payload.scheduledAt,
-    trigger_at: payload.scheduledAt,
-    scheduled_at: payload.scheduledAt,
+    fireAt,
     data: {
+      id: payload.id,
       kind: payload.kind,
       entityId: payload.entityId,
       entityType: payload.entityType,
@@ -144,137 +147,46 @@ export function scheduleLocalNotification(
     },
   };
 
-  try {
-    trySchedule.call(n, nativePayload, (resp: any) => {
-      const success =
-        resp?.status === 'SUCCESS' ||
-        resp?.success === true ||
-        resp?.scheduled === true ||
-        resp?.id != null;
-      console.log(LOG, success ? '✅ Scheduled' : '❌ Failed to schedule', payload.id, resp);
-      callback?.({ success, id: payload.id, error: success ? undefined : (resp?.error || 'Unknown error') });
-    });
-  } catch (err) {
-    console.error(LOG, 'Error scheduling notification:', err);
-    callback?.({ success: false, error: String(err) });
-  }
+  sendToSW('SCHEDULE', swPayload)
+    .then((result) => {
+      console.log(LOG, result.success ? '✅ Scheduled' : '❌ Failed', payload.id);
+      callback?.(result.success
+        ? { success: true, id: payload.id }
+        : { success: false, error: result.error });
+    })
+    .catch((err) => callback?.({ success: false, error: String(err) }));
 }
 
 export function cancelLocalNotification(
   notificationId: string,
   callback?: (result: LocalNotificationCancelResult) => void
 ): void {
-  const n = getInstance();
-  if (!n) {
-    console.warn(LOG, 'SDK not available — cannot cancel:', notificationId);
-    callback?.({ success: false, error: 'SDK not available' });
-    return;
-  }
-
-  const tryCancel =
-    n.cancelLocalNotification ||
-    n.cancel ||
-    n.cancelNotification ||
-    null;
-
-  if (typeof tryCancel !== 'function') {
-    console.warn(LOG, 'cancel method not found on SDK');
-    callback?.({ success: false, error: 'cancel method not available' });
-    return;
-  }
-
-  try {
-    tryCancel.call(n, { id: notificationId }, (resp: any) => {
-      const success =
-        resp?.status === 'SUCCESS' ||
-        resp?.success === true ||
-        resp?.canceled === true;
-      console.log(LOG, success ? '✅ Canceled' : '❌ Failed to cancel', notificationId, resp);
-      callback?.({ success, error: success ? undefined : (resp?.error || 'Unknown error') });
-    });
-  } catch (err) {
-    console.error(LOG, 'Error canceling notification:', err);
-    callback?.({ success: false, error: String(err) });
-  }
+  sendToSW('CANCEL', { id: notificationId })
+    .then((result) => {
+      console.log(LOG, result.success ? '✅ Canceled' : '❌ Cancel failed', notificationId);
+      callback?.(result);
+    })
+    .catch((err) => callback?.({ success: false, error: String(err) }));
 }
 
 export function cancelAllLocalNotifications(
   callback?: (result: LocalNotificationCancelResult) => void
 ): void {
-  const n = getInstance();
-  if (!n) {
-    callback?.({ success: false, error: 'SDK not available' });
-    return;
-  }
-
-  const tryCancel =
-    n.cancelAllLocalNotifications ||
-    n.cancelAll ||
-    n.removeAllPendingNotifications ||
-    null;
-
-  if (typeof tryCancel !== 'function') {
-    console.warn(LOG, 'cancelAll method not found on SDK');
-    callback?.({ success: false, error: 'cancelAll method not available' });
-    return;
-  }
-
-  try {
-    tryCancel.call(n, (resp: any) => {
-      const success =
-        resp?.status === 'SUCCESS' ||
-        resp?.success === true ||
-        resp?.canceled === true;
-      console.log(LOG, success ? '✅ Canceled all' : '❌ Failed to cancel all', resp);
-      callback?.({ success, error: success ? undefined : (resp?.error || 'Unknown error') });
-    });
-  } catch (err) {
-    console.error(LOG, 'Error canceling all notifications:', err);
-    callback?.({ success: false, error: String(err) });
-  }
+  sendToSW('CANCEL_ALL', {})
+    .then((result) => {
+      console.log(LOG, result.success ? '✅ Canceled all' : '❌ Cancel all failed');
+      callback?.(result);
+    })
+    .catch((err) => callback?.({ success: false, error: String(err) }));
 }
 
 export function setLocalNotificationTapHandler(handler: LocalNotificationTapHandler): void {
-  const n = getInstance();
-  if (!n) {
-    console.warn(LOG, 'SDK not available — cannot set tap handler');
-    return;
-  }
+  _tapHandler = handler;
+  getSwRegistration().catch(() => {});
+  console.log(LOG, '✅ Tap handler registered');
+}
 
-  const tryHandler =
-    n.setLocalNotificationOpenedHandler ||
-    n.setNotificationOpenedHandler ||
-    n.onNotificationTapped ||
-    null;
-
-  if (typeof tryHandler !== 'function') {
-    console.warn(LOG, 'tap handler method not found on SDK');
-    return;
-  }
-
-  try {
-    tryHandler.call(n, (notification: any) => {
-      const data = notification?.data || notification?.additionalData || notification?.userInfo || {};
-
-      if (!data.kind) {
-        console.warn(LOG, 'Tap received but no kind in data — ignoring', notification);
-        return;
-      }
-
-      const tapPayload: LocalNotificationTapPayload = {
-        id: notification?.id || data.id || '',
-        kind: data.kind,
-        entityId: data.entityId || data.entity_id || '',
-        entityType: data.entityType || data.entity_type || 'reminder',
-        deepLink: data.deepLink || data.deep_link || '/',
-        userId: data.userId || data.user_id || '',
-      };
-
-      console.log(LOG, '📲 Notification tapped:', tapPayload);
-      handler(tapPayload);
-    });
-    console.log(LOG, '✅ Tap handler set');
-  } catch (err) {
-    console.error(LOG, 'Error setting tap handler:', err);
-  }
+export async function initLocalNotifications(): Promise<void> {
+  if (!isLocalNotificationsSupported()) return;
+  await getSwRegistration();
 }

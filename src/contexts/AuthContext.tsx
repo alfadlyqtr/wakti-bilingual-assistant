@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { purchasesLogin, purchasesLogout, purchasesWarmup } from '@/integrations/natively/purchasesBridge';
 import { setNotificationUser, removeNotificationUser, requestNotificationPermission, setupNotificationClickHandler } from '@/integrations/natively/notificationsBridge';
 import { syncLocalNotifications, clearLocalNotificationsOnLogout } from '@/services/localNotificationSyncService';
+import { initLocalNotifications } from '@/integrations/natively/localNotificationsBridge';
 
 interface AuthContextType {
   user: User | null;
@@ -75,6 +76,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Warm up Natively Purchases SDK if present (no-op on web)
   useEffect(() => {
     try { purchasesWarmup(); } catch {}
+  }, []);
+
+  // Initialize local notifications Service Worker on app mount
+  useEffect(() => {
+    initLocalNotifications().catch(() => {});
   }, []);
 
   useEffect(() => {
