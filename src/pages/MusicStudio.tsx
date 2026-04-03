@@ -46,6 +46,13 @@ import {
   Palette,
   Mic,
   X,
+  ListMusic,
+  Check,
+  Shuffle,
+  Repeat,
+  SkipForward,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import StudioImageGenerator from '@/components/studio/StudioImageGenerator';
@@ -1280,7 +1287,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       },
       {
         title: 'GCC — Heritage',
-        items: ['GCC Traditional','Sheilat','Samri','Jalsa','Liwa','GCC Shaabi']
+        items: ['GCC Traditional','Sheilat','Samri','Ardah','Jalsa','Liwa','GCC Shaabi','Zar','Khaleeji Trap']
       },
       {
         title: 'Other Arabic',
@@ -1292,19 +1299,27 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       },
       {
         title: 'Pop',
-        items: ['pop','R&B','80s pop','90s pop','Synthpop','Indie Pop','K-Pop']
+        items: ['pop','R&B','80s pop','90s pop','Synthpop','Indie Pop','K-Pop','soul','funk','disco']
       },
       {
         title: 'Urban / World',
-        items: ['hip hop','rap','Afrobeats','Reggaeton','Latin','Bollywood']
+        items: ['hip hop','rap','Afrobeats','Reggaeton','Latin','Salsa','Bossa Nova','Bollywood']
       },
       {
-        title: 'Band',
-        items: ['rock','rock and roll','soft rock','heavy metal','country','jazz','soul']
+        title: 'Rock / Metal',
+        items: ['rock','rock and roll','soft rock','punk rock','alternative rock','indie rock','heavy metal','thrash metal','grunge']
+      },
+      {
+        title: 'Roots',
+        items: ['country','bluegrass','folk','blues','delta blues','jazz','smooth jazz','swing','classical','gospel']
+      },
+      {
+        title: 'Reggae',
+        items: ['reggae','ska','dub']
       },
       {
         title: 'Electronic',
-        items: ['Lo-Fi','House','Deep House','Trance','Techno','Dubstep','Drum & Bass']
+        items: ['Lo-Fi','House','Deep House','Trance','Techno','Dubstep','Drum & Bass','ambient','synthwave','chillwave']
       }
     ];
   }, [language]);
@@ -1437,7 +1452,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'Samri': ['frame drum', 'tabla', 'darbuka', 'rebab'],
       'Jalsa': ['oud', 'qanun', 'tabla', 'riq', 'ney'],
       'Liwa': ['frame drum', 'tabla', 'darbuka', 'gulf percussion'],
-      'GCC Shaabi': ['frame drum', 'tabla', 'darbuka', 'rebab', 'group chant'],
+      'GCC Shaabi': ['oud', 'qanun', 'tabla', 'riq', 'ney'],
+      'Zar': ['tanbura', 'frame drum', 'brass cymbals', 'clay drum'],
+      'Ardah': ['tabl drum', 'darbuka', 'tabl turki'],
+      'Khaleeji Trap': ['808 bass', 'trap hi-hats', 'oud', 'synth lead', 'mirwas'],
       // Other Arabic
       'Egyptian': ['oud', 'qanun', 'ney', 'tabla', 'darbuka', 'riq'],
       'Egyptian Shaabi': ['drum machine', 'synth lead', 'bass guitar', 'electric guitar', 'darbuka'],
@@ -1472,6 +1490,30 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'Drum & Bass': ['drum kit', 'synth bass', 'synth pad'],
       'K-Pop': ['synth pad', 'electric guitar', 'bass guitar', 'drum kit', 'piano'],
       'Bollywood': ['tabla', 'violin', 'piano', 'flute', 'synth pad'],
+      // New global genres
+      'funk': ['bass guitar', 'electric guitar', 'drum kit', 'organ', 'horn section'],
+      'disco': ['bass guitar', 'drum kit', 'strings', 'piano', 'horn section'],
+      'Salsa': ['trumpet', 'trombone', 'piano', 'bass guitar', 'congas'],
+      'Bossa Nova': ['acoustic guitar', 'upright bass', 'drum kit', 'piano'],
+      'punk rock': ['electric guitar', 'bass guitar', 'drum kit'],
+      'alternative rock': ['electric guitar', 'bass guitar', 'drum kit', 'synth pad'],
+      'indie rock': ['acoustic guitar', 'electric guitar', 'bass guitar', 'drum kit'],
+      'thrash metal': ['electric guitar', 'bass guitar', 'drum kit'],
+      'grunge': ['electric guitar', 'bass guitar', 'drum kit'],
+      'bluegrass': ['banjo', 'fiddle', 'acoustic guitar', 'mandolin', 'upright bass'],
+      'folk': ['acoustic guitar', 'fiddle', 'harmonica', 'upright bass'],
+      'blues': ['electric guitar', 'harmonica', 'piano', 'bass guitar', 'drum kit'],
+      'delta blues': ['acoustic guitar', 'harmonica', 'slide guitar'],
+      'smooth jazz': ['saxophone', 'piano', 'bass guitar', 'drum kit'],
+      'swing': ['saxophone', 'trumpet', 'trombone', 'piano', 'upright bass'],
+      'classical': ['violin', 'cello', 'piano', 'flute', 'oboe'],
+      'gospel': ['piano', 'organ', 'choir', 'bass guitar', 'drum kit'],
+      'reggae': ['electric guitar', 'bass guitar', 'drum kit', 'organ', 'horn section'],
+      'ska': ['trumpet', 'trombone', 'electric guitar', 'bass guitar', 'drum kit'],
+      'dub': ['bass guitar', 'drum kit', 'electric guitar', 'organ'],
+      'ambient': ['synth pad', 'piano', 'synth lead'],
+      'synthwave': ['synth lead', 'synth pad', 'synth bass', 'drum kit'],
+      'chillwave': ['synth pad', 'acoustic guitar', 'drum kit', 'piano'],
     };
   }, [language]);
 
@@ -1509,7 +1551,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'Samri': ['Samri Rhythm', 'Wedding Beat'],
     'Jalsa': ['Adani', 'Gulf Groove'],
     'Liwa': ['Leiwah Rhythm', '6/8 Fusion'],
-    'GCC Shaabi': ['Samri Rhythm', 'Clap-Driven Groove'],
+    'GCC Shaabi': ['Adani', 'Gulf Groove'],
+    'Zar': ['6/8 Fusion', 'Afro-Gulf Groove'],
+    'Ardah': ['Marching Anthem', 'Clap-Driven Groove'],
+    'Khaleeji Trap': ['Trap Beat', 'Gulf Groove'],
     'Egyptian': ['Maqsoum', 'Ballad Slow Groove'],
     'Egyptian Shaabi': ['Maqsoum', 'Club Beat'],
     'Arabic Pop': ['Maqsoum', 'Pop 4/4'],
@@ -1531,6 +1576,29 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'Trance': ['Club Beat', 'Pop 4/4'],
     'K-Pop': ['Pop 4/4', 'Club Beat'],
     'Bollywood': ['Maqsoum', '6/8 Fusion'],
+    'funk': ['Pop 4/4', 'Club Beat'],
+    'disco': ['Club Beat', 'Pop 4/4'],
+    'Salsa': ['6/8 Fusion', 'Pop 4/4'],
+    'Bossa Nova': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'punk rock': ['Pop 4/4', 'Marching Anthem'],
+    'alternative rock': ['Pop 4/4', 'Ballad Slow Groove'],
+    'indie rock': ['Pop 4/4', 'Ballad Slow Groove'],
+    'thrash metal': ['Pop 4/4', 'Marching Anthem'],
+    'grunge': ['Pop 4/4', 'Ballad Slow Groove'],
+    'bluegrass': ['Waltz 3/4', 'Ballad Slow Groove'],
+    'folk': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'blues': ['Ballad Slow Groove', 'Pop 4/4'],
+    'delta blues': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'smooth jazz': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'swing': ['Waltz 3/4', 'Pop 4/4'],
+    'classical': ['Waltz 3/4', 'Ballad Slow Groove'],
+    'gospel': ['Pop 4/4', 'Ballad Slow Groove'],
+    'reggae': ['Ballad Slow Groove', 'Pop 4/4'],
+    'ska': ['Pop 4/4', 'Club Beat'],
+    'dub': ['Ballad Slow Groove', '6/8 Fusion'],
+    'ambient': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'synthwave': ['Pop 4/4', 'Club Beat'],
+    'chillwave': ['Ballad Slow Groove', 'Pop 4/4'],
   };
 
   // Style → recommended moods (top 3)
@@ -1557,7 +1625,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'Samri': ['proud', 'energetic', 'bold'],
     'Jalsa': ['romantic', 'nostalgic', 'intimate'],
     'Liwa': ['energetic', 'celebratory', 'bold'],
-    'GCC Shaabi': ['bold', 'energetic', 'proud'],
+    'GCC Shaabi': ['calm', 'nostalgic', 'intimate'],
+    'Zar': ['trance', 'mystical', 'spiritual'],
+    'Ardah': ['proud', 'national', 'solemn'],
+    'Khaleeji Trap': ['confident', 'energetic', 'bold'],
     'Egyptian': ['romantic', 'emotional', 'nostalgic'],
     'Egyptian Shaabi': ['energetic', 'party', 'exciting'],
     'Arabic Pop': ['romantic', 'emotional', 'happy'],
@@ -1579,6 +1650,29 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'Trance': ['energetic', 'epic', 'cinematic'],
     'K-Pop': ['happy', 'energetic', 'playful'],
     'Bollywood': ['happy', 'romantic', 'energetic'],
+    'funk': ['groovy', 'energetic', 'happy'],
+    'disco': ['party', 'happy', 'energetic'],
+    'Salsa': ['happy', 'energetic', 'romantic'],
+    'Bossa Nova': ['calm', 'romantic', 'nostalgic'],
+    'punk rock': ['angry', 'energetic', 'bold'],
+    'alternative rock': ['emotional', 'energetic', 'bold'],
+    'indie rock': ['nostalgic', 'emotional', 'calm'],
+    'thrash metal': ['intense', 'angry', 'powerful'],
+    'grunge': ['sad', 'emotional', 'powerful'],
+    'bluegrass': ['happy', 'energetic', 'nostalgic'],
+    'folk': ['nostalgic', 'calm', 'emotional'],
+    'blues': ['sad', 'soulful', 'emotional'],
+    'delta blues': ['sad', 'soulful', 'nostalgic'],
+    'smooth jazz': ['calm', 'soulful', 'romantic'],
+    'swing': ['happy', 'energetic', 'nostalgic'],
+    'classical': ['epic', 'emotional', 'calm'],
+    'gospel': ['spiritual', 'uplifting', 'powerful'],
+    'reggae': ['calm', 'happy', 'uplifting'],
+    'ska': ['happy', 'energetic', 'groovy'],
+    'dub': ['trance', 'calm', 'mystical'],
+    'ambient': ['calm', 'peaceful', 'cinematic'],
+    'synthwave': ['nostalgic', 'energetic', 'cinematic'],
+    'chillwave': ['calm', 'nostalgic', 'dreamy'],
   };
 
   const recommendedRhythms = useMemo(() => {
@@ -2136,38 +2230,65 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
       const mappings: Record<string, string> = {
         // ── GCC Core ──
-        'GCC Pop': 'Khaleeji pop, modern commercial Gulf Arabic style, upbeat gulf rhythm, khaleeji percussion, catchy chorus, polished production, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'Khaleeji Pop': 'Khaleeji pop, authentic Gulf Arabic sound, khaleeji rhythmic groove, modern commercial production, catchy hook, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'GCC Romantic': 'Romantic Khaleeji pop, warm Gulf Arabic melody, emotional elegant delivery, adani groove, ney flute, violin, piano, cello, soft percussion, heartfelt commercial ballad vibe, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'GCC Elegant': 'Elegant Khaleeji pop, refined Gulf Arabic style, qanun, ney, violin, piano, soft percussion, smooth rhythmic groove, classy polished production, graceful melody, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'GCC Party': 'Khaleeji party anthem, festive Gulf Arabic pop, tabla, darbuka, frame drum, hand claps, synth pad, big celebratory chorus, energetic khaleeji drums, danceable groove, modern commercial production, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'GCC Wedding': 'Khaleeji wedding song, festive Gulf celebration, tabla, darbuka, daff, hand claps, group chant, wedding beat, joyful crowd-friendly vibe, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Pop': 'Khaleeji pop, modern commercial Gulf Arabic style, catchy melodic hook, polished production, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Khaleeji Pop': 'Khaleeji pop, authentic Gulf Arabic sound, modern commercial production, catchy hook, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Romantic': 'Romantic Khaleeji ballad, warm heartfelt Gulf Arabic melody, emotional elegant vocal delivery, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Elegant': 'Elegant Khaleeji pop, refined and graceful Gulf Arabic style, classy polished production, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Party': 'Khaleeji party anthem, festive high-energy Gulf Arabic pop, big celebratory chorus, danceable crowd-friendly vibe, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Wedding': 'Khaleeji wedding song, joyful festive Gulf celebration atmosphere, traditional wedding energy, Gulf Arabic accent, Khaleeji dialect pronunciation',
         // ── GCC Radio & Crossover ──
-        'GCC Radio Pop': 'Gulf Arabic radio pop, mainstream commercial khaleeji, electric guitar, bass guitar, drum kit, synth pad, piano, polished pop production, catchy hook, radio-friendly, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'GCC Dance Pop': 'Khaleeji dance pop, uptempo Gulf groove, synth lead, bass guitar, drum kit, tabla, hand claps, danceable beat, modern commercial finish, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'GCC Electro Pop': 'Gulf Arabic electro pop, synth lead, synth pad, drum kit, bass guitar, tabla, electronic textures with khaleeji rhythm, catchy electronic hook, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'GCC Synth Pop': 'Gulf Arabic synth pop, synth lead, synth pad, drum kit, bass guitar, glossy synthesizer-led production, khaleeji phrasing, radio-ready hook, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'Modern Khaleeji Fusion': 'Modern Khaleeji fusion, electric guitar, bass guitar, drum kit, synth pad, tabla, hybrid Gulf Arabic sound, western pop production with Gulf rhythmic identity, youth-oriented, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'English GCC Pop': 'English language pop song with clear Gulf Arabic Khaleeji flavor, synth lead, bass guitar, drum kit, gulf percussion, electric guitar, khaleeji rhythmic bed, catchy English hook, Gulf accent flavor, minimal traditional instrumentation',
+        'GCC Radio Pop': 'Gulf Arabic radio pop, mainstream commercial khaleeji sound, radio-friendly catchy hook, polished pop production, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Dance Pop': 'Khaleeji dance pop, uptempo danceable Gulf Arabic groove, modern commercial finish, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Electro Pop': 'Gulf Arabic electro pop, electronic production with khaleeji rhythmic identity, catchy electronic hook, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Synth Pop': 'Gulf Arabic synth pop, glossy synthesizer-led production, khaleeji phrasing, radio-ready hook, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Modern Khaleeji Fusion': 'Modern Khaleeji fusion, hybrid Gulf Arabic sound blending western pop production with Gulf rhythmic identity, youth-oriented, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'English GCC Pop': 'English language pop song with clear Gulf Arabic Khaleeji flavor, catchy English hook, Gulf accent character, Gulf Arabic musical identity',
         // ── GCC Rich & Event ──
-        'GCC R&B Pop': 'Gulf Arabic R&B pop, electric piano, bass guitar, drum kit, synth pad, tabla, smooth modern groove, vocal-forward khaleeji R&B, polished urban production, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'Luxury GCC Pop': 'Luxury Gulf Arabic pop, piano, strings, bass guitar, synth pad, soft percussion, premium elegant khaleeji production, rich orchestral touches, confident luxurious vibe, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'Cinematic GCC': 'Cinematic Gulf Arabic music, strings, piano, synth pad, drum kit, choir, dramatic orchestral khaleeji, large emotional sound, sweeping strings, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'GCC Anthem': 'Khaleeji anthem, hand claps, choir, tabla, drum kit, synth pad, crowd-unifying Gulf Arabic song, strong chorus, marching anthem feel, proud bold energy, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'National Event GCC': 'Gulf national event music, choir, strings, drum kit, hand claps, synth pad, ceremonial proud khaleeji, patriotic anthem vibe, majestic production, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC R&B Pop': 'Gulf Arabic R&B pop, smooth modern vocal-forward khaleeji R&B, polished urban production, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Luxury GCC Pop': 'Luxury Gulf Arabic pop, premium elegant khaleeji production, rich orchestral touches, confident luxurious vibe, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Cinematic GCC': 'Cinematic Gulf Arabic music, dramatic large-scale orchestral khaleeji sound, sweeping emotional atmosphere, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Anthem': 'Khaleeji anthem, crowd-unifying Gulf Arabic song, strong powerful chorus, proud bold energy, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'National Event GCC': 'Gulf national event music, ceremonial proud khaleeji sound, patriotic anthem vibe, majestic large-scale production, Gulf Arabic accent, Khaleeji dialect pronunciation',
         // ── GCC Heritage ──
-        'GCC Traditional': 'Traditional Khaleeji music, acoustic Gulf Arabic instrumentation, qanun, ney, tabla, riq, rebab, authentic Gulf identity, purist khaleeji approach, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'Sheilat': 'Khaleeji sheilat, chant-driven Gulf Arabic folk tradition, strong masculine energy, call-and-response vocal style, frame drums, tabla, darbuka, group chant, percussion-driven, authentic Gulf identity, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'Samri': 'Samri rhythm, Gulf Arabic folk tradition from Najd, martial driving beat, frame drums, tabla, darbuka, rebab, traditional sword-dance energy, authentic Gulf Arabic sound, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'Jalsa': 'Khaleeji jalsa, intimate Gulf Arabic sitting session, acoustic oud-led arrangement, qanun, tabla, soft riq, ney, warm conversational musical atmosphere, authentic Gulf Arabic sound, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'Liwa': 'Liwa rhythm, Afro-Gulf coastal tradition, 6/8 polyrhythmic feel, East African influenced Gulf music, frame drums, tabla, darbuka, gulf percussion, authentic Gulf identity, Gulf Arabic accent, Khaleeji dialect pronunciation',
-        'GCC Shaabi': 'Gulf Arabic shaabi, raw Saudi-Gulf street folk music, masculine group energy, frame drums, tabla, darbuka, rebab, call-and-response chant, unpolished authentic Gulf street sound, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Traditional': 'Traditional Khaleeji music, purist acoustic Gulf Arabic folk identity, authentic heritage sound, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Sheilat': 'Khaleeji sheilat, chant-driven Gulf Arabic folk tradition, strong masculine group vocal energy, call-and-response style, authentic Gulf identity, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Samri': 'Samri, Gulf Arabic folk tradition from Najd, martial ceremonial sword-dance energy, traditional authentic Gulf Arabic sound, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Jalsa': 'Khaleeji jalsa, intimate Gulf Arabic sitting session, warm conversational musical atmosphere, acoustic and delicate sound, authentic Gulf Arabic sound, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Liwa': 'Liwa, Afro-Gulf coastal tradition, East African influenced Gulf music, polyrhythmic feel, authentic Gulf identity, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'GCC Shaabi': 'Khaleeji Shaabi, calm traditional Gulf folk music, relaxed intimate atmosphere, melodic solo vocal, no chanting, no loud percussion, authentic Gulf Arabic sound, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Zar': 'Zar, Gulf African ritual trance tradition, repetitive hypnotic spiritual healing ceremony atmosphere, Bahraini Zar style, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Ardah': 'Ardah, Saudi Gulf national martial ceremony, classical Arabic poetry recitation, stately dignified energy, sword dance tradition, Gulf Arabic accent, Khaleeji dialect pronunciation',
+        'Khaleeji Trap': 'Khaleeji trap, Gulf Arabic trap fusion, modern Gulf youth sound, Khaleeji dialect vocals, Arabic lyrics, urban street energy, Gulf Arabic accent',
         // ── Other Arabic ──
-        'Egyptian': 'Egyptian pop, authentic Egyptian Arabic style, modern Egyptian commercial production, oud and qanun, tabla and riq percussion, warm Egyptian melody, catchy Egyptian chorus, polished Egyptian sound, Egyptian dialect pronunciation, Egyptian Arabic accent',
-        'Egyptian Shaabi': 'Egyptian shaabi street pop, Cairo street music energy, fast-paced beat, drum machine, synth lead, bass guitar, electric guitar, darbuka, high energy compressed sound, Egyptian street dialect pronunciation, Egyptian Arabic accent',
-        'Arabic Pop': 'Modern Arabic pop, pan-Arabic commercial sound, western influenced Arabic production, piano, electric guitar, drum kit, synth pad, catchy Arabic melody, polished radio-ready finish, Modern Standard Arabic pronunciation, clear Arabic accent',
-        'Levant Pop': 'Levantine Arabic pop, Syrian-Lebanese commercial style, piano, violin, acoustic guitar, drum kit, smooth Arabic melody, modern production, emotional vocal delivery, Levantine Arabic dialect pronunciation, Lebanese-Syrian accent',
-        'Anasheed': 'Islamic nasheed, strictly a cappella, zero melodic instruments, no strings, no keys, no electronic instruments, multi-layered human vocal harmonies only, deep spiritual choral arrangements, optional duff frame drum only, heavy spatial reverb and echo on vocals, pure vocal textures, Islamic spiritual energy, Arabic pronunciation, elevated poetic Arabic language',
+        'Egyptian': 'Egyptian pop, authentic Egyptian Arabic style, modern Egyptian commercial production, warm melodic character, polished Egyptian sound, Egyptian dialect pronunciation, Egyptian Arabic accent',
+        'Egyptian Shaabi': 'Egyptian shaabi street pop, Cairo street music energy, fast-paced high-energy compressed sound, Egyptian street dialect pronunciation, Egyptian Arabic accent',
+        'Arabic Pop': 'Modern Arabic pop, pan-Arabic commercial sound, western-influenced Arabic production, catchy melody, polished radio-ready finish, Modern Standard Arabic pronunciation, clear Arabic accent',
+        'Levant Pop': 'Levantine Arabic pop, Syrian-Lebanese commercial style, smooth emotional Arabic melody, modern production, Levantine Arabic dialect pronunciation, Lebanese-Syrian accent',
+        'Anasheed': 'Islamic nasheed, strictly a cappella vocal tradition, zero melodic instruments, no strings, no keys, no electronic instruments, multi-layered human vocal harmonies only, deep spiritual choral arrangements, Islamic spiritual energy, Arabic pronunciation, elevated poetic Arabic language',
+        // ── New Global Genres ──
+        'funk': 'funk music, syncopated groovy feel, rhythmic danceable character, James Brown style groove energy',
+        'disco': 'disco music, glamorous 70s dance music vibe, four-on-the-floor dance energy, upbeat polished feel',
+        'Salsa': 'salsa music, Caribbean Latin dance tradition, energetic syncopated Latin groove, vibrant social dance feel',
+        'Bossa Nova': 'bossa nova, Brazilian jazz fusion, relaxed sophisticated sound, warm intimate Latin jazz atmosphere',
+        'punk rock': 'punk rock, fast raw rebellious energy, stripped-down aggressive character, DIY spirit, short sharp songs',
+        'alternative rock': 'alternative rock, non-commercial expressive rock sound, emotional authentic character, experimental textures',
+        'indie rock': 'indie rock, independent guitar-driven sound, authentic introspective feel, raw artistic identity',
+        'thrash metal': 'thrash metal, fast aggressive extreme metal style, intense powerful energy, relentless driving character',
+        'grunge': 'grunge, raw emotional distorted rock, melancholic heavy sound, Seattle grunge aesthetic',
+        'bluegrass': 'bluegrass, acoustic American roots music, tight vocal harmonies, energetic traditional folk character',
+        'folk': 'folk music, acoustic storytelling tradition, authentic roots sound, lyrical narrative focus',
+        'blues': 'blues music, soulful expressive emotional character, blues scale melody, deep raw feeling',
+        'delta blues': 'delta blues, raw Southern acoustic blues tradition, sparse arrangement, deep emotional roots',
+        'smooth jazz': 'smooth jazz, mellow easy listening jazz, polished laid-back groove, soothing melodic character',
+        'swing': 'swing music, big band jazz tradition, dance hall energy, swing feel, 1930s-40s era character',
+        'classical': 'classical music, Western orchestral composition tradition, rich harmonic complexity, formal structured arrangement',
+        'gospel': 'gospel music, spiritual Christian music tradition, powerful uplifting vocal energy, soul-stirring devotional character',
+        'reggae': 'reggae music, Jamaican offbeat tradition, relaxed tempo, socially conscious lyrical spirit',
+        'ska': 'ska music, upbeat offbeat Jamaican rhythm tradition, lively danceable character',
+        'dub': 'dub music, reggae-rooted remix tradition, deep immersive bass-heavy soundscape, echo-drenched atmosphere',
+        'ambient': 'ambient music, atmospheric minimalistic mood-based sound, relaxing immersive soundscape',
+        'synthwave': 'synthwave, retro 80s inspired electronic music, cinematic nostalgic feel, vintage synthesizer character',
+        'chillwave': 'chillwave, dreamy lo-fi nostalgic electronic sound, reverb-drenched relaxed atmosphere',
         // ── Rhythm chips ──
         'Gulf Groove': 'khaleeji groove, gulf rhythmic pattern, syncopated Gulf beat',
         'Khaleeji Shuffle': 'khaleeji shuffle rhythm, swing feel Gulf beat',
@@ -2204,33 +2325,33 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         'إيقاع جماهيري': 'إيقاع جماهيري، مسيرة أنشودة',
         'إيقاع نادي': 'بيت نادي راقص، إيقاع إلكتروني',
         // ── Arabic style chips ──
-        'بوب خليجي': 'بوب خليجي عصري، أسلوب خليجي تجاري حديث، إيقاع خليجي، كورس جذاب، إنتاج احترافي، لهجة خليجية، نطق خليجي',
-        'خليجي عصري': 'خليجي عصري، بوب خليجي حديث، إيقاع خليجي راقٍ، إنتاج عصري، لحن جذاب، لهجة خليجية',
-        'خليجي رومانسي': 'خليجي رومانسي، لحن دافئ، إحساس عاطفي، إيقاع عدني هادئ، أداء أنيق، طابع تجاري جميل، لهجة خليجية، نطق خليجي',
-        'خليجي أنيق': 'خليجي أنيق، طابع عربي خليجي راقٍ، إنتاج نظيف واحترافي، لحن ناعم، إيقاع متزن، لمسات عربية فاخرة، لهجة خليجية، نطق خليجي',
-        'خليجي حفلات': 'خليجي حفلات، جو احتفالي، إيقاع خليجي راقص، طبول خليجية قوية، كورس جماهيري، طاقة عالية، إنتاج عصري، لهجة خليجية، نطق خليجي',
-        'خليجي أعراس': 'أغنية أعراس خليجية، فرح خليجي، إيقاع أعراس، تصفيق يدوي، دربوكة، هتاف جماعي، جو احتفالي عائلي، لهجة خليجية',
-        'خليجي إذاعي': 'خليجي إذاعي، بوب خليجي تجاري، إنتاج مصقول، جيتار كهربائي، سينث، كورس جذاب، صالح للإذاعة، لهجة خليجية',
-        'خليجي دانس': 'خليجي دانس بوب، إيقاع خليجي سريع راقص، سينث، باص، طبلة، إنتاج عصري، لهجة خليجية',
-        'خليجي إلكتروني': 'خليجي إلكتروني، ملمس إلكتروني مع إيقاع خليجي، سينث درايفن، إنتاج خليجي عصري، لهجة خليجية',
-        'خليجي سينث بوب': 'خليجي سينث بوب، إنتاج سينث مصقول، نطق خليجي، ترتيب بوب عصري، هوك راديوي، لهجة خليجية',
-        'فيوجن خليجي': 'فيوجن خليجي عصري، صوت خليجي هجين، إنتاج بوب غربي مع هوية إيقاعية خليجية، موجه للشباب، لهجة خليجية',
-        'إنجليزي بطابع خليجي': 'أغنية بوب إنجليزية بنكهة خليجية واضحة، إيقاع خليجي، آلات بوب عصرية، سينث ليد، باص جيتار، طقم درامز، هوك إنجليزي جذاب، حد أدنى من الآلات التراثية',
-        'خليجي آر أند بي': 'خليجي آر أند بي، نبضة ناعمة عصرية، خليجي صوتي، إيقاع ناعم، بيانو كهربائي، باص، إنتاج حضري مصقول، لهجة خليجية',
-        'خليجي فاخر': 'خليجي فاخر، إنتاج خليجي راقٍ مميز، وتريات، بيانو، إيقاع ناعم، أجواء واثقة ومضيئة، لهجة خليجية',
-        'خليجي سينمائي': 'موسيقى خليجية سينمائية، درامية أوركسترالية خليجية، صوت عاطفي ضخم، وتريات كاسحة، إيقاع قوي، لهجة خليجية',
-        'خليجي جماهيري': 'أنشودة خليجية جماهيرية، أغنية خليجية موحدة، كورس قوي، تصفيق، كورال، طاقة فخورة جريئة، لهجة خليجية',
-        'مناسبات وطنية خليجية': 'موسيقى مناسبات وطنية خليجية، احتفال فخور، نشيد وطني، كورال، وتريات، إيقاع، إنتاج ضخم مهيب، لهجة خليجية',
-        'خليجي تراثي': 'خليجي تراثي، موسيقى خليجية عريقة، آلات أكوستيك خليجية، قانون وناي وطبلة ورق، هوية خليجية أصيلة، لهجة خليجية',
-        'شيلات': 'شيلات خليجية، أغنية شعبية خليجية، طاقة ذكورية قوية، أسلوب صوتي نداء واستجابة، مدفوعة بالإيقاع، هوية خليجية أصيلة، لهجة خليجية',
-        'سامري': 'إيقاع سامري، تراث شعبي خليجي من نجد، نبضة قوية حازمة، طبول الإطار، طاقة رقصة السيف التقليدية، عربي خليجي أصيل، لهجة خليجية',
-        'جلسة': 'جلسة خليجية، جلسة عربية خليجية حميمة، ترتيب أكوستيكي بالعود، قانون وطبلة، رق ناعم، جو موسيقي حواري دافئ، صوت خليجي أصيل، لهجة خليجية',
-        'ليوان': 'إيقاع الليوان، تراث خليجي أفريقي ساحلي، إيقاع ٦/٨ متعدد، تأثير أفريقي شرقي خليجي، طبول الإطار',
-        'مصري': 'بوب مصري، أسلوب عربي مصري أصيل، إنتاج مصري تجاري عصري، نطق باللهجة المصرية، لهجة مصرية واضحة، عود وقانون، طبلة ورق، لحن مصري دافئ، كورس مصري جذاب، صوت مصري مصقول',
-        'أناشيد': 'أناشيد إسلامية، صوت بشري بحت، لا آلات موسيقية إطلاقاً، تحوك صوتي متعدد الطبقات، انسجام صوتي عميق، صدى وترديد، طاقة روحانية إسلامية، دف اختياري فقط، لغة عربية فصيحة شعرية رفيعة',
-        'مهرجانات': 'مهرجانات مصرية، بوب شعبي إلكتروني، إيقاع مهرجانات سريع، طاقة عالية، صوت مضغوط، شارع مصري',
-        'شامي': 'بوب شامي، أسلوب عربي لبناني سوري، لحن عربي ناعم، إنتاج عصري، أداء صوتي عاطفي، لهجة شامية',
-        'بوب عربي': 'بوب عربي حديث، صوت عربي تجاري، إنتاج بوب غربي متأثر، لحن عربي جذاب، إنهاء راديوي مصقول، لهجة عربية',
+        'بوب خليجي': 'بوب خليجي عصري، أسلوب خليجي تجاري حديث، كورس جذاب، إنتاج احترافي مصقول، لهجة خليجية، نطق خليجي',
+        'خليجي عصري': 'خليجي عصري، بوب خليجي حديث، إنتاج عصري راقٍ، لحن جذاب، لهجة خليجية',
+        'خليجي رومانسي': 'خليجي رومانسي، بالاد خليجي دافئ، إحساس عاطفي راقٍ، أداء صوتي أنيق، طابع تجاري جميل، لهجة خليجية، نطق خليجي',
+        'خليجي أنيق': 'خليجي أنيق، طابع عربي خليجي راقٍ، إنتاج نظيف واحترافي، أجواء أنيقة ومتزنة، لهجة خليجية، نطق خليجي',
+        'خليجي حفلات': 'خليجي حفلات، جو احتفالي خليجي، كورس جماهيري مفعم بالطاقة، طابع راقص ومبهج، إنتاج عصري، لهجة خليجية، نطق خليجي',
+        'خليجي أعراس': 'أغنية أعراس خليجية، فرح خليجي تقليدي، جو احتفالي عائلي مبهج، لهجة خليجية',
+        'خليجي إذاعي': 'خليجي إذاعي، بوب خليجي تجاري، إنتاج مصقول، كورس جذاب صالح للإذاعة، لهجة خليجية',
+        'خليجي دانس': 'خليجي دانس بوب، طابع خليجي راقص سريع الإيقاع، إنتاج عصري، لهجة خليجية',
+        'خليجي إلكتروني': 'خليجي إلكتروني، طابع إلكتروني مع هوية خليجية، إنتاج خليجي عصري، لهجة خليجية',
+        'خليجي سينث بوب': 'خليجي سينث بوب، إنتاج سينث مصقول، هوك راديوي، ترتيب بوب عصري، لهجة خليجية، نطق خليجي',
+        'فيوجن خليجي': 'فيوجن خليجي عصري، صوت خليجي هجين يمزج الإنتاج الغربي بالهوية الخليجية، موجه للشباب، لهجة خليجية',
+        'إنجليزي بطابع خليجي': 'أغنية بوب إنجليزية بنكهة خليجية واضحة، هوك إنجليزي جذاب، طابع خليجي موسيقي',
+        'خليجي آر أند بي': 'خليجي آر أند بي، ناعم عصري صوتي، إنتاج حضري مصقول، لهجة خليجية',
+        'خليجي فاخر': 'خليجي فاخر، إنتاج خليجي راقٍ مميز، أجواء واثقة ومضيئة، لهجة خليجية',
+        'خليجي سينمائي': 'موسيقى خليجية سينمائية، صوت درامي أوركسترالي ضخم، أجواء عاطفية كاسحة، لهجة خليجية',
+        'خليجي جماهيري': 'أنشودة خليجية جماهيرية، أغنية خليجية موحدة، كورس قوي، طاقة فخورة جريئة، لهجة خليجية',
+        'مناسبات وطنية خليجية': 'موسيقى مناسبات وطنية خليجية، نشيد وطني فخور، إنتاج ضخم مهيب احتفالي، لهجة خليجية',
+        'خليجي تراثي': 'خليجي تراثي، موسيقى خليجية عريقة أصيلة، هوية خليجية تراثية، لهجة خليجية',
+        'شيلات': 'شيلات خليجية، أغنية شعبية خليجية، طاقة ذكورية جماعية قوية، أسلوب نداء واستجابة، هوية خليجية أصيلة، لهجة خليجية',
+        'سامري': 'سامري، تراث شعبي خليجي من نجد، طاقة حربية احتفالية، رقصة السيف التقليدية، عربي خليجي أصيل، لهجة خليجية',
+        'جلسة': 'جلسة خليجية حميمة، جو موسيقي حواري دافئ، صوت أكوستيكي ناعم ومتأمل، لهجة خليجية',
+        'ليوان': 'الليوان، تراث خليجي أفريقي ساحلي، مؤثرات أفريقية شرقية خليجية، إيقاع متعدد، لهجة خليجية',
+        'مصري': 'بوب مصري أصيل، إنتاج مصري تجاري عصري، لحن مصري دافئ جذاب، صوت مصري مصقول، لهجة مصرية واضحة',
+        'أناشيد': 'أناشيد إسلامية، صوت بشري بحت فقط، لا آلات موسيقية إطلاقاً، انسجام صوتي متعدد الطبقات، طاقة روحانية إسلامية، دف اختياري فقط، لغة عربية فصيحة شعرية رفيعة',
+        'مهرجانات': 'مهرجانات مصرية، بوب شعبي إلكتروني ضاج، طاقة عالية ضاغطة، روح شارع مصري، لهجة مصرية',
+        'شامي': 'بوب شامي، أسلوب عربي لبناني سوري، لحن عربي ناعم عاطفي، إنتاج عصري، لهجة شامية',
+        'بوب عربي': 'بوب عربي حديث، صوت عربي تجاري، لحن عربي جذاب، إنتاج راديوي مصقول، لهجة عربية',
       };
 
       return mappings[value] ?? value;
@@ -3168,27 +3289,366 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   );
 }
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+type SavedTrack = {
+  id: string;
+  created_at: string;
+  title: string | null;
+  prompt: string | null;
+  include_styles: string[] | null;
+  requested_duration_seconds: number | null;
+  duration: number | null;
+  cover_url: string | null;
+  signed_url: string | null;
+  storage_path: string | null;
+  mime: string | null;
+  meta: Record<string, unknown> | null;
+  play_url?: string | null;
+};
+
+type Playlist = {
+  id: string;
+  name: string;
+  trackIds: string[];
+  createdAt: number;
+};
+
+// ─── Playlist storage helpers (localStorage) ──────────────────────────────────
+const PL_KEY = 'wakti_music_playlists';
+function loadPlaylists(): Playlist[] {
+  try { return JSON.parse(localStorage.getItem(PL_KEY) || '[]'); } catch { return []; }
+}
+function savePlaylists(pls: Playlist[]) {
+  localStorage.setItem(PL_KEY, JSON.stringify(pls));
+}
+function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
+  playlist: Playlist;
+  tracks: SavedTrack[];
+  isAr: boolean;
+  onClose: () => void;
+}) {
+  const plTracks = playlist.trackIds
+    .map(id => tracks.find(t => t.id === id))
+    .filter(Boolean) as SavedTrack[];
+
+  const [shuffle, setShuffle] = useState(false);
+  const [loop, setLoop] = useState(false);
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [order, setOrder] = useState<number[]>(() => plTracks.map((_, i) => i));
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const orderRef = useRef<number[]>(order);
+  const currentIdxRef = useRef(currentIdx);
+  const loopRef = useRef(loop);
+  const desiredPlayingRef = useRef(false);
+  const progressBarRef = useRef<HTMLDivElement | null>(null);
+  const isScrubbingRef = useRef(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+
+  const actualIdx = order[currentIdx] ?? 0;
+  const current = plTracks[actualIdx];
+
+  useEffect(() => {
+    orderRef.current = order;
+  }, [order]);
+
+  useEffect(() => {
+    currentIdxRef.current = currentIdx;
+  }, [currentIdx]);
+
+  useEffect(() => {
+    loopRef.current = loop;
+  }, [loop]);
+
+  useEffect(() => {
+    if (shuffle) {
+      const shuffled = [...plTracks.map((_, i) => i)].sort(() => Math.random() - 0.5);
+      setOrder(shuffled);
+    } else {
+      setOrder(plTracks.map((_, i) => i));
+    }
+    setCurrentIdx(0);
+  }, [shuffle, plTracks.length]);
+
+  useEffect(() => {
+    const url = current?.play_url;
+    if (!url) return;
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+    }
+
+    setCurrentTime(0);
+    setProgress(0);
+    setDuration(0);
+
+    const audio = new Audio(url);
+    audio.preload = 'auto';
+    audioRef.current = audio;
+
+    const startPlayback = () => {
+      if (!desiredPlayingRef.current) return;
+      window.dispatchEvent(new CustomEvent('wakti-audio-play', { detail: { playerId: 'playlist-player' } }));
+      audio.play().catch(() => {});
+    };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+      setProgress(audio.duration > 0 ? (audio.currentTime / audio.duration) * 100 : 0);
+    };
+
+    const handleLoadedMetadata = () => setDuration(audio.duration);
+    const handleCanPlay = () => startPlayback();
+
+    const handleEnded = () => {
+      const next = currentIdxRef.current + 1;
+      if (next < orderRef.current.length) {
+        desiredPlayingRef.current = true;
+        setCurrentIdx(next);
+      } else if (loopRef.current) {
+        desiredPlayingRef.current = true;
+        setCurrentIdx(0);
+      } else {
+        desiredPlayingRef.current = false;
+        setIsPlaying(false);
+      }
+    };
+
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('canplay', handleCanPlay);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
+
+    if (desiredPlayingRef.current) {
+      startPlayback();
+    }
+
+    audio.load();
+
+    return () => {
+      audio.pause();
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
+      audio.src = '';
+    };
+  }, [current?.id]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ playerId: string }>).detail;
+      if (detail.playerId !== 'playlist-player' && audioRef.current && !audioRef.current.paused) {
+        audioRef.current.pause();
+      }
+    };
+    window.addEventListener('wakti-audio-play', handler);
+    return () => window.removeEventListener('wakti-audio-play', handler);
+  }, []);
+
+  const togglePlay = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying) {
+      desiredPlayingRef.current = false;
+      audio.pause();
+    } else {
+      desiredPlayingRef.current = true;
+      window.dispatchEvent(new CustomEvent('wakti-audio-play', { detail: { playerId: 'playlist-player' } }));
+      audio.play().catch(() => {});
+    }
+  };
+
+  const goNext = () => {
+    const next = currentIdx + 1;
+    desiredPlayingRef.current = isPlaying || desiredPlayingRef.current;
+    if (next < order.length) setCurrentIdx(next);
+    else if (loop) setCurrentIdx(0);
+  };
+
+  const goPrev = () => {
+    desiredPlayingRef.current = isPlaying || desiredPlayingRef.current;
+    if (currentIdx > 0) setCurrentIdx(currentIdx - 1);
+  };
+
+  const seek = (e: React.MouseEvent<HTMLDivElement>) => {
+    const audio = audioRef.current;
+    if (!audio || !duration) return;
+    const b = e.currentTarget.getBoundingClientRect();
+    audio.currentTime = ((e.clientX - b.left) / b.width) * duration;
+  };
+
+  const seekToClientX = (clientX: number) => {
+    const audio = audioRef.current;
+    const bar = progressBarRef.current;
+    if (!audio || !bar || !duration) return;
+    const bounds = bar.getBoundingClientRect();
+    const raw = (clientX - bounds.left) / bounds.width;
+    const clamped = Math.max(0, Math.min(1, raw));
+    audio.currentTime = clamped * duration;
+    setCurrentTime(audio.currentTime);
+    setProgress(clamped * 100);
+  };
+
+  const handleProgressPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    isScrubbingRef.current = true;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    seekToClientX(e.clientX);
+  };
+
+  const handleProgressPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isScrubbingRef.current) return;
+    seekToClientX(e.clientX);
+  };
+
+  const handleProgressPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isScrubbingRef.current) return;
+    seekToClientX(e.clientX);
+    isScrubbingRef.current = false;
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+  };
+
+  const handleProgressPointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    isScrubbingRef.current = false;
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+  };
+
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+  if (!current) return null;
+
+  const coverUrl = current.cover_url;
+  const trackTitle = current.title || (isAr ? 'مقطع موسيقي' : 'Music Track');
+
+  return (
+    <div className="rounded-2xl border border-purple-400/20 bg-gradient-to-br from-purple-900/20 via-sky-900/10 to-purple-900/20 dark:from-purple-950/40 dark:to-sky-950/30 shadow-[0_8px_32px_rgba(128,0,255,0.15)] p-4 space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <ListMusic className="h-4 w-4 text-purple-400" />
+          <span className="text-sm font-bold text-foreground truncate max-w-[160px]">{playlist.name}</span>
+          <span className="text-[10px] text-muted-foreground/60">{currentIdx + 1} / {order.length}</span>
+        </div>
+        <button title={isAr ? 'إغلاق مشغل القائمة' : 'Close playlist player'} onClick={onClose} className="p-1 rounded-lg text-muted-foreground/40 hover:text-foreground transition-colors">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Current track */}
+      <div className="flex gap-3 items-center">
+        <div className="flex-shrink-0 w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br from-purple-900/50 to-sky-900/50 border border-white/10">
+          {coverUrl
+            ? <img src={coverUrl} alt={trackTitle} className="w-full h-full object-cover" />
+            : <div className="w-full h-full flex items-center justify-center"><Music className="h-5 w-5 text-purple-400/60" /></div>
+          }
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-foreground truncate">{trackTitle}</p>
+          <p className="text-[10px] text-muted-foreground/50">{fmt(currentTime)} / {fmt(duration)}</p>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div
+        ref={progressBarRef}
+        className="h-1.5 bg-white/10 rounded-full cursor-pointer overflow-hidden touch-none"
+        onClick={seek}
+        onPointerDown={handleProgressPointerDown}
+        onPointerMove={handleProgressPointerMove}
+        onPointerUp={handleProgressPointerUp}
+        onPointerCancel={handleProgressPointerCancel}
+      >
+        <div className="h-full bg-gradient-to-r from-purple-400 to-sky-400 transition-all duration-100 rounded-full" style={{ width: `${progress}%` }} />
+      </div>
+
+      {/* Controls */}
+      <div className="flex items-center justify-center gap-3">
+        <button title={isAr ? 'المقطع السابق' : 'Previous track'} onClick={goPrev} disabled={currentIdx === 0 && !loop}
+          className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-white/10 active:scale-95 transition-all disabled:opacity-30">
+          <SkipForward className="h-4 w-4 rotate-180" />
+        </button>
+        <button title={isAr ? 'تشغيل أو إيقاف القائمة' : 'Play or pause playlist'} onClick={togglePlay}
+          className="p-3 rounded-2xl bg-gradient-to-br from-purple-500 to-sky-500 text-white shadow-[0_4px_16px_rgba(128,0,255,0.4)] hover:shadow-[0_4px_24px_rgba(128,0,255,0.6)] active:scale-95 transition-all">
+          {isPlaying
+            ? <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            : <Play className="h-5 w-5" />
+          }
+        </button>
+        <button title={isAr ? 'المقطع التالي' : 'Next track'} onClick={goNext} disabled={currentIdx >= order.length - 1 && !loop}
+          className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-white/10 active:scale-95 transition-all disabled:opacity-30">
+          <SkipForward className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Shuffle / Loop */}
+      <div className="flex items-center justify-center gap-3">
+        <button title={isAr ? 'تشغيل أو إيقاف العشوائي' : 'Toggle shuffle'} onClick={() => setShuffle(v => !v)}
+          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-semibold border transition-all active:scale-95 ${shuffle ? 'border-purple-400/50 bg-purple-500/15 text-purple-300' : 'border-white/10 text-muted-foreground hover:border-white/20'}`}>
+          <Shuffle className="h-3 w-3" />{isAr ? 'عشوائي' : 'Shuffle'}
+        </button>
+        <button title={isAr ? 'تشغيل أو إيقاف التكرار' : 'Toggle loop'} onClick={() => setLoop(v => !v)}
+          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-semibold border transition-all active:scale-95 ${loop ? 'border-sky-400/50 bg-sky-500/15 text-sky-300' : 'border-white/10 text-muted-foreground hover:border-white/20'}`}>
+          <Repeat className="h-3 w-3" />{isAr ? 'تكرار' : 'Loop'}
+        </button>
+      </div>
+
+      {/* Track list */}
+      <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+        {order.map((trackIdx, i) => {
+          const t = plTracks[trackIdx];
+          if (!t) return null;
+          const tTitle = t.title || (isAr ? 'مقطع موسيقي' : 'Music Track');
+          return (
+            <button key={t.id} onClick={() => setCurrentIdx(i)}
+              className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-xl transition-all active:scale-[0.98] ${i === currentIdx ? 'bg-purple-500/20 text-foreground' : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'}`}>
+              {i === currentIdx && <div className="w-1.5 h-1.5 rounded-full bg-purple-400 flex-shrink-0 animate-pulse" />}
+              {i !== currentIdx && <div className="w-1.5 h-1.5 rounded-full bg-white/10 flex-shrink-0" />}
+              <span className="text-xs truncate">{tTitle}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── EditorTab ─────────────────────────────────────────────────────────────────
 function EditorTab() {
   const { language } = useTheme();
   const { user } = useAuth();
   const isAr = language === 'ar';
+
+  // ── Saved sub-tab: tracks vs playlists
+  const [savedSubTab, setSavedSubTab] = useState<'tracks' | 'playlists'>('tracks');
+
+  // ── Tracks
   const [loading, setLoading] = useState(false);
-  const [tracks, setTracks] = useState<Array<{
-    id: string;
-    created_at: string;
-    title: string | null;
-    prompt: string | null;
-    include_styles: string[] | null;
-    requested_duration_seconds: number | null;
-    duration: number | null;
-    cover_url: string | null;
-    signed_url: string | null;
-    storage_path: string | null;
-    mime: string | null;
-    meta: Record<string, unknown> | null;
-    play_url?: string | null;
-  }>>([]);
+  const [tracks, setTracks] = useState<SavedTrack[]>([]);
   const [deleteTrackTarget, setDeleteTrackTarget] = useState<{ id: string; storagePath: string | null } | null>(null);
+
+  // ── Playlists
+  const [playlists, setPlaylists] = useState<Playlist[]>(() => loadPlaylists());
+  const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [editingPlaylist, setEditingPlaylist] = useState<Playlist | null>(null);
+  const [pickerPlaylistId, setPickerPlaylistId] = useState<string | null>(null);
+  const [activePlaylist, setActivePlaylist] = useState<Playlist | null>(null);
+  const [deletePlaylistTarget, setDeletePlaylistTarget] = useState<Playlist | null>(null);
+
+  const persistPlaylists = (pls: Playlist[]) => {
+    setPlaylists(pls);
+    savePlaylists(pls);
+  };
 
   const load = async () => {
     if (!user) { setTracks([]); return; }
@@ -3200,9 +3660,7 @@ function EditorTab() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(60);
-
       if (error) throw error;
-
       const withUrls = (data || [])
         .filter((t: any) => {
           const status = t.meta?.status;
@@ -3239,9 +3697,7 @@ function EditorTab() {
     try {
       const { error: dbError } = await (supabase as any).from('user_music_tracks').delete().eq('id', trackId);
       if (dbError) throw dbError;
-      if (storagePath) {
-        await supabase.storage.from('music').remove([storagePath]).catch(() => {});
-      }
+      if (storagePath) await supabase.storage.from('music').remove([storagePath]).catch(() => {});
       setTracks(prev => prev.filter(t => t.id !== trackId));
       toast.success(isAr ? 'تم الحذف بنجاح' : 'Deleted successfully');
     } catch (e: any) {
@@ -3249,120 +3705,341 @@ function EditorTab() {
     }
   };
 
+  const handleCreatePlaylist = () => {
+    const name = newPlaylistName.trim();
+    if (!name) return;
+    const pl: Playlist = { id: crypto.randomUUID(), name, trackIds: [], createdAt: Date.now() };
+    persistPlaylists([...playlists, pl]);
+    setNewPlaylistName('');
+    setShowCreatePlaylist(false);
+    setEditingPlaylist(pl);
+    setSavedSubTab('playlists');
+    toast.success(isAr ? `تم إنشاء قائمة "${name}"` : `Playlist "${name}" created`);
+  };
+
+  const toggleTrackInPlaylist = (pl: Playlist, trackId: string) => {
+    const has = pl.trackIds.includes(trackId);
+    const updated = { ...pl, trackIds: has ? pl.trackIds.filter(id => id !== trackId) : [...pl.trackIds, trackId] };
+    persistPlaylists(playlists.map(p => p.id === pl.id ? updated : p));
+    setEditingPlaylist(updated);
+  };
+
+  const handleDeletePlaylist = (pl: Playlist) => {
+    persistPlaylists(playlists.filter(p => p.id !== pl.id));
+    if (activePlaylist?.id === pl.id) setActivePlaylist(null);
+    if (editingPlaylist?.id === pl.id) setEditingPlaylist(null);
+    if (pickerPlaylistId === pl.id) setPickerPlaylistId(null);
+    setDeletePlaylistTarget(null);
+    toast.success(isAr ? 'تم حذف القائمة' : 'Playlist deleted');
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-bold">{isAr ? 'مشاريعي' : 'My Tracks'}</h2>
-        <button
-          type="button"
-          onClick={load}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/[0.04] text-muted-foreground hover:text-foreground hover:border-white/20 active:scale-95 transition-all disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
-          {loading ? (isAr ? 'تحديث...' : 'Loading...') : (isAr ? 'تحديث' : 'Refresh')}
-        </button>
+
+      {/* ── Sub-tab nav: My Tracks / My Playlists ── */}
+      <div className="flex items-center gap-2">
+        <nav className="flex gap-1.5 p-1 rounded-xl bg-[#ffffff] dark:bg-white/[0.04] border border-[#d9dde7] dark:border-white/10 shadow-[0_6px_18px_rgba(6,5,65,0.08)] dark:shadow-none flex-1">
+          {([
+            { key: 'tracks' as const, labelEn: 'My Tracks', labelAr: 'مقاطعي', icon: Music },
+            { key: 'playlists' as const, labelEn: 'My Playlists', labelAr: 'قوائمي', icon: ListMusic },
+          ]).map(({ key, labelEn, labelAr, icon: Icon }) => (
+            <button key={key} type="button" onClick={() => setSavedSubTab(key)}
+              className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${savedSubTab === key ? 'bg-gradient-to-r from-[#f1e7ff] to-[#dff0ff] dark:from-purple-500/20 dark:to-sky-500/20 border border-[#cbb9f3] dark:border-purple-400/20 text-[#060541] dark:text-foreground shadow-[0_4px_12px_rgba(6,5,65,0.08)] dark:shadow-sm' : 'text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground hover:bg-[#f8f9fc] dark:hover:bg-transparent'}`}>
+              <Icon className="h-3 w-3" />
+              {isAr ? labelAr : labelEn}
+            </button>
+          ))}
+        </nav>
+
+        {/* Actions row */}
+        {savedSubTab === 'tracks' && (
+          <button type="button" onClick={load} disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-[#ffffff] dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.06)] dark:shadow-none text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20 active:scale-95 transition-all disabled:opacity-50">
+            <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? (isAr ? 'تحديث...' : 'Loading...') : (isAr ? 'تحديث' : 'Refresh')}
+          </button>
+        )}
+        {savedSubTab === 'playlists' && (
+          <button type="button" onClick={() => setShowCreatePlaylist(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9c5f3] dark:border-purple-400/20 bg-[#f3e8ff] dark:bg-purple-500/10 text-[#7c3aed] dark:text-purple-300 shadow-[0_4px_12px_rgba(124,58,237,0.10)] dark:shadow-none hover:bg-[#eadcff] dark:hover:bg-purple-500/20 active:scale-95 transition-all">
+            <Plus className="h-3 w-3" />
+            {isAr ? 'قائمة جديدة' : 'New Playlist'}
+          </button>
+        )}
       </div>
 
-      {tracks.length === 0 && !loading ? (
-        <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-10 flex flex-col items-center gap-3 text-center">
-          <div className="w-12 h-12 rounded-full bg-[#f7f8fc] dark:bg-white/[0.05] border border-[#e4e7ef] dark:border-transparent flex items-center justify-center">
-            <Music className="h-6 w-6 text-muted-foreground/40" />
+      {/* ── Create Playlist Modal (inline) ── */}
+      {showCreatePlaylist && (
+        <div className="rounded-2xl border border-[#d9dde7] dark:border-purple-400/20 bg-gradient-to-br from-[#ffffff] via-[#faf7ff] to-[#f4f8ff] dark:from-purple-900/20 dark:to-sky-900/10 p-4 space-y-3 shadow-[0_12px_32px_rgba(6,5,65,0.10)] dark:shadow-[0_8px_32px_rgba(128,0,255,0.15)]">
+          <p className="text-sm font-bold text-foreground">{isAr ? 'قائمة تشغيل جديدة' : 'New Playlist'}</p>
+          <input
+            autoFocus
+            type="text"
+            value={newPlaylistName}
+            onChange={e => setNewPlaylistName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleCreatePlaylist()}
+            placeholder={isAr ? 'اسم القائمة...' : 'Playlist name...'}
+            className="w-full px-3 py-2 rounded-xl bg-[#ffffff] dark:bg-white/[0.06] border border-[#d9dde7] dark:border-white/10 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-[#bba4f0] dark:focus:border-purple-400/40 shadow-[inset_0_1px_2px_rgba(6,5,65,0.04)] dark:shadow-none"
+          />
+          <div className="flex gap-2">
+            <button onClick={handleCreatePlaylist} disabled={!newPlaylistName.trim()}
+              className="flex-1 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-purple-500 to-sky-500 text-white active:scale-95 transition-all disabled:opacity-40">
+              {isAr ? 'إنشاء' : 'Create'}
+            </button>
+            <button onClick={() => { setShowCreatePlaylist(false); setNewPlaylistName(''); }}
+              className="px-4 py-2 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-[#ffffff] dark:bg-transparent text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20 active:scale-95 transition-all">
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </button>
           </div>
-          <p className="text-sm text-muted-foreground/80 dark:text-muted-foreground/60">{isAr ? 'لا توجد مقاطع محفوظة بعد.' : 'No saved tracks yet.'}</p>
-          <p className="text-xs text-muted-foreground/60 dark:text-muted-foreground/40">{isAr ? 'أنشئ موسيقى ثم احفظ المقاطع التي تريدها هنا.' : 'Generate music, then save the tracks you want here.'}</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {tracks.map((t) => {
-            const durationSec = t.duration ?? t.requested_duration_seconds ?? null;
-            const durationLabel = durationSec
-              ? `${Math.floor(durationSec / 60)}:${String(Math.round(durationSec % 60)).padStart(2, '0')}`
-              : null;
-            const trackTitle = t.title || (t.prompt ? t.prompt.slice(0, 40) : (isAr ? 'مقطع موسيقي' : 'Music Track'));
-            const styleTags: string[] = t.include_styles ?? [];
-            const metaTags = (t.meta as any)?.tags as string | null;
-
-            return (
-              <div key={t.id}
-                className="relative overflow-hidden rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-gradient-to-br from-[#ffffff] via-[#f8f9fc] to-[#f3f5fb] dark:from-white/[0.04] dark:to-white/[0.02] shadow-[0_12px_32px_rgba(6,5,65,0.10)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]"
-              >
-                <div className="p-4 flex gap-4 items-start">
-                  {/* Cover art */}
-                  <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-gradient-to-br from-sky-100 to-purple-100 dark:from-sky-900/40 dark:to-purple-900/40 border border-[#d9dde7] dark:border-white/10 shadow-md">
-                    {t.cover_url ? (
-                      <img src={t.cover_url} alt={trackTitle} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Music className="h-6 w-6 text-sky-400/50" />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0 space-y-1.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-bold text-sm text-foreground truncate leading-tight">{trackTitle}</p>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {durationLabel && (
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-400/20">
-                            {durationLabel}
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          aria-label={isAr ? 'حذف' : 'Delete'}
-                          onClick={() => setDeleteTrackTarget({ id: t.id, storagePath: t.storage_path })}
-                          className="p-1 rounded-lg text-muted-foreground/40 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Tags */}
-                    {(styleTags.length > 0 || metaTags) && (
-                      <div className="flex flex-wrap gap-1">
-                        {(metaTags ? [metaTags] : styleTags).slice(0, 3).map((tag, i) => (
-                          <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-[#f7f8fc] dark:bg-white/[0.06] text-muted-foreground/80 dark:text-muted-foreground/70 border border-[#e4e7ef] dark:border-white/[0.06]">
-                            {typeof tag === 'string' ? tag.slice(0, 20) : tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    <p className="text-[10px] text-muted-foreground/40">
-                      {new Date(t.created_at).toLocaleDateString(isAr ? 'ar' : 'en', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Player + actions */}
-                {t.play_url && (
-                  <div className="px-4 pb-4 space-y-3">
-                    <AudioPlayer src={t.play_url} className="w-full" />
-                    <div className="flex items-center gap-2 justify-end flex-wrap">
-                      <button
-                        type="button"
-                        onPointerUp={() => handleDownload(t.play_url || '', `wakti-music-${t.id}.mp3`)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:shadow-none text-muted-foreground hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20 active:scale-95 transition-all"
-                      >
-                        <RefreshCw className="h-3 w-3" />{isAr ? 'تنزيل' : 'Download'}
-                      </button>
-                      <ShareButton
-                        size="sm"
-                        shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${t.id}` : ''}
-                        shareTitle={isAr ? 'استمع إلى موسيقى من وقتي 🎵' : 'Listen to my Wakti music 🎵'}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
         </div>
       )}
 
+      {/* ── Active Playlist Player ── */}
+      {activePlaylist && (
+        <PlaylistPlayer
+          playlist={activePlaylist}
+          tracks={tracks}
+          isAr={isAr}
+          onClose={() => setActivePlaylist(null)}
+        />
+      )}
+
+      {/* ══ MY TRACKS TAB ══════════════════════════════════════════════════════ */}
+      {savedSubTab === 'tracks' && (
+        <>
+          {tracks.length === 0 && !loading ? (
+            <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-10 flex flex-col items-center gap-3 text-center">
+              <div className="w-12 h-12 rounded-full bg-[#f7f8fc] dark:bg-white/[0.05] border border-[#e4e7ef] dark:border-transparent flex items-center justify-center">
+                <Music className="h-6 w-6 text-muted-foreground/40" />
+              </div>
+              <p className="text-sm text-muted-foreground/80 dark:text-muted-foreground/60">{isAr ? 'لا توجد مقاطع محفوظة بعد.' : 'No saved tracks yet.'}</p>
+              <p className="text-xs text-muted-foreground/60 dark:text-muted-foreground/40">{isAr ? 'أنشئ موسيقى ثم احفظ المقاطع التي تريدها هنا.' : 'Generate music, then save the tracks you want here.'}</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {tracks.map((t) => {
+                const durationSec = t.duration ?? t.requested_duration_seconds ?? null;
+                const durationLabel = durationSec
+                  ? `${Math.floor(durationSec / 60)}:${String(Math.round(durationSec % 60)).padStart(2, '0')}`
+                  : null;
+                const trackTitle = t.title || (t.prompt ? t.prompt.slice(0, 40) : (isAr ? 'مقطع موسيقي' : 'Music Track'));
+                const styleTags: string[] = t.include_styles ?? [];
+                const metaTags = (t.meta as any)?.tags as string | null;
+
+                return (
+                  <div key={t.id}
+                    className="relative overflow-hidden rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-gradient-to-br from-[#ffffff] via-[#f8f9fc] to-[#f3f5fb] dark:from-white/[0.04] dark:to-white/[0.02] shadow-[0_12px_32px_rgba(6,5,65,0.10)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]"
+                  >
+                    <div className="p-4 flex gap-4 items-start">
+                      <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-gradient-to-br from-sky-100 to-purple-100 dark:from-sky-900/40 dark:to-purple-900/40 border border-[#d9dde7] dark:border-white/10 shadow-md">
+                        {t.cover_url
+                          ? <img src={t.cover_url} alt={trackTitle} className="w-full h-full object-cover" />
+                          : <div className="w-full h-full flex items-center justify-center"><Music className="h-6 w-6 text-sky-400/50" /></div>
+                        }
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-bold text-sm text-foreground truncate leading-tight">{trackTitle}</p>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {durationLabel && (
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-400/20">{durationLabel}</span>
+                            )}
+                            <button type="button" aria-label={isAr ? 'حذف' : 'Delete'}
+                              onClick={() => setDeleteTrackTarget({ id: t.id, storagePath: t.storage_path })}
+                              className="p-1 rounded-lg text-muted-foreground/40 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                        {(styleTags.length > 0 || metaTags) && (
+                          <div className="flex flex-wrap gap-1">
+                            {(metaTags ? [metaTags] : styleTags).slice(0, 3).map((tag, i) => (
+                              <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-[#f7f8fc] dark:bg-white/[0.06] text-muted-foreground/80 dark:text-muted-foreground/70 border border-[#e4e7ef] dark:border-white/[0.06]">
+                                {typeof tag === 'string' ? tag.slice(0, 20) : tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <p className="text-[10px] text-muted-foreground/40">
+                          {new Date(t.created_at).toLocaleDateString(isAr ? 'ar' : 'en', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                      </div>
+                    </div>
+                    {t.play_url && (
+                      <div className="px-4 pb-4 space-y-3">
+                        <AudioPlayer src={t.play_url} className="w-full" />
+                        <div className="flex items-center gap-2 justify-end flex-wrap">
+                          <button type="button"
+                            onPointerUp={() => handleDownload(t.play_url || '', `wakti-music-${t.id}.mp3`)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:shadow-none text-muted-foreground hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20 active:scale-95 transition-all">
+                            <RefreshCw className="h-3 w-3" />{isAr ? 'تنزيل' : 'Download'}
+                          </button>
+                          <ShareButton size="sm"
+                            shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${t.id}` : ''}
+                            shareTitle={isAr ? 'استمع إلى موسيقى من وقتي 🎵' : 'Listen to my Wakti music 🎵'}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ══ MY PLAYLISTS TAB ═══════════════════════════════════════════════════ */}
+      {savedSubTab === 'playlists' && (
+        <div className="space-y-3">
+          {playlists.length === 0 ? (
+            <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-[#ffffff] dark:bg-white/[0.02] shadow-[0_12px_32px_rgba(6,5,65,0.08)] dark:shadow-none p-10 flex flex-col items-center gap-3 text-center">
+              <div className="w-12 h-12 rounded-full bg-[#f7f8fc] dark:bg-white/[0.05] border border-[#e4e7ef] dark:border-transparent flex items-center justify-center">
+                <ListMusic className="h-6 w-6 text-muted-foreground/40" />
+              </div>
+              <p className="text-sm text-muted-foreground/60">{isAr ? 'لا توجد قوائم تشغيل بعد.' : 'No playlists yet.'}</p>
+              <button onClick={() => setShowCreatePlaylist(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-[#f1e7ff] to-[#dff0ff] dark:from-purple-500/20 dark:to-sky-500/20 border border-[#d9c5f3] dark:border-purple-400/20 text-[#7c3aed] dark:text-purple-300 hover:from-[#eadcff] hover:to-[#d6ebff] dark:hover:from-purple-500/30 dark:hover:to-sky-500/30 active:scale-95 transition-all shadow-[0_4px_12px_rgba(124,58,237,0.10)] dark:shadow-none">
+                <Plus className="h-3 w-3" />{isAr ? 'أنشئ قائمتك الأولى' : 'Create your first playlist'}
+              </button>
+            </div>
+          ) : (
+            playlists.map(pl => {
+              const isOpen = editingPlaylist?.id === pl.id;
+              const pickerOpen = pickerPlaylistId === pl.id;
+              const plTracks = pl.trackIds.map(id => tracks.find(t => t.id === id)).filter(Boolean) as SavedTrack[];
+              return (
+                <div key={pl.id} className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-gradient-to-br from-[#ffffff] via-[#f8f9fc] to-[#f3f5fb] dark:from-white/[0.04] dark:to-white/[0.03] shadow-[0_12px_32px_rgba(6,5,65,0.10)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)] overflow-hidden">
+                  {/* Playlist header */}
+                  <div className="flex items-center gap-3 p-3 border-b border-[#eef1f6] dark:border-transparent">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#efe7ff] to-[#dff0ff] dark:from-purple-900/50 dark:to-sky-900/50 border border-[#d9c5f3] dark:border-purple-400/20 flex items-center justify-center flex-shrink-0 shadow-[0_4px_12px_rgba(124,58,237,0.10)] dark:shadow-none">
+                      <ListMusic className="h-4 w-4 text-purple-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-foreground truncate">{pl.name}</p>
+                      <p className="text-[10px] text-muted-foreground/50">{pl.trackIds.length} {isAr ? 'مقاطع' : 'tracks'}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {pl.trackIds.length > 0 && (
+                        <button onClick={() => setActivePlaylist(activePlaylist?.id === pl.id ? null : pl)}
+                          title={isAr ? 'تشغيل القائمة' : 'Play playlist'}
+                          className={`p-2 rounded-xl transition-all active:scale-95 ${activePlaylist?.id === pl.id ? 'bg-[#efe7ff] dark:bg-purple-500/20 text-[#7c3aed] dark:text-purple-300 border border-[#d9c5f3] dark:border-transparent shadow-[0_4px_12px_rgba(124,58,237,0.10)] dark:shadow-none' : 'text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground bg-[#ffffff] dark:bg-transparent border border-[#e5e7eb] dark:border-transparent hover:bg-[#f8f9fc] dark:hover:bg-white/[0.06]'}`}>
+                          <Play className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setPickerPlaylistId(pickerOpen ? null : pl.id)}
+                        title={isAr ? 'إضافة أو إزالة المقاطع' : 'Add or remove tracks'}
+                        className={`p-2 rounded-xl transition-all active:scale-95 ${pickerOpen ? 'bg-[#dff0ff] dark:bg-sky-500/20 text-[#0284c7] dark:text-sky-300 border border-[#bfdbfe] dark:border-transparent shadow-[0_4px_12px_rgba(2,132,199,0.10)] dark:shadow-none' : 'text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground bg-[#ffffff] dark:bg-transparent border border-[#e5e7eb] dark:border-transparent hover:bg-[#f8f9fc] dark:hover:bg-white/[0.06]'}`}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => setEditingPlaylist(isOpen ? null : pl)}
+                        title={isAr ? 'إظهار تفاصيل القائمة' : 'Show playlist details'}
+                        className="p-2 rounded-xl text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground bg-[#ffffff] dark:bg-transparent border border-[#e5e7eb] dark:border-transparent hover:bg-[#f8f9fc] dark:hover:bg-white/[0.06] transition-all active:scale-95">
+                        {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      </button>
+                      <button onClick={() => setDeletePlaylistTarget(pl)}
+                        title={isAr ? 'حذف القائمة' : 'Delete playlist'}
+                        className="p-2 rounded-xl text-muted-foreground/40 bg-[#ffffff] dark:bg-transparent border border-[#e5e7eb] dark:border-transparent hover:text-red-400 hover:bg-red-500/10 transition-colors active:scale-95">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Expand: playlist details + controls */}
+                  {isOpen && (
+                    <div className="border-t border-[#eef1f6] dark:border-white/10 p-3 space-y-2 bg-[#fcfefd] dark:bg-transparent">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => setActivePlaylist(activePlaylist?.id === pl.id ? null : pl)}
+                          disabled={pl.trackIds.length === 0}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 disabled:opacity-40 ${activePlaylist?.id === pl.id ? 'border-[#d9c5f3] dark:border-purple-400/30 bg-[#efe7ff] dark:bg-purple-500/15 text-[#7c3aed] dark:text-purple-300 shadow-[0_4px_12px_rgba(124,58,237,0.10)] dark:shadow-none' : 'border-[#d9dde7] dark:border-white/10 bg-[#ffffff] dark:bg-transparent text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20'}`}
+                        >
+                          <Play className="h-3 w-3" />
+                          {activePlaylist?.id === pl.id ? (isAr ? 'يتم التشغيل' : 'Playing') : (isAr ? 'تشغيل' : 'Play')}
+                        </button>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-[#ffffff] dark:bg-transparent text-[#6b7280] dark:text-muted-foreground shadow-[0_2px_8px_rgba(6,5,65,0.04)] dark:shadow-none">
+                          <Shuffle className="h-3 w-3" />
+                          {isAr ? 'عشوائي' : 'Shuffle'}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-[#ffffff] dark:bg-transparent text-[#6b7280] dark:text-muted-foreground shadow-[0_2px_8px_rgba(6,5,65,0.04)] dark:shadow-none">
+                          <Repeat className="h-3 w-3" />
+                          {isAr ? 'بالترتيب / تكرار' : 'Ordered / Loop'}
+                        </span>
+                      </div>
+
+                      <p className="text-[10px] text-muted-foreground/60 font-semibold uppercase tracking-wider">
+                        {isAr ? 'مقاطع هذه القائمة' : 'Tracks in this playlist'}
+                      </p>
+                      {plTracks.length === 0 ? (
+                        <p className="text-xs text-muted-foreground/40">{isAr ? 'لا توجد مقاطع في هذه القائمة بعد.' : 'No tracks in this playlist yet.'}</p>
+                      ) : (
+                        <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                          {plTracks.map(t => {
+                            const tTitle = t.title || (isAr ? 'مقطع موسيقي' : 'Music Track');
+                            return (
+                              <div key={t.id}
+                                className="w-full flex items-center gap-2 px-2 py-2 rounded-xl text-left bg-[#ffffff] dark:bg-purple-500/15 border border-[#d9dde7] dark:border-purple-400/20 shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:shadow-none">
+                                <div className="w-4 h-4 rounded-md border flex items-center justify-center flex-shrink-0 transition-colors bg-[#8b5cf6] dark:bg-purple-500 border-[#7c3aed] dark:border-purple-400">
+                                  <Check className="h-2.5 w-2.5 text-white" />
+                                </div>
+                                {t.cover_url
+                                  ? <img src={t.cover_url} alt={tTitle} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
+                                  : <div className="w-7 h-7 rounded-lg bg-[#f7f8fc] dark:bg-white/[0.06] border border-[#e4e7ef] dark:border-transparent flex items-center justify-center flex-shrink-0"><Music className="h-3 w-3 text-muted-foreground/40" /></div>
+                                }
+                                <span className="text-xs text-foreground truncate flex-1">{tTitle}</span>
+                                <button
+                                  onClick={() => toggleTrackInPlaylist(pl, t.id)}
+                                  title={isAr ? 'إزالة من القائمة' : 'Remove from playlist'}
+                                  className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Separate library picker only when explicitly requested */}
+                  {pickerOpen && (
+                    <div className="border-t border-[#eef1f6] dark:border-white/10 p-3 space-y-2 bg-[#f8fafc] dark:bg-white/[0.02]">
+                      <p className="text-[10px] text-muted-foreground/60 font-semibold uppercase tracking-wider">
+                        {isAr ? 'أضف من مقاطعك المحفوظة' : 'Add from your saved tracks'}
+                      </p>
+                      {tracks.length === 0 ? (
+                        <p className="text-xs text-muted-foreground/40">{isAr ? 'لا توجد مقاطع محفوظة.' : 'No saved tracks.'}</p>
+                      ) : (
+                        <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                          {tracks.filter(t => !pl.trackIds.includes(t.id)).map(t => {
+                            const tTitle = t.title || (isAr ? 'مقطع موسيقي' : 'Music Track');
+                            return (
+                              <button key={t.id} onClick={() => toggleTrackInPlaylist(pl, t.id)}
+                                className="w-full flex items-center gap-2 px-2 py-2 rounded-xl text-left transition-all active:scale-[0.98] bg-[#ffffff] dark:bg-transparent border border-[#e5e7eb] dark:border-transparent hover:bg-[#f8f9fc] dark:hover:bg-white/[0.04] shadow-[0_2px_8px_rgba(6,5,65,0.04)] dark:shadow-none">
+                                <div className="w-4 h-4 rounded-md border flex items-center justify-center flex-shrink-0 transition-colors border-[#d1d5db] dark:border-white/20" />
+                                {t.cover_url
+                                  ? <img src={t.cover_url} alt={tTitle} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
+                                  : <div className="w-7 h-7 rounded-lg bg-[#f7f8fc] dark:bg-white/[0.06] border border-[#e4e7ef] dark:border-transparent flex items-center justify-center flex-shrink-0"><Music className="h-3 w-3 text-muted-foreground/40" /></div>
+                                }
+                                <span className="text-xs text-foreground truncate flex-1">{tTitle}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* ── Delete track dialog ── */}
       <AlertDialog open={!!deleteTrackTarget} onOpenChange={(open) => !open && setDeleteTrackTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -3374,6 +4051,24 @@ function EditorTab() {
           <AlertDialogFooter>
             <AlertDialogCancel>{isAr ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isAr ? 'حذف' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Delete playlist dialog ── */}
+      <AlertDialog open={!!deletePlaylistTarget} onOpenChange={(open) => !open && setDeletePlaylistTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{isAr ? 'حذف القائمة' : 'Delete Playlist'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {isAr ? `هل تريد حذف قائمة "${deletePlaylistTarget?.name}"؟ لا يمكن التراجع.` : `Delete playlist "${deletePlaylistTarget?.name}"? This cannot be undone.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{isAr ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deletePlaylistTarget && handleDeletePlaylist(deletePlaylistTarget)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {isAr ? 'حذف' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>

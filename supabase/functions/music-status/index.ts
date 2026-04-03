@@ -112,9 +112,11 @@ serve(async (req) => {
     );
     const totalRows = (dbRows ?? []).length;
 
-    // Only return completed if ALL rows for this task are done
-    // (KIE generates 2 variants — wait for both before resolving)
-    if (completedRows.length > 0 && completedRows.length >= totalRows && totalRows > 0) {
+    // Return completed from DB if we have 2+ variants done, OR if we have been
+    // waiting (totalRows >= 2) and at least 1 is done — avoids race where
+    // second insert hasn't landed yet on a very early poll.
+    // We prefer waiting for both, but if totalRows >= 2 and completedRows >= 2 return all.
+    if (completedRows.length >= 2 && totalRows >= 2) {
       return new Response(JSON.stringify({
         status: "completed",
         tracks: completedRows.map((r: any) => ({
@@ -127,6 +129,9 @@ serve(async (req) => {
         })),
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
+    // If only 1 variant completed in DB but we know there should be 2,
+    // keep polling KIE — don't return early with partial results.
 
     // Check if marked as failed
     const failedRow = (dbRows ?? []).find((r: any) => r.meta?.status === "failed");

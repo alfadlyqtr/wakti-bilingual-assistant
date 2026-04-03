@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback, useId } from 'react';
 import { Play, Pause, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -10,6 +10,7 @@ interface AudioPlayerProps {
 
 export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
   const { language } = useTheme();
+  const playerId = useId();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const initializedSrcRef = useRef<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -141,6 +142,18 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
     };
   }, [cleanSrc, language]);
 
+  // Listen for other players starting — pause this one if it's playing
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ playerId: string }>).detail;
+      if (detail.playerId !== playerId && audioRef.current && !audioRef.current.paused) {
+        audioRef.current.pause();
+      }
+    };
+    window.addEventListener('wakti-audio-play', handler);
+    return () => window.removeEventListener('wakti-audio-play', handler);
+  }, [playerId]);
+
   const togglePlay = () => {
     const audio = ensureAudio();
     if (!audio) return;
@@ -148,6 +161,8 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
     if (isPlaying) {
       audio.pause();
     } else {
+      // Stop all other players before starting this one
+      window.dispatchEvent(new CustomEvent('wakti-audio-play', { detail: { playerId } }));
       setIsLoading(true);
       audio.play().catch(err => {
         console.error('[AudioPlayer] Play error:', err);

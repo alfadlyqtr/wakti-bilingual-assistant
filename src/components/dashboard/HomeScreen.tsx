@@ -1974,8 +1974,17 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         const s = (data?.settings as any);
 
         // ── Widgets ──
-        if (s?.homescreenWidgets) {
-          const clamped = clampHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false, ...s.homescreenWidgets });
+        // Read from homescreen.homescreenWidgets (nested) — same path as save.
+        // Fall back to root s.homescreenWidgets for migration only.
+        // Strip ALL legacy/unknown keys so they can't inflate the widget count.
+        const VALID_WIDGET_KEYS = new Set(['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget','showNavWidget']);
+        const rawWidgets = s?.homescreen?.homescreenWidgets || s?.homescreenWidgets;
+        if (rawWidgets) {
+          const stripped: Record<string, boolean> = {};
+          for (const k of Object.keys(rawWidgets)) {
+            if (VALID_WIDGET_KEYS.has(k)) stripped[k] = rawWidgets[k];
+          }
+          const clamped = clampHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false, ...stripped });
           const clampedJson = JSON.stringify(clamped);
           setHsWidgets(prev => JSON.stringify(prev) === clampedJson ? prev : clamped);
           localStorage.setItem(LS_WIDGETS_KEY(), clampedJson);
@@ -1983,8 +1992,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
         // ── Unified grid ──
         if (Array.isArray(s?.homescreen?.unifiedGrid) && s.homescreen.unifiedGrid.length > 0) {
-          const widgetState = s.homescreenWidgets
-            ? clampHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false, ...s.homescreenWidgets })
+          const rawW = s?.homescreen?.homescreenWidgets || s?.homescreenWidgets;
+          const strippedW: Record<string, boolean> = {};
+          if (rawW) { for (const k of Object.keys(rawW)) { if (VALID_WIDGET_KEYS.has(k)) strippedW[k] = rawW[k]; } }
+          const widgetState = rawW
+            ? clampHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false, ...strippedW })
             : { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
           const saved: string[] = s.homescreen.unifiedGrid;
           const enabledWidgets = new Set(WIDGET_IDS.filter(k => widgetState[k as keyof typeof widgetState]).map(k => `widget::${k}`));
