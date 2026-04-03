@@ -2284,27 +2284,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         return;
       }
 
-      // Auto-select model: V4 for Arabic/GCC styles (better vocals + pronunciation), V5 for everything else
-      const ARABIC_GCC_STYLES = new Set([
-        // GCC Core
-        'GCC Pop','Khaleeji Pop','GCC Romantic','GCC Elegant','GCC Party','GCC Wedding',
-        // GCC Radio & Crossover
-        'GCC Radio Pop','GCC Dance Pop','GCC Electro Pop','GCC Synth Pop','Modern Khaleeji Fusion','English GCC Pop',
-        // GCC Rich & Event
-        'GCC R&B Pop','Luxury GCC Pop','Cinematic GCC','GCC Anthem','National Event GCC',
-        // GCC Heritage
-        'GCC Traditional','Sheilat','Samri','Jalsa','Liwa','GCC Shaabi',
-        // Other Arabic
-        'Egyptian','Egyptian Shaabi','Levant Pop','Arabic Pop','Anasheed',
-        // Arabic UI labels
-        'بوب خليجي','خليجي عصري','خليجي رومانسي','خليجي أنيق','خليجي حفلات','خليجي أعراس',
-        'خليجي إذاعي','خليجي دانس','خليجي إلكتروني','خليجي سينث بوب','فيوجن خليجي','إنجليزي بطابع خليجي',
-        'خليجي آر أند بي','خليجي فاخر','خليجي سينمائي','خليجي جماهيري','مناسبات وطنية خليجية',
-        'خليجي تراثي','شيلات','سامري','جلسة','ليوان','شعبي خليجي',
-        'مصري','شعبي مصري','مهرجانات','شامي','بوب عربي','أناشيد',
-      ]);
-      const autoModel = includeTags.some((t) => ARABIC_GCC_STYLES.has(t)) ? 'V4' : 'V5';
-
       const instrumental = vocalType === 'none';
       const vocalGender: 'm' | 'f' | undefined =
         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
@@ -2316,10 +2295,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         style: kieStyle || (language === 'ar' ? 'بوب عربي' : 'pop'),
         customMode: true,
         instrumental,
-        model: autoModel,
+        model: 'V5_5',
         duration_seconds: durationTarget,
-        personaModel: 'style_persona',
-        audioWeight: 1,
       };
 
       if (!instrumental) invokeBody.prompt = lyricsText.trim() || styleText.trim();
