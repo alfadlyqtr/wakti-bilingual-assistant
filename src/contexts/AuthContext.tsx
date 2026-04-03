@@ -10,8 +10,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { purchasesLogin, purchasesLogout, purchasesWarmup } from '@/integrations/natively/purchasesBridge';
 import { setNotificationUser, removeNotificationUser, requestNotificationPermission, setupNotificationClickHandler } from '@/integrations/natively/notificationsBridge';
-import { syncLocalNotifications, clearLocalNotificationsOnLogout } from '@/services/localNotificationSyncService';
-import { initLocalNotifications } from '@/integrations/natively/localNotificationsBridge';
 
 interface AuthContextType {
   user: User | null;
@@ -76,11 +74,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Warm up Natively Purchases SDK if present (no-op on web)
   useEffect(() => {
     try { purchasesWarmup(); } catch {}
-  }, []);
-
-  // Initialize local notifications Service Worker on app mount
-  useEffect(() => {
-    initLocalNotifications().catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -338,13 +331,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           console.log('[AuthContext] Setting notification user ID (attempt 2 - retry):', user.id);
           setNotificationUser(user.id);
         }, 6000);
-
-        // Sync local notifications independently of push
-        setTimeout(() => {
-          syncLocalNotifications(user.id).catch((err) =>
-            console.warn('[AuthContext] Local notification sync failed:', err)
-          );
-        }, 3000);
         
         // CRITICAL: Always check subscription status via RevenueCat on app launch
         // This bypasses stale localStorage cache and ensures accurate subscription state
@@ -422,8 +408,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Detach user identity from RevenueCat on native builds (no-op on web)
     try { purchasesLogout(); } catch {}
     try { removeNotificationUser(); } catch {}
-    // Clear local notifications on logout
-    try { clearLocalNotificationsOnLogout(); } catch {}
     // OneSignal Web Push: logout on explicit sign out
     try {
       window.OneSignalDeferred = window.OneSignalDeferred || [];

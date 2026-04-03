@@ -1,12 +1,6 @@
 // @ts-nocheck
 import { supabase, ensurePassport, getCurrentUserId } from "@/integrations/supabase/client";
 import { TRServiceCache } from "./trServiceCache";
-import {
-  scheduleTaskNotification,
-  scheduleReminderNotification,
-  cancelTaskNotification,
-  cancelReminderNotification,
-} from "@/services/localNotificationService";
 
 type TRPushKind = 'tr_reminder_due' | 'tr_task_due';
 
@@ -320,9 +314,6 @@ export class TRService {
       }
     } catch {}
 
-    // Schedule local notification (separate from push)
-    try { scheduleTaskNotification(data, userId); } catch {}
-
     return data;
   }
 
@@ -361,13 +352,6 @@ export class TRService {
       }
     } catch {}
 
-    // Reschedule local notification (cancel old, schedule new if time exists)
-    try {
-      cancelTaskNotification(id);
-      const userId = await getCurrentUserId();
-      if (userId) scheduleTaskNotification(data, userId);
-    } catch {}
-
     return data;
   }
 
@@ -378,9 +362,6 @@ export class TRService {
         await this.cancelScheduledTRPush({ userId, kind: 'tr_task_due', itemId: id });
       }
     } catch {}
-
-    // Cancel local notification
-    try { cancelTaskNotification(id); } catch {}
 
     const { error } = await supabase
       .from('tr_tasks')
@@ -554,9 +535,6 @@ export class TRService {
       }
     } catch {}
 
-    // Schedule local notification (separate from push)
-    try { scheduleReminderNotification(data, userId); } catch {}
-
     return data;
   }
 
@@ -592,13 +570,6 @@ export class TRService {
           });
         }
       }
-    } catch {}
-
-    // Reschedule local notification (cancel old, schedule new if time exists)
-    try {
-      cancelReminderNotification(id);
-      const userId = await getCurrentUserId();
-      if (userId) scheduleReminderNotification(data, userId);
     } catch {}
 
     return data;
@@ -648,13 +619,6 @@ export class TRService {
         }
       }
     } catch {}
-
-    // Reschedule local notification for snoozed time (cancel old, schedule new)
-    try {
-      cancelReminderNotification(id);
-      const userId = await getCurrentUserId();
-      if (userId) scheduleReminderNotification(data, userId);
-    } catch {}
     
     return data;
   }
@@ -666,9 +630,6 @@ export class TRService {
         await this.cancelScheduledTRPush({ userId, kind: 'tr_reminder_due', itemId: id });
       }
     } catch {}
-
-    // Cancel local notification
-    try { cancelReminderNotification(id); } catch {}
 
     const { error } = await supabase
       .from('tr_reminders')
