@@ -55,6 +55,8 @@ import {
   ChevronUp,
   Film,
   Download,
+  CheckCircle2,
+  Copy,
 } from 'lucide-react';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import StudioImageGenerator from '@/components/studio/StudioImageGenerator';
@@ -1258,19 +1260,63 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         },
         {
           title: 'بوب وحديث',
-          items: ['بوب','آر آند بي','بوب الثمانينات','بوب التسعينات','سينث بوب','إندي بوب','كي-بوب']
+          items: ['بوب','دانس بوب','تين بوب','باور بوب','بوب روك','إندي بوب','آر آند بي','نيو سول','ديسكو معاصر','سينث بوب','إلكترو بوب','بوب الثمانينات','بوب التسعينات','كي-بوب','جي-بوب','لاتن بوب']
+        },
+        {
+          title: 'سول وفنك وديسكو',
+          items: ['سول','نيو سول','فنك','ديسكو','موتاون','نيو جاك سوينج','كوايت ستورم','آر آند بي معاصر']
+        },
+        {
+          title: 'هيب هوب وراب',
+          items: ['هيب هوب','راب','تراب','درِل','بوم باب','راب واعٍ','غانجستا راب','كلاود راب','ساوذرن هيب هوب']
         },
         {
           title: 'إيقاعي وعالمي',
-          items: ['هيب هوب','راب','أفروبيتس','ريغيتون','لاتين','بوليوود']
+          items: ['أفروبيتس','أفروبيت','ريغيتون','لاتين','سالسا','باتشاتا','ميرينغي','تانغو','سامبا','كومبيا','بوسا نوفا','بوليوود','بهانغرا']
         },
         {
-          title: 'فرق وكلاسيك',
-          items: ['روك','روك آند رول','سوفت روك','ميتال ثقيل','كانتري','جاز','سول']
+          title: 'روك',
+          items: ['روك','روك كلاسيك','روك آند رول','سوفت روك','روك بديل','إندي روك','روك تقدمي','روك نفسي','هارد روك','غاراج روك','غلام روك','غرانج','بريت بوب','شوغيز','بوست روك','ماث روك','سيرف روك']
         },
         {
-          title: 'إلكتروني',
-          items: ['لوفاي','هاوس','ديب هاوس','ترانس','تيكنو','دبسْتِب','درَم آند بَيس']
+          title: 'ميتال',
+          items: ['ميتال ثقيل','ثراش ميتال','ديث ميتال','بلاك ميتال','باور ميتال','دووم ميتال','غوثيك ميتال','سيمفوني ميتال','برو ميتال']
+        },
+        {
+          title: 'بانك وإيمو',
+          items: ['بانك روك','بوب بانك','هارد كور بانك','سكا بانك','إيمو','سكريمو']
+        },
+        {
+          title: 'جذور وتراث',
+          items: ['كانتري','كانتري بوب','بلوغراس','فولك','فولك روك','فولك إندي','فولك بوب','أمريكانا','كانتري أوت لاو','كانتري روك']
+        },
+        {
+          title: 'جاز',
+          items: ['جاز','بيباب','سوينج','جاز ناعم','جاز بارد','فيوجن جاز','جاز لاتيني','جاز فنك','هارد باب','جاز حر']
+        },
+        {
+          title: 'بلوز',
+          items: ['بلوز','بلوز دلتا','بلوز شيكاغو','بلوز كهربائي','بلوز روك','تكساس بلوز','جامب بلوز','بوغي ووغي']
+        },
+        {
+          title: 'ريغي',
+          items: ['ريغي','روتس ريغي','دانس هول','سكا','داب','ريغي فيوجن','راغا موفن']
+        },
+        {
+          title: 'كلاسيكي وأوركسترالي',
+          items: ['كلاسيكي','باروك','رومانسي','معاصر كلاسيكي','سيمفوني','أوبرا','موسيقى غرفة','كورال']
+        },
+        {
+          title: 'إلكتروني ودانس',
+          items: ['لوفاي','هاوس','ديب هاوس','تيك هاوس','ترانس','تيكنو','دبسْتِب','درَم آند بَيس','إي دي إم','إلكترو','هارد كور إلكتروني','آيدي إم','أمبيينت','سينث ويف','تشيل ويف','فيبور ويف','غلتش','غريم','يو كي غاراج','إلكترو سوينج','شيبتيون']
+        },
+        {
+          title: 'موسيقى عالمية',
+          items: ['فلامنكو','فادو','سيلتيك','أفروبيت','جوجو نيجيري','بهانغرا','موسيقى عالم']
+        },
+        {
+          title: 'أخرى',
+          items: ['غوسبل','جاز سوينج','بيغ باند','راغتايم','ديسكو','زيديكو','صوت جديد','إيندستريال']
         }
       ];
     }
@@ -1301,27 +1347,59 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       },
       {
         title: 'Pop',
-        items: ['pop','R&B','80s pop','90s pop','Synthpop','Indie Pop','K-Pop','soul','funk','disco']
+        items: ['pop','Dance Pop','Teen Pop','Power Pop','Pop Rock','Indie Pop','Bubblegum Pop','K-Pop','J-Pop','Latin Pop','80s pop','90s pop','Synthpop','Electropop']
+      },
+      {
+        title: 'R&B / Soul / Funk',
+        items: ['R&B','soul','Neo-Soul','Contemporary R&B','Motown','funk','disco','New Jack Swing','Quiet Storm','Blue-eyed Soul']
+      },
+      {
+        title: 'Hip-Hop / Rap',
+        items: ['hip hop','rap','Trap','Drill','Boom Bap','Conscious Hip Hop','Gangsta Rap','East Coast Hip Hop','West Coast Hip Hop','Southern Hip Hop','Alternative Hip Hop','Cloud Rap','Crunk']
       },
       {
         title: 'Urban / World',
-        items: ['hip hop','rap','Afrobeats','Reggaeton','Latin','Salsa','Bossa Nova','Bollywood']
+        items: ['Afrobeats','Afrobeat','Reggaeton','Latin','Salsa','Bachata','Merengue','Tango','Samba','Cumbia','Bossa Nova','Bollywood','Bhangra','Latin Rock']
       },
       {
-        title: 'Rock / Metal',
-        items: ['rock','rock and roll','soft rock','punk rock','alternative rock','indie rock','heavy metal','thrash metal','grunge']
+        title: 'Rock',
+        items: ['rock','Classic Rock','rock and roll','soft rock','Hard Rock','alternative rock','indie rock','Progressive Rock','Psychedelic Rock','Garage Rock','Glam Rock','grunge','Britpop','Shoegaze','Post-Rock','Math Rock','Surf Rock','Dream Pop']
       },
       {
-        title: 'Roots',
-        items: ['country','bluegrass','folk','blues','delta blues','jazz','smooth jazz','swing','classical','gospel']
+        title: 'Metal',
+        items: ['heavy metal','thrash metal','Death Metal','Black Metal','Power Metal','Doom Metal','Gothic Metal','Symphonic Metal','Progressive Metal','Speed Metal']
+      },
+      {
+        title: 'Punk',
+        items: ['punk rock','Pop Punk','Hardcore Punk','Ska Punk','Emo','Screamo','New Wave']
+      },
+      {
+        title: 'Roots / Americana',
+        items: ['country','Country Pop','Outlaw Country','Country Rock','Alternative Country','Honky Tonk','Western Swing','Americana','Contemporary Country','bluegrass','folk','Indie Folk','Folk Rock','Folk Pop','Folk Punk','Protest Folk']
+      },
+      {
+        title: 'Jazz',
+        items: ['jazz','Bebop','swing','smooth jazz','Cool Jazz','Jazz Fusion','Latin Jazz','Jazz Funk','Hard Bop','Acid Jazz','Free Jazz','Big Band']
+      },
+      {
+        title: 'Blues',
+        items: ['blues','delta blues','Chicago Blues','Electric Blues','Blues Rock','Texas Blues','Memphis Blues','Jump Blues','Boogie-Woogie','Country Blues']
       },
       {
         title: 'Reggae',
-        items: ['reggae','ska','dub']
+        items: ['reggae','Roots Reggae','Dancehall','ska','dub','Reggae Fusion','Lovers Rock','Ragga']
       },
       {
-        title: 'Electronic',
-        items: ['Lo-Fi','House','Deep House','Trance','Techno','Dubstep','Drum & Bass','ambient','synthwave','chillwave']
+        title: 'Classical / Orchestral',
+        items: ['classical','Baroque','Romantic','Contemporary Classical','Symphony','Opera','Chamber Music','Choral','Gregorian Chant']
+      },
+      {
+        title: 'Electronic / Dance',
+        items: ['Lo-Fi','House','Deep House','Tech House','Trance','Techno','Dubstep','Drum & Bass','EDM','Electro','Hardcore','IDM','ambient','synthwave','chillwave','Vaporwave','Glitch','Witch House','Grime','UK Garage','2-Step','Electro Swing','Chiptune']
+      },
+      {
+        title: 'World',
+        items: ['Flamenco','Fado','Celtic','gospel','Ragtime','Zydeco','Cajun','Industrial','Bhangra','Afrobeat']
       }
     ];
   }, [language]);
@@ -1429,93 +1507,229 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       };
     }
     return {
-      // GCC Core — instruments match style prompt exactly
-      'GCC Pop': ['tabla', 'darbuka', 'frame drum', 'electric guitar', 'synth pad'],
-      'GCC Romantic': ['ney', 'violin', 'piano', 'cello', 'soft percussion'],
-      'GCC Elegant': ['qanun', 'ney', 'violin', 'piano', 'soft percussion'],
-      'GCC Party': ['tabla', 'darbuka', 'frame drum', 'hand claps', 'synth pad'],
-      'GCC Wedding': ['tabla', 'darbuka', 'daff', 'hand claps', 'group chant'],
-      // GCC Radio & Crossover
-      'GCC Radio Pop': ['electric guitar', 'bass guitar', 'drum kit', 'synth pad', 'piano'],
-      'GCC Dance Pop': ['synth lead', 'bass guitar', 'drum kit', 'tabla', 'hand claps'],
-      'GCC Electro Pop': ['synth lead', 'synth pad', 'drum kit', 'bass guitar', 'tabla'],
-      'GCC Synth Pop': ['synth lead', 'synth pad', 'drum kit', 'bass guitar'],
-      'Modern Khaleeji Fusion': ['electric guitar', 'bass guitar', 'drum kit', 'synth pad', 'tabla'],
-      'English GCC Pop': ['synth lead', 'bass guitar', 'drum kit', 'gulf percussion', 'electric guitar'],
-      // GCC Rich & Event
-      'GCC R&B Pop': ['electric piano', 'bass guitar', 'drum kit', 'synth pad', 'tabla'],
-      'Luxury GCC Pop': ['piano', 'strings', 'bass guitar', 'synth pad', 'soft percussion'],
-      'Cinematic GCC': ['strings', 'piano', 'synth pad', 'drum kit', 'choir'],
-      'GCC Anthem': ['hand claps', 'choir', 'tabla', 'drum kit', 'synth pad'],
-      'National Event GCC': ['choir', 'strings', 'drum kit', 'hand claps', 'synth pad'],
-      // GCC Heritage
-      'GCC Traditional': ['qanun', 'ney', 'tabla', 'riq', 'rebab'],
-      'Sheilat': ['frame drum', 'tabla', 'darbuka', 'group chant'],
-      'Samri': ['frame drum', 'tabla', 'darbuka', 'rebab'],
-      'Jalsa': ['oud', 'qanun', 'tabla', 'riq', 'ney'],
-      'Liwa': ['frame drum', 'tabla', 'darbuka', 'gulf percussion'],
-      'GCC Shaabi': ['oud', 'qanun', 'tabla', 'riq', 'ney'],
-      'Zar': ['tanbura', 'frame drum', 'brass cymbals', 'clay drum'],
-      'Ardah': ['tabl drum', 'darbuka', 'tabl turki'],
-      'Khaleeji Trap': ['808 bass', 'trap hi-hats', 'oud', 'synth lead', 'mirwas'],
-      // Other Arabic
+      // ── GCC Core ──
+      // GCC Pop = modern Gulf pop + hip-hop energy: 808, trap hi-hats, synth, claps, Gulf flavor
+      'GCC Pop': ['808 bass', 'trap hi-hats', 'drum machine', 'synth lead', 'bass guitar', 'hand claps', 'mirwas', 'synth pad'],
+      'GCC Romantic': ['violin', 'ney', 'piano', 'cello', 'riq', 'soft percussion'],
+      'GCC Elegant': ['violin', 'qanun', 'piano', 'ney', 'soft percussion', 'strings'],
+      'GCC Party': ['mirwas', 'darbuka', 'frame drum', 'hand claps', 'bass guitar', 'synth lead'],
+      'GCC Wedding': ['mirwas', 'darbuka', 'daff', 'tabl', 'hand claps', 'group chant'],
+      // ── GCC Radio & Crossover ──
+      // modern radio: Gulf percussion groove leads, western instruments support
+      'GCC Radio Pop': ['mirwas', 'darbuka', 'bass guitar', 'drum kit', 'synth pad', 'electric guitar'],
+      'GCC Dance Pop': ['mirwas', 'darbuka', 'hand claps', 'bass guitar', 'synth lead', 'drum kit'],
+      'GCC Electro Pop': ['mirwas', 'darbuka', 'synth lead', 'synth bass', 'drum kit', 'synth pad'],
+      'GCC Synth Pop': ['mirwas', 'darbuka', 'synth lead', 'synth pad', 'synth bass', 'drum kit'],
+      'Modern Khaleeji Fusion': ['mirwas', 'darbuka', 'frame drum', 'bass guitar', 'synth pad', 'electric guitar'],
+      'English GCC Pop': ['mirwas', 'darbuka', 'hand claps', 'bass guitar', 'synth lead', 'electric guitar'],
+      // ── GCC Rich & Event ──
+      'GCC R&B Pop': ['mirwas', 'darbuka', 'electric piano', 'bass guitar', 'synth pad', 'strings'],
+      'Luxury GCC Pop': ['violin', 'strings', 'piano', 'riq', 'bass guitar', 'synth pad'],
+      'Cinematic GCC': ['strings', 'tabl', 'choir', 'piano', 'synth pad', 'frame drum'],
+      'GCC Anthem': ['tabl', 'darbuka', 'hand claps', 'choir', 'drum kit', 'synth pad'],
+      'National Event GCC': ['tabl', 'darbuka', 'choir', 'strings', 'drum kit', 'hand claps'],
+      // ── GCC Heritage — oud IS authentic here ──
+      'GCC Traditional': ['oud', 'qanun', 'ney', 'tabla', 'riq', 'rebab'],
+      'Sheilat': ['frame drum', 'mirwas', 'darbuka', 'tabl', 'group chant'],
+      'Samri': ['frame drum', 'mirwas', 'darbuka', 'tabl', 'rebab'],
+      'Jalsa': ['oud', 'qanun', 'riq', 'tabla', 'ney'],
+      'Liwa': ['tanbura', 'frame drum', 'mirwas', 'darbuka', 'gulf percussion'],
+      'GCC Shaabi': ['oud', 'qanun', 'riq', 'tabla', 'ney'],
+      'Zar': ['tanbura', 'frame drum', 'brass cymbals', 'clay drum', 'mirwas'],
+      'Ardah': ['tabl drum', 'tabl turki', 'darbuka', 'mirwas'],
+      'Khaleeji Trap': ['808 bass', 'trap hi-hats', 'mirwas', 'darbuka', 'synth lead', 'synth pad'],
+      // ── Other Arabic ──
       'Egyptian': ['oud', 'qanun', 'ney', 'tabla', 'darbuka', 'riq'],
       'Egyptian Shaabi': ['drum machine', 'synth lead', 'bass guitar', 'electric guitar', 'darbuka'],
       'Anasheed': ['daff'],
       'Arabic Pop': ['piano', 'violin', 'tabla', 'electric guitar', 'synth pad'],
       'Levant Pop': ['piano', 'violin', 'acoustic guitar', 'drum kit', 'synth pad'],
-      // Western styles
-      'R&B': ['electric piano', 'bass guitar', 'drum kit', 'synth pad', 'saxophone'],
-      'pop': ['piano', 'electric guitar', 'bass guitar', 'drum kit', 'synth pad'],
-      '80s pop': ['synth lead', 'synth pad', 'electric guitar', 'bass guitar', 'drum kit'],
-      '90s pop': ['electric guitar', 'bass guitar', 'drum kit', 'piano', 'synth pad'],
-      'rock': ['electric guitar', 'bass guitar', 'drum kit', 'piano'],
-      'rock and roll': ['electric guitar', 'bass guitar', 'drum kit', 'piano'],
-      'soft rock': ['acoustic guitar', 'electric guitar', 'bass guitar', 'drum kit', 'piano'],
-      'heavy metal': ['electric guitar', 'bass guitar', 'drum kit', 'synth pad'],
-      'country': ['acoustic guitar', 'bass guitar', 'drum kit', 'violin', 'harmonica'],
-      'jazz': ['piano', 'upright bass', 'drum kit', 'saxophone', 'trumpet'],
-      'soul': ['electric piano', 'bass guitar', 'drum kit', 'organ', 'saxophone'],
-      'hip hop': ['drum kit', 'bass guitar', 'synth pad', 'piano'],
-      'rap': ['drum kit', 'bass guitar', 'synth pad', 'piano'],
-      'Latin': ['percussion', 'acoustic guitar', 'bass guitar', 'piano', 'trumpet'],
-      'Reggaeton': ['drum kit', 'bass guitar', 'synth lead', 'percussion'],
-      'Afrobeats': ['drum kit', 'percussion', 'bass guitar', 'synth pad', 'electric guitar'],
-      'Synthpop': ['synth lead', 'synth pad', 'synth bass', 'drum kit'],
-      'Indie Pop': ['acoustic guitar', 'electric guitar', 'bass guitar', 'drum kit', 'synth pad'],
-      'Lo-Fi': ['piano', 'synth pad', 'bass guitar', 'drum kit'],
-      'House': ['synth bass', 'synth pad', 'drum kit', 'piano'],
-      'Deep House': ['synth bass', 'synth pad', 'electric piano', 'drum kit'],
-      'Trance': ['synth lead', 'synth pad', 'synth bass', 'drum kit'],
-      'Techno': ['synth bass', 'drum kit', 'synth pad'],
-      'Dubstep': ['synth bass', 'drum kit', 'synth lead'],
-      'Drum & Bass': ['drum kit', 'synth bass', 'synth pad'],
-      'K-Pop': ['synth pad', 'electric guitar', 'bass guitar', 'drum kit', 'piano'],
-      'Bollywood': ['tabla', 'violin', 'piano', 'flute', 'synth pad'],
-      // New global genres
-      'funk': ['bass guitar', 'electric guitar', 'drum kit', 'organ', 'horn section'],
-      'disco': ['bass guitar', 'drum kit', 'strings', 'piano', 'horn section'],
-      'Salsa': ['trumpet', 'trombone', 'piano', 'bass guitar', 'congas'],
-      'Bossa Nova': ['acoustic guitar', 'upright bass', 'drum kit', 'piano'],
+      // ── Pop ──
+      'pop': ['piano', 'electric guitar', 'bass guitar', 'drum kit', 'synth pad', 'claps'],
+      'Dance Pop': ['synth bass', 'drum kit', 'synth lead', 'bass guitar', 'claps', 'synth pad'],
+      'Teen Pop': ['piano', 'electric guitar', 'bass guitar', 'drum kit', 'synth pad', 'claps'],
+      'Power Pop': ['electric guitar', 'bass guitar', 'drum kit', 'piano', 'synth pad'],
+      'Pop Rock': ['electric guitar', 'acoustic guitar', 'bass guitar', 'drum kit', 'piano', 'strings'],
+      'Indie Pop': ['acoustic guitar', 'electric guitar', 'bass guitar', 'drum kit', 'synth pad', 'glockenspiel'],
+      'Bubblegum Pop': ['piano', 'synth pad', 'drum kit', 'bass guitar', 'claps', 'bells'],
+      'K-Pop': ['synth pad', 'electric guitar', 'bass guitar', 'drum kit', 'piano', '808 bass', 'claps'],
+      'J-Pop': ['piano', 'synth pad', 'electric guitar', 'bass guitar', 'drum kit', 'strings'],
+      'Latin Pop': ['acoustic guitar', 'piano', 'bass guitar', 'percussion', 'trumpet', 'drum kit'],
+      '80s pop': ['synth lead', 'synth pad', 'electric guitar', 'bass guitar', 'drum kit', 'gated snare'],
+      '90s pop': ['electric guitar', 'bass guitar', 'drum kit', 'piano', 'synth pad', 'strings'],
+      'Synthpop': ['synth lead', 'synth pad', 'synth bass', 'drum machine', 'arpeggiator'],
+      'Electropop': ['synth lead', 'synth pad', 'synth bass', 'drum machine', 'vocoder', 'arpeggiator'],
+      // ── R&B / Soul / Funk ──
+      'R&B': ['electric piano', 'bass guitar', 'drum kit', 'synth pad', 'saxophone', 'strings'],
+      'Neo-Soul': ['electric piano', 'bass guitar', 'drum kit', 'guitar', 'organ', 'strings'],
+      'Contemporary R&B': ['synth bass', 'drum kit', 'electric piano', 'synth pad', 'bass guitar', '808 bass'],
+      'Motown': ['electric guitar', 'bass guitar', 'drum kit', 'piano', 'strings', 'horn section', 'tambourine'],
+      'soul': ['electric piano', 'bass guitar', 'drum kit', 'organ', 'saxophone', 'strings', 'tambourine'],
+      'funk': ['bass guitar', 'electric guitar', 'drum kit', 'organ', 'horn section', 'clavinet', 'congas', 'wah guitar'],
+      'disco': ['bass guitar', 'drum kit', 'strings', 'piano', 'horn section', 'rhythm guitar', 'tambourine', 'congas'],
+      'New Jack Swing': ['drum machine', 'synth bass', 'electric piano', 'bass guitar', 'synth pad', 'horn section'],
+      'Quiet Storm': ['electric piano', 'bass guitar', 'drum kit', 'saxophone', 'strings', 'synth pad'],
+      'Blue-eyed Soul': ['electric piano', 'bass guitar', 'drum kit', 'organ', 'saxophone', 'strings'],
+      // ── Hip-Hop / Rap ──
+      'hip hop': ['808 bass', 'drum machine', 'sampler', 'synth pad', 'piano', 'bass guitar'],
+      'rap': ['808 bass', 'drum machine', 'synth pad', 'bass guitar', 'piano', 'orchestra hits'],
+      'Trap': ['808 bass', 'trap hi-hats', 'snare', 'synth lead', 'synth pad', 'piano', 'strings'],
+      'Drill': ['808 bass', 'trap hi-hats', 'sliding 808', 'dark synth pad', 'snare', 'piano'],
+      'Boom Bap': ['sampler', 'drum machine', 'upright bass', 'piano', 'vinyl keys', 'bass guitar'],
+      'Conscious Hip Hop': ['drum machine', 'bass guitar', 'piano', 'sampler', 'strings', 'organ'],
+      'Gangsta Rap': ['808 bass', 'drum machine', 'synth lead', 'bass guitar', 'piano', 'strings'],
+      'East Coast Hip Hop': ['sampler', 'drum machine', 'upright bass', 'piano', 'bass guitar', 'strings'],
+      'West Coast Hip Hop': ['drum machine', 'synth bass', 'bass guitar', 'electric piano', 'funk guitar', 'synth pad'],
+      'Southern Hip Hop': ['808 bass', 'drum machine', 'synth lead', 'bass guitar', 'synth pad', 'organ'],
+      'Alternative Hip Hop': ['drum machine', 'bass guitar', 'piano', 'electric guitar', 'strings', 'synth pad'],
+      'Cloud Rap': ['synth pad', 'drum machine', 'piano', '808 bass', 'atmospheric synth', 'trap hi-hats'],
+      'Crunk': ['808 bass', 'drum machine', 'synth lead', 'claps', 'horn section', 'bass guitar'],
+      // ── Urban / World ──
+      'Afrobeats': ['drum kit', 'percussion', 'bass guitar', 'synth pad', 'electric guitar', 'shakers', 'congas'],
+      'Afrobeat': ['drum kit', 'congas', 'bass guitar', 'electric guitar', 'horn section', 'piano', 'percussion'],
+      'Reggaeton': ['drum machine', 'bass guitar', 'synth lead', 'congas', 'bongos', 'synth pad'],
+      'Latin': ['percussion', 'acoustic guitar', 'bass guitar', 'piano', 'trumpet', 'congas', 'timbales'],
+      'Salsa': ['trumpet', 'trombone', 'piano', 'bass guitar', 'congas', 'timbales', 'bongos', 'clave', 'shakers'],
+      'Bachata': ['acoustic guitar', 'bass guitar', 'bongos', 'güira', 'piano', 'maracas'],
+      'Merengue': ['accordion', 'bass guitar', 'drum kit', 'tambora', 'güira', 'brass section'],
+      'Tango': ['bandoneón', 'acoustic guitar', 'upright bass', 'piano', 'violin', 'cello'],
+      'Samba': ['surdo', 'tamborim', 'pandeiro', 'cuíca', 'agogô', 'acoustic guitar', 'cavaquinho'],
+      'Cumbia': ['accordion', 'bass guitar', 'drum kit', 'congas', 'maracas', 'flute'],
+      'Bossa Nova': ['nylon guitar', 'upright bass', 'brushed drums', 'piano', 'flute'],
+      'Bollywood': ['tabla', 'violin', 'piano', 'flute', 'synth pad', 'sitar', 'dholak'],
+      'Bhangra': ['dhol', 'tumbi', 'bass guitar', 'synth pad', 'percussion', 'electric guitar'],
+      'Latin Rock': ['electric guitar', 'bass guitar', 'drum kit', 'congas', 'piano', 'trumpet'],
+      // ── Rock ──
+      'rock': ['electric guitar', 'rhythm guitar', 'bass guitar', 'drum kit', 'piano'],
+      'Classic Rock': ['electric guitar', 'rhythm guitar', 'bass guitar', 'drum kit', 'piano', 'organ'],
+      'rock and roll': ['electric guitar', 'bass guitar', 'drum kit', 'piano', 'saxophone'],
+      'soft rock': ['acoustic guitar', 'electric guitar', 'bass guitar', 'drum kit', 'piano', 'strings'],
+      'Hard Rock': ['distorted guitar', 'rhythm guitar', 'bass guitar', 'drum kit', 'organ'],
+      'alternative rock': ['electric guitar', 'bass guitar', 'drum kit', 'synth pad', 'piano'],
+      'indie rock': ['acoustic guitar', 'electric guitar', 'bass guitar', 'drum kit', 'piano', 'synth pad'],
+      'Progressive Rock': ['electric guitar', 'bass guitar', 'drum kit', 'organ', 'synth pad', 'mellotron', 'piano'],
+      'Psychedelic Rock': ['electric guitar', 'bass guitar', 'drum kit', 'organ', 'sitar', 'synth pad', 'theremin'],
+      'Garage Rock': ['electric guitar', 'bass guitar', 'drum kit'],
+      'Glam Rock': ['electric guitar', 'bass guitar', 'drum kit', 'piano', 'saxophone', 'synth pad'],
+      'grunge': ['distorted guitar', 'bass guitar', 'drum kit', 'acoustic guitar'],
+      'Britpop': ['electric guitar', 'bass guitar', 'drum kit', 'piano', 'strings', 'organ'],
+      'Shoegaze': ['electric guitar', 'bass guitar', 'drum kit', 'synth pad', 'reverb guitar', 'strings'],
+      'Post-Rock': ['electric guitar', 'bass guitar', 'drum kit', 'piano', 'strings', 'synth pad'],
+      'Math Rock': ['electric guitar', 'bass guitar', 'drum kit'],
+      'Surf Rock': ['reverb guitar', 'bass guitar', 'drum kit', 'organ'],
+      'Dream Pop': ['electric guitar', 'bass guitar', 'drum kit', 'synth pad', 'piano', 'strings', 'reverb guitar'],
+      // ── Metal ──
+      'heavy metal': ['distorted guitar', 'rhythm guitar', 'bass guitar', 'drum kit', 'double kick drums'],
+      'thrash metal': ['distorted guitar', 'rhythm guitar', 'bass guitar', 'drum kit', 'double kick drums'],
+      'Death Metal': ['distorted guitar', 'bass guitar', 'double kick drums', 'blast beat drums'],
+      'Black Metal': ['distorted guitar', 'bass guitar', 'blast beat drums', 'synth pad', 'piano'],
+      'Power Metal': ['electric guitar', 'bass guitar', 'drum kit', 'double kick drums', 'choir', 'synth pad', 'piano'],
+      'Doom Metal': ['distorted guitar', 'bass guitar', 'drum kit', 'organ', 'synth pad'],
+      'Gothic Metal': ['electric guitar', 'bass guitar', 'drum kit', 'piano', 'strings', 'choir', 'synth pad'],
+      'Symphonic Metal': ['electric guitar', 'bass guitar', 'drum kit', 'orchestra strings', 'choir', 'piano', 'french horn'],
+      'Progressive Metal': ['electric guitar', 'bass guitar', 'drum kit', 'piano', 'synth pad', 'organ'],
+      'Speed Metal': ['electric guitar', 'bass guitar', 'drum kit', 'double kick drums'],
+      // ── Punk ──
       'punk rock': ['electric guitar', 'bass guitar', 'drum kit'],
-      'alternative rock': ['electric guitar', 'bass guitar', 'drum kit', 'synth pad'],
-      'indie rock': ['acoustic guitar', 'electric guitar', 'bass guitar', 'drum kit'],
-      'thrash metal': ['electric guitar', 'bass guitar', 'drum kit'],
-      'grunge': ['electric guitar', 'bass guitar', 'drum kit'],
-      'bluegrass': ['banjo', 'fiddle', 'acoustic guitar', 'mandolin', 'upright bass'],
-      'folk': ['acoustic guitar', 'fiddle', 'harmonica', 'upright bass'],
-      'blues': ['electric guitar', 'harmonica', 'piano', 'bass guitar', 'drum kit'],
-      'delta blues': ['acoustic guitar', 'harmonica', 'slide guitar'],
-      'smooth jazz': ['saxophone', 'piano', 'bass guitar', 'drum kit'],
-      'swing': ['saxophone', 'trumpet', 'trombone', 'piano', 'upright bass'],
-      'classical': ['violin', 'cello', 'piano', 'flute', 'oboe'],
-      'gospel': ['piano', 'organ', 'choir', 'bass guitar', 'drum kit'],
-      'reggae': ['electric guitar', 'bass guitar', 'drum kit', 'organ', 'horn section'],
-      'ska': ['trumpet', 'trombone', 'electric guitar', 'bass guitar', 'drum kit'],
-      'dub': ['bass guitar', 'drum kit', 'electric guitar', 'organ'],
-      'ambient': ['synth pad', 'piano', 'synth lead'],
-      'synthwave': ['synth lead', 'synth pad', 'synth bass', 'drum kit'],
-      'chillwave': ['synth pad', 'acoustic guitar', 'drum kit', 'piano'],
+      'Pop Punk': ['electric guitar', 'bass guitar', 'drum kit', 'piano'],
+      'Hardcore Punk': ['electric guitar', 'bass guitar', 'drum kit'],
+      'Ska Punk': ['electric guitar', 'bass guitar', 'drum kit', 'trumpet', 'trombone', 'saxophone'],
+      'Emo': ['electric guitar', 'acoustic guitar', 'bass guitar', 'drum kit', 'piano'],
+      'Screamo': ['electric guitar', 'bass guitar', 'drum kit'],
+      'New Wave': ['synth lead', 'synth pad', 'drum machine', 'bass guitar', 'electric guitar'],
+      // ── Roots / Country / Folk ──
+      'country': ['acoustic guitar', 'pedal steel guitar', 'bass guitar', 'drum kit', 'fiddle', 'harmonica', 'banjo', 'piano'],
+      'Country Pop': ['acoustic guitar', 'electric guitar', 'bass guitar', 'drum kit', 'piano', 'pedal steel guitar', 'strings'],
+      'Outlaw Country': ['acoustic guitar', 'electric guitar', 'bass guitar', 'drum kit', 'fiddle', 'harmonica'],
+      'Country Rock': ['electric guitar', 'acoustic guitar', 'bass guitar', 'drum kit', 'pedal steel guitar', 'piano'],
+      'Alternative Country': ['acoustic guitar', 'electric guitar', 'bass guitar', 'drum kit', 'fiddle', 'mandolin'],
+      'Honky Tonk': ['acoustic guitar', 'pedal steel guitar', 'piano', 'bass guitar', 'drum kit', 'fiddle'],
+      'Western Swing': ['fiddle', 'acoustic guitar', 'pedal steel guitar', 'upright bass', 'piano', 'trumpet', 'trombone'],
+      'Americana': ['acoustic guitar', 'fiddle', 'banjo', 'mandolin', 'upright bass', 'piano', 'harmonica'],
+      'Contemporary Country': ['acoustic guitar', 'electric guitar', 'bass guitar', 'drum kit', 'piano', 'pedal steel guitar'],
+      'bluegrass': ['banjo', 'fiddle', 'acoustic guitar', 'mandolin', 'upright bass', 'dobro'],
+      'folk': ['acoustic guitar', 'fiddle', 'harmonica', 'upright bass', 'banjo', 'mandolin', 'dulcimer'],
+      'Indie Folk': ['acoustic guitar', 'piano', 'cello', 'upright bass', 'drum kit', 'glockenspiel', 'mandolin'],
+      'Folk Rock': ['acoustic guitar', 'electric guitar', 'bass guitar', 'drum kit', 'fiddle', 'harmonica'],
+      'Folk Pop': ['acoustic guitar', 'piano', 'bass guitar', 'drum kit', 'strings', 'glockenspiel'],
+      'Folk Punk': ['acoustic guitar', 'bass guitar', 'drum kit', 'fiddle', 'accordion'],
+      'Protest Folk': ['acoustic guitar', 'harmonica', 'upright bass', 'fiddle', 'banjo'],
+      // ── Jazz ──
+      'jazz': ['piano', 'upright bass', 'brushed drums', 'saxophone', 'trumpet', 'trombone'],
+      'Bebop': ['piano', 'upright bass', 'drum kit', 'saxophone', 'trumpet', 'trombone', 'vibraphone'],
+      'swing': ['saxophone', 'trumpet', 'trombone', 'clarinet', 'piano', 'upright bass', 'drum kit'],
+      'smooth jazz': ['saxophone', 'electric piano', 'bass guitar', 'drum kit', 'guitar', 'synth pad'],
+      'Cool Jazz': ['saxophone', 'piano', 'upright bass', 'brushed drums', 'trumpet', 'flute'],
+      'Jazz Fusion': ['electric guitar', 'electric piano', 'bass guitar', 'drum kit', 'saxophone', 'synth pad'],
+      'Latin Jazz': ['piano', 'upright bass', 'drum kit', 'trumpet', 'congas', 'timbales', 'bongos', 'saxophone'],
+      'Jazz Funk': ['electric piano', 'bass guitar', 'drum kit', 'saxophone', 'clavinet', 'trumpet', 'organ'],
+      'Hard Bop': ['piano', 'upright bass', 'drum kit', 'saxophone', 'trumpet', 'organ'],
+      'Acid Jazz': ['electric piano', 'bass guitar', 'drum kit', 'saxophone', 'guitar', 'turntable'],
+      'Free Jazz': ['saxophone', 'piano', 'upright bass', 'drum kit', 'trumpet'],
+      'Big Band': ['trumpet section', 'trombone section', 'saxophone section', 'piano', 'upright bass', 'drum kit', 'clarinet'],
+      // ── Blues ──
+      'blues': ['electric guitar', 'harmonica', 'piano', 'bass guitar', 'drum kit', 'organ'],
+      'delta blues': ['acoustic guitar', 'slide guitar', 'harmonica', 'resonator guitar'],
+      'Chicago Blues': ['electric guitar', 'harmonica', 'piano', 'bass guitar', 'drum kit', 'horn section'],
+      'Electric Blues': ['electric guitar', 'harmonica', 'bass guitar', 'drum kit', 'organ', 'piano'],
+      'Blues Rock': ['electric guitar', 'bass guitar', 'drum kit', 'harmonica', 'organ', 'piano'],
+      'Texas Blues': ['electric guitar', 'bass guitar', 'drum kit', 'piano', 'organ'],
+      'Memphis Blues': ['electric guitar', 'bass guitar', 'drum kit', 'piano', 'horn section', 'harmonica'],
+      'Jump Blues': ['saxophone', 'trumpet', 'trombone', 'piano', 'bass guitar', 'drum kit', 'electric guitar'],
+      'Boogie-Woogie': ['piano', 'bass guitar', 'drum kit', 'harmonica'],
+      'Country Blues': ['acoustic guitar', 'slide guitar', 'harmonica', 'upright bass'],
+      // ── Reggae ──
+      'reggae': ['electric guitar', 'bass guitar', 'drum kit', 'organ', 'horn section', 'percussion'],
+      'Roots Reggae': ['electric guitar', 'bass guitar', 'drum kit', 'organ', 'horn section', 'nyahbinghi drums'],
+      'Dancehall': ['drum machine', 'bass guitar', 'synth lead', 'keyboard', 'percussion'],
+      'ska': ['trumpet', 'trombone', 'saxophone', 'electric guitar', 'bass guitar', 'drum kit'],
+      'dub': ['bass guitar', 'drum kit', 'electric guitar', 'organ', 'horn section'],
+      'Reggae Fusion': ['electric guitar', 'bass guitar', 'drum kit', 'synth pad', 'percussion', 'organ'],
+      'Lovers Rock': ['electric guitar', 'bass guitar', 'drum kit', 'organ', 'strings', 'percussion'],
+      'Ragga': ['drum machine', 'bass guitar', 'synth lead', 'keyboard', 'percussion'],
+      // ── Classical / Orchestral ──
+      'classical': ['violin', 'viola', 'cello', 'piano', 'flute', 'oboe', 'french horn'],
+      'Baroque': ['harpsichord', 'violin', 'cello', 'flute', 'oboe', 'organ'],
+      'Romantic': ['piano', 'violin', 'cello', 'strings', 'french horn', 'clarinet', 'flute', 'harp'],
+      'Contemporary Classical': ['piano', 'strings', 'flute', 'clarinet', 'percussion', 'synth pad'],
+      'Symphony': ['violin', 'viola', 'cello', 'double bass', 'flute', 'oboe', 'clarinet', 'bassoon', 'french horn', 'trumpet', 'trombone', 'timpani', 'piano'],
+      'Opera': ['orchestra strings', 'piano', 'flute', 'oboe', 'french horn', 'choir', 'harp'],
+      'Chamber Music': ['violin', 'viola', 'cello', 'piano', 'flute', 'clarinet'],
+      'Choral': ['choir', 'organ', 'piano', 'strings'],
+      'Gregorian Chant': ['choir', 'organ'],
+      // ── Electronic / Dance ──
+      'Lo-Fi': ['electric piano', 'synth pad', 'bass guitar', 'drum machine', 'vinyl crackle', 'acoustic guitar'],
+      'House': ['synth bass', 'synth pad', 'drum machine', 'piano', 'organ', 'claps'],
+      'Deep House': ['synth bass', 'synth pad', 'electric piano', 'drum machine', 'guitar', 'strings'],
+      'Tech House': ['synth bass', 'drum machine', 'synth pad', 'synth lead', 'claps'],
+      'Trance': ['synth lead', 'synth pad', 'synth bass', 'drum machine', 'arpeggiator', 'piano'],
+      'Techno': ['synth bass', 'drum machine', '909 drums', 'synth pad', 'synth lead'],
+      'Dubstep': ['sub bass', 'drum machine', 'synth lead', 'wobble bass', 'synth pad'],
+      'Drum & Bass': ['drum machine', 'sub bass', 'synth bass', 'synth pad', 'amen break'],
+      'EDM': ['synth lead', 'synth bass', 'drum machine', 'synth pad', 'piano', 'fx riser', 'claps'],
+      'Electro': ['synth bass', 'drum machine', 'synth lead', '808 bass', 'vocoder'],
+      'Hardcore': ['drum machine', 'synth bass', 'synth lead', 'distorted synth', 'rave stab'],
+      'IDM': ['drum machine', 'synth pad', 'synth bass', 'glitch', 'piano', 'arpeggiator'],
+      'ambient': ['synth pad', 'piano', 'synth lead', 'atmospheric textures', 'strings'],
+      'synthwave': ['synth lead', 'synth pad', 'synth bass', 'drum machine', 'arpeggiator', 'gated snare'],
+      'chillwave': ['synth pad', 'electric guitar', 'drum machine', 'piano', 'bass guitar', 'reverb guitar'],
+      'Vaporwave': ['electric piano', 'synth pad', 'synth bass', 'saxophone', 'drum machine'],
+      'Glitch': ['drum machine', 'glitch', 'synth pad', 'synth bass', 'piano', 'arpeggiator'],
+      'Witch House': ['drum machine', 'synth pad', 'synth bass', 'atmospheric synth', 'distorted synth'],
+      'Grime': ['synth bass', 'drum machine', '808 bass', 'synth lead', 'piano', 'rave stab'],
+      'UK Garage': ['synth bass', 'drum machine', 'synth pad', 'piano', 'guitar'],
+      '2-Step': ['synth bass', 'drum machine', 'synth pad', 'piano', 'percussion'],
+      'Electro Swing': ['swing drums', 'brass section', 'piano', 'synth bass', 'synth lead', 'double bass'],
+      'Chiptune': ['8-bit lead', '8-bit bass', 'chip drums', 'square wave synth', 'arpeggiator'],
+      // ── World ──
+      'Flamenco': ['nylon guitar', 'cajon', 'hand claps', 'castanets', 'acoustic guitar'],
+      'Fado': ['portuguese guitar', 'acoustic guitar', 'upright bass', 'viola baixo'],
+      'Celtic': ['fiddle', 'tin whistle', 'uilleann pipes', 'acoustic guitar', 'bodhran', 'harp', 'mandolin'],
+      'gospel': ['piano', 'organ', 'choir', 'bass guitar', 'drum kit', 'hand claps', 'tambourine'],
+      'Ragtime': ['piano', 'bass guitar', 'drum kit', 'banjo'],
+      'Zydeco': ['accordion', 'washboard', 'bass guitar', 'drum kit', 'fiddle'],
+      'Cajun': ['accordion', 'fiddle', 'acoustic guitar', 'triangle', 'upright bass'],
+      'Industrial': ['drum machine', 'synth bass', 'distorted synth', 'noise generator', 'electric guitar'],
     };
   }, [language]);
 
@@ -1531,19 +1745,19 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   // Style → recommended rhythms (top 2)
   const STYLE_RHYTHM_MAPPING: Record<string, string[]> = {
-    'GCC Pop': ['Gulf Groove', 'Khaleeji Shuffle'],
-    'Khaleeji Pop': ['Gulf Groove', 'Khaleeji Shuffle'],
+    'GCC Pop': ['Trap Beat', 'Gulf Groove'],
+    'Khaleeji Pop': ['Trap Beat', 'Gulf Groove'],
     'GCC Romantic': ['Adani', 'Ballad Slow Groove'],
     'GCC Elegant': ['Adani', 'Khaleeji Shuffle'],
     'GCC Party': ['Gulf Groove', 'Clap-Driven Groove'],
     'GCC Wedding': ['Wedding Beat', 'Clap-Driven Groove'],
-    'GCC Radio Pop': ['Gulf Groove', 'Pop 4/4'],
-    'GCC Dance Pop': ['Club Beat', 'Gulf Groove'],
-    'GCC Electro Pop': ['Club Beat', 'Pop 4/4'],
-    'GCC Synth Pop': ['Pop 4/4', 'Club Beat'],
-    'Modern Khaleeji Fusion': ['Gulf Groove', 'Pop 4/4'],
-    'English GCC Pop': ['Pop 4/4', 'Club Beat'],
-    'GCC R&B Pop': ['Ballad Slow Groove', 'Gulf Groove'],
+    'GCC Radio Pop': ['Gulf Groove', 'Khaleeji Shuffle'],
+    'GCC Dance Pop': ['Gulf Groove', 'Clap-Driven Groove'],
+    'GCC Electro Pop': ['Gulf Groove', 'Club Beat'],
+    'GCC Synth Pop': ['Khaleeji Shuffle', 'Gulf Groove'],
+    'Modern Khaleeji Fusion': ['Gulf Groove', 'Khaleeji Shuffle'],
+    'English GCC Pop': ['Gulf Groove', 'Clap-Driven Groove'],
+    'GCC R&B Pop': ['Gulf Groove', 'Adani'],
     'Luxury GCC Pop': ['Adani', 'Ballad Slow Groove'],
     'Cinematic GCC': ['Marching Anthem', '6/8 Fusion'],
     'GCC Anthem': ['Marching Anthem', 'Clap-Driven Groove'],
@@ -1562,51 +1776,198 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'Arabic Pop': ['Maqsoum', 'Pop 4/4'],
     'Levant Pop': ['Maqsoum', 'Ballad Slow Groove'],
     'Anasheed': ['Clap-Driven Groove', 'Ballad Slow Groove'],
+    // ── Pop ──
     'pop': ['Pop 4/4', 'Ballad Slow Groove'],
-    'R&B': ['Ballad Slow Groove', 'Pop 4/4'],
-    'hip hop': ['Trap Beat', 'Pop 4/4'],
-    'rap': ['Trap Beat', 'Drill Beat'],
-    'Afrobeats': ['Afro-Gulf Groove', 'Pop 4/4'],
-    'Reggaeton': ['Club Beat', 'Pop 4/4'],
-    'Latin': ['6/8 Fusion', 'Pop 4/4'],
-    'jazz': ['Ballad Slow Groove', 'Waltz 3/4'],
-    'soul': ['Ballad Slow Groove', 'Pop 4/4'],
-    'rock': ['Pop 4/4', 'Marching Anthem'],
-    'heavy metal': ['Pop 4/4', 'Marching Anthem'],
-    'country': ['Ballad Slow Groove', 'Waltz 3/4'],
-    'House': ['Club Beat', 'Pop 4/4'],
-    'Trance': ['Club Beat', 'Pop 4/4'],
+    'Dance Pop': ['Club Beat', 'Pop 4/4'],
+    'Teen Pop': ['Pop 4/4', 'Club Beat'],
+    'Power Pop': ['Pop 4/4', 'Marching Anthem'],
+    'Pop Rock': ['Pop 4/4', 'Ballad Slow Groove'],
+    'Indie Pop': ['Pop 4/4', 'Ballad Slow Groove'],
+    'Bubblegum Pop': ['Pop 4/4', 'Club Beat'],
     'K-Pop': ['Pop 4/4', 'Club Beat'],
-    'Bollywood': ['Maqsoum', '6/8 Fusion'],
+    'J-Pop': ['Pop 4/4', 'Ballad Slow Groove'],
+    'Latin Pop': ['6/8 Fusion', 'Pop 4/4'],
+    '80s pop': ['Pop 4/4', 'Club Beat'],
+    '90s pop': ['Pop 4/4', 'Ballad Slow Groove'],
+    'Synthpop': ['Club Beat', 'Pop 4/4'],
+    'Electropop': ['Club Beat', 'Pop 4/4'],
+    // ── R&B / Soul / Funk ──
+    'R&B': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Neo-Soul': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Contemporary R&B': ['Trap Beat', 'Ballad Slow Groove'],
+    'Motown': ['Pop 4/4', 'Ballad Slow Groove'],
+    'soul': ['Ballad Slow Groove', 'Pop 4/4'],
     'funk': ['Pop 4/4', 'Club Beat'],
     'disco': ['Club Beat', 'Pop 4/4'],
+    'New Jack Swing': ['Trap Beat', 'Pop 4/4'],
+    'Quiet Storm': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'Blue-eyed Soul': ['Ballad Slow Groove', 'Pop 4/4'],
+    // ── Hip-Hop / Rap ──
+    'hip hop': ['Trap Beat', 'Pop 4/4'],
+    'rap': ['Trap Beat', 'Drill Beat'],
+    'Trap': ['Trap Beat', 'Club Beat'],
+    'Drill': ['Drill Beat', 'Trap Beat'],
+    'Boom Bap': ['Pop 4/4', 'Ballad Slow Groove'],
+    'Conscious Hip Hop': ['Pop 4/4', 'Ballad Slow Groove'],
+    'Gangsta Rap': ['Trap Beat', 'Pop 4/4'],
+    'East Coast Hip Hop': ['Pop 4/4', 'Trap Beat'],
+    'West Coast Hip Hop': ['Pop 4/4', 'Club Beat'],
+    'Southern Hip Hop': ['Trap Beat', 'Club Beat'],
+    'Alternative Hip Hop': ['Pop 4/4', 'Ballad Slow Groove'],
+    'Cloud Rap': ['Trap Beat', 'Ballad Slow Groove'],
+    'Crunk': ['Club Beat', 'Trap Beat'],
+    // ── Urban / World ──
+    'Afrobeats': ['Afro-Gulf Groove', 'Pop 4/4'],
+    'Afrobeat': ['Afro-Gulf Groove', '6/8 Fusion'],
+    'Reggaeton': ['Club Beat', 'Pop 4/4'],
+    'Latin': ['6/8 Fusion', 'Pop 4/4'],
     'Salsa': ['6/8 Fusion', 'Pop 4/4'],
+    'Bachata': ['Ballad Slow Groove', '6/8 Fusion'],
+    'Merengue': ['Pop 4/4', 'Club Beat'],
+    'Tango': ['Waltz 3/4', 'Ballad Slow Groove'],
+    'Samba': ['6/8 Fusion', 'Pop 4/4'],
+    'Cumbia': ['6/8 Fusion', 'Pop 4/4'],
     'Bossa Nova': ['Ballad Slow Groove', 'Waltz 3/4'],
-    'punk rock': ['Pop 4/4', 'Marching Anthem'],
+    'Bollywood': ['Maqsoum', '6/8 Fusion'],
+    'Bhangra': ['Pop 4/4', 'Club Beat'],
+    'Latin Rock': ['Pop 4/4', 'Marching Anthem'],
+    // ── Rock ──
+    'rock': ['Pop 4/4', 'Marching Anthem'],
+    'Classic Rock': ['Pop 4/4', 'Marching Anthem'],
+    'rock and roll': ['Pop 4/4', 'Marching Anthem'],
+    'soft rock': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Hard Rock': ['Pop 4/4', 'Marching Anthem'],
     'alternative rock': ['Pop 4/4', 'Ballad Slow Groove'],
     'indie rock': ['Pop 4/4', 'Ballad Slow Groove'],
-    'thrash metal': ['Pop 4/4', 'Marching Anthem'],
+    'Progressive Rock': ['Waltz 3/4', 'Pop 4/4'],
+    'Psychedelic Rock': ['Waltz 3/4', '6/8 Fusion'],
+    'Garage Rock': ['Pop 4/4', 'Marching Anthem'],
+    'Glam Rock': ['Pop 4/4', 'Club Beat'],
     'grunge': ['Pop 4/4', 'Ballad Slow Groove'],
+    'Britpop': ['Pop 4/4', 'Ballad Slow Groove'],
+    'Shoegaze': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Post-Rock': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'Math Rock': ['Pop 4/4', 'Waltz 3/4'],
+    'Surf Rock': ['Pop 4/4', 'Club Beat'],
+    'Dream Pop': ['Ballad Slow Groove', 'Waltz 3/4'],
+    // ── Metal ──
+    'heavy metal': ['Pop 4/4', 'Marching Anthem'],
+    'thrash metal': ['Pop 4/4', 'Marching Anthem'],
+    'Death Metal': ['Pop 4/4', 'Marching Anthem'],
+    'Black Metal': ['Pop 4/4', 'Marching Anthem'],
+    'Power Metal': ['Marching Anthem', 'Pop 4/4'],
+    'Doom Metal': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'Gothic Metal': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Symphonic Metal': ['Marching Anthem', 'Waltz 3/4'],
+    'Progressive Metal': ['Pop 4/4', 'Waltz 3/4'],
+    'Speed Metal': ['Pop 4/4', 'Marching Anthem'],
+    // ── Punk ──
+    'punk rock': ['Pop 4/4', 'Marching Anthem'],
+    'Pop Punk': ['Pop 4/4', 'Marching Anthem'],
+    'Hardcore Punk': ['Pop 4/4', 'Marching Anthem'],
+    'Ska Punk': ['Pop 4/4', 'Club Beat'],
+    'Emo': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Screamo': ['Pop 4/4', 'Marching Anthem'],
+    'New Wave': ['Club Beat', 'Pop 4/4'],
+    // ── Roots / Country / Folk ──
+    'country': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'Country Pop': ['Pop 4/4', 'Ballad Slow Groove'],
+    'Outlaw Country': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'Country Rock': ['Pop 4/4', 'Ballad Slow Groove'],
+    'Alternative Country': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Honky Tonk': ['Waltz 3/4', 'Pop 4/4'],
+    'Western Swing': ['Waltz 3/4', 'Pop 4/4'],
+    'Americana': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'Contemporary Country': ['Pop 4/4', 'Ballad Slow Groove'],
     'bluegrass': ['Waltz 3/4', 'Ballad Slow Groove'],
     'folk': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'Indie Folk': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'Folk Rock': ['Pop 4/4', 'Ballad Slow Groove'],
+    'Folk Pop': ['Pop 4/4', 'Ballad Slow Groove'],
+    'Folk Punk': ['Pop 4/4', 'Marching Anthem'],
+    'Protest Folk': ['Ballad Slow Groove', 'Waltz 3/4'],
+    // ── Jazz ──
+    'jazz': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'Bebop': ['Waltz 3/4', 'Pop 4/4'],
+    'swing': ['Waltz 3/4', 'Pop 4/4'],
+    'smooth jazz': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'Cool Jazz': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'Jazz Fusion': ['Pop 4/4', 'Club Beat'],
+    'Latin Jazz': ['6/8 Fusion', 'Waltz 3/4'],
+    'Jazz Funk': ['Pop 4/4', 'Club Beat'],
+    'Hard Bop': ['Pop 4/4', 'Waltz 3/4'],
+    'Acid Jazz': ['Club Beat', 'Pop 4/4'],
+    'Free Jazz': ['Waltz 3/4', 'Ballad Slow Groove'],
+    'Big Band': ['Waltz 3/4', 'Pop 4/4'],
+    // ── Blues ──
     'blues': ['Ballad Slow Groove', 'Pop 4/4'],
     'delta blues': ['Ballad Slow Groove', 'Waltz 3/4'],
-    'smooth jazz': ['Ballad Slow Groove', 'Waltz 3/4'],
-    'swing': ['Waltz 3/4', 'Pop 4/4'],
-    'classical': ['Waltz 3/4', 'Ballad Slow Groove'],
-    'gospel': ['Pop 4/4', 'Ballad Slow Groove'],
+    'Chicago Blues': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Electric Blues': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Blues Rock': ['Pop 4/4', 'Ballad Slow Groove'],
+    'Texas Blues': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Memphis Blues': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Jump Blues': ['Pop 4/4', 'Waltz 3/4'],
+    'Boogie-Woogie': ['Pop 4/4', 'Waltz 3/4'],
+    'Country Blues': ['Ballad Slow Groove', 'Waltz 3/4'],
+    // ── Reggae ──
     'reggae': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Roots Reggae': ['Ballad Slow Groove', '6/8 Fusion'],
+    'Dancehall': ['Club Beat', 'Pop 4/4'],
     'ska': ['Pop 4/4', 'Club Beat'],
     'dub': ['Ballad Slow Groove', '6/8 Fusion'],
+    'Reggae Fusion': ['Ballad Slow Groove', 'Club Beat'],
+    'Lovers Rock': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Ragga': ['Club Beat', 'Pop 4/4'],
+    // ── Classical / Orchestral ──
+    'classical': ['Waltz 3/4', 'Ballad Slow Groove'],
+    'Baroque': ['Waltz 3/4', 'Ballad Slow Groove'],
+    'Romantic': ['Waltz 3/4', 'Ballad Slow Groove'],
+    'Contemporary Classical': ['Waltz 3/4', 'Ballad Slow Groove'],
+    'Symphony': ['Waltz 3/4', 'Marching Anthem'],
+    'Opera': ['Waltz 3/4', 'Ballad Slow Groove'],
+    'Chamber Music': ['Waltz 3/4', 'Ballad Slow Groove'],
+    'Choral': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'Gregorian Chant': ['Ballad Slow Groove', 'Waltz 3/4'],
+    // ── Electronic / Dance ──
+    'Lo-Fi': ['Ballad Slow Groove', 'Pop 4/4'],
+    'House': ['Club Beat', 'Pop 4/4'],
+    'Deep House': ['Club Beat', 'Ballad Slow Groove'],
+    'Tech House': ['Club Beat', 'Pop 4/4'],
+    'Trance': ['Club Beat', 'Pop 4/4'],
+    'Techno': ['Club Beat', 'Pop 4/4'],
+    'Dubstep': ['Club Beat', 'Trap Beat'],
+    'Drum & Bass': ['Club Beat', 'Pop 4/4'],
+    'EDM': ['Club Beat', 'Pop 4/4'],
+    'Electro': ['Club Beat', 'Pop 4/4'],
+    'Hardcore': ['Club Beat', 'Marching Anthem'],
+    'IDM': ['Pop 4/4', 'Waltz 3/4'],
     'ambient': ['Ballad Slow Groove', 'Waltz 3/4'],
     'synthwave': ['Pop 4/4', 'Club Beat'],
     'chillwave': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Vaporwave': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Glitch': ['Club Beat', 'Pop 4/4'],
+    'Witch House': ['Trap Beat', 'Ballad Slow Groove'],
+    'Grime': ['Trap Beat', 'Club Beat'],
+    'UK Garage': ['Club Beat', 'Pop 4/4'],
+    '2-Step': ['Club Beat', 'Pop 4/4'],
+    'Electro Swing': ['Waltz 3/4', 'Pop 4/4'],
+    'Chiptune': ['Pop 4/4', 'Club Beat'],
+    // ── World ──
+    'Flamenco': ['6/8 Fusion', 'Waltz 3/4'],
+    'Fado': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'Celtic': ['Waltz 3/4', '6/8 Fusion'],
+    'gospel': ['Pop 4/4', 'Ballad Slow Groove'],
+    'Ragtime': ['Pop 4/4', 'Waltz 3/4'],
+    'Zydeco': ['Pop 4/4', '6/8 Fusion'],
+    'Cajun': ['Waltz 3/4', 'Pop 4/4'],
+    'Industrial': ['Club Beat', 'Marching Anthem'],
   };
 
   // Style → recommended moods (top 3)
   const STYLE_MOOD_MAPPING: Record<string, string[]> = {
-    'GCC Pop': ['energetic', 'confident', 'happy'],
-    'Khaleeji Pop': ['energetic', 'confident', 'happy'],
+    'GCC Pop': ['energetic', 'confident', 'bold'],
+    'Khaleeji Pop': ['energetic', 'confident', 'bold'],
     'GCC Romantic': ['romantic', 'emotional', 'tender'],
     'GCC Elegant': ['luxurious', 'confident', 'radiant'],
     'GCC Party': ['energetic', 'party', 'happy'],
@@ -1636,45 +1997,192 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'Arabic Pop': ['romantic', 'emotional', 'happy'],
     'Levant Pop': ['romantic', 'emotional', 'tender'],
     'Anasheed': ['spiritual', 'calm', 'proud'],
+    // ── Pop ──
     'pop': ['happy', 'energetic', 'uplifting'],
-    'R&B': ['romantic', 'soulful', 'emotional'],
-    'hip hop': ['confident', 'bold', 'energetic'],
-    'rap': ['confident', 'angry', 'bold'],
-    'Afrobeats': ['happy', 'energetic', 'groovy'],
-    'Reggaeton': ['energetic', 'party', 'groovy'],
-    'Latin': ['happy', 'energetic', 'romantic'],
-    'jazz': ['soulful', 'nostalgic', 'calm'],
-    'soul': ['soulful', 'emotional', 'romantic'],
-    'rock': ['energetic', 'powerful', 'bold'],
-    'heavy metal': ['intense', 'angry', 'powerful'],
-    'country': ['nostalgic', 'tender', 'sad'],
-    'House': ['energetic', 'club', 'groovy'],
-    'Trance': ['energetic', 'epic', 'cinematic'],
+    'Dance Pop': ['energetic', 'party', 'happy'],
+    'Teen Pop': ['happy', 'playful', 'uplifting'],
+    'Power Pop': ['energetic', 'uplifting', 'happy'],
+    'Pop Rock': ['energetic', 'uplifting', 'happy'],
+    'Indie Pop': ['happy', 'dreamy', 'nostalgic'],
+    'Bubblegum Pop': ['happy', 'playful', 'bright'],
     'K-Pop': ['happy', 'energetic', 'playful'],
-    'Bollywood': ['happy', 'romantic', 'energetic'],
+    'J-Pop': ['happy', 'energetic', 'dreamy'],
+    'Latin Pop': ['happy', 'energetic', 'romantic'],
+    '80s pop': ['energetic', 'nostalgic', 'bright'],
+    '90s pop': ['nostalgic', 'happy', 'energetic'],
+    'Synthpop': ['energetic', 'exciting', 'bright'],
+    'Electropop': ['energetic', 'exciting', 'club'],
+    // ── R&B / Soul / Funk ──
+    'R&B': ['romantic', 'soulful', 'emotional'],
+    'Neo-Soul': ['soulful', 'emotional', 'calm'],
+    'Contemporary R&B': ['romantic', 'confident', 'soulful'],
+    'Motown': ['happy', 'soulful', 'nostalgic'],
+    'soul': ['soulful', 'emotional', 'romantic'],
     'funk': ['groovy', 'energetic', 'happy'],
     'disco': ['party', 'happy', 'energetic'],
+    'New Jack Swing': ['energetic', 'party', 'groovy'],
+    'Quiet Storm': ['romantic', 'calm', 'soulful'],
+    'Blue-eyed Soul': ['emotional', 'soulful', 'romantic'],
+    // ── Hip-Hop / Rap ──
+    'hip hop': ['confident', 'bold', 'energetic'],
+    'rap': ['confident', 'angry', 'bold'],
+    'Trap': ['confident', 'dark', 'intense'],
+    'Drill': ['intense', 'dark', 'angry'],
+    'Boom Bap': ['confident', 'nostalgic', 'bold'],
+    'Conscious Hip Hop': ['powerful', 'emotional', 'bold'],
+    'Gangsta Rap': ['angry', 'intense', 'bold'],
+    'East Coast Hip Hop': ['confident', 'bold', 'nostalgic'],
+    'West Coast Hip Hop': ['calm', 'groovy', 'confident'],
+    'Southern Hip Hop': ['energetic', 'party', 'bold'],
+    'Alternative Hip Hop': ['emotional', 'calm', 'nostalgic'],
+    'Cloud Rap': ['dreamy', 'calm', 'nostalgic'],
+    'Crunk': ['energetic', 'party', 'angry'],
+    // ── Urban / World ──
+    'Afrobeats': ['happy', 'energetic', 'groovy'],
+    'Afrobeat': ['powerful', 'groovy', 'bold'],
+    'Reggaeton': ['energetic', 'party', 'groovy'],
+    'Latin': ['happy', 'energetic', 'romantic'],
     'Salsa': ['happy', 'energetic', 'romantic'],
+    'Bachata': ['romantic', 'emotional', 'tender'],
+    'Merengue': ['happy', 'energetic', 'party'],
+    'Tango': ['passionate', 'dramatic', 'romantic'],
+    'Samba': ['happy', 'energetic', 'celebratory'],
+    'Cumbia': ['happy', 'energetic', 'groovy'],
     'Bossa Nova': ['calm', 'romantic', 'nostalgic'],
-    'punk rock': ['angry', 'energetic', 'bold'],
+    'Bollywood': ['happy', 'romantic', 'energetic'],
+    'Bhangra': ['energetic', 'celebratory', 'happy'],
+    'Latin Rock': ['energetic', 'powerful', 'bold'],
+    // ── Rock ──
+    'rock': ['energetic', 'powerful', 'bold'],
+    'Classic Rock': ['energetic', 'nostalgic', 'bold'],
+    'rock and roll': ['energetic', 'happy', 'bold'],
+    'soft rock': ['emotional', 'tender', 'calm'],
+    'Hard Rock': ['energetic', 'powerful', 'intense'],
     'alternative rock': ['emotional', 'energetic', 'bold'],
     'indie rock': ['nostalgic', 'emotional', 'calm'],
-    'thrash metal': ['intense', 'angry', 'powerful'],
+    'Progressive Rock': ['epic', 'cinematic', 'emotional'],
+    'Psychedelic Rock': ['dreamy', 'mystical', 'trance'],
+    'Garage Rock': ['energetic', 'angry', 'bold'],
+    'Glam Rock': ['energetic', 'playful', 'bold'],
     'grunge': ['sad', 'emotional', 'powerful'],
+    'Britpop': ['energetic', 'nostalgic', 'uplifting'],
+    'Shoegaze': ['dreamy', 'emotional', 'calm'],
+    'Post-Rock': ['epic', 'cinematic', 'emotional'],
+    'Math Rock': ['intense', 'energetic', 'exciting'],
+    'Surf Rock': ['happy', 'energetic', 'bright'],
+    'Dream Pop': ['dreamy', 'romantic', 'calm'],
+    // ── Metal ──
+    'heavy metal': ['intense', 'angry', 'powerful'],
+    'thrash metal': ['intense', 'angry', 'powerful'],
+    'Death Metal': ['intense', 'dark', 'angry'],
+    'Black Metal': ['dark', 'intense', 'dramatic'],
+    'Power Metal': ['epic', 'powerful', 'uplifting'],
+    'Doom Metal': ['dark', 'sad', 'intense'],
+    'Gothic Metal': ['dark', 'dramatic', 'emotional'],
+    'Symphonic Metal': ['epic', 'powerful', 'dramatic'],
+    'Progressive Metal': ['intense', 'epic', 'emotional'],
+    'Speed Metal': ['intense', 'energetic', 'powerful'],
+    // ── Punk ──
+    'punk rock': ['angry', 'energetic', 'bold'],
+    'Pop Punk': ['energetic', 'emotional', 'bold'],
+    'Hardcore Punk': ['angry', 'intense', 'powerful'],
+    'Ska Punk': ['energetic', 'happy', 'bold'],
+    'Emo': ['emotional', 'sad', 'tender'],
+    'Screamo': ['intense', 'angry', 'emotional'],
+    'New Wave': ['energetic', 'exciting', 'nostalgic'],
+    // ── Roots / Country / Folk ──
+    'country': ['nostalgic', 'tender', 'sad'],
+    'Country Pop': ['happy', 'uplifting', 'nostalgic'],
+    'Outlaw Country': ['bold', 'nostalgic', 'confident'],
+    'Country Rock': ['energetic', 'bold', 'nostalgic'],
+    'Alternative Country': ['emotional', 'nostalgic', 'sad'],
+    'Honky Tonk': ['happy', 'nostalgic', 'energetic'],
+    'Western Swing': ['happy', 'nostalgic', 'energetic'],
+    'Americana': ['nostalgic', 'emotional', 'calm'],
+    'Contemporary Country': ['happy', 'uplifting', 'confident'],
     'bluegrass': ['happy', 'energetic', 'nostalgic'],
     'folk': ['nostalgic', 'calm', 'emotional'],
+    'Indie Folk': ['nostalgic', 'calm', 'dreamy'],
+    'Folk Rock': ['emotional', 'nostalgic', 'uplifting'],
+    'Folk Pop': ['happy', 'nostalgic', 'calm'],
+    'Folk Punk': ['energetic', 'angry', 'bold'],
+    'Protest Folk': ['powerful', 'emotional', 'bold'],
+    // ── Jazz ──
+    'jazz': ['soulful', 'nostalgic', 'calm'],
+    'Bebop': ['energetic', 'exciting', 'bold'],
+    'swing': ['happy', 'energetic', 'nostalgic'],
+    'smooth jazz': ['calm', 'soulful', 'romantic'],
+    'Cool Jazz': ['calm', 'nostalgic', 'soulful'],
+    'Jazz Fusion': ['energetic', 'exciting', 'groovy'],
+    'Latin Jazz': ['happy', 'energetic', 'romantic'],
+    'Jazz Funk': ['groovy', 'energetic', 'soulful'],
+    'Hard Bop': ['energetic', 'soulful', 'bold'],
+    'Acid Jazz': ['groovy', 'energetic', 'soulful'],
+    'Free Jazz': ['intense', 'experimental', 'emotional'],
+    'Big Band': ['happy', 'energetic', 'nostalgic'],
+    // ── Blues ──
     'blues': ['sad', 'soulful', 'emotional'],
     'delta blues': ['sad', 'soulful', 'nostalgic'],
-    'smooth jazz': ['calm', 'soulful', 'romantic'],
-    'swing': ['happy', 'energetic', 'nostalgic'],
-    'classical': ['epic', 'emotional', 'calm'],
-    'gospel': ['spiritual', 'uplifting', 'powerful'],
+    'Chicago Blues': ['sad', 'powerful', 'emotional'],
+    'Electric Blues': ['powerful', 'emotional', 'soulful'],
+    'Blues Rock': ['energetic', 'powerful', 'emotional'],
+    'Texas Blues': ['energetic', 'soulful', 'powerful'],
+    'Memphis Blues': ['sad', 'soulful', 'emotional'],
+    'Jump Blues': ['happy', 'energetic', 'groovy'],
+    'Boogie-Woogie': ['happy', 'energetic', 'playful'],
+    'Country Blues': ['sad', 'nostalgic', 'emotional'],
+    // ── Reggae ──
     'reggae': ['calm', 'happy', 'uplifting'],
+    'Roots Reggae': ['spiritual', 'calm', 'powerful'],
+    'Dancehall': ['energetic', 'party', 'groovy'],
     'ska': ['happy', 'energetic', 'groovy'],
     'dub': ['trance', 'calm', 'mystical'],
+    'Reggae Fusion': ['happy', 'calm', 'uplifting'],
+    'Lovers Rock': ['romantic', 'tender', 'calm'],
+    'Ragga': ['energetic', 'party', 'bold'],
+    // ── Classical / Orchestral ──
+    'classical': ['epic', 'emotional', 'calm'],
+    'Baroque': ['calm', 'elegant', 'spiritual'],
+    'Romantic': ['emotional', 'dramatic', 'tender'],
+    'Contemporary Classical': ['calm', 'experimental', 'emotional'],
+    'Symphony': ['epic', 'grand', 'emotional'],
+    'Opera': ['dramatic', 'emotional', 'epic'],
+    'Chamber Music': ['calm', 'elegant', 'emotional'],
+    'Choral': ['spiritual', 'uplifting', 'grand'],
+    'Gregorian Chant': ['spiritual', 'calm', 'mystical'],
+    // ── Electronic / Dance ──
+    'Lo-Fi': ['calm', 'nostalgic', 'dreamy'],
+    'House': ['energetic', 'club', 'groovy'],
+    'Deep House': ['calm', 'groovy', 'soulful'],
+    'Tech House': ['energetic', 'club', 'intense'],
+    'Trance': ['energetic', 'epic', 'cinematic'],
+    'Techno': ['intense', 'dark', 'energetic'],
+    'Dubstep': ['intense', 'dark', 'energetic'],
+    'Drum & Bass': ['energetic', 'intense', 'exciting'],
+    'EDM': ['energetic', 'party', 'uplifting'],
+    'Electro': ['energetic', 'exciting', 'dark'],
+    'Hardcore': ['intense', 'angry', 'energetic'],
+    'IDM': ['calm', 'experimental', 'cinematic'],
     'ambient': ['calm', 'peaceful', 'cinematic'],
     'synthwave': ['nostalgic', 'energetic', 'cinematic'],
     'chillwave': ['calm', 'nostalgic', 'dreamy'],
+    'Vaporwave': ['dreamy', 'nostalgic', 'calm'],
+    'Glitch': ['experimental', 'intense', 'dark'],
+    'Witch House': ['dark', 'mystical', 'trance'],
+    'Grime': ['angry', 'intense', 'bold'],
+    'UK Garage': ['groovy', 'energetic', 'soulful'],
+    '2-Step': ['groovy', 'energetic', 'happy'],
+    'Electro Swing': ['happy', 'energetic', 'nostalgic'],
+    'Chiptune': ['happy', 'playful', 'energetic'],
+    // ── World ──
+    'Flamenco': ['passionate', 'dramatic', 'emotional'],
+    'Fado': ['sad', 'nostalgic', 'emotional'],
+    'Celtic': ['nostalgic', 'spiritual', 'uplifting'],
+    'gospel': ['spiritual', 'uplifting', 'powerful'],
+    'Ragtime': ['happy', 'playful', 'nostalgic'],
+    'Zydeco': ['happy', 'energetic', 'celebratory'],
+    'Cajun': ['happy', 'energetic', 'nostalgic'],
+    'Industrial': ['dark', 'intense', 'angry'],
   };
 
   const recommendedRhythms = useMemo(() => {
@@ -1728,7 +2236,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       ];
     }
     return [
-      { title: 'Arabic & Gulf Traditional', items: ['oud','qanun','ney','riq','darbuka','tabla','frame drum','daff','mijwiz','rebab','gulf percussion'] },
+      { title: 'Arabic & Gulf Traditional', items: ['oud','qanun','ney','riq','darbuka','tabla','mirwas','tabl','tabl turki','frame drum','daff','tar','tanbura','mijwiz','rebab','gulf percussion'] },
       { title: 'Strings', items: ['violin','viola','cello','contrabass','strings'] },
       { title: 'Keys', items: ['piano','electric piano','soft piano','organ','accordion'] },
       { title: 'Guitars & Bass', items: ['acoustic guitar','electric guitar','bass guitar','upright bass','synth bass'] },
@@ -3316,13 +3824,13 @@ type Playlist = {
   createdAt: number;
 };
 
-// ─── Playlist storage helpers (localStorage) ──────────────────────────────────
-const PL_KEY = 'wakti_music_playlists';
-function loadPlaylists(): Playlist[] {
+// ─── Playlist storage helpers (Supabase-backed) ───────────────────────────────
+const PL_KEY = 'wakti_music_playlists'; // kept only for one-time migration of old local data
+function getLocalPlaylists(): Playlist[] {
   try { return JSON.parse(localStorage.getItem(PL_KEY) || '[]'); } catch { return []; }
 }
-function savePlaylists(pls: Playlist[]) {
-  localStorage.setItem(PL_KEY, JSON.stringify(pls));
+function clearLocalPlaylists() {
+  try { localStorage.removeItem(PL_KEY); } catch { /* ignore */ }
 }
 function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
   playlist: Playlist;
@@ -3673,9 +4181,22 @@ function EditorTab() {
     }
   };
 
-  const pollPoster = (posterId: string, kiePosterTaskId: string | null) => {
+  const POSTER_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+  const pollPoster = (posterId: string, kiePosterTaskId: string | null, startedAt: number = Date.now()) => {
     if (pollingRef.current[posterId]) return;
     pollingRef.current[posterId] = setInterval(async () => {
+      // Frontend stale guard — stop polling and mark failed after 10 min
+      if (Date.now() - startedAt > POSTER_TIMEOUT_MS) {
+        clearInterval(pollingRef.current[posterId]);
+        delete pollingRef.current[posterId];
+        setPosters(prev => prev.map(p => p.id === posterId ? { ...p, status: 'failed' } : p));
+        setGeneratingPosterTrackIds(prev => {
+          const poster = posters.find(p => p.id === posterId);
+          return poster ? prev.filter(id => id !== poster.track_id) : prev;
+        });
+        toast.error(isAr ? 'انتهت مهلة إنشاء البوستر' : 'Poster generation timed out');
+        return;
+      }
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
@@ -3684,21 +4205,37 @@ function EditorTab() {
         const resp = await fetch(`${SUPABASE_URL}/functions/v1/music-poster?${params}`, {
           headers: { 'Authorization': `Bearer ${session.access_token}`, 'apikey': SUPABASE_ANON_KEY },
         });
+        // 500 means poster no longer exists in DB — remove ghost from state
+        if (resp.status === 500 || resp.status === 404) {
+          clearInterval(pollingRef.current[posterId]);
+          delete pollingRef.current[posterId];
+          setPosters(prev => prev.filter(p => p.id !== posterId));
+          setGeneratingPosterTrackIds(prev => {
+            const poster = posters.find(p => p.id === posterId);
+            return poster ? prev.filter(id => id !== poster.track_id) : prev;
+          });
+          return;
+        }
         const json = await resp.json();
         if (json.status === 'completed') {
           clearInterval(pollingRef.current[posterId]);
           delete pollingRef.current[posterId];
           setPosters(prev => prev.map(p => p.id === posterId ? { ...p, status: 'completed', video_url: json.videoUrl } : p));
-          setGeneratingPosterTrackIds(prev => prev.filter(id => {
+          setGeneratingPosterTrackIds(prev => {
             const poster = posters.find(p => p.id === posterId);
-            return poster ? id !== poster.track_id : true;
-          }));
+            return poster ? prev.filter(id => id !== poster.track_id) : prev;
+          });
           toast.success(isAr ? 'تم إنشاء البوستر والتسميات!' : 'Poster & Captions ready!');
-        } else if (json.status === 'failed') {
+        } else if (json.status === 'failed' || json.error === 'not_found') {
           clearInterval(pollingRef.current[posterId]);
           delete pollingRef.current[posterId];
-          setPosters(prev => prev.map(p => p.id === posterId ? { ...p, status: 'failed' } : p));
-          toast.error(isAr ? 'فشل إنشاء البوستر' : 'Poster generation failed');
+          // Remove ghost poster from state entirely — don't show failed card
+          setPosters(prev => prev.filter(p => p.id !== posterId));
+          setGeneratingPosterTrackIds(prev => {
+            const poster = posters.find(p => p.id === posterId);
+            return poster ? prev.filter(id => id !== poster.track_id) : prev;
+          });
+          if (json.error !== 'not_found') toast.error(isAr ? 'فشل إنشاء البوستر' : 'Poster generation failed');
         }
       } catch (e) {
         console.error('[Posters] Poll error:', e);
@@ -3767,7 +4304,8 @@ function EditorTab() {
   }, []);
 
   // ── Playlists
-  const [playlists, setPlaylists] = useState<Playlist[]>(() => loadPlaylists());
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [playlistsLoading, setPlaylistsLoading] = useState(false);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [editingPlaylist, setEditingPlaylist] = useState<Playlist | null>(null);
@@ -3775,9 +4313,50 @@ function EditorTab() {
   const [activePlaylist, setActivePlaylist] = useState<Playlist | null>(null);
   const [deletePlaylistTarget, setDeletePlaylistTarget] = useState<Playlist | null>(null);
 
-  const persistPlaylists = (pls: Playlist[]) => {
-    setPlaylists(pls);
-    savePlaylists(pls);
+  const loadPlaylists = async () => {
+    if (!user) return;
+    setPlaylistsLoading(true);
+    try {
+      const { data, error } = await (supabase as any)
+        .from('user_music_playlists')
+        .select('id, name, track_ids, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      const pls: Playlist[] = (data || []).map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        trackIds: row.track_ids || [],
+        createdAt: new Date(row.created_at).getTime(),
+      }));
+      setPlaylists(pls);
+      // One-time migration: push any old localStorage playlists to Supabase
+      if (pls.length === 0) {
+        const local = getLocalPlaylists();
+        if (local.length > 0) {
+          const rows = local.map(pl => ({
+            id: pl.id,
+            user_id: user.id,
+            name: pl.name,
+            track_ids: pl.trackIds,
+            created_at: new Date(pl.createdAt).toISOString(),
+          }));
+          const { error: migrateErr } = await (supabase as any)
+            .from('user_music_playlists')
+            .upsert(rows, { onConflict: 'id' });
+          if (!migrateErr) {
+            setPlaylists(local);
+            clearLocalPlaylists();
+          }
+        }
+      } else {
+        clearLocalPlaylists();
+      }
+    } catch (e) {
+      console.error('[Playlists] Load error:', e);
+    } finally {
+      setPlaylistsLoading(false);
+    }
   };
 
   const load = async () => {
@@ -3818,7 +4397,7 @@ function EditorTab() {
     }
   };
 
-  useEffect(() => { load(); }, [user?.id]);
+  useEffect(() => { load(); loadPlaylists(); loadPosters(); }, [user?.id]);
 
   const handleDeleteConfirm = async () => {
     if (!deleteTrackTarget) return;
@@ -3835,32 +4414,67 @@ function EditorTab() {
     }
   };
 
-  const handleCreatePlaylist = () => {
+  const handleCreatePlaylist = async () => {
     const name = newPlaylistName.trim();
-    if (!name) return;
-    const pl: Playlist = { id: crypto.randomUUID(), name, trackIds: [], createdAt: Date.now() };
-    persistPlaylists([...playlists, pl]);
-    setNewPlaylistName('');
-    setShowCreatePlaylist(false);
-    setEditingPlaylist(pl);
-    setSavedSubTab('playlists');
-    toast.success(isAr ? `تم إنشاء قائمة "${name}"` : `Playlist "${name}" created`);
+    if (!name || !user) return;
+    try {
+      const { data: row, error } = await (supabase as any)
+        .from('user_music_playlists')
+        .insert({ user_id: user.id, name, track_ids: [] })
+        .select('id, name, track_ids, created_at')
+        .single();
+      if (error) throw error;
+      const pl: Playlist = { id: row.id, name: row.name, trackIds: row.track_ids || [], createdAt: new Date(row.created_at).getTime() };
+      setPlaylists(prev => [...prev, pl]);
+      setNewPlaylistName('');
+      setShowCreatePlaylist(false);
+      setEditingPlaylist(pl);
+      setSavedSubTab('playlists');
+      toast.success(isAr ? `تم إنشاء قائمة "${name}"` : `Playlist "${name}" created`);
+    } catch (e: any) {
+      console.error('[Playlists] Create error:', e);
+      toast.error(isAr ? 'فشل إنشاء القائمة' : 'Failed to create playlist');
+    }
   };
 
-  const toggleTrackInPlaylist = (pl: Playlist, trackId: string) => {
+  const toggleTrackInPlaylist = async (pl: Playlist, trackId: string) => {
     const has = pl.trackIds.includes(trackId);
-    const updated = { ...pl, trackIds: has ? pl.trackIds.filter(id => id !== trackId) : [...pl.trackIds, trackId] };
-    persistPlaylists(playlists.map(p => p.id === pl.id ? updated : p));
+    const newTrackIds = has ? pl.trackIds.filter(id => id !== trackId) : [...pl.trackIds, trackId];
+    const updated: Playlist = { ...pl, trackIds: newTrackIds };
+    setPlaylists(prev => prev.map(p => p.id === pl.id ? updated : p));
     setEditingPlaylist(updated);
+    try {
+      const { error } = await (supabase as any)
+        .from('user_music_playlists')
+        .update({ track_ids: newTrackIds })
+        .eq('id', pl.id);
+      if (error) throw error;
+    } catch (e: any) {
+      console.error('[Playlists] Update error:', e);
+      setPlaylists(prev => prev.map(p => p.id === pl.id ? pl : p));
+      setEditingPlaylist(pl);
+      toast.error(isAr ? 'فشل التحديث' : 'Failed to update playlist');
+    }
   };
 
-  const handleDeletePlaylist = (pl: Playlist) => {
-    persistPlaylists(playlists.filter(p => p.id !== pl.id));
+  const handleDeletePlaylist = async (pl: Playlist) => {
+    setPlaylists(prev => prev.filter(p => p.id !== pl.id));
     if (activePlaylist?.id === pl.id) setActivePlaylist(null);
     if (editingPlaylist?.id === pl.id) setEditingPlaylist(null);
     if (pickerPlaylistId === pl.id) setPickerPlaylistId(null);
     setDeletePlaylistTarget(null);
-    toast.success(isAr ? 'تم حذف القائمة' : 'Playlist deleted');
+    try {
+      const { error } = await (supabase as any)
+        .from('user_music_playlists')
+        .delete()
+        .eq('id', pl.id);
+      if (error) throw error;
+      toast.success(isAr ? 'تم حذف القائمة' : 'Playlist deleted');
+    } catch (e: any) {
+      console.error('[Playlists] Delete error:', e);
+      setPlaylists(prev => [...prev, pl]);
+      toast.error(isAr ? 'فشل الحذف' : 'Failed to delete playlist');
+    }
   };
 
   return (
@@ -4005,17 +4619,44 @@ function EditorTab() {
                       <div className="px-4 pb-4 space-y-3">
                         <AudioPlayer src={t.play_url} className="w-full" />
                         <div className="flex items-center gap-2 justify-end flex-wrap">
-                          {t.task_id && (
-                            <button type="button"
-                              onClick={() => handleCreatePoster(t)}
-                              disabled={generatingPosterTrackIds.includes(t.id)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#f0c8f0] dark:border-pink-400/20 bg-[#fdf0ff] dark:bg-pink-500/10 text-[#9333ea] dark:text-pink-300 shadow-[0_4px_12px_rgba(147,51,234,0.10)] dark:shadow-none hover:bg-[#f8e4ff] dark:hover:bg-pink-500/20 active:scale-95 transition-all disabled:opacity-50">
-                              {generatingPosterTrackIds.includes(t.id)
-                                ? <Loader2 className="h-3 w-3 animate-spin" />
-                                : <Film className="h-3 w-3" />}
-                              {isAr ? 'بوستر' : 'Poster & Captions'}
-                            </button>
-                          )}
+                          {(() => {
+                            const completedPoster = posters.find(p => p.track_id === t.id && p.status === 'completed');
+                            const isGenerating = generatingPosterTrackIds.includes(t.id) || posters.some(p => p.track_id === t.id && p.status === 'generating');
+                            // Resolve kie_track_id: use own or find from sibling track with same task_id
+                            const kieTrackId = (t.meta as any)?.kie_track_id
+                              || tracks.find(s => s.id !== t.id && s.task_id === t.task_id && (s.meta as any)?.kie_track_id)
+                                 && (tracks.find(s => s.id !== t.id && s.task_id === t.task_id && (s.meta as any)?.kie_track_id)!.meta as any)?.kie_track_id;
+                            if (completedPoster) {
+                              return (
+                                <button type="button"
+                                  onClick={() => setSavedSubTab('posters')}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-emerald-400/30 dark:border-emerald-400/20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 shadow-[0_4px_12px_rgba(16,185,129,0.10)] dark:shadow-none hover:bg-emerald-100 dark:hover:bg-emerald-500/20 active:scale-95 transition-all">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  {isAr ? 'بوستر وتسميات ✓' : 'Poster & Captions ✓'}
+                                </button>
+                              );
+                            }
+                            if (isGenerating) {
+                              return (
+                                <button type="button" disabled
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#f0c8f0] dark:border-pink-400/20 bg-[#fdf0ff] dark:bg-pink-500/10 text-[#9333ea] dark:text-pink-300 opacity-70">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  {isAr ? 'جاري الإنشاء...' : 'Generating...'}
+                                </button>
+                              );
+                            }
+                            if (t.task_id && kieTrackId) {
+                              return (
+                                <button type="button"
+                                  onClick={() => handleCreatePoster({ ...t, meta: { ...(t.meta as any), kie_track_id: kieTrackId } } as any)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#f0c8f0] dark:border-pink-400/20 bg-[#fdf0ff] dark:bg-pink-500/10 text-[#9333ea] dark:text-pink-300 shadow-[0_4px_12px_rgba(147,51,234,0.10)] dark:shadow-none hover:bg-[#f8e4ff] dark:hover:bg-pink-500/20 active:scale-95 transition-all">
+                                  <Film className="h-3 w-3" />
+                                  {isAr ? 'بوستر وتسميات' : 'Poster & Captions'}
+                                </button>
+                              );
+                            }
+                            return null;
+                          })()}
                           <button type="button"
                             onPointerUp={() => handleDownload(t.play_url || '', `wakti-music-${t.id}.mp3`)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:shadow-none text-muted-foreground hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20 active:scale-95 transition-all">
@@ -4119,9 +4760,10 @@ function EditorTab() {
                           playsInline
                           className="w-full rounded-xl border border-[#f0c8f0] dark:border-pink-400/20 shadow-[0_4px_16px_rgba(147,51,234,0.15)] dark:shadow-none bg-black"
                         />
+                        {/* ── Actions ── */}
                         <div className="flex items-center gap-2 justify-end flex-wrap">
-                          <button
-                            type="button"
+                          {/* Download — fetch blob and trigger save */}
+                          <button type="button"
                             onClick={async () => {
                               try {
                                 const { data: { session } } = await supabase.auth.getSession();
@@ -4145,33 +4787,24 @@ function EditorTab() {
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#f0c8f0] dark:border-pink-400/20 bg-[#fdf0ff] dark:bg-pink-500/10 text-[#9333ea] dark:text-pink-300 shadow-[0_4px_12px_rgba(147,51,234,0.10)] dark:shadow-none hover:bg-[#f8e4ff] dark:hover:bg-pink-500/20 active:scale-95 transition-all">
                             <Download className="h-3 w-3" />{isAr ? 'تنزيل' : 'Download'}
                           </button>
-                          <button
-                            type="button"
+                          {/* Share — clean wakti.qa/poster/{id} URL */}
+                          <button type="button"
+                            aria-label={isAr ? 'مشاركة' : 'Share'}
                             onClick={async () => {
-                              const filename = `wakti-poster-${poster.id}.mp4`;
+                              const shareUrl = `${window.location.origin}/poster/${poster.id}`;
                               const title = isAr ? 'بوستر موسيقي من وقتي 🎬' : 'My Wakti music poster 🎬';
                               try {
-                                const { data: { session } } = await supabase.auth.getSession();
-                                const proxyUrl = `${SUPABASE_URL}/functions/v1/music-poster?proxy=1&posterId=${poster.id}`;
-                                const r = await fetch(proxyUrl, {
-                                  headers: { 'Authorization': `Bearer ${session?.access_token}`, 'apikey': SUPABASE_ANON_KEY },
-                                });
-                                const blob = await r.blob();
-                                const file = new File([blob], filename, { type: 'video/mp4' });
-                                if (navigator.canShare?.({ files: [file] })) {
-                                  await navigator.share({ files: [file], title });
-                                } else if (navigator.share) {
-                                  await navigator.share({ url: poster.video_url!, title });
+                                if (navigator.share) {
+                                  await navigator.share({ title, url: shareUrl });
                                 } else {
-                                  await navigator.clipboard.writeText(poster.video_url!);
-                                  toast.success(isAr ? 'تم نسخ الرابط' : 'Link copied!');
+                                  await navigator.clipboard.writeText(shareUrl);
+                                  toast.success(isAr ? 'تم نسخ الرابط!' : 'Link copied!');
                                 }
                               } catch (e: any) {
                                 if (e?.name !== 'AbortError') toast.error(isAr ? 'فشل المشاركة' : 'Share failed');
                               }
                             }}
-                            aria-label={isAr ? 'مشاركة' : 'Share'}
-                            className="w-10 h-10 flex items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg hover:scale-105 active:scale-95 transition-all">
+                            className="w-9 h-9 flex items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg hover:scale-105 active:scale-95 transition-all">
                             <Share2 className="h-4 w-4" />
                           </button>
                         </div>

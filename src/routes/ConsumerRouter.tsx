@@ -51,6 +51,7 @@ const FitnessWhoopCallback = lazy(() => import("@/pages/FitnessWhoopCallback"));
 const Journal = lazy(() => import("@/pages/Journal"));
 const MusicStudio = lazy(() => import("@/pages/MusicStudio"));
 const MusicShare = lazy(() => import("@/pages/MusicShare"));
+const PosterShare = lazy(() => import("@/pages/PosterShare"));
 const ImageShare = lazy(() => import("@/pages/ImageShare"));
 const VideoShare = lazy(() => import("@/pages/VideoShare"));
 const BusinessCardShare = lazy(() => import("@/pages/BusinessCardShare"));
@@ -110,6 +111,7 @@ export default function ConsumerRouter() {
         <Route path="/card/:shareSlug" element={<BusinessCardShare />} />
         <Route path="/maw3d/:shortId" element={<Maw3dView />} />
         <Route path="/music/share/:id" element={<MusicShare />} />
+        <Route path="/poster/:id" element={<PosterShare />} />
         <Route path="/image/:id" element={<ImageShare />} />
         <Route path="/video/:id" element={<VideoShare />} />
         <Route path="/wallet-pass" element={<WalletPass />} />

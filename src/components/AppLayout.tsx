@@ -812,7 +812,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                   <Sparkles className="w-5 h-5 mr-2" />
                   {language === 'ar' ? 'ابدأ مجاناً ✨' : 'Start Free ✨'}
                 </Button>
-                <p className="text-center text-[10px] text-foreground/40 mt-2">
+                <p className="text-center text-sm font-medium text-cyan-400 mt-3">
                   {language === 'ar' ? '24 ساعة مجاناً — لا بطاقة مطلوبة' : '24 hours free — no card required'}
                 </p>
               </div>
@@ -839,11 +839,29 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                   const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
                   if (language === 'ar') {
                     const usd = isQUUser ? '19.99 دولار أمريكي/شهر' : (normalize(price.usd).replace('/month', '/شهر').replace('$', '') + ' دولار أمريكي/شهر') || '25 دولار أمريكي/شهر';
-                    const qar = isQUUser ? 'ر.ق 73.5/شهر' : (normalize(price.qar).replace('/month', '/شهر').replace('QAR', 'ر.ق').trim() || 'ر.ق 92/شهر');
+                    const qar = isQUUser ? 'ر.ق 73/شهر' : (normalize(price.qar).replace('/month', '/شهر').replace('QAR', 'ر.ق').trim() || 'ر.ق 92/شهر');
+                    const originalQarAr = isQUUser ? 'ر.ق 93' : null;
+                    const originalUsdAr = isQUUser ? '$25' : null;
                     return (
                       <>
                         {isQUUser && (
-                          <p className="text-xs font-semibold text-[hsl(45,100%,60%)] mb-1">🎓 تم تطبيق الخصم الأكاديمي</p>
+                          <>
+                            <div className="flex items-center justify-center gap-3 text-sm mb-2">
+                              <span className="relative inline-block text-muted-foreground/50 font-medium">
+                                {originalQarAr}
+                                <span className="absolute left-0 right-0 top-1/2 h-[2px] bg-cyan-400 transform -rotate-12 -translate-y-1/2 rounded-full shadow-[0_0_4px_rgba(34,211,238,0.8)]"></span>
+                              </span>
+                              <span className="text-muted-foreground/20">•</span>
+                              <span className="relative inline-block text-muted-foreground/50 font-medium">
+                                {originalUsdAr}
+                                <span className="absolute left-0 right-0 top-1/2 h-[2px] bg-cyan-400 transform -rotate-12 -translate-y-1/2 rounded-full shadow-[0_0_4px_rgba(34,211,238,0.8)]"></span>
+                              </span>
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-400/30 shadow-[0_0_12px_rgba(245,158,11,0.3)] mb-2">
+                              <span className="text-base">🎓</span>
+                              <span className="text-sm font-bold text-amber-400 tracking-wide">تم تطبيق الخصم الأكاديمي</span>
+                            </div>
+                          </>
                         )}
                         <div className="flex items-center justify-center gap-3">
                           <p className="text-lg text-muted-foreground">{usd}</p>
@@ -853,12 +871,30 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                       </>
                     );
                   } else {
-                    const qar = isQUUser ? 'QAR 73.5/month' : (normalize(price.qar) || 'QAR 92/month');
+                    const qar = isQUUser ? 'QAR 73/month' : (normalize(price.qar) || 'QAR 92/month');
                     const usd = isQUUser ? '$19.99/month' : (normalize(price.usd) || '$25/month');
+                    const originalQar = isQUUser ? 'QAR 93' : null;
+                    const originalUsd = isQUUser ? '$25' : null;
                     return (
                       <>
                         {isQUUser && (
-                          <p className="text-xs font-semibold text-[hsl(45,100%,60%)] mb-1">🎓 Academic Discount Applied</p>
+                          <>
+                            <div className="flex items-center justify-center gap-3 text-sm mb-2">
+                              <span className="relative inline-block text-muted-foreground/50 font-medium">
+                                {originalQar}
+                                <span className="absolute left-0 right-0 top-1/2 h-[2px] bg-cyan-400 transform -rotate-12 -translate-y-1/2 rounded-full shadow-[0_0_4px_rgba(34,211,238,0.8)]"></span>
+                              </span>
+                              <span className="text-muted-foreground/20">•</span>
+                              <span className="relative inline-block text-muted-foreground/50 font-medium">
+                                {originalUsd}
+                                <span className="absolute left-0 right-0 top-1/2 h-[2px] bg-cyan-400 transform -rotate-12 -translate-y-1/2 rounded-full shadow-[0_0_4px_rgba(34,211,238,0.8)]"></span>
+                              </span>
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-400/30 shadow-[0_0_12px_rgba(245,158,11,0.3)] mb-2">
+                              <span className="text-base">🎓</span>
+                              <span className="text-sm font-bold text-amber-400 tracking-wide">Academic Discount Applied</span>
+                            </div>
+                          </>
                         )}
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3">
                           <p className="text-xl sm:text-2xl font-bold text-primary">{qar}</p>
