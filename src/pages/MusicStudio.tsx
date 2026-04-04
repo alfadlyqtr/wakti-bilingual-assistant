@@ -53,6 +53,8 @@ import {
   SkipForward,
   ChevronDown,
   ChevronUp,
+  Film,
+  Download,
 } from 'lucide-react';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import StudioImageGenerator from '@/components/studio/StudioImageGenerator';
@@ -2750,7 +2752,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                   </div>
                   {STYLE_GROUPS.map((group) => (
                     <div key={group.title} className="space-y-2">
-                      <div className="text-[10px] sm:text-xs font-medium uppercase tracking-wide text-muted-foreground/60 dark:text-muted-foreground/50">
+                      <div className="text-[11px] font-bold uppercase tracking-widest text-[#060541]/70 dark:text-sky-200/80 px-0.5">
                         {group.title}
                       </div>
                       <div className="grid grid-cols-4 gap-2">
@@ -2759,10 +2761,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                             key={style}
                             type="button"
                             onClick={() => handleStyleToggle(style)}
-                            className={`w-full min-h-[52px] px-3 py-2.5 rounded-2xl text-xs sm:text-sm leading-tight text-center border transition-all active:scale-95 whitespace-normal break-words flex items-center justify-center ${
+                            className={`w-full min-h-[52px] px-2 py-2.5 rounded-2xl text-[11px] sm:text-xs font-semibold leading-tight text-center border transition-all active:scale-95 whitespace-normal break-words flex items-center justify-center ${
                               includeTags.includes(style)
-                                ? 'bg-sky-50 dark:bg-sky-500/25 border-sky-300 dark:border-sky-400/40 text-sky-700 dark:text-sky-200 shadow-[0_4px_12px_rgba(59,130,246,0.12)] dark:shadow-none'
-                                : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-sky-300 dark:hover:border-sky-400/30 hover:text-sky-600 dark:hover:text-sky-300'
+                                ? 'bg-sky-50 dark:bg-sky-500/25 border-sky-300 dark:border-sky-400/50 text-sky-700 dark:text-sky-200 shadow-[0_4px_12px_rgba(59,130,246,0.15)] dark:shadow-[0_0_12px_rgba(56,189,248,0.2)]'
+                                : 'bg-white dark:bg-white/[0.09] border-[#d9dde7] dark:border-white/20 text-[#374151] dark:text-white/90 hover:border-sky-300 dark:hover:border-sky-400/50 hover:text-sky-700 dark:hover:text-sky-200 hover:bg-sky-50/50 dark:hover:bg-sky-500/15'
                             }`}
                           >
                             {style}
@@ -2845,7 +2847,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                   </div>
                   {RHYTHM_GROUPS.map((group) => (
                     <div key={group.title} className="space-y-2">
-                      <div className="text-[10px] sm:text-xs font-medium uppercase tracking-wide text-muted-foreground/60 dark:text-muted-foreground/50">
+                      <div className="text-[11px] font-bold uppercase tracking-widest text-[#060541]/70 dark:text-orange-200/80 px-0.5">
                         {group.title}
                       </div>
                       <div className="grid grid-cols-3 gap-2">
@@ -2854,12 +2856,12 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                             key={rhythm}
                             type="button"
                             onClick={() => handleRhythmToggle(rhythm)}
-                            className={`w-full min-h-[52px] px-3 py-2.5 rounded-2xl text-xs sm:text-sm leading-tight text-center border transition-all active:scale-95 whitespace-normal break-words flex items-center justify-center ${
+                            className={`w-full min-h-[52px] px-3 py-2.5 rounded-2xl text-[11px] font-semibold leading-tight text-center border transition-all active:scale-95 whitespace-normal break-words flex items-center justify-center ${
                               rhythmTags.includes(rhythm)
-                                ? 'bg-orange-50 dark:bg-orange-500/25 border-orange-300 dark:border-orange-400/40 text-orange-700 dark:text-orange-200 shadow-[0_4px_12px_rgba(249,115,22,0.12)] dark:shadow-none'
+                                ? 'bg-orange-50 dark:bg-orange-500/25 border-orange-300 dark:border-orange-400/40 text-orange-700 dark:text-orange-200 shadow-[0_4px_12px_rgba(249,115,22,0.12)] dark:shadow-[0_0_12px_rgba(249,115,22,0.15)]'
                                 : recommendedRhythms.includes(rhythm)
-                                  ? 'bg-orange-50/40 dark:bg-orange-500/8 border-orange-200 dark:border-orange-400/20 text-orange-500 dark:text-orange-400/80'
-                                  : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-orange-300 dark:hover:border-orange-400/30 hover:text-orange-600 dark:hover:text-orange-300'
+                                  ? 'bg-orange-50/40 dark:bg-orange-500/15 border-orange-200 dark:border-orange-400/30 text-orange-600 dark:text-orange-300'
+                                  : 'bg-white dark:bg-white/[0.09] border-[#d9dde7] dark:border-white/20 text-[#374151] dark:text-white/90 hover:border-orange-300 dark:hover:border-orange-400/40 hover:text-orange-600 dark:hover:text-orange-200 dark:hover:bg-orange-500/15'
                             }`}
                           >
                             {rhythm}
@@ -2944,7 +2946,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                   </div>
                   {MODE_GROUPS.map((group) => (
                     <div key={group.title} className="space-y-2">
-                      <div className="text-[10px] sm:text-xs font-medium uppercase tracking-wide text-muted-foreground/60 dark:text-muted-foreground/50">
+                      <div className="text-[11px] font-bold uppercase tracking-widest text-[#060541]/70 dark:text-amber-200/80 px-0.5">
                         {group.title}
                       </div>
                       <div className="grid grid-cols-3 gap-2">
@@ -2953,10 +2955,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                             key={mood}
                             type="button"
                             onClick={() => handleMoodToggle(mood)}
-                            className={`w-full min-h-[52px] px-3 py-2.5 rounded-2xl text-xs sm:text-sm leading-tight text-center border transition-all active:scale-95 whitespace-normal break-words flex items-center justify-center ${
+                            className={`w-full min-h-[52px] px-3 py-2.5 rounded-2xl text-[11px] font-semibold leading-tight text-center border transition-all active:scale-95 whitespace-normal break-words flex items-center justify-center ${
                               moodTags.includes(mood)
-                                ? 'bg-amber-50 dark:bg-amber-500/25 border-amber-300 dark:border-amber-400/40 text-amber-700 dark:text-amber-200 shadow-[0_4px_12px_rgba(245,158,11,0.12)] dark:shadow-none'
-                                : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-amber-300 dark:hover:border-amber-400/30 hover:text-amber-600 dark:hover:text-amber-300'
+                                ? 'bg-amber-50 dark:bg-amber-500/25 border-amber-300 dark:border-amber-400/40 text-amber-700 dark:text-amber-200 shadow-[0_4px_12px_rgba(245,158,11,0.12)] dark:shadow-[0_0_12px_rgba(245,158,11,0.15)]'
+                                : 'bg-white dark:bg-white/[0.09] border-[#d9dde7] dark:border-white/20 text-[#374151] dark:text-white/90 hover:border-amber-300 dark:hover:border-amber-400/40 hover:text-amber-600 dark:hover:text-amber-200 dark:hover:bg-amber-500/15'
                             }`}
                           >
                             {mood}
@@ -3021,7 +3023,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                   </div>
                   {INSTRUMENT_GROUPS.map((group) => (
                     <div key={group.title} className="space-y-2">
-                      <div className="text-[10px] sm:text-xs font-medium uppercase tracking-wide text-muted-foreground/60 dark:text-muted-foreground/50">
+                      <div className="text-[11px] font-bold uppercase tracking-widest text-[#060541]/70 dark:text-purple-200/80 px-0.5">
                         {group.title}
                       </div>
                       <div className="grid grid-cols-3 gap-2">
@@ -3033,12 +3035,12 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                               key={inst}
                               type="button"
                               onClick={() => handleInstrumentToggle(inst)}
-                              className={`w-full min-h-[52px] px-3 py-2.5 rounded-2xl text-xs sm:text-sm leading-tight text-center border transition-all active:scale-95 whitespace-normal break-words flex items-center justify-center ${
+                              className={`w-full min-h-[52px] px-3 py-2.5 rounded-2xl text-[11px] font-semibold leading-tight text-center border transition-all active:scale-95 whitespace-normal break-words flex items-center justify-center ${
                                 isSelected
-                                  ? 'bg-purple-50 dark:bg-purple-500/25 border-purple-300 dark:border-purple-400/40 text-purple-700 dark:text-purple-200 shadow-[0_4px_12px_rgba(147,51,234,0.12)] dark:shadow-none'
+                                  ? 'bg-purple-50 dark:bg-purple-500/25 border-purple-300 dark:border-purple-400/40 text-purple-700 dark:text-purple-200 shadow-[0_4px_12px_rgba(147,51,234,0.12)] dark:shadow-[0_0_12px_rgba(147,51,234,0.2)]'
                                   : isRecommended
-                                    ? 'bg-emerald-50 dark:bg-emerald-500/20 border-emerald-300 dark:border-emerald-400/30 text-emerald-700 dark:text-emerald-300 shadow-[0_4px_12px_rgba(16,185,129,0.10)] dark:shadow-none ring-1 ring-emerald-400/30'
-                                    : 'bg-white dark:bg-transparent border-[#d9dde7] dark:border-white/[0.08] text-muted-foreground/90 dark:text-muted-foreground/80 hover:border-purple-300 dark:hover:border-purple-400/30 hover:text-purple-600 dark:hover:text-purple-300'
+                                    ? 'bg-emerald-50 dark:bg-emerald-500/20 border-emerald-300 dark:border-emerald-400/35 text-emerald-700 dark:text-emerald-200 shadow-[0_4px_12px_rgba(16,185,129,0.10)] dark:shadow-none'
+                                    : 'bg-white dark:bg-white/[0.09] border-[#d9dde7] dark:border-white/20 text-[#374151] dark:text-white/90 hover:border-purple-300 dark:hover:border-purple-400/40 hover:text-purple-600 dark:hover:text-purple-200 dark:hover:bg-purple-500/15'
                               }`}
                             >
                               {inst}
@@ -3293,6 +3295,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 type SavedTrack = {
   id: string;
   created_at: string;
+  task_id: string | null;
   title: string | null;
   prompt: string | null;
   include_styles: string[] | null;
@@ -3628,13 +3631,140 @@ function EditorTab() {
   const { user } = useAuth();
   const isAr = language === 'ar';
 
-  // ── Saved sub-tab: tracks vs playlists
-  const [savedSubTab, setSavedSubTab] = useState<'tracks' | 'playlists'>('tracks');
+  // ── Saved sub-tab: tracks vs playlists vs posters
+  const [savedSubTab, setSavedSubTab] = useState<'tracks' | 'playlists' | 'posters'>('tracks');
 
   // ── Tracks
   const [loading, setLoading] = useState(false);
   const [tracks, setTracks] = useState<SavedTrack[]>([]);
   const [deleteTrackTarget, setDeleteTrackTarget] = useState<{ id: string; storagePath: string | null } | null>(null);
+
+  // ── Poster & Captions
+  type MusicPoster = {
+    id: string;
+    track_id: string;
+    author: string;
+    status: 'generating' | 'completed' | 'failed';
+    video_url: string | null;
+    created_at: string;
+    kie_poster_task_id: string | null;
+  };
+  const [posters, setPosters] = useState<MusicPoster[]>([]);
+  const [postersLoading, setPostersLoading] = useState(false);
+  const [generatingPosterTrackIds, setGeneratingPosterTrackIds] = useState<string[]>([]);
+  const [expandedPosterId, setExpandedPosterId] = useState<string | null>(null);
+  const pollingRef = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+
+  const loadPosters = async () => {
+    if (!user) return;
+    setPostersLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/music-poster?list=1`, {
+        headers: { 'Authorization': `Bearer ${session.access_token}`, 'apikey': SUPABASE_ANON_KEY },
+      });
+      const json = await resp.json();
+      if (json.posters) setPosters(json.posters);
+    } catch (e) {
+      console.error('[Posters] Load error:', e);
+    } finally {
+      setPostersLoading(false);
+    }
+  };
+
+  const pollPoster = (posterId: string, kiePosterTaskId: string | null) => {
+    if (pollingRef.current[posterId]) return;
+    pollingRef.current[posterId] = setInterval(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        const params = new URLSearchParams({ posterId });
+        if (kiePosterTaskId) params.set('taskId', kiePosterTaskId);
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/music-poster?${params}`, {
+          headers: { 'Authorization': `Bearer ${session.access_token}`, 'apikey': SUPABASE_ANON_KEY },
+        });
+        const json = await resp.json();
+        if (json.status === 'completed') {
+          clearInterval(pollingRef.current[posterId]);
+          delete pollingRef.current[posterId];
+          setPosters(prev => prev.map(p => p.id === posterId ? { ...p, status: 'completed', video_url: json.videoUrl } : p));
+          setGeneratingPosterTrackIds(prev => prev.filter(id => {
+            const poster = posters.find(p => p.id === posterId);
+            return poster ? id !== poster.track_id : true;
+          }));
+          toast.success(isAr ? 'تم إنشاء البوستر والتسميات!' : 'Poster & Captions ready!');
+        } else if (json.status === 'failed') {
+          clearInterval(pollingRef.current[posterId]);
+          delete pollingRef.current[posterId];
+          setPosters(prev => prev.map(p => p.id === posterId ? { ...p, status: 'failed' } : p));
+          toast.error(isAr ? 'فشل إنشاء البوستر' : 'Poster generation failed');
+        }
+      } catch (e) {
+        console.error('[Posters] Poll error:', e);
+      }
+    }, 8000);
+  };
+
+  const handleCreatePoster = async (track: SavedTrack) => {
+    if (!user) return;
+    const taskId = track.task_id;
+    const audioId = (track.meta as any)?.kie_track_id as string | undefined;
+    if (!taskId || !audioId) {
+      toast.error(isAr ? 'هذا المقطع القديم لا يدعم البوستر' : 'This track is too old for Poster & Captions');
+      return;
+    }
+    setGeneratingPosterTrackIds(prev => [...prev, track.id]);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
+      const { data: profile } = await (supabase as any)
+        .from('profiles')
+        .select('display_name, username, email')
+        .eq('id', user.id)
+        .maybeSingle();
+      const author = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'Wakti User';
+      console.log('[Poster] Sending to edge fn:', { trackId: track.id, taskId, audioId, author });
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/music-poster`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session.access_token}`, 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackId: track.id, taskId, audioId, author }),
+      });
+      const json = await resp.json();
+      if (json.error) throw new Error(json.error);
+      const newPoster: MusicPoster = {
+        id: json.posterId,
+        track_id: track.id,
+        author,
+        status: json.status,
+        video_url: json.videoUrl ?? null,
+        created_at: new Date().toISOString(),
+        kie_poster_task_id: json.taskId ?? null,
+      };
+      setPosters(prev => [newPoster, ...prev]);
+      if (json.status === 'generating') {
+        toast.info(isAr ? 'جاري إنشاء البوستر... سيستغرق بضع دقائق' : 'Generating Poster & Captions... takes a few minutes');
+        pollPoster(json.posterId, json.taskId ?? null);
+      } else if (json.status === 'completed') {
+        setGeneratingPosterTrackIds(prev => prev.filter(id => id !== track.id));
+        toast.success(isAr ? 'تم إنشاء البوستر!' : 'Poster & Captions ready!');
+      }
+    } catch (e: any) {
+      setGeneratingPosterTrackIds(prev => prev.filter(id => id !== track.id));
+      console.error('[Poster] Creation error:', e?.message || e);
+      toast.error(isAr ? 'فشل إنشاء البوستر. حاول مرة أخرى.' : 'Poster creation failed. Please try again.');
+    }
+  };
+
+  useEffect(() => {
+    if (savedSubTab === 'posters') loadPosters();
+  }, [savedSubTab, user?.id]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(pollingRef.current).forEach(clearInterval);
+    };
+  }, []);
 
   // ── Playlists
   const [playlists, setPlaylists] = useState<Playlist[]>(() => loadPlaylists());
@@ -3656,7 +3786,7 @@ function EditorTab() {
     try {
       const { data, error } = await (supabase as any)
         .from('user_music_tracks')
-        .select('id, created_at, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta')
+        .select('id, created_at, task_id, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(60);
@@ -3736,27 +3866,33 @@ function EditorTab() {
   return (
     <div className="space-y-4">
 
-      {/* ── Sub-tab nav: My Tracks / My Playlists ── */}
+      {/* ── Sub-tab nav: My Tracks / My Playlists / Poster & Captions ── */}
       <div className="flex items-center gap-2">
-        <nav className="flex gap-1.5 p-1 rounded-xl bg-[#ffffff] dark:bg-white/[0.04] border border-[#d9dde7] dark:border-white/10 shadow-[0_6px_18px_rgba(6,5,65,0.08)] dark:shadow-none flex-1">
+        <nav className="flex gap-1 p-1 rounded-xl bg-[#ffffff] dark:bg-white/[0.04] border border-[#d9dde7] dark:border-white/10 shadow-[0_6px_18px_rgba(6,5,65,0.08)] dark:shadow-none flex-1">
           {([
             { key: 'tracks' as const, labelEn: 'My Tracks', labelAr: 'مقاطعي', icon: Music },
             { key: 'playlists' as const, labelEn: 'My Playlists', labelAr: 'قوائمي', icon: ListMusic },
+            { key: 'posters' as const, labelEn: 'Poster & Captions', labelAr: 'بوستر', icon: Film },
           ]).map(({ key, labelEn, labelAr, icon: Icon }) => (
             <button key={key} type="button" onClick={() => setSavedSubTab(key)}
-              className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${savedSubTab === key ? 'bg-gradient-to-r from-[#f1e7ff] to-[#dff0ff] dark:from-purple-500/20 dark:to-sky-500/20 border border-[#cbb9f3] dark:border-purple-400/20 text-[#060541] dark:text-foreground shadow-[0_4px_12px_rgba(6,5,65,0.08)] dark:shadow-sm' : 'text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground hover:bg-[#f8f9fc] dark:hover:bg-transparent'}`}>
-              <Icon className="h-3 w-3" />
-              {isAr ? labelAr : labelEn}
+              className={`flex-1 inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold transition-all active:scale-95 ${savedSubTab === key ? 'bg-gradient-to-r from-[#f1e7ff] to-[#dff0ff] dark:from-purple-500/20 dark:to-sky-500/20 border border-[#cbb9f3] dark:border-purple-400/20 text-[#060541] dark:text-foreground shadow-[0_4px_12px_rgba(6,5,65,0.08)] dark:shadow-sm' : 'text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground hover:bg-[#f8f9fc] dark:hover:bg-transparent'}`}>
+              <Icon className="h-3 w-3 flex-shrink-0" />
+              <span className="truncate">{isAr ? labelAr : labelEn}</span>
             </button>
           ))}
         </nav>
 
-        {/* Actions row */}
+        {/* Actions — icon-only refresh, smaller */}
         {savedSubTab === 'tracks' && (
-          <button type="button" onClick={load} disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-[#ffffff] dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.06)] dark:shadow-none text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20 active:scale-95 transition-all disabled:opacity-50">
+          <button type="button" onClick={load} disabled={loading} title={isAr ? 'تحديث' : 'Refresh'}
+            className="p-1.5 rounded-lg border border-[#d9dde7] dark:border-white/10 bg-[#ffffff] dark:bg-white/[0.04] shadow-[0_2px_8px_rgba(6,5,65,0.05)] dark:shadow-none text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20 active:scale-95 transition-all disabled:opacity-50">
             <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? (isAr ? 'تحديث...' : 'Loading...') : (isAr ? 'تحديث' : 'Refresh')}
+          </button>
+        )}
+        {savedSubTab === 'posters' && (
+          <button type="button" onClick={loadPosters} disabled={postersLoading} title={isAr ? 'تحديث' : 'Refresh'}
+            className="p-1.5 rounded-lg border border-[#d9dde7] dark:border-white/10 bg-[#ffffff] dark:bg-white/[0.04] shadow-[0_2px_8px_rgba(6,5,65,0.05)] dark:shadow-none text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20 active:scale-95 transition-all disabled:opacity-50">
+            <RefreshCw className={`h-3 w-3 ${postersLoading ? 'animate-spin' : ''}`} />
           </button>
         )}
         {savedSubTab === 'playlists' && (
@@ -3869,6 +4005,17 @@ function EditorTab() {
                       <div className="px-4 pb-4 space-y-3">
                         <AudioPlayer src={t.play_url} className="w-full" />
                         <div className="flex items-center gap-2 justify-end flex-wrap">
+                          {t.task_id && (
+                            <button type="button"
+                              onClick={() => handleCreatePoster(t)}
+                              disabled={generatingPosterTrackIds.includes(t.id)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#f0c8f0] dark:border-pink-400/20 bg-[#fdf0ff] dark:bg-pink-500/10 text-[#9333ea] dark:text-pink-300 shadow-[0_4px_12px_rgba(147,51,234,0.10)] dark:shadow-none hover:bg-[#f8e4ff] dark:hover:bg-pink-500/20 active:scale-95 transition-all disabled:opacity-50">
+                              {generatingPosterTrackIds.includes(t.id)
+                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                : <Film className="h-3 w-3" />}
+                              {isAr ? 'بوستر' : 'Poster & Captions'}
+                            </button>
+                          )}
                           <button type="button"
                             onPointerUp={() => handleDownload(t.play_url || '', `wakti-music-${t.id}.mp3`)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:shadow-none text-muted-foreground hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20 active:scale-95 transition-all">
@@ -3887,6 +4034,162 @@ function EditorTab() {
             </div>
           )}
         </>
+      )}
+
+      {/* ══ POSTER & CAPTIONS TAB ══════════════════════════════════════════════ */}
+      {savedSubTab === 'posters' && (
+        <div className="space-y-3">
+          {/* Intro hint */}
+          <div className="rounded-2xl border border-[#f0c8f0] dark:border-pink-400/20 bg-gradient-to-r from-[#fdf0ff] to-[#f5eeff] dark:from-pink-900/10 dark:to-purple-900/10 px-4 py-3 flex items-start gap-3 shadow-[0_4px_16px_rgba(147,51,234,0.08)] dark:shadow-none">
+            <Film className="h-4 w-4 text-[#9333ea] dark:text-pink-300 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-[#7c3aed] dark:text-pink-200/80 leading-relaxed">
+              {isAr
+                ? 'أنشئ بوستراً مرئياً لأي مقطع محفوظ. اضغط زر «بوستر» على أي مقطع في قائمة مقاطعي.'
+                : 'Create a branded visual poster for any saved track. Tap the Poster & Captions button on any track in My Tracks.'}
+            </p>
+          </div>
+
+          {postersLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" />
+            </div>
+          ) : posters.length === 0 ? (
+            <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-10 flex flex-col items-center gap-3 text-center">
+              <div className="w-12 h-12 rounded-full bg-[#fdf0ff] dark:bg-white/[0.05] border border-[#f0c8f0] dark:border-transparent flex items-center justify-center">
+                <Film className="h-6 w-6 text-[#9333ea]/40" />
+              </div>
+              <p className="text-sm text-muted-foreground/80 dark:text-muted-foreground/60">{isAr ? 'لا توجد بوسترات بعد.' : 'No posters yet.'}</p>
+              <p className="text-xs text-muted-foreground/60 dark:text-muted-foreground/40">{isAr ? 'اضغط «بوستر» على أي مقطع في قائمة مقاطعي.' : 'Tap "Poster & Captions" on any track in My Tracks.'}</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {posters.map((poster) => {
+                const linkedTrack = tracks.find(t => t.id === poster.track_id);
+                const trackTitle = linkedTrack?.title || (isAr ? 'مقطع موسيقي' : 'Music Track');
+                const isExpanded = expandedPosterId === poster.id;
+                const canExpand = poster.status === 'completed' && !!poster.video_url;
+                return (
+                  <div key={poster.id} className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-gradient-to-br from-[#ffffff] via-[#fdf0ff] to-[#f5eeff] dark:from-white/[0.04] dark:to-purple-900/10 shadow-[0_12px_32px_rgba(6,5,65,0.10)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)] overflow-hidden">
+                    {/* ── Header (always visible, clickable to expand if completed) ── */}
+                    <button
+                      type="button"
+                      onClick={() => canExpand && setExpandedPosterId(isExpanded ? null : poster.id)}
+                      className={`w-full p-4 flex items-center gap-3 text-left ${canExpand ? 'cursor-pointer hover:bg-purple-500/5 active:scale-[0.99] transition-all' : 'cursor-default'}`}
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#fdf0ff] to-[#f0e4ff] dark:from-pink-900/40 dark:to-purple-900/40 border border-[#f0c8f0] dark:border-pink-400/20 flex items-center justify-center flex-shrink-0">
+                        <Film className="h-4 w-4 text-[#9333ea] dark:text-pink-300" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-foreground truncate">{trackTitle}</p>
+                        <p className="text-[10px] text-muted-foreground/50">
+                          {new Date(poster.created_at).toLocaleDateString(isAr ? 'ar' : 'en', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {poster.author ? ` · @${poster.author}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                          poster.status === 'completed' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-400/20'
+                          : poster.status === 'failed' ? 'bg-red-500/15 text-red-400 border border-red-400/20'
+                          : 'bg-amber-500/15 text-amber-400 border border-amber-400/20'
+                        }`}>
+                          {poster.status === 'completed' ? (isAr ? 'مكتمل' : 'Ready')
+                            : poster.status === 'failed' ? (isAr ? 'فشل' : 'Failed')
+                            : (isAr ? 'جاري...' : 'Generating...')}
+                        </span>
+                        {canExpand && (
+                          <ChevronDown className={`h-4 w-4 text-muted-foreground/50 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                        )}
+                      </div>
+                    </button>
+
+                    {/* ── Generating indicator ── */}
+                    {poster.status === 'generating' && (
+                      <div className="px-4 pb-4 flex items-center gap-2 text-xs text-muted-foreground/60">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        {isAr ? 'يتم إنشاء البوستر، قد يستغرق بضع دقائق...' : 'Creating your poster, may take a few minutes...'}
+                      </div>
+                    )}
+
+                    {/* ── Expanded video (only when completed + expanded) ── */}
+                    {poster.status === 'completed' && poster.video_url && isExpanded && (
+                      <div className="px-4 pb-4 space-y-3">
+                        <video
+                          src={poster.video_url}
+                          controls
+                          playsInline
+                          className="w-full rounded-xl border border-[#f0c8f0] dark:border-pink-400/20 shadow-[0_4px_16px_rgba(147,51,234,0.15)] dark:shadow-none bg-black"
+                        />
+                        <div className="flex items-center gap-2 justify-end flex-wrap">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const { data: { session } } = await supabase.auth.getSession();
+                                const proxyUrl = `${SUPABASE_URL}/functions/v1/music-poster?proxy=1&posterId=${poster.id}`;
+                                const r = await fetch(proxyUrl, {
+                                  headers: { 'Authorization': `Bearer ${session?.access_token}`, 'apikey': SUPABASE_ANON_KEY },
+                                });
+                                const blob = await r.blob();
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `wakti-poster-${poster.id}.mp4`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                              } catch {
+                                window.open(poster.video_url!, '_blank');
+                              }
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#f0c8f0] dark:border-pink-400/20 bg-[#fdf0ff] dark:bg-pink-500/10 text-[#9333ea] dark:text-pink-300 shadow-[0_4px_12px_rgba(147,51,234,0.10)] dark:shadow-none hover:bg-[#f8e4ff] dark:hover:bg-pink-500/20 active:scale-95 transition-all">
+                            <Download className="h-3 w-3" />{isAr ? 'تنزيل' : 'Download'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const filename = `wakti-poster-${poster.id}.mp4`;
+                              const title = isAr ? 'بوستر موسيقي من وقتي 🎬' : 'My Wakti music poster 🎬';
+                              try {
+                                const { data: { session } } = await supabase.auth.getSession();
+                                const proxyUrl = `${SUPABASE_URL}/functions/v1/music-poster?proxy=1&posterId=${poster.id}`;
+                                const r = await fetch(proxyUrl, {
+                                  headers: { 'Authorization': `Bearer ${session?.access_token}`, 'apikey': SUPABASE_ANON_KEY },
+                                });
+                                const blob = await r.blob();
+                                const file = new File([blob], filename, { type: 'video/mp4' });
+                                if (navigator.canShare?.({ files: [file] })) {
+                                  await navigator.share({ files: [file], title });
+                                } else if (navigator.share) {
+                                  await navigator.share({ url: poster.video_url!, title });
+                                } else {
+                                  await navigator.clipboard.writeText(poster.video_url!);
+                                  toast.success(isAr ? 'تم نسخ الرابط' : 'Link copied!');
+                                }
+                              } catch (e: any) {
+                                if (e?.name !== 'AbortError') toast.error(isAr ? 'فشل المشاركة' : 'Share failed');
+                              }
+                            }}
+                            aria-label={isAr ? 'مشاركة' : 'Share'}
+                            className="w-10 h-10 flex items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg hover:scale-105 active:scale-95 transition-all">
+                            <Share2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Failed ── */}
+                    {poster.status === 'failed' && (
+                      <div className="px-4 pb-4">
+                        <p className="text-xs text-red-400">{isAr ? 'فشل إنشاء البوستر. حاول مرة أخرى من قائمة مقاطعي.' : 'Poster generation failed. Try again from My Tracks.'}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {/* ══ MY PLAYLISTS TAB ═══════════════════════════════════════════════════ */}
