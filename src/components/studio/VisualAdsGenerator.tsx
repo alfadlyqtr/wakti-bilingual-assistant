@@ -7,8 +7,12 @@ import { toast } from 'sonner';
 export interface VisualAdsState {
   brandAsset: {
     image: string | null;
-    type: 'logo' | 'product' | 'screenshot';
+    type: 'logo' | 'product' | 'screenshot' | null;
   };
+  assets?: {
+    image: string;
+    type: 'logo' | 'product' | 'screenshot' | null;
+  }[];
   campaignDNA: {
     platform: '9:16' | '1:1' | '16:9';
     objective: string;
@@ -54,11 +58,13 @@ export default function VisualAdsGenerator({
   const [activeStep, setActiveStep] = useState<1 | 2 | 3>(1);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedAssetIndex, setSelectedAssetIndex] = useState(0);
 
   const [state, setState] = useState<VisualAdsState>({
-    brandAsset: { image: null, type: 'product' },
+    brandAsset: { image: null, type: null },
     campaignDNA: { platform: '9:16', objective: '' },
     creativeSoul: { cta: '', style: '3d-glossy', magicEnhance: false },
+    assets: [],
   });
 
   // Helper to update nested state
@@ -73,7 +79,10 @@ export default function VisualAdsGenerator({
   }, []);
 
   // Handle multiple file uploads (up to 3)
-  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const [uploadedImages, setUploadedImages] = useState<Array<{
+    image: string;
+    type: 'logo' | 'product' | 'screenshot' | null;
+  }>>([]);
   
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -87,7 +96,7 @@ export default function VisualAdsGenerator({
       return;
     }
 
-    const newImages: string[] = [];
+    const newImages: Array<{ image: string; type: 'logo' | 'product' | 'screenshot' | null }> = [];
     let processed = 0;
     
     filesToProcess.forEach((file) => {
@@ -95,26 +104,68 @@ export default function VisualAdsGenerator({
       
       const reader = new FileReader();
       reader.onload = () => {
-        newImages.push(reader.result as string);
+        newImages.push({ image: reader.result as string, type: null });
         processed++;
         
         if (processed === filesToProcess.length) {
           const allImages = [...uploadedImages, ...newImages].slice(0, 3);
           setUploadedImages(allImages);
-          updateState('brandAsset', { image: allImages[0] || null });
-          
-          // Auto-collapse Step 1 if we have images
-          if (allImages.length > 0) {
-            setCompletedSteps(prev => new Set([...prev, 1]));
-            setActiveStep(2);
-          }
+          setSelectedAssetIndex(uploadedImages.length);
+          setCompletedSteps(prev => {
+            const next = new Set(prev);
+            next.delete(1);
+            return next;
+          });
+          setActiveStep(1);
+          setState(prev => ({
+            ...prev,
+            brandAsset: {
+              image: allImages[uploadedImages.length]?.image || allImages[0]?.image || null,
+              type: allImages[uploadedImages.length]?.type || null,
+            },
+            assets: allImages,
+          }));
         }
       };
       reader.readAsDataURL(file);
     });
     
     e.target.value = '';
-  }, [language, uploadedImages, updateState]);
+  }, [language, uploadedImages]);
+
+  const handleAssetTypeSelect = useCallback((type: 'logo' | 'product' | 'screenshot') => {
+    setUploadedImages(prev => {
+      const next = prev.map((asset, idx) => (
+        idx === selectedAssetIndex ? { ...asset, type } : asset
+      ));
+      const nextUnassignedIndex = next.findIndex((asset) => asset.type === null);
+      const currentAsset = next[selectedAssetIndex] || null;
+
+      setState(prevState => ({
+        ...prevState,
+        brandAsset: {
+          image: currentAsset?.image || next[0]?.image || null,
+          type,
+        },
+        assets: next,
+      }));
+
+      if (nextUnassignedIndex !== -1) {
+        setSelectedAssetIndex(nextUnassignedIndex);
+        setActiveStep(1);
+        setCompletedSteps(prevCompleted => {
+          const nextCompleted = new Set(prevCompleted);
+          nextCompleted.delete(1);
+          return nextCompleted;
+        });
+      } else {
+        setCompletedSteps(prevCompleted => new Set([...prevCompleted, 1]));
+        setActiveStep(2);
+      }
+
+      return next;
+    });
+  }, [selectedAssetIndex]);
 
   // Handle generate
   const handleGenerate = useCallback(async () => {
@@ -239,19 +290,59 @@ export default function VisualAdsGenerator({
                 <div className="space-y-3">
                   {/* Thumbnails grid */}
                   <div className="grid grid-cols-3 gap-2">
-                    {uploadedImages.map((img, idx) => (
-                      <div key={idx} className="relative aspect-square rounded-xl overflow-hidden bg-black/5 dark:bg-white/5 border border-[#606062]/20">
+                    {uploadedImages.map((asset, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          setSelectedAssetIndex(idx);
+                          updateState('brandAsset', { image: asset.image, type: asset.type });
+                        }}
+                        className={`relative aspect-square rounded-xl overflow-hidden bg-black/5 dark:bg-white/5 border transition-all duration-200 ${
+                          idx === selectedAssetIndex
+                            ? 'border-[#060541] dark:border-[#f2f2f2] ring-2 ring-[#060541]/20 dark:ring-[#f2f2f2]/20'
+                            : 'border-[#606062]/20'
+                        }`}
+                        aria-label={language === 'ar' ? `اختر صورة ${idx + 1}` : `Select image ${idx + 1}`}
+                        type="button"
+                      >
                         <img
-                          src={img}
+                          src={asset.image}
                           alt={`Asset ${idx + 1}`}
                           className="w-full h-full object-cover"
                         />
+                        {asset.type && (
+                          <span className="absolute left-1 bottom-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                            {asset.type === 'logo'
+                              ? (language === 'ar' ? 'شعار' : 'Logo')
+                              : asset.type === 'product'
+                                ? (language === 'ar' ? 'منتج' : 'Product')
+                                : (language === 'ar' ? 'لقطة' : 'Screenshot')}
+                          </span>
+                        )}
                         <button
                           onClick={() => {
                             const newImages = uploadedImages.filter((_, i) => i !== idx);
                             setUploadedImages(newImages);
-                            updateState('brandAsset', { image: newImages[0] || null });
+                            const nextSelectedIndex = Math.max(0, Math.min(selectedAssetIndex === idx ? idx - 1 : selectedAssetIndex > idx ? selectedAssetIndex - 1 : selectedAssetIndex, newImages.length - 1));
+                            setSelectedAssetIndex(nextSelectedIndex < 0 ? 0 : nextSelectedIndex);
+                            setState(prev => ({
+                              ...prev,
+                              brandAsset: {
+                                image: newImages[nextSelectedIndex]?.image || newImages[0]?.image || null,
+                                type: newImages[nextSelectedIndex]?.type || newImages[0]?.type || null,
+                              },
+                              assets: newImages,
+                            }));
                             if (newImages.length === 0) {
+                              setCompletedSteps(prev => {
+                                const next = new Set(prev);
+                                next.delete(1);
+                                return next;
+                              });
+                              setActiveStep(1);
+                            } else if (newImages.every((asset) => asset.type !== null)) {
+                              setCompletedSteps(prev => new Set([...prev, 1]));
+                            } else {
                               setCompletedSteps(prev => {
                                 const next = new Set(prev);
                                 next.delete(1);
@@ -261,16 +352,18 @@ export default function VisualAdsGenerator({
                           }}
                           aria-label={language === 'ar' ? `إزالة صورة ${idx + 1}` : `Remove image ${idx + 1}`}
                           className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs shadow-lg active:scale-90 transition-transform"
+                          type="button"
                         >
                           ×
                         </button>
-                      </div>
+                      </button>
                     ))}
                     {/* Add more button if less than 3 */}
                     {uploadedImages.length < 3 && (
                       <button
                         onClick={() => fileInputRef.current?.click()}
                         className="aspect-square rounded-xl border-2 border-dashed border-[#606062]/40 dark:border-[#858384]/30 bg-white/30 dark:bg-white/5 hover:bg-white/50 dark:hover:bg-white/10 flex flex-col items-center justify-center gap-1 active:scale-95 transition-all"
+                        type="button"
                       >
                         <Plus className="w-6 h-6 text-[#858384]" />
                         <span className="text-[10px] text-[#858384]">{language === 'ar' ? 'أضف' : 'Add'}</span>
@@ -302,16 +395,30 @@ export default function VisualAdsGenerator({
             </div>
 
             {/* Asset Type Selector - only show if images uploaded */}
-            {uploadedImages.length > 0 && (
-              <SegmentedControl
-                options={[
-                  { value: 'logo' as const, label: language === 'ar' ? 'شعار' : 'Logo', emoji: '🏷️' },
-                  { value: 'product' as const, label: language === 'ar' ? 'منتج' : 'Product', emoji: '📦' },
-                  { value: 'screenshot' as const, label: language === 'ar' ? 'لقطة' : 'Screenshot', emoji: '📱' },
-                ]}
-                value={state.brandAsset.type}
-                onChange={(type) => updateState('brandAsset', { type })}
-              />
+            {uploadedImages.length > 0 && uploadedImages[selectedAssetIndex] && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-[#858384]">
+                  {language === 'ar'
+                    ? `اختر نوع الصورة ${selectedAssetIndex + 1}`
+                    : `Choose what image ${selectedAssetIndex + 1} is`}
+                </p>
+                <SegmentedControl
+                  options={[
+                    { value: 'logo' as const, label: language === 'ar' ? 'شعار' : 'Logo', emoji: '🏷️' },
+                    { value: 'product' as const, label: language === 'ar' ? 'منتج' : 'Product', emoji: '📦' },
+                    { value: 'screenshot' as const, label: language === 'ar' ? 'لقطة' : 'Screenshot', emoji: '📱' },
+                  ]}
+                  value={(uploadedImages[selectedAssetIndex].type || 'product') as 'logo' | 'product' | 'screenshot'}
+                  onChange={handleAssetTypeSelect}
+                />
+                {uploadedImages.some((asset) => asset.type === null) && (
+                  <p className="text-[11px] text-[#858384]">
+                    {language === 'ar'
+                      ? 'كل صورة تحتاج نوعها الخاص قبل الانتقال للخطوة التالية.'
+                      : 'Each image needs its own type before moving to the next step.'}
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </StepContent>

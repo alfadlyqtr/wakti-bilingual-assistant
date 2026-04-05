@@ -846,10 +846,10 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               } ${
                 isActive
                   ? isVisualAds
-                    ? 'bg-gradient-to-r from-[#060541] via-[#1a1a4a] to-[#060541] text-white shadow-lg shadow-[#060541]/30 scale-[1.02]'
+                    ? 'bg-gradient-to-r from-orange-400 via-amber-400 to-orange-400 text-[#060541] shadow-lg shadow-orange-500/40 scale-[1.02]'
                     : 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.02]'
                   : isVisualAds
-                    ? 'bg-white/50 dark:bg-white/5 border-2 border-amber-400/60 dark:border-amber-500/50 hover:bg-white/70 dark:hover:bg-white/10 active:scale-95'
+                    ? 'bg-white/50 dark:bg-white/5 border-2 border-orange-400/60 dark:border-amber-500/50 hover:bg-white/70 dark:hover:bg-white/10 active:scale-95'
                     : 'bg-white/30 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/50 dark:hover:bg-white/15 active:scale-95'
               }`}
             >
@@ -1197,8 +1197,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       {submode !== 'visual-ads' && (
       <div className="rounded-2xl border border-border/50 bg-white/60 dark:bg-white/[0.03] backdrop-blur-sm p-4 space-y-4 shadow-sm">
 
-        {/* Quality toggle (T2I + I2I + Visual Ads) */}
-        {(submode === 'text2image' || submode === 'image2image' || submode === 'visual-ads') && (
+        {/* Quality toggle (T2I + I2I) */}
+        {(submode === 'text2image' || submode === 'image2image') && (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               {language === 'ar' ? 'الجودة' : 'Quality'}

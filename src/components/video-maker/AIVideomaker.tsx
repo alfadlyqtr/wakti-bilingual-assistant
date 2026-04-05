@@ -2770,7 +2770,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                             return newVal;
                                           });
                                         }} disabled={isDirecting} />
-                                    );})
+                                    );})}
                                     <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
                                       selected={cinemaVibe.includes('Custom')}
                                       onSelect={()=>setCinemaVibe(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])}
