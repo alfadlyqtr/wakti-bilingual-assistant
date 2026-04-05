@@ -279,14 +279,18 @@ Input Context:
 - User Idea: [USER_INPUT]
 - Assets Provided: [COUNT] images.
 - Tags: [TAG_LIST] (Possible tags: Logo, Brand, Screenshot).
+- Ad Topic: [TOPIC_LABEL]
 - CTA: [CTA_TEXT]
+- Style Direction: [STYLE_LABEL]
 
 Rules for Enhancement:
+- Respect the selected Ad Topic and make it explicit in the final ad concept.
 - For LOGO: Describe it as a high-fidelity 3D metallic or glass brand mark, naturally integrated into the environment with realistic reflections.
 - For SCREENSHOT: Explicitly instruct the AI to display the screenshot perfectly on the screen of a premium, modern 3D smartphone with a titanium frame or a holographic tablet.
 - For BRAND/PRODUCT: Describe professional commercial studio lighting, including rim lighting and softboxes, to highlight the product as the hero of the shot.
-- Style: Use high-impact keywords including 8k resolution, cinematic lighting, commercial photography, depth of field, sharp textures, and premium aesthetic.
+- Style: Respect the selected style direction first, then enhance it with high-impact keywords including 8k resolution, cinematic lighting, commercial photography, depth of field, sharp textures, and premium aesthetic.
 - Text: Ensure the CTA is described as sharply rendered, clean typography at the bottom of the frame.
+- Preserve the user's intent from the free-text box. Enhance it, do not replace it.
 
 Output Format:
 - Provide ONLY the final enhanced prompt in a single, descriptive paragraph.
@@ -298,6 +302,10 @@ async function ampVisualAdsWithOpenAI(
   assetsCount: number,
   tagList: string[],
   ctaText: string,
+  topicLabel: string,
+  topicPrompt: string,
+  styleLabel: string,
+  stylePrompt: string,
 ): Promise<string> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
@@ -317,7 +325,11 @@ async function ampVisualAdsWithOpenAI(
           `User Idea: ${userIdea}`,
           `Assets Provided: ${assetsCount} images`,
           `Tags: ${tagList.length > 0 ? tagList.join(", ") : "None specified"}`,
+          `Ad Topic: ${topicLabel || "None selected"}`,
+          `Ad Topic Detail: ${topicPrompt || "None specified"}`,
           `CTA: ${ctaText || "None"}`,
+          `Style Direction: ${styleLabel || "None selected"}`,
+          `Style Detail: ${stylePrompt || "None specified"}`,
         ].join("\n"),
       },
     ],
@@ -855,8 +867,12 @@ serve(async (req) => {
       const tagList = Array.isArray(body?.tag_list)
         ? body.tag_list.map((tag) => String(tag)).filter(Boolean)
         : [];
+      const topicLabel = (body?.topic_label ?? "").toString();
+      const topicPrompt = (body?.topic_prompt ?? "").toString();
       const ctaText = (body?.cta_text ?? "").toString();
-      inputText = `[visual-ads] idea: ${text}; assets: ${assetsCount}; tags: ${tagList.join(",")}; cta: ${ctaText}`;
+      const styleLabel = (body?.style_label ?? "").toString();
+      const stylePrompt = (body?.style_prompt ?? "").toString();
+      inputText = `[visual-ads] idea: ${text}; assets: ${assetsCount}; tags: ${tagList.join(",")}; topic: ${topicLabel}; cta: ${ctaText}; style: ${styleLabel}`;
 
       if (!text || text.trim().length === 0) {
         return new Response(
@@ -871,7 +887,7 @@ serve(async (req) => {
         );
       }
 
-      const improved = await ampVisualAdsWithOpenAI(text, assetsCount, tagList, ctaText);
+      const improved = await ampVisualAdsWithOpenAI(text, assetsCount, tagList, ctaText, topicLabel, topicPrompt, styleLabel, stylePrompt);
 
       await logAI({
         functionName: "prompt-amp",
@@ -887,6 +903,11 @@ serve(async (req) => {
           language: "en",
           assetsCount,
           tagList,
+          topicLabel,
+          topicPrompt,
+          ctaText,
+          styleLabel,
+          stylePrompt,
         },
       });
 

@@ -10,12 +10,19 @@ import { Analytics } from "@vercel/analytics/react";
 import { AppStoreBanner } from "@/components/AppStoreBanner";
 import AdminRouter from "@/routes/AdminRouter";
 import ConsumerRouter from "@/routes/ConsumerRouter";
+import { ColorBlindFilters, applyColorBlindFilter, STORAGE_KEY, type ColorBlindMode } from "@/components/accessibility/ColorBlindFilters";
 
 import "./App.css";
 
 const ProjectPreview = lazy(() => import("@/pages/ProjectPreview"));
 
 const queryClient = new QueryClient();
+
+// Restore color-blind filter BEFORE first paint
+try {
+  const saved = localStorage.getItem(STORAGE_KEY) as ColorBlindMode | null;
+  if (saved && saved !== 'none') applyColorBlindFilter(saved);
+} catch {}
 
 // Synchronously tag body for admin pages BEFORE first render so CSS works immediately
 const _adminPaths = ['/admindash', '/admin/', '/admin-setup', '/admin-settings', '/mqtr'];
@@ -90,6 +97,7 @@ function App() {
         <TooltipProvider>
           <AuthProvider>
             <BrowserRouter>
+              <ColorBlindFilters />
               <div className="bg-background font-sans antialiased">
                 <ConsumerRouter />
                 <AppStoreBanner position="bottom" dismissible={true} />

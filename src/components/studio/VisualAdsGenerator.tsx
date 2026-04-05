@@ -34,6 +34,70 @@ interface VisualAdsGeneratorProps {
   progress: number;
 }
 
+function StepHeader({
+  step,
+  title,
+  subtitle,
+  isActive,
+  isCompleted,
+  isGenerating,
+  onOpen,
+}: {
+  step: number;
+  title: string;
+  subtitle: string;
+  isActive: boolean;
+  isCompleted: boolean;
+  isGenerating: boolean;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      onClick={onOpen}
+      disabled={isGenerating}
+      className={`w-full flex items-center gap-3 p-4 rounded-xl transition-all duration-300 min-h-[44px] ${
+        isActive
+          ? 'bg-gradient-to-r from-[#060541]/10 via-[#1a1a4a]/10 to-[#060541]/10 dark:from-[#f2f2f2]/10 dark:via-[#e0e0e0]/10 dark:to-[#f2f2f2]/10 border-2 border-[#060541]/30 dark:border-[#f2f2f2]/30 shadow-[0_0_20px_rgba(6,5,65,0.15)] dark:shadow-[0_0_20px_rgba(242,242,242,0.1)]'
+          : isCompleted
+            ? 'bg-green-500/10 border border-green-500/30'
+            : 'bg-white/50 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/70 dark:hover:bg-white/10'
+      }`}
+    >
+      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+        isActive
+          ? 'bg-[#060541] text-white dark:bg-[#f2f2f2] dark:text-[#060541]'
+          : isCompleted
+            ? 'bg-green-500 text-white'
+            : 'bg-[#606062]/20 text-[#858384]'
+      }`}>
+        {isCompleted && !isActive ? '✓' : step}
+      </div>
+      <div className="flex-1 text-left">
+        <h3 className={`font-bold text-sm ${isActive ? 'text-[#060541] dark:text-[#f2f2f2]' : 'text-foreground'}`}>
+          {title}
+        </h3>
+        <p className="text-xs text-[#858384]">{subtitle}</p>
+      </div>
+      <div className={`flex-shrink-0 w-2 h-2 rounded-full transition-all duration-300 ${
+        isActive ? 'bg-[#060541] dark:bg-[#f2f2f2] animate-pulse' : 'bg-transparent'
+      }`} />
+    </button>
+  );
+}
+
+function StepContent({ step, activeStep, children }: { step: number; activeStep: number; children: React.ReactNode }) {
+  const isActive = activeStep === step;
+  return (
+    <div className={`transition-all duration-300 ease-in-out ${
+      isActive ? 'max-h-[2600px] opacity-100 overflow-visible' : 'max-h-0 opacity-0 overflow-hidden'
+    }`}>
+      <div className="pt-3 pb-4 px-2">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // What the ad is about — pick one chip
 const adTopicChips = [
   { id: 'new-launch',    label: '🚀 New Launch',          prompt: 'exciting new product launch' },
@@ -301,7 +365,9 @@ export default function VisualAdsGenerator({
       return;
     }
 
+    const selectedTopic = adTopicChips.find((chip) => chip.id === state.creativeSoul.mainMessage);
     const ctaLabel = ctaChips.find((chip) => chip.id === state.creativeSoul.cta)?.label || '';
+    const selectedStyle = adStyleChips.find((chip) => chip.id === state.creativeSoul.style);
     const tags = uploadedImages
       .map((asset) => asset.type)
       .filter((tag): tag is 'logo' | 'product' | 'screenshot' => Boolean(tag))
@@ -315,7 +381,11 @@ export default function VisualAdsGenerator({
           text,
           assets_count: uploadedImages.length,
           tag_list: tags,
+          topic_label: selectedTopic?.label || '',
+          topic_prompt: selectedTopic?.prompt || '',
           cta_text: ctaLabel,
+          style_label: selectedStyle?.label || '',
+          style_prompt: selectedStyle?.prompt || '',
         },
       });
 
@@ -333,60 +403,7 @@ export default function VisualAdsGenerator({
     } finally {
       setIsAmping(false);
     }
-  }, [state.creativeSoul.prompt, state.creativeSoul.cta, uploadedImages, isAmping, language, updateState]);
-
-  // Step header component
-  const StepHeader = ({ step, title, subtitle }: { step: number; title: string; subtitle: string }) => {
-    const isActive = activeStep === step;
-    const isCompleted = completedSteps.has(step);
-    
-    return (
-      <button
-        onClick={() => !isGenerating && setActiveStep(step as 1 | 2 | 3)}
-        disabled={isGenerating}
-        className={`w-full flex items-center gap-3 p-4 rounded-xl transition-all duration-300 min-h-[44px] ${
-          isActive
-            ? 'bg-gradient-to-r from-[#060541]/10 via-[#1a1a4a]/10 to-[#060541]/10 dark:from-[#f2f2f2]/10 dark:via-[#e0e0e0]/10 dark:to-[#f2f2f2]/10 border-2 border-[#060541]/30 dark:border-[#f2f2f2]/30 shadow-[0_0_20px_rgba(6,5,65,0.15)] dark:shadow-[0_0_20px_rgba(242,242,242,0.1)]'
-            : isCompleted
-              ? 'bg-green-500/10 border border-green-500/30'
-              : 'bg-white/50 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/70 dark:hover:bg-white/10'
-        }`}
-      >
-        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
-          isActive
-            ? 'bg-[#060541] text-white dark:bg-[#f2f2f2] dark:text-[#060541]'
-            : isCompleted
-              ? 'bg-green-500 text-white'
-              : 'bg-[#606062]/20 text-[#858384]'
-        }`}>
-          {isCompleted && !isActive ? '✓' : step}
-        </div>
-        <div className="flex-1 text-left">
-          <h3 className={`font-bold text-sm ${isActive ? 'text-[#060541] dark:text-[#f2f2f2]' : 'text-foreground'}`}>
-            {title}
-          </h3>
-          <p className="text-xs text-[#858384]">{subtitle}</p>
-        </div>
-        <div className={`flex-shrink-0 w-2 h-2 rounded-full transition-all duration-300 ${
-          isActive ? 'bg-[#060541] dark:bg-[#f2f2f2] animate-pulse' : 'bg-transparent'
-        }`} />
-      </button>
-    );
-  };
-
-  // Collapsible content wrapper
-  const StepContent = ({ step, children }: { step: number; children: React.ReactNode }) => {
-    const isActive = activeStep === step;
-    return (
-      <div className={`transition-all duration-300 ease-in-out ${
-        isActive ? 'max-h-[2600px] opacity-100 overflow-visible' : 'max-h-0 opacity-0 overflow-hidden'
-      }`}>
-        <div className="pt-3 pb-4 px-2">
-          {children}
-        </div>
-      </div>
-    );
-  };
+  }, [state.creativeSoul.prompt, state.creativeSoul.mainMessage, state.creativeSoul.cta, state.creativeSoul.style, uploadedImages, isAmping, language, updateState]);
 
   // Segmented control component
   const SegmentedControl = <T extends string>({
@@ -434,8 +451,12 @@ export default function VisualAdsGenerator({
           step={1}
           title={language === 'ar' ? 'أصول العلامة' : 'Brand Assets'}
           subtitle={language === 'ar' ? 'ما الذي يجب أن يظهر في الإعلان؟' : 'What should appear in the ad?'}
+          isActive={activeStep === 1}
+          isCompleted={completedSteps.has(1)}
+          isGenerating={isGenerating}
+          onOpen={() => !isGenerating && setActiveStep(1)}
         />
-        <StepContent step={1}>
+        <StepContent step={1} activeStep={activeStep}>
           <div className="space-y-4">
             {/* Upload Zone - Smaller with thumbnails */}
             <div className="relative">
@@ -583,8 +604,12 @@ export default function VisualAdsGenerator({
           step={2}
           title={language === 'ar' ? 'أين سيُنشر الإعلان؟' : 'Where will this run?'}
           subtitle={language === 'ar' ? 'اختر المنصة والمقاس المناسب' : 'Pick the platform & size'}
+          isActive={activeStep === 2}
+          isCompleted={completedSteps.has(2)}
+          isGenerating={isGenerating}
+          onOpen={() => !isGenerating && setActiveStep(2)}
         />
-        <StepContent step={2}>
+        <StepContent step={2} activeStep={activeStep}>
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-2">
               {platformOptions.map((opt) => (
@@ -630,8 +655,12 @@ export default function VisualAdsGenerator({
           step={3}
           title={language === 'ar' ? 'ماذا يقول الإعلان؟' : 'Tell us about your ad'}
           subtitle={language === 'ar' ? '١-٣ اختيارية، و٤ مطلوبة' : '1–3 are optional, 4 is required'}
+          isActive={activeStep === 3}
+          isCompleted={completedSteps.has(3)}
+          isGenerating={isGenerating}
+          onOpen={() => !isGenerating && setActiveStep(3)}
         />
-        <StepContent step={3}>
+        <StepContent step={3} activeStep={activeStep}>
           <div className="space-y-2">
 
             {/* Q1: What's the ad about? */}
