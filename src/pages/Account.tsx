@@ -419,6 +419,10 @@ export default function Account() {
 
     // QU user: fetch offerings to get the full package object so Android resolves correctly
     getOfferings((resp) => {
+      // TEMP DEBUG: show raw response on screen
+      const raw = JSON.stringify(resp);
+      window.alert('OFFERINGS RESP:\n' + raw.slice(0, 600));
+
       if (resp?.status !== 'SUCCESS') {
         console.warn('[BillingSubscribe] getOfferings failed, falling back to qatar_university string');
         doPurchase('qatar_university');
@@ -436,7 +440,7 @@ export default function Account() {
         const pkg = offering?.availablePackages?.find((p: any) => p?.identifier === 'qatar_university');
         if (pkg) { quPkg = pkg; break; }
       }
-      console.log('[BillingSubscribe] qatar_university pkg:', quPkg ? `FOUND price:${quPkg?.product?.priceString}` : 'NOT FOUND');
+      window.alert('QU PKG: ' + (quPkg ? 'FOUND price:' + quPkg?.product?.priceString + ' store:' + quPkg?.product?.identifier : 'NOT FOUND') + '\nOfferings: ' + allOfferings.map((o:any) => o?.identifier).join(', '));
       doPurchase(quPkg || 'qatar_university');
     });
   };
