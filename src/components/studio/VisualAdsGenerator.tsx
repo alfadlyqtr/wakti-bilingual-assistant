@@ -378,8 +378,8 @@ export default function VisualAdsGenerator({
   const StepContent = ({ step, children }: { step: number; children: React.ReactNode }) => {
     const isActive = activeStep === step;
     return (
-      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
-        isActive ? 'max-h-[1800px] opacity-100' : 'max-h-0 opacity-0'
+      <div className={`transition-all duration-300 ease-in-out ${
+        isActive ? 'max-h-[2600px] opacity-100 overflow-visible' : 'max-h-0 opacity-0 overflow-hidden'
       }`}>
         <div className="pt-3 pb-4 px-2">
           {children}
@@ -786,7 +786,7 @@ export default function VisualAdsGenerator({
               const isOpen = openBriefSection === 4;
               const hasText = state.creativeSoul.prompt.trim().length > 0;
               return (
-                <div className="rounded-xl border border-[#606062]/20 dark:border-[#858384]/20 overflow-hidden">
+                <div className="rounded-xl border border-[#606062]/20 dark:border-[#858384]/20 overflow-visible">
                   <button
                     type="button"
                     onClick={() => setOpenBriefSection(isOpen ? null : 4)}
@@ -826,10 +826,13 @@ export default function VisualAdsGenerator({
                         placeholder={language === 'ar'
                           ? 'مثال: ركز على التطبيق، استخدم ألوان العلامة التجارية...'
                           : 'e.g., Focus on the app, use brand colors, add a short caption...'}
-                        rows={3}
+                        rows={4}
                         onClick={(e) => e.stopPropagation()}
                         onPointerDown={(e) => e.stopPropagation()}
                         onFocus={(e) => e.stopPropagation()}
+                        autoCorrect="on"
+                        autoCapitalize="sentences"
+                        spellCheck={true}
                         className="relative z-10 w-full px-4 py-3 rounded-xl bg-[#0f131a] dark:bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 text-sm text-white resize-none focus:outline-none focus:border-[#060541]/50 dark:focus:border-[#f2f2f2]/50 transition-colors"
                       />
                     </div>
