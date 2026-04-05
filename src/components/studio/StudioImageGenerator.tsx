@@ -25,7 +25,7 @@ import {
 import { DrawAfterBGCanvas, DrawAfterBGCanvasRef } from '@/components/wakti-ai/DrawAfterBGCanvas';
 import type { UploadedFile } from '@/types/fileUpload';
 
-type ImageSubmode = 'text2image' | 'image2image' | 'background-removal' | 'draw';
+type ImageSubmode = 'text2image' | 'image2image' | 'background-removal' | 'draw' | 'visual-ads';
 
 const SUPABASE_URL = ((import.meta as any).env?.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co').trim();
 
@@ -678,6 +678,10 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
           case 'background-removal':
             url = await generateBGRemoval();
             break;
+          case 'visual-ads':
+            // For now, visual-ads uses the same generation as text2image
+            url = await generateText2Image();
+            break;
           default:
             throw new Error('Unknown submode');
         }
@@ -768,9 +772,10 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     { key: 'image2image',        labelEn: 'Image → Image', labelAr: 'صورة ← صورة',     emoji: '🖼️✨',  shortEn: 'I2I',  shortAr: 'ص-ص' },
     { key: 'background-removal', labelEn: 'BG Removal',    labelAr: 'إزالة الخلفية',   emoji: '🪄✂️', shortEn: 'BG-R', shortAr: 'قص' },
     { key: 'draw',               labelEn: 'Draw',          labelAr: 'رسم',              emoji: '🎨',   shortEn: 'Draw', shortAr: 'رسم' },
+    { key: 'visual-ads',         labelEn: 'Visual Ads',    labelAr: 'إعلانات بصرية',   emoji: '📷',   shortEn: 'Ads',  shortAr: 'إعلان' },
   ];
 
-  const needsUpload = submode === 'image2image' || submode === 'background-removal';
+  const needsUpload = submode === 'image2image' || submode === 'background-removal' || submode === 'visual-ads';
   const showPrompt = submode !== 'draw';
   const canGenerate = submode === 'draw'
     ? true
@@ -825,32 +830,41 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
   // ─── Shared submode tabs component ───
   const SubmodeTabs = () => (
-    <div className="overflow-x-auto scrollbar-none -mx-1 px-1">
-    <div className="grid grid-cols-4 gap-1 p-1 rounded-2xl bg-gradient-to-r from-[#0c0f14]/5 via-[#606062]/10 to-[#0c0f14]/5 dark:from-[#0c0f14] dark:via-[#1a1d24] dark:to-[#0c0f14] border border-[#606062]/20 dark:border-[#606062]/30 backdrop-blur-sm shadow-inner min-w-full">
-      {submodes.map((m) => {
-        const isActive = submode === m.key;
-        return (
-          <button
-            key={m.key}
-            onClick={() => { setSubmode(m.key); resetForNewGeneration(); setUploadedFile(null); setPrompt(''); }}
-            title={language === 'ar' ? m.labelAr : m.labelEn}
-            className={`relative flex flex-col items-center justify-center gap-1 px-1.5 py-2 rounded-xl transition-all duration-200 min-h-[54px] w-full touch-manipulation ${
-              isActive
-                ? 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.04]'
-                : 'bg-white/30 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/50 dark:hover:bg-white/15 active:scale-95'
-            }`}
-          >
-            <span className="text-base leading-none">{m.emoji}</span>
-            <span className={`text-[9px] font-bold leading-none tracking-tight ${
-              isActive ? 'text-white dark:text-[#060541]' : 'text-[#858384] dark:text-[#606062]'
-            }`}>{language === 'ar' ? m.shortAr : m.shortEn}</span>
-            {isActive && (
-              <span className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/20 via-amber-500/20 to-orange-500/20 dark:from-transparent dark:via-transparent dark:to-transparent pointer-events-none" />
-            )}
-          </button>
-        );
-      })}
-    </div>
+    <div className="p-1 rounded-2xl bg-gradient-to-r from-[#0c0f14]/5 via-[#606062]/10 to-[#0c0f14]/5 dark:from-[#0c0f14] dark:via-[#1a1d24] dark:to-[#0c0f14] border border-[#606062]/20 dark:border-[#606062]/30 backdrop-blur-sm shadow-inner">
+      <div className="grid grid-cols-2 gap-1.5">
+        {submodes.map((m) => {
+          const isActive = submode === m.key;
+          const isVisualAds = m.key === 'visual-ads';
+          return (
+            <button
+              key={m.key}
+              onClick={() => { setSubmode(m.key); resetForNewGeneration(); setUploadedFile(null); setPrompt(''); }}
+              title={language === 'ar' ? m.labelAr : m.labelEn}
+              className={`relative flex flex-col items-center justify-center gap-1 px-1.5 py-2.5 rounded-xl transition-all duration-200 min-h-[58px] touch-manipulation ${
+                isVisualAds ? 'col-span-2' : ''
+              } ${
+                isActive
+                  ? isVisualAds
+                    ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30 scale-[1.02]'
+                    : 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.02]'
+                  : isVisualAds
+                    ? 'bg-gradient-to-r from-amber-100/60 to-orange-100/60 dark:from-amber-900/30 dark:to-orange-900/30 border-2 border-amber-400/50 dark:border-amber-500/40 hover:from-amber-200/70 hover:to-orange-200/70 dark:hover:from-amber-800/40 dark:hover:to-orange-800/40 active:scale-95'
+                    : 'bg-white/30 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/50 dark:hover:bg-white/15 active:scale-95'
+              }`}
+            >
+              <span className={`leading-none ${isVisualAds ? 'text-xl' : 'text-lg'}`}>{m.emoji}</span>
+              <span className={`font-bold leading-none tracking-tight ${
+                isVisualAds ? 'text-[11px]' : 'text-[10px]'
+              } ${
+                isActive ? (isVisualAds ? 'text-white' : 'text-white dark:text-[#060541]') : (isVisualAds ? 'text-amber-700 dark:text-amber-300' : 'text-[#858384] dark:text-[#606062]')
+              }`}>{language === 'ar' ? m.shortAr : m.shortEn}</span>
+              {isActive && !isVisualAds && (
+                <span className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/20 via-amber-500/20 to-orange-500/20 dark:from-transparent dark:via-transparent dark:to-transparent pointer-events-none" />
+              )}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 
@@ -1033,6 +1047,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     'image2image':        { key: 'i2i',        limit: 2, en: 'Image to Image',     ar: 'صورة إلى صورة' },
     'background-removal': { key: 'bg_removal', limit: 2, en: 'Background Removal', ar: 'إزالة الخلفية' },
     'draw':               { key: '',           limit: 0, en: '',                    ar: '' },
+    'visual-ads':         { key: 'visual_ads', limit: 2, en: 'Visual Ads',          ar: 'إعلانات بصرية' },
   };
   const activeTrialInfo = submodeTrialMap[submode];
 
@@ -1126,8 +1141,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       {/* ── Generation Controls Card ── */}
       <div className="rounded-2xl border border-border/50 bg-white/60 dark:bg-white/[0.03] backdrop-blur-sm p-4 space-y-4 shadow-sm">
 
-        {/* Quality toggle (T2I + I2I) */}
-        {(submode === 'text2image' || submode === 'image2image') && (
+        {/* Quality toggle (T2I + I2I + Visual Ads) */}
+        {(submode === 'text2image' || submode === 'image2image' || submode === 'visual-ads') && (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               {language === 'ar' ? 'الجودة' : 'Quality'}
@@ -1172,7 +1187,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
           </div>
         )}
 
-        {/* Image upload area (I2I & BG Removal) */}
+        {/* Image upload area (I2I, BG Removal & Visual Ads) */}
         {needsUpload && (
           <div className="space-y-3">
             <div>
