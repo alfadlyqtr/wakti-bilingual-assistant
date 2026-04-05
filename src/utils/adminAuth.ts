@@ -84,7 +84,12 @@ export const validateAdminSession = async (): Promise<boolean> => {
         auth_user_id: supabaseSession.user.id
       });
 
-      if (error || !data || data.length === 0) {
+      if (error) {
+        console.warn('[AdminAuth] RPC validation failed, keeping stored session:', error);
+        return true;
+      }
+
+      if (!data || data.length === 0) {
         console.log('[AdminAuth] User is not an admin');
         localStorage.removeItem('admin_session');
         return false;
