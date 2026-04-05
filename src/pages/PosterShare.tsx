@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { useTheme } from '@/providers/ThemeProvider';
 import InAppWaktiEscape from '@/components/public/InAppWaktiEscape';
@@ -40,28 +40,26 @@ export default function PosterShare() {
         return;
       }
       try {
-        const { data: posterData, error: posterErr } = await (supabase as any)
-          .from('user_music_posters')
-          .select('id, track_id, author, status, video_url, created_at')
-          .eq('id', id)
-          .eq('status', 'completed')
-          .maybeSingle();
+        const base = SUPABASE_URL.replace(/\/$/, '');
+        const resp = await fetch(
+          `${base}/functions/v1/poster-share-public?id=${encodeURIComponent(id)}`,
+          {
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            },
+          }
+        );
+        const payload = await resp.json().catch(() => null);
 
-        if (posterErr || !posterData?.video_url) {
-          setError(isAr ? 'هذا البوستر غير موجود أو لم يكتمل بعد' : 'Poster not found or not ready yet');
+        if (!resp.ok || !payload?.poster?.video_url) {
+          setError(payload?.error || (isAr ? 'هذا البوستر غير موجود أو لم يكتمل بعد' : 'Poster not found or not ready yet'));
           setLoading(false);
           return;
         }
 
-        setPoster(posterData);
-
-        const { data: trackData } = await (supabase as any)
-          .from('user_music_tracks')
-          .select('id, title, cover_url, include_styles')
-          .eq('id', posterData.track_id)
-          .maybeSingle();
-
-        if (trackData) setTrack(trackData);
+        setPoster(payload.poster as PosterRecord);
+        if (payload.track) setTrack(payload.track as TrackRecord);
       } catch (e: any) {
         setError((isAr ? 'فشل التحميل: ' : 'Failed to load: ') + (e?.message || String(e)));
       } finally {
