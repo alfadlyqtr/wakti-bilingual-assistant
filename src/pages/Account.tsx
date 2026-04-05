@@ -35,7 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { purchasePackage, restorePurchases } from "@/integrations/natively/purchasesBridge";
+import { purchasePackage, restorePurchases, getOfferings } from "@/integrations/natively/purchasesBridge";
 import { MyGallery } from "@/components/social/MyGallery";
 import { ContactsContent } from "@/pages/Contacts";
 import { getPendingRequestsCount } from "@/services/contactsService";
@@ -375,51 +375,69 @@ export default function Account() {
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const ua = navigator.userAgent;
-    const isAndroid = /Android/.test(ua);
-    // Android RC SDK only resolves packages from the current/default offering by string name.
-    // Non-default offering packages (like qatar_university in university_exclusive) require
-    // the actual Google Play store product ID to be resolved correctly.
-    let packageId: string;
-    if (isQUUser && isAndroid) {
-      packageId = 'wakti_monthly_qu:monthly-academic'; // Google Play product ID
-    } else if (isQUUser) {
-      packageId = 'qatar_university'; // iOS RC package name works fine
-    } else {
-      packageId = '$rc_monthly';
-    }
-    console.log('[BillingSubscribe] Package:', packageId, '| isQUUser:', isQUUser, '| isAndroid:', isAndroid);
-    purchasePackage(packageId, async (resp: any) => {
-      const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
-        resp.message.toLowerCase().includes('already subscribed');
-      const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
-      if (isPurchased || isAlreadySubscribed) {
-        if (user?.id) {
-          try {
-            await supabase
-              .from('profiles')
-              .update({
-                is_subscribed: true,
-                subscription_status: 'active',
-                plan_name: 'Wakti Monthly',
-                billing_start_date: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', user.id);
-          } catch {}
-          try {
-            localStorage.removeItem(`wakti_sub_status_${user.id}`);
-            window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
-            window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
-          } catch {}
-          supabase.functions.invoke('check-subscription', { body: { userId: user.id } }).catch(() => {});
+
+    const doPurchase = (packageIdOrObj: string | any) => {
+      console.log('[BillingSubscribe] Purchasing:', typeof packageIdOrObj === 'string' ? packageIdOrObj : packageIdOrObj?.identifier, '| isQUUser:', isQUUser);
+      purchasePackage(packageIdOrObj, async (resp: any) => {
+        const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
+          resp.message.toLowerCase().includes('already subscribed');
+        const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
+        if (isPurchased || isAlreadySubscribed) {
+          if (user?.id) {
+            try {
+              await supabase
+                .from('profiles')
+                .update({
+                  is_subscribed: true,
+                  subscription_status: 'active',
+                  plan_name: 'Wakti Monthly',
+                  billing_start_date: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', user.id);
+            } catch {}
+            try {
+              localStorage.removeItem(`wakti_sub_status_${user.id}`);
+              window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
+              window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+            } catch {}
+            supabase.functions.invoke('check-subscription', { body: { userId: user.id } }).catch(() => {});
+          }
+          toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
+          queryClient.invalidateQueries({ queryKey: ['subscription'] });
+        } else if (resp?.status === 'ERROR') {
+          toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
         }
-        toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
-        queryClient.invalidateQueries({ queryKey: ['subscription'] });
-      } else if (resp?.status === 'ERROR') {
-        toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
+        setIsBillingPurchasing(false);
+      });
+    };
+
+    if (!isQUUser) {
+      doPurchase('$rc_monthly');
+      return;
+    }
+
+    // QU user: fetch offerings to get the full package object so Android resolves correctly
+    getOfferings((resp) => {
+      if (resp?.status !== 'SUCCESS') {
+        console.warn('[BillingSubscribe] getOfferings failed, falling back to qatar_university string');
+        doPurchase('qatar_university');
+        return;
       }
-      setIsBillingPurchasing(false);
+      const allRaw = resp?.offerings?.all ?? resp?.offerings;
+      let allOfferings: any[] = [];
+      if (Array.isArray(allRaw)) allOfferings = allRaw;
+      else if (allRaw && typeof allRaw === 'object') allOfferings = Object.values(allRaw);
+      if (resp?.offerings?.current && !allOfferings.includes(resp.offerings.current)) {
+        allOfferings.push(resp.offerings.current);
+      }
+      let quPkg: any = null;
+      for (const offering of allOfferings) {
+        const pkg = offering?.availablePackages?.find((p: any) => p?.identifier === 'qatar_university');
+        if (pkg) { quPkg = pkg; break; }
+      }
+      console.log('[BillingSubscribe] qatar_university pkg:', quPkg ? `FOUND price:${quPkg?.product?.priceString}` : 'NOT FOUND');
+      doPurchase(quPkg || 'qatar_university');
     });
   };
   
