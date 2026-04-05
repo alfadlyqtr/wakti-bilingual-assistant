@@ -4,15 +4,20 @@ import { X } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAccessibility } from '@/hooks/useAccessibility';
 import { useTextSize } from '@/hooks/useTextSize';
+import { useUserProfile } from '@/hooks/useUserProfile';
+import { useAuth } from '@/contexts/AuthContext';
 import { COLOR_BLIND_MODES, type ColorBlindMode } from '@/components/accessibility/ColorBlindFilters';
 import { type TextSize } from '@/hooks/useTextSize';
 
-const ONBOARDING_KEY = 'wakti_accessibility_onboarded';
-const CVD_KEY = 'wakti_color_blind_mode';
-const TEXT_KEY = 'wakti_text_size';
+// Returns a user-scoped key so each account has its own onboarding flag
+const getOnboardingKey = (userId: string) => `wakti_accessibility_onboarded_${userId}`;
+// Max age of free_access_start_at to count as "just came through the hello wall" (10 minutes)
+const NEW_USER_WINDOW_MS = 10 * 60 * 1000;
 
 export function AccessibilityOnboarding() {
   const { language, theme } = useTheme();
+  const { user } = useAuth();
+  const { profile, loading: profileLoading } = useUserProfile();
   const { colorBlindMode, setColorBlindMode } = useAccessibility();
   const { textSize, setTextSize } = useTextSize();
   const [visible, setVisible] = useState(false);
@@ -21,19 +26,30 @@ export function AccessibilityOnboarding() {
   const isAr = language === 'ar';
 
   useEffect(() => {
-    // Only show if never shown before AND user hasn't already set anything
-    const alreadyDone = localStorage.getItem(ONBOARDING_KEY);
-    const hasCVD = localStorage.getItem(CVD_KEY);
-    const hasText = localStorage.getItem(TEXT_KEY);
-    if (!alreadyDone && !hasCVD && !hasText) {
-      // Small delay so dashboard content loads first — feels less abrupt
-      const t = setTimeout(() => setVisible(true), 900);
-      return () => clearTimeout(t);
-    }
-  }, []);
+    // Wait until profile is loaded and we have a user
+    if (profileLoading || !user?.id || !profile) return;
+
+    const userId = user.id;
+    const onboardingKey = getOnboardingKey(userId);
+
+    // Never show again if already completed
+    if (localStorage.getItem(onboardingKey)) return;
+
+    // Only show for brand new users who JUST got through the hello wall:
+    // free_access_start_at must exist (trial just started) AND be within the last 10 minutes
+    const startAt = profile.free_access_start_at;
+    if (!startAt) return; // isNewUser — hello wall not yet passed, don't show
+
+    const msSinceStart = Date.now() - Date.parse(startAt);
+    if (msSinceStart > NEW_USER_WINDOW_MS) return; // existing user, window expired
+
+    // Small delay so dashboard content loads first — feels less abrupt
+    const timer = setTimeout(() => setVisible(true), 900);
+    return () => clearTimeout(timer);
+  }, [profileLoading, user?.id, profile]);
 
   const dismiss = () => {
-    localStorage.setItem(ONBOARDING_KEY, '1');
+    if (user?.id) localStorage.setItem(getOnboardingKey(user.id), '1');
     setVisible(false);
   };
 
