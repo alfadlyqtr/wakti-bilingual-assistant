@@ -583,7 +583,7 @@ export default function VisualAdsGenerator({
         <StepHeader
           step={3}
           title={language === 'ar' ? 'ماذا يقول الإعلان؟' : 'Tell us about your ad'}
-          subtitle={language === 'ar' ? 'اختر ما يناسبك — كل شيء اختياري' : 'Pick what fits — everything is optional'}
+          subtitle={language === 'ar' ? '١-٣ اختيارية، و٤ مطلوبة' : '1–3 are optional, 4 is required'}
         />
         <StepContent step={3}>
           <div className="space-y-2">
@@ -750,8 +750,8 @@ export default function VisualAdsGenerator({
                       <span className="text-sm font-semibold text-foreground">
                         {language === 'ar' ? '٤. أي تفاصيل إضافية؟' : '4. Anything specific?'}
                       </span>
-                      <span className="text-[10px] text-[#858384]">
-                        {language === 'ar' ? '(اختياري)' : '(optional)'}
+                      <span className="text-[10px] font-semibold text-orange-400">
+                        {language === 'ar' ? '(مطلوب)' : '(required)'}
                       </span>
                       {hasText && !isOpen && (
                         <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] text-[10px] font-semibold">

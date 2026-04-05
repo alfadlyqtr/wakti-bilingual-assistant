@@ -1078,7 +1078,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     const effectiveAction = hasCustomAction
       ? [cinemaActionCustom].filter(Boolean).join(', ')
       : cinemaAction.filter(v => v !== 'Custom').join(', ');
-    const effectiveCTA = cinemaCTA.filter(v => v !== 'Custom').join(', ');
+    const effectiveCTA = cinemaCTA.includes('Custom') ? cinemaCTACustom : cinemaCTA.filter(v => v !== 'Custom').join(', ');
     const effectiveCharacters = cinemaCharacters.includes('Custom') ? (cinemaRelationship || 'custom characters') : cinemaCharacters.filter(v => v !== 'Custom').join(', ');
     const builtVision = [
       cinemaSubject && `Subject: ${cinemaSubject}`,
@@ -1161,7 +1161,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       setIsDirecting(false);
     }
-  }, [cinemaVision, cinemaSubject, cinemaSetting, cinemaSettingCustom, cinemaAction, cinemaActionCustom, cinemaVibe, cinemaVibeCustom, cinemaCharacters, cinemaRelationship, cinemaCTA, isDirecting, language, user, brandAnchor, cinemaSceneCount]);
+  }, [cinemaVision, cinemaSubject, cinemaSetting, cinemaSettingCustom, cinemaAction, cinemaActionCustom, cinemaVibe, cinemaVibeCustom, cinemaCharacters, cinemaRelationship, cinemaCTA, cinemaCTACustom, isDirecting, language, user, brandAnchor, cinemaSceneCount]);
 
   // ── Role 2 & 3: Artist & Cloner ──
   // Uses create/status two-call pattern to avoid edge function 60s timeout.
@@ -1658,7 +1658,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const effectiveVibe = cinemaVibe.includes('Custom') ? cinemaVibeCustom : cinemaVibe.filter(v => v !== 'Custom').join(', ');
       const effectiveSetting = cinemaSetting.includes('Custom') ? cinemaSettingCustom : cinemaSetting.filter(v => v !== 'Custom').join(', ');
       const effectiveAction = cinemaAction.includes('Custom') ? cinemaActionCustom : cinemaAction.filter(v => v !== 'Custom').join(', ');
-      const effectiveCTA = cinemaCTA.filter(v => v !== 'Custom').join(', ');
+      const effectiveCTA = cinemaCTA.includes('Custom') ? cinemaCTACustom : cinemaCTA.filter(v => v !== 'Custom').join(', ');
       const builtVision = [
         cinemaSubject && `Subject: ${cinemaSubject}`,
         effectiveSetting && `Setting: ${effectiveSetting}`,
@@ -1690,7 +1690,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       setRegenSceneNum(null);
     }
-  }, [user, regenSceneNum, cinemaSubject, cinemaSetting, cinemaSettingCustom, cinemaAction, cinemaActionCustom, cinemaVibe, cinemaVibeCustom, cinemaCTA, cinemaVision, language, cinemaSceneCount]);
+  }, [user, regenSceneNum, cinemaSubject, cinemaSetting, cinemaSettingCustom, cinemaAction, cinemaActionCustom, cinemaVibe, cinemaVibeCustom, cinemaCTA, cinemaCTACustom, cinemaVision, language, cinemaSceneCount]);
 
   // ── Cinema AMP ⚡️ — enhance cinemaSubject prompt with gpt-4o-mini ──
   const handleCinemaAmp = useCallback(async () => {
@@ -1707,7 +1707,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const effectCharsAmp = cinemaCharacters.includes('Custom') ? (cinemaRelationship || 'custom characters') : cinemaCharacters.filter(v => v !== 'Custom').join(', ');
       const effectSettingAmp = cinemaSetting.includes('Custom') ? cinemaSettingCustom : cinemaSetting.filter(v => v !== 'Custom').join(', ');
       const effectActionAmp = cinemaAction.includes('Custom') ? cinemaActionCustom : cinemaAction.filter(v => v !== 'Custom').join(', ');
-      const effectCTAAmp = cinemaCTA.filter(v => v !== 'Custom').join(', ');
+      const effectCTAAmp = cinemaCTA.includes('Custom') ? cinemaCTACustom : cinemaCTA.filter(v => v !== 'Custom').join(', ');
 
       const context: Record<string, string | number> = {};
       context.sceneCount = cinemaSceneCount;
@@ -1735,7 +1735,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       setIsCinemaAmping(false);
     }
-  }, [cinemaSubject, isCinemaAmping, user, language, cinemaVibe, cinemaVibeCustom, cinemaCharacters, cinemaRelationship, cinemaSetting, cinemaSettingCustom, cinemaAction, cinemaActionCustom, cinemaCTA, cinemaSceneCount, selectedSubFormat]);
+  }, [cinemaSubject, isCinemaAmping, user, language, cinemaVibe, cinemaVibeCustom, cinemaCharacters, cinemaRelationship, cinemaSetting, cinemaSettingCustom, cinemaAction, cinemaActionCustom, cinemaCTA, cinemaCTACustom, cinemaSceneCount, selectedSubFormat]);
 
   // ── Storyboard: save inline scene text edit ──
   const handleSaveSceneEdit = useCallback((sceneNum: number, newText: string) => {
@@ -2509,23 +2509,20 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   const effectiveVibe = cinemaVibe.includes('Custom') ? cinemaVibeCustom : cinemaVibe.filter(v => v !== 'Custom').join(', ');
                   const effectiveSetting = cinemaSetting.includes('Custom') ? cinemaSettingCustom : cinemaSetting.filter(v => v !== 'Custom').join(', ');
                   const effectiveAction = cinemaAction.includes('Custom') ? cinemaActionCustom : cinemaAction.filter(v => v !== 'Custom').join(', ');
-                  const effectiveCTA = cinemaCTA.filter(v => v !== 'Custom').join(', ');
+                  const effectiveCTA = cinemaCTA.includes('Custom') ? cinemaCTACustom : cinemaCTA.filter(v => v !== 'Custom').join(', ');
                   const effectiveCharacters = cinemaCharacters.includes('Custom') ? (cinemaRelationship || 'custom characters') : cinemaCharacters.filter(v => v !== 'Custom').join(', ');
                   const isDark = theme === 'dark';
 
                   // Explicit boolean checks — scene count is always ready (hard-locked to 4)
                   const f1 = cinemaSubject.trim().length > 0;
-                  const f2 = cinemaVibe.length > 0 && (cinemaVibe.includes('Custom') ? cinemaVibeCustom.trim().length > 0 : true);
-                  const f3 = cinemaCharacters.length > 0;
-                  const f4 = true; // always ready — hard-locked 4 scenes
-                  const filledCount = [f1, f2, f3].filter(Boolean).length;
-                  const progressPct = filledCount === 0 ? 0 : Math.round((filledCount / 3) * 100);
-                  const isFormReady = f1 && f2 && f3;
-
-                  const sec1Done = f1;
-                  const sec2Done = f2 && f3 && f4;
-                  const sec3Done = false; // section 3 is optional — never blocks
                   const platformDone = !!selectedSubFormat;
+                  const f2 = cinemaCTA.length > 0 && (cinemaCTA.includes('Custom') ? cinemaCTACustom.trim().length > 0 : true);
+                  const f3 = platformDone;
+                  const f4 = cinemaVibe.length > 0 && (cinemaVibe.includes('Custom') ? cinemaVibeCustom.trim().length > 0 : true);
+                  const f5 = cinemaCharacters.length > 0;
+                  const filledCount = [f1, f2, f3, f4, f5].filter(Boolean).length;
+                  const progressPct = filledCount === 0 ? 0 : Math.round((filledCount / 5) * 100);
+                  const isFormReady = f1 && f2 && f3 && f4 && f5;
 
                   const openSection = cinemaOpenSection;
 
@@ -2709,7 +2706,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             <div className="min-w-0">
                               <p className="text-xs font-bold uppercase tracking-wider" style={{color: isFormReady ? '#C5A47E' : clr.text}}>{language==='ar'?'إعداد الإعلان':'Ad Setup'}</p>
                               <p className="text-[10px] truncate mt-0.5" style={{color: clr.textMuted}}>
-                                {language==='ar' ? 'المزاج، الشخصيات، المنصة، الوصف، والتحسين' : 'Mood, cast, platform, prompt, and AMP'}
+                                {language==='ar' ? 'العرض، الهدف، المنصة، الأسلوب، والعلامة' : 'Offer, objective, platform, style, and brand'}
                               </p>
                             </div>
                           </div>
@@ -2719,100 +2716,82 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         {cinemaSetupOpen && (
                           <div className="mt-4 flex flex-col gap-3">
                             <div>
-                              <SetupHeader idx={0} label={language==='ar'?'المزاج والأجواء':'Vibe & Mood'} done={f2} summary={effectiveVibe ? effectiveVibe.split('—')[0].trim() : undefined} />
+                              <SetupHeader idx={0} label={language==='ar'?'ماذا تعلن؟':'What are you advertising?'} done={f1} summary={cinemaSubject ? (cinemaSubject.length > 40 ? cinemaSubject.slice(0,40)+'...' : cinemaSubject) : undefined} />
                               {openSection === 0 && (
-                                <div className="mt-3 px-1">
-                                  <p className="text-[9px] mb-2" style={{color: clr.textMuted}}>{language==='ar'?'اختر واحداً أو أكثر':'Select one or more'}</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {([
-                                      {e:'🔥',en:'Epic & Grand',ar:'ملحمي وعظيم',v:'Epic and grand — cinematic score, wide establishing shots, larger than life'},
-                                      {e:'✨',en:'Luxurious',ar:'فاخر وراقي',v:'Luxurious and prestigious — slow motion, rich textures, gold tones'},
-                                      {e:'⚡',en:'Dramatic',ar:'درامي مكثف',v:'Dramatic and intense — high contrast, deep shadows, powerful tension'},
-                                      {e:'💛',en:'Emotional',ar:'عاطفي مؤثر',v:'Emotional and heartfelt — soft light, intimate close-ups, stirring music'},
-                                      {e:'🌅',en:'Inspiring',ar:'ملهم',v:'Inspiring and uplifting — bright light, rising motion, hopeful tone'},
-                                      {e:'💥',en:'High Energy',ar:'طاقة عالية',v:'Exciting and high energy — fast cuts, dynamic movement, adrenaline'},
-                                      {e:'🌿',en:'Peaceful',ar:'هادئ',v:'Peaceful and serene — slow camera, nature, stillness, gentle pace'},
-                                      {e:'📺',en:'Nostalgic / Retro',ar:'نوستالژيا / ريترو',v:'Nostalgic and retro — warm film grain, faded colors, childhood memory aesthetic'},
-                                      {e:'🎞️',en:'Vintage Film',ar:'فيلم كلاسيكي',v:'Vintage film look — heavy grain, muted tones, old-money cinematic quality'},
-                                      {e:'🛸',en:'Futuristic',ar:'مستقبلي',v:'Futuristic and hi-tech — neon accents, sleek surfaces, modern urban atmosphere'},
-                                      {e:'⬛',en:'Minimalist',ar:'بسيط هادئ',v:'Minimalist and clean — negative space, simple geometry, silent elegance'},
-                                    ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>{
-                                      const vibeNonCustomCount = cinemaVibe.filter(x=>x!=='Custom').length;
-                                      const isDimmedVibe = !cinemaVibe.includes(v) && vibeNonCustomCount >= 3;
-                                      return (
-                                      <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaVibe.includes(v)}
-                                        dimmed={isDimmedVibe}
-                                        onSelect={()=>{
-                                          setCinemaVibe(prev => { 
-                                            const newVal = prev.includes(v) ? prev.filter(x=>x!==v) : (() => { const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })();
-                                            const nonCustomCount = newVal.filter(x=>x!=='Custom').length;
-                                            if (nonCustomCount === 3) setTimeout(() => setCinemaOpenSection(1), 300);
-                                            return newVal;
-                                          });
-                                        }} disabled={isDirecting} />
-                                    );})}
-                                    <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                                      selected={cinemaVibe.includes('Custom')}
-                                      onSelect={()=>setCinemaVibe(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])}
-                                      disabled={isDirecting} />
+                                <div className="mt-3 flex flex-col gap-2 px-1">
+                                  <div className="rounded-xl overflow-hidden" style={{background: clr.inputBg, border:`1px solid ${clr.inputBorder(f1)}`}}>
+                                    <textarea
+                                      value={cinemaSubject}
+                                      onChange={(e) => setCinemaSubject(e.target.value.slice(0,800))}
+                                      onInput={(e) => { const t=e.currentTarget; t.style.height='auto'; t.style.height=`${Math.min(t.scrollHeight,220)}px`; t.style.overflowY=t.scrollHeight>220?'auto':'hidden'; }}
+                                      disabled={isDirecting} autoFocus rows={5} maxLength={800}
+                                      placeholder={language==='ar'?'مثال: تطبيق مالي جديد، أو مشروع عقاري، أو منتج فاخر، أو مطعم جديد...':'e.g., a new finance app, a real estate project, a luxury product, or a new restaurant...'}
+                                      className="w-full resize-none bg-transparent px-4 py-3 text-base placeholder:text-black/25 outline-none min-h-[120px] max-h-[220px] leading-7" style={{color: clr.text}}
+                                    />
                                   </div>
-                                  {cinemaVibe.includes('Custom') && (
-                                    <input type="text" value={cinemaVibeCustom} onChange={(e)=>setCinemaVibeCustom(e.target.value)}
-                                      disabled={isDirecting} placeholder={language==='ar'?'صف المزاج...':'Describe the mood...'}
-                                      className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
-                                      style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
-                                  )}
-                                  {f2 && (
-                                    <div className="flex justify-end mt-3">
+                                  <div className="flex items-center justify-between px-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px]" style={{color: cinemaSubject.length > 720 ? '#f97316' : clr.textSubtle}}>{cinemaSubject.length}/800</span>
+                                      {cinemaSubject.trim().length > 3 && (
+                                        <button
+                                          type="button"
+                                          onClick={handleCinemaAmp}
+                                          disabled={isCinemaAmping}
+                                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-95 disabled:opacity-50"
+                                          style={{background:'rgba(99,102,241,0.15)',border:'1px solid rgba(99,102,241,0.35)',color:'rgba(165,167,255,0.95)'}}
+                                        >
+                                          {isCinemaAmping
+                                            ? <><Loader2 className="h-3 w-3 animate-spin" /><span>{language==='ar'?'...':'AMP...'}</span></>
+                                            : <><span>⚡</span><span>{language==='ar'?'تحسين':'AMP'}</span></>
+                                          }
+                                        </button>
+                                      )}
+                                    </div>
+                                    {f1 && (
                                       <button type="button" onClick={()=>setCinemaOpenSection(1)}
                                         className="px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
                                         style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
                                         {language==='ar'?'التالي ›':'Next ›'}
                                       </button>
-                                    </div>
-                                  )}
+                                    )}
+                                  </div>
                                 </div>
                               )}
                             </div>
 
                             <div>
-                              <SetupHeader idx={1} label={language==='ar'?'من يظهر في الفيلم؟':'Who is in the movie?'} done={f3} summary={cinemaCharacters.length ? `${cinemaCharacters.length} selected` : undefined} />
+                              <SetupHeader idx={1} label={language==='ar'?'هدف الإعلان':'Ad Goal'} done={f2} summary={effectiveCTA || undefined} />
                               {openSection === 1 && (
                                 <div className="mt-3 px-1">
                                   <div className="flex flex-wrap gap-2">
                                     {([
-                                      {e:'📦',en:'No People',ar:'بدون أشخاص',v:'no people — product, object, or creature only'},
-                                      {e:'👤',en:'Solo Hero',ar:'بطل واحد',v:'one solo person — the hero, the protagonist'},
-                                      {e:'👥',en:'Two People',ar:'شخصان',v:'two people'},
-                                      {e:'👨‍👩‍👧‍👦',en:'Family',ar:'العائلة',v:'a family — warm, authentic moments between family members'},
-                                      {e:'💼',en:'Professionals',ar:'محترفون',v:'a group of professionals — confident, competent, business-ready'},
-                                      {e:'🦅',en:'Animals',ar:'حيوانات',v:'animals or wildlife — majestic creatures as the visual subject'},
-                                      {e:'📦',en:'Objects',ar:'منتجات / مجسمات',v:'objects or products — hero product shots, no people'},
-                                      {e:'🏟️',en:'Crowd',ar:'حشد',v:'a crowd or community — many people united'},
+                                      {e:'🛍️',en:'Sell Product',ar:'بيع منتج',v:'sell or promote a product — end with a strong desire to buy'},
+                                      {e:'🏷️',en:'Brand',ar:'هوية العلامة',v:'build brand identity — make the audience feel who we are'},
+                                      {e:'📣',en:'Announce',ar:'إعلان حدث',v:'announce an event or launch — create urgency and excitement'},
+                                      {e:'💪',en:'Inspire',ar:'إلهام',v:'inspire and motivate the viewer — leave them feeling empowered'},
+                                      {e:'❤️',en:'Emotional',ar:'تواصل عاطفي',v:'create an emotional connection — make the audience feel deeply'},
+                                      {e:'📱',en:'Go Viral',ar:'انتشار واسع',v:'grow social media presence — designed to be shared and go viral'},
+                                      {e:'🏠',en:'Real Estate Tour',ar:'جولة عقارية',v:'showcase a property — highlight space, luxury finishes, and lifestyle — make the viewer want to live there'},
+                                      {e:'🚗',en:'Automotive / Speed',ar:'عرض سيارات',v:'showcase an automotive vehicle — power, speed, design — evoke desire and aspiration'},
+                                      {e:'🍴',en:'Food & Beverage',ar:'مطاعم ومأكولات',v:'showcase food and dining — close-up textures, steam, pour shots, appetite appeal'},
                                     ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>{
-                                      const castNonCustomCount = cinemaCharacters.filter(x=>x!=='Custom').length;
-                                      const isDimmedCast = !cinemaCharacters.includes(v) && castNonCustomCount >= 3;
+                                      const ctaNonCustomCount = cinemaCTA.filter(x=>x!=='Custom').length;
+                                      const isDimmedCTA = !cinemaCTA.includes(v) && ctaNonCustomCount >= 3;
                                       return (
-                                      <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaCharacters.includes(v)}
-                                        dimmed={isDimmedCast}
-                                        onSelect={()=>setCinemaCharacters(prev => { 
-                                          const newVal = prev.includes(v) ? prev.filter(x=>x!==v) : (() => { const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })();
-                                          const nonCustomCount = newVal.filter(x=>x!=='Custom').length;
-                                          if (nonCustomCount === 3) setTimeout(() => setCinemaOpenSection(2), 300);
-                                          return newVal;
-                                        })} disabled={isDirecting} />
+                                      <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v}
+                                        dimmed={isDimmedCTA}
+                                        selected={cinemaCTA.includes(v)} onSelect={()=>setCinemaCTA(prev => { if (prev.includes(v)) return prev.filter(x=>x!==v); const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })} disabled={isDirecting} />
                                     );})}
                                     <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                                      selected={cinemaCharacters.includes('Custom')} onSelect={()=>setCinemaCharacters(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])} disabled={isDirecting} />
+                                      selected={cinemaCTA.includes('Custom')} onSelect={()=>setCinemaCTA(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])} disabled={isDirecting} />
                                   </div>
-                                  {cinemaCharacters.includes('Custom') && (
-                                    <input type="text" value={cinemaRelationship} onChange={(e)=>setCinemaRelationship(e.target.value)}
-                                      disabled={isDirecting}
-                                      placeholder={language==='ar'?'صف الشخصيات والعلاقة بينهم...':'Describe the characters and relationship between them...'}
+                                  {cinemaCTA.includes('Custom') && (
+                                    <input type="text" value={cinemaCTACustom} onChange={(e)=>setCinemaCTACustom(e.target.value)}
+                                      disabled={isDirecting} placeholder={language==='ar'?'صف الهدف...':'Describe the goal...'}
                                       className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
                                       style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
                                   )}
-                                  {f3 && (
+                                  {f2 && (
                                     <div className="flex justify-end mt-3">
                                       <button type="button" onClick={()=>setCinemaOpenSection(2)}
                                         className="px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
@@ -2826,13 +2805,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             </div>
 
                             <div>
-                              <SetupHeader idx={2} label={language==='ar'?'المنصة والتنسيق':'Platform & Format'} done={platformDone} summary={selectedSubFormat || undefined} />
+                              <SetupHeader idx={2} label={language==='ar'?'المنصة':'Platform'} done={platformDone} summary={selectedSubFormat || undefined} />
                               {openSection === 2 && (
                                 <div className="mt-3 px-1">
                                   <p className="text-[9px] mb-2" style={{color: clr.textSubtle}}>{language==='ar'?'اختر منصة النشر':'Choose your publishing platform'}</p>
                                   <div className="flex flex-wrap gap-2">
 
-                                {/* YouTube — real dropdown */}
                                 <div className="relative">
                                   <button
                                     type="button" disabled={isDirecting}
@@ -2925,57 +2903,120 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             </div>
 
                             <div>
-                              <SetupHeader idx={3} label={language==='ar'?'عم يدور فيلمك؟':'What is your movie about?'} done={sec1Done} summary={cinemaSubject ? (cinemaSubject.length > 40 ? cinemaSubject.slice(0,40)+'...' : cinemaSubject) : undefined} />
+                              <SetupHeader idx={3} label={language==='ar'?'أسلوب الإعلان':'Ad Style'} done={f4} summary={effectiveVibe ? effectiveVibe.split('—')[0].trim() : undefined} />
                               {openSection === 3 && (
-                                <div className="mt-3 flex flex-col gap-2 px-1">
-                                  <div className="rounded-xl overflow-hidden" style={{background: clr.inputBg, border:`1px solid ${clr.inputBorder(f1)}`}}>
-                                    <textarea
-                                      value={cinemaSubject}
-                                      onChange={(e) => setCinemaSubject(e.target.value.slice(0,800))}
-                                      onInput={(e) => { const t=e.currentTarget; t.style.height='auto'; t.style.height=`${Math.min(t.scrollHeight,220)}px`; t.style.overflowY=t.scrollHeight>220?'auto':'hidden'; }}
-                                      disabled={isDirecting} autoFocus rows={5} maxLength={800}
-                                      placeholder={language==='ar'?'مثال: رجل أعمال يطلق منتجه الجديد في مؤتمر كبير...':'e.g., An entrepreneur launching a new product at a major conference...'}
-                                      className="w-full resize-none bg-transparent px-4 py-3 text-base placeholder:text-black/25 outline-none min-h-[120px] max-h-[220px] leading-7" style={{color: clr.text}}
-                                    />
+                                <div className="mt-3 px-1">
+                                  <p className="text-[9px] mb-2" style={{color: clr.textMuted}}>{language==='ar'?'اختر واحداً أو أكثر':'Select one or more'}</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {([
+                                      {e:'🔥',en:'Epic & Grand',ar:'ملحمي وعظيم',v:'Epic and grand — cinematic score, wide establishing shots, larger than life'},
+                                      {e:'✨',en:'Luxurious',ar:'فاخر وراقي',v:'Luxurious and prestigious — slow motion, rich textures, gold tones'},
+                                      {e:'⚡',en:'Dramatic',ar:'درامي مكثف',v:'Dramatic and intense — high contrast, deep shadows, powerful tension'},
+                                      {e:'💛',en:'Emotional',ar:'عاطفي مؤثر',v:'Emotional and heartfelt — soft light, intimate close-ups, stirring music'},
+                                      {e:'🌅',en:'Inspiring',ar:'ملهم',v:'Inspiring and uplifting — bright light, rising motion, hopeful tone'},
+                                      {e:'💥',en:'High Energy',ar:'طاقة عالية',v:'Exciting and high energy — fast cuts, dynamic movement, adrenaline'},
+                                      {e:'🌿',en:'Peaceful',ar:'هادئ',v:'Peaceful and serene — slow camera, nature, stillness, gentle pace'},
+                                      {e:'📺',en:'Nostalgic / Retro',ar:'نوستالژيا / ريترو',v:'Nostalgic and retro — warm film grain, faded colors, childhood memory aesthetic'},
+                                      {e:'🎞️',en:'Vintage Film',ar:'فيلم كلاسيكي',v:'Vintage film look — heavy grain, muted tones, old-money cinematic quality'},
+                                      {e:'🛸',en:'Futuristic',ar:'مستقبلي',v:'Futuristic and hi-tech — neon accents, sleek surfaces, modern urban atmosphere'},
+                                      {e:'⬛',en:'Minimalist',ar:'بسيط هادئ',v:'Minimalist and clean — negative space, simple geometry, silent elegance'},
+                                    ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>{
+                                      const vibeNonCustomCount = cinemaVibe.filter(x=>x!=='Custom').length;
+                                      const isDimmedVibe = !cinemaVibe.includes(v) && vibeNonCustomCount >= 3;
+                                      return (
+                                      <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaVibe.includes(v)}
+                                        dimmed={isDimmedVibe}
+                                        onSelect={()=>{
+                                          setCinemaVibe(prev => { 
+                                            const newVal = prev.includes(v) ? prev.filter(x=>x!==v) : (() => { const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })();
+                                            const nonCustomCount = newVal.filter(x=>x!=='Custom').length;
+                                            if (nonCustomCount === 3) setTimeout(() => setCinemaOpenSection(4), 300);
+                                            return newVal;
+                                          });
+                                        }} disabled={isDirecting} />
+                                    );})}
+                                    <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
+                                      selected={cinemaVibe.includes('Custom')}
+                                      onSelect={()=>setCinemaVibe(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])}
+                                      disabled={isDirecting} />
                                   </div>
-                                  <div className="flex items-center justify-between px-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[10px]" style={{color: cinemaSubject.length > 720 ? '#f97316' : clr.textSubtle}}>{cinemaSubject.length}/800</span>
-                                      {cinemaSubject.trim().length > 3 && (
-                                        <button
-                                          type="button"
-                                          onClick={handleCinemaAmp}
-                                          disabled={isCinemaAmping}
-                                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-95 disabled:opacity-50"
-                                          style={{background:'rgba(99,102,241,0.15)',border:'1px solid rgba(99,102,241,0.35)',color:'rgba(165,167,255,0.95)'}}
-                                        >
-                                          {isCinemaAmping
-                                            ? <><Loader2 className="h-3 w-3 animate-spin" /><span>{language==='ar'?'...':'AMP...'}</span></>
-                                            : <><span>⚡</span><span>{language==='ar'?'تحسين':'AMP'}</span></>
-                                          }
-                                        </button>
-                                      )}
-                                    </div>
-                                    {f1 && (
-                                      <button type="button" onClick={()=>setCinemaOpenSection(5)}
+                                  {cinemaVibe.includes('Custom') && (
+                                    <input type="text" value={cinemaVibeCustom} onChange={(e)=>setCinemaVibeCustom(e.target.value)}
+                                      disabled={isDirecting} placeholder={language==='ar'?'صف الأسلوب...':'Describe the style...'}
+                                      className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
+                                      style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
+                                  )}
+                                  {f4 && (
+                                    <div className="flex justify-end mt-3">
+                                      <button type="button" onClick={()=>setCinemaOpenSection(4)}
                                         className="px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
                                         style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
                                         {language==='ar'?'التالي ›':'Next ›'}
                                       </button>
-                                    )}
-                                  </div>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
 
                             <div>
-                              <SetupHeader idx={5} label={language==='ar'?'المرجع البصري':'Brand Foundation'} done={!!brandAnchor} summary={brandAnchor ? (language==='ar'?'تمت الإضافة':'Added') : undefined} optional />
+                              <SetupHeader idx={4} label={language==='ar'?'من أو ما الذي يظهر؟':'Who or what should appear?'} done={f5} summary={cinemaCharacters.length ? `${cinemaCharacters.length} selected` : undefined} />
+                              {openSection === 4 && (
+                                <div className="mt-3 px-1">
+                                  <div className="flex flex-wrap gap-2">
+                                    {([
+                                      {e:'📦',en:'No People',ar:'بدون أشخاص',v:'no people — product, object, or creature only'},
+                                      {e:'👤',en:'Solo Hero',ar:'بطل واحد',v:'one solo person — the hero, the protagonist'},
+                                      {e:'👥',en:'Two People',ar:'شخصان',v:'two people'},
+                                      {e:'👨‍👩‍👧‍👦',en:'Family',ar:'العائلة',v:'a family — warm, authentic moments between family members'},
+                                      {e:'💼',en:'Professionals',ar:'محترفون',v:'a group of professionals — confident, competent, business-ready'},
+                                      {e:'🦅',en:'Animals',ar:'حيوانات',v:'animals or wildlife — majestic creatures as the visual subject'},
+                                      {e:'📦',en:'Objects',ar:'منتجات / مجسمات',v:'objects or products — hero product shots, no people'},
+                                      {e:'🏟️',en:'Crowd',ar:'حشد',v:'a crowd or community — many people united'},
+                                    ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>{
+                                      const castNonCustomCount = cinemaCharacters.filter(x=>x!=='Custom').length;
+                                      const isDimmedCast = !cinemaCharacters.includes(v) && castNonCustomCount >= 3;
+                                      return (
+                                      <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaCharacters.includes(v)}
+                                        dimmed={isDimmedCast}
+                                        onSelect={()=>setCinemaCharacters(prev => { 
+                                          const newVal = prev.includes(v) ? prev.filter(x=>x!==v) : (() => { const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })();
+                                          const nonCustomCount = newVal.filter(x=>x!=='Custom').length;
+                                          if (nonCustomCount === 3) setTimeout(() => setCinemaOpenSection(5), 300);
+                                          return newVal;
+                                        })} disabled={isDirecting} />
+                                    );})}
+                                    <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
+                                      selected={cinemaCharacters.includes('Custom')} onSelect={()=>setCinemaCharacters(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])} disabled={isDirecting} />
+                                  </div>
+                                  {cinemaCharacters.includes('Custom') && (
+                                    <input type="text" value={cinemaRelationship} onChange={(e)=>setCinemaRelationship(e.target.value)}
+                                      disabled={isDirecting}
+                                      placeholder={language==='ar'?'صف من أو ما الذي يجب أن يظهر في الإعلان...':'Describe who or what should appear in the ad...'}
+                                      className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
+                                      style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
+                                  )}
+                                  {f5 && (
+                                    <div className="flex justify-end mt-3">
+                                      <button type="button" onClick={()=>setCinemaOpenSection(5)}
+                                        className="px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
+                                        style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
+                                        {language==='ar'?'التالي ›':'Next ›'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            <div>
+                              <SetupHeader idx={5} label={language==='ar'?'مرجع العلامة':'Brand Reference'} done={!!brandAnchor} summary={brandAnchor ? (language==='ar'?'تمت الإضافة':'Added') : undefined} optional />
                               {openSection === 5 && (
                                 <div className="mt-3 flex flex-col gap-3 px-1">
                                   {cinemaMode === 'auto' && (
                                     <div className="mt-1 rounded-xl p-3 flex flex-col gap-2" style={{background: brandAnchor ? 'rgba(226,199,168,0.08)' : clr.cardBg, border: `1px solid ${brandAnchor ? 'rgba(226,199,168,0.35)' : clr.cardBorder}`}}>
                                     <p className="text-[10px] font-bold uppercase tracking-wider" style={{color: brandAnchor ? '#C5A47E' : clr.textMuted}}>
-                                      {language==='ar' ? '🎨 أساس النمط والعلامة التجارية (اختياري)' : '🎨 Style & Brand Foundation (Optional)'}
+                                      {language==='ar' ? '🎨 مرجع العلامة والأسلوب (اختياري)' : '🎨 Brand & Style Reference (Optional)'}
                                       {brandAnchor && <span className="ml-1 text-[#E2C7A8]">✓</span>}
                                     </p>
                                     <p className="text-[9px]" style={{color: clr.textSubtle}}>
@@ -3082,7 +3123,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             </div>
 
                             <div>
-                              <SetupHeader idx={6} label={language==='ar'?'تفاصيل إضافية':'Extra Details'} done={!!(effectiveSetting || effectiveAction || effectiveCTA)} summary={effectiveSetting || effectiveAction || effectiveCTA || undefined} optional />
+                              <SetupHeader idx={6} label={language==='ar'?'توجيه إضافي':'Extra Direction'} done={!!(effectiveSetting || effectiveAction)} summary={effectiveSetting || effectiveAction || undefined} optional />
                               {openSection === 6 && (
                                 <div className="mt-3 flex flex-col gap-5 px-1">
 
@@ -3128,7 +3169,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                             <div>
                               <p className="text-[10px] mb-1 font-semibold uppercase tracking-wider" style={{color: clr.textMuted}}>
-                                {language==='ar'?'الحدث الرئيسي':'Main Action'}{effectiveAction && <span className="text-[#E2C7A8] ml-1">✓</span>}
+                                {language==='ar'?'الحركة أو اللقطة':'Main Action'}{effectiveAction && <span className="text-[#E2C7A8] ml-1">✓</span>}
                               </p>
                               <p className="text-[9px] mb-2" style={{color: clr.textSubtle}}>{language==='ar'?'اختر واحداً أو أكثر':'Select one or more'}</p>
                               <div className="flex flex-wrap gap-2">
@@ -3159,41 +3200,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               {cinemaAction.includes('Custom') && (
                                 <input type="text" value={cinemaActionCustom} onChange={(e)=>setCinemaActionCustom(e.target.value)}
                                   disabled={isDirecting} placeholder={language==='ar'?'صف الحدث...':'Describe the action...'}
-                                  className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
-                                  style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
-                              )}
-                            </div>
-
-                            <div>
-                              <p className="text-[10px] mb-2 font-semibold uppercase tracking-wider" style={{color: clr.textMuted}}>
-                                {language==='ar'?'هدف الفيديو':'Video Goal'}{effectiveCTA && <span className="text-[#E2C7A8] ml-1">✓</span>}
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {([
-                                  {e:'🛍️',en:'Sell Product',ar:'بيع منتج',v:'sell or promote a product — end with a strong desire to buy'},
-                                  {e:'🏷️',en:'Brand',ar:'هوية العلامة',v:'build brand identity — make the audience feel who we are'},
-                                  {e:'📣',en:'Announce',ar:'إعلان حدث',v:'announce an event or launch — create urgency and excitement'},
-                                  {e:'💪',en:'Inspire',ar:'إلهام',v:'inspire and motivate the viewer — leave them feeling empowered'},
-                                  {e:'❤️',en:'Emotional',ar:'تواصل عاطفي',v:'create an emotional connection — make the audience feel deeply'},
-                                  {e:'📱',en:'Go Viral',ar:'انتشار واسع',v:'grow social media presence — designed to be shared and go viral'},
-                                  {e:'🏠',en:'Real Estate Tour',ar:'جولة عقارية',v:'showcase a property — highlight space, luxury finishes, and lifestyle — make the viewer want to live there'},
-                                  {e:'🚗',en:'Automotive / Speed',ar:'عرض سيارات',v:'showcase an automotive vehicle — power, speed, design — evoke desire and aspiration'},
-                                  {e:'🍴',en:'Food & Beverage',ar:'مطاعم ومأكولات',v:'showcase food and dining — close-up textures, steam, pour shots, appetite appeal'},
-
-                                ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>{
-                                  const ctaNonCustomCount = cinemaCTA.filter(x=>x!=='Custom').length;
-                                  const isDimmedCTA = !cinemaCTA.includes(v) && ctaNonCustomCount >= 3;
-                                  return (
-                                  <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v}
-                                    dimmed={isDimmedCTA}
-                                    selected={cinemaCTA.includes(v)} onSelect={()=>setCinemaCTA(prev => { if (prev.includes(v)) return prev.filter(x=>x!==v); const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })} disabled={isDirecting} />
-                                );})}
-                                <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                                  selected={cinemaCTA.includes('Custom')} onSelect={()=>setCinemaCTA(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])} disabled={isDirecting} />
-                              </div>
-                              {cinemaCTA.includes('Custom') && (
-                                <input type="text" value={cinemaCTACustom} onChange={(e)=>setCinemaCTACustom(e.target.value)}
-                                  disabled={isDirecting} placeholder={language==='ar'?'صف الهدف...':'Describe the goal...'}
                                   className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
                                   style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
                               )}
