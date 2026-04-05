@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { ChevronLeft, Plus, Smartphone, Square, Monitor, Sparkles, Wand2 } from 'lucide-react';
+import { Plus, Smartphone, Square, Monitor, Sparkles, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 // Types
@@ -72,37 +72,49 @@ export default function VisualAdsGenerator({
     }));
   }, []);
 
-  // Handle file upload
+  // Handle multiple file uploads (up to 3)
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
-    if (!file.type.startsWith('image/')) {
-      toast.error(language === 'ar' ? 'الرجاء اختيار صورة' : 'Please select an image');
+    const remainingSlots = 3 - uploadedImages.length;
+    const filesToProcess = files.slice(0, remainingSlots);
+    
+    if (filesToProcess.length === 0) {
+      toast.error(language === 'ar' ? 'الحد الأقصى 3 صور' : 'Max 3 images allowed');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      updateState('brandAsset', { image: result });
-      // Auto-detect screenshot based on dimensions
-      const img = new Image();
-      img.onload = () => {
-        const isPhoneRatio = img.height / img.width > 1.6;
-        const isScreenshot = isPhoneRatio || img.width < img.height;
-        if (isScreenshot) {
-          updateState('brandAsset', { type: 'screenshot' });
+    const newImages: string[] = [];
+    let processed = 0;
+    
+    filesToProcess.forEach((file) => {
+      if (!file.type.startsWith('image/')) return;
+      
+      const reader = new FileReader();
+      reader.onload = () => {
+        newImages.push(reader.result as string);
+        processed++;
+        
+        if (processed === filesToProcess.length) {
+          const allImages = [...uploadedImages, ...newImages].slice(0, 3);
+          setUploadedImages(allImages);
+          updateState('brandAsset', { image: allImages[0] || null });
+          
+          // Auto-collapse Step 1 if we have images
+          if (allImages.length > 0) {
+            setCompletedSteps(prev => new Set([...prev, 1]));
+            setActiveStep(2);
+          }
         }
-        // Auto-collapse Step 1 and go to Step 2
-        setCompletedSteps(prev => new Set([...prev, 1]));
-        setActiveStep(2);
       };
-      img.src = result;
-    };
-    reader.readAsDataURL(file);
+      reader.readAsDataURL(file);
+    });
+    
     e.target.value = '';
-  }, [language, updateState]);
+  }, [language, uploadedImages, updateState]);
 
   // Handle generate
   const handleGenerate = useCallback(async () => {
@@ -202,24 +214,14 @@ export default function VisualAdsGenerator({
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={onBack}
-          disabled={isGenerating}
-          aria-label={language === 'ar' ? 'رجوع' : 'Back'}
-          className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/50 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/70 dark:hover:bg-white/10 active:scale-95 transition-all duration-200"
-        >
-          <ChevronLeft className="w-5 h-5 text-[#060541] dark:text-[#f2f2f2]" />
-        </button>
-        <div>
-          <h1 className="text-xl font-bold text-[#060541] dark:text-[#f2f2f2]">
-            {language === 'ar' ? 'إعلانات بصرية' : 'Visual Ads'}
-          </h1>
-          <p className="text-xs text-[#858384]">
-            {language === 'ar' ? '3 خطوات لإعلان مذهل' : '3 steps to stunning ads'}
-          </p>
-        </div>
+      {/* Header - no back button */}
+      <div>
+        <h1 className="text-xl font-bold text-[#060541] dark:text-[#f2f2f2]">
+          {language === 'ar' ? 'إعلانات بصرية' : 'Visual Ads'}
+        </h1>
+        <p className="text-xs text-[#858384]">
+          {language === 'ar' ? '3 خطوات لإعلان مذهل' : '3 steps to stunning ads'}
+        </p>
       </div>
 
       {/* Step 1: Brand Asset */}
@@ -231,40 +233,61 @@ export default function VisualAdsGenerator({
         />
         <StepContent step={1}>
           <div className="space-y-4">
-            {/* Upload Zone */}
+            {/* Upload Zone - Smaller with thumbnails */}
             <div className="relative">
-              {state.brandAsset.image ? (
-                <div className="relative rounded-2xl border-2 border-dashed border-[#060541]/30 dark:border-[#f2f2f2]/30 overflow-hidden bg-black/5 dark:bg-white/5">
-                  <img
-                    src={state.brandAsset.image}
-                    alt="Brand asset"
-                    className="w-full aspect-video object-contain"
-                  />
-                  <button
-                    onClick={() => {
-                      updateState('brandAsset', { image: null });
-                      setCompletedSteps(prev => {
-                        const next = new Set(prev);
-                        next.delete(1);
-                        return next;
-                      });
-                    }}
-                    aria-label={language === 'ar' ? 'إزالة الصورة' : 'Remove image'}
-                    className="absolute top-2 right-2 w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform"
-                  >
-                    ×
-                  </button>
+              {uploadedImages.length > 0 ? (
+                <div className="space-y-3">
+                  {/* Thumbnails grid */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {uploadedImages.map((img, idx) => (
+                      <div key={idx} className="relative aspect-square rounded-xl overflow-hidden bg-black/5 dark:bg-white/5 border border-[#606062]/20">
+                        <img
+                          src={img}
+                          alt={`Asset ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          onClick={() => {
+                            const newImages = uploadedImages.filter((_, i) => i !== idx);
+                            setUploadedImages(newImages);
+                            updateState('brandAsset', { image: newImages[0] || null });
+                            if (newImages.length === 0) {
+                              setCompletedSteps(prev => {
+                                const next = new Set(prev);
+                                next.delete(1);
+                                return next;
+                              });
+                            }
+                          }}
+                          aria-label={language === 'ar' ? `إزالة صورة ${idx + 1}` : `Remove image ${idx + 1}`}
+                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs shadow-lg active:scale-90 transition-transform"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    {/* Add more button if less than 3 */}
+                    {uploadedImages.length < 3 && (
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="aspect-square rounded-xl border-2 border-dashed border-[#606062]/40 dark:border-[#858384]/30 bg-white/30 dark:bg-white/5 hover:bg-white/50 dark:hover:bg-white/10 flex flex-col items-center justify-center gap-1 active:scale-95 transition-all"
+                      >
+                        <Plus className="w-6 h-6 text-[#858384]" />
+                        <span className="text-[10px] text-[#858384]">{language === 'ar' ? 'أضف' : 'Add'}</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full aspect-video border-3 border-dashed border-[#606062]/40 dark:border-[#858384]/30 rounded-2xl flex flex-col items-center justify-center gap-3 bg-white/30 dark:bg-white/5 hover:bg-white/50 dark:hover:bg-white/10 active:scale-[0.98] transition-all duration-200 min-h-[200px]"
+                  className="w-full py-6 border-2 border-dashed border-[#606062]/40 dark:border-[#858384]/30 rounded-xl flex flex-col items-center justify-center gap-2 bg-white/30 dark:bg-white/5 hover:bg-white/50 dark:hover:bg-white/10 active:scale-[0.98] transition-all duration-200"
                 >
-                  <div className="w-16 h-16 rounded-full bg-[#060541]/10 dark:bg-[#f2f2f2]/10 flex items-center justify-center">
-                    <Plus className="w-8 h-8 text-[#060541] dark:text-[#f2f2f2]" />
+                  <div className="w-12 h-12 rounded-full bg-[#060541]/10 dark:bg-[#f2f2f2]/10 flex items-center justify-center">
+                    <Plus className="w-6 h-6 text-[#060541] dark:text-[#f2f2f2]" />
                   </div>
                   <span className="text-sm font-medium text-[#858384]">
-                    {language === 'ar' ? 'انقر لرفع الصورة' : 'Tap to upload image'}
+                    {language === 'ar' ? 'انقر لرفع الصور (حتى 3)' : 'Tap to upload (up to 3)'}
                   </span>
                 </button>
               )}
@@ -273,12 +296,13 @@ export default function VisualAdsGenerator({
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 accept="image/*"
+                multiple
                 hidden
               />
             </div>
 
-            {/* Asset Type Selector */}
-            {state.brandAsset.image && (
+            {/* Asset Type Selector - only show if images uploaded */}
+            {uploadedImages.length > 0 && (
               <SegmentedControl
                 options={[
                   { value: 'logo' as const, label: language === 'ar' ? 'شعار' : 'Logo', emoji: '🏷️' },
@@ -422,9 +446,9 @@ export default function VisualAdsGenerator({
             </div>
 
             {/* Magic Enhance Toggle */}
-            <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-purple-500/10 via-cyan-500/10 to-purple-500/10 dark:from-purple-500/5 dark:via-cyan-500/5 dark:to-purple-500/5 border border-purple-300/30 dark:border-purple-700/30">
+            <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-[#060541]/10 via-[#1a1a4a]/10 to-[#060541]/10 dark:from-[#060541]/5 dark:via-[#1a1a4a]/5 dark:to-[#060541]/5 border border-[#060541]/30 dark:border-[#f2f2f2]/30">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-purple-500" />
+                <Sparkles className="w-4 h-4 text-[#060541] dark:text-[#f2f2f2]" />
                 <span className="text-sm font-medium">
                   {language === 'ar' ? '✨ تحسين سحري' : '✨ Magic Enhance'}
                 </span>
@@ -434,7 +458,7 @@ export default function VisualAdsGenerator({
                 aria-label={state.creativeSoul.magicEnhance ? (language === 'ar' ? 'تعطيل التحسين' : 'Disable enhance') : (language === 'ar' ? 'تفعيل التحسين' : 'Enable enhance')}
                 className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
                   state.creativeSoul.magicEnhance
-                    ? 'bg-gradient-to-r from-purple-500 to-cyan-500'
+                    ? 'bg-gradient-to-r from-[#060541] to-[#1a1a4a]'
                     : 'bg-[#606062]/30'
                 }`}
               >
@@ -450,15 +474,15 @@ export default function VisualAdsGenerator({
             <div className="pt-2">
               {isGenerating ? (
                 <div className="space-y-3">
-                  <div className="h-12 rounded-xl bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border border-purple-300/30 flex items-center justify-center gap-2">
-                    <Wand2 className="w-5 h-5 text-purple-500 animate-pulse" />
+                  <div className="h-12 rounded-xl bg-gradient-to-r from-[#060541]/20 to-[#1a1a4a]/20 border border-[#060541]/30 flex items-center justify-center gap-2">
+                    <Wand2 className="w-5 h-5 text-[#060541] dark:text-[#f2f2f2] animate-pulse" />
                     <span className="text-sm font-semibold text-[#060541] dark:text-[#f2f2f2]">
                       {language === 'ar' ? 'جارِ صناعة الإعلان...' : 'Crafting your Ad...'}
                     </span>
                   </div>
                   <div className="w-full h-2 rounded-full bg-[#606062]/20 overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-purple-500 via-cyan-500 to-purple-500 transition-all duration-300 rounded-full"
+                      className="h-full bg-gradient-to-r from-[#060541] via-[#1a1a4a] to-[#060541] transition-all duration-300 rounded-full"
                       style={{ width: `${progress}%` }}
                     />
                   </div>
@@ -470,10 +494,10 @@ export default function VisualAdsGenerator({
                   className="relative w-full py-4 rounded-xl font-bold text-sm text-white overflow-hidden group active:scale-95 transition-transform duration-200"
                 >
                   {/* Gradient background */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-cyan-500 to-purple-500" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#060541] via-[#1a1a4a] to-[#060541]" />
                   {/* Bloom glow effect */}
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-r from-purple-400/50 via-cyan-400/50 to-purple-400/50 blur-xl" />
-                  <div className="absolute inset-0 shadow-[0_0_30px_rgba(168,85,247,0.5)]" />
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-r from-[#060541]/50 via-[#1a1a4a]/50 to-[#060541]/50 blur-xl" />
+                  <div className="absolute inset-0 shadow-[0_0_30px_rgba(6,5,65,0.5)]" />
                   {/* Content */}
                   <span className="relative flex items-center justify-center gap-2">
                     <span>🚀</span>

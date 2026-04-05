@@ -773,7 +773,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     { key: 'image2image',        labelEn: 'Image → Image', labelAr: 'صورة ← صورة',     emoji: '🖼️✨',  shortEn: 'I2I',  shortAr: 'ص-ص' },
     { key: 'background-removal', labelEn: 'BG Removal',    labelAr: 'إزالة الخلفية',   emoji: '🪄✂️', shortEn: 'BG-R', shortAr: 'قص' },
     { key: 'draw',               labelEn: 'Draw',          labelAr: 'رسم',              emoji: '🎨',   shortEn: 'Draw', shortAr: 'رسم' },
-    { key: 'visual-ads',         labelEn: 'Visual Ads',    labelAr: 'إعلانات بصرية',   emoji: '📷',   shortEn: 'Ads',  shortAr: 'إعلان' },
+    { key: 'visual-ads',         labelEn: 'Visual Ads',    labelAr: 'إعلانات بصرية',   emoji: '📷',   shortEn: 'Visual Ads',  shortAr: 'إعلانات' },
   ];
 
   const needsUpload = submode === 'image2image' || submode === 'background-removal' || submode === 'visual-ads';
@@ -841,26 +841,26 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               key={m.key}
               onClick={() => { setSubmode(m.key); resetForNewGeneration(); setUploadedFile(null); setPrompt(''); }}
               title={language === 'ar' ? m.labelAr : m.labelEn}
-              className={`relative flex flex-col items-center justify-center gap-1 px-1.5 py-2.5 rounded-xl transition-all duration-200 min-h-[58px] touch-manipulation ${
+              className={`relative flex items-center justify-center gap-2 px-3 py-3 rounded-xl transition-all duration-200 min-h-[58px] touch-manipulation ${
                 isVisualAds ? 'col-span-2' : ''
               } ${
                 isActive
                   ? isVisualAds
-                    ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30 scale-[1.02]'
+                    ? 'bg-gradient-to-r from-[#060541] via-[#1a1a4a] to-[#060541] text-white shadow-lg shadow-[#060541]/30 scale-[1.02]'
                     : 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.02]'
                   : isVisualAds
-                    ? 'bg-gradient-to-r from-amber-100/60 to-orange-100/60 dark:from-amber-900/30 dark:to-orange-900/30 border-2 border-amber-400/50 dark:border-amber-500/40 hover:from-amber-200/70 hover:to-orange-200/70 dark:hover:from-amber-800/40 dark:hover:to-orange-800/40 active:scale-95'
+                    ? 'bg-white/50 dark:bg-white/5 border-2 border-amber-400/60 dark:border-amber-500/50 hover:bg-white/70 dark:hover:bg-white/10 active:scale-95'
                     : 'bg-white/30 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/50 dark:hover:bg-white/15 active:scale-95'
               }`}
             >
-              <span className={`leading-none ${isVisualAds ? 'text-xl' : 'text-lg'}`}>{m.emoji}</span>
-              <span className={`font-bold leading-none tracking-tight ${
-                isVisualAds ? 'text-[11px]' : 'text-[10px]'
+              <span className="text-lg leading-none">{m.emoji}</span>
+              <span className={`font-semibold leading-none ${
+                isVisualAds ? 'text-sm' : 'text-[10px]'
               } ${
-                isActive ? (isVisualAds ? 'text-white' : 'text-white dark:text-[#060541]') : (isVisualAds ? 'text-amber-700 dark:text-amber-300' : 'text-[#858384] dark:text-[#606062]')
+                isActive ? 'text-white dark:text-[#060541]' : (isVisualAds ? 'text-foreground dark:text-[#f2f2f2]' : 'text-[#858384] dark:text-[#606062]')
               }`}>{language === 'ar' ? m.shortAr : m.shortEn}</span>
-              {isActive && !isVisualAds && (
-                <span className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/20 via-amber-500/20 to-orange-500/20 dark:from-transparent dark:via-transparent dark:to-transparent pointer-events-none" />
+              {isActive && (
+                <span className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/10 dark:from-transparent dark:via-transparent dark:to-transparent pointer-events-none" />
               )}
             </button>
           );
@@ -1115,7 +1115,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       )}
 
       {/* ── Result Display Area (for non-visual-ads modes) ── */}
-      {resultImageUrl ? (
+      {submode !== 'visual-ads' && (
+      resultImageUrl ? (
         <div className="space-y-3">
           {/* Multi-image picker slideshow (Quick/Grok) */}
           {resultUrls.length > 1 && (
@@ -1190,9 +1191,10 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               : 'Your image will appear here. Write a prompt and hit Generate.'}
           </p>
         </div>
-      )}
+      ))}
 
       {/* ── Generation Controls Card ── */}
+      {submode !== 'visual-ads' && (
       <div className="rounded-2xl border border-border/50 bg-white/60 dark:bg-white/[0.03] backdrop-blur-sm p-4 space-y-4 shadow-sm">
 
         {/* Quality toggle (T2I + I2I + Visual Ads) */}
@@ -1503,6 +1505,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
           </div>
         )}
       </div>
+      )}
 
       {/* Error */}
       {resultError && !isGenerating && (

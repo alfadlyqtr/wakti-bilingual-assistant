@@ -2809,22 +2809,26 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                       {e:'🦅',en:'Animals',ar:'حيوانات',v:'animals or wildlife — majestic creatures as the visual subject'},
                                       {e:'📦',en:'Objects',ar:'منتجات / مجسمات',v:'objects or products — hero product shots, no people'},
                                       {e:'🏟️',en:'Crowd',ar:'حشد',v:'a crowd or community — many people united'},
-                                    ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
+                                    ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>{
+                                      const castNonCustomCount = cinemaCharacters.filter(x=>x!=='Custom').length;
+                                      const isDimmedCast = !cinemaCharacters.includes(v) && castNonCustomCount >= 3;
+                                      return (
                                       <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaCharacters.includes(v)}
+                                        dimmed={isDimmedCast}
                                         onSelect={()=>setCinemaCharacters(prev => { 
                                           const newVal = prev.includes(v) ? prev.filter(x=>x!==v) : (() => { const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })();
                                           const nonCustomCount = newVal.filter(x=>x!=='Custom').length;
                                           if (nonCustomCount === 3) setTimeout(() => setCinemaOpenSection(3), 300);
                                           return newVal;
                                         })} disabled={isDirecting} />
-                                    ))}
+                                    );})}
                                     <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
                                       selected={cinemaCharacters.includes('Custom')} onSelect={()=>setCinemaCharacters(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])} disabled={isDirecting} />
                                   </div>
-                                  {(cinemaCharacters.includes('Custom') || cinemaCharacters.includes('\u0645\u062e\u0635\u0635')) && (
+                                  {cinemaCharacters.includes('Custom') && (
                                     <input type="text" value={cinemaRelationship} onChange={(e)=>setCinemaRelationship(e.target.value)}
                                       disabled={isDirecting}
-                                      placeholder={cinemaCharacters.includes('Custom')?(language==='ar'?'صف الشخصيات...':'Describe characters...'):(language==='ar'?'العلاقة بينهم...':'Relationship between them...')}
+                                      placeholder={language==='ar'?'صف الشخصيات والعلاقة بينهم...':'Describe the characters and relationship between them...'}
                                       className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
                                       style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
                                   )}
@@ -3120,11 +3124,15 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   {e:'🕌',en:'Heritage / Traditional',ar:'تراثي / تقليدي',v:'a traditional GCC heritage setting — old market, wind towers, traditional architecture, warm earth tones'},
                                   {e:'🏢',en:'Modern Office',ar:'مكتب عصري',v:'a sleek modern corporate office — glass walls, open plan, professional lighting'},
                                   {e:'🛣️',en:'Highway / Road',ar:'طريق سريعة',v:'a long open highway stretching into the horizon, heat haze, dramatic sky'},
-                                ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
+                                ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>{
+                                  const settingNonCustomCount = cinemaSetting.filter(x=>x!=='Custom').length;
+                                  const isDimmedSetting = !cinemaSetting.includes(v) && settingNonCustomCount >= 3;
+                                  return (
                                   <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaSetting.includes(v)}
+                                    dimmed={isDimmedSetting}
                                     onSelect={()=>setCinemaSetting(prev => { if (prev.includes(v)) return prev.filter(x=>x!==v); const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })}
                                     disabled={isDirecting} />
-                                ))}
+                                );})}
                                 <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
                                   selected={cinemaSetting.includes('Custom')}
                                   onSelect={()=>setCinemaSetting(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])}
@@ -3154,11 +3162,15 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   {e:'🔍',en:'Product Close-up',ar:'لقطة مقربة للمنتج',v:'a detailed product close-up — macro lens, texture and craftsmanship, slow rotation'},
                                   {e:'🚶‍♂️',en:'Cinematic Walk',ar:'مشي سينمائي',v:'a confident cinematic walk — hero strides forward, camera tracks alongside or follows from behind'},
                                   {e:'⚡',en:'Fast Motion / Speed',ar:'حركة سريعة',v:'fast motion and speed — blurred streaks, rapid movement, adrenaline-fueled energy'},
-                                ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
+                                ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>{
+                                  const actionNonCustomCount = cinemaAction.filter(x=>x!=='Custom').length;
+                                  const isDimmedAction = !cinemaAction.includes(v) && actionNonCustomCount >= 3;
+                                  return (
                                   <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaAction.includes(v)}
+                                    dimmed={isDimmedAction}
                                     onSelect={()=>setCinemaAction(prev => { if (prev.includes(v)) return prev.filter(x=>x!==v); const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })}
                                     disabled={isDirecting} />
-                                ))}
+                                );})}
                                 <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
                                   selected={cinemaAction.includes('Custom')}
                                   onSelect={()=>setCinemaAction(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])}
@@ -3188,10 +3200,14 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   {e:'🚗',en:'Automotive / Speed',ar:'عرض سيارات',v:'showcase an automotive vehicle — power, speed, design — evoke desire and aspiration'},
                                   {e:'🍴',en:'Food & Beverage',ar:'مطاعم ومأكولات',v:'showcase food and dining — close-up textures, steam, pour shots, appetite appeal'},
 
-                                ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
+                                ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>{
+                                  const ctaNonCustomCount = cinemaCTA.filter(x=>x!=='Custom').length;
+                                  const isDimmedCTA = !cinemaCTA.includes(v) && ctaNonCustomCount >= 3;
+                                  return (
                                   <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v}
+                                    dimmed={isDimmedCTA}
                                     selected={cinemaCTA.includes(v)} onSelect={()=>setCinemaCTA(prev => { if (prev.includes(v)) return prev.filter(x=>x!==v); const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })} disabled={isDirecting} />
-                                ))}
+                                );})}
                                 <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
                                   selected={cinemaCTA.includes('Custom')} onSelect={()=>setCinemaCTA(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])} disabled={isDirecting} />
                               </div>
@@ -3311,7 +3327,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   {sceneNum}
                                 </div>
                                 <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">
-                                  {language === 'ar' ? `مشهد ${sceneNum} • ١٠ث` : `Scene ${sceneNum} • 10s`}
+                                  {language === 'ar'
+                                    ? `مشهد ${sceneNum} • ${AD_DURATIONS[sceneNum - 1]}ث`
+                                    : `Scene ${sceneNum} • ${AD_DURATIONS[sceneNum - 1]}s`}
                                 </span>
                               </div>
                               {scene && !isEditing && (
@@ -4193,13 +4211,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     <div className="relative w-full max-w-2xl mx-auto px-4 flex flex-col gap-4">
                       <div className="text-center space-y-1">
                         <p className="text-[#E2C7A8] text-xs font-semibold uppercase tracking-widest opacity-80">
-                          {language === 'ar' ? 'وكتي سينما' : 'Wakti Cinema'}
+                          {language === 'ar' ? 'وكتي إعلانات الفيديو' : 'Wakti Video Ads'}
                         </p>
                         <h2 className="text-2xl font-bold text-white">{language === 'ar' ? '🎬 العرض الأول' : '🎬 The Premiere'}</h2>
                         <p className="text-xs text-white/40">
-                          {language === 'ar'
-                            ? `${cinemaSceneCount} مشاهد • ${cinemaSceneCount * 10}s`
-                            : `${cinemaSceneCount} scenes • ${cinemaSceneCount * 10}s`}
+                          {language === 'ar' ? '٤ مشاهد • ٣٢ث' : '4 Scenes • 32s'}
                         </p>
                       </div>
                       {/* Final stitched video */}
