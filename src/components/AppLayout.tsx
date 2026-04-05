@@ -256,18 +256,18 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
 
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     const isAndroid = /Android/.test(navigator.userAgent);
-    // Android RC SDK cannot resolve packages from non-default offerings by name alone.
-    // Must pass the actual Google Play store product ID for QU users on Android.
-    // iOS resolves correctly from the RC package name across all offerings.
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     let packageToUse: string | any;
     if (isQUUser && isAndroid) {
-      packageToUse = 'wakti_monthly_qu:monthly-academic'; // Google Play store product ID
+      packageToUse = 'wakti_monthly_qu:monthly-academic';
+    } else if (isQUUser && isIOS) {
+      packageToUse = 'wakti_monthly_qu';
     } else if (activePackageObj) {
-      packageToUse = activePackageObj; // full RC package obj (works on iOS for all users)
+      packageToUse = activePackageObj;
     } else {
-      packageToUse = isQUUser ? 'qatar_university' : '$rc_monthly'; // string fallback
+      packageToUse = '$rc_monthly';
     }
-    console.log('[Purchase] Initiating purchase — pkg:', typeof packageToUse === 'string' ? packageToUse : packageToUse?.identifier, '| isQUUser:', isQUUser, '| isAndroid:', isAndroid);
+    console.log('[Purchase] Initiating purchase — pkg:', typeof packageToUse === 'string' ? packageToUse : packageToUse?.identifier, '| isQUUser:', isQUUser, '| isAndroid:', isAndroid, '| isIOS:', isIOS);
     purchasePackage(packageToUse, async (resp: any) => {
       console.log('[Purchase] Response:', resp);
       

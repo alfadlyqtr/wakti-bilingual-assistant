@@ -74,8 +74,28 @@ export function restorePurchases(callback?: (resp: any) => void) {
 
 export function purchasePackage(packageIdOrObj: string | any, callback?: (resp: any) => void) {
   const p = getInstance();
-  if (!p || !packageIdOrObj) return;
-  try { p.purchasePackage(packageIdOrObj, callback || function () {}); } catch {}
+  if (!p) {
+    console.warn('[Purchases] purchasePackage() SDK not available');
+    if (callback) {
+      callback({ status: 'FAILED', error: 'NativelyPurchases SDK not available', customerId: null });
+    }
+    return;
+  }
+  if (!packageIdOrObj) {
+    console.warn('[Purchases] purchasePackage() missing package identifier/object');
+    if (callback) {
+      callback({ status: 'FAILED', error: 'Missing package identifier/object', customerId: null });
+    }
+    return;
+  }
+  try {
+    p.purchasePackage(packageIdOrObj, callback || function () {});
+  } catch (err) {
+    console.error('[Purchases] purchasePackage() threw error:', err);
+    if (callback) {
+      callback({ status: 'FAILED', error: String(err), customerId: null });
+    }
+  }
 }
 
 export function getOfferings(callback?: (resp: any) => void) {
