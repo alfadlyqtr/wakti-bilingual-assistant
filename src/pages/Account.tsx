@@ -403,20 +403,17 @@ export default function Account() {
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     const isAndroid = /Android/.test(navigator.userAgent);
-    
-    let packageToUse: string | any;
-    if (isQUUser && isAndroid) {
-      // Android QU uses the specific string
-      packageToUse = 'wakti_monthly_qu:monthly-academic'; 
-    } else if (billingPackageObj) {
-      // iOS (and fallback) uses the FULL RC PACKAGE OBJECT
-      packageToUse = billingPackageObj; 
+
+    // iOS: must use Apple store product IDs directly (Natively SDK only resolves Default offering by RC ID)
+    // Android: RC strings work fine
+    let packageToUse: string;
+    if (isAndroid) {
+      packageToUse = isQUUser ? 'wakti_monthly_qu:monthly-academic' : '$rc_monthly';
     } else {
-      // Ultimate fallback string
-      packageToUse = isQUUser ? 'qatar_university' : '$rc_monthly'; 
+      packageToUse = isQUUser ? 'wakti_monthly_qu' : 'qa.wakti.ai.monthly';
     }
 
-    console.log('[BillingSubscribe] pkg:', typeof packageToUse === 'string' ? packageToUse : packageToUse?.identifier, '| QU:', isQUUser, '| Android:', isAndroid, '| isObj:', typeof packageToUse !== 'string');
+    console.log('[BillingSubscribe] pkg:', packageToUse, '| QU:', isQUUser, '| Android:', isAndroid);
     purchasePackage(packageToUse, async (resp: any) => {
       const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
         resp.message.toLowerCase().includes('already subscribed');

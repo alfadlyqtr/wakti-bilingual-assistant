@@ -237,20 +237,17 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     // Standard users: '$rc_monthly' string works on both platforms
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     const isAndroid = /Android/.test(navigator.userAgent);
-    
-    let packageToUse: string | any;
-    if (isQUUser && isAndroid) {
-      // Android QU uses the specific string
-      packageToUse = 'wakti_monthly_qu:monthly-academic'; 
-    } else if (activePackageObj) {
-      // iOS (and fallback) uses the FULL RC PACKAGE OBJECT
-      packageToUse = activePackageObj; 
+
+    // iOS: must use Apple store product IDs directly (Natively SDK only resolves Default offering by RC ID)
+    // Android: RC strings work fine
+    let packageToUse: string;
+    if (isAndroid) {
+      packageToUse = isQUUser ? 'wakti_monthly_qu:monthly-academic' : '$rc_monthly';
     } else {
-      // Ultimate fallback string
-      packageToUse = isQUUser ? 'qatar_university' : '$rc_monthly'; 
+      packageToUse = isQUUser ? 'wakti_monthly_qu' : 'qa.wakti.ai.monthly';
     }
 
-    console.log('[Purchase] pkg:', typeof packageToUse === 'string' ? packageToUse : packageToUse?.identifier, '| QU:', isQUUser, '| Android:', isAndroid, '| isObj:', typeof packageToUse !== 'string');
+    console.log('[Purchase] pkg:', packageToUse, '| QU:', isQUUser, '| Android:', isAndroid);
     purchasePackage(packageToUse, async (resp: any) => {
       console.log('[Purchase] Response:', resp);
       
