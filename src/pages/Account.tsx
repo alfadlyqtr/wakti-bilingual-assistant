@@ -375,15 +375,9 @@ export default function Account() {
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const isAndroid = /Android/.test(navigator.userAgent);
-    let packageId: string;
-    if (isQUUser) {
-      packageId = isAndroid ? 'wakti_monthly_qu:monthly-academic' : 'wakti_monthly_qu';
-    } else {
-      packageId = '$rc_monthly';
-    }
-    console.log('[BillingSubscribe] pkg:', packageId, '| QU:', isQUUser, '| Android:', isAndroid);
-    purchasePackage(packageId, async (resp: any) => {
+    const rcPackageId = isQUUser ? 'qatar_university' : '$rc_monthly';
+    console.log('[BillingSubscribe] pkg:', rcPackageId, '| QU:', isQUUser);
+    purchasePackage(rcPackageId, async (resp: any) => {
       const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
         resp.message.toLowerCase().includes('already subscribed');
       const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
