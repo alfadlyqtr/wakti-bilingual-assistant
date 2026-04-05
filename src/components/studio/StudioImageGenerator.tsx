@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { DrawAfterBGCanvas, DrawAfterBGCanvasRef } from '@/components/wakti-ai/DrawAfterBGCanvas';
 import type { UploadedFile } from '@/types/fileUpload';
+import VisualAdsGenerator, { type VisualAdsState } from '@/components/studio/VisualAdsGenerator';
 
 type ImageSubmode = 'text2image' | 'image2image' | 'background-removal' | 'draw' | 'visual-ads';
 
@@ -1060,7 +1061,60 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       {/* Submode tabs */}
       <SubmodeTabs />
 
-      {/* ── Result Display Area ── */}
+      {/* ── Visual Ads Mode ── */}
+      {submode === 'visual-ads' && (
+        <VisualAdsGenerator
+          onBack={() => setSubmode('text2image')}
+          onGenerate={async (visualState) => {
+            // Build prompt from visual ads state
+            const objectiveLabels: Record<string, string> = {
+              'hype-hook': 'hype hook, viral style, energetic',
+              'minimalist-pro': 'minimalist, professional, clean design',
+              'lifestyle': 'lifestyle, warm, relatable scene',
+              'feature-focus': 'feature focused, product highlight',
+              'sales-fomo': 'sales, FOMO, urgency, limited time',
+            };
+            const styleLabels: Record<string, string> = {
+              '3d-glossy': '3D glossy, premium',
+              'cyberpunk': 'cyberpunk, neon, futuristic',
+              'soft-pastel': 'soft pastel, gentle, calming',
+              'vector': 'vector illustration, flat design',
+            };
+            
+            const parts = [
+              'Create a professional visual advertisement',
+              objectiveLabels[visualState.campaignDNA.objective] || '',
+              styleLabels[visualState.creativeSoul.style] || '',
+              visualState.creativeSoul.magicEnhance ? 'highly detailed, enhanced quality' : '',
+              visualState.creativeSoul.cta ? `with call to action: ${visualState.creativeSoul.cta}` : '',
+              `format: ${visualState.campaignDNA.platform}`,
+            ].filter(Boolean);
+            
+            setPrompt(parts.join(', '));
+            
+            // Store the uploaded image if any
+            if (visualState.brandAsset.image) {
+              setUploadedFile({
+                id: `visual-ads-${Date.now()}`,
+                name: 'brand-asset.png',
+                type: 'image/png',
+                size: 0,
+                url: visualState.brandAsset.image,
+                preview: visualState.brandAsset.image,
+                base64: visualState.brandAsset.image,
+                imageType: { id: 'general', name: 'General' },
+              });
+            }
+            
+            // Trigger generation
+            await handleGenerate();
+          }}
+          isGenerating={isGenerating}
+          progress={progress}
+        />
+      )}
+
+      {/* ── Result Display Area (for non-visual-ads modes) ── */}
       {resultImageUrl ? (
         <div className="space-y-3">
           {/* Multi-image picker slideshow (Quick/Grok) */}

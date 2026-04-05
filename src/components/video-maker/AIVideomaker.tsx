@@ -109,6 +109,10 @@ const cleanSignedUrl = (url: string): string => {
   }
 };
 
+// Video Ads v5.0 — hard-locked 4-scene / 32-second format
+const AD_DURATIONS = [6, 10, 10, 6] as const;
+const AD_SCENE_COUNT = 4;
+
 export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const { language, theme } = useTheme();
   const { user } = useAuth();
@@ -285,8 +289,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [cinemaCharacters, setCinemaCharacters] = useState<string[]>([]);
   const [cinemaRelationship, setCinemaRelationship] = useState('');
   const [cinemaCTA, setCinemaCTA] = useState<string[]>([]);
-  const [cinemaSceneCount, setCinemaSceneCount] = useState(3);
-  const [cinemaSceneCountTouched, setCinemaSceneCountTouched] = useState(false);
+  const cinemaSceneCount = AD_SCENE_COUNT; // hard-locked to 4 (Video Ads v5.0)
   const [cinemaCTACustom, setCinemaCTACustom] = useState('');
 
   // Typewriter effect component for Cinema scene cards
@@ -1617,8 +1620,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setClipOrder([]);
     setSwapClipIdx(null);
     setClipsReady(false);
-    setCinemaSceneCount(3);
-    setCinemaSceneCountTouched(false);
+    // cinemaSceneCount is hard-locked to AD_SCENE_COUNT (4) — no reset needed
     setIsFilming(false);
     setIsCasting(false);
     setIsStitching(false);
@@ -1708,7 +1710,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const effectCTAAmp = cinemaCTA.filter(v => v !== 'Custom').join(', ');
 
       const context: Record<string, string | number> = {};
-      if (cinemaSceneCountTouched) context.sceneCount = cinemaSceneCount;
+      context.sceneCount = cinemaSceneCount;
       if (effectVibeAmp) context.vibe = effectVibeAmp;
       if (effectCharsAmp) context.characters = effectCharsAmp;
       if (selectedSubFormat) context.platform = selectedSubFormat;
@@ -1733,7 +1735,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       setIsCinemaAmping(false);
     }
-  }, [cinemaSubject, isCinemaAmping, user, language, cinemaVibe, cinemaVibeCustom, cinemaCharacters, cinemaRelationship, cinemaSetting, cinemaSettingCustom, cinemaAction, cinemaActionCustom, cinemaCTA, cinemaSceneCount, cinemaSceneCountTouched, selectedSubFormat]);
+  }, [cinemaSubject, isCinemaAmping, user, language, cinemaVibe, cinemaVibeCustom, cinemaCharacters, cinemaRelationship, cinemaSetting, cinemaSettingCustom, cinemaAction, cinemaActionCustom, cinemaCTA, cinemaSceneCount, selectedSubFormat]);
 
   // ── Storyboard: save inline scene text edit ──
   const handleSaveSceneEdit = useCallback((sceneNum: number, newText: string) => {
@@ -1989,10 +1991,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
   };
 
-  const remaining = quota ? quota.limit - quota.used + quota.extra : 80;
+  const remaining = quota ? quota.limit - quota.used + quota.extra : 60;
   const used = quota?.used || 0;
-  const limit = quota?.limit || 80;
+  const limit = quota?.limit || 60;
   const limitReached = quota !== null && !quota.canGenerate;
+  // Video Ads v5.0: each 32s ad costs 4 credits; quota tracks individual credits
+  const canAffordVideoAd = remaining >= AD_SCENE_COUNT;
   const maxAffordableCinemaScenes = Math.max(0, Math.min(6, remaining));
 
   const needsArabicTranslation =
@@ -2010,14 +2014,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     : false;
   const showLatestVideo = !generatedVideoUrl && !!(latestVideo?.signedUrl || latestVideo?.video_url);
 
-  useEffect(() => {
-    if (generationMode !== 'cinema') return;
-    if (loadingQuota) return;
-    if (maxAffordableCinemaScenes <= 0) return;
-    if (cinemaSceneCount > maxAffordableCinemaScenes) {
-      setCinemaSceneCount(maxAffordableCinemaScenes);
-    }
-  }, [generationMode, loadingQuota, maxAffordableCinemaScenes, cinemaSceneCount]);
+  // cinemaSceneCount is now hard-locked to AD_SCENE_COUNT (4) — no clamping needed
 
   const getSignedVideoUrl = useCallback(async (storagePath?: string | null) => {
     if (!storagePath) return null;
@@ -2248,7 +2245,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               }}
             >
               <Film className="h-3.5 w-3.5" />
-              <span>{language === 'ar' ? 'سينما' : 'Cinema'}</span>
+              <span>{language === 'ar' ? 'إعلانات الفيديو' : 'Video Ads'}</span>
               {isTrialUser && <Lock className="h-3 w-3 ml-0.5 opacity-60" />}
             </button>
           </div>
@@ -2514,17 +2511,16 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   const effectiveAction = cinemaAction.includes('Custom') ? cinemaActionCustom : cinemaAction.filter(v => v !== 'Custom').join(', ');
                   const effectiveCTA = cinemaCTA.filter(v => v !== 'Custom').join(', ');
                   const effectiveCharacters = cinemaCharacters.includes('Custom') ? (cinemaRelationship || 'custom characters') : cinemaCharacters.filter(v => v !== 'Custom').join(', ');
-                  const isSceneCountReady = cinemaSceneCountTouched === true;
                   const isDark = theme === 'dark';
 
-                  // Explicit boolean checks — no implicit truthy on number defaults
+                  // Explicit boolean checks — scene count is always ready (hard-locked to 4)
                   const f1 = cinemaSubject.trim().length > 0;
                   const f2 = cinemaVibe.length > 0 && (cinemaVibe.includes('Custom') ? cinemaVibeCustom.trim().length > 0 : true);
                   const f3 = cinemaCharacters.length > 0;
-                  const f4 = isSceneCountReady;
-                  const filledCount = [f1, f2, f3, f4].filter(Boolean).length;
-                  const progressPct = filledCount === 0 ? 0 : Math.round((filledCount / 4) * 100);
-                  const isFormReady = f1 && f2 && f3 && f4;
+                  const f4 = true; // always ready — hard-locked 4 scenes
+                  const filledCount = [f1, f2, f3].filter(Boolean).length;
+                  const progressPct = filledCount === 0 ? 0 : Math.round((filledCount / 3) * 100);
+                  const isFormReady = f1 && f2 && f3;
 
                   const sec1Done = f1;
                   const sec2Done = f2 && f3 && f4;
@@ -2560,16 +2556,18 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     progressTrack: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)',
                   };
 
-                  // Chip helper
-                  type ChipProps = { label: string; emoji: string; value: string; selected: boolean; onSelect: () => void; disabled?: boolean };
-                  const Chip = ({ label, emoji, value: _v, selected, onSelect, disabled }: ChipProps) => (
-                    <button type="button" onClick={onSelect} disabled={disabled}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 disabled:opacity-40 whitespace-nowrap"
+                  // Chip helper — dimmed=true when Max-3 reached and this chip is unselected
+                  type ChipProps = { label: string; emoji: string; value: string; selected: boolean; onSelect: () => void; disabled?: boolean; dimmed?: boolean };
+                  const Chip = ({ label, emoji, value: _v, selected, onSelect, disabled, dimmed }: ChipProps) => (
+                    <button type="button" onClick={onSelect} disabled={disabled || dimmed}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 whitespace-nowrap"
                       style={{
                         background: selected ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : clr.chipBg,
                         border: selected ? '1px solid rgba(226,199,168,0.9)' : `1px solid ${clr.chipBorder}`,
                         color: selected ? '#0c0f14' : clr.chipText,
                         boxShadow: selected ? '0 2px 12px rgba(226,199,168,0.35)' : 'none',
+                        opacity: dimmed ? 0.3 : disabled ? 0.4 : 1,
+                        pointerEvents: dimmed ? 'none' : undefined,
                       }}>{emoji} {label}</button>
                   );
 
@@ -2720,42 +2718,24 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                         {cinemaSetupOpen && (
                           <div className="mt-4 flex flex-col gap-3">
-                            <div>
-                              <SetupHeader idx={0} label={language==='ar'?'عدد المشاهد':'How many scenes?'} done={f4} summary={f4 ? `${cinemaSceneCount} × 10s` : undefined} />
-                              {openSection === 0 && (
-                                <div className="mt-3 px-1">
-                                  <div className="flex gap-2">
-                                    {[1,2,3,4,5,6].map(n=>{
-                                      const exceedsQuota = !loadingQuota && n > maxAffordableCinemaScenes;
-                                      return (
-                                      <button key={n}
-                                        onClick={()=>{if (exceedsQuota) return; setCinemaSceneCount(n);setCinemaSceneCountTouched(true); setTimeout(() => setCinemaOpenSection(1), 300);}}
-                                        disabled={isDirecting || exceedsQuota}
-                                        className="flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-40"
-                                        style={{
-                                          background: f4 && cinemaSceneCount===n ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : n===3 && !f4 ? 'rgba(226,199,168,0.1)' : clr.numBg,
-                                          border: f4 && cinemaSceneCount===n ? '1px solid rgba(226,199,168,0.8)' : n===3 && !f4 ? '1px solid rgba(226,199,168,0.25)' : `1px solid ${clr.numBorder}`,
-                                          color: f4 && cinemaSceneCount===n ? '#0c0f14' : clr.numText,
-                                        }}>
-                                        <span className="text-sm font-bold">{n}</span>
-                                        <span className="text-[9px] opacity-80">{n*10}s</span>
-                                      </button>
-                                    )})}
-                                  </div>
-                                  {!f4 && <p className="text-[10px] mt-1.5 px-1" style={{color: clr.textSubtle}}>{language==='ar'?'اختر عدداً للمتابعة':'Tap a number to confirm'}</p>}
-                                  {!loadingQuota && generationMode === 'cinema' && maxAffordableCinemaScenes < 6 && (
-                                    <p className="text-[10px] mt-1.5 px-1" style={{color: 'rgba(226,199,168,0.78)'}}>
-                                      {maxAffordableCinemaScenes > 0
-                                        ? (language === 'ar'
-                                          ? `يمكنك اختيار حتى ${maxAffordableCinemaScenes} ${maxAffordableCinemaScenes === 1 ? 'مشهد' : 'مشاهد'} حسب رصيد الفيديو المتبقي`
-                                          : `You can choose up to ${maxAffordableCinemaScenes} scene${maxAffordableCinemaScenes === 1 ? '' : 's'} based on your remaining video credits`)
-                                        : (language === 'ar'
-                                          ? 'لا توجد أرصدة فيديو متبقية لهذا الشهر'
-                                          : 'No video credits remaining this month')}
-                                    </p>
-                                  )}
-                                </div>
-                              )}
+                            {/* Video Ads v5.0 — static format badge (no user selection) */}
+                            <div className="flex items-center gap-3 px-1 py-2 rounded-xl" style={{background:'rgba(226,199,168,0.08)',border:'1px solid rgba(226,199,168,0.25)'}}>
+                              <div className="flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0" style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)'}}>
+                                <Film className="h-4 w-4 text-[#0c0f14]" />
+                              </div>
+                              <div>
+                                <p className="text-[11px] font-bold" style={{color:'#E2C7A8'}}>
+                                  {language==='ar' ? 'تنسيق: إعلان ٣٢ث احترافي (٤ مشاهد)' : 'Format: 32s Professional Ad (4 Scenes)'}
+                                </p>
+                                <p className="text-[9px]" style={{color:'rgba(226,199,168,0.55)'}}>
+                                  {language==='ar' ? '٦ث هوك • ١٠ث تفصيل • ١٠ث قصة • ٦ث اختتام' : '6s Hook • 10s Feature • 10s Story • 6s Closer'}
+                                </p>
+                              </div>
+                              <div className="ml-auto flex-shrink-0">
+                                <span className="text-[9px] font-bold px-2 py-1 rounded-lg" style={{background:'rgba(226,199,168,0.15)',color:'rgba(226,199,168,0.8)'}}>
+                                  {language==='ar' ? '٤ وحدات' : '4 Credits'}
+                                </span>
+                              </div>
                             </div>
 
                             <div>
@@ -2776,8 +2756,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                       {e:'🎞️',en:'Vintage Film',ar:'فيلم كلاسيكي',v:'Vintage film look — heavy grain, muted tones, old-money cinematic quality'},
                                       {e:'🛸',en:'Futuristic',ar:'مستقبلي',v:'Futuristic and hi-tech — neon accents, sleek surfaces, modern urban atmosphere'},
                                       {e:'⬛',en:'Minimalist',ar:'بسيط هادئ',v:'Minimalist and clean — negative space, simple geometry, silent elegance'},
-                                    ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>(
+                                    ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>{
+                                      const vibeNonCustomCount = cinemaVibe.filter(x=>x!=='Custom').length;
+                                      const isDimmedVibe = !cinemaVibe.includes(v) && vibeNonCustomCount >= 3;
+                                      return (
                                       <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaVibe.includes(v)}
+                                        dimmed={isDimmedVibe}
                                         onSelect={()=>{
                                           setCinemaVibe(prev => { 
                                             const newVal = prev.includes(v) ? prev.filter(x=>x!==v) : (() => { const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })();
@@ -2786,7 +2770,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                             return newVal;
                                           });
                                         }} disabled={isDirecting} />
-                                    ))}
+                                    );})
                                     <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
                                       selected={cinemaVibe.includes('Custom')}
                                       onSelect={()=>setCinemaVibe(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])}
@@ -3242,8 +3226,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           </div>
                           <p className="text-sm text-white/60 max-w-md text-center">
                             {language === 'ar'
-                              ? `جاري تحليل رؤيتك وإنشاء ${cinemaSceneCount} مشاهد سينمائية...`
-                              : `Analyzing your vision and creating ${cinemaSceneCount} cinematic scene${cinemaSceneCount === 1 ? '' : 's'}...`}
+                              ? 'جاري تحليل رؤيتك وإنشاء ٤ مشاهد إعلانية (٣٢ث)...'
+                              : 'Analyzing your vision and scripting 4 ad scenes (32s)...'}
                           </p>
                         </div>
                       ) : (
