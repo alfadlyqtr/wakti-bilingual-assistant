@@ -35,7 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { purchasePackage, restorePurchases, getOfferings } from "@/integrations/natively/purchasesBridge";
+import { purchasePackage, restorePurchases } from "@/integrations/natively/purchasesBridge";
 import { MyGallery } from "@/components/social/MyGallery";
 import { ContactsContent } from "@/pages/Contacts";
 import { getPendingRequestsCount } from "@/services/contactsService";
@@ -375,75 +375,38 @@ export default function Account() {
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const isAndroid = /Android/.test(navigator.userAgent);
-    // Safety: reset button after 15s if native callback never fires
-    const safetyTimer = setTimeout(() => { setIsBillingPurchasing(false); }, 15000);
-
-    const doPurchase = (packageIdOrObj: string | any) => {
-      console.log('[BillingSubscribe] Purchasing:', typeof packageIdOrObj === 'string' ? packageIdOrObj : `obj(${packageIdOrObj?.identifier})`, '| QU:', isQUUser, '| Android:', isAndroid);
-      purchasePackage(packageIdOrObj, async (resp: any) => {
-        clearTimeout(safetyTimer);
-        const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
-          resp.message.toLowerCase().includes('already subscribed');
-        const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
-        if (isPurchased || isAlreadySubscribed) {
-          if (user?.id) {
-            try {
-              await supabase
-                .from('profiles')
-                .update({
-                  is_subscribed: true,
-                  subscription_status: 'active',
-                  plan_name: 'Wakti Monthly',
-                  billing_start_date: new Date().toISOString(),
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', user.id);
-            } catch {}
-            try {
-              localStorage.removeItem(`wakti_sub_status_${user.id}`);
-              window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
-              window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
-            } catch {}
-            supabase.functions.invoke('check-subscription', { body: { userId: user.id } }).catch(() => {});
-          }
-          toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
-          queryClient.invalidateQueries({ queryKey: ['subscription'] });
-        } else if (resp?.status === 'ERROR') {
-          toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
+    const rcPackageId = isQUUser ? 'qatar_university' : '$rc_monthly';
+    purchasePackage(rcPackageId, async (resp: any) => {
+      const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
+        resp.message.toLowerCase().includes('already subscribed');
+      const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
+      if (isPurchased || isAlreadySubscribed) {
+        if (user?.id) {
+          try {
+            await supabase
+              .from('profiles')
+              .update({
+                is_subscribed: true,
+                subscription_status: 'active',
+                plan_name: 'Wakti Monthly',
+                billing_start_date: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', user.id);
+          } catch {}
+          try {
+            localStorage.removeItem(`wakti_sub_status_${user.id}`);
+            window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
+            window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+          } catch {}
+          supabase.functions.invoke('check-subscription', { body: { userId: user.id } }).catch(() => {});
         }
-        setIsBillingPurchasing(false);
-      });
-    };
-
-    // iOS: MUST use string identifiers (full objects cause silent failure on iOS Natively SDK)
-    // Android QU: use full package object from getOfferings (needed for correct offering resolution)
-    if (!isAndroid || !isQUUser) {
-      doPurchase(isQUUser ? 'qatar_university' : '$rc_monthly');
-      return;
-    }
-
-    // Android QU: fetch offerings to get full RC package object
-    getOfferings((resp: any) => {
-      if (resp?.status !== 'SUCCESS') {
-        console.warn('[BillingSubscribe] getOfferings failed, falling back to qatar_university string');
-        doPurchase('qatar_university');
-        return;
+        toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
+        queryClient.invalidateQueries({ queryKey: ['subscription'] });
+      } else if (resp?.status === 'ERROR') {
+        toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
       }
-      const allRaw = resp?.offerings?.all ?? resp?.offerings;
-      let allOfferings: any[] = [];
-      if (Array.isArray(allRaw)) allOfferings = allRaw;
-      else if (allRaw && typeof allRaw === 'object') allOfferings = Object.values(allRaw);
-      if (resp?.offerings?.current && !allOfferings.includes(resp.offerings.current)) {
-        allOfferings.push(resp.offerings.current);
-      }
-      let quPkg: any = null;
-      for (const off of allOfferings) {
-        const pkg = off?.availablePackages?.find((p: any) => p?.identifier === 'qatar_university');
-        if (pkg) { quPkg = pkg; break; }
-      }
-      console.log('[BillingSubscribe] qatar_university pkg:', quPkg ? `FOUND` : 'NOT FOUND');
-      doPurchase(quPkg || 'qatar_university');
+      setIsBillingPurchasing(false);
     });
   };
   
