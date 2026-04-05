@@ -8,6 +8,68 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
+type KieMusicTrack = {
+  id?: string;
+  audioUrl?: string;
+  audio_url?: string;
+  title?: string;
+};
+
+async function recoverAudioIdFromTask(db: any, taskId: string, trackId: string, userId: string, apiKey: string) {
+  const { data: trackRow } = await db
+    .from("user_music_tracks")
+    .select("id, title, source_audio_url, variant_index, meta")
+    .eq("id", trackId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!trackRow) return null;
+
+  const detailResp = await fetch(`https://api.kie.ai/api/v1/music/detail?taskId=${encodeURIComponent(taskId)}`, {
+    headers: { "Authorization": `Bearer ${apiKey}` },
+  });
+  if (!detailResp.ok) return null;
+
+  const detailData = await detailResp.json();
+  const tracks: KieMusicTrack[] = detailData?.data?.data ?? detailData?.data?.response?.sunoData ?? detailData?.data?.sunoData ?? [];
+  if (!Array.isArray(tracks) || tracks.length === 0) return null;
+
+  const normalizedTracks = tracks
+    .map((track) => ({
+      id: typeof track?.id === "string" ? track.id : null,
+      audioUrl: typeof (track?.audioUrl ?? track?.audio_url) === "string" ? (track.audioUrl ?? track.audio_url)! : null,
+      title: typeof track?.title === "string" ? track.title : null,
+    }))
+    .filter((track) => track.id);
+
+  if (normalizedTracks.length === 0) return null;
+
+  const sourceAudioUrl = typeof trackRow.source_audio_url === "string" ? trackRow.source_audio_url : null;
+  const title = typeof trackRow.title === "string" ? trackRow.title : null;
+  const variantIndex = typeof trackRow.variant_index === "number" ? trackRow.variant_index : null;
+
+  const matchedTrack =
+    (sourceAudioUrl ? normalizedTracks.find((track) => track.audioUrl === sourceAudioUrl) : null)
+    || (title ? normalizedTracks.find((track) => track.title === title) : null)
+    || (variantIndex !== null ? normalizedTracks[variantIndex] : null)
+    || normalizedTracks[0];
+
+  if (!matchedTrack?.id) return null;
+
+  await db
+    .from("user_music_tracks")
+    .update({
+      meta: {
+        ...((trackRow.meta as Record<string, unknown> | null) ?? {}),
+        kie_track_id: matchedTrack.id,
+      },
+    })
+    .eq("id", trackId)
+    .eq("user_id", userId);
+
+  return matchedTrack.id;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -53,13 +115,22 @@ serve(async (req) => {
       const body = await req.json();
       const trackId = String(body.trackId ?? "").trim();
       const taskId = String(body.taskId ?? "").trim();
-      const audioId = String(body.audioId ?? "").trim();
+      let audioId = String(body.audioId ?? "").trim();
       const author = String(body.author ?? "Wakti User").trim().slice(0, 50);
 
       console.log("[poster] POST trackId:", trackId, "taskId:", taskId, "audioId:", audioId, "author:", author);
 
-      if (!trackId || !taskId || !audioId) {
-        throw new Error("trackId, taskId, and audioId are all required");
+      if (!trackId || !taskId) {
+        throw new Error("trackId and taskId are required");
+      }
+
+      if (!audioId) {
+        audioId = await recoverAudioIdFromTask(db, taskId, trackId, user.id, KIE_API_KEY) ?? "";
+        console.log("[poster] recovered audioId:", audioId || "<none>");
+      }
+
+      if (!audioId) {
+        throw new Error("Could not recover audioId for this track");
       }
 
       // Check existing poster

@@ -233,14 +233,15 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     setLoading(true);
     setPurchaseInProgress(true);
 
-    // Natively SDK purchasePackage() takes a RevenueCat PACKAGE identifier,
-    // NOT an App Store / Play Store product ID. Passing store product IDs causes silent failure.
-    // For QU users: 'qatar_university' (from university_exclusive offering)
-    // For standard: '$rc_monthly' (from Default offering)
+    // Prefer the full RC package object fetched from getOfferings — it carries the correct
+    // offering context (university_exclusive for QU, default for standard) which Android
+    // requires to resolve the right product. iOS works with both object and string identifier.
+    // Fall back to string identifier if offerings haven't loaded yet.
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const rcPackageId = isQUUser ? 'qatar_university' : '$rc_monthly';
-    console.log('[Purchase] Initiating purchase — RC package:', rcPackageId, '| isQUUser:', isQUUser, '| email:', user?.email);
-    purchasePackage(rcPackageId, async (resp: any) => {
+    const fallbackId = isQUUser ? 'qatar_university' : '$rc_monthly';
+    const packageToUse = activePackageObj || fallbackId;
+    console.log('[Purchase] Initiating purchase — using:', activePackageObj ? `package obj (${activePackageObj?.identifier})` : `fallback string (${fallbackId})`, '| isQUUser:', isQUUser);
+    purchasePackage(packageToUse, async (resp: any) => {
       console.log('[Purchase] Response:', resp);
       
       // Treat success OR 'already subscribed' (Android) as a successful subscription

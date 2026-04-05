@@ -2698,9 +2698,24 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const existing = track ? trackId : null;
       if (!existing) throw new Error(isAr ? 'لم يتم العثور على المقطع' : 'Track not found');
 
+      const { data: existingRow, error: existingRowError } = await (supabase as any)
+        .from('user_music_tracks')
+        .select('meta')
+        .eq('id', existing)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (existingRowError) throw existingRowError;
+
+      const nextMeta = {
+        ...((existingRow?.meta as Record<string, unknown> | null) ?? {}),
+        status: 'completed',
+        saved: true,
+      };
+
       const { error } = await (supabase as any)
         .from('user_music_tracks')
-        .update({ meta: { status: 'completed', saved: true } })
+        .update({ meta: nextMeta })
         .eq('id', existing)
         .eq('user_id', user.id);
 
@@ -4247,7 +4262,7 @@ function EditorTab() {
     if (!user) return;
     const taskId = track.task_id;
     const audioId = (track.meta as any)?.kie_track_id as string | undefined;
-    if (!taskId || !audioId) {
+    if (!taskId) {
       toast.error(isAr ? 'هذا المقطع القديم لا يدعم البوستر' : 'This track is too old for Poster & Captions');
       return;
     }
@@ -4610,65 +4625,56 @@ function EditorTab() {
                             ))}
                           </div>
                         )}
-                        <p className="text-[10px] text-muted-foreground/40">
-                          {new Date(t.created_at).toLocaleDateString(isAr ? 'ar' : 'en', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </p>
+                        {t.play_url && (
+                          <div className="px-4 pb-4 space-y-3">
+                            <AudioPlayer src={t.play_url} className="w-full" />
+                            <div className="flex items-center gap-2 justify-end">
+                              {(() => {
+                                const completedPoster = posters.find(p => p.track_id === t.id && p.status === 'completed');
+                                const isGenerating = generatingPosterTrackIds.includes(t.id) || posters.some(p => p.track_id === t.id && p.status === 'generating');
+                                const kieTrackId = (t.meta as any)?.kie_track_id as string | undefined;
+                                const isValidAudioId = !!kieTrackId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(kieTrackId);
+                                const canCreatePoster = !!t.task_id && isValidAudioId;
+                                
+                                // Always show completed poster button if exists
+                                const posterButton = completedPoster ? (
+                                  <button type="button"
+                                    onClick={() => setSavedSubTab('posters')}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-emerald-400/30 dark:border-emerald-400/20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 shadow-[0_4px_12px_rgba(16,185,129,0.10)] dark:shadow-none hover:bg-emerald-100 dark:hover:bg-emerald-500/20 active:scale-95 transition-all whitespace-nowrap">
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    {isAr ? 'بوستر وتسميات ✓' : 'Poster & Captions ✓'}
+                                  </button>
+                                ) : isGenerating ? (
+                                  <button type="button" disabled
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#f0c8f0] dark:border-pink-400/20 bg-[#fdf0ff] dark:bg-pink-500/10 text-[#9333ea] dark:text-pink-300 opacity-70 whitespace-nowrap">
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    {isAr ? 'جاري الإنشاء...' : 'Generating...'}
+                                  </button>
+                                ) : canCreatePoster ? (
+                                  <button type="button"
+                                    onClick={() => handleCreatePoster({ ...t, meta: { ...(t.meta as any), kie_track_id: kieTrackId } } as any)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#f0c8f0] dark:border-pink-400/20 bg-[#fdf0ff] dark:bg-pink-500/10 text-[#9333ea] dark:text-pink-300 shadow-[0_4px_12px_rgba(147,51,234,0.10)] dark:shadow-none hover:bg-[#f8e4ff] dark:hover:bg-pink-500/20 active:scale-95 transition-all whitespace-nowrap">
+                                    <Film className="h-3 w-3" />
+                                    {isAr ? 'بوستر وتسميات' : 'Poster & Captions'}
+                                  </button>
+                                ) : null;
+                                
+                                return posterButton;
+                              })()}
+                              <button type="button"
+                                onPointerUp={() => handleDownload(t.play_url || '', `wakti-music-${t.id}.mp3`)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:shadow-none text-muted-foreground hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20 active:scale-95 transition-all">
+                                <RefreshCw className="h-3 w-3" />{isAr ? 'تنزيل' : 'Download'}
+                              </button>
+                              <ShareButton size="sm"
+                                shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${t.id}` : ''}
+                                shareTitle={isAr ? 'استمع إلى موسيقى من وقتي 🎵' : 'Listen to my Wakti music 🎵'}
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
-                    {t.play_url && (
-                      <div className="px-4 pb-4 space-y-3">
-                        <AudioPlayer src={t.play_url} className="w-full" />
-                        <div className="flex items-center gap-2 justify-end flex-wrap">
-                          {(() => {
-                            const completedPoster = posters.find(p => p.track_id === t.id && p.status === 'completed');
-                            const isGenerating = generatingPosterTrackIds.includes(t.id) || posters.some(p => p.track_id === t.id && p.status === 'generating');
-                            // Resolve kie_track_id: use own or find from sibling track with same task_id
-                            const kieTrackId = (t.meta as any)?.kie_track_id
-                              || tracks.find(s => s.id !== t.id && s.task_id === t.task_id && (s.meta as any)?.kie_track_id)
-                                 && (tracks.find(s => s.id !== t.id && s.task_id === t.task_id && (s.meta as any)?.kie_track_id)!.meta as any)?.kie_track_id;
-                            if (completedPoster) {
-                              return (
-                                <button type="button"
-                                  onClick={() => setSavedSubTab('posters')}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-emerald-400/30 dark:border-emerald-400/20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 shadow-[0_4px_12px_rgba(16,185,129,0.10)] dark:shadow-none hover:bg-emerald-100 dark:hover:bg-emerald-500/20 active:scale-95 transition-all">
-                                  <CheckCircle2 className="h-3 w-3" />
-                                  {isAr ? 'بوستر وتسميات ✓' : 'Poster & Captions ✓'}
-                                </button>
-                              );
-                            }
-                            if (isGenerating) {
-                              return (
-                                <button type="button" disabled
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#f0c8f0] dark:border-pink-400/20 bg-[#fdf0ff] dark:bg-pink-500/10 text-[#9333ea] dark:text-pink-300 opacity-70">
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                  {isAr ? 'جاري الإنشاء...' : 'Generating...'}
-                                </button>
-                              );
-                            }
-                            if (t.task_id && kieTrackId) {
-                              return (
-                                <button type="button"
-                                  onClick={() => handleCreatePoster({ ...t, meta: { ...(t.meta as any), kie_track_id: kieTrackId } } as any)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#f0c8f0] dark:border-pink-400/20 bg-[#fdf0ff] dark:bg-pink-500/10 text-[#9333ea] dark:text-pink-300 shadow-[0_4px_12px_rgba(147,51,234,0.10)] dark:shadow-none hover:bg-[#f8e4ff] dark:hover:bg-pink-500/20 active:scale-95 transition-all">
-                                  <Film className="h-3 w-3" />
-                                  {isAr ? 'بوستر وتسميات' : 'Poster & Captions'}
-                                </button>
-                              );
-                            }
-                            return null;
-                          })()}
-                          <button type="button"
-                            onPointerUp={() => handleDownload(t.play_url || '', `wakti-music-${t.id}.mp3`)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:shadow-none text-muted-foreground hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20 active:scale-95 transition-all">
-                            <RefreshCw className="h-3 w-3" />{isAr ? 'تنزيل' : 'Download'}
-                          </button>
-                          <ShareButton size="sm"
-                            shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${t.id}` : ''}
-                            shareTitle={isAr ? 'استمع إلى موسيقى من وقتي 🎵' : 'Listen to my Wakti music 🎵'}
-                          />
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })}

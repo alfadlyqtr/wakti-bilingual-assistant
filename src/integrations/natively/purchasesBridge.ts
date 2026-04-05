@@ -72,10 +72,10 @@ export function restorePurchases(callback?: (resp: any) => void) {
   }
 }
 
-export function purchasePackage(packageId: string, callback?: (resp: any) => void) {
+export function purchasePackage(packageIdOrObj: string | any, callback?: (resp: any) => void) {
   const p = getInstance();
-  if (!p || !packageId) return;
-  try { p.purchasePackage(packageId, callback || function () {}); } catch {}
+  if (!p || !packageIdOrObj) return;
+  try { p.purchasePackage(packageIdOrObj, callback || function () {}); } catch {}
 }
 
 export function getOfferings(callback?: (resp: any) => void) {
