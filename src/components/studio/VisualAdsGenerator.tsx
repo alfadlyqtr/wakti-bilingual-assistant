@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { Plus, Smartphone, Square, Monitor, Sparkles, Wand2, Globe } from 'lucide-react';
+import { Plus, Smartphone, Square, Monitor, Wand2, Globe, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 // Types
@@ -166,6 +167,7 @@ export default function VisualAdsGenerator({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedAssetIndex, setSelectedAssetIndex] = useState(0);
   const [openBriefSection, setOpenBriefSection] = useState<1 | 2 | 3 | 4 | null>(4);
+  const [isAmping, setIsAmping] = useState(false);
 
   const [state, setState] = useState<VisualAdsState>({
     brandAsset: { image: null, type: null },
@@ -281,13 +283,57 @@ export default function VisualAdsGenerator({
       setActiveStep(1);
       return;
     }
-    if (!state.campaignDNA.objective) {
-      toast.error(language === 'ar' ? 'الرجاء اختيار الهدف' : 'Please select an objective');
-      setActiveStep(2);
+    if (!state.creativeSoul.prompt.trim()) {
+      toast.error(language === 'ar' ? 'الرجاء كتابة تفاصيل الإعلان المطلوبة' : 'Please add the required ad details');
+      setActiveStep(3);
+      setOpenBriefSection(4);
       return;
     }
     await onGenerate(state);
   }, [state, onGenerate, language]);
+
+  const handleAmp = useCallback(async () => {
+    const text = state.creativeSoul.prompt.trim();
+    if (!text || isAmping) {
+      if (!text) {
+        toast.error(language === 'ar' ? 'اكتب فكرة الإعلان أولاً' : 'Write the ad idea first');
+      }
+      return;
+    }
+
+    const ctaLabel = ctaChips.find((chip) => chip.id === state.creativeSoul.cta)?.label || '';
+    const tags = uploadedImages
+      .map((asset) => asset.type)
+      .filter((tag): tag is 'logo' | 'product' | 'screenshot' => Boolean(tag))
+      .map((tag) => tag === 'logo' ? 'Logo' : tag === 'product' ? 'Brand' : 'Screenshot');
+
+    try {
+      setIsAmping(true);
+      const { data, error } = await supabase.functions.invoke('prompt-amp', {
+        body: {
+          mode: 'visual-ads',
+          text,
+          assets_count: uploadedImages.length,
+          tag_list: tags,
+          cta_text: ctaLabel,
+        },
+      });
+
+      if (error || !data?.text) {
+        console.error('Visual Ads AMP failed:', error || data);
+        toast.error(language === 'ar' ? 'فشل تحسين الوصف' : 'Failed to enhance prompt');
+        return;
+      }
+
+      updateState('creativeSoul', { prompt: String(data.text) });
+      toast.success(language === 'ar' ? 'تم تحسين الوصف' : 'Prompt enhanced');
+    } catch (err) {
+      console.error('Visual Ads AMP exception:', err);
+      toast.error(language === 'ar' ? 'فشل تحسين الوصف' : 'Failed to enhance prompt');
+    } finally {
+      setIsAmping(false);
+    }
+  }, [state.creativeSoul.prompt, state.creativeSoul.cta, uploadedImages, isAmping, language, updateState]);
 
   // Step header component
   const StepHeader = ({ step, title, subtitle }: { step: number; title: string; subtitle: string }) => {
@@ -762,7 +808,18 @@ export default function VisualAdsGenerator({
                     <span className={`text-[#858384] text-xs transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                   </button>
                   {isOpen && (
-                    <div className="px-4 pb-4 pt-2">
+                    <div className="relative z-10 px-4 pb-4 pt-2" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                      <div className="mb-3 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleAmp}
+                          disabled={isAmping}
+                          className="inline-flex items-center gap-2 rounded-xl bg-[#060541] px-3 py-2 text-xs font-semibold text-white shadow-[0_4px_18px_rgba(6,5,65,0.28)] transition-all hover:bg-[#0b0a63] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isAmping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+                          <span>AMP</span>
+                        </button>
+                      </div>
                       <textarea
                         value={state.creativeSoul.prompt}
                         onChange={(e) => updateState('creativeSoul', { prompt: e.target.value })}
@@ -770,7 +827,10 @@ export default function VisualAdsGenerator({
                           ? 'مثال: ركز على التطبيق، استخدم ألوان العلامة التجارية...'
                           : 'e.g., Focus on the app, use brand colors, add a short caption...'}
                         rows={3}
-                        className="w-full px-4 py-3 rounded-xl bg-white/50 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 text-sm resize-none focus:outline-none focus:border-[#060541]/50 dark:focus:border-[#f2f2f2]/50 transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onFocus={(e) => e.stopPropagation()}
+                        className="relative z-10 w-full px-4 py-3 rounded-xl bg-[#0f131a] dark:bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 text-sm text-white resize-none focus:outline-none focus:border-[#060541]/50 dark:focus:border-[#f2f2f2]/50 transition-colors"
                       />
                     </div>
                   )}
@@ -778,41 +838,11 @@ export default function VisualAdsGenerator({
               );
             })()}
 
-            {/* Boost Ad Polish Toggle */}
-            <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-[#060541]/10 via-[#1a1a4a]/10 to-[#060541]/10 dark:from-[#060541]/5 dark:via-[#1a1a4a]/5 dark:to-[#060541]/5 border border-[#060541]/30 dark:border-[#f2f2f2]/30">
-              <div className="flex items-start gap-2">
-                <Sparkles className="w-4 h-4 text-[#060541] dark:text-[#f2f2f2] mt-0.5" />
-                <div>
-                  <span className="text-sm font-medium block">
-                    {language === 'ar' ? 'تحسين مظهر الإعلان' : 'Boost Ad Polish'}
-                  </span>
-                  <span className="text-[11px] text-[#858384] block mt-0.5">
-                    {language === 'ar' ? 'يحسن التناسق، التباين، والإحساس الفاخر.' : 'Improves layout, contrast, readability, and premium feel.'}
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => updateState('creativeSoul', { magicEnhance: !state.creativeSoul.magicEnhance })}
-                aria-label={state.creativeSoul.magicEnhance ? (language === 'ar' ? 'تعطيل تحسين الإعلان' : 'Disable ad polish') : (language === 'ar' ? 'تفعيل تحسين الإعلان' : 'Enable ad polish')}
-                className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
-                  state.creativeSoul.magicEnhance
-                    ? 'bg-gradient-to-r from-[#060541] to-[#1a1a4a]'
-                    : 'bg-[#606062]/30'
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-200 ${
-                    state.creativeSoul.magicEnhance ? 'left-[26px]' : 'left-[2px]'
-                  }`}
-                />
-              </button>
-            </div>
-
             {/* Generate Button */}
             <div className="pt-2">
               {isGenerating ? (
                 <div className="space-y-3">
-                  <div className="h-12 rounded-xl bg-gradient-to-r from-[#060541]/20 to-[#1a1a4a]/20 border border-[#060541]/30 flex items-center justify-center gap-2">
+                  <div className="h-12 rounded-xl bg-[#060541]/10 border border-[#060541]/30 flex items-center justify-center gap-2">
                     <Wand2 className="w-5 h-5 text-[#060541] dark:text-[#f2f2f2] animate-pulse" />
                     <span className="text-sm font-semibold text-[#060541] dark:text-[#f2f2f2]">
                       {language === 'ar' ? 'جارِ صناعة الإعلان...' : 'Crafting your Ad...'}
@@ -831,10 +861,9 @@ export default function VisualAdsGenerator({
                   onClick={handleGenerate}
                   className="relative w-full py-4 rounded-xl font-bold text-sm text-white overflow-hidden group active:scale-95 transition-transform duration-200"
                 >
-                  {/* Gradient background */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-[#060541] via-[#1a1a4a] to-[#060541]" />
+                  <div className="absolute inset-0 bg-[#060541]" />
                   {/* Bloom glow effect */}
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-r from-[#060541]/50 via-[#1a1a4a]/50 to-[#060541]/50 blur-xl" />
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-[#060541]/40 blur-xl" />
                   <div className="absolute inset-0 shadow-[0_0_30px_rgba(6,5,65,0.5)]" />
                   {/* Content */}
                   <span className="relative flex items-center justify-center gap-2">

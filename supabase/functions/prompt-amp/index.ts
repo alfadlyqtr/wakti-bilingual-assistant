@@ -273,6 +273,84 @@ function buildSystemPrompt(preferArabic: boolean, mode?: string) {
   }
 }
 
+const VISUAL_ADS_SYSTEM_PROMPT = `Transform a user's simple idea and a list of tagged image assets into a high-performance, professional 3D advertisement prompt for the Nano-Banana-2 image model.
+
+Input Context:
+- User Idea: [USER_INPUT]
+- Assets Provided: [COUNT] images.
+- Tags: [TAG_LIST] (Possible tags: Logo, Brand, Screenshot).
+- CTA: [CTA_TEXT]
+
+Rules for Enhancement:
+- For LOGO: Describe it as a high-fidelity 3D metallic or glass brand mark, naturally integrated into the environment with realistic reflections.
+- For SCREENSHOT: Explicitly instruct the AI to display the screenshot perfectly on the screen of a premium, modern 3D smartphone with a titanium frame or a holographic tablet.
+- For BRAND/PRODUCT: Describe professional commercial studio lighting, including rim lighting and softboxes, to highlight the product as the hero of the shot.
+- Style: Use high-impact keywords including 8k resolution, cinematic lighting, commercial photography, depth of field, sharp textures, and premium aesthetic.
+- Text: Ensure the CTA is described as sharply rendered, clean typography at the bottom of the frame.
+
+Output Format:
+- Provide ONLY the final enhanced prompt in a single, descriptive paragraph.
+- Do not include conversational filler.
+- Output in English only.`;
+
+async function ampVisualAdsWithOpenAI(
+  userIdea: string,
+  assetsCount: number,
+  tagList: string[],
+  ctaText: string,
+): Promise<string> {
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
+
+  const payload = {
+    model: "gpt-4o-mini",
+    temperature: 0.55,
+    max_tokens: 500,
+    messages: [
+      {
+        role: "system",
+        content: VISUAL_ADS_SYSTEM_PROMPT,
+      },
+      {
+        role: "user",
+        content: [
+          `User Idea: ${userIdea}`,
+          `Assets Provided: ${assetsCount} images`,
+          `Tags: ${tagList.length > 0 ? tagList.join(", ") : "None specified"}`,
+          `CTA: ${ctaText || "None"}`,
+        ].join("\n"),
+      },
+    ],
+  };
+
+  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await resp.json().catch(() => null);
+  if (!resp.ok) {
+    throw new Error(
+      JSON.stringify({
+        stage: "openai-visual-ads",
+        status: resp.status,
+        body: data || null,
+      }),
+    );
+  }
+
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== "string" || content.trim().length === 0) {
+    throw new Error("openai_empty_response");
+  }
+
+  return content.trim();
+}
+
 // ─── Music/Lyrics Amp (OpenAI gpt-4o-mini) ───
 const MUSIC_LYRICS_SYSTEM_PROMPT = `You are a song structure assistant. Your ONLY job is to take the user's lyrics and expand them into a complete song with proper sections.
 
@@ -769,6 +847,62 @@ serve(async (req) => {
     const text = (body?.text ?? "").toString();
     mode = typeof body?.mode === "string" ? (body.mode as string) : undefined;
     inputText = text;
+
+    if (mode === "visual-ads") {
+      const assetsCount = typeof body?.assets_count === "number"
+        ? body.assets_count
+        : Number(body?.assets_count ?? 0);
+      const tagList = Array.isArray(body?.tag_list)
+        ? body.tag_list.map((tag) => String(tag)).filter(Boolean)
+        : [];
+      const ctaText = (body?.cta_text ?? "").toString();
+      inputText = `[visual-ads] idea: ${text}; assets: ${assetsCount}; tags: ${tagList.join(",")}; cta: ${ctaText}`;
+
+      if (!text || text.trim().length === 0) {
+        return new Response(
+          JSON.stringify({
+            error: "Missing 'text' for visual-ads mode",
+            code: "BAD_REQUEST_MISSING_TEXT",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      const improved = await ampVisualAdsWithOpenAI(text, assetsCount, tagList, ctaText);
+
+      await logAI({
+        functionName: "prompt-amp",
+        userId,
+        model: "gpt-4o-mini",
+        inputText,
+        outputText: improved,
+        durationMs: Date.now() - startTime,
+        status: "success",
+        metadata: {
+          provider: "openai",
+          mode: "visual-ads",
+          language: "en",
+          assetsCount,
+          tagList,
+        },
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          text: improved,
+          language: "en",
+          mode: "visual-ads",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
 
     // ─── Music/Lyrics Amp route (OpenAI gpt-4o-mini) ───
     if (mode === "music" || mode === "lyrics") {
