@@ -33,70 +33,39 @@ interface VisualAdsGeneratorProps {
   progress: number;
 }
 
-// Style options with emojis
-const styleOptions = [
-  { id: 'premium-dark', label: 'Premium Dark', emoji: '🌙' },
-  { id: 'bold-modern', label: 'Bold & Modern', emoji: '⚡' },
-  { id: 'lifestyle-human', label: 'Lifestyle & Human', emoji: '📸' },
-  { id: 'app-promo', label: 'App Promo', emoji: '📱' },
-  { id: 'luxury-minimal', label: 'Luxury Minimal', emoji: '✨' },
-  { id: 'ugc-style', label: 'UGC Style', emoji: '�' },
+// What the ad is about — pick one chip
+const adTopicChips = [
+  { id: 'new-launch',    label: '🚀 New Launch',          prompt: 'exciting new product launch' },
+  { id: 'limited-offer', label: '⏰ Limited Offer',        prompt: 'limited-time offer, urgency' },
+  { id: 'app-download',  label: '📱 App Download',         prompt: 'app download promotion' },
+  { id: 'save-time',     label: '⚡ Save Time',            prompt: 'time-saving benefit' },
+  { id: 'premium',       label: '✨ Premium Quality',      prompt: 'premium quality and prestige' },
+  { id: 'social-proof',  label: '⭐ Customer Love',        prompt: 'social proof and customer trust' },
+  { id: 'features',      label: '🎯 Show Features',        prompt: 'product feature showcase' },
+  { id: 'sale',          label: '🛍️ Sale / Discount',      prompt: 'sale or discount offer' },
 ];
 
-// Campaign objectives
-const campaignObjectives = [
-  {
-    id: 'hype-hook',
-    label: 'Problem / Solution',
-    description: 'Bold hook made to grab attention fast',
-    icon: '🎯',
-  },
-  {
-    id: 'minimalist-pro',
-    label: 'Product Hero',
-    description: 'Clean, premium, elegant brand presence',
-    icon: '✨',
-  },
-  {
-    id: 'lifestyle',
-    label: 'Lifestyle Story',
-    description: 'Human, emotional, real-life connection',
-    icon: '🎬',
-  },
-  {
-    id: 'feature-focus',
-    label: 'Social Proof',
-    description: 'Lead with the strongest product value',
-    icon: '💎',
-  },
-  {
-    id: 'sales-fomo',
-    label: 'Offer Push',
-    description: 'Urgency, offer, and conversion pressure',
-    icon: '⏰',
-  },
-];
-
+// CTA chips
 const ctaChips = [
-  'Download now',
-  'Get started',
-  'Shop now',
-  'Learn more',
-  'Book now',
-  'Start free',
-  'Try it today',
-  'Join now',
-  'Request a demo',
-  'Subscribe',
+  { id: 'download-now',   label: 'Download now' },
+  { id: 'get-started',    label: 'Get started' },
+  { id: 'shop-now',       label: 'Shop now' },
+  { id: 'learn-more',     label: 'Learn more' },
+  { id: 'book-now',       label: 'Book now' },
+  { id: 'start-free',     label: 'Start free' },
+  { id: 'try-today',      label: 'Try it today' },
+  { id: 'join-now',       label: 'Join now' },
+  { id: 'subscribe',      label: 'Subscribe' },
 ];
 
-const messageChips = [
-  'New launch',
-  'Limited-time offer',
-  'Download the app',
-  'Save time',
-  'Premium quality',
-  'Trusted by customers',
+// Ad look & feel
+const adStyleChips = [
+  { id: 'premium-dark',      label: '🌙 Sleek & Dark',       prompt: 'premium dark theme, elegant, high-contrast' },
+  { id: 'bright-clean',      label: '☀️ Bright & Clean',     prompt: 'bright clean design, light background, fresh' },
+  { id: 'bold-modern',       label: '⚡ Bold & Punchy',       prompt: 'bold modern design, high energy, strong typography' },
+  { id: 'lifestyle',         label: '📸 Real & Human',        prompt: 'lifestyle photography feel, authentic and relatable' },
+  { id: 'luxury-minimal',    label: '🤍 Luxury Minimal',      prompt: 'luxury minimalist, spacious, refined, premium' },
+  { id: 'ugc',               label: '🎥 Natural / UGC',       prompt: 'organic UGC style, native social feed look' },
 ];
 
 const InstagramBrandIcon = () => (
@@ -196,11 +165,12 @@ export default function VisualAdsGenerator({
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedAssetIndex, setSelectedAssetIndex] = useState(0);
+  const [openBriefSection, setOpenBriefSection] = useState<1 | 2 | 3 | 4 | null>(4);
 
   const [state, setState] = useState<VisualAdsState>({
     brandAsset: { image: null, type: null },
     campaignDNA: { platform: '9:16', objective: '' },
-    creativeSoul: { mainMessage: '', cta: '', style: 'premium-dark', magicEnhance: false, prompt: '' },
+    creativeSoul: { mainMessage: '', cta: '', style: '', magicEnhance: false, prompt: '' },
     assets: [],
   });
 
@@ -565,223 +535,248 @@ export default function VisualAdsGenerator({
       <div className="space-y-1">
         <StepHeader
           step={2}
-          title={language === 'ar' ? 'المنصة والمقاس' : 'Platform & Format'}
-          subtitle={language === 'ar' ? 'أين سيظهر هذا الإعلان؟' : 'Where will this ad run?'}
+          title={language === 'ar' ? 'أين سيُنشر الإعلان؟' : 'Where will this run?'}
+          subtitle={language === 'ar' ? 'اختر المنصة والمقاس المناسب' : 'Pick the platform & size'}
         />
         <StepContent step={2}>
-          <div className="space-y-5">
-            {/* Platform Selection */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-[#858384] uppercase tracking-wider">
-                {language === 'ar' ? 'المنصات ونسبة العرض' : 'Platforms & Aspect Ratio'}
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {platformOptions.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => updateState('campaignDNA', { platform: opt.value })}
-                    className={`flex flex-col items-center justify-center gap-2 py-3 px-2 rounded-xl border transition-all duration-200 min-h-[88px] ${
-                      state.campaignDNA.platform === opt.value
-                        ? 'bg-gradient-to-b from-[#1a1d24] to-[#11141b] text-[#f2f2f2] border-2 border-orange-400 ring-2 ring-orange-400/35 shadow-[0_0_0_1px_rgba(251,146,60,0.45),0_10px_28px_rgba(251,146,60,0.18)] scale-[1.02]'
-                        : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/70 dark:hover:bg-white/10'
-                    }`}
-                  >
-                    <opt.icon className="w-5 h-5" />
-                    <span className="text-xs font-semibold">{opt.label}</span>
-                    <div className="flex flex-wrap items-center justify-center gap-1.5">
-                      {opt.platforms.map((platform) => (
-                        <span
-                          key={platform.name}
-                          className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium ${platform.badgeClass} ${
-                            state.campaignDNA.platform === opt.value
-                              ? 'shadow-[0_4px_12px_rgba(0,0,0,0.18)]'
-                              : 'opacity-95'
-                          }`}
-                        >
-                          <platform.icon className="w-3.5 h-3.5" />
-                          <span>{platform.name}</span>
-                        </span>
-                      ))}
-                    </div>
-                  </button>
-                ))}
-              </div>
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-2">
+              {platformOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    updateState('campaignDNA', { platform: opt.value });
+                    setCompletedSteps(prev => new Set([...prev, 2]));
+                    setActiveStep(3);
+                  }}
+                  className={`flex flex-col items-center justify-center gap-2 py-3 px-2 rounded-xl border transition-all duration-200 min-h-[88px] ${
+                    state.campaignDNA.platform === opt.value
+                      ? 'bg-gradient-to-b from-[#1a1d24] to-[#11141b] text-[#f2f2f2] border-2 border-orange-400 ring-2 ring-orange-400/35 shadow-[0_0_0_1px_rgba(251,146,60,0.45),0_10px_28px_rgba(251,146,60,0.18)] scale-[1.02]'
+                      : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/70 dark:hover:bg-white/10'
+                  }`}
+                >
+                  <opt.icon className="w-5 h-5" />
+                  <span className="text-xs font-semibold">{opt.label}</span>
+                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                    {opt.platforms.map((platform) => (
+                      <span
+                        key={platform.name}
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium ${platform.badgeClass}`}
+                      >
+                        <platform.icon className="w-3.5 h-3.5" />
+                        <span>{platform.name}</span>
+                      </span>
+                    ))}
+                  </div>
+                </button>
+              ))}
             </div>
-
-            {/* Objective Selection */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-[#858384] uppercase tracking-wider">
-                {language === 'ar' ? 'زاوية الإعلان' : 'Creative Angle'}
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {campaignObjectives.map((obj) => (
-                  <button
-                    key={obj.id}
-                    onClick={() => {
-                      updateState('campaignDNA', { objective: obj.id });
-                      // Auto-collapse and go to Step 3
-                      setCompletedSteps(prev => new Set([...prev, 2]));
-                      setActiveStep(3);
-                    }}
-                    className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all duration-200 min-h-[78px] ${
-                      state.campaignDNA.objective === obj.id
-                        ? 'bg-gradient-to-b from-[#1a1d24] to-[#11141b] border-2 border-orange-400 ring-2 ring-orange-400/30 shadow-[0_0_0_1px_rgba(251,146,60,0.45),0_10px_28px_rgba(251,146,60,0.15)]'
-                        : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/70 dark:hover:bg-white/10'
-                    }`}
-                  >
-                    <div className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-lg ${
-                      state.campaignDNA.objective === obj.id
-                        ? 'bg-orange-400/20'
-                        : 'bg-white/10 dark:bg-white/5'
-                    }`}>
-                      <span>{obj.icon}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <div className={`text-sm font-semibold ${
-                        state.campaignDNA.objective === obj.id ? 'text-[#f2f2f2]' : 'text-foreground'
-                      }`}>
-                        {obj.label}
-                      </div>
-                      <div className={`mt-1 text-[11px] leading-4 ${
-                        state.campaignDNA.objective === obj.id ? 'text-white/75' : 'text-[#858384]'
-                      }`}>
-                        {obj.description}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Confirm Button */}
-            <button
-              onClick={() => {
-                if (!state.campaignDNA.objective) {
-                  toast.error(language === 'ar' ? 'الرجاء اختيار الهدف' : 'Please select an objective');
-                  return;
-                }
-                setCompletedSteps(prev => new Set([...prev, 2]));
-                setActiveStep(3);
-              }}
-              className="w-full py-3 rounded-xl bg-[#060541] text-white dark:bg-[#f2f2f2] dark:text-[#060541] font-semibold text-sm shadow-lg active:scale-95 transition-all duration-200"
-            >
-              {language === 'ar' ? 'تأكيد المنصة والزاوية' : 'Confirm Platform & Angle'}
-            </button>
+            <p className="text-[11px] text-[#858384] text-center">
+              {language === 'ar' ? 'اختر واحدة للانتقال تلقائياً إلى الخطوة التالية' : 'Select one to move to the next step'}
+            </p>
           </div>
         </StepContent>
       </div>
 
-      {/* Step 3: Creative Brief */}
+      {/* Step 3: Ad Brief */}
       <div className="space-y-1">
         <StepHeader
           step={3}
-          title={language === 'ar' ? 'الملخص الإبداعي' : 'Creative Brief'}
-          subtitle={language === 'ar' ? 'ماذا يجب أن يقول الإعلان؟' : 'What should this ad say?'}
+          title={language === 'ar' ? 'ماذا يقول الإعلان؟' : 'Tell us about your ad'}
+          subtitle={language === 'ar' ? 'اختر ما يناسبك — كل شيء اختياري' : 'Pick what fits — everything is optional'}
         />
         <StepContent step={3}>
-          <div className="space-y-5">
-            {/* Main Message */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-[#858384] uppercase tracking-wider">
-                {language === 'ar' ? 'الرسالة الأساسية' : 'Main Message'}
-              </label>
-              <input
-                type="text"
-                value={state.creativeSoul.mainMessage}
-                onChange={(e) => updateState('creativeSoul', { mainMessage: e.target.value })}
-                placeholder={language === 'ar' ? 'مثال: وفر وقتك مع Wakti AI' : 'e.g., Save time with Wakti AI'}
-                className="w-full px-4 py-3 rounded-xl bg-white/50 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 text-sm focus:outline-none focus:border-[#060541]/50 dark:focus:border-[#f2f2f2]/50 transition-colors"
-              />
-              <div className="flex flex-wrap gap-2 pt-1">
-                {messageChips.map((chip) => (
+          <div className="space-y-2">
+
+            {/* Q1: What's the ad about? */}
+            {(() => {
+              const selectedTopic = adTopicChips.find(c => c.id === state.creativeSoul.mainMessage);
+              const isOpen = openBriefSection === 1;
+              return (
+                <div className="rounded-xl border border-[#606062]/20 dark:border-[#858384]/20 overflow-hidden">
                   <button
-                    key={chip}
-                    onClick={() => updateState('creativeSoul', { mainMessage: chip })}
                     type="button"
-                    className={`px-3 py-1.5 rounded-full border text-[11px] font-medium transition-all ${
-                      state.creativeSoul.mainMessage === chip
-                        ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.3)]'
-                        : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-[#858384] hover:bg-white/70 dark:hover:bg-white/10'
-                    }`}
+                    onClick={() => setOpenBriefSection(isOpen ? null : 1)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-white/40 dark:bg-white/5 hover:bg-white/60 dark:hover:bg-white/8 transition-colors"
                   >
-                    {chip}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-foreground">
+                        {language === 'ar' ? '١. عن ماذا يتحدث الإعلان؟' : "1. What's the ad about?"}
+                      </span>
+                      {selectedTopic && !isOpen && (
+                        <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] text-[10px] font-semibold">
+                          {selectedTopic.label}
+                        </span>
+                      )}
+                    </div>
+                    <span className={`text-[#858384] text-xs transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                   </button>
-                ))}
-              </div>
-            </div>
+                  {isOpen && (
+                    <div className="px-4 pb-4 pt-2 flex flex-wrap gap-2">
+                      {adTopicChips.map((chip) => (
+                        <button
+                          key={chip.id}
+                          onClick={() => {
+                            const newVal = state.creativeSoul.mainMessage === chip.id ? '' : chip.id;
+                            updateState('creativeSoul', { mainMessage: newVal });
+                            setOpenBriefSection(4);
+                          }}
+                          type="button"
+                          className={`px-3 py-2 rounded-xl border text-[12px] font-medium transition-all ${
+                            state.creativeSoul.mainMessage === chip.id
+                              ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)] scale-[1.03]'
+                              : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
+                          }`}
+                        >
+                          {chip.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
-            {/* CTA Input */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-[#858384] uppercase tracking-wider">
-                {language === 'ar' ? 'دعوة للعمل' : 'Call to Action'}
-              </label>
-              <input
-                type="text"
-                value={state.creativeSoul.cta}
-                onChange={(e) => updateState('creativeSoul', { cta: e.target.value })}
-                placeholder={language === 'ar' ? 'مثال: حمّل الآن' : 'e.g., Download now'}
-                className="w-full px-4 py-3 rounded-xl bg-white/50 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 text-sm focus:outline-none focus:border-[#060541]/50 dark:focus:border-[#f2f2f2]/50 transition-colors"
-              />
-              <div className="flex flex-wrap gap-2 pt-1">
-                {ctaChips.map((chip) => (
+            {/* Q2: What should people do? */}
+            {(() => {
+              const selectedCta = ctaChips.find(c => c.id === state.creativeSoul.cta);
+              const isOpen = openBriefSection === 2;
+              return (
+                <div className="rounded-xl border border-[#606062]/20 dark:border-[#858384]/20 overflow-hidden">
                   <button
-                    key={chip}
-                    onClick={() => updateState('creativeSoul', { cta: chip })}
                     type="button"
-                    className={`px-3 py-1.5 rounded-full border text-[11px] font-medium transition-all ${
-                      state.creativeSoul.cta === chip
-                        ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.3)]'
-                        : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-[#858384] hover:bg-white/70 dark:hover:bg-white/10'
-                    }`}
+                    onClick={() => setOpenBriefSection(isOpen ? null : 2)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-white/40 dark:bg-white/5 hover:bg-white/60 dark:hover:bg-white/8 transition-colors"
                   >
-                    {chip}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-foreground">
+                        {language === 'ar' ? '٢. ماذا تريد أن يفعلوا؟' : '2. What should people do?'}
+                      </span>
+                      {selectedCta && !isOpen && (
+                        <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] text-[10px] font-semibold">
+                          {selectedCta.label}
+                        </span>
+                      )}
+                    </div>
+                    <span className={`text-[#858384] text-xs transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                   </button>
-                ))}
-              </div>
-            </div>
+                  {isOpen && (
+                    <div className="px-4 pb-4 pt-2 flex flex-wrap gap-2">
+                      {ctaChips.map((chip) => (
+                        <button
+                          key={chip.id}
+                          onClick={() => {
+                            const newVal = state.creativeSoul.cta === chip.id ? '' : chip.id;
+                            updateState('creativeSoul', { cta: newVal });
+                            setOpenBriefSection(4);
+                          }}
+                          type="button"
+                          className={`px-3 py-2 rounded-xl border text-[12px] font-medium transition-all ${
+                            state.creativeSoul.cta === chip.id
+                              ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)] scale-[1.03]'
+                              : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
+                          }`}
+                        >
+                          {chip.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
-            {/* Style Selection */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-[#858384] uppercase tracking-wider">
-                {language === 'ar' ? 'الاتجاه البصري' : 'Visual Direction'}
-              </label>
-              <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-none">
-                {styleOptions.map((style) => (
+            {/* Q3: Ad look & feel */}
+            {(() => {
+              const selectedStyle = adStyleChips.find(s => s.id === state.creativeSoul.style);
+              const isOpen = openBriefSection === 3;
+              return (
+                <div className="rounded-xl border border-[#606062]/20 dark:border-[#858384]/20 overflow-hidden">
                   <button
-                    key={style.id}
-                    onClick={() => updateState('creativeSoul', { style: style.id })}
-                    className={`flex-shrink-0 flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all duration-200 min-w-[80px] ${
-                      state.creativeSoul.style === style.id
-                        ? 'bg-[#060541]/10 dark:bg-[#f2f2f2]/10 border-[#060541]/40 dark:border-[#f2f2f2]/40'
-                        : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/70 dark:hover:bg-white/10'
-                    }`}
+                    type="button"
+                    onClick={() => setOpenBriefSection(isOpen ? null : 3)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-white/40 dark:bg-white/5 hover:bg-white/60 dark:hover:bg-white/8 transition-colors"
                   >
-                    <span className="text-2xl">{style.emoji}</span>
-                    <span className="text-[10px] font-medium text-center whitespace-nowrap">{style.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-foreground">
+                        {language === 'ar' ? '٣. كيف تريد أن يبدو الإعلان؟' : '3. How should the ad look?'}
+                      </span>
+                      {selectedStyle && !isOpen && (
+                        <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] text-[10px] font-semibold">
+                          {selectedStyle.label}
+                        </span>
+                      )}
+                    </div>
+                    <span className={`text-[#858384] text-xs transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                   </button>
-                ))}
-              </div>
-            </div>
+                  {isOpen && (
+                    <div className="px-4 pb-4 pt-2 grid grid-cols-2 gap-2">
+                      {adStyleChips.map((style) => (
+                        <button
+                          key={style.id}
+                          onClick={() => {
+                            const newVal = state.creativeSoul.style === style.id ? '' : style.id;
+                            updateState('creativeSoul', { style: newVal });
+                            setOpenBriefSection(4);
+                          }}
+                          type="button"
+                          className={`px-3 py-2.5 rounded-xl border text-[12px] font-medium text-left transition-all ${
+                            state.creativeSoul.style === style.id
+                              ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)] scale-[1.02]'
+                              : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
+                          }`}
+                        >
+                          {style.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
-            {/* Creative Instructions */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-[#858384] uppercase tracking-wider">
-                {language === 'ar' ? 'تعليمات إبداعية' : 'Creative Instructions'}
-              </label>
-              <textarea
-                value={state.creativeSoul.prompt}
-                onChange={(e) => updateState('creativeSoul', { prompt: e.target.value })}
-                placeholder={language === 'ar'
-                  ? 'صف الشكل، المزاج، النص، وتوزيع العناصر الذي تريده في الإعلان.'
-                  : 'Describe the look, mood, text, and composition you want in the ad.'}
-                className="w-full min-h-[110px] px-4 py-3 rounded-xl bg-white/50 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 text-sm resize-none focus:outline-none focus:border-[#060541]/50 dark:focus:border-[#f2f2f2]/50 transition-colors"
-              />
-              <p className="text-[11px] text-[#858384]">
-                {language === 'ar'
-                  ? 'مثال: إعلان حديث وفخم، خلفية داكنة، لقطة التطبيق في المنتصف، عنوان واضح، وتركيز على توفير الوقت.'
-                  : 'Example: Modern premium ad, dark elegant background, app screenshot centered, clear headline, and a strong time-saving message.'}
-              </p>
-            </div>
+            {/* Q4: Anything specific? (optional freetext) */}
+            {(() => {
+              const isOpen = openBriefSection === 4;
+              const hasText = state.creativeSoul.prompt.trim().length > 0;
+              return (
+                <div className="rounded-xl border border-[#606062]/20 dark:border-[#858384]/20 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setOpenBriefSection(isOpen ? null : 4)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-white/40 dark:bg-white/5 hover:bg-white/60 dark:hover:bg-white/8 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-foreground">
+                        {language === 'ar' ? '٤. أي تفاصيل إضافية؟' : '4. Anything specific?'}
+                      </span>
+                      <span className="text-[10px] text-[#858384]">
+                        {language === 'ar' ? '(اختياري)' : '(optional)'}
+                      </span>
+                      {hasText && !isOpen && (
+                        <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] text-[10px] font-semibold">
+                          ✓
+                        </span>
+                      )}
+                    </div>
+                    <span className={`text-[#858384] text-xs transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+                  </button>
+                  {isOpen && (
+                    <div className="px-4 pb-4 pt-2">
+                      <textarea
+                        value={state.creativeSoul.prompt}
+                        onChange={(e) => updateState('creativeSoul', { prompt: e.target.value })}
+                        placeholder={language === 'ar'
+                          ? 'مثال: ركز على التطبيق، استخدم ألوان العلامة التجارية...'
+                          : 'e.g., Focus on the app, use brand colors, add a short caption...'}
+                        rows={3}
+                        className="w-full px-4 py-3 rounded-xl bg-white/50 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 text-sm resize-none focus:outline-none focus:border-[#060541]/50 dark:focus:border-[#f2f2f2]/50 transition-colors"
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Boost Ad Polish Toggle */}
             <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-[#060541]/10 via-[#1a1a4a]/10 to-[#060541]/10 dark:from-[#060541]/5 dark:via-[#1a1a4a]/5 dark:to-[#060541]/5 border border-[#060541]/30 dark:border-[#f2f2f2]/30">

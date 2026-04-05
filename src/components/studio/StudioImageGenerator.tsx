@@ -1067,31 +1067,53 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
           onBack={() => setSubmode('text2image')}
           onGenerate={async (visualState) => {
             // Build prompt from visual ads state
-            const objectiveLabels: Record<string, string> = {
-              'hype-hook': 'problem and solution angle, attention-grabbing hook',
-              'minimalist-pro': 'product hero angle, premium product-led presentation',
-              'lifestyle': 'lifestyle story angle, human and relatable scene',
-              'feature-focus': 'social proof angle, trust-building and credibility-led',
-              'sales-fomo': 'offer push angle, urgency and conversion-focused',
+            const topicPrompts: Record<string, string> = {
+              'new-launch':    'exciting new product launch',
+              'limited-offer': 'limited-time offer, urgency',
+              'app-download':  'app download promotion',
+              'save-time':     'time-saving benefit',
+              'premium':       'premium quality and prestige',
+              'social-proof':  'social proof and customer trust',
+              'features':      'product feature showcase',
+              'sale':          'sale or discount offer',
             };
-            const styleLabels: Record<string, string> = {
-              'premium-dark': 'premium dark, elegant, high-contrast',
-              'bold-modern': 'bold modern, high contrast, contemporary',
-              'lifestyle-human': 'lifestyle human, authentic, warm, relatable',
-              'app-promo': 'app promo, product UI focused, clean mobile composition',
-              'luxury-minimal': 'luxury minimal, refined, spacious, premium',
-              'ugc-style': 'UGC style, organic, native social feel',
+            const stylePrompts: Record<string, string> = {
+              'premium-dark':   'premium dark theme, elegant, high-contrast',
+              'bright-clean':   'bright clean design, light background, fresh',
+              'bold-modern':    'bold modern design, high energy, strong typography',
+              'lifestyle':      'lifestyle photography feel, authentic and relatable',
+              'luxury-minimal': 'luxury minimalist, spacious, refined, premium',
+              'ugc':            'organic UGC style, native social feed look',
             };
-            
+            const ctaLabels: Record<string, string> = {
+              'download-now': 'Download now',
+              'get-started':  'Get started',
+              'shop-now':     'Shop now',
+              'learn-more':   'Learn more',
+              'book-now':     'Book now',
+              'start-free':   'Start free',
+              'try-today':    'Try it today',
+              'join-now':     'Join now',
+              'subscribe':    'Subscribe',
+            };
+
+            const topicStr  = topicPrompts[visualState.creativeSoul.mainMessage] || '';
+            const styleStr  = stylePrompts[visualState.creativeSoul.style] || '';
+            const ctaStr    = ctaLabels[visualState.creativeSoul.cta] ? `call to action: ${ctaLabels[visualState.creativeSoul.cta]}` : '';
+            const assetTypes = (visualState.assets || [])
+              .filter(a => a.type)
+              .map(a => a.type)
+              .join(', ');
+
             const parts = [
               'Create a professional visual advertisement',
-              visualState.creativeSoul.mainMessage ? `main message: ${visualState.creativeSoul.mainMessage}` : '',
-              objectiveLabels[visualState.campaignDNA.objective] || '',
-              styleLabels[visualState.creativeSoul.style] || '',
+              topicStr,
+              styleStr,
+              assetTypes ? `incorporate brand assets: ${assetTypes}` : '',
+              ctaStr,
               visualState.creativeSoul.prompt || '',
-              visualState.creativeSoul.magicEnhance ? 'premium polish, improved layout, stronger contrast, better readability' : '',
-              visualState.creativeSoul.cta ? `with call to action: ${visualState.creativeSoul.cta}` : '',
-              `format: ${visualState.campaignDNA.platform}`,
+              visualState.creativeSoul.magicEnhance ? 'premium polish, sharp layout, strong contrast, high readability' : '',
+              `aspect ratio: ${visualState.campaignDNA.platform}`,
             ].filter(Boolean);
             
             setPrompt(parts.join(', '));
