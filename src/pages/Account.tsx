@@ -375,9 +375,21 @@ export default function Account() {
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const rcPackageId = isQUUser ? 'qatar_university' : '$rc_monthly';
-    console.log('[BillingSubscribe] Package:', rcPackageId, '| isQUUser:', isQUUser);
-    purchasePackage(rcPackageId, async (resp: any) => {
+    const ua = navigator.userAgent;
+    const isAndroid = /Android/.test(ua);
+    // Android RC SDK only resolves packages from the current/default offering by string name.
+    // Non-default offering packages (like qatar_university in university_exclusive) require
+    // the actual Google Play store product ID to be resolved correctly.
+    let packageId: string;
+    if (isQUUser && isAndroid) {
+      packageId = 'wakti_monthly_qu:monthly-academic'; // Google Play product ID
+    } else if (isQUUser) {
+      packageId = 'qatar_university'; // iOS RC package name works fine
+    } else {
+      packageId = '$rc_monthly';
+    }
+    console.log('[BillingSubscribe] Package:', packageId, '| isQUUser:', isQUUser, '| isAndroid:', isAndroid);
+    purchasePackage(packageId, async (resp: any) => {
       const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
         resp.message.toLowerCase().includes('already subscribed');
       const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';

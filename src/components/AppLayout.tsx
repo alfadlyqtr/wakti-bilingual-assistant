@@ -254,14 +254,20 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     setLoading(true);
     setPurchaseInProgress(true);
 
-    // Prefer the full RC package object fetched from getOfferings — it carries the correct
-    // offering context (university_exclusive for QU, default for standard) which Android
-    // requires to resolve the right product. iOS works with both object and string identifier.
-    // Fall back to string identifier if offerings haven't loaded yet.
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const fallbackId = isQUUser ? 'qatar_university' : '$rc_monthly';
-    const packageToUse = activePackageObj || fallbackId;
-    console.log('[Purchase] Initiating purchase — using:', activePackageObj ? `package obj (${activePackageObj?.identifier})` : `fallback string (${fallbackId})`, '| isQUUser:', isQUUser);
+    const isAndroid = /Android/.test(navigator.userAgent);
+    // Android RC SDK cannot resolve packages from non-default offerings by name alone.
+    // Must pass the actual Google Play store product ID for QU users on Android.
+    // iOS resolves correctly from the RC package name across all offerings.
+    let packageToUse: string | any;
+    if (isQUUser && isAndroid) {
+      packageToUse = 'wakti_monthly_qu:monthly-academic'; // Google Play store product ID
+    } else if (activePackageObj) {
+      packageToUse = activePackageObj; // full RC package obj (works on iOS for all users)
+    } else {
+      packageToUse = isQUUser ? 'qatar_university' : '$rc_monthly'; // string fallback
+    }
+    console.log('[Purchase] Initiating purchase — pkg:', typeof packageToUse === 'string' ? packageToUse : packageToUse?.identifier, '| isQUUser:', isQUUser, '| isAndroid:', isAndroid);
     purchasePackage(packageToUse, async (resp: any) => {
       console.log('[Purchase] Response:', resp);
       
