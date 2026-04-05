@@ -237,18 +237,19 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     // Standard users: '$rc_monthly' string works on both platforms
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     const isAndroid = /Android/.test(navigator.userAgent);
+    
     let packageToUse: string | any;
     if (isQUUser && isAndroid) {
-      packageToUse = 'qatar_university';
-    } else if (isQUUser) {
-      // iOS QU user: use exact Apple store product ID
-      packageToUse = 'wakti_monthly_qu';
-    } else if (isAndroid) {
-      packageToUse = '$rc_monthly';
+      // Android QU uses the specific string
+      packageToUse = 'wakti_monthly_qu:monthly-academic'; 
+    } else if (activePackageObj) {
+      // iOS (and fallback) uses the FULL RC PACKAGE OBJECT
+      packageToUse = activePackageObj; 
     } else {
-      // iOS Standard user: use exact Apple store product ID
-      packageToUse = 'qa.wakti.ai.monthly';
+      // Ultimate fallback string
+      packageToUse = isQUUser ? 'qatar_university' : '$rc_monthly'; 
     }
+
     console.log('[Purchase] pkg:', typeof packageToUse === 'string' ? packageToUse : packageToUse?.identifier, '| QU:', isQUUser, '| Android:', isAndroid, '| isObj:', typeof packageToUse !== 'string');
     purchasePackage(packageToUse, async (resp: any) => {
       console.log('[Purchase] Response:', resp);

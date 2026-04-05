@@ -379,16 +379,24 @@ export default function Account() {
   // Fetch offerings once so iOS can use the full RC package object
   useEffect(() => {
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    if (!isQUUser) return;
     getOfferings((resp: any) => {
       if (resp?.status !== 'SUCCESS') return;
       const allRaw = resp?.offerings?.all;
       const allOfferings: any[] = Array.isArray(allRaw) ? allRaw : (allRaw && typeof allRaw === 'object' ? Object.values(allRaw) : []);
-      const quOffering = allOfferings.find((o: any) => o?.identifier === 'university_exclusive');
-      const quPkg = quOffering?.availablePackages?.find((p: any) => p?.identifier === 'qatar_university');
-      if (quPkg) {
-        console.log('[BillingOfferings] QU package found for iOS');
-        setBillingPackageObj(quPkg);
+      
+      if (isQUUser) {
+        const quOffering = allOfferings.find((o: any) => o?.identifier === 'university_exclusive');
+        const quPkg = quOffering?.availablePackages?.find((p: any) => p?.identifier === 'qatar_university');
+        if (quPkg) {
+          console.log('[BillingOfferings] QU package found for iOS');
+          setBillingPackageObj(quPkg);
+        }
+      } else {
+        const pkg = resp.offerings?.current?.availablePackages?.find((p: any) => p.identifier === '$rc_monthly') || resp.offerings?.current?.availablePackages?.[0];
+        if (pkg) {
+          console.log('[BillingOfferings] Standard package found for iOS');
+          setBillingPackageObj(pkg);
+        }
       }
     });
   }, [user?.email]);
@@ -398,18 +406,19 @@ export default function Account() {
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     const isAndroid = /Android/.test(navigator.userAgent);
+    
     let packageToUse: string | any;
     if (isQUUser && isAndroid) {
-      packageToUse = 'qatar_university';
-    } else if (isQUUser) {
-      // iOS QU user: use exact Apple store product ID
-      packageToUse = 'wakti_monthly_qu';
-    } else if (isAndroid) {
-      packageToUse = '$rc_monthly';
+      // Android QU uses the specific string
+      packageToUse = 'wakti_monthly_qu:monthly-academic'; 
+    } else if (billingPackageObj) {
+      // iOS (and fallback) uses the FULL RC PACKAGE OBJECT
+      packageToUse = billingPackageObj; 
     } else {
-      // iOS Standard user: use exact Apple store product ID
-      packageToUse = 'qa.wakti.ai.monthly';
+      // Ultimate fallback string
+      packageToUse = isQUUser ? 'qatar_university' : '$rc_monthly'; 
     }
+
     console.log('[BillingSubscribe] pkg:', typeof packageToUse === 'string' ? packageToUse : packageToUse?.identifier, '| QU:', isQUUser, '| Android:', isAndroid, '| isObj:', typeof packageToUse !== 'string');
     purchasePackage(packageToUse, async (resp: any) => {
       const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
