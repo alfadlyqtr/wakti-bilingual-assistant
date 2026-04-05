@@ -35,7 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { purchasePackage, restorePurchases } from "@/integrations/natively/purchasesBridge";
+import { purchasePackage, restorePurchases, getOfferings } from "@/integrations/natively/purchasesBridge";
 import { MyGallery } from "@/components/social/MyGallery";
 import { ContactsContent } from "@/pages/Contacts";
 import { getPendingRequestsCount } from "@/services/contactsService";
@@ -375,11 +375,9 @@ export default function Account() {
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const isAndroid = /Android/.test(navigator.userAgent);
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
     const doPurchase = (packageIdOrObj: string | any) => {
-      console.log('[BillingSubscribe] Purchasing:', typeof packageIdOrObj === 'string' ? packageIdOrObj : packageIdOrObj?.identifier, '| isQUUser:', isQUUser);
+      console.log('[BillingSubscribe] Purchasing:', typeof packageIdOrObj === 'string' ? packageIdOrObj : `obj(${packageIdOrObj?.identifier})`, '| isQUUser:', isQUUser);
       purchasePackage(packageIdOrObj, async (resp: any) => {
         const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
           resp.message.toLowerCase().includes('already subscribed');
@@ -414,22 +412,35 @@ export default function Account() {
       });
     };
 
-    if (isQUUser && isAndroid) {
-      doPurchase('wakti_monthly_qu:monthly-academic');
-      return;
-    }
-
-    if (isQUUser && isIOS) {
-      doPurchase('wakti_monthly_qu');
-      return;
-    }
-
+    // Standard users: purchase default monthly directly
     if (!isQUUser) {
       doPurchase('$rc_monthly');
       return;
     }
 
-    doPurchase('$rc_monthly');
+    // QU users: fetch offerings first to get the full RC package object
+    // (carries offering context so both iOS & Android resolve the correct product)
+    getOfferings((resp: any) => {
+      if (resp?.status !== 'SUCCESS') {
+        console.warn('[BillingSubscribe] getOfferings failed, falling back to qatar_university string');
+        doPurchase('qatar_university');
+        return;
+      }
+      const allRaw = resp?.offerings?.all ?? resp?.offerings;
+      let allOfferings: any[] = [];
+      if (Array.isArray(allRaw)) allOfferings = allRaw;
+      else if (allRaw && typeof allRaw === 'object') allOfferings = Object.values(allRaw);
+      if (resp?.offerings?.current && !allOfferings.includes(resp.offerings.current)) {
+        allOfferings.push(resp.offerings.current);
+      }
+      let quPkg: any = null;
+      for (const off of allOfferings) {
+        const pkg = off?.availablePackages?.find((p: any) => p?.identifier === 'qatar_university');
+        if (pkg) { quPkg = pkg; break; }
+      }
+      console.log('[BillingSubscribe] qatar_university pkg:', quPkg ? `FOUND obj(${quPkg?.identifier}) price:${quPkg?.product?.priceString}` : 'NOT FOUND — using string fallback');
+      doPurchase(quPkg || 'qatar_university');
+    });
   };
   
   // Restore purchases state

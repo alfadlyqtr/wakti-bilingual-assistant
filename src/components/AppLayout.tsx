@@ -255,19 +255,15 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     setPurchaseInProgress(true);
 
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const isAndroid = /Android/.test(navigator.userAgent);
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    // Always prefer the full RC package object from getOfferings (carries offering context).
+    // Fall back to RC package identifier strings — NEVER pass raw store product IDs.
     let packageToUse: string | any;
-    if (isQUUser && isAndroid) {
-      packageToUse = 'wakti_monthly_qu:monthly-academic';
-    } else if (isQUUser && isIOS) {
-      packageToUse = 'wakti_monthly_qu';
-    } else if (activePackageObj) {
+    if (activePackageObj) {
       packageToUse = activePackageObj;
     } else {
-      packageToUse = '$rc_monthly';
+      packageToUse = isQUUser ? 'qatar_university' : '$rc_monthly';
     }
-    console.log('[Purchase] Initiating purchase — pkg:', typeof packageToUse === 'string' ? packageToUse : packageToUse?.identifier, '| isQUUser:', isQUUser, '| isAndroid:', isAndroid, '| isIOS:', isIOS);
+    console.log('[Purchase] Initiating purchase — pkg:', typeof packageToUse === 'string' ? packageToUse : `obj(${packageToUse?.identifier})`, '| isQUUser:', isQUUser);
     purchasePackage(packageToUse, async (resp: any) => {
       console.log('[Purchase] Response:', resp);
       
