@@ -230,15 +230,21 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   }, [open, purchaseInProgress, user?.id, language, onOpenChange]);
 
   const handleSubscribe = async () => {
-    alert('PAYWALL BTN CLICKED v2');
     setLoading(true);
     setPurchaseInProgress(true);
 
+    // QU users: pass the STORE product ID (proven working approach from commit 9cbd96d7)
+    // Standard users: use activePackageId from getOfferings (defaults to $rc_monthly)
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const rcPackageId = isQUUser ? 'qatar_university' : '$rc_monthly';
-    alert('Paywall purchasing: ' + rcPackageId);
-    purchasePackage(rcPackageId, async (resp: any) => {
-      alert('Paywall RC Response: ' + JSON.stringify(resp));
+    const isAndroid = /Android/.test(navigator.userAgent);
+    let packageId: string;
+    if (isQUUser) {
+      packageId = isAndroid ? 'wakti_monthly_qu:monthly-academic' : 'wakti_monthly_qu';
+    } else {
+      packageId = activePackageId;
+    }
+    console.log('[Purchase] pkg:', packageId, '| QU:', isQUUser, '| Android:', isAndroid);
+    purchasePackage(packageId, async (resp: any) => {
       console.log('[Purchase] Response:', resp);
       
       // Treat success OR 'already subscribed' (Android) as a successful subscription
