@@ -73,6 +73,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const [purchaseInProgress, setPurchaseInProgress] = useState(false);
   const [activePackageId, setActivePackageId] = useState<string>('$rc_monthly');
   const [activePackageObj, setActivePackageObj] = useState<any>(null);
+  const [debugLog, setDebugLog] = useState<string>('');
   const [step, setStep] = useState(variant === 'new_user' ? 1 : 2);
   // New users go directly to Dashboard via handleSkip — Step 2 is only for expired/cancelled
   const [editingName, setEditingName] = useState(false);
@@ -114,43 +115,63 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     if (!open) return;
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     getOfferings((resp) => {
-      console.log('[Offerings] Raw SDK response:', JSON.stringify(resp));
+      const rawStr = JSON.stringify(resp);
+      console.log('[Offerings] Raw SDK response:', rawStr);
+      setDebugLog('RAW: ' + rawStr.slice(0, 800));
       if (resp?.status !== 'SUCCESS') {
         console.warn('[Offerings] SDK returned non-SUCCESS status:', resp?.status);
         return;
       }
 
-      // The Natively SDK may return offerings.all as an object (keyed by identifier)
-      // OR as an array OR expose them via offerings.all differently.
-      // We try all known shapes.
-      const allRaw = resp?.offerings?.all;
+      // Build a flat list of ALL offerings from every possible SDK shape:
+      // - resp.offerings.all as array
+      // - resp.offerings.all as object (keyed by identifier)
+      // - resp.offerings as array directly
+      // - resp.offerings as object directly
+      const allRaw = resp?.offerings?.all ?? resp?.offerings;
       let allOfferings: any[] = [];
       if (Array.isArray(allRaw)) {
         allOfferings = allRaw;
       } else if (allRaw && typeof allRaw === 'object') {
         allOfferings = Object.values(allRaw);
       }
-      console.log('[Offerings] All offerings parsed:', allOfferings.map((o: any) => o?.identifier));
+      // Also always include current offering in the search pool
+      if (resp?.offerings?.current && !allOfferings.includes(resp.offerings.current)) {
+        allOfferings.push(resp.offerings.current);
+      }
+      const offeringIds = allOfferings.map((o: any) => o?.identifier).join(', ');
+      console.log('[Offerings] All offerings found:', offeringIds);
+      setDebugLog(prev => prev + ' | OFFERINGS: ' + offeringIds);
 
-      // --- QU path: try university_exclusive → qatar_university package ---
+      // Helper: search any offering's packages for a given package identifier
+      const findPkg = (offeringId: string, pkgId: string) => {
+        const offering = allOfferings.find((o: any) => o?.identifier === offeringId);
+        return offering?.availablePackages?.find((p: any) => p?.identifier === pkgId) || null;
+      };
+
+      // Helper: search ALL offerings for a package identifier (Android may put it in current)
+      const findPkgAnywhere = (pkgId: string) => {
+        for (const offering of allOfferings) {
+          const pkg = offering?.availablePackages?.find((p: any) => p?.identifier === pkgId);
+          if (pkg) {
+            console.log('[Offerings] Found', pkgId, 'in offering:', offering?.identifier);
+            return pkg;
+          }
+        }
+        return null;
+      };
+
+      // --- QU path ---
       if (isQUUser) {
-        const quOffering = allOfferings.find(
-          (o: any) => o.identifier === 'university_exclusive'
-        );
-        console.log('[Offerings] university_exclusive offering:', quOffering ? 'FOUND' : 'NOT FOUND');
-        const quPkg = quOffering?.availablePackages?.find(
-          (p: any) => p.identifier === 'qatar_university'
-        );
-        console.log('[Offerings] qatar_university package:', quPkg ? 'FOUND' : 'NOT FOUND', quPkg?.product?.priceString);
+        // Try university_exclusive offering first, then search everywhere
+        let quPkg = findPkg('university_exclusive', 'qatar_university') || findPkgAnywhere('qatar_university');
+        const quPkgStatus = quPkg ? `FOUND price:${quPkg?.product?.priceString} store:${quPkg?.product?.identifier}` : 'NOT FOUND';
+        console.log('[Offerings] qatar_university package:', quPkgStatus);
+        setDebugLog(prev => prev + ' | QU_PKG: ' + quPkgStatus);
+
         if (quPkg?.product) {
-          // CRITICAL: pass the STORE product identifier (e.g. 'wakti_monthly_qu'),
-          // NOT the RevenueCat package identifier ('qatar_university').
-          // Natively's purchasePackage resolves against the App Store / Play Store product,
-          // not the RC offering/package name. Passing the RC name causes it to silently
-          // fall back to the default offering product (qa.wakti.ai.monthly = QAR 92).
-          const storeProductId = quPkg.product.identifier;
-          console.log('[Offerings] ✅ QU package set — RC pkg:', quPkg.identifier, '| Store product:', storeProductId, '| price:', quPkg.product.priceString);
-          setActivePackageId(storeProductId);
+          console.log('[Offerings] ✅ QU package resolved — using package obj for purchase');
+          setActivePackageId(quPkg.product.identifier);
           setActivePackageObj(quPkg);
           setPrice({
             qar: quPkg.product.priceString || 'QAR 73/month',
@@ -158,18 +179,18 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
           });
           return;
         }
-        console.warn('[Offerings] ⚠️ university_exclusive / qatar_university not found, falling back to default');
+        console.warn('[Offerings] ⚠️ qatar_university not found anywhere — falling back to default offering');
       }
 
-      // --- Standard / fallback path: use current offering → $rc_monthly ---
-      if (resp?.offerings?.current) {
-        const pkg = resp.offerings.current.availablePackages?.find(
+      // --- Standard / fallback path ---
+      const currentOffering = resp?.offerings?.current || allOfferings[0];
+      if (currentOffering) {
+        const pkg = currentOffering.availablePackages?.find(
           (p: any) => p.identifier === '$rc_monthly'
-        ) || resp.offerings.current.availablePackages?.[0];
+        ) || currentOffering.availablePackages?.[0];
         if (pkg?.product) {
-          const storeProductId = pkg.product.identifier;
-          console.log('[Offerings] ✅ Standard package set — RC pkg:', pkg.identifier, '| Store product:', storeProductId, '| price:', pkg.product.priceString);
-          setActivePackageId(storeProductId);
+          console.log('[Offerings] ✅ Standard package set — RC pkg:', pkg.identifier, '| Store product:', pkg.product.identifier, '| price:', pkg.product.priceString);
+          setActivePackageId(pkg.product.identifier);
           setActivePackageObj(pkg);
           setPrice({
             qar: pkg.product.priceString || 'QAR 92/month',
@@ -953,6 +974,13 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                     <span className="text-xs text-foreground/60">{language === 'ar' ? 'مشكلة في الدفع؟ نحن هنا للمساعدة' : 'Payment issues? We\'re here to help'}</span>
                   </div>
                 </button>
+
+                {/* DEBUG: Android offerings log — remove after debugging */}
+                {getDeviceOS() === 'android' && debugLog ? (
+                  <div className="text-[9px] text-yellow-400 bg-black/80 rounded p-2 break-all font-mono">
+                    {debugLog}
+                  </div>
+                ) : null}
 
                 {/* Terms */}
                 <div className="text-center pt-1">
