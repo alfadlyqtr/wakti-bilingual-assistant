@@ -372,11 +372,14 @@ export default function Account() {
   // Direct native purchase — skips modal, fires Apple/Android payment sheet immediately
   const [isBillingPurchasing, setIsBillingPurchasing] = useState(false);
   const handleBillingSubscribe = () => {
+    alert('BILLING BTN CLICKED v2');
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     const rcPackageId = isQUUser ? 'qatar_university' : '$rc_monthly';
+    alert('Purchasing: ' + rcPackageId);
     purchasePackage(rcPackageId, async (resp: any) => {
+      alert('RC Response: ' + JSON.stringify(resp));
       const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
         resp.message.toLowerCase().includes('already subscribed');
       const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
