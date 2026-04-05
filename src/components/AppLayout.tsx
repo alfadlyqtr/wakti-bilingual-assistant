@@ -233,12 +233,22 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     setLoading(true);
     setPurchaseInProgress(true);
 
-    // QU users: 'qatar_university' RC package ID (proven working — Apple sheet showed QAR 73)
-    // Standard users: '$rc_monthly' RC package ID
+    // QU users: iOS needs full RC package object from getOfferings, Android uses string
+    // Standard users: '$rc_monthly' string works on both platforms
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const rcPackageId = isQUUser ? 'qatar_university' : '$rc_monthly';
-    console.log('[Purchase] pkg:', rcPackageId, '| QU:', isQUUser);
-    purchasePackage(rcPackageId, async (resp: any) => {
+    const isAndroid = /Android/.test(navigator.userAgent);
+    let packageToUse: string | any;
+    if (isQUUser && isAndroid) {
+      packageToUse = 'qatar_university';
+    } else if (isQUUser && activePackageObj) {
+      packageToUse = activePackageObj;
+    } else if (isQUUser) {
+      packageToUse = 'qatar_university';
+    } else {
+      packageToUse = '$rc_monthly';
+    }
+    console.log('[Purchase] pkg:', typeof packageToUse === 'string' ? packageToUse : packageToUse?.identifier, '| QU:', isQUUser, '| Android:', isAndroid, '| isObj:', typeof packageToUse !== 'string');
+    purchasePackage(packageToUse, async (resp: any) => {
       console.log('[Purchase] Response:', resp);
       
       // Treat success OR 'already subscribed' (Android) as a successful subscription

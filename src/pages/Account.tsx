@@ -35,7 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { purchasePackage, restorePurchases } from "@/integrations/natively/purchasesBridge";
+import { purchasePackage, restorePurchases, getOfferings } from "@/integrations/natively/purchasesBridge";
 import { MyGallery } from "@/components/social/MyGallery";
 import { ContactsContent } from "@/pages/Contacts";
 import { getPendingRequestsCount } from "@/services/contactsService";
@@ -371,13 +371,42 @@ export default function Account() {
 
   // Direct native purchase — skips modal, fires Apple/Android payment sheet immediately
   const [isBillingPurchasing, setIsBillingPurchasing] = useState(false);
+  const [billingPackageObj, setBillingPackageObj] = useState<any>(null);
+
+  // Fetch offerings once so iOS can use the full RC package object
+  useEffect(() => {
+    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+    if (!isQUUser) return;
+    getOfferings((resp: any) => {
+      if (resp?.status !== 'SUCCESS') return;
+      const allRaw = resp?.offerings?.all;
+      const allOfferings: any[] = Array.isArray(allRaw) ? allRaw : (allRaw && typeof allRaw === 'object' ? Object.values(allRaw) : []);
+      const quOffering = allOfferings.find((o: any) => o?.identifier === 'university_exclusive');
+      const quPkg = quOffering?.availablePackages?.find((p: any) => p?.identifier === 'qatar_university');
+      if (quPkg) {
+        console.log('[BillingOfferings] QU package found for iOS');
+        setBillingPackageObj(quPkg);
+      }
+    });
+  }, [user?.email]);
+
   const handleBillingSubscribe = () => {
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const rcPackageId = isQUUser ? 'qatar_university' : '$rc_monthly';
-    console.log('[BillingSubscribe] pkg:', rcPackageId, '| QU:', isQUUser);
-    purchasePackage(rcPackageId, async (resp: any) => {
+    const isAndroid = /Android/.test(navigator.userAgent);
+    let packageToUse: string | any;
+    if (isQUUser && isAndroid) {
+      packageToUse = 'qatar_university';
+    } else if (isQUUser && billingPackageObj) {
+      packageToUse = billingPackageObj;
+    } else if (isQUUser) {
+      packageToUse = 'qatar_university';
+    } else {
+      packageToUse = '$rc_monthly';
+    }
+    console.log('[BillingSubscribe] pkg:', typeof packageToUse === 'string' ? packageToUse : packageToUse?.identifier, '| QU:', isQUUser, '| Android:', isAndroid, '| isObj:', typeof packageToUse !== 'string');
+    purchasePackage(packageToUse, async (resp: any) => {
       const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
         resp.message.toLowerCase().includes('already subscribed');
       const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
