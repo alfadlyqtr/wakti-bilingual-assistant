@@ -398,12 +398,14 @@ export default function Account() {
     let packageToUse: string | any;
     if (isQUUser && isAndroid) {
       packageToUse = 'qatar_university';
-    } else if (isQUUser && billingPackageObj) {
-      packageToUse = billingPackageObj;
     } else if (isQUUser) {
-      packageToUse = 'qatar_university';
-    } else {
+      // iOS QU user: use exact Apple store product ID
+      packageToUse = 'wakti_monthly_qu';
+    } else if (isAndroid) {
       packageToUse = '$rc_monthly';
+    } else {
+      // iOS Standard user: use exact Apple store product ID
+      packageToUse = 'qa.wakti.ai.monthly';
     }
     console.log('[BillingSubscribe] pkg:', typeof packageToUse === 'string' ? packageToUse : packageToUse?.identifier, '| QU:', isQUUser, '| Android:', isAndroid, '| isObj:', typeof packageToUse !== 'string');
     purchasePackage(packageToUse, async (resp: any) => {
