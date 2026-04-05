@@ -255,16 +255,20 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     setPurchaseInProgress(true);
 
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    // Always prefer the full RC package object from getOfferings (carries offering context).
-    // Fall back to RC package identifier strings — NEVER pass raw store product IDs.
+    const isAndroid = /Android/.test(navigator.userAgent);
+    // iOS: MUST use string identifiers (full objects cause silent failure on iOS Natively SDK)
+    // Android: use full package object when available (needed for correct offering resolution)
     let packageToUse: string | any;
-    if (activePackageObj) {
+    if (isAndroid && activePackageObj) {
       packageToUse = activePackageObj;
     } else {
       packageToUse = isQUUser ? 'qatar_university' : '$rc_monthly';
     }
-    console.log('[Purchase] Initiating purchase — pkg:', typeof packageToUse === 'string' ? packageToUse : `obj(${packageToUse?.identifier})`, '| isQUUser:', isQUUser);
+    console.log('[Purchase] pkg:', typeof packageToUse === 'string' ? packageToUse : `obj(${packageToUse?.identifier})`, '| QU:', isQUUser, '| Android:', isAndroid);
+    // Safety: reset loading after 15s if native callback never fires
+    const safetyTimer = setTimeout(() => { setLoading(false); setPurchaseInProgress(false); }, 15000);
     purchasePackage(packageToUse, async (resp: any) => {
+      clearTimeout(safetyTimer);
       console.log('[Purchase] Response:', resp);
       
       // Treat success OR 'already subscribed' (Android) as a successful subscription

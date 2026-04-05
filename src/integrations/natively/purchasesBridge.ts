@@ -100,6 +100,19 @@ export function purchasePackage(packageIdOrObj: string | any, callback?: (resp: 
 
 export function getOfferings(callback?: (resp: any) => void) {
   const p = getInstance();
-  if (!p) return;
-  try { p.getOfferings(callback || function () {}); } catch {}
+  if (!p) {
+    console.warn('[Purchases] getOfferings() SDK not available');
+    if (callback) {
+      callback({ status: 'FAILED', error: 'NativelyPurchases SDK not available' });
+    }
+    return;
+  }
+  try {
+    p.getOfferings(callback || function () {});
+  } catch (err) {
+    console.error('[Purchases] getOfferings() threw error:', err);
+    if (callback) {
+      callback({ status: 'FAILED', error: String(err) });
+    }
+  }
 }

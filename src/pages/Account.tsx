@@ -375,10 +375,14 @@ export default function Account() {
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+    const isAndroid = /Android/.test(navigator.userAgent);
+    // Safety: reset button after 15s if native callback never fires
+    const safetyTimer = setTimeout(() => { setIsBillingPurchasing(false); }, 15000);
 
     const doPurchase = (packageIdOrObj: string | any) => {
-      console.log('[BillingSubscribe] Purchasing:', typeof packageIdOrObj === 'string' ? packageIdOrObj : `obj(${packageIdOrObj?.identifier})`, '| isQUUser:', isQUUser);
+      console.log('[BillingSubscribe] Purchasing:', typeof packageIdOrObj === 'string' ? packageIdOrObj : `obj(${packageIdOrObj?.identifier})`, '| QU:', isQUUser, '| Android:', isAndroid);
       purchasePackage(packageIdOrObj, async (resp: any) => {
+        clearTimeout(safetyTimer);
         const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
           resp.message.toLowerCase().includes('already subscribed');
         const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
@@ -412,14 +416,14 @@ export default function Account() {
       });
     };
 
-    // Standard users: purchase default monthly directly
-    if (!isQUUser) {
-      doPurchase('$rc_monthly');
+    // iOS: MUST use string identifiers (full objects cause silent failure on iOS Natively SDK)
+    // Android QU: use full package object from getOfferings (needed for correct offering resolution)
+    if (!isAndroid || !isQUUser) {
+      doPurchase(isQUUser ? 'qatar_university' : '$rc_monthly');
       return;
     }
 
-    // QU users: fetch offerings first to get the full RC package object
-    // (carries offering context so both iOS & Android resolve the correct product)
+    // Android QU: fetch offerings to get full RC package object
     getOfferings((resp: any) => {
       if (resp?.status !== 'SUCCESS') {
         console.warn('[BillingSubscribe] getOfferings failed, falling back to qatar_university string');
@@ -438,7 +442,7 @@ export default function Account() {
         const pkg = off?.availablePackages?.find((p: any) => p?.identifier === 'qatar_university');
         if (pkg) { quPkg = pkg; break; }
       }
-      console.log('[BillingSubscribe] qatar_university pkg:', quPkg ? `FOUND obj(${quPkg?.identifier}) price:${quPkg?.product?.priceString}` : 'NOT FOUND — using string fallback');
+      console.log('[BillingSubscribe] qatar_university pkg:', quPkg ? `FOUND` : 'NOT FOUND');
       doPurchase(quPkg || 'qatar_university');
     });
   };
