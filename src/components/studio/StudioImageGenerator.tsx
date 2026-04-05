@@ -1099,44 +1099,194 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
             const topicStr  = topicPrompts[visualState.creativeSoul.mainMessage] || '';
             const styleStr  = stylePrompts[visualState.creativeSoul.style] || '';
-            const ctaStr    = ctaLabels[visualState.creativeSoul.cta] ? `call to action: ${ctaLabels[visualState.creativeSoul.cta]}` : '';
-            const assetTypes = (visualState.assets || [])
-              .filter(a => a.type)
-              .map(a => a.type)
-              .join(', ');
-
-            const parts = [
-              'Create a professional visual advertisement',
-              topicStr,
-              styleStr,
-              assetTypes ? `incorporate brand assets: ${assetTypes}` : '',
-              ctaStr,
-              visualState.creativeSoul.prompt || '',
-              visualState.creativeSoul.magicEnhance ? 'premium polish, sharp layout, strong contrast, high readability' : '',
-              `aspect ratio: ${visualState.campaignDNA.platform}`,
-            ].filter(Boolean);
+            const ctaStr    = ctaLabels[visualState.creativeSoul.cta] || '';
             
-            setPrompt(parts.join(', '));
-            
-            // Store the uploaded image if any
-            if (visualState.brandAsset.image) {
-              setUploadedFile({
-                id: `visual-ads-${Date.now()}`,
-                name: 'brand-asset.png',
-                type: 'image/png',
-                size: 0,
-                url: visualState.brandAsset.image,
-                preview: visualState.brandAsset.image,
-                base64: visualState.brandAsset.image,
-                imageType: { id: 'general', name: 'General' },
-              });
+            // Collect up to 3 images from assets array, compress them if they are data URIs
+            const rawImages = (visualState.assets || [])
+              .filter(a => a.image)
+              .map(a => a.image as string)
+              .slice(0, 3);
+              
+            if (!rawImages.length) {
+              toast.error(language === 'ar' ? 'الرجاء رفع صورة واحدة على الأقل' : 'Please upload at least one image');
+              return;
             }
-            
-            // Trigger generation
-            await handleGenerate();
+
+            // Client-side compression function (max 1MB)
+            const compressImage = async (dataUri: string): Promise<string> => {
+              if (!dataUri.startsWith('data:image/')) return dataUri;
+              return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  let width = img.width;
+                  let height = img.height;
+                  
+                  // Max dimensions to ensure under 1MB (approx 1200px longest side)
+                  const MAX_SIZE = 1200;
+                  if (width > height && width > MAX_SIZE) {
+                    height *= MAX_SIZE / width;
+                    width = MAX_SIZE;
+                  } else if (height > MAX_SIZE) {
+                    width *= MAX_SIZE / height;
+                    height = MAX_SIZE;
+                  }
+                  
+                  canvas.width = width;
+                  canvas.height = height;
+                  const ctx = canvas.getContext('2d');
+                  if (!ctx) return resolve(dataUri);
+                  
+                  ctx.drawImage(img, 0, 0, width, height);
+                  // 0.8 quality usually yields < 500KB for 1200px images
+                  resolve(canvas.toDataURL('image/jpeg', 0.8));
+                };
+                img.onerror = () => resolve(dataUri);
+                img.src = dataUri;
+              });
+            };
+
+            // 1. Dynamic Environment Logic (for variety)
+            const environments = [
+              "minimalist marble desk with plants", 
+              "futuristic tech laboratory", 
+              "professional high-end photo studio", 
+              "blurred modern office background"
+            ];
+            const randomEnv = environments[Math.floor(Math.random() * environments.length)];
+
+            // 2. Identify Assets (Map tags to specific visual instructions)
+            const assetInstructions = (visualState.assets || []).filter(a => a.image).map(img => {
+              if (img.type === 'screenshot') return "3D titanium smartphone, glass screen, high-fidelity";
+              if (img.type === 'logo') return "3D metallic glass logo, floating, ray-traced";
+              if (img.type === 'product') return "The Brand Product is the central hero; use commercial rim lighting and high-end textures.";
+              return "";
+            }).join(", ");
+
+            // 3. Build the Final Clean Keyword Prompt for KIE
+            const finalPromptForKie = `Professional 3D Ad, ${topicStr}, ${styleStr}, ${assetInstructions}, ${randomEnv}, ${visualState.creativeSoul.prompt || ''}, cinematic lighting, 8k, bokeh, sharp textures, bold text "${ctaStr}" bottom center.`.replace(/\s+/g, ' ').trim();
+
+            setIsGenerating(true);
+            setResultError(null);
+            setResultImageUrl(null);
+            setResultUrls([]);
+            setPickerIndex(0);
+            startProgress();
+
+            try {
+              // Compress images concurrently
+              const validImages = await Promise.all(rawImages.map(compressImage));
+
+              const { data: { session } } = await supabase.auth.getSession();
+              if (!session?.access_token) throw new Error('Not authenticated');
+
+              const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/freepik-image2video`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({
+                  mode: 'async',
+                  generation_type: 'visual_ads',
+                  images: validImages,
+                  prompt: finalPromptForKie,
+                  aspect_ratio: visualState.campaignDNA.platform,
+                }),
+              });
+
+              if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Failed to start Visual Ads generation');
+              }
+
+              const taskData = await res.json();
+              if (taskData.videoUrl) {
+                // Synchronous fallback
+                stopProgress();
+                setResultImageUrl(taskData.videoUrl);
+                setResultUrls([taskData.videoUrl]);
+                persistGeneratedImage(taskData.videoUrl, { showSuccessToast: false, showAlreadySavedToast: false, triggerSaveSuccess: false }).catch(() => {});
+                // Keep the user in the Visual Ads view
+              } else if (taskData.task_id) {
+                // Async polling
+                const taskId = taskData.task_id;
+                let isCompleted = false;
+                let finalUrl = '';
+                
+                while (!isCompleted) {
+                  await new Promise(resolve => setTimeout(resolve, 5000)); // Poll every 5s
+                  
+                  const pollRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/freepik-image2video`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${session.access_token}`,
+                    },
+                    body: JSON.stringify({
+                      mode: 'status',
+                      task_id: taskId,
+                      increment_usage: true,
+                    }),
+                  });
+                  
+                  if (!pollRes.ok) continue;
+                  
+                  const pollData = await pollRes.json();
+                  const status = pollData?.data?.status;
+                  
+                  if (status === 'COMPLETED') {
+                    isCompleted = true;
+                    finalUrl = pollData?.data?.video?.url || pollData?.data?.generated?.[0];
+                  } else if (status === 'FAILED') {
+                    throw new Error(pollData?.data?.error || 'Video generation failed');
+                  }
+                }
+                
+                if (finalUrl) {
+                  stopProgress();
+                  setResultImageUrl(finalUrl);
+                  setResultUrls([finalUrl]);
+                  // Auto-save immediately
+                  persistGeneratedImage(finalUrl, { showSuccessToast: true, showAlreadySavedToast: false, triggerSaveSuccess: true }).catch(() => {});
+                } else {
+                  throw new Error('Video completed but no URL returned');
+                }
+              } else {
+                throw new Error('Failed to start task: no task_id returned');
+              }
+            } catch (err: any) {
+              stopProgress();
+              const msg = err?.message || (language === 'ar' ? 'فشل إنشاء الإعلان' : 'Ad generation failed');
+              setResultError(msg);
+              toast.error(msg);
+            } finally {
+              setIsGenerating(false);
+            }
           }}
           isGenerating={isGenerating}
           progress={progress}
+          resultUrl={resultImageUrl || undefined}
+          onSave={() => {
+            if (resultImageUrl) {
+              persistGeneratedImage(resultImageUrl, { showSuccessToast: true, showAlreadySavedToast: true, triggerSaveSuccess: true }).catch(() => {});
+            }
+          }}
+          onDownload={() => {
+            if (resultImageUrl) {
+              const a = document.createElement('a');
+              a.href = resultImageUrl;
+              a.download = `wakti-ad-${Date.now()}.png`;
+              a.target = '_blank';
+              a.click();
+            }
+          }}
+          onTryAgain={() => {
+            setResultImageUrl(null);
+            setResultUrls([]);
+            setResultError(null);
+            stopProgress();
+          }}
         />
       )}
 

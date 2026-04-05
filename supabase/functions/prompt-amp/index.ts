@@ -650,17 +650,9 @@ Your job: Take the user's idea (in ANY language, including Arabic) and rewrite i
 The video prompt should describe a 6–10 second cinematic spot. Think of brands like Corona, Tesla, IKEA, Apple, Google, Qatar Airways, and Chewy — magical, fast-assembly transformations progressing smoothly from an empty or minimal scene into a fully revealed experience. No on-screen text. No spoken dialogue.
 
 Rules & Tone:
-- Output must ALWAYS be in English, even if the input is in Arabic or another language.
-- Write in present tense, active voice.
-- Keep the description under ~200 words but rich in cinematic detail.
-- Describe the scene, motion, camera movement, lighting progression, mood, environment, and timing clearly.
-- Ensure one seamless, visually satisfying build-up or transformation.
-- Be specific about subjects, environments, actions, visual dynamics, and pacing.
-- If brand/product direction is unclear, default to cinematic magical realism.
-- Do NOT chat, explain, ask questions, or add commentary. Output ONLY the enhanced video prompt.
-- Do NOT include any JSON formatting. Output a single plain-text paragraph.
-
-Output format: One vivid paragraph describing the desired video scene, motion, camera work, lighting, and mood.`;
+- Start with the core subject.
+- Describe lighting, environment, and dynamic motion.
+- End with a beautiful cinematic conclusion.`;
 
 async function ampText2VideoWithOpenAI(userText: string): Promise<string> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");

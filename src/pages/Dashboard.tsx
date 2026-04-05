@@ -9,6 +9,7 @@ import { HomeScreen } from "@/components/dashboard/HomeScreen";
 import { useWidgetManager } from "@/hooks/useWidgetManager";
 import { supabase } from "@/integrations/supabase/client";
 import { t } from "@/utils/translations";
+import { AccessibilityOnboarding } from "@/components/accessibility/AccessibilityOnboarding";
 
 export default function Dashboard() {
   const { language } = useTheme();
@@ -116,23 +117,29 @@ export default function Dashboard() {
   // Render based on dashboard look preference
   if (dashboardLook === 'homescreen') {
     return (
-      <div className="w-full h-full p-0 m-0">
-        <HomeScreen displayName={displayName} key={refreshKey} />
-      </div>
+      <>
+        <div className="w-full h-full p-0 m-0">
+          <HomeScreen displayName={displayName} key={refreshKey} />
+        </div>
+        <AccessibilityOnboarding />
+      </>
     );
   }
 
   // Default dashboard look (widget grid)
   return (
-    <div className="px-4 pb-4 pt-4 pr-4 dashboard-container">
-        <DragModeToggle
-          isDragging={isDragging}
-          onToggle={toggleDragMode}
-          language={language}
-          displayName={displayName}
-        />
+    <>
+      <div className="px-4 pb-4 pt-4 pr-4 dashboard-container">
+          <DragModeToggle
+            isDragging={isDragging}
+            onToggle={toggleDragMode}
+            language={language}
+            displayName={displayName}
+          />
 
-        <WidgetGrid widgets={widgets} isDragging={isDragging} onDragEnd={handleDragEnd} key={refreshKey} />
-    </div>
+          <WidgetGrid widgets={widgets} isDragging={isDragging} onDragEnd={handleDragEnd} key={refreshKey} />
+      </div>
+      <AccessibilityOnboarding />
+    </>
   );
 }

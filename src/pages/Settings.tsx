@@ -29,7 +29,10 @@ import NotificationSettings from "@/components/notifications/NotificationSetting
 import { QuotePreferencesManager } from "@/components/settings/QuotePreferencesManager";
 import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 import { t } from "@/utils/translations";
-import { Shield, Users, Eye, Quote, Palette, Bell, Layout, Home, LayoutDashboard } from "lucide-react";
+import { Shield, Users, Eye, Quote, Palette, Bell, Layout, Home, LayoutDashboard, AlertTriangle } from "lucide-react";
+import { useAccessibility } from "@/hooks/useAccessibility";
+import { COLOR_BLIND_MODES } from "@/components/accessibility/ColorBlindFilters";
+import { useTextSize } from "@/hooks/useTextSize";
 import { useToastHelper } from "@/hooks/use-toast-helper";
 
 export default function Settings() {
@@ -37,6 +40,8 @@ export default function Settings() {
   const { user } = useAuth();
   const { showSuccess, showError } = useToastHelper();
   const [activeTab, setActiveTab] = useState("appearance");
+  const { colorBlindMode, setColorBlindMode } = useAccessibility();
+  const { textSize, setTextSize } = useTextSize();
 
   type WidgetConfig = {
     showNavWidget: boolean;
@@ -377,6 +382,134 @@ export default function Settings() {
                     </SelectContent>
                   </Select>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Text Size Settings */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="text-lg font-bold leading-none">A</span><span className="text-sm font-bold leading-none">A</span>
+                  <span className="ml-1">{language === 'ar' ? 'حجم النص' : 'Text Size'}</span>
+                </CardTitle>
+                <CardDescription>
+                  {language === 'ar'
+                    ? 'يُكبِّر كل النصوص في التطبيق بما فيها الأزرار والقوائم والأوصاف.'
+                    : 'Enlarges all text across the app including buttons, menus, and descriptions.'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {([
+                  { value: 'normal' as const, labelEn: 'Normal',      labelAr: 'عادي',        sample: 'Aa', sampleSize: 'text-base' },
+                  { value: 'large'  as const, labelEn: 'Large',       labelAr: 'كبير',        sample: 'Aa', sampleSize: 'text-lg'   },
+                  { value: 'xlarge' as const, labelEn: 'Extra Large', labelAr: 'كبير جداً',  sample: 'Aa', sampleSize: 'text-2xl'  },
+                ]).map((opt) => {
+                  const isActive = textSize === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => setTextSize(opt.value)}
+                      className={`w-full flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-all active:scale-[0.98] ${
+                        isActive
+                          ? 'border-blue-500 bg-blue-500/10 dark:bg-blue-500/15'
+                          : 'border-border bg-transparent hover:bg-muted/40'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className={`font-bold ${opt.sampleSize} ${
+                          isActive ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'
+                        }`}>{opt.sample}</span>
+                        <div>
+                          <p className={`text-sm font-medium leading-tight ${
+                            isActive ? 'text-blue-600 dark:text-blue-400' : 'text-foreground'
+                          }`}>
+                            {language === 'ar' ? opt.labelAr : opt.labelEn}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {opt.value === 'normal'  && (language === 'ar' ? 'الحجم الافتراضي' : 'Default size')}
+                            {opt.value === 'large'   && (language === 'ar' ? '١١٥٪ من الحجم الاعتيادي' : '115% of normal')}
+                            {opt.value === 'xlarge'  && (language === 'ar' ? '١٣٠٪ من الحجم الاعتيادي' : '130% of normal')}
+                          </p>
+                        </div>
+                      </div>
+                      {isActive && (
+                        <div className="h-5 w-5 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+                          <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </CardContent>
+            </Card>
+
+            {/* Accessibility Settings */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Eye className="h-5 w-5 text-blue-500" />
+                  {language === 'ar' ? 'إمكانية الوصول' : 'Accessibility'}
+                </CardTitle>
+                <CardDescription>
+                  {language === 'ar'
+                    ? 'فلتر الألوان يُعيد رسم كل شيء في التطبيق — بما فيه الصور ومقاطع الفيديو — لتحسين التمييز بين الألوان.'
+                    : 'The color filter redraws everything in the app — including images and videos — to improve color distinction.'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">
+                    {language === 'ar' ? 'وضع عمى الألوان' : 'Color Blindness Mode'}
+                  </Label>
+                  {/* Mobile-optimized button group — no dropdown needed */}
+                  <div className="grid grid-cols-1 gap-2">
+                    {COLOR_BLIND_MODES.map((m) => {
+                      const isActive = colorBlindMode === m.value;
+                      return (
+                        <button
+                          key={m.value}
+                          onClick={() => setColorBlindMode(m.value)}
+                          className={`w-full flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-all active:scale-[0.98] ${
+                            isActive
+                              ? 'border-blue-500 bg-blue-500/10 dark:bg-blue-500/15'
+                              : 'border-border bg-transparent hover:border-border/80 hover:bg-muted/40'
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-medium leading-tight ${
+                              isActive ? 'text-blue-600 dark:text-blue-400' : 'text-foreground'
+                            }`}>
+                              {language === 'ar' ? m.labelAr : m.labelEn}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
+                              {language === 'ar' ? m.descriptionAr : m.description}
+                            </p>
+                          </div>
+                          {isActive && (
+                            <div className="h-5 w-5 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+                              <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {colorBlindMode !== 'none' && (
+                  <div className="rounded-xl border border-amber-400/60 bg-amber-50 dark:bg-amber-950/20 p-3 flex gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                      {language === 'ar'
+                        ? 'ملاحظة: يُغير هذا الفلتر الألوان رياضياً لتحسين التباين. قد يبدو التطبيق غير طبيعي لمن لديهم رؤية عادية.'
+                        : 'Note: This filter mathematically alters colors to improve contrast. The app may look unnatural to those with standard vision.'}
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

@@ -11,6 +11,7 @@ import { AppStoreBanner } from "@/components/AppStoreBanner";
 import AdminRouter from "@/routes/AdminRouter";
 import ConsumerRouter from "@/routes/ConsumerRouter";
 import { ColorBlindFilters, applyColorBlindFilter, STORAGE_KEY, type ColorBlindMode } from "@/components/accessibility/ColorBlindFilters";
+import { applyTextSize, TEXT_SIZE_STORAGE_KEY, type TextSize } from "@/hooks/useTextSize";
 
 import "./App.css";
 
@@ -18,10 +19,17 @@ const ProjectPreview = lazy(() => import("@/pages/ProjectPreview"));
 
 const queryClient = new QueryClient();
 
-// Restore color-blind filter BEFORE first paint
+// Restore color-blind filter on body BEFORE first paint (works on iOS Safari, Android, PC)
+// applyColorBlindFilter targets document.body + sets both filter and -webkit-filter
 try {
   const saved = localStorage.getItem(STORAGE_KEY) as ColorBlindMode | null;
   if (saved && saved !== 'none') applyColorBlindFilter(saved);
+} catch {}
+
+// Restore text size BEFORE first paint — sets font-size on <html> so all rem text scales
+try {
+  const savedSize = localStorage.getItem(TEXT_SIZE_STORAGE_KEY) as TextSize | null;
+  if (savedSize && savedSize !== 'normal') applyTextSize(savedSize);
 } catch {}
 
 // Synchronously tag body for admin pages BEFORE first render so CSS works immediately

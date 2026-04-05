@@ -1,6 +1,6 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { Plus, Smartphone, Square, Monitor, Wand2, Globe, Loader2 } from 'lucide-react';
+import { Plus, Smartphone, Square, Monitor, Wand2, Globe, Loader2, ArrowLeft, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -32,6 +32,10 @@ interface VisualAdsGeneratorProps {
   onGenerate: (state: VisualAdsState) => Promise<void>;
   isGenerating: boolean;
   progress: number;
+  resultUrl?: string;
+  onSave?: () => void;
+  onDownload?: () => void;
+  onTryAgain?: () => void;
 }
 
 function StepHeader({
@@ -224,9 +228,15 @@ export default function VisualAdsGenerator({
   onGenerate,
   isGenerating,
   progress,
+  resultUrl,
+  onDownload,
+  onSave,
+  onTryAgain,
 }: VisualAdsGeneratorProps) {
   const { language } = useTheme();
-  const [activeStep, setActiveStep] = useState<1 | 2 | 3>(1);
+  
+  // State
+  const [activeStep, setActiveStep] = useState<number | null>(1);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedAssetIndex, setSelectedAssetIndex] = useState(0);
@@ -433,20 +443,16 @@ export default function VisualAdsGenerator({
     </div>
   );
 
-  return (
-    <div className="space-y-4">
-      {/* Header - no back button */}
-      <div>
-        <h1 className="text-xl font-bold text-[#060541] dark:text-[#f2f2f2]">
-          {language === 'ar' ? 'إعلانات بصرية' : 'Visual Ads'}
-        </h1>
-        <p className="text-xs text-[#858384]">
-          {language === 'ar' ? '3 خطوات لإعلان مذهل' : '3 steps to stunning ads'}
-        </p>
-      </div>
+  useEffect(() => {
+    if (resultUrl) {
+      setActiveStep(null);
+    }
+  }, [resultUrl]);
 
-      {/* Step 1: Brand Asset */}
-      <div className="space-y-1">
+  return (
+    <div className="w-full max-w-4xl mx-auto px-4 md:px-6">
+      {/* Stepper */}
+      <div className="space-y-4">
         <StepHeader
           step={1}
           title={language === 'ar' ? 'أصول العلامة' : 'Brand Assets'}
@@ -843,7 +849,7 @@ export default function VisualAdsGenerator({
                           type="button"
                           onClick={handleAmp}
                           disabled={isAmping}
-                          className="inline-flex items-center gap-2 rounded-xl bg-[#060541] px-3 py-2 text-xs font-semibold text-white shadow-[0_4px_18px_rgba(6,5,65,0.28)] transition-all hover:bg-[#0b0a63] disabled:cursor-not-allowed disabled:opacity-60"
+                          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-3 py-2 text-xs font-bold text-white shadow-[0_4px_18px_rgba(249,115,22,0.28)] transition-all hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {isAmping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
                           <span>AMP</span>
@@ -874,15 +880,15 @@ export default function VisualAdsGenerator({
             <div className="pt-2">
               {isGenerating ? (
                 <div className="space-y-3">
-                  <div className="h-12 rounded-xl bg-[#060541]/10 border border-[#060541]/30 flex items-center justify-center gap-2">
-                    <Wand2 className="w-5 h-5 text-[#060541] dark:text-[#f2f2f2] animate-pulse" />
-                    <span className="text-sm font-semibold text-[#060541] dark:text-[#f2f2f2]">
+                  <div className="h-12 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center gap-2">
+                    <Wand2 className="w-5 h-5 text-orange-500 dark:text-orange-400 animate-pulse" />
+                    <span className="text-sm font-bold text-orange-600 dark:text-orange-400">
                       {language === 'ar' ? 'جارِ صناعة الإعلان...' : 'Crafting your Ad...'}
                     </span>
                   </div>
                   <div className="w-full h-2 rounded-full bg-[#606062]/20 overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-[#060541] via-[#1a1a4a] to-[#060541] transition-all duration-300 rounded-full"
+                      className="h-full bg-gradient-to-r from-orange-500 to-amber-500 transition-all duration-300 rounded-full"
                       style={{ width: `${progress}%` }}
                     />
                   </div>
@@ -893,10 +899,10 @@ export default function VisualAdsGenerator({
                   onClick={handleGenerate}
                   className="relative w-full py-4 rounded-xl font-bold text-sm text-white overflow-hidden group active:scale-95 transition-transform duration-200"
                 >
-                  <div className="absolute inset-0 bg-[#060541]" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-orange-500 to-amber-500" />
                   {/* Bloom glow effect */}
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-[#060541]/40 blur-xl" />
-                  <div className="absolute inset-0 shadow-[0_0_30px_rgba(6,5,65,0.5)]" />
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-orange-500/40 blur-xl" />
+                  <div className="absolute inset-0 shadow-[0_0_30px_rgba(249,115,22,0.4)]" />
                   {/* Content */}
                   <span className="relative flex items-center justify-center gap-2">
                     <span>🚀</span>
@@ -908,6 +914,42 @@ export default function VisualAdsGenerator({
           </div>
         </StepContent>
       </div>
+
+      {/* Result Preview — shown below the collapsed steps */}
+      {resultUrl && (
+        <div className="mt-6 rounded-2xl border border-border/50 bg-card overflow-hidden shadow-xl p-4 space-y-4">
+          <img src={resultUrl} alt="Generated Ad" className="w-full rounded-xl object-contain" />
+          <div className="flex flex-wrap gap-3 justify-center">
+            {onSave && (
+              <button
+                onClick={onSave}
+                className="inline-flex items-center gap-2 rounded-xl bg-muted px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted/80"
+              >
+                <span>💾</span>
+                <span>{language === 'ar' ? 'حفظ' : 'Save'}</span>
+              </button>
+            )}
+            {onDownload && (
+              <button
+                onClick={onDownload}
+                className="inline-flex items-center gap-2 rounded-xl bg-muted px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted/80"
+              >
+                <span>📥</span>
+                <span>{language === 'ar' ? 'تنزيل' : 'Download'}</span>
+              </button>
+            )}
+            {onTryAgain && (
+              <button
+                onClick={() => { setActiveStep(1); onTryAgain!(); }}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-orange-500/20 transition-all hover:brightness-110 active:scale-95"
+              >
+                <span>🔄</span>
+                <span>{language === 'ar' ? 'حاول مرة أخرى' : 'Try Again'}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 export type ColorBlindMode = 'none' | 'protanopia' | 'deuteranopia' | 'tritanopia';
 
 export const COLOR_BLIND_MODES: { value: ColorBlindMode; labelEn: string; labelAr: string; description: string; descriptionAr: string }[] = [
@@ -33,74 +35,86 @@ export const COLOR_BLIND_MODES: { value: ColorBlindMode; labelEn: string; labelA
 
 export const STORAGE_KEY = 'wakti_color_blind_mode';
 
+const SVG_ID = 'wakti-cvd-filters';
+
+const filterSvg = `<svg id="${SVG_ID}" aria-hidden="true" focusable="false"
+  xmlns="http://www.w3.org/2000/svg"
+  style="position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;">
+  <defs>
+    <filter id="daltonize-protanopia" color-interpolation-filters="linearRGB" x="0%" y="0%" width="100%" height="100%">
+      <feColorMatrix type="matrix"
+        values="0.152286 1.052583 -0.204868 0 0
+                0.114503 0.786281 0.099216 0 0
+               -0.003882 -0.048116 1.051998 0 0
+                0 0 0 1 0"/>
+    </filter>
+    <filter id="daltonize-deuteranopia" color-interpolation-filters="linearRGB" x="0%" y="0%" width="100%" height="100%">
+      <feColorMatrix type="matrix"
+        values="0.367322 0.860646 -0.227968 0 0
+                0.280085 0.672501 0.047413 0 0
+               -0.011820 0.042940 0.968881 0 0
+                0 0 0 1 0"/>
+    </filter>
+    <filter id="daltonize-tritanopia" color-interpolation-filters="linearRGB" x="0%" y="0%" width="100%" height="100%">
+      <feColorMatrix type="matrix"
+        values="1.255528 -0.076749 -0.178779 0 0
+               -0.078411  0.930809  0.147602 0 0
+                0.004733  0.691367  0.303900 0 0
+                0 0 0 1 0"/>
+    </filter>
+  </defs>
+</svg>`;
+
 /**
- * Invisible SVG element that defines the Daltonization filter matrices.
- * Based on LMS color space transformations from Machado et al. (2009).
- * These are hardware-accelerated by the browser GPU — zero JS per-pixel loops.
- *
- * Applied globally via: filter: url(#daltonize-protanopia) on document.documentElement
+ * Injects the Daltonization SVG filter defs as the very first child of <body>.
+ * Using a raw DOM injection (not React portal) guarantees the SVG exists before
+ * any filter: url(#...) reference is resolved by the browser — critical for
+ * iOS Safari, Android WebView, and all Chromium-based browsers.
  */
 export function ColorBlindFilters() {
-  return (
-    <svg
-      aria-hidden="true"
-      focusable="false"
-      style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', pointerEvents: 'none' }}
-    >
-      <defs>
-        {/* ─── PROTANOPIA: Missing L-cone (Red-blind) ─────────────────────────
-            Daltonization: lost red data is shifted into green/blue channels.
-            Red objects become vivid blue/teal — distinguishable from green.
-        */}
-        <filter id="daltonize-protanopia" colorInterpolationFilters="linearRGB">
-          <feColorMatrix
-            type="matrix"
-            values="0.152286 1.052583 -0.204868 0 0
-                    0.114503 0.786281 0.099216 0 0
-                    -0.003882 -0.048116 1.051998 0 0
-                    0        0        0        1 0"
-          />
-        </filter>
+  const injectedRef = useRef(false);
 
-        {/* ─── DEUTERANOPIA: Missing M-cone (Green-blind) ─────────────────────
-            Daltonization: lost green data is shifted into red/blue channels.
-            Green objects shift toward yellow/orange — distinguishable from red.
-        */}
-        <filter id="daltonize-deuteranopia" colorInterpolationFilters="linearRGB">
-          <feColorMatrix
-            type="matrix"
-            values="0.367322 0.860646 -0.227968 0 0
-                    0.280085 0.672501 0.047413 0 0
-                    -0.011820 0.042940 0.968881 0 0
-                    0        0        0        1 0"
-          />
-        </filter>
+  useEffect(() => {
+    if (injectedRef.current) return;
+    injectedRef.current = true;
 
-        {/* ─── TRITANOPIA: Missing S-cone (Blue-blind) ────────────────────────
-            Daltonization: lost blue data is shifted into red/green channels.
-            Blue objects shift toward red/pink — distinguishable from yellow.
-        */}
-        <filter id="daltonize-tritanopia" colorInterpolationFilters="linearRGB">
-          <feColorMatrix
-            type="matrix"
-            values="1.255528 -0.076749 -0.178779 0 0
-                    -0.078411  0.930809  0.147602 0 0
-                    0.004733   0.691367  0.303900 0 0
-                    0          0         0        1 0"
-          />
-        </filter>
-      </defs>
-    </svg>
-  );
+    if (document.getElementById(SVG_ID)) return;
+
+    const container = document.createElement('div');
+    container.innerHTML = filterSvg;
+    const svgEl = container.firstElementChild;
+    if (svgEl) {
+      document.body.insertBefore(svgEl, document.body.firstChild);
+    }
+
+    return () => {
+      document.getElementById(SVG_ID)?.remove();
+      injectedRef.current = false;
+    };
+  }, []);
+
+  return null;
 }
 
+const FILTER_ATTR = 'data-cvd';
+
 export function applyColorBlindFilter(mode: ColorBlindMode) {
-  const root = document.documentElement;
-  root.removeAttribute('data-cvd');
+  // Target #root (not body) to avoid iOS Safari stacking context bug.
+  // When filter is on <body>, iOS creates a new stacking context which breaks
+  // all position:fixed children (mobile nav, chat input, dialogs, modals).
+  // #root wraps all visible app content so the filter covers 100% of the UI.
+  const root = document.getElementById('root') ?? document.body;
+
+  root.removeAttribute(FILTER_ATTR);
   root.style.removeProperty('filter');
+  (root.style as any)['-webkit-filter'] = '';
 
   if (mode === 'none') return;
 
-  root.setAttribute('data-cvd', mode);
-  root.style.filter = `url(#daltonize-${mode})`;
+  const filterValue = `url(#daltonize-${mode})`;
+
+  root.setAttribute(FILTER_ATTR, mode);
+  // Set both standard and -webkit- prefix for Safari 9-14 compatibility
+  root.style.setProperty('filter', filterValue);
+  (root.style as any)['-webkit-filter'] = filterValue;
 }

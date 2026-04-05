@@ -37,8 +37,6 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { purchasePackage, restorePurchases, getOfferings } from "@/integrations/natively/purchasesBridge";
 import { MyGallery } from "@/components/social/MyGallery";
-import { useAccessibility } from "@/hooks/useAccessibility";
-import { COLOR_BLIND_MODES } from "@/components/accessibility/ColorBlindFilters";
 import { ContactsContent } from "@/pages/Contacts";
 import { getPendingRequestsCount } from "@/services/contactsService";
 import { getAllUnreadCounts, getUnreadGalleryNotifCount } from "@/services/messageService";
@@ -252,7 +250,6 @@ export default function Account() {
     return 'social';
   })();
   const [activeTab, setActiveTab] = useState<'profile' | 'billing' | 'social' | 'wishes'>(initialTab);
-  const { colorBlindMode, setColorBlindMode } = useAccessibility();
   useEffect(() => {
     const params = new URLSearchParams(location.search || '');
     const tab = (params.get('tab') || '').toLowerCase();
@@ -1321,70 +1318,6 @@ export default function Account() {
               </CardContent>
             </Card>
             
-            {/* ── ACCESSIBILITY SECTION ─────────────────────────────────────── */}
-            <Card className="border border-[#d7dbe5] dark:border-border bg-card rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Eye className="h-4 w-4 text-[hsl(210,100%,55%)]" />
-                  {language === 'ar' ? 'إمكانية الوصول' : 'Accessibility'}
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  {language === 'ar'
-                    ? 'فلتر الألوان يُعيد رسم كل شيء في التطبيق — بما فيه الصور ومقاطع الفيديو — لتحسين التمييز بين الألوان.'
-                    : 'The color filter redraws everything in the app — including images and videos — to improve color distinction.'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">
-                    {language === 'ar' ? 'وضع عمى الألوان' : 'Color Blindness Mode'}
-                  </Label>
-                  <Select value={colorBlindMode} onValueChange={(v) => setColorBlindMode(v as any)}>
-                    <SelectTrigger className="w-full border-[#d7dbe5] dark:border-border">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {COLOR_BLIND_MODES.map((m) => (
-                        <SelectItem key={m.value} value={m.value}>
-                          <div className="flex flex-col">
-                            <span className="font-medium text-sm">
-                              {language === 'ar' ? m.labelAr : m.labelEn}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {language === 'ar' ? m.descriptionAr : m.description}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {colorBlindMode !== 'none' && (
-                  <div className="rounded-xl border border-amber-400/60 bg-amber-50 dark:bg-amber-950/20 p-3 flex gap-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
-                      {language === 'ar'
-                        ? 'ملاحظة: يُغير هذا الفلتر الألوان رياضياً لتحسين التباين. قد يبدو التطبيق غير طبيعي لمن لديهم رؤية عادية.'
-                        : 'Note: This filter mathematically alters colors to improve contrast. The app may look unnatural to those with standard vision.'}
-                    </p>
-                  </div>
-                )}
-
-                {colorBlindMode !== 'none' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full text-xs"
-                    onClick={() => setColorBlindMode('none')}
-                  >
-                    <Check className="h-3.5 w-3.5 mr-1.5" />
-                    {language === 'ar' ? 'إيقاف الفلتر' : 'Turn Off Filter'}
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-
             {/* Delete Account Section */}
             <Card>
               <CardHeader className="pb-2">

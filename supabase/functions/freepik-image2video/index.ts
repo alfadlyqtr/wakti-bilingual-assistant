@@ -389,6 +389,56 @@ async function pollUntilComplete(taskId: string): Promise<{ videoUrl: string } |
   return { error: "Timeout: Video generation took too long" };
 }
 
+async function createVisualAdsTask(
+  imageUrls: string[],
+  prompt: string,
+  aspectRatio?: string,
+): Promise<{ task_id: string; status: string }> {
+  const sanitizedImageUrls = imageUrls.map(url => sanitizeImageUrl(url));
+  const validAspectRatio = ["1:1", "16:9", "9:16"].includes(aspectRatio || "") ? aspectRatio! : "9:16";
+
+  const input: Record<string, unknown> = {
+    prompt: prompt.slice(0, 2500),
+    image_input: sanitizedImageUrls, // Up to 14 images supported by nano-banana-2
+    aspect_ratio: validAspectRatio,
+    resolution: "1K", // Hardcoded per new strategy
+    output_format: "png", // Hardcoded per new strategy
+  };
+
+  const requestBody = {
+    model: "nano-banana-2",
+    input,
+    callBackUrl: "https://api.wakti.ai/webhooks/visual-ads", // Configured webhook
+  };
+
+  console.log("[kie-visual-ads] Creating task, model: nano-banana-2");
+
+  const response = await fetch(KIE_CREATE_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${KIE_API_KEY}`,
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("[kie-visual-ads] Create task failed:", response.status, errorText);
+    throw new Error(`Visual Ads generation service error ${response.status}`);
+  }
+
+  const result: KieCreateResponse = await response.json();
+  console.log("[kie-visual-ads] Create response:", JSON.stringify(result));
+
+  if (result.code !== 200 || !result.data?.taskId) {
+    throw new Error(sanitizeError(result.msg || result.message || "Failed to create task"));
+  }
+
+  console.log("[kie-visual-ads] Task created, taskId:", result.data.taskId);
+  return { task_id: result.data.taskId, status: "waiting" };
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -577,6 +627,37 @@ serve(async (req) => {
       }
       
       task = await createVideoTask([imageUrl1, imageUrl2], prompt, reqDuration, aspect_ratio, fixed_lens, generate_audio, resolution, video_style_mode);
+    } else if (generationType === "visual_ads") {
+      // Visual Ads: requires 1-3 images, uses nano-banana-2
+      const rawImages: string[] = body.images || [];
+      if (!rawImages.length) {
+        return new Response(JSON.stringify({ error: "Missing images for visual_ads" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const imageUrls: string[] = [];
+      for (let i = 0; i < Math.min(rawImages.length, 3); i++) {
+        let imgUrl = rawImages[i];
+        if (typeof imgUrl === "string" && imgUrl.startsWith("data:image/")) {
+          try {
+            imgUrl = await uploadImageDataUriToPublicUrl(supabase, user.id, imgUrl);
+            console.log(`[kie-visual-ads] Uploaded data URI ${i+1} to public URL`);
+          } catch (e) {
+            console.error(`[kie-visual-ads] Failed to upload image ${i+1}:`, e);
+            return new Response(
+              JSON.stringify({ error: e instanceof Error ? e.message : `Failed to prepare image ${i+1}` }),
+              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+        imageUrls.push(imgUrl);
+      }
+      
+      // Use the pre-built, sanitized master prompt provided by the client
+      const masterPrompt = body.prompt || "";
+      task = await createVisualAdsTask(imageUrls, masterPrompt, aspect_ratio);
     } else {
       // Image-to-Video: requires single image
       let imageUrl: string = image;

@@ -204,20 +204,20 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [cinemaAudio, setCinemaAudio] = useState(true);
 
   // Role 2 & 3 — Artist & Cloner
-  const [sceneImages, setSceneImages] = useState<(string | null)[]>([null, null, null, null, null, null]);
-  const [sceneImageOptions, setSceneImageOptions] = useState<(string[] | null)[]>([null, null, null, null, null, null]);
+  const [sceneImages, setSceneImages] = useState<(string | null)[]>([null, null, null, null]);
+  const [sceneImageOptions, setSceneImageOptions] = useState<(string[] | null)[]>([null, null, null, null]);
   const [anchorImageUrl, setAnchorImageUrl] = useState<string | null>(null);
   const [isCasting, setIsCasting] = useState(false);
   const [castingProgress, setCastingProgress] = useState<('idle' | 'loading' | 'done' | 'error')[]>(
-    ['idle', 'idle', 'idle', 'idle', 'idle', 'idle']
+    ['idle', 'idle', 'idle', 'idle']
   );
   const [activeCastingIdx, setActiveCastingIdx] = useState(0);
 
   // Role 4 — Animator
-  const [videoClips, setVideoClips] = useState<(string | null)[]>([null, null, null, null, null, null]);
-  const [animTaskIds, setAnimTaskIds] = useState<(string | null)[]>([null, null, null, null, null, null]);
+  const [videoClips, setVideoClips] = useState<(string | null)[]>([null, null, null, null]);
+  const [animTaskIds, setAnimTaskIds] = useState<(string | null)[]>([null, null, null, null]);
   const [animProgress, setAnimProgress] = useState<('idle' | 'queued' | 'rendering' | 'done' | 'error')[]>(
-    ['idle', 'idle', 'idle', 'idle', 'idle', 'idle']
+    ['idle', 'idle', 'idle', 'idle']
   );
   const [isFilming, setIsFilming] = useState(false);
   const animPollRef = useRef<NodeJS.Timeout | null>(null);
@@ -226,8 +226,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [clipsReady, setClipsReady] = useState(false); // true when all clips done, before stitch
 
   // Visual Supervisor — per-scene spatial motion briefs from Gemini Flash-Lite
-  const [visualSupervisorPrompts, setVisualSupervisorPrompts] = useState<(string | null)[]>([null, null, null, null, null, null]);
-  const [vsStatus, setVsStatus] = useState<('idle' | 'scanning' | 'done' | 'error')[]>(['idle', 'idle', 'idle', 'idle', 'idle', 'idle']);
+  const [visualSupervisorPrompts, setVisualSupervisorPrompts] = useState<(string | null)[]>([null, null, null, null]);
+  const [vsStatus, setVsStatus] = useState<('idle' | 'scanning' | 'done' | 'error')[]>(['idle', 'idle', 'idle', 'idle']);
 
   // Role 5 — Premiere
   const [isStitching, setIsStitching] = useState(false);
@@ -1177,10 +1177,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
     setIsCasting(true);
     setAnchorImageUrl(null);
-    setSceneImages([null, null, null, null, null, null]);
-    setSceneImageOptions([null, null, null, null, null, null]);
+    setSceneImages([null, null, null, null]);
+    setSceneImageOptions([null, null, null, null]);
     setActiveCastingIdx(0);
-    setCastingProgress(Array.from({length: 6}, (_, i) => i === 0 ? 'loading' : 'idle') as ('idle'|'loading'|'done'|'error')[]);
+    setCastingProgress(Array.from({length: 4}, (_, i) => i === 0 ? 'loading' : 'idle') as ('idle'|'loading'|'done'|'error')[]);
     setCinemaStep('casting');
 
     const artistCall = async (body: Record<string, unknown>) => {
@@ -1608,15 +1608,15 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setCinemaCTA([]);
     setCinemaCTACustom('');
     setAnchorImageUrl(null);
-    setSceneImages([null, null, null, null, null, null]);
-    setSceneImageOptions([null, null, null, null, null, null]);
+    setSceneImages([null, null, null, null]);
+    setSceneImageOptions([null, null, null, null]);
     setActiveCastingIdx(0);
-    setCastingProgress(['idle', 'idle', 'idle', 'idle', 'idle', 'idle']);
-    setVisualSupervisorPrompts([null, null, null, null, null, null]);
-    setVsStatus(['idle', 'idle', 'idle', 'idle', 'idle', 'idle']);
-    setVideoClips([null, null, null, null, null, null]);
-    setAnimTaskIds([null, null, null, null, null, null]);
-    setAnimProgress(['idle', 'idle', 'idle', 'idle', 'idle', 'idle']);
+    setCastingProgress(['idle', 'idle', 'idle', 'idle']);
+    setVisualSupervisorPrompts([null, null, null, null]);
+    setVsStatus(['idle', 'idle', 'idle', 'idle']);
+    setVideoClips([null, null, null, null]);
+    setAnimTaskIds([null, null, null, null]);
+    setAnimProgress(['idle', 'idle', 'idle', 'idle']);
     setClipOrder([]);
     setSwapClipIdx(null);
     setClipsReady(false);
@@ -3316,8 +3316,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                 </div>
                                 <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">
                                   {language === 'ar'
-                                    ? `مشهد ${sceneNum} • ${AD_DURATIONS[sceneNum - 1]}ث`
-                                    : `Scene ${sceneNum} • ${AD_DURATIONS[sceneNum - 1]}s`}
+                                    ? `${['الخطّاف','الحركة المحورية','القيمة','النهاية'][sceneNum-1]} • ${AD_DURATIONS[sceneNum - 1]}ث`
+                                    : `${['THE HOOK','CORE ACTION','VALUE','PAYOFF'][sceneNum-1]} • ${AD_DURATIONS[sceneNum - 1]}s`}
                                 </span>
                               </div>
                               {scene && !isEditing && (
@@ -3355,6 +3355,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   .replace(/Visual DNA:.*?(\n|$)/gi, '')
                                   .replace(/\[SCENE ACTION\]:.*?(\n|$)/gi, '')
                                   .replace(/\[VISUAL DNA\][^[]*(\[|$)/gi, '')
+                                  .replace(/story_state:.*?(\n|$)/gi, '')
+                                  .replace(/english_prompt:.*?(\n|$)/gi, '')
+                                  .replace(/scene_pipeline:.*?(\n|$)/gi, '')
+                                  .replace(/generation_mode:.*?(\n|$)/gi, '')
                                   .trim();
                               };
                               // Extract Visual DNA badge text if present
@@ -3754,7 +3758,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                         {vsStatus[idx] === 'scanning' && (
                                           <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[9px] font-semibold flex items-center gap-1" style={{background:'rgba(12,15,20,0.85)',color:'rgba(226,199,168,0.8)'}}>
                                             <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{background:'#E2C7A8'}} />
-                                            {language === 'ar' ? 'المشرف يحدد الأبعاد...' : 'Supervisor mapping physics...'}
+                                            {language === 'ar' ? '🎬 تحليل اللقطة...' : '🎬 Mapping physics for this shot...'}
                                           </div>
                                         )}
                                       </button>
