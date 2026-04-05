@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { Plus, Smartphone, Square, Monitor, Sparkles, Wand2 } from 'lucide-react';
+import { Plus, Smartphone, Square, Monitor, Sparkles, Wand2, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 
 // Types
@@ -46,6 +46,92 @@ const campaignObjectives = [
   { id: 'lifestyle', label: 'Lifestyle', icon: '☕' },
   { id: 'feature-focus', label: 'Feature Focus', icon: '💡' },
   { id: 'sales-fomo', label: 'Sales/FOMO', icon: '🚨' },
+];
+
+const InstagramBrandIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="3" width="18" height="18" rx="5" />
+    <circle cx="12" cy="12" r="4" />
+    <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+const YouTubeBrandIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor" aria-hidden="true">
+    <path d="M21.6 7.2a2.9 2.9 0 0 0-2-2C17.8 4.7 12 4.7 12 4.7s-5.8 0-7.6.5a2.9 2.9 0 0 0-2 2C2 9 2 12 2 12s0 3 .4 4.8a2.9 2.9 0 0 0 2 2c1.8.5 7.6.5 7.6.5s5.8 0 7.6-.5a2.9 2.9 0 0 0 2-2C22 15 22 12 22 12s0-3-.4-4.8Z" />
+    <path d="m10 15.5 5-3.5-5-3.5v7Z" fill="#0c0f14" />
+  </svg>
+);
+
+const TikTokBrandIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor" aria-hidden="true">
+    <path d="M14.5 3c.3 1.7 1.3 3.1 2.9 4 .9.5 1.8.8 2.6.8V11c-1.5 0-3-.4-4.3-1.2v5.4a5.2 5.2 0 1 1-5.2-5.2c.4 0 .8 0 1.2.1v3.1a2.2 2.2 0 1 0 1.8 2.1V3h3Z" />
+  </svg>
+);
+
+const SnapchatBrandIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor" aria-hidden="true">
+    <path d="M12 3.2c2.6 0 4.8 2 4.8 4.6 0 1 .1 1.7.4 2.4.2.4.5.8.9 1.1.5.4.9.7.9 1.1 0 .5-.5.8-1.3 1-1 .3-1.4.8-1.6 1.2-.2.5-.7.8-1.2.8-.6 0-1 .4-1.3 1-.4.7-.9 1-1.6 1s-1.2-.3-1.6-1c-.3-.6-.7-1-1.3-1-.5 0-1-.3-1.2-.8-.2-.4-.6-.9-1.6-1.2-.8-.2-1.3-.5-1.3-1 0-.4.4-.7.9-1.1.4-.3.7-.7.9-1.1.3-.7.4-1.4.4-2.4C7.2 5.2 9.4 3.2 12 3.2Z" />
+  </svg>
+);
+
+const platformOptions = [
+  {
+    value: '9:16' as const,
+    icon: Smartphone,
+    label: '9:16',
+    platforms: [
+      {
+        name: 'TikTok',
+        icon: TikTokBrandIcon,
+        badgeClass: 'bg-[#0c0f14] text-white border border-white/10',
+      },
+      {
+        name: 'Snapchat',
+        icon: SnapchatBrandIcon,
+        badgeClass: 'bg-[#FFFC00] text-[#060541] border border-[#F5E800]',
+      },
+      {
+        name: 'Instagram',
+        icon: InstagramBrandIcon,
+        badgeClass: 'bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#515BD4] text-white border border-white/10',
+      },
+    ],
+  },
+  {
+    value: '1:1' as const,
+    icon: Square,
+    label: '1:1',
+    platforms: [
+      {
+        name: 'Instagram',
+        icon: InstagramBrandIcon,
+        badgeClass: 'bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#515BD4] text-white border border-white/10',
+      },
+      {
+        name: 'Website',
+        icon: Globe,
+        badgeClass: 'bg-[#060541]/85 text-white border border-[#060541]/50',
+      },
+    ],
+  },
+  {
+    value: '16:9' as const,
+    icon: Monitor,
+    label: '16:9',
+    platforms: [
+      {
+        name: 'YouTube',
+        icon: YouTubeBrandIcon,
+        badgeClass: 'bg-[#FF0000] text-white border border-[#ff6b6b]/40',
+      },
+      {
+        name: 'Website',
+        icon: Globe,
+        badgeClass: 'bg-[#060541]/85 text-white border border-[#060541]/50',
+      },
+    ],
+  },
 ];
 
 export default function VisualAdsGenerator({
@@ -436,25 +522,36 @@ export default function VisualAdsGenerator({
             {/* Platform Selection */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-[#858384] uppercase tracking-wider">
-                {language === 'ar' ? 'المنصة (نسبة العرض)' : 'Platform (Aspect Ratio)'}
+                {language === 'ar' ? 'المنصات ونسبة العرض' : 'Platforms & Aspect Ratio'}
               </label>
               <div className="grid grid-cols-3 gap-2">
-                {[
-                  { value: '9:16' as const, icon: Smartphone, label: '9:16' },
-                  { value: '1:1' as const, icon: Square, label: '1:1' },
-                  { value: '16:9' as const, icon: Monitor, label: '16:9' },
-                ].map((opt) => (
+                {platformOptions.map((opt) => (
                   <button
                     key={opt.value}
                     onClick={() => updateState('campaignDNA', { platform: opt.value })}
-                    className={`flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-xl border transition-all duration-200 min-h-[44px] ${
+                    className={`flex flex-col items-center justify-center gap-2 py-3 px-2 rounded-xl border transition-all duration-200 min-h-[88px] ${
                       state.campaignDNA.platform === opt.value
-                        ? 'bg-[#060541] text-white dark:bg-[#f2f2f2] dark:text-[#060541] border-transparent shadow-md'
+                        ? 'bg-gradient-to-b from-[#1a1d24] to-[#11141b] text-[#f2f2f2] border-[#606062]/50 shadow-[0_8px_24px_rgba(0,0,0,0.28)]'
                         : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/70 dark:hover:bg-white/10'
                     }`}
                   >
                     <opt.icon className="w-5 h-5" />
                     <span className="text-xs font-semibold">{opt.label}</span>
+                    <div className="flex flex-wrap items-center justify-center gap-1.5">
+                      {opt.platforms.map((platform) => (
+                        <span
+                          key={platform.name}
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium ${platform.badgeClass} ${
+                            state.campaignDNA.platform === opt.value
+                              ? 'shadow-[0_4px_12px_rgba(0,0,0,0.18)]'
+                              : 'opacity-95'
+                          }`}
+                        >
+                          <platform.icon className="w-3.5 h-3.5" />
+                          <span>{platform.name}</span>
+                        </span>
+                      ))}
+                    </div>
                   </button>
                 ))}
               </div>

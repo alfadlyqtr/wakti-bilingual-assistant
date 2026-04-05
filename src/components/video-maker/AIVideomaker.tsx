@@ -2719,22 +2719,14 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         {cinemaSetupOpen && (
                           <div className="mt-4 flex flex-col gap-3">
                             {/* Video Ads v5.0 — static format badge (no user selection) */}
-                            <div className="flex items-center gap-3 px-1 py-2 rounded-xl" style={{background:'rgba(226,199,168,0.08)',border:'1px solid rgba(226,199,168,0.25)'}}>
-                              <div className="flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0" style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)'}}>
-                                <Film className="h-4 w-4 text-[#0c0f14]" />
+                            <div className="flex items-center gap-3 px-3 py-2 rounded-xl" style={{background:'rgba(226,199,168,0.08)',border:'1px solid rgba(226,199,168,0.25)'}}>
+                              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{background:'rgba(226,199,168,0.14)',color:'#E2C7A8'}}>
+                                <Film className="h-4 w-4" />
                               </div>
                               <div>
                                 <p className="text-[11px] font-bold" style={{color:'#E2C7A8'}}>
-                                  {language==='ar' ? 'تنسيق: إعلان ٣٢ث احترافي (٤ مشاهد)' : 'Format: 32s Professional Ad (4 Scenes)'}
+                                  {language==='ar' ? 'إعلان احترافي' : 'Professional Ad'}
                                 </p>
-                                <p className="text-[9px]" style={{color:'rgba(226,199,168,0.55)'}}>
-                                  {language==='ar' ? '٦ث هوك • ١٠ث تفصيل • ١٠ث قصة • ٦ث اختتام' : '6s Hook • 10s Feature • 10s Story • 6s Closer'}
-                                </p>
-                              </div>
-                              <div className="ml-auto flex-shrink-0">
-                                <span className="text-[9px] font-bold px-2 py-1 rounded-lg" style={{background:'rgba(226,199,168,0.15)',color:'rgba(226,199,168,0.8)'}}>
-                                  {language==='ar' ? '٤ وحدات' : '4 Credits'}
-                                </span>
                               </div>
                             </div>
 
