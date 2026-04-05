@@ -975,13 +975,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                   </div>
                 </button>
 
-                {/* DEBUG: Android offerings log — remove after debugging */}
-                {getDeviceOS() === 'android' && debugLog ? (
-                  <div className="text-[9px] text-yellow-400 bg-black/80 rounded p-2 break-all font-mono">
-                    {debugLog}
-                  </div>
-                ) : null}
-
                 {/* Terms */}
                 <div className="text-center pt-1">
                   <a

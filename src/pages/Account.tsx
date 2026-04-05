@@ -374,7 +374,10 @@ export default function Account() {
   const handleBillingSubscribe = () => {
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
-    purchasePackage('$rc_monthly', async (resp: any) => {
+    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+    const rcPackageId = isQUUser ? 'qatar_university' : '$rc_monthly';
+    console.log('[BillingSubscribe] Package:', rcPackageId, '| isQUUser:', isQUUser);
+    purchasePackage(rcPackageId, async (resp: any) => {
       const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
         resp.message.toLowerCase().includes('already subscribed');
       const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
