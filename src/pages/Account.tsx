@@ -417,7 +417,7 @@ export default function Account() {
       return;
     }
 
-    // QU user: fetch offerings to get the package identifier string from the correct offering
+    // QU user: fetch offerings to get the full package object so Android resolves correctly
     getOfferings((resp) => {
       if (resp?.status !== 'SUCCESS') {
         console.warn('[BillingSubscribe] getOfferings failed, falling back to qatar_university string');
@@ -437,7 +437,7 @@ export default function Account() {
         if (pkg) { quPkg = pkg; break; }
       }
       console.log('[BillingSubscribe] qatar_university pkg:', quPkg ? `FOUND price:${quPkg?.product?.priceString}` : 'NOT FOUND');
-      doPurchase(quPkg?.identifier || 'qatar_university');
+      doPurchase(quPkg || 'qatar_university');
     });
   };
   
