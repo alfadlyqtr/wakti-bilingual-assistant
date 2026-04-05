@@ -1068,24 +1068,28 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
           onGenerate={async (visualState) => {
             // Build prompt from visual ads state
             const objectiveLabels: Record<string, string> = {
-              'hype-hook': 'hype hook, viral style, energetic',
-              'minimalist-pro': 'minimalist, professional, clean design',
-              'lifestyle': 'lifestyle, warm, relatable scene',
-              'feature-focus': 'feature focused, product highlight',
-              'sales-fomo': 'sales, FOMO, urgency, limited time',
+              'hype-hook': 'problem and solution angle, attention-grabbing hook',
+              'minimalist-pro': 'product hero angle, premium product-led presentation',
+              'lifestyle': 'lifestyle story angle, human and relatable scene',
+              'feature-focus': 'social proof angle, trust-building and credibility-led',
+              'sales-fomo': 'offer push angle, urgency and conversion-focused',
             };
             const styleLabels: Record<string, string> = {
-              '3d-glossy': '3D glossy, premium',
-              'cyberpunk': 'cyberpunk, neon, futuristic',
-              'soft-pastel': 'soft pastel, gentle, calming',
-              'vector': 'vector illustration, flat design',
+              'premium-dark': 'premium dark, elegant, high-contrast',
+              'bold-modern': 'bold modern, high contrast, contemporary',
+              'lifestyle-human': 'lifestyle human, authentic, warm, relatable',
+              'app-promo': 'app promo, product UI focused, clean mobile composition',
+              'luxury-minimal': 'luxury minimal, refined, spacious, premium',
+              'ugc-style': 'UGC style, organic, native social feel',
             };
             
             const parts = [
               'Create a professional visual advertisement',
+              visualState.creativeSoul.mainMessage ? `main message: ${visualState.creativeSoul.mainMessage}` : '',
               objectiveLabels[visualState.campaignDNA.objective] || '',
               styleLabels[visualState.creativeSoul.style] || '',
-              visualState.creativeSoul.magicEnhance ? 'highly detailed, enhanced quality' : '',
+              visualState.creativeSoul.prompt || '',
+              visualState.creativeSoul.magicEnhance ? 'premium polish, improved layout, stronger contrast, better readability' : '',
               visualState.creativeSoul.cta ? `with call to action: ${visualState.creativeSoul.cta}` : '',
               `format: ${visualState.campaignDNA.platform}`,
             ].filter(Boolean);

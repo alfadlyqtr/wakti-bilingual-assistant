@@ -18,9 +18,11 @@ export interface VisualAdsState {
     objective: string;
   };
   creativeSoul: {
+    mainMessage: string;
     cta: string;
     style: string;
     magicEnhance: boolean;
+    prompt: string;
   };
 }
 
@@ -33,19 +35,68 @@ interface VisualAdsGeneratorProps {
 
 // Style options with emojis
 const styleOptions = [
-  { id: '3d-glossy', label: '3D Glossy', emoji: '💎' },
-  { id: 'cyberpunk', label: 'Cyberpunk', emoji: '🌃' },
-  { id: 'soft-pastel', label: 'Soft Pastel', emoji: '🌸' },
-  { id: 'vector', label: 'Vector', emoji: '🎯' },
+  { id: 'premium-dark', label: 'Premium Dark', emoji: '🌙' },
+  { id: 'bold-modern', label: 'Bold & Modern', emoji: '⚡' },
+  { id: 'lifestyle-human', label: 'Lifestyle & Human', emoji: '📸' },
+  { id: 'app-promo', label: 'App Promo', emoji: '📱' },
+  { id: 'luxury-minimal', label: 'Luxury Minimal', emoji: '✨' },
+  { id: 'ugc-style', label: 'UGC Style', emoji: '�' },
 ];
 
 // Campaign objectives
 const campaignObjectives = [
-  { id: 'hype-hook', label: 'The Hype Hook', icon: '🔥' },
-  { id: 'minimalist-pro', label: 'Minimalist Pro', icon: '✨' },
-  { id: 'lifestyle', label: 'Lifestyle', icon: '☕' },
-  { id: 'feature-focus', label: 'Feature Focus', icon: '💡' },
-  { id: 'sales-fomo', label: 'Sales/FOMO', icon: '🚨' },
+  {
+    id: 'hype-hook',
+    label: 'Problem / Solution',
+    description: 'Bold hook made to grab attention fast',
+    icon: '🎯',
+  },
+  {
+    id: 'minimalist-pro',
+    label: 'Product Hero',
+    description: 'Clean, premium, elegant brand presence',
+    icon: '✨',
+  },
+  {
+    id: 'lifestyle',
+    label: 'Lifestyle Story',
+    description: 'Human, emotional, real-life connection',
+    icon: '🎬',
+  },
+  {
+    id: 'feature-focus',
+    label: 'Social Proof',
+    description: 'Lead with the strongest product value',
+    icon: '💎',
+  },
+  {
+    id: 'sales-fomo',
+    label: 'Offer Push',
+    description: 'Urgency, offer, and conversion pressure',
+    icon: '⏰',
+  },
+];
+
+const ctaChips = [
+  'Download now',
+  'Get started',
+  'Shop now',
+  'Learn more',
+  'Book now',
+  'Start free',
+  'Try it today',
+  'Join now',
+  'Request a demo',
+  'Subscribe',
+];
+
+const messageChips = [
+  'New launch',
+  'Limited-time offer',
+  'Download the app',
+  'Save time',
+  'Premium quality',
+  'Trusted by customers',
 ];
 
 const InstagramBrandIcon = () => (
@@ -149,7 +200,7 @@ export default function VisualAdsGenerator({
   const [state, setState] = useState<VisualAdsState>({
     brandAsset: { image: null, type: null },
     campaignDNA: { platform: '9:16', objective: '' },
-    creativeSoul: { cta: '', style: '3d-glossy', magicEnhance: false },
+    creativeSoul: { mainMessage: '', cta: '', style: 'premium-dark', magicEnhance: false, prompt: '' },
     assets: [],
   });
 
@@ -312,7 +363,7 @@ export default function VisualAdsGenerator({
     const isActive = activeStep === step;
     return (
       <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
-        isActive ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'
+        isActive ? 'max-h-[1800px] opacity-100' : 'max-h-0 opacity-0'
       }`}>
         <div className="pt-3 pb-4 px-2">
           {children}
@@ -365,8 +416,8 @@ export default function VisualAdsGenerator({
       <div className="space-y-1">
         <StepHeader
           step={1}
-          title={language === 'ar' ? 'أصل العلامة' : 'Brand Asset'}
-          subtitle={language === 'ar' ? 'الهوية البصرية' : 'The Identity'}
+          title={language === 'ar' ? 'أصول العلامة' : 'Brand Assets'}
+          subtitle={language === 'ar' ? 'ما الذي يجب أن يظهر في الإعلان؟' : 'What should appear in the ad?'}
         />
         <StepContent step={1}>
           <div className="space-y-4">
@@ -510,12 +561,12 @@ export default function VisualAdsGenerator({
         </StepContent>
       </div>
 
-      {/* Step 2: Campaign DNA */}
+      {/* Step 2: Platform & Format */}
       <div className="space-y-1">
         <StepHeader
           step={2}
-          title={language === 'ar' ? 'حمض الحملة' : 'Campaign DNA'}
-          subtitle={language === 'ar' ? 'الاستراتيجية' : 'The Strategy'}
+          title={language === 'ar' ? 'المنصة والمقاس' : 'Platform & Format'}
+          subtitle={language === 'ar' ? 'أين سيظهر هذا الإعلان؟' : 'Where will this ad run?'}
         />
         <StepContent step={2}>
           <div className="space-y-5">
@@ -531,7 +582,7 @@ export default function VisualAdsGenerator({
                     onClick={() => updateState('campaignDNA', { platform: opt.value })}
                     className={`flex flex-col items-center justify-center gap-2 py-3 px-2 rounded-xl border transition-all duration-200 min-h-[88px] ${
                       state.campaignDNA.platform === opt.value
-                        ? 'bg-gradient-to-b from-[#1a1d24] to-[#11141b] text-[#f2f2f2] border-[#606062]/50 shadow-[0_8px_24px_rgba(0,0,0,0.28)]'
+                        ? 'bg-gradient-to-b from-[#1a1d24] to-[#11141b] text-[#f2f2f2] border-2 border-orange-400 ring-2 ring-orange-400/35 shadow-[0_0_0_1px_rgba(251,146,60,0.45),0_10px_28px_rgba(251,146,60,0.18)] scale-[1.02]'
                         : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/70 dark:hover:bg-white/10'
                     }`}
                   >
@@ -560,7 +611,7 @@ export default function VisualAdsGenerator({
             {/* Objective Selection */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-[#858384] uppercase tracking-wider">
-                {language === 'ar' ? 'الهدف' : 'Objective'}
+                {language === 'ar' ? 'زاوية الإعلان' : 'Creative Angle'}
               </label>
               <div className="grid grid-cols-2 gap-2">
                 {campaignObjectives.map((obj) => (
@@ -572,14 +623,31 @@ export default function VisualAdsGenerator({
                       setCompletedSteps(prev => new Set([...prev, 2]));
                       setActiveStep(3);
                     }}
-                    className={`flex items-center gap-2 p-3 rounded-xl border transition-all duration-200 min-h-[44px] ${
+                    className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all duration-200 min-h-[78px] ${
                       state.campaignDNA.objective === obj.id
-                        ? 'bg-[#060541]/10 dark:bg-[#f2f2f2]/10 border-[#060541]/40 dark:border-[#f2f2f2]/40'
+                        ? 'bg-gradient-to-b from-[#1a1d24] to-[#11141b] border-2 border-orange-400 ring-2 ring-orange-400/30 shadow-[0_0_0_1px_rgba(251,146,60,0.45),0_10px_28px_rgba(251,146,60,0.15)]'
                         : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/70 dark:hover:bg-white/10'
                     }`}
                   >
-                    <span className="text-lg">{obj.icon}</span>
-                    <span className="text-xs font-medium">{obj.label}</span>
+                    <div className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-lg ${
+                      state.campaignDNA.objective === obj.id
+                        ? 'bg-orange-400/20'
+                        : 'bg-white/10 dark:bg-white/5'
+                    }`}>
+                      <span>{obj.icon}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <div className={`text-sm font-semibold ${
+                        state.campaignDNA.objective === obj.id ? 'text-[#f2f2f2]' : 'text-foreground'
+                      }`}>
+                        {obj.label}
+                      </div>
+                      <div className={`mt-1 text-[11px] leading-4 ${
+                        state.campaignDNA.objective === obj.id ? 'text-white/75' : 'text-[#858384]'
+                      }`}>
+                        {obj.description}
+                      </div>
+                    </div>
                   </button>
                 ))}
               </div>
@@ -597,21 +665,51 @@ export default function VisualAdsGenerator({
               }}
               className="w-full py-3 rounded-xl bg-[#060541] text-white dark:bg-[#f2f2f2] dark:text-[#060541] font-semibold text-sm shadow-lg active:scale-95 transition-all duration-200"
             >
-              {language === 'ar' ? 'تأكيد الاستراتيجية' : 'Confirm Strategy'}
+              {language === 'ar' ? 'تأكيد المنصة والزاوية' : 'Confirm Platform & Angle'}
             </button>
           </div>
         </StepContent>
       </div>
 
-      {/* Step 3: Creative Soul */}
+      {/* Step 3: Creative Brief */}
       <div className="space-y-1">
         <StepHeader
           step={3}
-          title={language === 'ar' ? 'الروح الإبداعية' : 'Creative Soul'}
-          subtitle={language === 'ar' ? 'اللمسة الأخيرة' : 'The Final Touch'}
+          title={language === 'ar' ? 'الملخص الإبداعي' : 'Creative Brief'}
+          subtitle={language === 'ar' ? 'ماذا يجب أن يقول الإعلان؟' : 'What should this ad say?'}
         />
         <StepContent step={3}>
           <div className="space-y-5">
+            {/* Main Message */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-[#858384] uppercase tracking-wider">
+                {language === 'ar' ? 'الرسالة الأساسية' : 'Main Message'}
+              </label>
+              <input
+                type="text"
+                value={state.creativeSoul.mainMessage}
+                onChange={(e) => updateState('creativeSoul', { mainMessage: e.target.value })}
+                placeholder={language === 'ar' ? 'مثال: وفر وقتك مع Wakti AI' : 'e.g., Save time with Wakti AI'}
+                className="w-full px-4 py-3 rounded-xl bg-white/50 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 text-sm focus:outline-none focus:border-[#060541]/50 dark:focus:border-[#f2f2f2]/50 transition-colors"
+              />
+              <div className="flex flex-wrap gap-2 pt-1">
+                {messageChips.map((chip) => (
+                  <button
+                    key={chip}
+                    onClick={() => updateState('creativeSoul', { mainMessage: chip })}
+                    type="button"
+                    className={`px-3 py-1.5 rounded-full border text-[11px] font-medium transition-all ${
+                      state.creativeSoul.mainMessage === chip
+                        ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.3)]'
+                        : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-[#858384] hover:bg-white/70 dark:hover:bg-white/10'
+                    }`}
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* CTA Input */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-[#858384] uppercase tracking-wider">
@@ -621,17 +719,33 @@ export default function VisualAdsGenerator({
                 type="text"
                 value={state.creativeSoul.cta}
                 onChange={(e) => updateState('creativeSoul', { cta: e.target.value })}
-                placeholder={language === 'ar' ? 'مثال: حمل التطبيق' : 'e.g., Download on App Store'}
+                placeholder={language === 'ar' ? 'مثال: حمّل الآن' : 'e.g., Download now'}
                 className="w-full px-4 py-3 rounded-xl bg-white/50 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 text-sm focus:outline-none focus:border-[#060541]/50 dark:focus:border-[#f2f2f2]/50 transition-colors"
               />
+              <div className="flex flex-wrap gap-2 pt-1">
+                {ctaChips.map((chip) => (
+                  <button
+                    key={chip}
+                    onClick={() => updateState('creativeSoul', { cta: chip })}
+                    type="button"
+                    className={`px-3 py-1.5 rounded-full border text-[11px] font-medium transition-all ${
+                      state.creativeSoul.cta === chip
+                        ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.3)]'
+                        : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-[#858384] hover:bg-white/70 dark:hover:bg-white/10'
+                    }`}
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Style Selection */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-[#858384] uppercase tracking-wider">
-                {language === 'ar' ? 'النمط البصري' : 'Visual Style'}
+                {language === 'ar' ? 'الاتجاه البصري' : 'Visual Direction'}
               </label>
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+              <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-none">
                 {styleOptions.map((style) => (
                   <button
                     key={style.id}
@@ -649,17 +763,42 @@ export default function VisualAdsGenerator({
               </div>
             </div>
 
-            {/* Magic Enhance Toggle */}
+            {/* Creative Instructions */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-[#858384] uppercase tracking-wider">
+                {language === 'ar' ? 'تعليمات إبداعية' : 'Creative Instructions'}
+              </label>
+              <textarea
+                value={state.creativeSoul.prompt}
+                onChange={(e) => updateState('creativeSoul', { prompt: e.target.value })}
+                placeholder={language === 'ar'
+                  ? 'صف الشكل، المزاج، النص، وتوزيع العناصر الذي تريده في الإعلان.'
+                  : 'Describe the look, mood, text, and composition you want in the ad.'}
+                className="w-full min-h-[110px] px-4 py-3 rounded-xl bg-white/50 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 text-sm resize-none focus:outline-none focus:border-[#060541]/50 dark:focus:border-[#f2f2f2]/50 transition-colors"
+              />
+              <p className="text-[11px] text-[#858384]">
+                {language === 'ar'
+                  ? 'مثال: إعلان حديث وفخم، خلفية داكنة، لقطة التطبيق في المنتصف، عنوان واضح، وتركيز على توفير الوقت.'
+                  : 'Example: Modern premium ad, dark elegant background, app screenshot centered, clear headline, and a strong time-saving message.'}
+              </p>
+            </div>
+
+            {/* Boost Ad Polish Toggle */}
             <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-[#060541]/10 via-[#1a1a4a]/10 to-[#060541]/10 dark:from-[#060541]/5 dark:via-[#1a1a4a]/5 dark:to-[#060541]/5 border border-[#060541]/30 dark:border-[#f2f2f2]/30">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#060541] dark:text-[#f2f2f2]" />
-                <span className="text-sm font-medium">
-                  {language === 'ar' ? '✨ تحسين سحري' : '✨ Magic Enhance'}
-                </span>
+              <div className="flex items-start gap-2">
+                <Sparkles className="w-4 h-4 text-[#060541] dark:text-[#f2f2f2] mt-0.5" />
+                <div>
+                  <span className="text-sm font-medium block">
+                    {language === 'ar' ? 'تحسين مظهر الإعلان' : 'Boost Ad Polish'}
+                  </span>
+                  <span className="text-[11px] text-[#858384] block mt-0.5">
+                    {language === 'ar' ? 'يحسن التناسق، التباين، والإحساس الفاخر.' : 'Improves layout, contrast, readability, and premium feel.'}
+                  </span>
+                </div>
               </div>
               <button
                 onClick={() => updateState('creativeSoul', { magicEnhance: !state.creativeSoul.magicEnhance })}
-                aria-label={state.creativeSoul.magicEnhance ? (language === 'ar' ? 'تعطيل التحسين' : 'Disable enhance') : (language === 'ar' ? 'تفعيل التحسين' : 'Enable enhance')}
+                aria-label={state.creativeSoul.magicEnhance ? (language === 'ar' ? 'تعطيل تحسين الإعلان' : 'Disable ad polish') : (language === 'ar' ? 'تفعيل تحسين الإعلان' : 'Enable ad polish')}
                 className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
                   state.creativeSoul.magicEnhance
                     ? 'bg-gradient-to-r from-[#060541] to-[#1a1a4a]'

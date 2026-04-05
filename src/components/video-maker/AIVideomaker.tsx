@@ -2605,7 +2605,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       <div className="min-w-0 flex items-center gap-2">
                         <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
                           style={{background: done ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : optional ? clr.optBadgeBg : clr.secNumBg, color: done ? '#0c0f14' : clr.textMuted}}>
-                          {done ? '✓' : (idx + 1)}
+                          {done ? '✓' : String.fromCharCode(65 + idx)}
                         </span>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 min-w-0">
@@ -2707,9 +2707,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               {isFormReady ? '✓' : '1'}
                             </span>
                             <div className="min-w-0">
-                              <p className="text-xs font-bold uppercase tracking-wider" style={{color: isFormReady ? '#C5A47E' : clr.text}}>{language==='ar'?'إعداد الفيلم':'Movie Setup'}</p>
+                              <p className="text-xs font-bold uppercase tracking-wider" style={{color: isFormReady ? '#C5A47E' : clr.text}}>{language==='ar'?'إعداد الإعلان':'Ad Setup'}</p>
                               <p className="text-[10px] truncate mt-0.5" style={{color: clr.textMuted}}>
-                                {language==='ar' ? 'المشاهد، المزاج، الشخصيات، المنصة، الوصف، والتحسين' : 'Scenes, mood, cast, platform, prompt, and AMP'}
+                                {language==='ar' ? 'المزاج، الشخصيات، المنصة، الوصف، والتحسين' : 'Mood, cast, platform, prompt, and AMP'}
                               </p>
                             </div>
                           </div>
@@ -2718,21 +2718,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                         {cinemaSetupOpen && (
                           <div className="mt-4 flex flex-col gap-3">
-                            {/* Video Ads v5.0 — static format badge (no user selection) */}
-                            <div className="flex items-center gap-3 px-3 py-2 rounded-xl" style={{background:'rgba(226,199,168,0.08)',border:'1px solid rgba(226,199,168,0.25)'}}>
-                              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{background:'rgba(226,199,168,0.14)',color:'#E2C7A8'}}>
-                                <Film className="h-4 w-4" />
-                              </div>
-                              <div>
-                                <p className="text-[11px] font-bold" style={{color:'#E2C7A8'}}>
-                                  {language==='ar' ? 'إعلان احترافي' : 'Professional Ad'}
-                                </p>
-                              </div>
-                            </div>
-
                             <div>
-                              <SetupHeader idx={1} label={language==='ar'?'المزاج والأجواء':'Vibe & Mood'} done={f2} summary={effectiveVibe ? effectiveVibe.split('—')[0].trim() : undefined} />
-                              {openSection === 1 && (
+                              <SetupHeader idx={0} label={language==='ar'?'المزاج والأجواء':'Vibe & Mood'} done={f2} summary={effectiveVibe ? effectiveVibe.split('—')[0].trim() : undefined} />
+                              {openSection === 0 && (
                                 <div className="mt-3 px-1">
                                   <p className="text-[9px] mb-2" style={{color: clr.textMuted}}>{language==='ar'?'اختر واحداً أو أكثر':'Select one or more'}</p>
                                   <div className="flex flex-wrap gap-2">
@@ -2758,7 +2746,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                           setCinemaVibe(prev => { 
                                             const newVal = prev.includes(v) ? prev.filter(x=>x!==v) : (() => { const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })();
                                             const nonCustomCount = newVal.filter(x=>x!=='Custom').length;
-                                            if (nonCustomCount === 3) setTimeout(() => setCinemaOpenSection(2), 300);
+                                            if (nonCustomCount === 3) setTimeout(() => setCinemaOpenSection(1), 300);
                                             return newVal;
                                           });
                                         }} disabled={isDirecting} />
@@ -2776,7 +2764,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   )}
                                   {f2 && (
                                     <div className="flex justify-end mt-3">
-                                      <button type="button" onClick={()=>setCinemaOpenSection(2)}
+                                      <button type="button" onClick={()=>setCinemaOpenSection(1)}
                                         className="px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
                                         style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
                                         {language==='ar'?'التالي ›':'Next ›'}
@@ -2788,8 +2776,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             </div>
 
                             <div>
-                              <SetupHeader idx={2} label={language==='ar'?'من يظهر في الفيلم؟':'Who is in the movie?'} done={f3} summary={cinemaCharacters.length ? `${cinemaCharacters.length} selected` : undefined} />
-                              {openSection === 2 && (
+                              <SetupHeader idx={1} label={language==='ar'?'من يظهر في الفيلم؟':'Who is in the movie?'} done={f3} summary={cinemaCharacters.length ? `${cinemaCharacters.length} selected` : undefined} />
+                              {openSection === 1 && (
                                 <div className="mt-3 px-1">
                                   <div className="flex flex-wrap gap-2">
                                     {([
@@ -2810,7 +2798,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                         onSelect={()=>setCinemaCharacters(prev => { 
                                           const newVal = prev.includes(v) ? prev.filter(x=>x!==v) : (() => { const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })();
                                           const nonCustomCount = newVal.filter(x=>x!=='Custom').length;
-                                          if (nonCustomCount === 3) setTimeout(() => setCinemaOpenSection(3), 300);
+                                          if (nonCustomCount === 3) setTimeout(() => setCinemaOpenSection(2), 300);
                                           return newVal;
                                         })} disabled={isDirecting} />
                                     );})}
@@ -2826,7 +2814,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   )}
                                   {f3 && (
                                     <div className="flex justify-end mt-3">
-                                      <button type="button" onClick={()=>setCinemaOpenSection(3)}
+                                      <button type="button" onClick={()=>setCinemaOpenSection(2)}
                                         className="px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
                                         style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
                                         {language==='ar'?'التالي ›':'Next ›'}
@@ -2838,8 +2826,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             </div>
 
                             <div>
-                              <SetupHeader idx={3} label={language==='ar'?'المنصة والتنسيق':'Platform & Format'} done={platformDone} summary={selectedSubFormat || undefined} />
-                              {openSection === 3 && (
+                              <SetupHeader idx={2} label={language==='ar'?'المنصة والتنسيق':'Platform & Format'} done={platformDone} summary={selectedSubFormat || undefined} />
+                              {openSection === 2 && (
                                 <div className="mt-3 px-1">
                                   <p className="text-[9px] mb-2" style={{color: clr.textSubtle}}>{language==='ar'?'اختر منصة النشر':'Choose your publishing platform'}</p>
                                   <div className="flex flex-wrap gap-2">
@@ -2865,7 +2853,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                         {label:language==='ar'?'يوتيوب شورتس':'YouTube Shorts', sub:'9:16', fmt:'9:16' as const, sfName:'YouTube Shorts (9:16)'},
                                       ]).map(({label,sub,fmt,sfName})=>(
                                         <button key={sfName} type="button"
-                                          onClick={()=>{setCinemaFormat(fmt);setSelectedSubFormat(sfName);setSelectedPlatform(null); setTimeout(() => setCinemaOpenSection(4), 300);}}
+                                          onClick={()=>{setCinemaFormat(fmt);setSelectedSubFormat(sfName);setSelectedPlatform(null); setTimeout(() => setCinemaOpenSection(3), 300);}}
                                           className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium transition-all hover:bg-red-900/30 active:scale-[0.98]"
                                           style={{color: selectedSubFormat===sfName ? '#fff' : 'rgba(255,255,255,0.75)', background: selectedSubFormat===sfName ? 'rgba(255,0,0,0.2)' : 'transparent'}}>
                                           <span>{label}</span>
@@ -2878,7 +2866,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                                 <button
                                   type="button" disabled={isDirecting}
-                                  onClick={()=>{setSelectedPlatform('tiktok');setCinemaFormat('9:16');setSelectedSubFormat('TikTok Vertical (9:16)'); setTimeout(() => setCinemaOpenSection(4), 300);}}
+                                  onClick={()=>{setSelectedPlatform('tiktok');setCinemaFormat('9:16');setSelectedSubFormat('TikTok Vertical (9:16)'); setTimeout(() => setCinemaOpenSection(3), 300);}}
                                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 disabled:opacity-40"
                                   style={selectedSubFormat?.includes('TikTok')
                                     ? {background:'rgba(0,0,0,0.5)',border:'1.5px solid #69C9D0',color:'#fff',boxShadow:'0 0 8px rgba(105,201,208,0.4)'}
@@ -2909,7 +2897,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                         {label:language==='ar'?'ستوري':'Story', sub:'9:16', fmt:'9:16' as const, sfName:'Instagram Story (9:16)'},
                                       ]).map(({label,sub,fmt,sfName})=>(
                                         <button key={sfName} type="button"
-                                          onClick={()=>{setCinemaFormat(fmt);setSelectedSubFormat(sfName);setSelectedPlatform(null); setTimeout(() => setCinemaOpenSection(4), 300);}}
+                                          onClick={()=>{setCinemaFormat(fmt);setSelectedSubFormat(sfName);setSelectedPlatform(null); setTimeout(() => setCinemaOpenSection(3), 300);}}
                                           className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium transition-all hover:bg-pink-900/30 active:scale-[0.98]"
                                           style={{color: selectedSubFormat===sfName ? '#fff' : 'rgba(255,255,255,0.75)', background: selectedSubFormat===sfName ? 'rgba(188,24,136,0.25)' : 'transparent'}}>
                                           <span>{label}</span>
@@ -2922,7 +2910,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                                 <button
                                   type="button" disabled={isDirecting}
-                                  onClick={()=>{setSelectedPlatform('snapchat');setCinemaFormat('9:16');setSelectedSubFormat('Snapchat Story (9:16)'); setTimeout(() => setCinemaOpenSection(4), 300);}}
+                                  onClick={()=>{setSelectedPlatform('snapchat');setCinemaFormat('9:16');setSelectedSubFormat('Snapchat Story (9:16)'); setTimeout(() => setCinemaOpenSection(3), 300);}}
                                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 disabled:opacity-40"
                                   style={selectedSubFormat?.includes('Snapchat')
                                     ? {background:'rgba(255,252,0,0.15)',border:'1.5px solid rgba(255,252,0,0.7)',color:'#fff',boxShadow:'0 0 8px rgba(255,252,0,0.3)'}
@@ -2937,8 +2925,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             </div>
 
                             <div>
-                              <SetupHeader idx={4} label={language==='ar'?'عم يدور فيلمك؟':'What is your movie about?'} done={sec1Done} summary={cinemaSubject ? (cinemaSubject.length > 40 ? cinemaSubject.slice(0,40)+'...' : cinemaSubject) : undefined} />
-                              {openSection === 4 && (
+                              <SetupHeader idx={3} label={language==='ar'?'عم يدور فيلمك؟':'What is your movie about?'} done={sec1Done} summary={cinemaSubject ? (cinemaSubject.length > 40 ? cinemaSubject.slice(0,40)+'...' : cinemaSubject) : undefined} />
+                              {openSection === 3 && (
                                 <div className="mt-3 flex flex-col gap-2 px-1">
                                   <div className="rounded-xl overflow-hidden" style={{background: clr.inputBg, border:`1px solid ${clr.inputBorder(f1)}`}}>
                                     <textarea
