@@ -1175,24 +1175,122 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
   }, [cinemaVision, cinemaSubject, cinemaSetting, cinemaSettingCustom, cinemaAction, cinemaActionCustom, cinemaVibe, cinemaVibeCustom, cinemaCharacters, cinemaRelationship, cinemaCTA, cinemaCTACustom, isDirecting, language, user, brandAnchor, cinemaSceneCount]);
 
-  // ── Role 2 & 3: Artist & Cloner ──
-  // Uses create/status two-call pattern to avoid edge function 60s timeout.
-  // Step 1: fire T2I create for Scene 1 → get task_id
-  // Step 2: poll until Scene 1 done → get anchor image URL
-  // Step 3: fire I2I create for Scenes 2-6 in parallel
-  // Step 4: poll all I2I tasks from frontend every 5s
+  // ── Role 2 & 3: Artist & Cloner — Sequential Identity Handshake ──
+  // S1 is generated first. Each user pick triggers the next scene using the
+  // SELECTED image as the i2i anchor → true continuity, zero identity drift.
+
+  // ── Shared poll helper (used by both handleCast and generateNextScene) ──
+  const makePollTask = (artistCall: (body: Record<string, unknown>) => Promise<any>) =>
+    async (task_id: string, scene_index: number): Promise<{ url: string; options: string[] }> => {
+      for (let i = 0; i < 36; i++) {
+        await new Promise(r => setTimeout(r, 5000));
+        let res: any;
+        try { res = await artistCall({ mode: 'status', task_id, scene_index }); }
+        catch { throw new Error('Image generation failed'); }
+        if (res.status === 'COMPLETED' && res.image_url) {
+          const opts: string[] = Array.isArray(res.image_urls) && res.image_urls.length > 0 ? res.image_urls : [res.image_url];
+          return { url: res.image_url as string, options: opts };
+        }
+        if (res.status === 'FAILED') throw new Error(res.error || 'Image generation failed');
+      }
+      throw new Error('Image generation timed out');
+    };
+
+  // ── generateNextScene: called when user picks a shot for scene `prevIdx` ──
+  // prevIdx = 0-based index of the scene that was just picked
+  // pickedUrl = the URL the user tapped
+  const generateNextScene = useCallback(async (prevIdx: number, pickedUrl: string) => {
+    const nextIdx = prevIdx + 1;
+    if (nextIdx >= cinemaSceneCount) return; // all done
+
+    const session = castingSessionRef.current;
+    if (!session.artistCall) return;
+
+    const scene = cinemaScenes.find(s => s.scene === nextIdx + 1);
+    if (!scene) return;
+
+    // Store the picked URL as the chain anchor for this scene
+    castingAnchorRef.current[prevIdx + 1] = pickedUrl; // 1-based: scene prevIdx+1 was picked
+
+    // If user pre-filled this slot, use it directly
+    if (session.sceneSlotMap[nextIdx]) {
+      const slotUrl = session.sceneSlotMap[nextIdx];
+      setSceneImages(prev => { const n = [...prev]; n[nextIdx] = slotUrl; return n; });
+      setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'done'; return n; });
+      setActiveCastingIdx(nextIdx);
+      castingAnchorRef.current[nextIdx + 1] = slotUrl;
+      return;
+    }
+
+    setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'loading'; return n; });
+    setActiveCastingIdx(nextIdx);
+    setIsCasting(true);
+
+    try {
+      const artistCall = session.artistCall;
+      const pollTask = makePollTask(artistCall);
+      const effectiveTag = session.effectiveTag;
+
+      const rawPrompt = scene.english_prompt || scene.text;
+      const lockIsPoisoned = subjectLock && /\b(logo|brand|emblem|wordmark|insignia)\b/i.test(subjectLock);
+      const useSubjectLock = subjectLock && !lockIsPoisoned && scene.scene_pipeline !== 'logo_integration';
+      const epScene = useSubjectLock && !rawPrompt.startsWith(subjectLock) ? `${subjectLock}. ${rawPrompt}` : rawPrompt;
+
+      const isLastScene = nextIdx === cinemaSceneCount - 1;
+
+      let created: any;
+
+      if (effectiveTag === 'character' && brandAnchor) {
+        // Character mode: chain from picked scene + character anchor blended
+        const chainPrompt = `Maintain 100% identity match with the character in the reference image. New environment and action only: ${epScene}`;
+        created = await artistCall({ mode: 'i2i_create', prompt: chainPrompt.slice(0, 2500), anchor_url: pickedUrl, anchor_pipeline: 'character', scene_index: nextIdx });
+      } else if (effectiveTag === 'logo' && brandAnchor && isLastScene) {
+        // Scene 4 (payoff): re-introduce brand logo strongly — i2i from picked S3 + logo emphasis in prompt
+        const payoffPrompt = `${epScene} The brand logo and visual identity must be strongly re-introduced. Maintain 100% subject consistency with the reference image.`;
+        created = await artistCall({ mode: 'i2i_create', prompt: payoffPrompt.slice(0, 2500), anchor_url: pickedUrl, anchor_pipeline: 'style', scene_index: nextIdx });
+      } else {
+        // Identity mute safeguard for middle scenes: chain from picked prev image using 'style' pipeline
+        // 'style' pipeline preserves subject form/color without burning the raw logo onto the scene
+        const chainPrompt = `Maintain the exact same subject identity, body form, proportions, and color from the reference image. Change only the environment, lighting, and camera angle to match: ${epScene}`;
+        created = await artistCall({ mode: 'i2i_create', prompt: chainPrompt.slice(0, 2500), anchor_url: pickedUrl, anchor_pipeline: 'style', scene_index: nextIdx });
+      }
+
+      const { url: imgUrl, options: imgOptions } = await pollTask(created.task_id, nextIdx);
+      setPrevSceneImages(prev => ({ ...prev, [scene.scene]: imgUrl }));
+
+      const optsToShow = imgOptions.length >= 1 ? imgOptions : [imgUrl];
+      setSceneImageOptions(prev => { const n = [...prev]; n[nextIdx] = optsToShow; return n; });
+      setSceneImages(prev => { const n = [...prev]; n[nextIdx] = null; return n; });
+      setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'done'; return n; });
+
+      if (nextIdx === cinemaSceneCount - 1) {
+        toast.success(language === 'ar' ? '🎬 جميع المشاهد جاهزة!' : '🎬 All scenes ready!');
+      }
+    } catch (err: any) {
+      console.error(`[cinema] generateNextScene ${nextIdx + 1} failed:`, err);
+      setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'error'; return n; });
+      toast.error(language === 'ar' ? `فشل المشهد ${nextIdx + 1}` : `Scene ${nextIdx + 1} failed — tap Retry`);
+    } finally {
+      setIsCasting(false);
+    }
+  }, [cinemaScenes, cinemaSceneCount, subjectLock, brandAnchor, language]);
+
+  // ── handleCast: generates Scene 1 ONLY, then stops and waits for user pick ──
   const handleCast = useCallback(async () => {
     if (!user || isCasting || cinemaScenes.length < cinemaSceneCount) return;
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData?.session?.access_token;
     if (!accessToken) return;
 
+    // Reset all state
+    castingAnchorRef.current = {};
     setIsCasting(true);
     setAnchorImageUrl(null);
     setSceneImages([null, null, null, null]);
     setSceneImageOptions([null, null, null, null]);
     setActiveCastingIdx(0);
-    setCastingProgress(Array.from({length: 4}, (_, i) => i === 0 ? 'loading' : 'idle') as ('idle'|'loading'|'done'|'error')[]);
+    // Scene 1 = loading, 2-4 = 'waiting' (shown as locked in UI)
+    setCastingProgress(['loading', 'idle', 'idle', 'idle'] as ('idle'|'loading'|'done'|'error')[]);
     setCinemaStep('casting');
 
     const artistCall = async (body: Record<string, unknown>) => {
@@ -1210,180 +1308,63 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       return json;
     };
 
-    // Poll a single task until COMPLETED or FAILED (max 3 min, 5s intervals)
-    // Returns { url: string, options: string[] } — options holds all images KIE returned
-    const pollTask = async (task_id: string, scene_index: number): Promise<{ url: string; options: string[] }> => {
-      for (let i = 0; i < 36; i++) {
-        await new Promise(r => setTimeout(r, 5000));
-        // BD-2: artistCall itself may throw on network error — catch and treat as FAILED
-        let res: any;
-        try {
-          res = await artistCall({ mode: 'status', task_id, scene_index });
-        } catch {
-          throw new Error('Image generation failed');
+    const pollTask = makePollTask(artistCall);
+
+    // ── Build scene-slot map from reference image tags ──
+    const sceneSlotMap: Record<number, string> = {};
+    cinemaReferenceImages.forEach((url, slotIdx) => {
+      if (!url) return;
+      const tag = cinemaRefTags[slotIdx] || 'ref';
+      if (tag !== 'logo' && tag !== 'ref') {
+        const sceneNum = parseInt(tag.replace('scene', ''), 10);
+        if (!isNaN(sceneNum) && sceneNum >= 1 && sceneNum <= 6) {
+          sceneSlotMap[sceneNum - 1] = url;
         }
-        if (res.status === 'COMPLETED' && res.image_url) {
-          const opts: string[] = Array.isArray(res.image_urls) && res.image_urls.length > 0 ? res.image_urls : [res.image_url];
-          return { url: res.image_url as string, options: opts };
-        }
-        if (res.status === 'FAILED') throw new Error(res.error || 'Image generation failed');
-        // If network error on status (FAILED from kieGetStatus), continue retrying up to max
       }
-      throw new Error('Image generation timed out');
-    };
+    });
+
+    const effectiveTag = (brandAnchor ? anchorTag : 'style') as 'logo' | 'style' | 'character';
+
+    // Store session context so generateNextScene can access it without stale closure
+    castingSessionRef.current = { artistCall, sceneSlotMap, effectiveTag, accessToken };
 
     try {
       const scene1 = cinemaScenes.find(s => s.scene === 1);
       if (!scene1) throw new Error('Scene 1 not found');
-      // Use english_prompt for all AI image calls — image models don't understand Arabic well
       const ep1 = scene1.english_prompt || scene1.text;
 
-      // ── Build scene-slot map from tags ──
-      // logo/ref tagged images are used as visual anchor (style reference) for all AI scenes
-      // scene-tagged images (scene1..scene6) go directly to that slot index
-      const sceneSlotMap: Record<number, string> = {}; // idx → url for direct-use
-      let logoAnchor: string | null = null; // brand logo or reference image
-
-      cinemaReferenceImages.forEach((url, slotIdx) => {
-        if (!url) return;
-        const tag = cinemaRefTags[slotIdx] || 'ref'; // default: treat untagged images as visual reference
-        if (tag === 'logo' || tag === 'ref') {
-          logoAnchor = url; // use as style anchor for AI-generated scenes
-        } else {
-          // tag is 'scene1'..'scene6' — extract scene number
-          const sceneNum = parseInt(tag.replace('scene', ''), 10);
-          if (!isNaN(sceneNum) && sceneNum >= 1 && sceneNum <= 6) {
-            sceneSlotMap[sceneNum - 1] = url; // 0-indexed
-          }
-        }
-      });
-
-      // ── Smart-Tag pipeline selection ──
-      // Pipeline A (logo):      True I2I — brandAnchor sent as source image; AI generates new background around it
-      // Pipeline B (style):     Dual-anchor ghost-cure — brandAnchor=style@0.45, prevAnchor=motion
-      // Pipeline C (character): I2I at 0.72 strength to preserve facial/body identity across scenes
-      const effectiveTag = brandAnchor ? anchorTag : 'style';
-
-      // ── Scene 1 — Unified multi-take logic (no auto-select bias) ──
+      // ── Scene 1: always anchored to brand identity asset ──
       if (sceneSlotMap[0]) {
-        // User pre-filled scene 1 via reference slot — use directly
+        // User pre-filled slot — use directly, skip generation
         setSceneImages(prev => { const n = [...prev]; n[0] = sceneSlotMap[0]; return n; });
         setSceneImageOptions(prev => { const n = [...prev]; n[0] = null; return n; });
         setAnchorImageUrl(sceneSlotMap[0]);
-        setCastingProgress(prev => { const n = [...prev]; n[0] = 'done'; for (let i = 1; i < cinemaSceneCount; i++) n[i] = 'loading'; return n; });
+        setCastingProgress(['done', 'idle', 'idle', 'idle'] as ('idle'|'loading'|'done'|'error')[]);
       } else {
-        // Set scene 1 + all others to loading
-        setCastingProgress(prev => { const n = [...prev]; for (let i = 0; i < cinemaSceneCount; i++) n[i] = 'loading'; return n; });
         try {
-          let created;
+          let created: any;
           if (effectiveTag === 'logo' && brandAnchor) {
+            // Logo mode S1: i2i from brand logo — establishes the identity truth
             created = await artistCall({ mode: 'i2i_create', prompt: ep1, anchor_url: brandAnchor, anchor_pipeline: 'logo', scene_index: 0 });
           } else if (effectiveTag === 'character' && brandAnchor) {
+            // Character mode S1: i2i from character reference
             created = await artistCall({ mode: 'i2i_create', prompt: ep1, anchor_url: brandAnchor, anchor_pipeline: 'character', scene_index: 0 });
           } else {
+            // Style-only: S1 is t2i — no real identity image to anchor from
             created = await artistCall({ mode: 't2i_create', prompt: ep1, aspect_ratio: cinemaFormat });
           }
           const { url: s1url, options: s1opts } = await pollTask(created.task_id, 0);
-          // Always store in options — never auto-pick, even for single image.
-          // User must tap "Pick your shot" just like Scenes 2-N.
           const optsToShow = s1opts.length >= 1 ? s1opts : [s1url];
           setSceneImageOptions(prev => { const n = [...prev]; n[0] = optsToShow; return n; });
           setSceneImages(prev => { const n = [...prev]; n[0] = null; return n; });
-          // Don't set anchorImageUrl yet — wait for user pick
-          setCastingProgress(prev => { const n = [...prev]; n[0] = 'done'; for (let i = 1; i < cinemaSceneCount; i++) n[i] = 'loading'; return n; });
+          // Scenes 2-4 remain 'idle' — they unlock only after user picks Scene 1
+          setCastingProgress(['done', 'idle', 'idle', 'idle'] as ('idle'|'loading'|'done'|'error')[]);
         } catch (s1err: any) {
           console.error('[cinema] Scene 1 failed:', s1err);
-          setCastingProgress(prev => { const n = [...prev]; n[0] = 'error'; for (let i = 1; i < cinemaSceneCount; i++) n[i] = 'loading'; return n; });
+          setCastingProgress(['error', 'idle', 'idle', 'idle'] as ('idle'|'loading'|'done'|'error')[]);
+          toast.error(language === 'ar' ? 'فشل المشهد 1 — حاول مجدداً' : 'Scene 1 failed — please retry');
         }
       }
-
-      // ── Scenes 2-N: HYBRID sequential chain ──
-      // S2 = T2I master anchor (defines canonical subject look for all following scenes)
-      // S3-SN = i2i_chain from previous scene's generated image (story continuity)
-      // EXCEPTION: logo mode overrides chain logic for bookend scenes
-      const remainingScenes = cinemaScenes
-        .filter(s => s.scene >= 2 && s.scene <= cinemaSceneCount)
-        .sort((a, b) => a.scene - b.scene);
-
-      // Track the last generated image URL for i2i_chain handoff
-      const chainImageMap: Record<number, string> = {}; // scene_number → first generated image URL
-
-      for (const scene of remainingScenes) {
-        const idx = scene.scene - 1;
-        if (sceneSlotMap[idx]) {
-          setSceneImages(prev => { const n = [...prev]; n[idx] = sceneSlotMap[idx]; return n; });
-          setCastingProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
-          chainImageMap[scene.scene] = sceneSlotMap[idx];
-          continue;
-        }
-        try {
-          let created;
-          const rawPrompt = scene.english_prompt || scene.text;
-          const scenePipelineTag = scene.scene_pipeline || 'style_extraction';
-          const lockIsPoisoned = subjectLock && /\b(logo|brand|emblem|wordmark|insignia)\b/i.test(subjectLock);
-          const useSubjectLock = subjectLock && !lockIsPoisoned && scenePipelineTag !== 'logo_integration';
-          const epScene = useSubjectLock && !rawPrompt.startsWith(subjectLock) ? `${subjectLock}. ${rawPrompt}` : rawPrompt;
-          const scenePipeline = scene.scene_pipeline || 'style_extraction';
-          const directorMode = scene.generation_mode || (scene.scene === 2 ? 't2i' : 'i2i_chain');
-
-          const isLogoMode = effectiveTag === 'logo' && brandAnchor;
-          // S6 only gets logo treatment if Director explicitly tagged it logo_integration
-          // Never override the i2i chain just because it's the last scene
-          const isExplicitLogoScene = scenePipeline === 'logo_integration';
-
-          if (effectiveTag === 'character' && brandAnchor) {
-            // Character mode: ALWAYS use I2I with character anchor — every scene must match the uploaded character
-            created = await artistCall({ mode: 'i2i_create', prompt: epScene, anchor_url: brandAnchor, anchor_pipeline: 'character', scene_index: idx });
-          } else if (isLogoMode && !isExplicitLogoScene && directorMode !== 'i2i_chain') {
-            // Logo mode non-chain scenes: pure T2I — no anchor leak
-            created = await artistCall({ mode: 't2i_create', prompt: epScene, aspect_ratio: cinemaFormat, scene_index: idx });
-          } else if (isExplicitLogoScene && isLogoMode) {
-            // Explicit logo_integration tag: I2I with brand logo anchor
-            created = await artistCall({ mode: 'i2i_create', prompt: epScene, anchor_url: brandAnchor, anchor_pipeline: 'logo', scene_index: idx });
-          } else if (scenePipeline === 'character_lock' && brandAnchor) {
-            // Character lock fallback: I2I with face/body anchor
-            created = await artistCall({ mode: 'i2i_create', prompt: epScene, anchor_url: brandAnchor, anchor_pipeline: 'character', scene_index: idx });
-          } else if (directorMode === 'i2i_chain') {
-            // ── STORY CHAIN: use previous scene's generated image as anchor ──
-            // Walk back to find the nearest available previous scene image
-            const prevImg = chainImageMap[scene.scene - 1]
-              || chainImageMap[scene.scene - 2]
-              || brandAnchor
-              || null;
-            if (prevImg) {
-              // i2i_chain: change the scene environment while keeping subject identity
-              const chainPrompt = `Maintain the exact same subject identity, body form, and proportions from the reference image. Change only the environment and lighting to match this new scene: ${epScene}`;
-              created = await artistCall({ mode: 'i2i_create', prompt: chainPrompt.slice(0, 2500), anchor_url: prevImg, anchor_pipeline: 'style', scene_index: idx });
-            } else {
-              // No previous image available yet — fall back to T2I
-              created = await artistCall({ mode: 't2i_create', prompt: epScene, aspect_ratio: cinemaFormat, scene_index: idx });
-            }
-          } else {
-            // T2I master anchor (S2) or fallback
-            created = await artistCall({ mode: 't2i_create', prompt: epScene, aspect_ratio: cinemaFormat, scene_index: idx });
-          }
-
-          const { url: imgUrl, options: imgOptions } = await pollTask(created.task_id, idx);
-          // Store the first image from this scene for the next scene's i2i_chain
-          chainImageMap[scene.scene] = imgUrl;
-          setPrevSceneImages(prev => ({ ...prev, [scene.scene]: imgUrl }));
-
-          if (imgOptions.length >= 2) {
-            setSceneImageOptions(prev => { const n = [...prev]; n[idx] = imgOptions; return n; });
-            setSceneImages(prev => { const n = [...prev]; n[idx] = null; return n; });
-            setCastingProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
-          } else {
-            setSceneImages(prev => { const n = [...prev]; n[idx] = imgUrl; return n; });
-            setSceneImageOptions(prev => { const n = [...prev]; n[idx] = null; return n; });
-            setCastingProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
-          }
-        } catch (err: any) {
-          console.error(`[cinema] scene ${idx + 1} failed:`, err);
-          setCastingProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
-        }
-      }
-
-      toast.success(language === 'ar' ? 'تم إنشاء الصور!' : 'Scenes cast!');
     } catch (err: any) {
       console.error('[cinema] Cast error:', err);
       toast.error(language === 'ar' ? 'فشل إنشاء الصور: ' + err.message : 'Casting failed: ' + err.message);
@@ -1391,7 +1372,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       setIsCasting(false);
     }
-  }, [user, isCasting, cinemaScenes, cinemaFormat, language, cinemaReferenceImages, anchorTag, brandAnchor, subjectLock]);
+  }, [user, isCasting, cinemaScenes, cinemaSceneCount, cinemaFormat, language, cinemaReferenceImages, anchorTag, brandAnchor]);
 
   // ── Visual Supervisor: fire-and-forget per-scene spatial analysis ──
   // Called immediately when user picks Shot A or B. Runs in background, no await needed.
@@ -3682,32 +3663,38 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           }
 
                           // ── IDLE / LOADING / ERROR: not yet active ──
-                          // If this scene already has opts ready (loaded while not active), make it tappable
                           if (!isActive && !isDone) {
                             const canOpen = opts && opts.length >= 1 && !img;
+                            // A future scene is "locked" if the previous scene hasn't been picked yet
+                            const prevPicked = idx === 0 || sceneImages[idx - 1] !== null;
+                            const isLocked = prog === 'idle' && !canOpen && !prevPicked;
                             return (
                               <div
                                 key={idx}
                                 onClick={canOpen ? () => setActiveCastingIdx(idx) : undefined}
                                 className={`flex items-center gap-3 w-full rounded-2xl px-3${canOpen ? ' cursor-pointer active:scale-[0.99]' : ''}`}
-                                style={{height:'52px', background: canOpen ? 'rgba(226,199,168,0.06)' : 'rgba(255,255,255,0.02)', border: canOpen ? '1px solid rgba(226,199,168,0.3)' : '1px solid rgba(255,255,255,0.06)'}}
+                                style={{height:'52px', background: canOpen ? 'rgba(226,199,168,0.06)' : 'rgba(255,255,255,0.02)', border: canOpen ? '1px solid rgba(226,199,168,0.3)' : '1px solid rgba(255,255,255,0.06)', opacity: isLocked ? 0.45 : 1}}
                               >
                                 <div className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center" style={{background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)'}}>
                                   {prog === 'loading' ? (
                                     <Loader2 className="h-4 w-4 animate-spin text-[#E2C7A8]/40" />
                                   ) : prog === 'error' ? (
                                     <span className="text-red-400 text-xs">✗</span>
+                                  ) : isLocked ? (
+                                    <Lock className="h-3 w-3" style={{color:'rgba(255,255,255,0.15)'}} />
                                   ) : (
                                     <span className="text-[10px] font-bold" style={{color:'rgba(255,255,255,0.2)'}}>{idx + 1}</span>
                                   )}
                                 </div>
-                                <p className="text-xs flex-1" style={{color: (opts && opts.length >= 1 && !img) ? 'rgba(226,199,168,0.7)' : 'rgba(255,255,255,0.2)'}}>
+                                <p className="text-xs flex-1" style={{color: canOpen ? 'rgba(226,199,168,0.7)' : isLocked ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.2)'}}>
                                   {prog === 'loading'
                                     ? (language === 'ar' ? 'جاري الرسم...' : 'Painting…')
                                     : prog === 'error'
                                     ? (language === 'ar' ? 'فشل التوليد' : 'Generation failed')
-                                    : (opts && opts.length >= 1 && !img)
+                                    : canOpen
                                     ? (language === 'ar' ? `مشهد ${idx + 1} — اضغط للاختيار` : `Scene ${idx + 1} — tap to pick`)
+                                    : isLocked
+                                    ? (language === 'ar' ? `مشهد ${idx + 1} — في انتظار اختيارك للمشهد السابق` : `Scene ${idx + 1} — waiting for previous pick`)
                                     : (language === 'ar' ? `مشهد ${idx + 1}` : `Scene ${idx + 1}`)}
                                 </p>
                                 {prog === 'error' && (
@@ -3777,8 +3764,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                           setSceneImageOptions(prev => { const n = [...prev]; n[idx] = null; return n; });
                                           setCastingProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
                                           if (idx === 0) setAnchorImageUrl(shotUrl);
-                                          setActiveCastingIdx(prev => Math.min(prev + 1, cinemaSceneCount - 1));
                                           runVisualSupervisor(idx, shotUrl, cinemaScenes[idx]?.english_prompt || cinemaScenes[idx]?.text || '');
+                                          // Sequential Identity Handshake: picked shot triggers next scene generation
+                                          generateNextScene(idx, shotUrl);
                                         }}
                                         className="relative w-full rounded-2xl overflow-hidden transition-all active:brightness-125 active:scale-[0.99]"
                                         style={{border:'1.5px solid rgba(226,199,168,0.4)', background:'none', padding:0}}

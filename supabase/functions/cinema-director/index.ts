@@ -138,7 +138,7 @@ subject_lock: ١٢-٢٠ كلمة وصف غني لا يمكن اختزاله.
 
 ━━━ علامات الأنبوب ━━━
 anchor_tag هو "${effectiveAnchorTag}".
-logo → ضربة ١ و٤: "logo_integration"، ضربتان ٢ و٣: "style_extraction".
+logo → جميع الضربات الأربع: "logo_integration" للضربة ١، "style_extraction" للضربات ٢ و٣، "logo_integration" للضربة ٤.
 style → جميع الضربات: "style_extraction".
 character → جميع الضربات: "character_lock".
 
@@ -152,10 +152,9 @@ character → جميع الضربات: "character_lock".
   • الأسلوب الافتراضي: cinematic commercial photography, photorealistic, high detail.
 
 ━━━ أوضاع التوليد ━━━
-ضربة ١: "t2i" دائماً.
-ضربة ٢: "t2i" دائماً — المرساة الرئيسية. تُحدد المظهر الكنسي لكل الضربات.
-ضربة ٣: "i2i_chain" — ترث شكل الموضوع، تغير السياق/الانفعال.
-ضربة ٤: "i2i_chain" — حل العلامة مع الشعار/الدعوة للتصرف.
+• إذا كان anchor_tag هو "logo" أو "character": جميع الضربات الأربع = "i2i_chain" — كل ضربة ترث شكل الهوية من الضربة السابقة.
+• إذا كان anchor_tag هو "style": ضربة ١ = "t2i"، ضربات ٢-٤ = "i2i_chain".
+• الضربة ٤ — قاعدة صارمة: أعِد تقديم هوية العلامة التجارية والشعار بقوة. حافظ على ١٠٠٪ تطابق الموضوع مع الضربة السابقة. أضف الشعار ومعلومات التواصل.
 
 ━━━ تنسيق الإخراج ━━━
 أعد JSON صالحاً فقط — بدون markdown:
@@ -194,7 +193,7 @@ ZERO tolerance. The user's exact words are the law. No exceptions. No creative r
 
 ━━━ PIPELINE TAGS ━━━
 anchor_tag is "${effectiveAnchorTag}".
-logo → Beat 1 and Beat 4: "logo_integration". Beats 2 and 3: "style_extraction".
+logo → Beat 1: "logo_integration". Beats 2 and 3: "style_extraction". Beat 4: "logo_integration".
 style → ALL beats: "style_extraction".
 character → ALL beats: "character_lock".
 
@@ -214,10 +213,9 @@ english_prompt rules:
   • For logo beats: start with "The provided [brand] logo", then describe the background composition.
 
 ━━━ GENERATION MODE — 4-BEAT AD CHAIN ━━━
-  • Beat 1: always "t2i" — Hook opening.
-  • Beat 2: always "t2i" — MASTER ANCHOR. Defines the canonical subject look for Beats 3 and 4.
-  • Beat 3: always "i2i_chain" — inherits subject form from Beat 2, changes context/emotion.
-  • Beat 4: always "i2i_chain" — brand resolution, inherits Beat 3 form, adds slogan/CTA.
+  • If anchor_tag is "logo" or "character": ALL 4 beats = "i2i_chain". Every beat inherits identity from the user-selected shot of the previous beat.
+  • If anchor_tag is "style": Beat 1 = "t2i". Beats 2-4 = "i2i_chain".
+  • Beat 4 — PAYOFF RULE (non-negotiable): Re-introduce brand identity and slogan strongly. Maintain 100% subject consistency with the previous beat. Compose the closing image to include slogan/CTA/contact info prominently.
 
 ━━━ STORY STATE ━━━
 For EVERY beat, write story_state:
@@ -316,7 +314,7 @@ Return EXACTLY 4 beats. Never 3, 5, or 6.`;
         text: s.text || '',
         english_prompt: s.english_prompt || s.text || '',
         scene_pipeline: s.scene_pipeline || 'style_extraction',
-        generation_mode: s.generation_mode || (i < 2 ? 't2i' : 'i2i_chain'),
+        generation_mode: s.generation_mode || (effectiveAnchorTag === 'logo' || effectiveAnchorTag === 'character' ? 'i2i_chain' : (i === 0 ? 't2i' : 'i2i_chain')),
         story_state: s.story_state || '',
       }))
     };

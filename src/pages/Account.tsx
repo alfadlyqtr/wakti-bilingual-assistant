@@ -452,14 +452,15 @@ export default function Account() {
     };
 
     try {
-      if (isQUUser && isIOS) {
-        // iOS + QU: pass store product ID directly — bypasses offering cache entirely
-        addBillingDebug('QU iOS → purchasePackage(wakti_monthly_qu)');
-        purchasePackage('wakti_monthly_qu', billingCallback);
-      } else if (isQUUser && !isIOS) {
+      if (isQUUser && !isIOS) {
         // Android + QU: showPaywall with offering — confirmed working
         addBillingDebug('QU Android → showPaywall(university_exclusive)');
         showPaywall(true, 'university_exclusive', billingCallback);
+      } else if (isQUUser) {
+        // iOS + QU: RC package identifier — confirmed working at 6f18d483
+        // NOTE: must use RC package ID 'qatar_university', NOT store product ID
+        addBillingDebug('QU iOS → purchasePackage(qatar_university)');
+        purchasePackage('qatar_university', billingCallback);
       } else {
         addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);
