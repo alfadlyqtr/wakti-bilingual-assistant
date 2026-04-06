@@ -2610,7 +2610,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       if (limited.length === 13) {
         setTimeout(() => {
           setInstrumentsOpen(false);
-          setMoodOpen(true);
+          setVocalsOpen(true);
           setStylesOpen(false);
         }, 0);
       }
@@ -2635,7 +2635,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       if (next.length === 13) {
         setTimeout(() => {
           setInstrumentsOpen(false);
-          setMoodOpen(true);
+          setVocalsOpen(true);
           setStylesOpen(false);
         }, 0);
       }
@@ -2646,6 +2646,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   function handleInstrumentsNext() {
     setInstrumentsOpen(false);
+    setVocalsOpen(true);
   }
 
   function handleMoodToggle(mood: string) {
@@ -3691,7 +3692,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               </select>
               <button
                 type="button"
-                disabled={overLimit || submitting || !title.trim() || !lyricsText.trim()}
+                disabled={overLimit || submitting || !title.trim() || (vocalType !== 'none' && !lyricsText.trim())}
                 onClick={handleGenerate}
                 className="flex-1 relative overflow-hidden h-12 rounded-2xl font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-sky-500 via-blue-600 to-purple-600 text-white shadow-[0_4px_24px_hsla(210,100%,65%,0.4)]"
               >
@@ -4627,7 +4628,7 @@ function EditorTab() {
                         )}
                         {t.play_url && (
                           <div className="px-4 pb-4 space-y-3">
-                            <AudioPlayer src={t.play_url} className="w-full" />
+                            <AudioPlayer src={t.play_url} className="w-full" showLoopToggle />
                             <div className="flex items-center gap-2 justify-end">
                               {(() => {
                                 const completedPoster = posters.find(p => p.track_id === t.id && p.status === 'completed');

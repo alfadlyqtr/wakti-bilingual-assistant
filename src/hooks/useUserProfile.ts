@@ -221,17 +221,17 @@ export function useUserProfile() {
       return (profile?.is_subscribed ?? false);
     },
     get isAdminGifted() {
-      // A user is "gifted" if they have a REAL payment method (gift, apple, google, stripe)
-      // with a valid next_billing_date (future date). NULL payment_method = regular user.
-      // NOTE: 'manual' with null billing = old DB default, NOT a gift.
+      // Check the explicit admin_gifted flag first
+      if ((profile as any)?.admin_gifted === true) return true;
+      // Also treat as gifted if they have a REAL payment method with a valid next_billing_date
       const pm = profile?.payment_method;
       if (!pm || pm === 'manual') return false;
-      // Must have a future billing date to be active
       if (!profile?.next_billing_date) return false;
       return new Date(profile.next_billing_date) > new Date();
     },
     get isGracePeriod() {
       if (profile?.is_subscribed) return false;
+      if ((profile as any)?.admin_gifted === true) return false;
       // Check gifted inline (same logic as isAdminGifted)
       const pm = profile?.payment_method;
       if (pm && pm !== 'manual' && profile?.next_billing_date && new Date(profile.next_billing_date) > new Date()) return false;
@@ -249,6 +249,7 @@ export function useUserProfile() {
     },
     get isAccessExpired() {
       if (profile?.is_subscribed) return false;
+      if ((profile as any)?.admin_gifted === true) return false;
       // Check gifted inline
       const pm = profile?.payment_method;
       if (pm && pm !== 'manual' && profile?.next_billing_date && new Date(profile.next_billing_date) > new Date()) return false;

@@ -155,7 +155,8 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
         // Real payment methods: gift, apple, google, stripe (NOT 'manual' — that's the old DB default for everyone)
         const pm = profile.payment_method;
         const hasRealPaymentMethod = pm && pm !== 'manual';
-        const hasActiveGift = hasRealPaymentMethod && profile.next_billing_date && new Date(profile.next_billing_date) > now;
+        const hasActiveGift = (profile as any).admin_gifted === true ||
+          (hasRealPaymentMethod && profile.next_billing_date && new Date(profile.next_billing_date) > now);
 
         if (isPaid && profile.next_billing_date) {
           const nextBillingDate = new Date(profile.next_billing_date);
@@ -361,7 +362,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
 
     // Still in grace period
     setShowPaywall(false);
-  }, [user?.id, isSubscribed, subscriptionStatus.isSubscribed, isAccessExpired, isNewUser, wasSubscribed, location.pathname, accessCheckTick, isProfileLoading]);
+  }, [user?.id, isSubscribed, subscriptionStatus.isSubscribed, isAdminGifted, isAccessExpired, isNewUser, wasSubscribed, location.pathname, accessCheckTick, isProfileLoading]);
 
   let effectiveHasSession = hasAnySession;
   
