@@ -13,7 +13,7 @@ import { useLocation, useNavigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useTheme } from "@/providers/ThemeProvider";
-import { purchasePackage, restorePurchases, getOfferings, purchasesLogin } from "@/integrations/natively/purchasesBridge";
+import { purchasePackage, restorePurchases, getOfferings, purchasesLogin, showPaywall } from "@/integrations/natively/purchasesBridge";
 import { setupNotificationClickHandler } from "@/integrations/natively/notificationsBridge";
 import {
   Dialog,
@@ -242,78 +242,74 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isAndroid = /Android/.test(navigator.userAgent);
-    let packageToUse: string;
-    if (isQUUser) {
-      packageToUse = isIOS ? 'wakti_monthly_qu' : 'wakti_monthly_qu:monthly-academic';
-    } else {
-      packageToUse = '$rc_monthly';
-    }
-    addDebug(`QU:${isQUUser} iOS:${isIOS} Android:${isAndroid} pkg:${packageToUse}`);
-    console.log('[Purchase] pkg:', packageToUse, '| QU:', isQUUser, '| iOS:', isIOS);
-    
-    try {
-      purchasePackage(packageToUse, async (resp: any) => {
-        addDebug(`Callback fired! Status: ${resp?.status}`);
-        addDebug(`Callback message: ${resp?.message}`);
-        if (resp?.error) addDebug(`Callback error: ${JSON.stringify(resp.error)}`);
-        
-        console.log('[Purchase] Response:', resp);
-        
-        // Treat success OR 'already subscribed' (Android) as a successful subscription
-        const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
-          resp.message.toLowerCase().includes('already subscribed');
-        const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
+    addDebug(`QU:${isQUUser} iOS:${isIOS} Android:${isAndroid}`);
+    console.log('[Purchase] QU:', isQUUser, '| iOS:', isIOS);
 
-        if (isPurchased || isAlreadySubscribed) {
-          // Update Supabase directly after successful purchase
-          if (user?.id) {
-            try {
-              await supabase
-                .from('profiles')
-                .update({
-                  is_subscribed: true,
-                  subscription_status: 'active',
-                  plan_name: 'Wakti Monthly',
-                  billing_start_date: new Date().toISOString(),
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', user.id);
-              console.log('[Purchase] Supabase updated successfully');
-            } catch (err) {
-              console.error('[Purchase] Supabase update failed:', err);
-            }
+    // QU users: use showPaywall with university_exclusive offering so the SDK
+    // loads the correct non-default offering and its products on demand.
+    // Standard users: use purchasePackage with $rc_monthly from Default offering.
+    const purchaseCallback = async (resp: any) => {
+      addDebug(`Callback fired! Status: ${resp?.status}`);
+      addDebug(`Callback message: ${resp?.message}`);
+      if (resp?.error) addDebug(`Callback error: ${JSON.stringify(resp.error)}`);
+      console.log('[Purchase] Response:', resp);
+
+      const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
+        resp.message.toLowerCase().includes('already subscribed');
+      const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
+
+      if (isPurchased || isAlreadySubscribed) {
+        if (user?.id) {
+          try {
+            await supabase
+              .from('profiles')
+              .update({
+                is_subscribed: true,
+                subscription_status: 'active',
+                plan_name: 'Wakti Monthly',
+                billing_start_date: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', user.id);
+            console.log('[Purchase] Supabase updated successfully');
+          } catch (err) {
+            console.error('[Purchase] Supabase update failed:', err);
           }
-          
-          toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
-          setPurchaseInProgress(false);
-          
-          // IMMEDIATELY clear cache and dispatch update events — do NOT wait for check-subscription
-          // This closes the paywall right away on iOS/sandbox where RC sync can be slow
-          if (user?.id) {
-            try {
-              localStorage.removeItem(`wakti_sub_status_${user.id}`);
-              window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
-              window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
-            } catch {}
-            // Fire check-subscription in background to sync RC data — non-blocking
-            supabase.functions.invoke('check-subscription', { body: { userId: user.id } })
-              .then(({ data }) => { console.log('[Purchase] Background RC sync:', data?.isSubscribed); })
-              .catch(err => { console.warn('[Purchase] Background RC sync failed:', err); });
-          }
-          
-          setTimeout(() => onOpenChange(false), 1000);
-        } else if (resp?.status === 'ERROR') {
-          toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
-          setPurchaseInProgress(false);
         }
-        setLoading(false);
-      });
+        toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
+        setPurchaseInProgress(false);
+        if (user?.id) {
+          try {
+            localStorage.removeItem(`wakti_sub_status_${user.id}`);
+            window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
+            window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+          } catch {}
+          supabase.functions.invoke('check-subscription', { body: { userId: user.id } })
+            .then(({ data }) => { console.log('[Purchase] Background RC sync:', data?.isSubscribed); })
+            .catch(err => { console.warn('[Purchase] Background RC sync failed:', err); });
+        }
+        setTimeout(() => onOpenChange(false), 1000);
+      } else if (resp?.status === 'ERROR') {
+        toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
+        setPurchaseInProgress(false);
+      }
+      setLoading(false);
+    };
+
+    try {
+      if (isQUUser) {
+        addDebug('QU user → showPaywall(university_exclusive)');
+        showPaywall(true, 'university_exclusive', purchaseCallback);
+      } else {
+        addDebug('Standard user → purchasePackage($rc_monthly)');
+        purchasePackage('$rc_monthly', purchaseCallback);
+      }
     } catch (e: any) {
       addDebug(`TRY/CATCH ERROR: ${e?.message || String(e)}`);
       setLoading(false);
       setPurchaseInProgress(false);
     }
-    
+
     // Android fallback: If callback never fires after 30s, rely on visibilitychange
     setTimeout(() => {
       if (purchaseInProgress) {
@@ -321,6 +317,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
       }
     }, 30000);
   };
+
 
   // Restore purchases handler - per RevenueCat docs, SUCCESS means restore completed,
   // but we must verify entitlements via backend to confirm purchases were actually found

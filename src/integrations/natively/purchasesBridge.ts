@@ -83,3 +83,15 @@ export function getOfferings(callback?: (resp: any) => void) {
   if (!p) return;
   try { p.getOfferings(callback || function () {}); } catch {}
 }
+
+export function showPaywall(
+  showCloseButton = true,
+  offeringId?: string,
+  callback?: (resp: any) => void
+) {
+  const p = getInstance();
+  if (!p) return;
+  try {
+    p.showPaywall(showCloseButton, offeringId, callback || function () {});
+  } catch {}
+}

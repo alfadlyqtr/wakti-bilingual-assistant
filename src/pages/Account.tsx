@@ -35,7 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { purchasePackage, restorePurchases, getOfferings } from "@/integrations/natively/purchasesBridge";
+import { purchasePackage, restorePurchases, getOfferings, showPaywall } from "@/integrations/natively/purchasesBridge";
 import { MyGallery } from "@/components/social/MyGallery";
 import { ContactsContent } from "@/pages/Contacts";
 import { getPendingRequestsCount } from "@/services/contactsService";
@@ -407,53 +407,58 @@ export default function Account() {
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    let packageToUse: string;
-    if (isQUUser) {
-      packageToUse = isIOS ? 'wakti_monthly_qu' : 'wakti_monthly_qu:monthly-academic';
-    } else {
-      packageToUse = '$rc_monthly';
-    }
-    addBillingDebug(`QU:${isQUUser} iOS:${isIOS} pkg:${packageToUse}`);
-    console.log('[BillingSubscribe] pkg:', packageToUse, '| QU:', isQUUser, '| iOS:', isIOS);
-    
-    try {
-      purchasePackage(packageToUse, async (resp: any) => {
-        addBillingDebug(`Callback fired! Status: ${resp?.status}`);
-        addBillingDebug(`Callback message: ${resp?.message}`);
-        if (resp?.error) addBillingDebug(`Callback error: ${JSON.stringify(resp.error)}`);
-        
-        const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
-          resp.message.toLowerCase().includes('already subscribed');
-        const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
-        
-        if (isPurchased || isAlreadySubscribed) {
-          if (user?.id) {
-            try {
-              await supabase
-                .from('profiles')
-                .update({
-                  is_subscribed: true,
-                  subscription_status: 'active',
-                  plan_name: 'Wakti Monthly',
-                  billing_start_date: new Date().toISOString(),
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', user.id);
-            } catch {}
-            try {
-              localStorage.removeItem(`wakti_sub_status_${user.id}`);
-              window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
-              window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
-            } catch {}
-            supabase.functions.invoke('check-subscription', { body: { userId: user.id } }).catch(() => {});
-          }
-          toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
-          queryClient.invalidateQueries({ queryKey: ['subscription'] });
-        } else if (resp?.status === 'ERROR') {
-          toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
+    addBillingDebug(`QU:${isQUUser} iOS:${isIOS}`);
+    console.log('[BillingSubscribe] QU:', isQUUser, '| iOS:', isIOS);
+
+    // QU users: use showPaywall with university_exclusive offering so the SDK
+    // loads the correct non-default offering and its products on demand.
+    // Standard users: use purchasePackage with $rc_monthly from Default offering.
+    const billingCallback = async (resp: any) => {
+      addBillingDebug(`Callback fired! Status: ${resp?.status}`);
+      addBillingDebug(`Callback message: ${resp?.message}`);
+      if (resp?.error) addBillingDebug(`Callback error: ${JSON.stringify(resp.error)}`);
+
+      const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
+        resp.message.toLowerCase().includes('already subscribed');
+      const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
+
+      if (isPurchased || isAlreadySubscribed) {
+        if (user?.id) {
+          try {
+            await supabase
+              .from('profiles')
+              .update({
+                is_subscribed: true,
+                subscription_status: 'active',
+                plan_name: 'Wakti Monthly',
+                billing_start_date: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', user.id);
+          } catch {}
+          try {
+            localStorage.removeItem(`wakti_sub_status_${user.id}`);
+            window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
+            window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+          } catch {}
+          supabase.functions.invoke('check-subscription', { body: { userId: user.id } }).catch(() => {});
         }
-        setIsBillingPurchasing(false);
-      });
+        toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
+        queryClient.invalidateQueries({ queryKey: ['subscription'] });
+      } else if (resp?.status === 'ERROR') {
+        toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
+      }
+      setIsBillingPurchasing(false);
+    };
+
+    try {
+      if (isQUUser) {
+        addBillingDebug('QU user → showPaywall(university_exclusive)');
+        showPaywall(true, 'university_exclusive', billingCallback);
+      } else {
+        addBillingDebug('Standard user → purchasePackage($rc_monthly)');
+        purchasePackage('$rc_monthly', billingCallback);
+      }
     } catch (e: any) {
       addBillingDebug(`TRY/CATCH ERROR: ${e?.message || String(e)}`);
       setIsBillingPurchasing(false);
