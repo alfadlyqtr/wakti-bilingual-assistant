@@ -406,11 +406,15 @@ export default function Account() {
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const fallbackId = isQUUser ? 'qatar_university' : '$rc_monthly';
-    const packageToUse = billingPackageObj || fallbackId;
-    addBillingDebug(`User QU: ${isQUUser}`);
-    addBillingDebug(`Using: ${billingPackageObj ? `PKG OBJ (${billingPackageObj?.identifier})` : `STRING (${fallbackId})`}`);
-    console.log('[BillingSubscribe] using:', billingPackageObj ? `obj(${billingPackageObj?.identifier})` : `string(${fallbackId})`, '| QU:', isQUUser);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    let packageToUse: string;
+    if (isQUUser) {
+      packageToUse = isIOS ? 'wakti_monthly_qu' : 'wakti_monthly_qu:monthly-academic';
+    } else {
+      packageToUse = '$rc_monthly';
+    }
+    addBillingDebug(`QU:${isQUUser} iOS:${isIOS} pkg:${packageToUse}`);
+    console.log('[BillingSubscribe] pkg:', packageToUse, '| QU:', isQUUser, '| iOS:', isIOS);
     
     try {
       purchasePackage(packageToUse, async (resp: any) => {

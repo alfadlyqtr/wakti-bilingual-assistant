@@ -240,11 +240,16 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     setPurchaseInProgress(true);
 
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const fallbackId = isQUUser ? 'qatar_university' : '$rc_monthly';
-    const packageToUse = activePackageObj || fallbackId;
-    addDebug(`User QU: ${isQUUser}`);
-    addDebug(`Using: ${activePackageObj ? `PKG OBJ (${activePackageObj?.identifier})` : `STRING (${fallbackId})`}`);
-    console.log('[Purchase] using:', activePackageObj ? `obj(${activePackageObj?.identifier})` : `string(${fallbackId})`, '| QU:', isQUUser);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /Android/.test(navigator.userAgent);
+    let packageToUse: string;
+    if (isQUUser) {
+      packageToUse = isIOS ? 'wakti_monthly_qu' : 'wakti_monthly_qu:monthly-academic';
+    } else {
+      packageToUse = '$rc_monthly';
+    }
+    addDebug(`QU:${isQUUser} iOS:${isIOS} Android:${isAndroid} pkg:${packageToUse}`);
+    console.log('[Purchase] pkg:', packageToUse, '| QU:', isQUUser, '| iOS:', isIOS);
     
     try {
       purchasePackage(packageToUse, async (resp: any) => {
