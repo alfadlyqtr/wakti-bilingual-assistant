@@ -240,18 +240,10 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     setPurchaseInProgress(true);
 
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const isAndroid = /Android/.test(navigator.userAgent);
-    addDebug(`User QU: ${isQUUser}, Android: ${isAndroid}`);
-
-    let packageToUse: string;
-    if (isAndroid) {
-      packageToUse = isQUUser ? 'wakti_monthly_qu:monthly-academic' : '$rc_monthly';
-    } else {
-      packageToUse = isQUUser ? 'wakti_monthly_qu' : 'qa.wakti.ai.monthly';
-    }
-
+    const packageToUse = isQUUser ? 'qatar_university' : '$rc_monthly';
+    addDebug(`User QU: ${isQUUser}`);
     addDebug(`Calling purchasePackage with: ${packageToUse}`);
-    console.log('[Purchase] pkg:', packageToUse, '| QU:', isQUUser, '| Android:', isAndroid);
+    console.log('[Purchase] pkg:', packageToUse, '| QU:', isQUUser);
     
     try {
       purchasePackage(packageToUse, async (resp: any) => {

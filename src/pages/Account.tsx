@@ -406,20 +406,10 @@ export default function Account() {
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const isAndroid = /Android/.test(navigator.userAgent);
-    addBillingDebug(`User QU: ${isQUUser}, Android: ${isAndroid}`);
-
-    // iOS: must use Apple store product IDs directly (Natively SDK only resolves Default offering by RC ID)
-    // Android: RC strings work fine
-    let packageToUse: string;
-    if (isAndroid) {
-      packageToUse = isQUUser ? 'wakti_monthly_qu:monthly-academic' : '$rc_monthly';
-    } else {
-      packageToUse = isQUUser ? 'wakti_monthly_qu' : 'qa.wakti.ai.monthly';
-    }
-
+    const packageToUse = isQUUser ? 'qatar_university' : '$rc_monthly';
+    addBillingDebug(`User QU: ${isQUUser}`);
     addBillingDebug(`Calling purchasePackage with: ${packageToUse}`);
-    console.log('[BillingSubscribe] pkg:', packageToUse, '| QU:', isQUUser, '| Android:', isAndroid);
+    console.log('[BillingSubscribe] pkg:', packageToUse, '| QU:', isQUUser);
     
     try {
       purchasePackage(packageToUse, async (resp: any) => {
