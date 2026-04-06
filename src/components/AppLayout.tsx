@@ -297,10 +297,13 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     };
 
     try {
-      if (isQUUser) {
-        // QU users (iOS + Android): showPaywall with university_exclusive offering
-        // Paywall is now configured in RC dashboard — works on both platforms
-        addDebug('QU → showPaywall(university_exclusive)');
+      if (isQUUser && isIOS) {
+        // iOS + QU: pass store product ID directly — bypasses offering cache entirely
+        addDebug('QU iOS → purchasePackage(wakti_monthly_qu)');
+        purchasePackage('wakti_monthly_qu', purchaseCallback);
+      } else if (isQUUser && isAndroid) {
+        // Android + QU: showPaywall with offering — confirmed working
+        addDebug('QU Android → showPaywall(university_exclusive)');
         showPaywall(true, 'university_exclusive', purchaseCallback);
       } else {
         addDebug('Standard → purchasePackage($rc_monthly)');

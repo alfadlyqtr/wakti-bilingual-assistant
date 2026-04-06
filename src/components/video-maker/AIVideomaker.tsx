@@ -254,6 +254,15 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   // Smart-Tag: user-declared intent for the brand anchor image
   const [anchorTag, setAnchorTag] = useState<'logo' | 'style' | 'character'>('style');
 
+  // Sequential casting chain: stores the user-selected image URL from scene i, used as anchor for scene i+1
+  const castingAnchorRef = useRef<Record<number, string>>({}); // sceneNum (1-based) → picked image URL
+  const castingSessionRef = useRef<{
+    artistCall: ((body: Record<string, unknown>) => Promise<any>) | null;
+    sceneSlotMap: Record<number, string>;
+    effectiveTag: 'logo' | 'style' | 'character';
+    accessToken: string;
+  }>({ artistCall: null, sceneSlotMap: {}, effectiveTag: 'style', accessToken: '' });
+
   // Casting: per-scene regen modal
   const [castingRegenModal, setCastingRegenModal] = useState<{ sceneIdx: number; mode?: 'regen' | 'new' } | null>(null);
   const [castingRegenNote, setCastingRegenNote] = useState('');
