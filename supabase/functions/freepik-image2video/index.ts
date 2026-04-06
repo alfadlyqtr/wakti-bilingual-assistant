@@ -28,6 +28,7 @@ function sanitizeError(msg: string): string {
 }
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY") || "";
 const KIE_IMAGE2VIDEO_MODEL = "grok-imagine/image-to-video";
+const KIE_HAILUO_MODEL = "bytedance/hailuo-2.3-image-to-video-standard";
 const KIE_TEXT2VIDEO_MODEL = "grok-imagine/text-to-video";
 const KIE_2IMAGES_MODEL = "bytedance/seedance-1.5-pro";
 const KIE_CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
@@ -197,13 +198,16 @@ async function createVideoTask(
   generateAudio?: boolean,
   resolution?: string,
   videoStyleMode?: string,
+  modelOverride?: string,
 ): Promise<{ task_id: string; status: string }> {
   const sanitizedImageUrls = imageUrls.map(url => sanitizeImageUrl(url));
   const isTwoImages = sanitizedImageUrls.length === 2;
-  // Seedance (2images): 4/8/12s, user-selected resolution
-  // Grok Imagine (single image): 6/10/15s — 15s forces 480p, others use 720p
+  // Hailuo 2.3 supports 6/10s; Grok Imagine: 6/10/15s; Seedance: 4/8/12s
+  const isHailuo = !isTwoImages && (modelOverride === KIE_HAILUO_MODEL || modelOverride?.includes('hailuo'));
   const validDuration = isTwoImages
     ? (["4", "8", "12"].includes(duration || "") ? duration! : "8")
+    : isHailuo
+    ? (["6", "10"].includes(duration || "") ? duration! : "6")
     : (["6", "10", "15"].includes(duration || "") ? duration! : "6");
   const validAspectRatio = ["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"].includes(aspectRatio || "")
     ? aspectRatio!
@@ -211,7 +215,7 @@ async function createVideoTask(
   const validResolution = ["480p", "720p"].includes(resolution || "") ? resolution! : (isTwoImages ? "480p" : "720p");
   const validMode = ["normal", "fun"].includes(videoStyleMode || "") ? videoStyleMode! : "normal";
 
-  const model = isTwoImages ? KIE_2IMAGES_MODEL : KIE_IMAGE2VIDEO_MODEL;
+  const model = isTwoImages ? KIE_2IMAGES_MODEL : (modelOverride || KIE_IMAGE2VIDEO_MODEL);
 
   const input: Record<string, unknown> = isTwoImages
     ? {
@@ -499,7 +503,7 @@ serve(async (req) => {
       }
     }
     // ── End Trial Token Check ──
-    const { image, image1, image2, prompt, mode, duration: reqDuration, aspect_ratio, fixed_lens, generate_audio, generation_type, resolution, video_style_mode } = body;
+    const { image, image1, image2, prompt, mode, duration: reqDuration, aspect_ratio, fixed_lens, generate_audio, generation_type, resolution, video_style_mode, model: modelOverride } = body;
 
     // Mode: 'status' to check task status
     if (mode === "status") {
@@ -577,7 +581,7 @@ serve(async (req) => {
           error: "Monthly AI video limit reached",
           quota: {
             used: quota?.videos_generated || 0,
-            limit: quota?.videos_limit || 80,
+            limit: quota?.videos_limit || 60,
             extra: quota?.extra_videos || 0,
           },
         }),
@@ -673,7 +677,7 @@ serve(async (req) => {
           );
         }
       }
-      task = await createVideoTask([imageUrl], prompt, reqDuration, aspect_ratio, fixed_lens, generate_audio, resolution, video_style_mode);
+      task = await createVideoTask([imageUrl], prompt, reqDuration, aspect_ratio, fixed_lens, generate_audio, resolution, video_style_mode, modelOverride);
     }
 
     // If mode is 'async', return task_id immediately for frontend polling

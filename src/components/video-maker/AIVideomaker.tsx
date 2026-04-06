@@ -163,7 +163,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const usageIncrementedRef = useRef(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Trial access check — Cinema is locked for 24-hour trial users
+  // Trial access check — Ads Creator is locked for 24-hour trial users
   const [isTrialUser, setIsTrialUser] = useState(false);
   useEffect(() => {
     let mounted = true;
@@ -190,7 +190,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     return () => { mounted = false; };
   }, [user?.id]);
 
-  // Cinema mode state
+  // Ads Creator state
   const [cinemaVision, setCinemaVision] = useState('');
   const [cinemaScenes, setCinemaScenes] = useState<{scene: number; text: string; english_prompt: string; scene_pipeline?: string; generation_mode?: string; story_state?: string}[]>([]);
   const [prevSceneImages, setPrevSceneImages] = useState<Record<number, string>>({});
@@ -245,7 +245,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [isUploadingBrand, setIsUploadingBrand] = useState(false);
   const [showBrandSavedPicker, setShowBrandSavedPicker] = useState(false);
 
-  // Reference images — user-uploaded assets for Cinema
+  // Reference images — user-uploaded assets for Ads Creator
   // Index 0-5 = scene slots, index 6 = brand logo/reference anchor
   const [cinemaReferenceImages, setCinemaReferenceImages] = useState<(string | null)[]>([]);
   const [cinemaRefTags, setCinemaRefTags] = useState<string[]>([]); // 'scene1'..'scene6', 'logo', 'ref'
@@ -1402,11 +1402,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
   }, []);
 
-  // ── Role 4: Producer — Grok (video gen per scene) + Shotstack (stitch) ──
-  // Step 1: For each scene, send keyframe image to Grok via freepik-image2video
-  // Step 2: Poll each scene's video task until all clips are ready
-  // Step 3: Send all video URLs to Shotstack cinema-producer for stitching
-  // Step 4: Poll Shotstack until final stitched video is ready
+  // ── Role 4: Producer — Hailuo 2.3 parallel animation ──
+  // Fires ALL 4 Hailuo tasks simultaneously (parallel), then polls until all done.
+  // Uses AD_DURATIONS [6,10,10,6] per scene. VS briefs injected into motion prompts.
   const handleFilm = useCallback(async () => {
     if (!user || isFilming) return;
     const images = sceneImages;
@@ -1418,91 +1416,93 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setIsFilming(true);
     setAnimProgress(Array(cinemaSceneCount).fill('rendering'));
     setCinemaStep('filming');
-    setStitchStatus(language === 'ar' ? '🎬 جاري إنشاء مقاطع الفيديو...' : '🎬 Generating video clips...');
+    setStitchStatus(language === 'ar' ? '🎬 جاري إطلاق كل المشاهد بالتوازي...' : '🎬 Firing all 4 Hailuo tasks in parallel...');
 
     try {
       const imageUrls = images.slice(0, cinemaSceneCount) as string[];
       const scripts = cinemaScenes.slice(0, cinemaSceneCount).map(s => s?.text || '');
 
-      // ── Step 1: Create Grok video tasks for each scene ──
-      const taskIds: string[] = [];
-      for (let idx = 0; idx < imageUrls.length; idx++) {
-        setStitchStatus(
-          language === 'ar'
-            ? `🎬 بدء مشهد ${idx + 1}/${imageUrls.length}...`
-            : `🎬 Starting scene ${idx + 1}/${imageUrls.length}...`
-        );
+      // ── Step 1: Fire ALL 4 Hailuo 2.3 tasks in parallel ──
+      const taskPromises = imageUrls.map(async (imgUrl, idx) => {
+        // Merge VS spatial brief into motion prompt for better physics
+        const vsBrief = visualSupervisorPrompts[idx];
+        const basePrompt = scripts[idx] || '';
+        const motionPrompt = vsBrief
+          ? `${basePrompt} ${vsBrief}`.slice(0, 500)
+          : basePrompt;
+
         const { data, error } = await supabase.functions.invoke('freepik-image2video', {
           body: {
             generation_type: 'image_to_video',
-            image: imageUrls[idx],
-            prompt: scripts[idx] || undefined,
-            duration: '10',
+            model: 'bytedance/hailuo-2.3-image-to-video-standard',
+            image: imgUrl,
+            prompt: motionPrompt || undefined,
+            duration: String(AD_DURATIONS[idx] ?? 10),
             aspect_ratio: cinemaFormat === '16:9' ? '16:9' : '9:16',
             resolution: '720p',
-            video_style_mode: 'normal',
             mode: 'async',
           },
         });
-        if (error) throw new Error(`Scene ${idx + 1}: ${error.message}`);
-        if (!data?.ok || !data?.task_id) throw new Error(data?.error || `Scene ${idx + 1}: No task_id`);
-        taskIds.push(data.task_id);
-        console.log(`[cinema] Scene ${idx + 1} Grok task: ${data.task_id}`);
-      }
+        if (error) throw new Error(`Beat ${idx + 1}: ${error.message}`);
+        if (!data?.ok || !data?.task_id) throw new Error(data?.error || `Beat ${idx + 1}: No task_id`);
+        console.log(`[ads] Beat ${idx + 1} Hailuo task: ${data.task_id} (${AD_DURATIONS[idx]}s)`);
+        return data.task_id as string;
+      });
 
-      // ── Step 2: Poll all Grok tasks until all clips are ready ──
+      const taskIds = await Promise.all(taskPromises);
+      setStitchStatus(language === 'ar' ? '🎬 الكل في الإنتاج... انتظر' : '🎬 All 4 beats rendering… hang tight');
+
+      // ── Step 2: Poll all tasks in parallel until every clip is done ──
       const clipUrls: string[] = new Array(taskIds.length).fill('');
-      const MAX_CLIP_POLLS = 80; // ~6.5 min per clip
+      const MAX_CLIP_POLLS = 80; // ~6.5 min
       for (let poll = 0; poll < MAX_CLIP_POLLS; poll++) {
         await new Promise(r => setTimeout(r, 5000));
-        for (let idx = 0; idx < taskIds.length; idx++) {
-          if (clipUrls[idx]) continue; // already done
+        await Promise.all(taskIds.map(async (taskId, idx) => {
+          if (clipUrls[idx]) return; // already done
           try {
             const { data: statusData } = await supabase.functions.invoke('freepik-image2video', {
-              body: { mode: 'status', task_id: taskIds[idx], increment_usage: false },
+              body: { mode: 'status', task_id: taskId, increment_usage: false },
             });
             const s = statusData?.data;
             if (s?.status === 'COMPLETED' && (s?.video?.url || s?.generated?.[0])) {
               clipUrls[idx] = s.video?.url || s.generated[0];
               setVideoClips(prev => { const n = [...prev]; n[idx] = clipUrls[idx]; return n; });
               setAnimProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
-              console.log(`[cinema] Scene ${idx + 1} video ready: ${clipUrls[idx].slice(0, 60)}...`);
+              console.log(`[ads] Beat ${idx + 1} ready: ${clipUrls[idx].slice(0, 60)}…`);
             } else if (s?.status === 'FAILED') {
-              throw new Error(s?.error || `Scene ${idx + 1} video generation failed`);
+              throw new Error(s?.error || `Beat ${idx + 1} failed`);
             }
           } catch (pollErr: any) {
-            console.warn(`[cinema] Scene ${idx + 1} poll error:`, pollErr);
+            console.warn(`[ads] Beat ${idx + 1} poll error:`, pollErr);
           }
-        }
+        }));
         const doneCount = clipUrls.filter(Boolean).length;
         setStitchStatus(
           language === 'ar'
-            ? `🎬 إنشاء المقاطع... ${doneCount}/${taskIds.length} جاهز`
-            : `🎬 Generating clips... ${doneCount}/${taskIds.length} ready`
+            ? `🎬 الإنتاج... ${doneCount}/${taskIds.length} جاهز`
+            : `🎬 Rendering… ${doneCount}/${taskIds.length} ready`
         );
         if (clipUrls.every(Boolean)) break;
       }
 
-      // Check all clips are ready
       if (!clipUrls.every(Boolean)) {
         const missing = clipUrls.map((u, i) => u ? null : i + 1).filter(Boolean);
-        throw new Error(`Timed out waiting for scenes: ${missing.join(', ')}`);
+        throw new Error(`Timed out waiting for beats: ${missing.join(', ')}`);
       }
 
-      // All clips ready — stop here so user can preview & reorder before stitching
       setClipOrder(clipUrls.map((_, i) => i));
       setClipsReady(true);
       setStitchStatus('');
-      toast.success(language === 'ar' ? '🎬 المقاطع جاهزة! راجع وأعد الترتيب ثم اضغط تجميع' : '🎬 Clips ready! Review, reorder, then tap Stitch');
+      toast.success(language === 'ar' ? '🎬 الإعلان جاهز! راجع ثم اضغط تجميع' : '🎬 Ad ready! Review then tap Stitch');
     } catch (err: any) {
-      console.error('[cinema] Film produce error:', err);
+      console.error('[ads] Film produce error:', err);
       setAnimProgress(prev => prev.map(p => p === 'rendering' ? 'error' : p));
       toast.error(language === 'ar' ? 'فشل الإنتاج: ' + err.message : 'Production failed: ' + err.message);
     } finally {
       setIsFilming(false);
       setStitchStatus('');
     }
-  }, [user, isFilming, sceneImages, cinemaScenes, cinemaSceneCount, language, cinemaFormat]);
+  }, [user, isFilming, sceneImages, cinemaScenes, cinemaSceneCount, language, cinemaFormat, visualSupervisorPrompts]);
 
   // ── Role 4b: Retry — re-trigger full Grok + Shotstack produce ──
   const handleRetryFilm = useCallback(async (_idx: number) => {
