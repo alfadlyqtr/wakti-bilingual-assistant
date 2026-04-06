@@ -71,6 +71,11 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const [restoring, setRestoring] = useState(false);
   const [price, setPrice] = useState<{ qar?: string; usd?: string }>({});
   const [purchaseInProgress, setPurchaseInProgress] = useState(false);
+  const [debugLog, setDebugLog] = useState<string[]>([]); // Added for deep audit
+  const addDebug = (msg: string) => {
+    console.log('[DEBUG]', msg);
+    setDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
+  };
   const [activePackageId, setActivePackageId] = useState<string>('$rc_monthly');
   const [activePackageObj, setActivePackageObj] = useState<any>(null);
   const [step, setStep] = useState(variant === 'new_user' ? 1 : 2);
@@ -230,16 +235,14 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   }, [open, purchaseInProgress, user?.id, language, onOpenChange]);
 
   const handleSubscribe = async () => {
+    addDebug('--- BUTTON PRESSED ---');
     setLoading(true);
     setPurchaseInProgress(true);
 
-    // QU users: iOS needs full RC package object from getOfferings, Android uses string
-    // Standard users: '$rc_monthly' string works on both platforms
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     const isAndroid = /Android/.test(navigator.userAgent);
+    addDebug(`User QU: ${isQUUser}, Android: ${isAndroid}`);
 
-    // iOS: must use Apple store product IDs directly (Natively SDK only resolves Default offering by RC ID)
-    // Android: RC strings work fine
     let packageToUse: string;
     if (isAndroid) {
       packageToUse = isQUUser ? 'wakti_monthly_qu:monthly-academic' : '$rc_monthly';
@@ -247,59 +250,71 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
       packageToUse = isQUUser ? 'wakti_monthly_qu' : 'qa.wakti.ai.monthly';
     }
 
+    addDebug(`Calling purchasePackage with: ${packageToUse}`);
     console.log('[Purchase] pkg:', packageToUse, '| QU:', isQUUser, '| Android:', isAndroid);
-    purchasePackage(packageToUse, async (resp: any) => {
-      console.log('[Purchase] Response:', resp);
-      
-      // Treat success OR 'already subscribed' (Android) as a successful subscription
-      const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
-        resp.message.toLowerCase().includes('already subscribed');
-      const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
+    
+    try {
+      purchasePackage(packageToUse, async (resp: any) => {
+        addDebug(`Callback fired! Status: ${resp?.status}`);
+        addDebug(`Callback message: ${resp?.message}`);
+        if (resp?.error) addDebug(`Callback error: ${JSON.stringify(resp.error)}`);
+        
+        console.log('[Purchase] Response:', resp);
+        
+        // Treat success OR 'already subscribed' (Android) as a successful subscription
+        const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
+          resp.message.toLowerCase().includes('already subscribed');
+        const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
 
-      if (isPurchased || isAlreadySubscribed) {
-        // Update Supabase directly after successful purchase
-        if (user?.id) {
-          try {
-            await supabase
-              .from('profiles')
-              .update({
-                is_subscribed: true,
-                subscription_status: 'active',
-                plan_name: 'Wakti Monthly',
-                billing_start_date: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', user.id);
-            console.log('[Purchase] Supabase updated successfully');
-          } catch (err) {
-            console.error('[Purchase] Supabase update failed:', err);
+        if (isPurchased || isAlreadySubscribed) {
+          // Update Supabase directly after successful purchase
+          if (user?.id) {
+            try {
+              await supabase
+                .from('profiles')
+                .update({
+                  is_subscribed: true,
+                  subscription_status: 'active',
+                  plan_name: 'Wakti Monthly',
+                  billing_start_date: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', user.id);
+              console.log('[Purchase] Supabase updated successfully');
+            } catch (err) {
+              console.error('[Purchase] Supabase update failed:', err);
+            }
           }
+          
+          toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
+          setPurchaseInProgress(false);
+          
+          // IMMEDIATELY clear cache and dispatch update events — do NOT wait for check-subscription
+          // This closes the paywall right away on iOS/sandbox where RC sync can be slow
+          if (user?.id) {
+            try {
+              localStorage.removeItem(`wakti_sub_status_${user.id}`);
+              window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
+              window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+            } catch {}
+            // Fire check-subscription in background to sync RC data — non-blocking
+            supabase.functions.invoke('check-subscription', { body: { userId: user.id } })
+              .then(({ data }) => { console.log('[Purchase] Background RC sync:', data?.isSubscribed); })
+              .catch(err => { console.warn('[Purchase] Background RC sync failed:', err); });
+          }
+          
+          setTimeout(() => onOpenChange(false), 1000);
+        } else if (resp?.status === 'ERROR') {
+          toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
+          setPurchaseInProgress(false);
         }
-        
-        toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
-        setPurchaseInProgress(false);
-        
-        // IMMEDIATELY clear cache and dispatch update events — do NOT wait for check-subscription
-        // This closes the paywall right away on iOS/sandbox where RC sync can be slow
-        if (user?.id) {
-          try {
-            localStorage.removeItem(`wakti_sub_status_${user.id}`);
-            window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
-            window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
-          } catch {}
-          // Fire check-subscription in background to sync RC data — non-blocking
-          supabase.functions.invoke('check-subscription', { body: { userId: user.id } })
-            .then(({ data }) => { console.log('[Purchase] Background RC sync:', data?.isSubscribed); })
-            .catch(err => { console.warn('[Purchase] Background RC sync failed:', err); });
-        }
-        
-        setTimeout(() => onOpenChange(false), 1000);
-      } else if (resp?.status === 'ERROR') {
-        toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
-        setPurchaseInProgress(false);
-      }
+        setLoading(false);
+      });
+    } catch (e: any) {
+      addDebug(`TRY/CATCH ERROR: ${e?.message || String(e)}`);
       setLoading(false);
-    });
+      setPurchaseInProgress(false);
+    }
     
     // Android fallback: If callback never fires after 30s, rely on visibilitychange
     setTimeout(() => {
@@ -807,6 +822,16 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                   ? '✨ نقوم دائماً بتحديث وإضافة ميزات جديدة!'
                   : '✨ We constantly update and add new features!'}
               </p>
+
+              {/* Debug Box */}
+              {debugLog.length > 0 && (
+                <div className="w-full text-left p-2 rounded bg-black/80 border border-red-500 max-h-32 overflow-y-auto">
+                  <p className="text-red-400 text-xs font-bold mb-1">SDK DEBUG LOG:</p>
+                  {debugLog.map((log, i) => (
+                    <div key={i} className="text-[10px] font-mono text-green-400 border-b border-white/10 pb-1 mb-1">{log}</div>
+                  ))}
+                </div>
+              )}
 
               {/* Continue button — starts 24h trial immediately, no pricing screen */}
               <div className="hello-float hello-float-5 px-1 pb-2">
