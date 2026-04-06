@@ -396,6 +396,7 @@ export default function VisualAdsGenerator({
           cta_text: ctaLabel,
           style_label: selectedStyle?.label || '',
           style_prompt: selectedStyle?.prompt || '',
+          platform: state.campaignDNA.platform,
         },
       });
 

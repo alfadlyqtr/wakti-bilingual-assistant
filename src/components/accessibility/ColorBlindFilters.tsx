@@ -96,25 +96,23 @@ export function ColorBlindFilters() {
   return null;
 }
 
-const FILTER_ATTR = 'data-cvd';
+const STYLE_ID = 'wakti-cvd-style';
 
 export function applyColorBlindFilter(mode: ColorBlindMode) {
-  // Target #root (not body) to avoid iOS Safari stacking context bug.
-  // When filter is on <body>, iOS creates a new stacking context which breaks
-  // all position:fixed children (mobile nav, chat input, dialogs, modals).
-  // #root wraps all visible app content so the filter covers 100% of the UI.
-  const root = document.getElementById('root') ?? document.body;
-
-  root.removeAttribute(FILTER_ATTR);
-  root.style.removeProperty('filter');
-  (root.style as any)['-webkit-filter'] = '';
+  // Remove existing injected style rule
+  document.getElementById(STYLE_ID)?.remove();
 
   if (mode === 'none') return;
 
+  // Inject a <style> tag with a CSS rule instead of using element.style.setProperty().
+  // This is the ONLY approach that reliably resolves url(#id) SVG filter references
+  // on iOS Safari and Android WebView — inline style property assignments of url()
+  // are silently discarded on many mobile browsers.
+  // We target #root (not body) to avoid iOS stacking context bug that breaks
+  // all position:fixed children (mobile nav, chat input, dialogs, modals).
   const filterValue = `url(#daltonize-${mode})`;
-
-  root.setAttribute(FILTER_ATTR, mode);
-  // Set both standard and -webkit- prefix for Safari 9-14 compatibility
-  root.style.setProperty('filter', filterValue);
-  (root.style as any)['-webkit-filter'] = filterValue;
+  const style = document.createElement('style');
+  style.id = STYLE_ID;
+  style.textContent = `#root{-webkit-filter:${filterValue};filter:${filterValue};}`;
+  document.head.appendChild(style);
 }

@@ -273,29 +273,40 @@ function buildSystemPrompt(preferArabic: boolean, mode?: string) {
   }
 }
 
-const VISUAL_ADS_SYSTEM_PROMPT = `Transform a user's simple idea and a list of tagged image assets into a high-performance, professional 3D advertisement prompt for the Nano-Banana-2 image model.
+const VISUAL_ADS_SYSTEM_PROMPT = `Enhance a user's ad concept into a high-converting visual prompt for Nano-Banana-2. Balance user intent with platform-best practices.
 
-Input Context:
+INPUT:
 - User Idea: [USER_INPUT]
-- Assets Provided: [COUNT] images.
-- Tags: [TAG_LIST] (Possible tags: Logo, Brand, Screenshot).
-- Ad Topic: [TOPIC_LABEL]
+- Assets: [COUNT] images ([TAG_LIST]: Logo/Product/Screenshot)
+- Format: [PLATFORM] (9:16 vertical | 1:1 square | 16:9 landscape)
+- Ad Goal: [TOPIC_LABEL]
+- Style: [STYLE_LABEL]
 - CTA: [CTA_TEXT]
-- Style Direction: [STYLE_LABEL]
 
-Rules for Enhancement:
-- Respect the selected Ad Topic and make it explicit in the final ad concept.
-- For LOGO: Describe it as a high-fidelity 3D metallic or glass brand mark, naturally integrated into the environment with realistic reflections.
-- For SCREENSHOT: Explicitly instruct the AI to display the screenshot perfectly on the screen of a premium, modern 3D smartphone with a titanium frame or a holographic tablet.
-- For BRAND/PRODUCT: Describe professional commercial studio lighting, including rim lighting and softboxes, to highlight the product as the hero of the shot.
-- Style: Respect the selected style direction first, then enhance it with high-impact keywords including 8k resolution, cinematic lighting, commercial photography, depth of field, sharp textures, and premium aesthetic.
-- Text: Ensure the CTA is described as sharply rendered, clean typography at the bottom of the frame.
-- Preserve the user's intent from the free-text box. Enhance it, do not replace it.
+RULES:
+1. USER IDEA IS KING — Never override their core concept. Enhance around it.
+2. ADAPT TO STYLE —
+   - "ugc" → authentic, native-social, casual lighting, real-world setting
+   - "bright-clean" → soft pastels, airy, minimal shadows, friendly
+   - "premium-dark" → rich contrast, selective lighting, depth
+   - "lifestyle" → natural environment, candid moment, authentic feel
+   - "luxury-minimal" → negative space, refined details, understated
+   - "bold-modern" → vibrant colors, dynamic angles, high energy
+3. PLATFORM AWARE —
+   - 9:16: Vertical composition, safe zones for UI, portrait framing
+   - 1:1: Centered hero, balanced layout, Instagram-native
+   - 16:9: Cinematic framing, landscape environment, wider context
+4. ASSET INTEGRATION (subtle, don't over-describe) —
+   - Logo: Naturally placed, good contrast against background
+   - Screenshot: Displayed on relevant device mockup only if it fits the style
+   - Product: Clear visibility, context-appropriate lighting
+5. OUTPUT FORMAT — 1-2 sentences max. Keyword-dense. No filler.
 
-Output Format:
-- Provide ONLY the final enhanced prompt in a single, descriptive paragraph.
-- Do not include conversational filler.
-- Output in English only.`;
+OUTPUT STRUCTURE:
+[User core concept] + [style keywords] + [composition notes] + [quality boosters: sharp focus, professional color grading, suitable for [PLATFORM]]
+
+EXAMPLE GOOD OUTPUT:
+"Fresh iced coffee with condensation droplets on bright summer table, vibrant colors, Instagram 1:1 square composition, crisp product photography, energetic summer vibe, 'Shop Now' text space at bottom, sharp focus, commercial quality."`;
 
 async function ampVisualAdsWithOpenAI(
   userIdea: string,
@@ -306,6 +317,7 @@ async function ampVisualAdsWithOpenAI(
   topicPrompt: string,
   styleLabel: string,
   stylePrompt: string,
+  platform: string,
 ): Promise<string> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
@@ -313,7 +325,7 @@ async function ampVisualAdsWithOpenAI(
   const payload = {
     model: "gpt-4o-mini",
     temperature: 0.55,
-    max_tokens: 500,
+    max_tokens: 200,
     messages: [
       {
         role: "system",
@@ -325,6 +337,7 @@ async function ampVisualAdsWithOpenAI(
           `User Idea: ${userIdea}`,
           `Assets Provided: ${assetsCount} images`,
           `Tags: ${tagList.length > 0 ? tagList.join(", ") : "None specified"}`,
+          `Format/Platform: ${platform || "9:16"}`,
           `Ad Topic: ${topicLabel || "None selected"}`,
           `Ad Topic Detail: ${topicPrompt || "None specified"}`,
           `CTA: ${ctaText || "None"}`,
@@ -864,7 +877,8 @@ serve(async (req) => {
       const ctaText = (body?.cta_text ?? "").toString();
       const styleLabel = (body?.style_label ?? "").toString();
       const stylePrompt = (body?.style_prompt ?? "").toString();
-      inputText = `[visual-ads] idea: ${text}; assets: ${assetsCount}; tags: ${tagList.join(",")}; topic: ${topicLabel}; cta: ${ctaText}; style: ${styleLabel}`;
+      const platform = (body?.platform ?? "9:16").toString();
+      inputText = `[visual-ads] idea: ${text}; assets: ${assetsCount}; tags: ${tagList.join(",")}; topic: ${topicLabel}; cta: ${ctaText}; style: ${styleLabel}; platform: ${platform}`;
 
       if (!text || text.trim().length === 0) {
         return new Response(
@@ -879,7 +893,7 @@ serve(async (req) => {
         );
       }
 
-      const improved = await ampVisualAdsWithOpenAI(text, assetsCount, tagList, ctaText, topicLabel, topicPrompt, styleLabel, stylePrompt);
+      const improved = await ampVisualAdsWithOpenAI(text, assetsCount, tagList, ctaText, topicLabel, topicPrompt, styleLabel, stylePrompt, platform);
 
       await logAI({
         functionName: "prompt-amp",

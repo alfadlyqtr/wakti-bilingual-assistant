@@ -1,14 +1,15 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback, useId } from 'react';
-import { Play, Pause, RotateCcw } from 'lucide-react';
+import { Play, Pause, RotateCcw, Repeat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
 
 interface AudioPlayerProps {
   src: string;
   className?: string;
+  showLoopToggle?: boolean;
 }
 
-export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
+export function AudioPlayer({ src, className = '', showLoopToggle = false }: AudioPlayerProps) {
   const { language } = useTheme();
   const playerId = useId();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -18,6 +19,7 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
   const [duration, setDuration] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLooping, setIsLooping] = useState(false);
 
   const cleanSrc = useMemo(() => {
     let cleanUrl = (src || '').trim();
@@ -112,6 +114,7 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
     cleanupRef.current?.();
 
     const audio = new Audio(cleanSrc);
+    audio.loop = isLooping;
     audioRef.current = audio;
     initializedSrcRef.current = cleanSrc;
     cleanupRef.current = attachAudio(audio);
@@ -121,7 +124,7 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
     setIsLoading(true);
     audio.load();
     return audio;
-  }, [attachAudio, cleanSrc, language]);
+  }, [attachAudio, cleanSrc, isLooping, language]);
 
   useEffect(() => {
     setIsPlaying(false);
@@ -178,6 +181,14 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
     audio.currentTime = Math.max(0, audio.currentTime - 10);
   };
 
+  const toggleLoop = () => {
+    const nextLoop = !isLooping;
+    setIsLooping(nextLoop);
+    if (audioRef.current) {
+      audioRef.current.loop = nextLoop;
+    }
+  };
+
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
     if (!audio || !duration) return;
@@ -206,42 +217,60 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
         </div>
       ) : (
         <>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={togglePlay}
-              disabled={isLoading}
-              className="h-9 w-9"
-            >
-              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            </Button>
-            
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={rewind}
-              disabled={isLoading}
-              className="h-9 w-9"
-              title={language === 'ar' ? 'الرجوع 10 ثوان' : 'Rewind 10s'}
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-          </div>
+          <div className="flex flex-col gap-2 w-full">
+            {/* Top row: buttons left, time right */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={togglePlay}
+                  disabled={isLoading}
+                  className="h-9 w-9"
+                >
+                  {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={rewind}
+                  disabled={isLoading}
+                  className="h-9 w-9"
+                  title={language === 'ar' ? 'الرجوع 10 ثوان' : 'Rewind 10s'}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
 
-          <div className="flex-1 flex items-center gap-2">
+                {showLoopToggle && (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={toggleLoop}
+                    disabled={isLoading}
+                    className={`h-9 w-9 ${isLooping ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15' : ''}`}
+                    title={language === 'ar' ? 'تكرار' : 'Loop'}
+                    aria-pressed={isLooping}
+                  >
+                    <Repeat className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+
+              <div className="text-xs text-muted-foreground whitespace-nowrap">
+                {formatTime(currentTime)} / {formatTime(duration)}
+              </div>
+            </div>
+
+            {/* Bottom row: progress bar spanning full width */}
             <div
-              className="flex-1 h-2 bg-muted rounded-full cursor-pointer overflow-hidden"
+              className="w-full h-1.5 bg-muted rounded-full cursor-pointer overflow-hidden"
               onClick={handleProgressClick}
             >
               <div
                 className="h-full bg-primary transition-all duration-100"
                 style={{ width: `${progress}%` }}
               />
-            </div>
-            
-            <div className="text-xs text-muted-foreground whitespace-nowrap min-w-[80px] text-right">
-              {formatTime(currentTime)} / {formatTime(duration)}
             </div>
           </div>
         </>

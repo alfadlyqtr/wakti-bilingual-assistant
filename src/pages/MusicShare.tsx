@@ -117,7 +117,7 @@ export default function MusicShare() {
     <div className="min-h-screen bg-background">
       <InAppWaktiEscape language={isAr ? 'ar' : 'en'} containerClassName="max-w-xl" />
       <div className="flex items-center justify-center p-4 pt-6">
-        <div className="w-full max-w-sm space-y-0">
+        <div className="w-full max-w-sm">
           {/* Cover art hero */}
           <div className="relative w-full aspect-square rounded-3xl overflow-hidden bg-gradient-to-br from-sky-900/60 to-purple-900/60 border border-white/10 shadow-[0_8px_40px_rgba(0,0,0,0.5)]">
             {track.cover_url ? (
@@ -140,47 +140,57 @@ export default function MusicShare() {
             )}
           </div>
 
-          {/* Info card */}
-          <div className="relative -mt-2 mx-3 rounded-b-2xl bg-background/95 backdrop-blur-xl border border-white/10 border-t-0 px-5 py-4 shadow-lg space-y-3">
-            <div>
-              <h1 className="text-base font-bold text-foreground leading-tight">{trackTitle}</h1>
-              <p className="text-xs text-muted-foreground/60 mt-0.5">
-                {new Date(track.created_at).toLocaleDateString(isAr ? 'ar' : 'en', { month: 'long', day: 'numeric', year: 'numeric' })}
-              </p>
-            </div>
+          {/* Apple iCloud-style card */}
+          <div className="relative mx-4 mt-8">
 
-            {displayTags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {displayTags.slice(0, 4).map((tag, i) => (
-                  <span key={i} className="text-[10px] px-2.5 py-0.5 rounded-full bg-sky-500/10 text-sky-300 border border-sky-400/20">
-                    {typeof tag === 'string' ? tag.slice(0, 25) : tag}
-                  </span>
-                ))}
-              </div>
-            )}
+            {/* Card */}
+            <div className="relative w-full rounded-[28px] bg-[#0f1c3f] shadow-[0_24px_60px_rgba(0,0,0,0.7),0_8px_20px_rgba(0,0,40,0.5)] overflow-hidden">
 
-            <AudioPlayer src={playUrl} className="w-full" />
-
-            <div className="pt-4 text-center">
-              <a
-                href="https://wakti.qa"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-gradient-to-r from-[#060541]/5 via-[#e9ceb0]/20 to-[#060541]/5 dark:from-white/5 dark:via-white/10 dark:to-white/5 hover:from-[#060541]/10 hover:via-[#e9ceb0]/30 hover:to-[#060541]/10 dark:hover:from-white/10 dark:hover:via-white/15 dark:hover:to-white/10 transition-all duration-300 group"
-              >
+              {/* Logo locked into top-left corner of the card */}
+              <div className="absolute top-0 left-0 z-10 flex h-[60px] w-[60px] items-center justify-center rounded-br-[24px] rounded-tl-[28px] bg-[#1a2d5a] shadow-[2px_2px_16px_rgba(0,0,0,0.4)] border-b border-r border-white/[0.08]">
                 <Logo3D size="sm" />
-                <span className="text-xs font-medium bg-gradient-to-r from-[#060541] to-[#4a4a8a] dark:from-[#f2f2f2] dark:to-[#858384] bg-clip-text text-transparent">
-                  {isAr ? 'تم الإنشاء بواسطة وقتي AI' : 'Created with Wakti AI'}
-                </span>
-                <svg 
-                  className="w-3 h-3 text-[#060541]/40 dark:text-white/40 group-hover:text-[#060541]/60 dark:group-hover:text-white/60 transition-colors" 
-                  fill="none" 
-                  viewBox="0 0 24 24" 
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
+              </div>
+
+              {/* Card content */}
+              <div className="pb-6 space-y-4">
+
+                {/* Top bar: logo space left, chip right — all on same 60px row */}
+                <div className="flex items-center justify-end h-[60px] pr-4">
+                  {displayTags.length > 0 && (
+                    <span className="rounded-full bg-[#1e3a6e] px-3 py-1 text-[11px] font-medium text-[#7eb8ff] border border-[#2a4d8a] tracking-wide">
+                      {String(displayTags[0]).split(',')[0].trim().slice(0, 20)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Song name — centered, gradient with colored glow */}
+                <div className="text-center px-5 py-1">
+                  <h1 className="text-2xl font-bold leading-tight bg-gradient-to-r from-[#7eb8ff] via-white to-[#a78bfa] bg-clip-text text-transparent drop-shadow-[0_2px_16px_rgba(123,184,255,0.5)]">
+                    {trackTitle}
+                  </h1>
+                </div>
+
+                {/* Audio controls — narrower width */}
+                <div className="mx-8 rounded-2xl bg-white/[0.06] px-4 py-3 border border-white/[0.07]">
+                  <AudioPlayer src={playUrl} className="w-full" showLoopToggle />
+                </div>
+
+                {/* Wakti brand footer — colored and styled */}
+                <div className="flex justify-center pt-1">
+                  <a
+                    href="https://wakti.qa"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group inline-flex items-center gap-2 rounded-full bg-[linear-gradient(90deg,rgba(94,144,255,0.15),rgba(167,139,250,0.15))] border border-white/10 px-4 py-1.5 text-xs font-semibold text-[#a0c4ff] hover:text-white hover:border-white/20 transition-all"
+                  >
+                    <span className="text-[#7eb8ff]">✦</span>
+                    {isAr ? 'تم الإنشاء بواسطة وقتي AI' : 'Created with Wakti AI'}
+                    <svg className="h-3 w-3 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         </div>
