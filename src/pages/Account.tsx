@@ -406,10 +406,11 @@ export default function Account() {
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const packageToUse = isQUUser ? 'qatar_university' : '$rc_monthly';
+    const fallbackId = isQUUser ? 'qatar_university' : '$rc_monthly';
+    const packageToUse = billingPackageObj || fallbackId;
     addBillingDebug(`User QU: ${isQUUser}`);
-    addBillingDebug(`Calling purchasePackage with: ${packageToUse}`);
-    console.log('[BillingSubscribe] pkg:', packageToUse, '| QU:', isQUUser);
+    addBillingDebug(`Using: ${billingPackageObj ? `PKG OBJ (${billingPackageObj?.identifier})` : `STRING (${fallbackId})`}`);
+    console.log('[BillingSubscribe] using:', billingPackageObj ? `obj(${billingPackageObj?.identifier})` : `string(${fallbackId})`, '| QU:', isQUUser);
     
     try {
       purchasePackage(packageToUse, async (resp: any) => {
