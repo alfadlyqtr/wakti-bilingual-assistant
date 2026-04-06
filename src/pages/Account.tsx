@@ -364,16 +364,19 @@ export default function Account() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [confirmationEmail, setConfirmationEmail] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
-  
   // Detect correct paywall variant using same logic as ProtectedRoute (priority: trial_expired > cancelled > new_user)
   const { isNewUser, wasSubscribed, isAccessExpired, profile } = useUserProfile();
   const paywallVariant: PaywallVariant = isAccessExpired ? 'trial_expired' : wasSubscribed ? 'cancelled' : 'new_user';
 
-  // Direct native purchase — skips modal, fires Apple/Android payment sheet immediately
+  // Direct native purchase — 
   const [isBillingPurchasing, setIsBillingPurchasing] = useState(false);
   const [billingPackageObj, setBillingPackageObj] = useState<any>(null);
+  const [billingDebugLog, setBillingDebugLog] = useState<string[]>([]);
+  const addBillingDebug = (msg: string) => {
+    console.log('[BillingDebug]', msg);
+    setBillingDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
+  };
 
-  // Fetch offerings once so iOS can use the full RC package object
   useEffect(() => {
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     getOfferings((resp: any) => {
@@ -399,10 +402,12 @@ export default function Account() {
   }, [user?.email]);
 
   const handleBillingSubscribe = () => {
+    addBillingDebug('--- BUTTON PRESSED ---');
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     const isAndroid = /Android/.test(navigator.userAgent);
+    addBillingDebug(`User QU: ${isQUUser}, Android: ${isAndroid}`);
 
     // iOS: must use Apple store product IDs directly (Natively SDK only resolves Default offering by RC ID)
     // Android: RC strings work fine
@@ -413,39 +418,51 @@ export default function Account() {
       packageToUse = isQUUser ? 'wakti_monthly_qu' : 'qa.wakti.ai.monthly';
     }
 
+    addBillingDebug(`Calling purchasePackage with: ${packageToUse}`);
     console.log('[BillingSubscribe] pkg:', packageToUse, '| QU:', isQUUser, '| Android:', isAndroid);
-    purchasePackage(packageToUse, async (resp: any) => {
-      const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
-        resp.message.toLowerCase().includes('already subscribed');
-      const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
-      if (isPurchased || isAlreadySubscribed) {
-        if (user?.id) {
-          try {
-            await supabase
-              .from('profiles')
-              .update({
-                is_subscribed: true,
-                subscription_status: 'active',
-                plan_name: 'Wakti Monthly',
-                billing_start_date: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', user.id);
-          } catch {}
-          try {
-            localStorage.removeItem(`wakti_sub_status_${user.id}`);
-            window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
-            window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
-          } catch {}
-          supabase.functions.invoke('check-subscription', { body: { userId: user.id } }).catch(() => {});
+    
+    try {
+      purchasePackage(packageToUse, async (resp: any) => {
+        addBillingDebug(`Callback fired! Status: ${resp?.status}`);
+        addBillingDebug(`Callback message: ${resp?.message}`);
+        if (resp?.error) addBillingDebug(`Callback error: ${JSON.stringify(resp.error)}`);
+        
+        const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
+          resp.message.toLowerCase().includes('already subscribed');
+        const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
+        
+        if (isPurchased || isAlreadySubscribed) {
+          if (user?.id) {
+            try {
+              await supabase
+                .from('profiles')
+                .update({
+                  is_subscribed: true,
+                  subscription_status: 'active',
+                  plan_name: 'Wakti Monthly',
+                  billing_start_date: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', user.id);
+            } catch {}
+            try {
+              localStorage.removeItem(`wakti_sub_status_${user.id}`);
+              window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
+              window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+            } catch {}
+            supabase.functions.invoke('check-subscription', { body: { userId: user.id } }).catch(() => {});
+          }
+          toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
+          queryClient.invalidateQueries({ queryKey: ['subscription'] });
+        } else if (resp?.status === 'ERROR') {
+          toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
         }
-        toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
-        queryClient.invalidateQueries({ queryKey: ['subscription'] });
-      } else if (resp?.status === 'ERROR') {
-        toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
-      }
+        setIsBillingPurchasing(false);
+      });
+    } catch (e: any) {
+      addBillingDebug(`TRY/CATCH ERROR: ${e?.message || String(e)}`);
       setIsBillingPurchasing(false);
-    });
+    }
   };
   
   // Restore purchases state
@@ -1425,26 +1442,21 @@ export default function Account() {
                               <Button
                                 onClick={handleBillingSubscribe}
                                 disabled={isBillingPurchasing}
-                                className="w-full max-w-xs bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:from-[hsl(210,100%,60%)] hover:via-[hsl(195,100%,55%)] hover:to-[hsl(175,100%,50%)] text-white font-bold shadow-[0_0_30px_hsl(200,100%,55%,0.4)]"
+                                className="w-full bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:from-[hsl(210,100%,60%)] hover:via-[hsl(195,100%,55%)] hover:to-[hsl(175,100%,50%)] text-white font-bold shadow-[0_0_30px_hsl(200,100%,55%,0.4)]"
                                 size="lg"
                               >
                                 <Sparkles className="w-4 h-4 mr-2" />
-                                {language === 'ar' ? 'اشترك الآن' : 'Subscribe Now'}
+                                {isBillingPurchasing ? (language === 'en' ? 'Processing...' : 'جاري المعالجة...') : (language === 'en' ? 'Subscribe Now' : 'اشترك الآن')}
                               </Button>
-                              {paywallVariant === 'cancelled' && (
-                                <Button
-                                  variant="outline"
-                                  onClick={handleRestorePurchases}
-                                  disabled={isRestoring}
-                                  className="w-full max-w-xs"
-                                >
-                                  {isRestoring ? (
-                                    <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                                  ) : (
-                                    <RefreshCw className="w-4 h-4 mr-2" />
-                                  )}
-                                  {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
-                                </Button>
+
+                              {/* DEBUG BOX */}
+                              {billingDebugLog.length > 0 && (
+                                <div className="w-full mt-4 text-left p-2 rounded bg-black/80 border border-red-500 max-h-40 overflow-y-auto">
+                                  <p className="text-red-400 text-xs font-bold mb-1">ACCOUNT BILLING DEBUG LOG:</p>
+                                  {billingDebugLog.map((log, i) => (
+                                    <div key={i} className="text-[10px] font-mono text-green-400 border-b border-white/10 pb-1 mb-1">{log}</div>
+                                  ))}
+                                </div>
                               )}
                             </div>
                           )}
