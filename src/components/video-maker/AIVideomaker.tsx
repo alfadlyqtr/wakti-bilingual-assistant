@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useFFmpegVideo } from '@/hooks/useFFmpegVideo';
 import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
 import { SavedImagesPicker } from '@/components/dashboard/SavedImagesPicker';
 import { Button } from '@/components/ui/button';
@@ -116,6 +117,7 @@ const AD_SCENE_COUNT = 4;
 export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const { language, theme } = useTheme();
   const { user } = useAuth();
+  const { stitchClips, isLoading: isFFmpegLoading, progress: ffmpegProgress, status: ffmpegStatus } = useFFmpegVideo();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef2 = useRef<HTMLInputElement>(null);
 
@@ -1580,16 +1582,43 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
   }, [user, isStitching, clipOrder, videoClips, brandAnchor, cinemaFormat, cinemaSceneCount, language, loadQuota]);
 
-  // ── Role 5: Premiere — client-side sequential player (no server needed) ──
-  // Clips play one after another in the browser. No stitching, no Vercel.
-  const handleStitch = useCallback(() => {
+  // ── Role 5: Premiere — FFmpeg.wasm in-browser stitch → single MP4 blob ──
+  const handleStitch = useCallback(async () => {
     const orderedClips = (clipOrder.length > 0 ? clipOrder.map(i => videoClips[i]) : videoClips).filter(Boolean) as string[];
     if (orderedClips.length < 1) return;
-    setPremiereClips(orderedClips);
-    setPremiereClipIndex(0);
-    setPremiereVideoUrl(orderedClips[0]);
-    setCinemaStep('premiere');
-  }, [videoClips, clipOrder]);
+
+    setIsStitching(true);
+    setStitchStatus(language === 'ar' ? '🎬 جاري تحميل محرك الفيديو...' : '🎬 Loading video engine...');
+
+    try {
+      const blob = await stitchClips({
+        clipUrls: orderedClips,
+        onProgress: (pct, msg) => {
+          setStitchStatus(
+            language === 'ar'
+              ? `🎬 ${pct}% — جاري الدمج...`
+              : `🎬 ${pct}% — ${msg}`
+          );
+        },
+      });
+
+      if (!blob) throw new Error('FFmpeg returned no output');
+
+      const url = URL.createObjectURL(blob);
+      setPremiereClips(orderedClips);   // keep for dot nav fallback
+      setPremiereClipIndex(0);
+      setPremiereVideoUrl(url);
+      setCinemaStep('premiere');
+      supabase.rpc('increment_ai_video_usage', { p_user_id: user!.id }).then(() => loadQuota());
+      toast.success(language === 'ar' ? '🎬 الفيلم جاهز!' : '🎬 Film ready!');
+    } catch (err: any) {
+      console.error('[cinema] FFmpeg stitch error:', err);
+      toast.error(language === 'ar' ? 'فشل الدمج: ' + err.message : 'Stitch failed: ' + err.message);
+    } finally {
+      setIsStitching(false);
+      setStitchStatus('');
+    }
+  }, [videoClips, clipOrder, stitchClips, language, user, loadQuota]);
 
   // ── Cinema full reset ──
   const handleCinemaReset = useCallback(() => {
