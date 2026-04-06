@@ -4662,7 +4662,31 @@ function EditorTab() {
                                 return posterButton;
                               })()}
                               <button type="button"
-                                onPointerUp={() => handleDownload(t.play_url || '', `wakti-music-${t.id}.mp3`)}
+                                onClick={async () => {
+                                  try {
+                                    if (t.storage_path) {
+                                      const { data, error: downloadError } = await supabase.storage
+                                        .from('music')
+                                        .download(t.storage_path);
+                                      if (downloadError) throw downloadError;
+
+                                      const objectUrl = URL.createObjectURL(data);
+                                      const a = document.createElement('a');
+                                      a.href = objectUrl;
+                                      a.download = t.storage_path.split('/').pop() || `wakti-music-${t.id}.mp3`;
+                                      document.body.appendChild(a);
+                                      a.click();
+                                      document.body.removeChild(a);
+                                      URL.revokeObjectURL(objectUrl);
+                                      return;
+                                    }
+
+                                    await handleDownload(t.play_url || '', `wakti-music-${t.id}.mp3`);
+                                  } catch (error) {
+                                    console.error('Track download failed:', error);
+                                    await handleDownload(t.play_url || '', `wakti-music-${t.id}.mp3`);
+                                  }
+                                }}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:shadow-none text-muted-foreground hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20 active:scale-95 transition-all">
                                 <RefreshCw className="h-3 w-3" />{isAr ? 'تنزيل' : 'Download'}
                               </button>
