@@ -452,11 +452,16 @@ export default function Account() {
     };
 
     try {
-      if (isQUUser) {
-        addBillingDebug('QU user → showPaywall(university_exclusive)');
+      if (isQUUser && isIOS) {
+        // iOS + QU: purchasePackage with RC package identifier — confirmed working at 6f18d483
+        addBillingDebug('QU iOS → purchasePackage(qatar_university)');
+        purchasePackage('qatar_university', billingCallback);
+      } else if (isQUUser && !isIOS) {
+        // Android + QU: showPaywall with offering — confirmed working
+        addBillingDebug('QU Android → showPaywall(university_exclusive)');
         showPaywall(true, 'university_exclusive', billingCallback);
       } else {
-        addBillingDebug('Standard user → purchasePackage($rc_monthly)');
+        addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);
       }
     } catch (e: any) {

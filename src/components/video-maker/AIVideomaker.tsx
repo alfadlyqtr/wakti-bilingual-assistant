@@ -4167,23 +4167,14 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             <RefreshCw className="h-4 w-4" />
                             <span>{language === 'ar' ? 'إعادة المحاولة' : 'Retry Production'}</span>
                           </button>
-                        ) : allClipsDone && !isStitching ? (
+                        ) : allClipsDone ? (
                           <button
-                            onClick={handleStitchClips}
-                            disabled={isStitching}
-                            className="flex-1 h-12 text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-40"
+                            onClick={handleStitch}
+                            className="flex-1 h-12 text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
                             style={{background:'linear-gradient(135deg,#E2C7A8 0%,#C5A47E 100%)',color:'#0c0f14',boxShadow:'0 6px 24px rgba(226,199,168,0.35)'}}
                           >
-                            <span>{language === 'ar' ? '🎬 تجميع الفيلم' : '🎬 Stitch Film'}</span>
+                            <span>{language === 'ar' ? '🎬 عرض الفيلم' : '🎬 Watch Film'}</span>
                           </button>
-                        ) : isStitching ? (
-                          <div
-                            className="flex-1 h-12 text-sm font-bold rounded-xl flex items-center justify-center gap-2 opacity-60"
-                            style={{background:'linear-gradient(135deg,hsl(210,100%,60%),hsl(280,70%,65%))',color:'#fff'}}
-                          >
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            <span>{language === 'ar' ? 'جاري التجميع...' : 'Stitching...'}</span>
-                          </div>
                         ) : (
                           <div
                             className="flex-1 h-12 text-sm font-bold rounded-xl flex items-center justify-center gap-2 opacity-60"
