@@ -298,9 +298,9 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
 
     try {
       if (isQUUser && isIOS) {
-        // iOS + QU: purchasePackage with RC package identifier — confirmed working at 6f18d483
-        addDebug('QU iOS → purchasePackage(qatar_university)');
-        purchasePackage('qatar_university', purchaseCallback);
+        // iOS + QU: pass store product ID directly — bypasses offering cache entirely
+        addDebug('QU iOS → purchasePackage(wakti_monthly_qu)');
+        purchasePackage('wakti_monthly_qu', purchaseCallback);
       } else if (isQUUser && isAndroid) {
         // Android + QU: showPaywall with offering — confirmed working
         addDebug('QU Android → showPaywall(university_exclusive)');

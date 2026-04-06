@@ -234,6 +234,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [stitchStatus, setStitchStatus] = useState('');
   const [premiereVideoUrl, setPremiereVideoUrl] = useState<string | null>(null);
   const [premiereClipIndex, setPremiereClipIndex] = useState(0);
+  const [premiereClips, setPremiereClips] = useState<string[]>([]); // ordered clip URLs for browser player
   const [isCinemaSaving, setIsCinemaSaving] = useState(false);
   const [isCinemaSaved, setIsCinemaSaved] = useState(false);
 
@@ -1582,12 +1583,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   // ── Role 5: Premiere — client-side sequential player (no server needed) ──
   // Clips play one after another in the browser. No stitching, no Vercel.
   const handleStitch = useCallback(() => {
-    const readyClips = videoClips.filter(Boolean) as string[];
-    if (readyClips.length < 1) return;
+    const orderedClips = (clipOrder.length > 0 ? clipOrder.map(i => videoClips[i]) : videoClips).filter(Boolean) as string[];
+    if (orderedClips.length < 1) return;
+    setPremiereClips(orderedClips);
     setPremiereClipIndex(0);
-    setPremiereVideoUrl(readyClips[0]);
+    setPremiereVideoUrl(orderedClips[0]);
     setCinemaStep('premiere');
-  }, [videoClips]);
+  }, [videoClips, clipOrder]);
 
   // ── Cinema full reset ──
   const handleCinemaReset = useCallback(() => {
@@ -4201,15 +4203,41 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           {language === 'ar' ? '٤ مشاهد • ٣٢ث' : '4 Scenes • 32s'}
                         </p>
                       </div>
-                      {/* Final stitched video */}
+                      {/* Clip progress dots */}
+                      {premiereClips.length > 1 && (
+                        <div className="flex items-center justify-center gap-1.5">
+                          {premiereClips.map((_, i) => (
+                            <button
+                              key={i}
+                              aria-label={`Scene ${i + 1}`}
+                              onClick={() => { setPremiereClipIndex(i); setPremiereVideoUrl(premiereClips[i]); }}
+                              className="rounded-full transition-all"
+                              style={{
+                                width: i === premiereClipIndex ? '20px' : '6px',
+                                height: '6px',
+                                background: i === premiereClipIndex ? '#E2C7A8' : 'rgba(255,255,255,0.2)',
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {/* Browser sequential player — clips play one after another */}
                       <div className="cinema-diamond-border rounded-2xl overflow-hidden w-full"
                         style={{aspectRatio: cinemaFormat === '16:9' ? '16/9' : '9/16', maxHeight:'70vh'}}>
                         <video
+                          key={premiereVideoUrl}
                           src={premiereVideoUrl}
                           controls
                           autoPlay
                           playsInline
                           className="w-full h-full object-cover"
+                          onEnded={() => {
+                            const next = premiereClipIndex + 1;
+                            if (next < premiereClips.length) {
+                              setPremiereClipIndex(next);
+                              setPremiereVideoUrl(premiereClips[next]);
+                            }
+                          }}
                         />
                       </div>
                       {/* Actions */}
