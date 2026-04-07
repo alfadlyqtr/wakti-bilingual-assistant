@@ -137,22 +137,21 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
       }
       console.log('[Offerings] All offerings parsed:', allOfferings.map((o: any) => o?.identifier));
 
-      // --- QU path: try university_exclusive → qatar_university package ---
+      // --- QU path: look in university_exclusive OR Default offering for the QU package ---
       if (isQUUser) {
-        const quOffering = allOfferings.find(
-          (o: any) => o.identifier === 'university_exclusive'
-        );
-        console.log('[Offerings] university_exclusive offering:', quOffering ? 'FOUND' : 'NOT FOUND');
-        const quPkg = quOffering?.availablePackages?.find(
-          (p: any) => p.identifier === 'qatar_university'
-        );
-        console.log('[Offerings] qatar_university package:', quPkg ? 'FOUND' : 'NOT FOUND', quPkg?.product?.priceString);
+        let quPkg: any = null;
+        // First try university_exclusive → qatar_university
+        const quOffering = allOfferings.find((o: any) => o.identifier === 'university_exclusive');
+        if (quOffering) {
+          quPkg = quOffering.availablePackages?.find((p: any) => p.identifier === 'qatar_university');
+        }
+        // Fallback: try Default offering → $rc_three_month (QU package was moved here)
+        if (!quPkg) {
+          const defaultOffering = allOfferings.find((o: any) => o.identifier === 'Default') || resp?.offerings?.current;
+          quPkg = defaultOffering?.availablePackages?.find((p: any) => p.identifier === '$rc_three_month');
+        }
+        console.log('[Offerings] QU package:', quPkg ? `FOUND (${quPkg.identifier})` : 'NOT FOUND', quPkg?.product?.priceString);
         if (quPkg?.product) {
-          // CRITICAL: pass the STORE product identifier (e.g. 'wakti_monthly_qu'),
-          // NOT the RevenueCat package identifier ('qatar_university').
-          // Natively's purchasePackage resolves against the App Store / Play Store product,
-          // not the RC offering/package name. Passing the RC name causes it to silently
-          // fall back to the default offering product (qa.wakti.ai.monthly = QAR 92).
           const storeProductId = quPkg.product.identifier;
           console.log('[Offerings] ✅ QU package set — RC pkg:', quPkg.identifier, '| Store product:', storeProductId, '| price:', quPkg.product.priceString);
           setActivePackageId(storeProductId);
@@ -163,7 +162,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
           });
           return;
         }
-        console.warn('[Offerings] ⚠️ university_exclusive / qatar_university not found, falling back to default');
+        console.warn('[Offerings] ⚠️ QU package not found in any offering, falling back to default');
       }
 
       // --- Standard / fallback path: use current offering → $rc_monthly ---

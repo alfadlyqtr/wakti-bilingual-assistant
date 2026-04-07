@@ -385,10 +385,17 @@ export default function Account() {
       const allOfferings: any[] = Array.isArray(allRaw) ? allRaw : (allRaw && typeof allRaw === 'object' ? Object.values(allRaw) : []);
       
       if (isQUUser) {
+        let quPkg: any = null;
+        // First try university_exclusive → qatar_university
         const quOffering = allOfferings.find((o: any) => o?.identifier === 'university_exclusive');
-        const quPkg = quOffering?.availablePackages?.find((p: any) => p?.identifier === 'qatar_university');
+        if (quOffering) quPkg = quOffering.availablePackages?.find((p: any) => p?.identifier === 'qatar_university');
+        // Fallback: try Default offering → $rc_three_month
+        if (!quPkg) {
+          const defaultOffering = allOfferings.find((o: any) => o.identifier === 'Default') || resp?.offerings?.current;
+          quPkg = defaultOffering?.availablePackages?.find((p: any) => p?.identifier === '$rc_three_month');
+        }
         if (quPkg) {
-          console.log('[BillingOfferings] QU package found for iOS');
+          console.log('[BillingOfferings] QU package found:', quPkg.identifier);
           setBillingPackageObj(quPkg);
         }
       } else {
@@ -458,9 +465,16 @@ export default function Account() {
         addBillingDebug('QU Android → showPaywall(university_exclusive)');
         showPaywall(true, 'university_exclusive', billingCallback);
       } else if (isQUUser) {
-        // iOS + QU: $rc_three_month is the standard RC identifier mapped to the QU product in Default offering
-        addBillingDebug('QU iOS → purchasePackage($rc_three_month)');
-        purchasePackage('$rc_three_month', billingCallback);
+        // iOS + QU: use package object fetched at mount
+        if (billingPackageObj) {
+          addBillingDebug(`QU iOS → purchasePackage(OBJ: ${billingPackageObj?.identifier})`);
+          alert(`[Debug] Billing using package object: ${billingPackageObj?.identifier} / store: ${billingPackageObj?.product?.identifier}`);
+          purchasePackage(billingPackageObj, billingCallback);
+        } else {
+          addBillingDebug('QU iOS → billingPackageObj null, fallback $rc_three_month');
+          alert('[Debug] billingPackageObj is NULL');
+          purchasePackage('$rc_three_month', billingCallback);
+        }
       } else {
         addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);
