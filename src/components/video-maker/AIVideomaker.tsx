@@ -31,6 +31,7 @@ import {
   Check,
   Lock,
   FolderOpen,
+  Info,
   Type,
   GalleryHorizontalEnd,
   Images,
@@ -138,10 +139,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [imageFile2, setImageFile2] = useState<File | null>(null);
   const [imagePreview2, setImagePreview2] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
-  const [duration, setDuration] = useState<'4' | '6' | '8' | '10' | '12' | '15'>('8');
+  const [duration, setDuration] = useState<'4' | '6' | '8' | '10' | '12'>('8');
   const [aspectRatio, setAspectRatio] = useState<string>('9:16');
   const [resolution, setResolution] = useState<'480p' | '720p'>('480p');
   const [videoStyleMode, setVideoStyleMode] = useState<'normal' | 'fun'>('normal');
+  const [showVideoModeInfo, setShowVideoModeInfo] = useState(false);
   const [isAmping, setIsAmping] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState('');
@@ -2146,18 +2148,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       }`}
                     >
                       {language === 'ar' ? '10 ث' : '10s'}
-                    </button>
-                    <button
-                      onClick={() => !isGenerating && setDuration('15')}
-                      disabled={isGenerating}
-                      title={undefined}
-                      className={`px-2.5 py-1.5 text-xs font-medium transition-all mr-0.5 ${
-                        duration === '15'
-                          ? 'bg-gradient-to-r from-[hsl(25,95%,60%)]/30 to-[hsl(45,100%,60%)]/25 text-orange-500 font-bold'
-                          : 'text-muted-foreground hover:text-primary'
-                      }`}
-                    >
-                      {language === 'ar' ? '15 ث' : '15s'}
                     </button>
                   </>
                 )}
@@ -4460,29 +4450,53 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   </button>
                 </div>
                 {(generationMode === 'image_to_video' || generationMode === 'text_to_video') && (
-                  <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/50">
+                  <div className="relative flex items-center gap-1">
+                    <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/50">
+                      <button
+                        onClick={() => !isGenerating && setVideoStyleMode('normal')}
+                        disabled={isGenerating}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                          videoStyleMode === 'normal'
+                            ? 'bg-gradient-to-r from-[#060541] to-[hsl(210,100%,45%)] text-white shadow-md shadow-blue-500/30'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                        }`}
+                      >
+                        {language === 'ar' ? 'متوازن' : 'Balanced'}
+                      </button>
+                      <button
+                        onClick={() => !isGenerating && setVideoStyleMode('fun')}
+                        disabled={isGenerating}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                          videoStyleMode === 'fun'
+                            ? 'bg-gradient-to-r from-[hsl(25,95%,60%)] to-[hsl(320,75%,70%)] text-white shadow-md shadow-orange-500/30'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                        }`}
+                      >
+                        {language === 'ar' ? 'إبداعي' : 'Creative'}
+                      </button>
+                    </div>
                     <button
-                      onClick={() => !isGenerating && setVideoStyleMode('normal')}
-                      disabled={isGenerating}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                        videoStyleMode === 'normal'
-                          ? 'bg-gradient-to-r from-[#060541] to-[hsl(210,100%,45%)] text-white shadow-md shadow-blue-500/30'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
-                      }`}
+                      type="button"
+                      onClick={() => setShowVideoModeInfo((prev) => !prev)}
+                      className="h-8 w-8 rounded-full border border-border/50 bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-background/70 flex items-center justify-center transition-all active:scale-95"
+                      aria-label={language === 'ar' ? 'معلومات أوضاع الفيديو' : 'Video mode info'}
                     >
-                      {language === 'ar' ? 'عادي' : 'Normal'}
+                      <Info className="h-4 w-4" />
                     </button>
-                    <button
-                      onClick={() => !isGenerating && setVideoStyleMode('fun')}
-                      disabled={isGenerating}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                        videoStyleMode === 'fun'
-                          ? 'bg-gradient-to-r from-[hsl(25,95%,60%)] to-[hsl(320,75%,70%)] text-white shadow-md shadow-orange-500/30'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
-                      }`}
-                    >
-                      {language === 'ar' ? 'مرح' : 'Fun'}
-                    </button>
+                    {showVideoModeInfo && (
+                      <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-border/60 bg-background/95 backdrop-blur-md shadow-[0_10px_30px_rgba(0,0,0,0.25)] p-3 z-20">
+                        <div className="space-y-2 text-xs">
+                          <div>
+                            <p className="font-semibold text-foreground">{language === 'ar' ? 'متوازن' : 'Balanced'}</p>
+                            <p className="text-muted-foreground">{language === 'ar' ? 'للحركة الأنظف والأهدأ والنتائج الأكثر ثباتًا.' : 'Best for cleaner, steadier, more predictable motion.'}</p>
+                          </div>
+                          <div>
+                            <p className="font-semibold text-foreground">{language === 'ar' ? 'إبداعي' : 'Creative'}</p>
+                            <p className="text-muted-foreground">{language === 'ar' ? 'لحركة أكثر حيوية وتعبيرًا ولمسة أكثر خيالًا.' : 'Best for more lively, expressive, imaginative motion.'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

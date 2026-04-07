@@ -1,10 +1,11 @@
 // supabase/functions/cinema-amp/index.ts
-// Wakti Cinema AMP ⚡️ — Cinematic Prompt Enhancer (gpt-4o-mini)
+// Wakti Cinema AMP ⚡️ — Cinematic Prompt Enhancer (Gemini Flash-Lite)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
+const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_GENAI_API_KEY') || '';
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
@@ -75,28 +76,35 @@ STRICT RULES:
 
     const userMessage = text.trim() + contextBlock;
 
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+    const resp = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: userMessage }],
+          },
         ],
-        temperature: 0.25,
-        max_tokens: 380,
+        generationConfig: {
+          temperature: 0.25,
+          maxOutputTokens: 380,
+        },
       }),
     });
 
     if (!resp.ok) {
       const err = await resp.text();
-      throw new Error(`OpenAI error: ${resp.status} - ${err}`);
+      throw new Error(`Gemini error: ${resp.status} - ${err}`);
     }
 
     const data = await resp.json();
-    let enhanced = data.choices?.[0]?.message?.content?.trim();
-    if (!enhanced) throw new Error('No content returned from OpenAI');
+    const parts = Array.isArray(data?.candidates?.[0]?.content?.parts)
+      ? data.candidates[0].content.parts as Array<{ text?: string }>
+      : [];
+    let enhanced = parts.map((p) => p?.text || '').join('').trim();
+    if (!enhanced) throw new Error('No content returned from Gemini');
 
     // Hard server-side cap: truncate at last word boundary at or before 650 chars
     const HARD_CAP = 420;

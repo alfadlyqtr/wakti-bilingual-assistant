@@ -144,7 +144,7 @@ async function createTextToVideoTask(
   resolution?: string,
   videoStyleMode?: string,
 ): Promise<{ task_id: string; status: string }> {
-  const validDuration = ["6", "10", "15"].includes(duration || "") ? duration! : "6";
+  const validDuration = ["6", "10"].includes(duration || "") ? duration! : "6";
   const validResolution = ["480p", "720p"].includes(resolution || "") ? resolution! : "720p";
   const validAspectRatio = ["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"].includes(aspectRatio || "") ? aspectRatio! : "9:16";
   const validMode = ["normal", "fun"].includes(videoStyleMode || "") ? videoStyleMode! : "normal";
@@ -202,13 +202,13 @@ async function createVideoTask(
 ): Promise<{ task_id: string; status: string }> {
   const sanitizedImageUrls = imageUrls.map(url => sanitizeImageUrl(url));
   const isTwoImages = sanitizedImageUrls.length === 2;
-  // Hailuo 2.3 supports 6/10s; Grok Imagine: 6/10/15s; Seedance: 4/8/12s
+  // Hailuo 2.3 supports 6/10s; standard image-to-video is locked to 6/10s; Seedance: 4/8/12s
   const isHailuo = !isTwoImages && (modelOverride === KIE_HAILUO_MODEL || modelOverride?.includes('hailuo'));
   const validDuration = isTwoImages
     ? (["4", "8", "12"].includes(duration || "") ? duration! : "8")
     : isHailuo
     ? (["6", "10"].includes(duration || "") ? duration! : "6")
-    : (["6", "10", "15"].includes(duration || "") ? duration! : "6");
+    : (["6", "10"].includes(duration || "") ? duration! : "6");
   const validAspectRatio = ["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"].includes(aspectRatio || "")
     ? aspectRatio!
     : "9:16";
