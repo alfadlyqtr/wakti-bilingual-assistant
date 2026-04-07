@@ -1031,6 +1031,36 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         <VisualAdsGenerator
           onBack={() => setSubmode('text2image')}
           onGenerate={async (visualState) => {
+            const getAssetLabel = (asset: NonNullable<VisualAdsState['assets']>[number]) => {
+              if (asset.type === 'other') {
+                return asset.customType?.trim() || 'custom asset';
+              }
+              if (asset.type === 'logo') return 'logo';
+              if (asset.type === 'product') return 'product';
+              if (asset.type === 'screenshot') return 'screenshot';
+              if (asset.type === 'person') return 'person';
+              return 'asset';
+            };
+
+            const getAssetInstruction = (asset: NonNullable<VisualAdsState['assets']>[number], index: number) => {
+              const imageNumber = index + 1;
+              const assetLabel = getAssetLabel(asset);
+
+              if (asset.type === 'screenshot') {
+                return `Image ${imageNumber} is a screenshot. Use it as the screen/content reference with sharp readable UI and place it naturally inside the ad composition.`;
+              }
+              if (asset.type === 'logo') {
+                return `Image ${imageNumber} is the logo. Treat it as the brand mark and place it clearly but tastefully in the composition.`;
+              }
+              if (asset.type === 'product') {
+                return `Image ${imageNumber} is the product. Make it the main hero asset with premium commercial lighting and strong focus.`;
+              }
+              if (asset.type === 'person') {
+                return `Image ${imageNumber} is a person. Use it as the human/lifestyle element supporting the ad story.`;
+              }
+              return `Image ${imageNumber} is ${assetLabel}. Use it exactly as a ${assetLabel} reference in the final composition.`;
+            };
+
             // Build prompt from visual ads state
             const topicPrompts: Record<string, string> = {
               'new-launch':    'exciting new product launch',
@@ -1121,15 +1151,16 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             const randomEnv = environments[Math.floor(Math.random() * environments.length)];
 
             // 2. Identify Assets (Map tags to specific visual instructions)
-            const assetInstructions = (visualState.assets || []).filter(a => a.image).map(img => {
-              if (img.type === 'screenshot') return "3D titanium smartphone, glass screen, high-fidelity";
-              if (img.type === 'logo') return "3D metallic glass logo, floating, ray-traced";
-              if (img.type === 'product') return "The Brand Product is the central hero; use commercial rim lighting and high-end textures.";
-              return "";
-            }).join(", ");
+            const taggedAssets = (visualState.assets || []).filter(a => a.image && a.type);
+            const assetInstructions = taggedAssets
+              .map((asset, index) => getAssetInstruction(asset, index))
+              .join(' ');
+            const assetSummary = taggedAssets
+              .map((asset, index) => `Image ${index + 1} = ${getAssetLabel(asset)}`)
+              .join(', ');
 
             // 3. Build the Final Clean Keyword Prompt for KIE
-            const finalPromptForKie = `Professional 3D Ad, ${topicStr}, ${styleStr}, ${assetInstructions}, ${randomEnv}, ${visualState.creativeSoul.prompt || ''}, cinematic lighting, 8k, bokeh, sharp textures, bold text "${ctaStr}" bottom center.`.replace(/\s+/g, ' ').trim();
+            const finalPromptForKie = `Professional poster ad. ${topicStr}. ${styleStr}. ${assetSummary}. ${assetInstructions}. Environment: ${randomEnv}. ${visualState.creativeSoul.prompt || ''}. Cinematic lighting, 8k, bokeh, sharp textures, bold text "${ctaStr}" bottom center.`.replace(/\s+/g, ' ').trim();
 
             setIsGenerating(true);
             setResultError(null);

@@ -9,10 +9,12 @@ export interface VisualAdsState {
   brandAsset: {
     image: string | null;
     type: 'logo' | 'product' | 'screenshot' | 'person' | 'other' | null;
+    customType?: string | null;
   };
   assets?: {
     image: string;
     type: 'logo' | 'product' | 'screenshot' | 'person' | 'other' | null;
+    customType?: string | null;
   }[];
   campaignDNA: {
     platform: '9:16' | '1:1' | '16:9';
@@ -234,6 +236,13 @@ export default function VisualAdsGenerator({
   onTryAgain,
 }: VisualAdsGeneratorProps) {
   const { language } = useTheme();
+  const assetTypeOptions = [
+    { value: 'logo', label: language === 'ar' ? 'شعار' : 'Logo' },
+    { value: 'product', label: language === 'ar' ? 'منتج' : 'Product' },
+    { value: 'screenshot', label: language === 'ar' ? 'لقطة شاشة' : 'Screenshot' },
+    { value: 'person', label: language === 'ar' ? 'شخص' : 'Person' },
+    { value: 'other', label: language === 'ar' ? 'أخرى' : 'Other' },
+  ] as const;
   
   // State
   const [activeStep, setActiveStep] = useState<number | null>(1);
@@ -265,7 +274,9 @@ export default function VisualAdsGenerator({
   const [uploadedImages, setUploadedImages] = useState<Array<{
     image: string;
     type: 'logo' | 'product' | 'screenshot' | 'person' | 'other' | null;
+    customType?: string | null;
   }>>([]);
+  const hasIncompleteAssetTags = uploadedImages.some((asset) => asset.type === null || (asset.type === 'other' && !asset.customType?.trim()));
   
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -279,7 +290,7 @@ export default function VisualAdsGenerator({
       return;
     }
 
-    const newImages: Array<{ image: string; type: 'logo' | 'product' | 'screenshot' | 'person' | 'other' | null }> = [];
+    const newImages: Array<{ image: string; type: 'logo' | 'product' | 'screenshot' | 'person' | 'other' | null; customType?: string | null }> = [];
     let processed = 0;
     
     filesToProcess.forEach((file) => {
@@ -287,7 +298,7 @@ export default function VisualAdsGenerator({
       
       const reader = new FileReader();
       reader.onload = () => {
-        newImages.push({ image: reader.result as string, type: null });
+        newImages.push({ image: reader.result as string, type: null, customType: null });
         processed++;
         
         if (processed === filesToProcess.length) {
@@ -305,6 +316,7 @@ export default function VisualAdsGenerator({
             brandAsset: {
               image: allImages[uploadedImages.length]?.image || allImages[0]?.image || null,
               type: allImages[uploadedImages.length]?.type || null,
+              customType: allImages[uploadedImages.length]?.customType || null,
             },
             assets: allImages,
           }));
@@ -319,9 +331,10 @@ export default function VisualAdsGenerator({
   const handleAssetTypeSelect = useCallback((index: number, type: 'logo' | 'product' | 'screenshot' | 'person' | 'other') => {
     setUploadedImages(prev => {
       const next = prev.map((asset, idx) => (
-        idx === index ? { ...asset, type } : asset
+        idx === index ? { ...asset, type, customType: type === 'other' ? asset.customType || '' : null } : asset
       ));
       const nextUnassignedIndex = next.findIndex((asset) => asset.type === null);
+      const nextOtherWithoutLabelIndex = next.findIndex((asset) => asset.type === 'other' && !asset.customType?.trim());
       const currentAsset = next[index] || null;
 
       setState(prevState => ({
@@ -329,12 +342,29 @@ export default function VisualAdsGenerator({
         brandAsset: {
           image: currentAsset?.image || next[0]?.image || null,
           type,
+          customType: currentAsset?.customType || null,
         },
         assets: next,
       }));
 
-      if (nextUnassignedIndex !== -1) {
+      if (type === 'other' && !currentAsset?.customType?.trim()) {
+        setSelectedAssetIndex(index);
+        setActiveStep(1);
+        setCompletedSteps(prevCompleted => {
+          const nextCompleted = new Set(prevCompleted);
+          nextCompleted.delete(1);
+          return nextCompleted;
+        });
+      } else if (nextUnassignedIndex !== -1) {
         setSelectedAssetIndex(nextUnassignedIndex);
+        setActiveStep(1);
+        setCompletedSteps(prevCompleted => {
+          const nextCompleted = new Set(prevCompleted);
+          nextCompleted.delete(1);
+          return nextCompleted;
+        });
+      } else if (nextOtherWithoutLabelIndex !== -1) {
+        setSelectedAssetIndex(nextOtherWithoutLabelIndex);
         setActiveStep(1);
         setCompletedSteps(prevCompleted => {
           const nextCompleted = new Set(prevCompleted);
@@ -344,6 +374,51 @@ export default function VisualAdsGenerator({
       } else {
         setCompletedSteps(prevCompleted => new Set([...prevCompleted, 1]));
         setActiveStep(2);
+      }
+
+      return next;
+    });
+  }, []);
+
+  const handleCustomAssetLabelChange = useCallback((index: number, value: string) => {
+    const sanitized = value
+      .replace(/[^\p{L}\p{N}\s-]/gu, '')
+      .replace(/\s+/g, ' ')
+      .trimStart()
+      .split(' ')
+      .slice(0, 2)
+      .join(' ')
+      .slice(0, 24);
+
+    setUploadedImages(prev => {
+      const next = prev.map((asset, idx) => (
+        idx === index ? { ...asset, customType: sanitized } : asset
+      ));
+      const currentAsset = next[index] || null;
+
+      setState(prevState => ({
+        ...prevState,
+        brandAsset: {
+          image: currentAsset?.image || next[0]?.image || null,
+          type: currentAsset?.type || null,
+          customType: currentAsset?.customType || null,
+        },
+        assets: next,
+      }));
+
+      const hasUnassignedAssets = next.some((asset) => asset.type === null);
+      const hasOtherWithoutLabel = next.some((asset) => asset.type === 'other' && !asset.customType?.trim());
+
+      if (!hasUnassignedAssets && !hasOtherWithoutLabel && next.length > 0) {
+        setCompletedSteps(prevCompleted => new Set([...prevCompleted, 1]));
+        setActiveStep(1);
+      } else {
+        setCompletedSteps(prevCompleted => {
+          const nextCompleted = new Set(prevCompleted);
+          nextCompleted.delete(1);
+          return nextCompleted;
+        });
+        setActiveStep(1);
       }
 
       return next;
@@ -363,8 +438,18 @@ export default function VisualAdsGenerator({
       setOpenBriefSection(4);
       return;
     }
+    if (uploadedImages.some((asset) => asset.type === null)) {
+      toast.error(language === 'ar' ? 'اختر نوع كل صورة قبل الإنشاء' : 'Select a type for each image before generating');
+      setActiveStep(1);
+      return;
+    }
+    if (uploadedImages.some((asset) => asset.type === 'other' && !asset.customType?.trim())) {
+      toast.error(language === 'ar' ? 'عند اختيار أخرى، اكتب وصفاً قصيراً من كلمتين كحد أقصى' : 'When choosing Other, add a short custom label with up to two words');
+      setActiveStep(1);
+      return;
+    }
     await onGenerate(state);
-  }, [state, onGenerate, language]);
+  }, [state, onGenerate, language, uploadedImages]);
 
   const handleAmp = useCallback(async () => {
     const text = state.creativeSoul.prompt.trim();
@@ -379,19 +464,14 @@ export default function VisualAdsGenerator({
     const ctaLabel = ctaChips.find((chip) => chip.id === state.creativeSoul.cta)?.label || '';
     const selectedStyle = adStyleChips.find((chip) => chip.id === state.creativeSoul.style);
     const tags = uploadedImages
-      .map((asset) => asset.type)
-      .filter((tag): tag is 'logo' | 'product' | 'screenshot' | 'person' | 'other' => Boolean(tag))
-      .map((tag) => (
-        tag === 'logo'
-          ? 'Logo'
-          : tag === 'product'
-            ? 'Product'
-            : tag === 'screenshot'
-              ? 'Screenshot'
-              : tag === 'person'
-                ? 'Person'
-                : 'Other'
-      ));
+      .map((asset, index) => {
+        if (!asset.type) return null;
+        const tagLabel = asset.type === 'other'
+          ? (asset.customType?.trim() || 'Other')
+          : assetTypeOptions.find((option) => option.value === asset.type)?.label || asset.type;
+        return `Image ${index + 1}: ${tagLabel}`;
+      })
+      .filter((tag): tag is string => Boolean(tag));
 
     try {
       setIsAmping(true);
@@ -424,7 +504,7 @@ export default function VisualAdsGenerator({
     } finally {
       setIsAmping(false);
     }
-  }, [state.creativeSoul.prompt, state.creativeSoul.mainMessage, state.creativeSoul.cta, state.creativeSoul.style, uploadedImages, isAmping, language, updateState]);
+  }, [state.creativeSoul.prompt, state.creativeSoul.mainMessage, state.creativeSoul.cta, state.creativeSoul.style, uploadedImages, isAmping, language, updateState, assetTypeOptions]);
 
   // Segmented control component
   const SegmentedControl = <T extends string>({
@@ -517,6 +597,7 @@ export default function VisualAdsGenerator({
                                 brandAsset: {
                                   image: newImages[nextSelectedIndex]?.image || newImages[0]?.image || null,
                                   type: newImages[nextSelectedIndex]?.type || newImages[0]?.type || null,
+                                  customType: newImages[nextSelectedIndex]?.customType || newImages[0]?.customType || null,
                                 },
                                 assets: newImages,
                               }));
@@ -527,7 +608,7 @@ export default function VisualAdsGenerator({
                                   return next;
                                 });
                                 setActiveStep(1);
-                              } else if (newImages.every((nextAsset) => nextAsset.type !== null)) {
+                              } else if (newImages.every((nextAsset) => nextAsset.type !== null && (nextAsset.type !== 'other' || Boolean(nextAsset.customType?.trim())))) {
                                 setCompletedSteps(prev => new Set([...prev, 1]));
                               } else {
                                 setCompletedSteps(prev => {
@@ -546,21 +627,37 @@ export default function VisualAdsGenerator({
                         </button>
                         <div className="mt-2 space-y-1.5">
                           <label className="block text-[11px] font-semibold text-[#858384]" htmlFor={`asset-type-${idx}`}>
-                            {language === 'ar' ? `نوع ${idx + 1}` : `Type ${idx + 1}`}
+                            {language === 'ar' ? `الصورة ${idx + 1}` : `Image ${idx + 1}`}
                           </label>
+                          <p className="text-[11px] font-medium text-foreground/80">
+                            {language === 'ar' ? 'هذه الصورة هي:' : 'This image is:'}
+                          </p>
                           <select
                             id={`asset-type-${idx}`}
                             value={asset.type || ''}
                             onChange={(e) => handleAssetTypeSelect(idx, e.target.value as 'logo' | 'product' | 'screenshot' | 'person' | 'other')}
-                            className="w-full rounded-lg border border-[#606062]/20 dark:border-[#858384]/30 bg-white/70 dark:bg-white/10 px-2 py-2 text-xs text-foreground outline-none transition-all focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20"
+                            className={`w-full min-w-0 rounded-lg border bg-white/70 dark:bg-white/10 px-3 py-2 text-xs text-foreground outline-none transition-all focus:ring-2 ${
+                              !asset.type
+                                ? 'border-orange-400 ring-2 ring-orange-400/25 shadow-[0_0_0_1px_rgba(251,146,60,0.35)]'
+                                : 'border-[#606062]/20 dark:border-[#858384]/30 focus:border-orange-400 focus:ring-orange-400/20'
+                            }`}
                           >
-                            <option value="">{language === 'ar' ? 'اختر النوع' : 'Select type'}</option>
+                            <option value="">{language === 'ar' ? 'اختر النوع' : 'Choose type'}</option>
                             <option value="logo">{language === 'ar' ? 'شعار' : 'Logo'}</option>
                             <option value="product">{language === 'ar' ? 'منتج' : 'Product'}</option>
                             <option value="screenshot">{language === 'ar' ? 'لقطة شاشة' : 'Screenshot'}</option>
                             <option value="person">{language === 'ar' ? 'شخص' : 'Person'}</option>
                             <option value="other">{language === 'ar' ? 'أخرى' : 'Other'}</option>
                           </select>
+                          {asset.type === 'other' && (
+                            <input
+                              value={asset.customType || ''}
+                              onChange={(e) => handleCustomAssetLabelChange(idx, e.target.value)}
+                              placeholder={language === 'ar' ? 'مثال: عبوة ذهبية' : 'Ex: gold bottle'}
+                              maxLength={24}
+                              className="w-full rounded-lg border border-[#606062]/20 dark:border-[#858384]/30 bg-white/70 dark:bg-white/10 px-2 py-2 text-xs text-foreground outline-none transition-all focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20"
+                            />
+                          )}
                         </div>
                       </div>
                       );
@@ -599,6 +696,13 @@ export default function VisualAdsGenerator({
                       : 'At least one image is required, and each added image needs its own type from the dropdown.'}
                   </p>
                 )}
+                {uploadedImages.some((asset) => asset.type === 'other') && (
+                  <p className="text-[11px] text-[#858384]">
+                    {language === 'ar'
+                      ? 'إذا اخترت أخرى، اكتب وصفاً قصيراً من كلمتين كحد أقصى.'
+                      : 'If you choose Other, add a short custom label with up to two words.'}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -614,7 +718,15 @@ export default function VisualAdsGenerator({
           isActive={activeStep === 2}
           isCompleted={completedSteps.has(2)}
           isGenerating={isGenerating}
-          onOpen={() => !isGenerating && setActiveStep(2)}
+          onOpen={() => {
+            if (isGenerating) return;
+            if (hasIncompleteAssetTags) {
+              toast.error(language === 'ar' ? 'اختر نوع كل صورة أولاً' : 'Choose a type for each uploaded image first');
+              setActiveStep(1);
+              return;
+            }
+            setActiveStep(2);
+          }}
         />
         <StepContent step={2} activeStep={activeStep}>
           <div className="space-y-4">
