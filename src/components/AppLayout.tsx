@@ -249,6 +249,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     // loads the correct non-default offering and its products on demand.
     // Standard users: use purchasePackage with $rc_monthly from Default offering.
     const purchaseCallback = async (resp: any) => {
+      alert(`[Debug] SDK Response: status=${resp?.status}, msg=${resp?.message}, err=${resp?.error ? JSON.stringify(resp.error) : 'none'}`);
       addDebug(`Callback fired! Status: ${resp?.status}`);
       addDebug(`Callback message: ${resp?.message}`);
       if (resp?.error) addDebug(`Callback error: ${JSON.stringify(resp.error)}`);
