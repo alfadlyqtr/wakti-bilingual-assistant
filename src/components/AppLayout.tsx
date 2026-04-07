@@ -297,22 +297,12 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     };
 
     try {
-      if (isQUUser && isAndroid) {
-        // Android + QU: showPaywall confirmed working
-        addDebug('QU Android → showPaywall(university_exclusive)');
+      if (isQUUser) {
+        // QU users (iOS + Android): showPaywall with university_exclusive
+        // This offering has a Components-based Paywall configured + qatar_university package
+        addDebug('QU → showPaywall(university_exclusive)');
+        alert('[Debug] QU → showPaywall(university_exclusive)');
         showPaywall(true, 'university_exclusive', purchaseCallback);
-      } else if (isQUUser) {
-        // iOS + QU: use the package object already fetched at mount — this is what showed QAR 73
-        // activePackageObj is set by getOfferings in the useEffect above
-        if (activePackageObj) {
-          addDebug(`QU iOS → purchasePackage(OBJ: ${activePackageObj?.identifier})`);
-          alert(`[Debug] Using package object: ${activePackageObj?.identifier} / store: ${activePackageObj?.product?.identifier}`);
-          purchasePackage(activePackageObj, purchaseCallback);
-        } else {
-          addDebug('QU iOS → activePackageObj is null, falling back to $rc_three_month');
-          alert('[Debug] activePackageObj is NULL - getOfferings at mount never set it');
-          purchasePackage('$rc_three_month', purchaseCallback);
-        }
       } else {
         addDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', purchaseCallback);

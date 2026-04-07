@@ -460,21 +460,11 @@ export default function Account() {
     };
 
     try {
-      if (isQUUser && !isIOS) {
-        // Android + QU: showPaywall confirmed working
-        addBillingDebug('QU Android → showPaywall(university_exclusive)');
+      if (isQUUser) {
+        // QU users (iOS + Android): showPaywall with university_exclusive
+        addBillingDebug('QU → showPaywall(university_exclusive)');
+        alert('[Debug] Billing QU → showPaywall(university_exclusive)');
         showPaywall(true, 'university_exclusive', billingCallback);
-      } else if (isQUUser) {
-        // iOS + QU: use package object fetched at mount
-        if (billingPackageObj) {
-          addBillingDebug(`QU iOS → purchasePackage(OBJ: ${billingPackageObj?.identifier})`);
-          alert(`[Debug] Billing using package object: ${billingPackageObj?.identifier} / store: ${billingPackageObj?.product?.identifier}`);
-          purchasePackage(billingPackageObj, billingCallback);
-        } else {
-          addBillingDebug('QU iOS → billingPackageObj null, fallback $rc_three_month');
-          alert('[Debug] billingPackageObj is NULL');
-          purchasePackage('$rc_three_month', billingCallback);
-        }
       } else {
         addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);
