@@ -17,7 +17,7 @@ export interface VisualAdsState {
     customType?: string | null;
   }[];
   campaignDNA: {
-    platform: '9:16' | '1:1' | '16:9';
+    platform: '9:16' | '1:1' | '16:9' | null;
     objective: string;
   };
   creativeSoul: {
@@ -170,7 +170,10 @@ const platformOptions = [
   {
     value: '9:16' as const,
     icon: Smartphone,
-    label: '9:16',
+    titleEn: 'Stories / Shorts',
+    titleAr: 'القصص / الشورتس',
+    ratioEn: '9:16 vertical',
+    ratioAr: 'عمودي 9:16',
     platforms: [
       {
         name: 'TikTok',
@@ -183,19 +186,27 @@ const platformOptions = [
         badgeClass: 'bg-[#FFFC00] text-[#060541] border border-[#F5E800]',
       },
       {
-        name: 'Instagram',
+        name: 'Instagram Reels',
         icon: InstagramBrandIcon,
         badgeClass: 'bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#515BD4] text-white border border-white/10',
+      },
+      {
+        name: 'YouTube Shorts',
+        icon: YouTubeBrandIcon,
+        badgeClass: 'bg-[#FF0000] text-white border border-[#ff6b6b]/40',
       },
     ],
   },
   {
     value: '1:1' as const,
     icon: Square,
-    label: '1:1',
+    titleEn: 'Square Post',
+    titleAr: 'منشور مربع',
+    ratioEn: '1:1 square',
+    ratioAr: 'مربع 1:1',
     platforms: [
       {
-        name: 'Instagram',
+        name: 'Instagram Post',
         icon: InstagramBrandIcon,
         badgeClass: 'bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#515BD4] text-white border border-white/10',
       },
@@ -209,7 +220,10 @@ const platformOptions = [
   {
     value: '16:9' as const,
     icon: Monitor,
-    label: '16:9',
+    titleEn: 'Landscape Video',
+    titleAr: 'فيديو أفقي',
+    ratioEn: '16:9 horizontal',
+    ratioAr: 'أفقي 16:9',
     platforms: [
       {
         name: 'YouTube',
@@ -254,7 +268,7 @@ export default function VisualAdsGenerator({
 
   const [state, setState] = useState<VisualAdsState>({
     brandAsset: { image: null, type: null },
-    campaignDNA: { platform: '9:16', objective: '' },
+    campaignDNA: { platform: null, objective: '' },
     creativeSoul: { mainMessage: '', cta: '', style: '', magicEnhance: false, prompt: '' },
     assets: [],
   });
@@ -276,6 +290,7 @@ export default function VisualAdsGenerator({
     type: 'logo' | 'product' | 'screenshot' | 'person' | 'other' | null;
     customType?: string | null;
   }>>([]);
+  const hasAtLeastOneValidAsset = uploadedImages.some((asset) => asset.type !== null && (asset.type !== 'other' || Boolean(asset.customType?.trim())));
   const hasIncompleteAssetTags = uploadedImages.some((asset) => asset.type === null || (asset.type === 'other' && !asset.customType?.trim()));
   
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -373,7 +388,7 @@ export default function VisualAdsGenerator({
         });
       } else {
         setCompletedSteps(prevCompleted => new Set([...prevCompleted, 1]));
-        setActiveStep(2);
+        setActiveStep(1);
       }
 
       return next;
@@ -436,6 +451,11 @@ export default function VisualAdsGenerator({
       toast.error(language === 'ar' ? 'الرجاء كتابة تفاصيل الإعلان المطلوبة' : 'Please add the required ad details');
       setActiveStep(3);
       setOpenBriefSection(4);
+      return;
+    }
+    if (!state.campaignDNA.platform) {
+      toast.error(language === 'ar' ? 'اختر المنصة والمقاس أولاً' : 'Choose the platform and size first');
+      setActiveStep(2);
       return;
     }
     if (uploadedImages.some((asset) => asset.type === null)) {
@@ -703,6 +723,22 @@ export default function VisualAdsGenerator({
                       : 'If you choose Other, add a short custom label with up to two words.'}
                   </p>
                 )}
+                {hasAtLeastOneValidAsset && (
+                  <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 space-y-2">
+                    <p className="text-[11px] font-medium text-green-700 dark:text-green-300">
+                      {language === 'ar'
+                        ? 'الحد الأدنى جاهز. يمكنك المتابعة الآن أو إضافة صورتين إضافيتين اختيارياً.'
+                        : 'Minimum requirement complete. You can continue now or add up to 2 more optional images.'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setActiveStep(2)}
+                      className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-orange-500/20 transition-all duration-200 active:scale-95"
+                    >
+                      {language === 'ar' ? 'المتابعة إلى الخطوة ٢' : 'Continue to Step 2'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -713,13 +749,18 @@ export default function VisualAdsGenerator({
       <div className="space-y-1">
         <StepHeader
           step={2}
-          title={language === 'ar' ? 'أين سيُنشر الإعلان؟' : 'Where will this run?'}
-          subtitle={language === 'ar' ? 'اختر المنصة والمقاس المناسب' : 'Pick the platform & size'}
+          title={language === 'ar' ? 'اختر تنسيق الإعلان' : 'Choose your format'}
+          subtitle={language === 'ar' ? 'اختر الشكل المناسب للمكان الذي سيظهر فيه الإعلان' : 'Pick the shape that matches where this ad will be used'}
           isActive={activeStep === 2}
           isCompleted={completedSteps.has(2)}
           isGenerating={isGenerating}
           onOpen={() => {
             if (isGenerating) return;
+            if (!hasAtLeastOneValidAsset) {
+              toast.error(language === 'ar' ? 'أضف صورة واحدة صحيحة على الأقل أولاً' : 'Add at least one valid tagged image first');
+              setActiveStep(1);
+              return;
+            }
             if (hasIncompleteAssetTags) {
               toast.error(language === 'ar' ? 'اختر نوع كل صورة أولاً' : 'Choose a type for each uploaded image first');
               setActiveStep(1);
@@ -729,7 +770,7 @@ export default function VisualAdsGenerator({
           }}
         />
         <StepContent step={2} activeStep={activeStep}>
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div className="grid grid-cols-3 gap-2">
               {platformOptions.map((opt) => (
                 <button
@@ -739,21 +780,36 @@ export default function VisualAdsGenerator({
                     setCompletedSteps(prev => new Set([...prev, 2]));
                     setActiveStep(3);
                   }}
-                  className={`flex flex-col items-center justify-center gap-2 py-3 px-2 rounded-xl border transition-all duration-200 min-h-[88px] ${
+                  className={`flex flex-col items-start justify-start gap-2 rounded-xl border px-2.5 py-3 text-left transition-all duration-200 min-h-[120px] ${
                     state.campaignDNA.platform === opt.value
                       ? 'bg-gradient-to-b from-[#1a1d24] to-[#11141b] text-[#f2f2f2] border-2 border-orange-400 ring-2 ring-orange-400/35 shadow-[0_0_0_1px_rgba(251,146,60,0.45),0_10px_28px_rgba(251,146,60,0.18)] scale-[1.02]'
                       : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/70 dark:hover:bg-white/10'
                   }`}
                 >
-                  <opt.icon className="w-5 h-5" />
-                  <span className="text-xs font-semibold">{opt.label}</span>
-                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                  <div className="flex items-start gap-2">
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${
+                      state.campaignDNA.platform === opt.value
+                        ? 'border-orange-300/60 bg-white/10 text-white'
+                        : 'border-[#606062]/20 dark:border-[#858384]/30 bg-white/60 dark:bg-white/5 text-foreground'
+                    }`}>
+                      <opt.icon className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-[13px] font-semibold leading-tight">
+                        {language === 'ar' ? opt.titleAr : opt.titleEn}
+                      </p>
+                      <p className={`text-[11px] ${state.campaignDNA.platform === opt.value ? 'text-white/70' : 'text-[#858384]'}`}>
+                        {language === 'ar' ? opt.ratioAr : opt.ratioEn}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1">
                     {opt.platforms.map((platform) => (
                       <span
                         key={platform.name}
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium ${platform.badgeClass}`}
+                        className={`inline-flex items-center gap-1 rounded-full px-1.5 py-1 text-[9px] font-medium ${platform.badgeClass}`}
                       >
-                        <platform.icon className="w-3.5 h-3.5" />
+                        <platform.icon className="w-3 h-3" />
                         <span>{platform.name}</span>
                       </span>
                     ))}
@@ -762,7 +818,7 @@ export default function VisualAdsGenerator({
               ))}
             </div>
             <p className="text-[11px] text-[#858384] text-center">
-              {language === 'ar' ? 'اختر واحدة للانتقال تلقائياً إلى الخطوة التالية' : 'Select one to move to the next step'}
+              {language === 'ar' ? 'اختر تنسيقاً واحداً للمتابعة إلى الخطوة التالية' : 'Choose one format to continue to the next step'}
             </p>
           </div>
         </StepContent>
