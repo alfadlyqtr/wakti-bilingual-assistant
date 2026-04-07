@@ -8,11 +8,11 @@ import { toast } from 'sonner';
 export interface VisualAdsState {
   brandAsset: {
     image: string | null;
-    type: 'logo' | 'product' | 'screenshot' | null;
+    type: 'logo' | 'product' | 'screenshot' | 'person' | 'other' | null;
   };
   assets?: {
     image: string;
-    type: 'logo' | 'product' | 'screenshot' | null;
+    type: 'logo' | 'product' | 'screenshot' | 'person' | 'other' | null;
   }[];
   campaignDNA: {
     platform: '9:16' | '1:1' | '16:9';
@@ -264,7 +264,7 @@ export default function VisualAdsGenerator({
   // Handle multiple file uploads (up to 3)
   const [uploadedImages, setUploadedImages] = useState<Array<{
     image: string;
-    type: 'logo' | 'product' | 'screenshot' | null;
+    type: 'logo' | 'product' | 'screenshot' | 'person' | 'other' | null;
   }>>([]);
   
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -279,7 +279,7 @@ export default function VisualAdsGenerator({
       return;
     }
 
-    const newImages: Array<{ image: string; type: 'logo' | 'product' | 'screenshot' | null }> = [];
+    const newImages: Array<{ image: string; type: 'logo' | 'product' | 'screenshot' | 'person' | 'other' | null }> = [];
     let processed = 0;
     
     filesToProcess.forEach((file) => {
@@ -316,13 +316,13 @@ export default function VisualAdsGenerator({
     e.target.value = '';
   }, [language, uploadedImages]);
 
-  const handleAssetTypeSelect = useCallback((type: 'logo' | 'product' | 'screenshot') => {
+  const handleAssetTypeSelect = useCallback((index: number, type: 'logo' | 'product' | 'screenshot' | 'person' | 'other') => {
     setUploadedImages(prev => {
       const next = prev.map((asset, idx) => (
-        idx === selectedAssetIndex ? { ...asset, type } : asset
+        idx === index ? { ...asset, type } : asset
       ));
       const nextUnassignedIndex = next.findIndex((asset) => asset.type === null);
-      const currentAsset = next[selectedAssetIndex] || null;
+      const currentAsset = next[index] || null;
 
       setState(prevState => ({
         ...prevState,
@@ -348,7 +348,7 @@ export default function VisualAdsGenerator({
 
       return next;
     });
-  }, [selectedAssetIndex]);
+  }, []);
 
   // Handle generate
   const handleGenerate = useCallback(async () => {
@@ -380,8 +380,18 @@ export default function VisualAdsGenerator({
     const selectedStyle = adStyleChips.find((chip) => chip.id === state.creativeSoul.style);
     const tags = uploadedImages
       .map((asset) => asset.type)
-      .filter((tag): tag is 'logo' | 'product' | 'screenshot' => Boolean(tag))
-      .map((tag) => tag === 'logo' ? 'Logo' : tag === 'product' ? 'Brand' : 'Screenshot');
+      .filter((tag): tag is 'logo' | 'product' | 'screenshot' | 'person' | 'other' => Boolean(tag))
+      .map((tag) => (
+        tag === 'logo'
+          ? 'Logo'
+          : tag === 'product'
+            ? 'Product'
+            : tag === 'screenshot'
+              ? 'Screenshot'
+              : tag === 'person'
+                ? 'Person'
+                : 'Other'
+      ));
 
     try {
       setIsAmping(true);
@@ -457,7 +467,7 @@ export default function VisualAdsGenerator({
         <StepHeader
           step={1}
           title={language === 'ar' ? 'أصول العلامة' : 'Brand Assets'}
-          subtitle={language === 'ar' ? 'ما الذي يجب أن يظهر في الإعلان؟' : 'What should appear in the ad?'}
+          subtitle={language === 'ar' ? 'ارفع صورة واحدة على الأقل ثم اختر نوعها من القائمة. الصورتان الأخريان اختياريتان.' : 'Upload at least one image, then select its type from the dropdown. The other two images are optional.'}
           isActive={activeStep === 1}
           isCompleted={completedSteps.has(1)}
           isGenerating={isGenerating}
@@ -467,81 +477,98 @@ export default function VisualAdsGenerator({
           <div className="space-y-4">
             {/* Upload Zone - Smaller with thumbnails */}
             <div className="relative">
-              {uploadedImages.length > 0 ? (
-                <div className="space-y-3">
-                  {/* Thumbnails grid */}
-                  <div className="grid grid-cols-3 gap-2">
-                    {uploadedImages.map((asset, idx) => (
-                      <button
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-2">
+                  {Array.from({ length: 3 }).map((_, idx) => {
+                    const asset = uploadedImages[idx];
+
+                    if (asset) {
+                      return (
+                      <div
                         key={idx}
-                        onClick={() => {
-                          setSelectedAssetIndex(idx);
-                          updateState('brandAsset', { image: asset.image, type: asset.type });
-                        }}
-                        className={`relative aspect-square rounded-xl overflow-hidden bg-black/5 dark:bg-white/5 border transition-all duration-200 ${
+                        className={`rounded-xl border p-2 transition-all duration-200 ${
                           idx === selectedAssetIndex
                             ? 'border-[#060541] dark:border-[#f2f2f2] ring-2 ring-[#060541]/20 dark:ring-[#f2f2f2]/20'
-                            : 'border-[#606062]/20'
+                            : 'border-[#606062]/20 bg-white/20 dark:bg-white/5'
                         }`}
-                        aria-label={language === 'ar' ? `اختر صورة ${idx + 1}` : `Select image ${idx + 1}`}
-                        type="button"
                       >
-                        <img
-                          src={asset.image}
-                          alt={`Asset ${idx + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                        {asset.type && (
-                          <span className="absolute left-1 bottom-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[9px] font-semibold text-white">
-                            {asset.type === 'logo'
-                              ? (language === 'ar' ? 'شعار' : 'Logo')
-                              : asset.type === 'product'
-                                ? (language === 'ar' ? 'منتج' : 'Product')
-                                : (language === 'ar' ? 'لقطة' : 'Screenshot')}
-                          </span>
-                        )}
                         <button
                           onClick={() => {
-                            const newImages = uploadedImages.filter((_, i) => i !== idx);
-                            setUploadedImages(newImages);
-                            const nextSelectedIndex = Math.max(0, Math.min(selectedAssetIndex === idx ? idx - 1 : selectedAssetIndex > idx ? selectedAssetIndex - 1 : selectedAssetIndex, newImages.length - 1));
-                            setSelectedAssetIndex(nextSelectedIndex < 0 ? 0 : nextSelectedIndex);
-                            setState(prev => ({
-                              ...prev,
-                              brandAsset: {
-                                image: newImages[nextSelectedIndex]?.image || newImages[0]?.image || null,
-                                type: newImages[nextSelectedIndex]?.type || newImages[0]?.type || null,
-                              },
-                              assets: newImages,
-                            }));
-                            if (newImages.length === 0) {
-                              setCompletedSteps(prev => {
-                                const next = new Set(prev);
-                                next.delete(1);
-                                return next;
-                              });
-                              setActiveStep(1);
-                            } else if (newImages.every((asset) => asset.type !== null)) {
-                              setCompletedSteps(prev => new Set([...prev, 1]));
-                            } else {
-                              setCompletedSteps(prev => {
-                                const next = new Set(prev);
-                                next.delete(1);
-                                return next;
-                              });
-                            }
+                            setSelectedAssetIndex(idx);
+                            updateState('brandAsset', { image: asset.image, type: asset.type });
                           }}
-                          aria-label={language === 'ar' ? `إزالة صورة ${idx + 1}` : `Remove image ${idx + 1}`}
-                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs shadow-lg active:scale-90 transition-transform"
+                          className="relative aspect-square w-full rounded-xl overflow-hidden bg-black/5 dark:bg-white/5"
+                          aria-label={language === 'ar' ? `اختر صورة ${idx + 1}` : `Select image ${idx + 1}`}
                           type="button"
                         >
-                          ×
+                          <img
+                            src={asset.image}
+                            alt={`Asset ${idx + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                          <button
+                            onClick={() => {
+                              const newImages = uploadedImages.filter((_, i) => i !== idx);
+                              setUploadedImages(newImages);
+                              const nextSelectedIndex = Math.max(0, Math.min(selectedAssetIndex === idx ? idx - 1 : selectedAssetIndex > idx ? selectedAssetIndex - 1 : selectedAssetIndex, newImages.length - 1));
+                              setSelectedAssetIndex(nextSelectedIndex < 0 ? 0 : nextSelectedIndex);
+                              setState(prev => ({
+                                ...prev,
+                                brandAsset: {
+                                  image: newImages[nextSelectedIndex]?.image || newImages[0]?.image || null,
+                                  type: newImages[nextSelectedIndex]?.type || newImages[0]?.type || null,
+                                },
+                                assets: newImages,
+                              }));
+                              if (newImages.length === 0) {
+                                setCompletedSteps(prev => {
+                                  const next = new Set(prev);
+                                  next.delete(1);
+                                  return next;
+                                });
+                                setActiveStep(1);
+                              } else if (newImages.every((nextAsset) => nextAsset.type !== null)) {
+                                setCompletedSteps(prev => new Set([...prev, 1]));
+                              } else {
+                                setCompletedSteps(prev => {
+                                  const next = new Set(prev);
+                                  next.delete(1);
+                                  return next;
+                                });
+                              }
+                            }}
+                            aria-label={language === 'ar' ? `إزالة صورة ${idx + 1}` : `Remove image ${idx + 1}`}
+                            className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs shadow-lg active:scale-90 transition-transform"
+                            type="button"
+                          >
+                            ×
+                          </button>
                         </button>
-                      </button>
-                    ))}
-                    {/* Add more button if less than 3 */}
-                    {uploadedImages.length < 3 && (
+                        <div className="mt-2 space-y-1.5">
+                          <label className="block text-[11px] font-semibold text-[#858384]" htmlFor={`asset-type-${idx}`}>
+                            {language === 'ar' ? `نوع ${idx + 1}` : `Type ${idx + 1}`}
+                          </label>
+                          <select
+                            id={`asset-type-${idx}`}
+                            value={asset.type || ''}
+                            onChange={(e) => handleAssetTypeSelect(idx, e.target.value as 'logo' | 'product' | 'screenshot' | 'person' | 'other')}
+                            className="w-full rounded-lg border border-[#606062]/20 dark:border-[#858384]/30 bg-white/70 dark:bg-white/10 px-2 py-2 text-xs text-foreground outline-none transition-all focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20"
+                          >
+                            <option value="">{language === 'ar' ? 'اختر النوع' : 'Select type'}</option>
+                            <option value="logo">{language === 'ar' ? 'شعار' : 'Logo'}</option>
+                            <option value="product">{language === 'ar' ? 'منتج' : 'Product'}</option>
+                            <option value="screenshot">{language === 'ar' ? 'لقطة شاشة' : 'Screenshot'}</option>
+                            <option value="person">{language === 'ar' ? 'شخص' : 'Person'}</option>
+                            <option value="other">{language === 'ar' ? 'أخرى' : 'Other'}</option>
+                          </select>
+                        </div>
+                      </div>
+                      );
+                    }
+
+                    return (
                       <button
+                        key={idx}
                         onClick={() => fileInputRef.current?.click()}
                         className="aspect-square rounded-xl border-2 border-dashed border-[#606062]/40 dark:border-[#858384]/30 bg-white/30 dark:bg-white/5 hover:bg-white/50 dark:hover:bg-white/10 flex flex-col items-center justify-center gap-1 active:scale-95 transition-all"
                         type="button"
@@ -549,22 +576,10 @@ export default function VisualAdsGenerator({
                         <Plus className="w-6 h-6 text-[#858384]" />
                         <span className="text-[10px] text-[#858384]">{language === 'ar' ? 'أضف' : 'Add'}</span>
                       </button>
-                    )}
-                  </div>
+                    );
+                  })}
                 </div>
-              ) : (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full py-6 border-2 border-dashed border-[#606062]/40 dark:border-[#858384]/30 rounded-xl flex flex-col items-center justify-center gap-2 bg-white/30 dark:bg-white/5 hover:bg-white/50 dark:hover:bg-white/10 active:scale-[0.98] transition-all duration-200"
-                >
-                  <div className="w-12 h-12 rounded-full bg-[#060541]/10 dark:bg-[#f2f2f2]/10 flex items-center justify-center">
-                    <Plus className="w-6 h-6 text-[#060541] dark:text-[#f2f2f2]" />
-                  </div>
-                  <span className="text-sm font-medium text-[#858384]">
-                    {language === 'ar' ? 'انقر لرفع الصور (حتى 3)' : 'Tap to upload (up to 3)'}
-                  </span>
-                </button>
-              )}
+              </div>
               <input
                 type="file"
                 ref={fileInputRef}
@@ -575,28 +590,13 @@ export default function VisualAdsGenerator({
               />
             </div>
 
-            {/* Asset Type Selector - only show if images uploaded */}
-            {uploadedImages.length > 0 && uploadedImages[selectedAssetIndex] && (
+            {uploadedImages.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-[#858384]">
-                  {language === 'ar'
-                    ? `اختر نوع الصورة ${selectedAssetIndex + 1}`
-                    : `Choose what image ${selectedAssetIndex + 1} is`}
-                </p>
-                <SegmentedControl
-                  options={[
-                    { value: 'logo' as const, label: language === 'ar' ? 'شعار' : 'Logo', emoji: '🏷️' },
-                    { value: 'product' as const, label: language === 'ar' ? 'منتج' : 'Product', emoji: '📦' },
-                    { value: 'screenshot' as const, label: language === 'ar' ? 'لقطة' : 'Screenshot', emoji: '📱' },
-                  ]}
-                  value={(uploadedImages[selectedAssetIndex].type || 'product') as 'logo' | 'product' | 'screenshot'}
-                  onChange={handleAssetTypeSelect}
-                />
                 {uploadedImages.some((asset) => asset.type === null) && (
                   <p className="text-[11px] text-[#858384]">
                     {language === 'ar'
-                      ? 'كل صورة تحتاج نوعها الخاص قبل الانتقال للخطوة التالية.'
-                      : 'Each image needs its own type before moving to the next step.'}
+                      ? 'صورة واحدة مطلوبة على الأقل، واختر نوع كل صورة مضافة من القائمة.'
+                      : 'At least one image is required, and each added image needs its own type from the dropdown.'}
                   </p>
                 )}
               </div>
