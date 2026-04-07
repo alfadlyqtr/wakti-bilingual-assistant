@@ -28,7 +28,6 @@ function sanitizeError(msg: string): string {
 }
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY") || "";
 const KIE_IMAGE2VIDEO_MODEL = "grok-imagine/image-to-video";
-const KIE_HAILUO_MODEL = "bytedance/hailuo-2.3-image-to-video-standard";
 const KIE_TEXT2VIDEO_MODEL = "grok-imagine/text-to-video";
 const KIE_2IMAGES_MODEL = "bytedance/seedance-1.5-pro";
 const KIE_CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
@@ -202,17 +201,15 @@ async function createVideoTask(
 ): Promise<{ task_id: string; status: string }> {
   const sanitizedImageUrls = imageUrls.map(url => sanitizeImageUrl(url));
   const isTwoImages = sanitizedImageUrls.length === 2;
-  // Hailuo 2.3 supports 6/10s; standard image-to-video is locked to 6/10s; Seedance: 4/8/12s
-  const isHailuo = !isTwoImages && (modelOverride === KIE_HAILUO_MODEL || modelOverride?.includes('hailuo'));
   const validDuration = isTwoImages
     ? (["4", "8", "12"].includes(duration || "") ? duration! : "8")
-    : isHailuo
-    ? (["6", "10"].includes(duration || "") ? duration! : "6")
     : (["6", "10"].includes(duration || "") ? duration! : "6");
   const validAspectRatio = ["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"].includes(aspectRatio || "")
     ? aspectRatio!
     : "9:16";
-  const validResolution = ["480p", "720p"].includes(resolution || "") ? resolution! : (isTwoImages ? "480p" : "720p");
+  const validResolution = isTwoImages
+    ? (["480p", "720p"].includes(resolution || "") ? resolution! : "480p")
+    : (["480p", "720p"].includes(resolution || "") ? resolution! : "720p");
   const validMode = ["normal", "fun"].includes(videoStyleMode || "") ? videoStyleMode! : "normal";
 
   const model = isTwoImages ? KIE_2IMAGES_MODEL : (modelOverride || KIE_IMAGE2VIDEO_MODEL);
@@ -228,7 +225,7 @@ async function createVideoTask(
         generate_audio: generateAudio || false,
       }
     : {
-        // Grok Imagine API: only documented fields
+        // Grok Imagine API: image_urls array, supports mode
         image_urls: sanitizedImageUrls,
         duration: validDuration,
         resolution: validResolution,

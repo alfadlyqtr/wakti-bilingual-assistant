@@ -1416,6 +1416,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [rhythmOpen, setRhythmOpen] = useState(false);
   const [moodOpen, setMoodOpen] = useState(false);
   const [composeDetailsVisible, setComposeDetailsVisible] = useState(false);
+  const [openStyleGroupIdx, setOpenStyleGroupIdx] = useState(0);
+  const [stylesCollapsed, setStylesCollapsed] = useState(false);
+  const styleGroupRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [composeStep, setComposeStep] = useState<1|2|3|4>(1);
   const [includeTags, setIncludeTags] = useState<string[]>([]);
   const [instrumentTags, setInstrumentTags] = useState<string[]>([]);
   const [rhythmTags, setRhythmTags] = useState<string[]>([]);
@@ -1744,6 +1748,50 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   // Style → recommended rhythms (top 2)
   const STYLE_RHYTHM_MAPPING: Record<string, string[]> = {
+    // ── Arabic style names → Arabic rhythm names ──
+    'بوب خليجي': ['تراب بيت', 'إيقاع خليجي'],
+    'خليجي رومانسي': ['عدني', 'بالاد هادئ'],
+    'خليجي أنيق': ['عدني', 'خليجي متمايل'],
+    'خليجي حفلات': ['إيقاع خليجي', 'إيقاع تصفيق'],
+    'خليجي أعراس': ['إيقاع أعراس', 'إيقاع تصفيق'],
+    'خليجي إذاعي': ['إيقاع خليجي', 'خليجي متمايل'],
+    'خليجي دانس': ['إيقاع خليجي', 'إيقاع تصفيق'],
+    'خليجي إلكتروني': ['إيقاع خليجي', 'إيقاع نادي'],
+    'خليجي سينث بوب': ['خليجي متمايل', 'إيقاع خليجي'],
+    'فيوجن خليجي': ['إيقاع خليجي', 'خليجي متمايل'],
+    'إنجليزي بطابع خليجي': ['إيقاع خليجي', 'إيقاع تصفيق'],
+    'خليجي آر أند بي': ['إيقاع خليجي', 'عدني'],
+    'خليجي فاخر': ['عدني', 'بالاد هادئ'],
+    'خليجي سينمائي': ['إيقاع جماهيري', '٦/٨ فيوجن'],
+    'خليجي جماهيري': ['إيقاع جماهيري', 'إيقاع تصفيق'],
+    'مناسبات وطنية خليجية': ['إيقاع جماهيري', 'إيقاع تصفيق'],
+    'خليجي تراثي': ['عدني', 'إيقاع خليجي'],
+    'شيلات': ['سامري', 'إيقاع تصفيق'],
+    'سامري': ['سامري', 'إيقاع أعراس'],
+    'جلسة': ['عدني', 'إيقاع خليجي'],
+    'ليوان': ['إيقاع الليوان', '٦/٨ فيوجن'],
+    'شعبي خليجي': ['عدني', 'إيقاع خليجي'],
+    'مصري': ['مقسوم', 'بالاد هادئ'],
+    'شعبي مصري': ['مقسوم', 'إيقاع نادي'],
+    'مهرجانات': ['إيقاع نادي', 'تراب بيت'],
+    'شامي': ['مقسوم', 'بالاد هادئ'],
+    'بوب عربي': ['مقسوم', 'بوب ٤/٤'],
+    'أناشيد': ['إيقاع تصفيق', 'بالاد هادئ'],
+    'بوب': ['بوب ٤/٤', 'بالاد هادئ'],
+    'دانس بوب': ['إيقاع نادي', 'بوب ٤/٤'],
+    'هيب هوب': ['تراب بيت', 'بوب ٤/٤'],
+    'راب': ['تراب بيت', 'دريل بيت'],
+    'تراب': ['تراب بيت', 'إيقاع نادي'],
+    'درِل': ['دريل بيت', 'تراب بيت'],
+    'جاز': ['بالاد هادئ', 'والتز ٣/٤'],
+    'روك': ['بوب ٤/٤', 'إيقاع جماهيري'],
+    'كلاسيكي': ['والتز ٣/٤', 'بالاد هادئ'],
+    'لوفاي': ['بالاد هادئ', 'بوب ٤/٤'],
+    'هاوس': ['إيقاع نادي', 'بوب ٤/٤'],
+    'إي دي إم': ['إيقاع نادي', 'بوب ٤/٤'],
+    'ريغي': ['بالاد هادئ', 'بوب ٤/٤'],
+    'أفروبيتس': ['أفرو خليجي', 'بوب ٤/٤'],
+    // ── English style names → English rhythm names ──
     'GCC Pop': ['Trap Beat', 'Gulf Groove'],
     'Khaleeji Pop': ['Trap Beat', 'Gulf Groove'],
     'GCC Romantic': ['Adani', 'Ballad Slow Groove'],
@@ -1965,6 +2013,56 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   // Style → recommended moods (top 3)
   const STYLE_MOOD_MAPPING: Record<string, string[]> = {
+    // ── Arabic style names → Arabic mood names ──
+    'بوب خليجي': ['مفعم بالطاقة', 'واثق', 'جريء'],
+    'خليجي رومانسي': ['رومانسي', 'عاطفي', 'حنون'],
+    'خليجي أنيق': ['فاخر', 'واثق', 'مشع'],
+    'خليجي حفلات': ['مفعم بالطاقة', 'حفلة', 'سعيد'],
+    'خليجي أعراس': ['احتفالي', 'أعراس', 'سعيد'],
+    'خليجي إذاعي': ['مفعم بالطاقة', 'سعيد', 'محفز'],
+    'خليجي دانس': ['مفعم بالطاقة', 'حفلة', 'متمايل'],
+    'خليجي إلكتروني': ['مفعم بالطاقة', 'مثير', 'نادي'],
+    'خليجي سينث بوب': ['مفعم بالطاقة', 'مثير', 'ساطع'],
+    'فيوجن خليجي': ['مفعم بالطاقة', 'واثق', 'محفز'],
+    'إنجليزي بطابع خليجي': ['سعيد', 'مفعم بالطاقة', 'محفز'],
+    'خليجي آر أند بي': ['رومانسي', 'عاطفي', 'روحاني'],
+    'خليجي فاخر': ['فاخر', 'واثق', 'مشع'],
+    'خليجي سينمائي': ['ملحمي', 'درامي', 'ضخم'],
+    'خليجي جماهيري': ['فخور', 'جماهيري', 'قوي'],
+    'مناسبات وطنية خليجية': ['وطني', 'فخور', 'ضخم'],
+    'خليجي تراثي': ['نوستالجي', 'روحاني', 'فخور'],
+    'شيلات': ['فخور', 'جريء', 'قوي'],
+    'سامري': ['فخور', 'مفعم بالطاقة', 'جريء'],
+    'جلسة': ['رومانسي', 'نوستالجي', 'حميمي'],
+    'ليوان': ['مفعم بالطاقة', 'احتفالي', 'جريء'],
+    'شعبي خليجي': ['هادئ', 'نوستالجي', 'حميمي'],
+    'مصري': ['رومانسي', 'عاطفي', 'نوستالجي'],
+    'شعبي مصري': ['مفعم بالطاقة', 'حفلة', 'مثير'],
+    'مهرجانات': ['مفعم بالطاقة', 'حفلة', 'مثير'],
+    'شامي': ['رومانسي', 'عاطفي', 'حنون'],
+    'بوب عربي': ['رومانسي', 'عاطفي', 'سعيد'],
+    'أناشيد': ['روحاني', 'هادئ', 'فخور'],
+    'بوب': ['سعيد', 'مفعم بالطاقة', 'محفز'],
+    'دانس بوب': ['مفعم بالطاقة', 'حفلة', 'سعيد'],
+    'تين بوب': ['سعيد', 'مرح', 'محفز'],
+    'هيب هوب': ['واثق', 'جريء', 'مفعم بالطاقة'],
+    'راب': ['واثق', 'جريء', 'مكثف'],
+    'تراب': ['واثق', 'جريء', 'غامض'],
+    'درِل': ['مكثف', 'مظلم', 'جريء'],
+    'سول': ['عاطفي', 'روحاني', 'رومانسي'],
+    'فنك': ['متمايل', 'مفعم بالطاقة', 'سعيد'],
+    'ديسكو': ['حفلة', 'سعيد', 'مفعم بالطاقة'],
+    'جاز': ['روحاني', 'نوستالجي', 'هادئ'],
+    'روك': ['مفعم بالطاقة', 'قوي', 'جريء'],
+    'كلاسيكي': ['ملحمي', 'عاطفي', 'هادئ'],
+    'لوفاي': ['هادئ', 'نوستالجي', 'حالم'],
+    'هاوس': ['مفعم بالطاقة', 'نادي', 'متمايل'],
+    'إي دي إم': ['مفعم بالطاقة', 'حفلة', 'محفز'],
+    'ريغي': ['هادئ', 'سعيد', 'محفز'],
+    'بلوز': ['حزين', 'عاطفي', 'روحاني'],
+    'أفروبيتس': ['مفعم بالطاقة', 'حفلة', 'متمايل'],
+    'أفروبيت': ['مفعم بالطاقة', 'سعيد', 'متمايل'],
+    // ── English style names → English mood names ──
     'GCC Pop': ['energetic', 'confident', 'bold'],
     'Khaleeji Pop': ['energetic', 'confident', 'bold'],
     'GCC Romantic': ['romantic', 'emotional', 'tender'],
@@ -2533,22 +2631,18 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }
 
   function handleStyleToggle(style: string) {
-    setIncludeTags((prev) => {
-      if (prev.includes(style)) {
-        return prev.filter((tag) => tag !== style);
-      }
-      if (prev.length >= 1) {
-        return [style]; // replace with new selection
-      }
-      const next = [style];
-      setTimeout(() => {
-        setStylesOpen(false);
-        setRhythmOpen(true);
-        setInstrumentsOpen(false);
-        setMoodOpen(false);
-      }, 0);
-      return next;
-    });
+    const isDeselect = includeTags.includes(style);
+    if (isDeselect) {
+      setIncludeTags((prev) => prev.filter((t) => t !== style));
+      setStylesCollapsed(false);
+      setRhythmOpen(false);
+    } else {
+      setIncludeTags([style]);
+      setStylesCollapsed(true);
+      setRhythmOpen(true);
+      setMoodOpen(false);
+      setInstrumentsOpen(false);
+    }
   }
 
   function handleStylesNext() {
@@ -3268,63 +3362,87 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     return () => document.removeEventListener('mousedown', handleDocClick);
   }, [showIncludePicker, showInstrumentPicker, showMoodPicker]);
 
+  // Clear all tag selections when language switches (English tags must not show in Arabic mode)
+  useEffect(() => {
+    setIncludeTags([]);
+    setRhythmTags([]);
+    setMoodTags([]);
+    setInstrumentTags([]);
+    setStylesCollapsed(false);
+    setRhythmOpen(false);
+    setMoodOpen(false);
+    setInstrumentsOpen(false);
+  }, [language]);
+
+  const goToStep = (step) => {
+    setComposeStep(step);
+    if (step === 1) { setTitleOpen(true); }
+    if (step === 2) { setComposeDetailsVisible(true); setMusicStyleOpen(true); setStylesOpen(true); }
+    if (step === 3) { setComposeDetailsVisible(true); setVocalsOpen(true); }
+    if (step === 4) { setComposeDetailsVisible(true); setLyricsOpen(true); }
+  };
+
+  const StepBar = ({ current }: { current: number }) => (
+    <div className="flex items-center gap-1.5 mb-5">
+      {[1,2,3,4].map((s) => (
+        <div key={s} className={`h-1 flex-1 rounded-full transition-all ${s <= current ? 'bg-[#060541] dark:bg-white/70' : 'bg-[#e4e6ed] dark:bg-white/10'}`} />
+      ))}
+    </div>
+  );
+
+  const TrackChip = () => (
+    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#f7f8fc] dark:bg-white/[0.04] border border-[#e4e6ed] dark:border-white/5 mb-1">
+      <span className="text-[10px] font-bold uppercase tracking-wider text-[#858384] dark:text-white/40">{isAr ? 'الأغنية' : 'Track'}</span>
+      <span className="text-sm font-semibold text-[#060541] dark:text-white truncate">{title}</span>
+    </div>
+  );
+
+  const BackBtn = ({ toStep }: { toStep: 1|2|3|4 }) => (
+    <button
+      type="button"
+      onClick={() => goToStep(toStep)}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-[#f7f8fc] dark:bg-white/[0.04] text-[#606062] dark:text-white/50 hover:border-[#c0c4d0] dark:hover:border-white/20 hover:text-[#060541] dark:hover:text-white/80 active:scale-95 transition-all mb-3"
+    >
+      <ArrowRight className="h-3.5 w-3.5 rotate-180" />
+      {isAr ? 'رجوع' : 'Back'}
+    </button>
+  );
+
+  const cardCls = "rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4";
+
   return (
     <div className="space-y-4">
-      <div className={`rounded-2xl border transition-all ${titleOpen
-        ? 'border-sky-300/70 dark:border-sky-400/25 bg-gradient-to-br from-white via-[#f8fbff] to-[#eef6ff] dark:from-[#0c0f14] dark:via-[#101722] dark:to-[#0c0f14] shadow-[0_16px_40px_rgba(59,130,246,0.12)] dark:shadow-[0_0_30px_rgba(56,189,248,0.12)]'
-        : 'border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none'
-      } p-5 sm:p-4 space-y-4 sm:space-y-3`}>
-        <button
-          type="button"
-          onClick={() => toggleMainSection('title')}
-          className="flex items-center justify-between w-full py-1"
-        >
-          <div className="flex items-center gap-3 sm:gap-2">
-            <span className="inline-flex h-7 w-7 sm:h-5 sm:min-w-5 items-center justify-center rounded-full border border-[#d9dde7] dark:border-white/10 bg-[#f7f8fc] dark:bg-white/[0.04] text-sm sm:text-[10px] font-bold text-[#606062] dark:text-muted-foreground">1</span>
-            <span className="text-sm sm:text-xs font-semibold text-[#4b4d63] dark:text-muted-foreground uppercase tracking-wider">{isAr ? 'العنوان' : 'Title'}</span>
-            <span className="rounded-full border border-rose-300/60 dark:border-rose-400/30 bg-rose-50 dark:bg-rose-500/10 px-2.5 py-1 sm:px-2 sm:py-0.5 text-xs sm:text-[9px] font-bold uppercase tracking-wider text-rose-500 dark:text-rose-300">{isAr ? 'مطلوب' : 'Must'}</span>
-          </div>
-          {titleOpen ? (
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-sky-200 dark:border-sky-400/20 bg-white/80 dark:bg-sky-500/10 text-sky-600 dark:text-sky-300 shadow-[0_8px_18px_rgba(59,130,246,0.10)] dark:shadow-none">
-              <X className="h-4 w-4" />
-            </span>
-          ) : (
-            <span className="text-xl sm:text-lg text-sky-500 dark:text-sky-400/80">+</span>
-          )}
-        </button>
-        {!titleOpen && title.trim() && (
-          <p className="text-sm text-sky-600 dark:text-sky-300 font-medium truncate mt-1">{title}</p>
-        )}
-        {titleOpen && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-[#060541] dark:text-white">{isAr ? 'ابدأ باسم واضح للأغنية' : 'Start with a clear track title'}</p>
-              <p className="text-xs text-[#606062] dark:text-white/60">{isAr ? 'هذه هي الخطوة الأولى، وبعدها ننتقل لاختيار الهوية الموسيقية.' : 'This is the first step, then we move into the musical identity.'}</p>
+
+      {/* ── STEP 1: TITLE ── */}
+      {composeStep === 1 && (
+        <div className={cardCls}>
+          <StepBar current={1} />
+          <div className="text-center pb-5">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[#f7f8fc] dark:bg-white/[0.04] border border-[#e4e6ed] dark:border-white/10 mb-4">
+              <Music className="h-7 w-7 text-[#060541] dark:text-white/60" />
             </div>
+            <h2 className="text-lg font-bold text-[#060541] dark:text-white mb-1">
+              {isAr ? 'مرحباً بك في استوديو الموسيقى' : 'Welcome to Music Studio'}
+            </h2>
+            <p className="text-xs text-[#606062] dark:text-white/50 leading-relaxed">
+              {isAr ? 'لنبدأ! ما هو عنوان أغنيتك؟' : "Let's start — what's your track title?"}
+            </p>
+          </div>
+          <div className="space-y-3">
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value.slice(0, 80))}
               placeholder={isAr ? 'اسم الأغنية...' : 'Track title...'}
-              className="bg-white/90 dark:bg-white/[0.04] border-sky-200/80 dark:border-white/10 shadow-[0_10px_24px_rgba(59,130,246,0.08)] dark:shadow-none focus:border-sky-400/60 focus:ring-sky-400/20 rounded-2xl h-12"
+              className="bg-white dark:bg-white/[0.04] border-[#d9dde7] dark:border-white/10 focus:border-sky-400/60 focus:ring-sky-400/20 rounded-2xl h-12 text-[#060541] dark:text-white"
               maxLength={80}
             />
             <div className="flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground/70 dark:text-muted-foreground/50">{title.length}/80</span>
+              <span className="text-[10px] text-[#858384] dark:text-white/30">{title.length}/80</span>
               {title.trim().length > 0 && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setComposeDetailsVisible(true);
-                    setTitleOpen(false);
-                    setMusicStyleOpen(true);
-                    setStylesOpen(true);
-                    setRhythmOpen(false);
-                    setMoodOpen(false);
-                    setVocalsOpen(false);
-                    setLyricsOpen(false);
-                    setInstrumentsOpen(false);
-                  }}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-semibold bg-gradient-to-r from-[#060541] via-sky-600 to-blue-600 hover:brightness-110 text-white active:scale-95 transition-all shadow-[0_12px_28px_rgba(37,99,235,0.35)]"
+                  onClick={() => goToStep(2)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-semibold bg-[#060541] dark:bg-white/10 hover:opacity-90 text-white active:scale-95 transition-all"
                 >
                   {isAr ? 'التالي' : 'Next'}
                   <ArrowRight className="h-3.5 w-3.5" />
@@ -3332,27 +3450,31 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               )}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {composeDetailsVisible && (
-      <>
-      <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4 space-y-4 sm:space-y-3">
-        {/* Header with collapse toggle */}
-        <button 
-          type="button"
-          onClick={() => toggleMainSection('style')}
-          className="flex items-center justify-between w-full py-1"
-        >
-          <div className="flex items-center gap-3 sm:gap-2">
-            <span className="inline-flex h-7 w-7 sm:h-5 sm:min-w-5 items-center justify-center rounded-full border border-sky-400/20 bg-sky-500/10 text-sm sm:text-[10px] font-bold text-sky-300">2</span>
-            <Music className="h-6 w-6 sm:h-4 sm:w-4 text-sky-400" />
-            <span className="text-sm sm:text-xs font-semibold text-sky-300 uppercase">{isAr ? 'أسلوب الموسيقى' : 'Music Style'}</span>
+      {/* ── STEP 2: MUSIC STYLE ── */}
+      {composeStep === 2 && composeDetailsVisible && (
+        <div className={`${cardCls} space-y-3`}>
+          <StepBar current={2} />
+          <BackBtn toStep={1} />
+          <TrackChip />
+          <div className="flex items-center justify-between pb-1">
+            <div className="flex items-center gap-2">
+              <Music className="h-5 w-5 text-sky-400" />
+              <span className="text-sm font-bold text-[#060541] dark:text-white uppercase tracking-wider">{isAr ? 'أسلوب الموسيقى' : 'Music Style'}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => includeTags.length > 0 ? goToStep(3) : undefined}
+              disabled={includeTags.length === 0}
+              title={includeTags.length === 0 ? (isAr ? 'اختر نمطًا أولاً' : 'Pick a style first') : undefined}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-semibold bg-[#060541] dark:bg-white/10 hover:opacity-90 text-white active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
+            >
+              {isAr ? 'التالي: الصوت' : 'Next: Vocals'}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
           </div>
-          <span className="text-xl sm:text-lg text-sky-400/80">{musicStyleOpen ? '−' : '+'}</span>
-        </button>
-
-        {musicStyleOpen && (
           <>
             <div className="rounded-xl border border-sky-200 dark:border-sky-400/20 bg-sky-50/80 dark:bg-sky-500/10 px-3 py-2 text-[11px] sm:text-[10px] text-sky-700 dark:text-sky-200">
               {isAr ? 'اختر النمط والإيقاع والمزاج والآلات. هذه الاختيارات تبني الهوية الموسيقية.' : 'Choose the style, rhythm, mood, and instruments. These selections build the musical identity.'}
@@ -3396,63 +3518,83 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
             )}
 
             {/* Category: Styles */}
-            <div>
-              <button 
-                type="button"
-                onClick={() => toggleMusicSubsection('styles')}
-                className="flex items-center justify-between w-full text-[10px] font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase mb-1.5"
+            <div className="rounded-2xl border border-[#d9dde7] dark:border-white/[0.08] overflow-hidden">
+              {/* STYLES header */}
+              <div
+                className={`flex items-center justify-between px-4 py-3 border-b border-[#e4e6ed] dark:border-white/[0.06] ${
+                  stylesCollapsed
+                    ? 'bg-[#f0f9ff] dark:bg-sky-500/[0.08] cursor-pointer hover:bg-[#e8f4fd] dark:hover:bg-sky-500/[0.12]'
+                    : 'bg-[#f7f8fc] dark:bg-white/[0.03]'
+                }`}
+                onClick={() => stylesCollapsed && setStylesCollapsed(false)}
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-sm sm:text-xs font-medium text-muted-foreground/80 dark:text-muted-foreground/60 uppercase">{isAr ? 'الأنماط' : 'Styles'}</span>
-                  {!stylesOpen && includeTags.length > 0 && (
-                    <span className="text-xs font-medium text-sky-600 dark:text-sky-300 normal-case">{includeTags[0]}</span>
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-[#060541]/60 dark:text-white/40">{isAr ? 'الأنماط' : 'Styles'}</span>
+                  {includeTags.length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-100 dark:bg-sky-500/20 text-sky-600 dark:text-sky-300 text-[10px] font-semibold border border-sky-200 dark:border-sky-400/30">
+                      ✓ {includeTags[0]}{includeTags.length > 1 ? ` +${includeTags.length - 1}` : ''}
+                    </span>
                   )}
                 </div>
-                <span className="text-xl sm:text-lg text-sky-500 dark:text-sky-400/80">{stylesOpen ? '−' : '+'}</span>
-              </button>
-              {stylesOpen && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[10px] sm:text-xs text-muted-foreground/70 dark:text-muted-foreground/60">
-                      {isAr
-                        ? includeTags.length > 0 ? `تم اختيار: ${includeTags[0]}` : 'اختر نمطًا واحدًا'
-                        : includeTags.length > 0 ? `Selected: ${includeTags[0]}` : 'Pick one style'}
-                    </span>
-                    {includeTags.length > 0 && (
+                <span className="text-[10px] text-[#858384] dark:text-white/30">
+                  {stylesCollapsed ? (isAr ? 'اضغط للتغيير' : 'tap to change') : (isAr ? 'اختر نمطًا واحدًا' : 'Pick one style')}
+                </span>
+              </div>
+              {/* Category accordion rows — hidden when collapsed after pick */}
+              {!stylesCollapsed && <div className="divide-y divide-[#e4e6ed] dark:divide-white/[0.05]">
+                {STYLE_GROUPS.map((group, gIdx) => {
+                  const isOpen = openStyleGroupIdx === gIdx;
+                  const groupSelected = group.items.filter(s => includeTags.includes(s));
+                  return (
+                    <div
+                      key={group.title}
+                      ref={(el) => { styleGroupRefs.current[gIdx] = el; }}
+                    >
                       <button
                         type="button"
-                        onClick={handleStylesNext}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-sky-300 dark:border-sky-400/30 bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-500/20 active:scale-95 transition-all"
+                        onClick={() => setOpenStyleGroupIdx(isOpen ? -1 : gIdx)}
+                        className={`flex items-center justify-between w-full px-4 py-3 transition-colors ${
+                          isOpen
+                            ? 'bg-[#eef4ff] dark:bg-sky-500/[0.08]'
+                            : 'bg-white dark:bg-transparent hover:bg-[#f5f7fb] dark:hover:bg-white/[0.03]'
+                        }`}
                       >
-                        {isAr ? 'التالي' : 'Next'}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`text-xs font-bold uppercase tracking-wider ${
+                            isOpen ? 'text-sky-600 dark:text-sky-300' : 'text-[#374151] dark:text-white/70'
+                          }`}>{group.title}</span>
+                          {!isOpen && groupSelected.length > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-100 dark:bg-sky-500/20 text-sky-600 dark:text-sky-300 text-[10px] font-semibold border border-sky-200 dark:border-sky-400/30">
+                              ✓ {groupSelected[0]}{groupSelected.length > 1 ? ` +${groupSelected.length - 1}` : ''}
+                            </span>
+                          )}
+                        </div>
+                        <span className={`text-base font-light flex-shrink-0 ${
+                          isOpen ? 'text-sky-500 dark:text-sky-300' : 'text-[#858384] dark:text-white/30'
+                        }`}>{isOpen ? '−' : '+'}</span>
                       </button>
-                    )}
-                  </div>
-                  {STYLE_GROUPS.map((group) => (
-                    <div key={group.title} className="space-y-2">
-                      <div className="text-[11px] font-bold uppercase tracking-widest text-[#060541]/70 dark:text-sky-200/80 px-0.5">
-                        {group.title}
-                      </div>
-                      <div className="grid grid-cols-4 gap-2">
-                        {group.items.map((style) => (
-                          <button
-                            key={style}
-                            type="button"
-                            onClick={() => handleStyleToggle(style)}
-                            className={`w-full min-h-[52px] px-2 py-2.5 rounded-2xl text-[11px] sm:text-xs font-semibold leading-tight text-center border transition-all active:scale-95 whitespace-normal break-words flex items-center justify-center ${
-                              includeTags.includes(style)
-                                ? 'bg-sky-50 dark:bg-sky-500/25 border-sky-300 dark:border-sky-400/50 text-sky-700 dark:text-sky-200 shadow-[0_4px_12px_rgba(59,130,246,0.15)] dark:shadow-[0_0_12px_rgba(56,189,248,0.2)]'
-                                : 'bg-white dark:bg-white/[0.09] border-[#d9dde7] dark:border-white/20 text-[#374151] dark:text-white/90 hover:border-sky-300 dark:hover:border-sky-400/50 hover:text-sky-700 dark:hover:text-sky-200 hover:bg-sky-50/50 dark:hover:bg-sky-500/15'
-                            }`}
-                          >
-                            {style}
-                          </button>
-                        ))}
-                      </div>
+                      {isOpen && (
+                        <div className="px-3 pb-3 pt-2 grid grid-cols-4 gap-2 bg-[#fafbff] dark:bg-white/[0.01]">
+                          {group.items.map((style) => (
+                            <button
+                              key={style}
+                              type="button"
+                              onClick={() => handleStyleToggle(style)}
+                              className={`w-full min-h-[48px] px-2 py-2 rounded-xl text-[11px] font-semibold leading-tight text-center border transition-all active:scale-95 whitespace-normal break-words flex items-center justify-center ${
+                                includeTags.includes(style)
+                                  ? 'bg-sky-50 dark:bg-sky-500/25 border-sky-300 dark:border-sky-400/50 text-sky-700 dark:text-sky-200 shadow-[0_4px_12px_rgba(59,130,246,0.15)]'
+                                  : 'bg-white dark:bg-white/[0.06] border-[#d9dde7] dark:border-white/15 text-[#374151] dark:text-white/80 hover:border-sky-300 dark:hover:border-sky-400/40 hover:text-sky-700 dark:hover:text-sky-200 hover:bg-sky-50/50 dark:hover:bg-sky-500/10'
+                              }`}
+                            >
+                              {style}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
-              )}
+                  );
+                })}
+              </div>}
             </div>
 
             {/* Category: Rhythm / Beat */}
@@ -3485,10 +3627,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                             key={rhythm}
                             type="button"
                             onClick={() => handleRhythmToggle(rhythm)}
-                            className={`flex-1 min-h-[44px] px-3 py-2 rounded-2xl text-xs sm:text-sm leading-tight text-center border transition-all active:scale-95 ${
+                            className={`flex-1 min-h-[44px] px-3 py-2 rounded-2xl text-xs sm:text-sm leading-tight text-center border-2 transition-all active:scale-95 font-semibold ${
                               rhythmTags.includes(rhythm)
-                                ? 'bg-orange-50 dark:bg-orange-500/25 border-orange-300 dark:border-orange-400/40 text-orange-700 dark:text-orange-200'
-                                : 'bg-orange-50/60 dark:bg-orange-500/10 border-orange-200 dark:border-orange-400/25 text-orange-600 dark:text-orange-300 ring-1 ring-orange-300/40'
+                                ? 'bg-orange-500 dark:bg-orange-500 border-orange-500 dark:border-orange-400 text-white shadow-[0_0_16px_rgba(249,115,22,0.5)]'
+                                : 'bg-transparent border-orange-400 dark:border-orange-400/60 text-orange-500 dark:text-orange-300 shadow-[0_0_12px_rgba(249,115,22,0.25)] dark:shadow-[0_0_12px_rgba(249,115,22,0.2)] hover:bg-orange-50 dark:hover:bg-orange-500/10'
                             }`}
                           >
                             {rhythm}
@@ -3538,7 +3680,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                               rhythmTags.includes(rhythm)
                                 ? 'bg-orange-50 dark:bg-orange-500/25 border-orange-300 dark:border-orange-400/40 text-orange-700 dark:text-orange-200 shadow-[0_4px_12px_rgba(249,115,22,0.12)] dark:shadow-[0_0_12px_rgba(249,115,22,0.15)]'
                                 : recommendedRhythms.includes(rhythm)
-                                  ? 'bg-orange-50/40 dark:bg-orange-500/15 border-orange-200 dark:border-orange-400/30 text-orange-600 dark:text-orange-300'
+                                  ? 'bg-transparent border-orange-400 dark:border-orange-400/50 text-orange-500 dark:text-orange-300 shadow-[0_0_10px_rgba(249,115,22,0.2)] dark:shadow-[0_0_10px_rgba(249,115,22,0.15)]'
                                   : 'bg-white dark:bg-white/[0.09] border-[#d9dde7] dark:border-white/20 text-[#374151] dark:text-white/90 hover:border-orange-300 dark:hover:border-orange-400/40 hover:text-orange-600 dark:hover:text-orange-200 dark:hover:bg-orange-500/15'
                             }`}
                           >
@@ -3582,10 +3724,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                             key={mood}
                             type="button"
                             onClick={() => handleMoodToggle(mood)}
-                            className={`flex-1 min-h-[44px] px-3 py-2 rounded-2xl text-xs sm:text-sm leading-tight text-center border transition-all active:scale-95 ${
+                            className={`flex-1 min-h-[44px] px-3 py-2 rounded-2xl text-xs sm:text-sm leading-tight text-center border-2 transition-all active:scale-95 font-semibold ${
                               moodTags.includes(mood)
-                                ? 'bg-amber-50 dark:bg-amber-500/25 border-amber-300 dark:border-amber-400/40 text-amber-700 dark:text-amber-200'
-                                : 'bg-amber-50/60 dark:bg-amber-500/10 border-amber-200 dark:border-amber-400/25 text-amber-600 dark:text-amber-300 ring-1 ring-amber-300/40'
+                                ? 'bg-amber-500 dark:bg-amber-500 border-amber-500 dark:border-amber-400 text-white shadow-[0_0_16px_rgba(245,158,11,0.5)]'
+                                : 'bg-transparent border-amber-400 dark:border-amber-400/60 text-amber-500 dark:text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)] dark:shadow-[0_0_12px_rgba(245,158,11,0.2)] hover:bg-amber-50 dark:hover:bg-amber-500/10'
                             }`}
                           >
                             {mood}
@@ -3732,25 +3874,20 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               )}
             </div>
           </>
-        )}
-      </div>
+        </div>
+      )}
 
-      <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4 space-y-4 sm:space-y-3">
-        <button 
-          type="button"
-          onClick={() => toggleMainSection('vocals')}
-          className="flex items-center justify-between w-full py-1"
-        >
-          <div className="flex items-center gap-3 sm:gap-2">
-            <span className="inline-flex h-7 w-7 sm:h-5 sm:min-w-5 items-center justify-center rounded-full border border-emerald-400/20 bg-emerald-500/10 text-sm sm:text-[10px] font-bold text-emerald-300">3</span>
-            <Mic className="h-6 w-6 sm:h-4 sm:w-4 text-emerald-400" />
-            <span className="text-sm sm:text-xs font-semibold text-emerald-300 uppercase tracking-wider">{isAr ? 'الصوت' : 'Vocals'}</span>
-            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 sm:px-2 sm:py-0.5 text-xs sm:text-[9px] font-bold uppercase tracking-wider text-emerald-300">{isAr ? 'اختياري' : 'Optional'}</span>
+      {/* ── STEP 3: VOCALS ── */}
+      {composeStep === 3 && composeDetailsVisible && (
+        <div className={`${cardCls} space-y-3`}>
+          <StepBar current={3} />
+          <BackBtn toStep={2} />
+          <TrackChip />
+          <div className="flex items-center gap-2 pb-1">
+            <Mic className="h-5 w-5 text-emerald-400" />
+            <span className="text-sm font-bold text-[#060541] dark:text-white uppercase tracking-wider">{isAr ? 'الصوت' : 'Vocals'}</span>
+            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-300">{isAr ? 'اختياري' : 'Optional'}</span>
           </div>
-          <span className="text-xl sm:text-lg text-emerald-400/80">{vocalsOpen ? '−' : '+'}</span>
-        </button>
-        
-        {vocalsOpen && (
           <div className="flex flex-wrap gap-2">
             {(['auto', 'none', 'female', 'male'] as const).map((v) => {
               const labels: Record<string, { en: string; ar: string }> = {
@@ -3771,24 +3908,29 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               );
             })}
           </div>
-        )}
-      </div>
-
-      <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4 space-y-4">
-        <button
-          type="button"
-          onClick={() => toggleMainSection('lyrics')}
-          className="flex items-center justify-between w-full py-1"
-        >
-          <div className="flex items-center gap-3 sm:gap-2">
-            <span className="inline-flex h-7 w-7 sm:h-5 sm:min-w-5 items-center justify-center rounded-full border border-purple-400/20 bg-purple-500/10 text-sm sm:text-[10px] font-bold text-purple-300">4</span>
-            <span className="text-sm sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isAr ? 'الكلمات' : 'Lyrics'}</span>
-            <span className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2.5 py-1 sm:px-2 sm:py-0.5 text-xs sm:text-[9px] font-bold uppercase tracking-wider text-rose-300">{isAr ? 'مطلوب' : 'Must'}</span>
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => goToStep(4)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-semibold bg-[#060541] dark:bg-white/10 hover:opacity-90 text-white active:scale-95 transition-all"
+            >
+              {isAr ? 'التالي: الكلمات' : 'Next: Lyrics'}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
           </div>
-          <span className="text-xl sm:text-lg text-purple-400/80">{lyricsOpen ? '−' : '+'}</span>
-        </button>
+        </div>
+      )}
 
-        {lyricsOpen && (
+      {/* ── STEP 4: LYRICS ── */}
+      {composeStep === 4 && composeDetailsVisible && (
+        <div className={`${cardCls} space-y-3`}>
+          <StepBar current={4} />
+          <BackBtn toStep={3} />
+          <TrackChip />
+          <div className="flex items-center gap-2 pb-1">
+            <span className="text-sm font-bold text-[#060541] dark:text-white uppercase tracking-wider">{isAr ? 'الكلمات' : 'Lyrics'}</span>
+            <span className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-rose-300">{isAr ? 'مطلوب' : 'Must'}</span>
+          </div>
           <div className="space-y-3">
             <div className="flex items-center justify-end">
               <button
@@ -3852,7 +3994,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               </button>
             </div>
           </div>
-        )}
 
         {lastError && (
           <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-400/20 text-red-300 text-xs">
@@ -3860,8 +4001,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
             {lastError}
           </div>
         )}
-      </div>
-      </>
+        </div>
       )}
 
       {/* ── Generating State ── */}

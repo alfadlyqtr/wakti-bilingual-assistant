@@ -72,23 +72,25 @@ serve(async (req) => {
 
     // ── Mode: create — fire one I2V task and return task_id immediately ──
     if (mode === 'create') {
-      const { image_url, prompt, scene_index } = body;
+      const { image_url, prompt, scene_index, duration } = body;
       if (!image_url) {
         return new Response(JSON.stringify({ error: 'image_url required' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      console.log(`[cinema-animator] Creating I2V task for scene ${scene_index}`);
+      // Hailuo 2.3 valid durations: 6 or 10 seconds
+      const validDuration = ['6', '10'].includes(String(duration)) ? String(duration) : '6';
+
+      console.log(`[cinema-animator] Creating Hailuo I2V task for scene ${scene_index}, duration=${validDuration}s`);
 
       const requestBody = {
-        model: 'grok-imagine/image-to-video',
+        model: 'bytedance/hailuo-2.3-image-to-video-standard',
         input: {
-          image_urls: [image_url],
-          duration: '10',
-          resolution: '720p',
-          mode: 'normal',
-          ...(prompt ? { prompt: prompt.slice(0, 2500) } : {}),
+          image_url: String(image_url),
+          duration: validDuration,
+          resolution: '768P',
+          ...(prompt ? { prompt: String(prompt).slice(0, 2500) } : {}),
         },
       };
 

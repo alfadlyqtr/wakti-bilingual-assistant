@@ -1418,41 +1418,53 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setIsFilming(true);
     setAnimProgress(Array(cinemaSceneCount).fill('rendering'));
     setCinemaStep('filming');
-    setStitchStatus(language === 'ar' ? '🎬 جاري إطلاق كل المشاهد بالتوازي...' : '🎬 Firing all 4 Hailuo tasks in parallel...');
+    setStitchStatus(language === 'ar' ? '🎬 جاري إطلاق كل المشاهد بالتوازي...' : '🎬 Firing all 4 scene tasks in parallel...');
 
     try {
       const imageUrls = images.slice(0, cinemaSceneCount) as string[];
-      const scripts = cinemaScenes.slice(0, cinemaSceneCount).map(s => s?.text || '');
+      // Use english_prompt for motion direction (not display text)
+      const scripts = cinemaScenes.slice(0, cinemaSceneCount).map(s => s?.english_prompt || s?.text || '');
 
-      // ── Step 1: Fire ALL 4 Hailuo 2.3 tasks in parallel ──
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) throw new Error('Not authenticated');
+
+      const animatorCall = async (body: Record<string, unknown>) => {
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/cinema-animator`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify(body),
+        });
+        const json = await resp.json();
+        if (!resp.ok || !json.ok) throw new Error(json.error || `cinema-animator ${resp.status}`);
+        return json;
+      };
+
+      // ── Step 1: Fire ALL scene tasks in parallel ──
       const taskPromises = imageUrls.map(async (imgUrl, idx) => {
-        // Merge VS spatial brief into motion prompt for better physics
         const vsBrief = visualSupervisorPrompts[idx];
         const basePrompt = scripts[idx] || '';
         const motionPrompt = vsBrief
           ? `${basePrompt} ${vsBrief}`.slice(0, 500)
           : basePrompt;
 
-        const { data, error } = await supabase.functions.invoke('freepik-image2video', {
-          body: {
-            generation_type: 'image_to_video',
-            model: 'bytedance/hailuo-2.3-image-to-video-standard',
-            image: imgUrl,
-            prompt: motionPrompt || undefined,
-            duration: String(AD_DURATIONS[idx] ?? 10),
-            aspect_ratio: cinemaFormat === '16:9' ? '16:9' : '9:16',
-            resolution: '720p',
-            mode: 'async',
-          },
+        const result = await animatorCall({
+          mode: 'create',
+          image_url: imgUrl,
+          prompt: motionPrompt || undefined,
+          scene_index: idx,
+          duration: String(AD_DURATIONS[idx] ?? 6),
         });
-        if (error) throw new Error(`Beat ${idx + 1}: ${error.message}`);
-        if (!data?.ok || !data?.task_id) throw new Error(data?.error || `Beat ${idx + 1}: No task_id`);
-        console.log(`[ads] Beat ${idx + 1} Hailuo task: ${data.task_id} (${AD_DURATIONS[idx]}s)`);
-        return data.task_id as string;
+        console.log(`[ads] Beat ${idx + 1} task: ${result.task_id} (${AD_DURATIONS[idx]}s)`);
+        return result.task_id as string;
       });
 
       const taskIds = await Promise.all(taskPromises);
-      setStitchStatus(language === 'ar' ? '🎬 الكل في الإنتاج... انتظر' : '🎬 All 4 beats rendering… hang tight');
+      setStitchStatus(language === 'ar' ? '🎬 الكل في الإنتاج... انتظر' : '🎬 All beats rendering… hang tight');
 
       // ── Step 2: Poll all tasks in parallel until every clip is done ──
       const clipUrls: string[] = new Array(taskIds.length).fill('');
@@ -1462,17 +1474,14 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         await Promise.all(taskIds.map(async (taskId, idx) => {
           if (clipUrls[idx]) return; // already done
           try {
-            const { data: statusData } = await supabase.functions.invoke('freepik-image2video', {
-              body: { mode: 'status', task_id: taskId, increment_usage: false },
-            });
-            const s = statusData?.data;
-            if (s?.status === 'COMPLETED' && (s?.video?.url || s?.generated?.[0])) {
-              clipUrls[idx] = s.video?.url || s.generated[0];
+            const statusResult = await animatorCall({ mode: 'status', task_id: taskId, scene_index: idx });
+            if (statusResult.status === 'COMPLETED' && statusResult.video_url) {
+              clipUrls[idx] = statusResult.video_url;
               setVideoClips(prev => { const n = [...prev]; n[idx] = clipUrls[idx]; return n; });
               setAnimProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
               console.log(`[ads] Beat ${idx + 1} ready: ${clipUrls[idx].slice(0, 60)}…`);
-            } else if (s?.status === 'FAILED') {
-              throw new Error(s?.error || `Beat ${idx + 1} failed`);
+            } else if (statusResult.status === 'FAILED') {
+              throw new Error(statusResult.error || `Beat ${idx + 1} failed`);
             }
           } catch (pollErr: any) {
             console.warn(`[ads] Beat ${idx + 1} poll error:`, pollErr);
@@ -1819,11 +1828,14 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         if (!resp.ok || !json.ok) throw new Error(json.error || `Image generation failed (${resp.status})`);
         return json;
       };
-      const regenPollTask = async (task_id: string): Promise<string> => {
+      const regenPollTask = async (task_id: string): Promise<{ url: string; options: string[] }> => {
         for (let i = 0; i < 36; i++) {
           await new Promise(r => setTimeout(r, 5000));
           const res = await regenArtistCall({ mode: 'status', task_id, scene_index: sceneIdx });
-          if (res.status === 'COMPLETED' && res.image_url) return res.image_url as string;
+          if (res.status === 'COMPLETED' && res.image_url) {
+            const opts: string[] = Array.isArray(res.image_urls) && res.image_urls.length > 0 ? res.image_urls : [res.image_url as string];
+            return { url: res.image_url as string, options: opts };
+          }
           if (res.status === 'FAILED') throw new Error(res.error || 'Failed');
         }
         throw new Error('Timed out');
@@ -1839,7 +1851,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       // Only use I2I when the user explicitly uploaded a scene-specific anchor image.
       const forceT2I = !note && !sceneAnchor;
 
-      let imgUrl: string;
+      let result: { url: string; options: string[] };
       if (!forceT2I && sceneAnchor) {
         // User explicitly uploaded a scene anchor — use I2I with it
         const created = await regenArtistCall({
@@ -1849,7 +1861,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           anchor_pipeline: 'style',
           scene_index: sceneIdx,
         });
-        imgUrl = await regenPollTask(created.task_id);
+        result = await regenPollTask(created.task_id);
       } else {
         // T2I — reliable fresh generation with a new prompt
         const created = await regenArtistCall({
@@ -1858,9 +1870,16 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           aspect_ratio: cinemaFormat,
           scene_index: sceneIdx,
         });
-        imgUrl = await regenPollTask(created.task_id);
+        result = await regenPollTask(created.task_id);
       }
-      setSceneImages(prev => { const n = [...prev]; n[sceneIdx] = imgUrl; return n; });
+      // If multiple shots returned, show options picker (same as initial cast)
+      if (result.options.length > 1) {
+        setSceneImageOptions(prev => { const n = [...prev]; n[sceneIdx] = result.options; return n; });
+        setSceneImages(prev => { const n = [...prev]; n[sceneIdx] = null; return n; });
+      } else {
+        setSceneImages(prev => { const n = [...prev]; n[sceneIdx] = result.url; return n; });
+        setSceneImageOptions(prev => { const n = [...prev]; n[sceneIdx] = null; return n; });
+      }
       setCastingProgress(prev => { const n = [...prev]; n[sceneIdx] = 'done'; return n; });
       toast.success(language === 'ar' ? `تم إعادة توليد المشهد ${sceneIdx + 1}` : `Scene ${sceneIdx + 1} regenerated!`);
     } catch (err: any) {
