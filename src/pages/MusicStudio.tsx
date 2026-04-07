@@ -1418,6 +1418,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [composeDetailsVisible, setComposeDetailsVisible] = useState(false);
   const [openStyleGroupIdx, setOpenStyleGroupIdx] = useState(0);
   const [stylesCollapsed, setStylesCollapsed] = useState(false);
+  const [step2ReadyToProceed, setStep2ReadyToProceed] = useState(false);
   const styleGroupRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [composeStep, setComposeStep] = useState<1|2|3|4>(1);
   const [includeTags, setIncludeTags] = useState<string[]>([]);
@@ -2728,8 +2729,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       if (next.length === 13) {
         setTimeout(() => {
           setInstrumentsOpen(false);
-          setVocalsOpen(true);
           setStylesOpen(false);
+          setStep2ReadyToProceed(true);
         }, 0);
       }
 
@@ -2739,7 +2740,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   function handleInstrumentsNext() {
     setInstrumentsOpen(false);
-    setVocalsOpen(true);
+    setStep2ReadyToProceed(true);
   }
 
   function handleMoodToggle(mood: string) {
@@ -2775,6 +2776,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     setVocalType(v);
     setVocalsOpen(false);
     setLyricsOpen(true);
+    setTimeout(() => goToStep(4), 700);
   }
 
   function toggleMainSection(section: 'title' | 'style' | 'vocals' | 'lyrics') {
@@ -3362,6 +3364,16 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     return () => document.removeEventListener('mousedown', handleDocClick);
   }, [showIncludePicker, showInstrumentPicker, showMoodPicker]);
 
+  // Auto-advance Step 2 → Step 3 when all subsections done
+  useEffect(() => {
+    if (!step2ReadyToProceed) return;
+    const timer = setTimeout(() => {
+      setStep2ReadyToProceed(false);
+      goToStep(3);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [step2ReadyToProceed]);
+
   // Clear all tag selections when language switches (English tags must not show in Arabic mode)
   useEffect(() => {
     setIncludeTags([]);
@@ -3469,7 +3481,11 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               onClick={() => includeTags.length > 0 ? goToStep(3) : undefined}
               disabled={includeTags.length === 0}
               title={includeTags.length === 0 ? (isAr ? 'اختر نمطًا أولاً' : 'Pick a style first') : undefined}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-semibold bg-[#060541] dark:bg-white/10 hover:opacity-90 text-white active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-semibold text-white active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 ${
+                step2ReadyToProceed
+                  ? 'bg-emerald-500 dark:bg-emerald-500 animate-pulse shadow-[0_0_20px_rgba(16,185,129,0.7)]'
+                  : 'bg-[#060541] dark:bg-white/10 hover:opacity-90'
+              }`}
             >
               {isAr ? 'التالي: الصوت' : 'Next: Vocals'}
               <ArrowRight className="h-3.5 w-3.5" />
