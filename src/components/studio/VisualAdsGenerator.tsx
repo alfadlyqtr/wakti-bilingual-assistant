@@ -361,6 +361,7 @@ export default function VisualAdsGenerator({
   }>>([]);
   const hasAtLeastOneValidAsset = uploadedImages.some((asset) => asset.type !== null && (asset.type !== 'other' || Boolean(asset.customType?.trim())));
   const hasIncompleteAssetTags = uploadedImages.some((asset) => asset.type === null || (asset.type === 'other' && !asset.customType?.trim()));
+  const canContinueToStep2 = uploadedImages.length > 0 && !hasIncompleteAssetTags;
   
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -810,12 +811,16 @@ export default function VisualAdsGenerator({
                       : 'If you choose Other, add a short custom label with up to two words.'}
                   </p>
                 )}
-                {hasAtLeastOneValidAsset && (
+                {canContinueToStep2 && (
                   <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 space-y-2">
                     <p className="text-[11px] font-medium text-green-700 dark:text-green-300">
                       {language === 'ar'
-                        ? 'الحد الأدنى جاهز. يمكنك المتابعة الآن أو إضافة صورتين إضافيتين اختيارياً.'
-                        : 'Minimum requirement complete. You can continue now or add up to 2 more optional images.'}
+                        ? (uploadedImages.length === 1
+                            ? 'الصورة المضافة جاهزة الآن. يمكنك المتابعة إلى الخطوة ٢ أو إضافة المزيد من الصور.'
+                            : 'جميع الصور المضافة جاهزة الآن. يمكنك المتابعة إلى الخطوة ٢ أو إضافة المزيد من الصور.')
+                        : (uploadedImages.length === 1
+                            ? 'Your uploaded image is ready. You can continue to Step 2 or add more images.'
+                            : 'All uploaded images are ready. You can continue to Step 2 or add more images.')}
                     </p>
                     <button
                       type="button"

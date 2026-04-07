@@ -3329,15 +3329,17 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
             <span className="inline-flex h-7 w-7 sm:h-5 sm:min-w-5 items-center justify-center rounded-full border border-sky-400/20 bg-sky-500/10 text-sm sm:text-[10px] font-bold text-sky-300">2</span>
             <Music className="h-6 w-6 sm:h-4 sm:w-4 text-sky-400" />
             <span className="text-sm sm:text-xs font-semibold text-sky-300 uppercase">{isAr ? 'أسلوب الموسيقى' : 'Music Style'}</span>
-            <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 sm:px-2 sm:py-0.5 text-xs sm:text-[9px] font-bold uppercase tracking-wider text-sky-300">{isAr ? 'اختياري' : 'Optional'}</span>
           </div>
           <span className="text-xl sm:text-lg text-sky-400/80">{musicStyleOpen ? '−' : '+'}</span>
         </button>
 
         {musicStyleOpen && (
           <>
+            <div className="rounded-xl border border-sky-200 dark:border-sky-400/20 bg-sky-50/80 dark:bg-sky-500/10 px-3 py-2 text-[11px] sm:text-[10px] text-sky-700 dark:text-sky-200">
+              {isAr ? 'اختر النمط والإيقاع والمزاج والآلات. هذه الاختيارات تبني الهوية الموسيقية.' : 'Choose the style, rhythm, mood, and instruments. These selections build the musical identity.'}
+            </div>
             {/* Selected tags - compact row */}
-            {(includeTags.length > 0 || instrumentTags.length > 0 || moodTags.length > 0) && (
+            {(includeTags.length > 0 || instrumentTags.length > 0 || rhythmTags.length > 0 || moodTags.length > 0) && (
               <div className="flex flex-wrap gap-1.5 pb-2 border-b border-[#eceef5] dark:border-white/5">
                 {includeTags.map((tag) => (
                   <span key={tag} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sky-50 dark:bg-sky-500/20 border border-sky-200 dark:border-sky-400/30 text-sky-600 dark:text-sky-300 text-sm shadow-[0_2px_8px_rgba(59,130,246,0.10)] dark:shadow-none">
@@ -3709,17 +3711,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                   ))}
                 </div>
               )}
-            </div>
-
-            {/* Extra details input - compact */}
-            <div className="pt-1">
-              <input
-                type="text"
-                value={styleText}
-                onChange={(e) => setStyleText(e.target.value.slice(0, 150))}
-                placeholder={isAr ? 'تفاصيل إضافية... (اختياري)' : 'Extra details... (optional)'}
-                className="w-full px-3 py-2 rounded-lg bg-[#fcfefd] dark:bg-white/[0.03] border border-[#d9dde7] dark:border-white/10 shadow-[0_4px_12px_rgba(6,5,65,0.04)] dark:shadow-none text-xs placeholder:text-muted-foreground/50 focus:border-sky-400/50 focus:outline-none"
-              />
             </div>
           </>
         )}
