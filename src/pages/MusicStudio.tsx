@@ -1408,13 +1408,14 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     return STYLE_GROUPS.flatMap((group) => group.items);
   }, [STYLE_GROUPS]);
 
-      // Collapse states for Music Style section
-  const [titleOpen, setTitleOpen] = useState(false);
+  // Collapse states for Music Style section
+  const [titleOpen, setTitleOpen] = useState(true);
   const [musicStyleOpen, setMusicStyleOpen] = useState(false);
   const [stylesOpen, setStylesOpen] = useState(false);
   const [instrumentsOpen, setInstrumentsOpen] = useState(false);
   const [rhythmOpen, setRhythmOpen] = useState(false);
   const [moodOpen, setMoodOpen] = useState(false);
+  const [composeDetailsVisible, setComposeDetailsVisible] = useState(false);
   const [includeTags, setIncludeTags] = useState<string[]>([]);
   const [instrumentTags, setInstrumentTags] = useState<string[]>([]);
   const [rhythmTags, setRhythmTags] = useState<string[]>([]);
@@ -2683,6 +2684,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }
 
   function toggleMainSection(section: 'title' | 'style' | 'vocals' | 'lyrics') {
+    if (!composeDetailsVisible && section !== 'title') return;
     setTitleOpen(section === 'title' ? !titleOpen : false);
     setMusicStyleOpen(section === 'style' ? !musicStyleOpen : false);
     setVocalsOpen(section === 'vocals' ? !vocalsOpen : false);
@@ -3268,8 +3270,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   return (
     <div className="space-y-4">
-      {/* ── Title (First) ── */}
-      <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4 space-y-4 sm:space-y-3">
+      <div className={`rounded-2xl border transition-all ${titleOpen
+        ? 'border-sky-300/70 dark:border-sky-400/25 bg-gradient-to-br from-white via-[#f8fbff] to-[#eef6ff] dark:from-[#0c0f14] dark:via-[#101722] dark:to-[#0c0f14] shadow-[0_16px_40px_rgba(59,130,246,0.12)] dark:shadow-[0_0_30px_rgba(56,189,248,0.12)]'
+        : 'border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none'
+      } p-5 sm:p-4 space-y-4 sm:space-y-3`}>
         <button
           type="button"
           onClick={() => toggleMainSection('title')}
@@ -3280,18 +3284,28 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
             <span className="text-sm sm:text-xs font-semibold text-[#4b4d63] dark:text-muted-foreground uppercase tracking-wider">{isAr ? 'العنوان' : 'Title'}</span>
             <span className="rounded-full border border-rose-300/60 dark:border-rose-400/30 bg-rose-50 dark:bg-rose-500/10 px-2.5 py-1 sm:px-2 sm:py-0.5 text-xs sm:text-[9px] font-bold uppercase tracking-wider text-rose-500 dark:text-rose-300">{isAr ? 'مطلوب' : 'Must'}</span>
           </div>
-          <span className="text-xl sm:text-lg text-sky-500 dark:text-sky-400/80">{titleOpen ? '−' : '+'}</span>
+          {titleOpen ? (
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-sky-200 dark:border-sky-400/20 bg-white/80 dark:bg-sky-500/10 text-sky-600 dark:text-sky-300 shadow-[0_8px_18px_rgba(59,130,246,0.10)] dark:shadow-none">
+              <X className="h-4 w-4" />
+            </span>
+          ) : (
+            <span className="text-xl sm:text-lg text-sky-500 dark:text-sky-400/80">+</span>
+          )}
         </button>
         {!titleOpen && title.trim() && (
           <p className="text-sm text-sky-600 dark:text-sky-300 font-medium truncate mt-1">{title}</p>
         )}
         {titleOpen && (
-          <div className="space-y-2">
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-[#060541] dark:text-white">{isAr ? 'ابدأ باسم واضح للأغنية' : 'Start with a clear track title'}</p>
+              <p className="text-xs text-[#606062] dark:text-white/60">{isAr ? 'هذه هي الخطوة الأولى، وبعدها ننتقل لاختيار الهوية الموسيقية.' : 'This is the first step, then we move into the musical identity.'}</p>
+            </div>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value.slice(0, 80))}
               placeholder={isAr ? 'اسم الأغنية...' : 'Track title...'}
-              className="bg-[#fcfefd] dark:bg-white/[0.04] border-[#d9dde7] dark:border-white/10 shadow-[0_4px_12px_rgba(6,5,65,0.04)] dark:shadow-none focus:border-sky-400/50 focus:ring-sky-400/20 rounded-xl h-11"
+              className="bg-white/90 dark:bg-white/[0.04] border-sky-200/80 dark:border-white/10 shadow-[0_10px_24px_rgba(59,130,246,0.08)] dark:shadow-none focus:border-sky-400/60 focus:ring-sky-400/20 rounded-2xl h-12"
               maxLength={80}
             />
             <div className="flex items-center justify-between">
@@ -3300,16 +3314,20 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 <button
                   type="button"
                   onClick={() => {
+                    setComposeDetailsVisible(true);
                     setTitleOpen(false);
                     setMusicStyleOpen(true);
                     setStylesOpen(true);
                     setRhythmOpen(false);
                     setMoodOpen(false);
+                    setVocalsOpen(false);
+                    setLyricsOpen(false);
                     setInstrumentsOpen(false);
                   }}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-sky-500 hover:bg-sky-600 text-white active:scale-95 transition-all shadow-[0_4px_12px_rgba(59,130,246,0.3)]"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-semibold bg-gradient-to-r from-[#060541] via-sky-600 to-blue-600 hover:brightness-110 text-white active:scale-95 transition-all shadow-[0_12px_28px_rgba(37,99,235,0.35)]"
                 >
-                  {isAr ? 'التالي' : 'Next'} →
+                  {isAr ? 'التالي' : 'Next'}
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
@@ -3317,7 +3335,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         )}
       </div>
 
-      {/* ── Music Style ── */}
+      {composeDetailsVisible && (
+      <>
       <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4 space-y-4 sm:space-y-3">
         {/* Header with collapse toggle */}
         <button 
@@ -3716,7 +3735,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         )}
       </div>
 
-      {/* ── Vocals ── */}
       <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4 space-y-4 sm:space-y-3">
         <button 
           type="button"
@@ -3756,7 +3774,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         )}
       </div>
 
-      {/* ── Compose Form ── */}
       <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4 space-y-4">
         <button
           type="button"
@@ -3844,6 +3861,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* ── Generating State ── */}
       {submitting && generatingTask && (

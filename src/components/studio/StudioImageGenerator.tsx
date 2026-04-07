@@ -29,6 +29,7 @@ import VisualAdsGenerator, { type VisualAdsState } from '@/components/studio/Vis
 type ImageSubmode = 'text2image' | 'image2image' | 'background-removal' | 'draw' | 'visual-ads';
 
 const SUPABASE_URL = ((import.meta as any).env?.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co').trim();
+const MAX_STUDIO_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 /** Strip stray spaces / %20 from a storage URL before persisting it. */
 const sanitizeImageUrl = (url: string): string =>
@@ -89,6 +90,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   const [isSaved, setIsSaved] = useState(false);
   const [savedBucketUrl, setSavedBucketUrl] = useState<string | null>(null);
   const [savedImageId, setSavedImageId] = useState<string | null>(null);
+  const [savedSourceUrl, setSavedSourceUrl] = useState<string | null>(null);
 
   const hasArabic = (s: string) => /[\u0600-\u06FF]/.test(s || '');
 
@@ -206,8 +208,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     if (!files || files.length === 0) return;
     const file = files[0];
     if (!file.type.startsWith('image/') && !file.name.toLowerCase().match(/\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff)$/)) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error(language === 'ar' ? 'الحد الأقصى 5 ميجابايت' : 'Max 5MB');
+    if (file.size > MAX_STUDIO_IMAGE_UPLOAD_BYTES) {
+      toast.error(language === 'ar' ? 'الحد الأقصى 10 ميجابايت' : 'Max 10MB');
       return;
     }
     try {
@@ -233,8 +235,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     if (!files || files.length === 0) return;
     const file = files[0];
     if (!file.type.startsWith('image/') && !file.name.toLowerCase().match(/\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff)$/)) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error(language === 'ar' ? 'الحد الأقصى 5 ميجابايت' : 'Max 5MB');
+    if (file.size > MAX_STUDIO_IMAGE_UPLOAD_BYTES) {
+      toast.error(language === 'ar' ? 'الحد الأقصى 10 ميجابايت' : 'Max 10MB');
       return;
     }
     try {
@@ -260,8 +262,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     if (!files || files.length === 0) return;
     const file = files[0];
     if (!file.type.startsWith('image/') && !file.name.toLowerCase().match(/\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff)$/)) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error(language === 'ar' ? 'الحد الأقصى 5 ميجابايت' : 'Max 5MB');
+    if (file.size > MAX_STUDIO_IMAGE_UPLOAD_BYTES) {
+      toast.error(language === 'ar' ? 'الحد الأقصى 10 ميجابايت' : 'Max 10MB');
       return;
     }
     try {
@@ -287,8 +289,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     if (!files || files.length === 0) return;
     const file = files[0];
     if (!file.type.startsWith('image/') && !file.name.toLowerCase().match(/\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff)$/)) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error(language === 'ar' ? 'الحد الأقصى 5 ميجابايت' : 'Max 5MB');
+    if (file.size > MAX_STUDIO_IMAGE_UPLOAD_BYTES) {
+      toast.error(language === 'ar' ? 'الحد الأقصى 10 ميجابايت' : 'Max 10MB');
       return;
     }
     try {
@@ -540,7 +542,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       triggerSaveSuccess = true,
     } = options || {};
 
-    if (isSaved && savedImageId) {
+    if (isSaved && savedImageId && savedSourceUrl === imageUrl) {
       if (showAlreadySavedToast) {
         toast.success(language === 'ar' ? 'تم الحفظ بالفعل' : 'Already saved');
       }
@@ -599,10 +601,12 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
           .select('id')
           .single();
         if (dbErr) throw dbErr;
-        if (row?.id) setSavedImageId(row.id);
+        if (!row?.id) throw new Error('Save succeeded but no record ID was returned');
+        setSavedImageId(row.id);
       }
 
       setIsSaved(true);
+      setSavedSourceUrl(imageUrl);
       if (showSuccessToast) {
         toast.success(language === 'ar' ? 'تم الحفظ' : 'Saved');
       }
@@ -619,7 +623,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     } finally {
       setIsSaving(false);
     }
-  }, [user?.id, isSaved, savedImageId, savedBucketUrl, submode, prompt, quality, language, onSaveSuccess, importExternalImageToStorage]);
+  }, [user?.id, isSaved, savedImageId, savedBucketUrl, savedSourceUrl, submode, prompt, quality, language, onSaveSuccess, importExternalImageToStorage]);
 
   const selectQuickResult = useCallback((index: number) => {
     const nextUrl = resultUrls[index];
@@ -629,6 +633,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     setIsSaved(false);
     setSavedBucketUrl(null);
     setSavedImageId(null);
+    setSavedSourceUrl(null);
   }, [resultUrls]);
 
   // ─── Main generate handler ───
@@ -652,6 +657,10 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     setResultImageUrl(null);
     setResultUrls([]);
     setPickerIndex(0);
+    setIsSaved(false);
+    setSavedBucketUrl(null);
+    setSavedImageId(null);
+    setSavedSourceUrl(null);
     startProgress();
 
     let generatedUrl: string | null = null;
@@ -786,6 +795,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     setIsSaved(false);
     setSavedBucketUrl(null);
     setSavedImageId(null);
+    setSavedSourceUrl(null);
   };
 
   // ─── Placeholder per submode ───
@@ -1178,6 +1188,10 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             setResultImageUrl(null);
             setResultUrls([]);
             setPickerIndex(0);
+            setIsSaved(false);
+            setSavedBucketUrl(null);
+            setSavedImageId(null);
+            setSavedSourceUrl(null);
             startProgress();
 
             try {
