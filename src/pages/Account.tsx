@@ -453,10 +453,14 @@ export default function Account() {
     };
 
     try {
-      if (isQUUser) {
-        // QU users (all platforms): showPaywall loads the university_exclusive offering on demand
-        addBillingDebug('QU → showPaywall(university_exclusive)');
+      if (isQUUser && !isIOS) {
+        // Android + QU: showPaywall confirmed working
+        addBillingDebug('QU Android → showPaywall(university_exclusive)');
         showPaywall(true, 'university_exclusive', billingCallback);
+      } else if (isQUUser) {
+        // iOS + QU: $rc_three_month is the standard RC identifier mapped to the QU product in Default offering
+        addBillingDebug('QU iOS → purchasePackage($rc_three_month)');
+        purchasePackage('$rc_three_month', billingCallback);
       } else {
         addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);
