@@ -297,12 +297,16 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     };
 
     try {
-      if (isQUUser) {
-        // QU users (iOS + Android): showPaywall with university_exclusive
-        // This offering has a Components-based Paywall configured + qatar_university package
-        addDebug('QU → showPaywall(university_exclusive)');
-        alert('[Debug] QU → showPaywall(university_exclusive)');
+      if (isQUUser && isAndroid) {
+        // Android + QU: showPaywall confirmed working
+        addDebug('QU Android → showPaywall(university_exclusive)');
         showPaywall(true, 'university_exclusive', purchaseCallback);
+      } else if (isQUUser) {
+        // iOS + QU: purchasePackage with RC package ID — confirmed working April 1
+        // Requires: qatar_university ONLY in university_exclusive (not in Default)
+        addDebug('QU iOS → purchasePackage(qatar_university)');
+        alert('[Debug] QU iOS → purchasePackage(qatar_university)');
+        purchasePackage('qatar_university', purchaseCallback);
       } else {
         addDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', purchaseCallback);
