@@ -22,8 +22,11 @@ export interface VisualAdsState {
   };
   creativeSoul: {
     mainMessage: string;
+    customMainMessage?: string;
     cta: string;
+    customCta?: string;
     style: string;
+    customStyle?: string;
     magicEnhance: boolean;
     prompt: string;
   };
@@ -275,7 +278,7 @@ export default function VisualAdsGenerator({
   const [state, setState] = useState<VisualAdsState>({
     brandAsset: { image: null, type: null },
     campaignDNA: { platform: null, objective: '' },
-    creativeSoul: { mainMessage: '', cta: '', style: '', magicEnhance: false, prompt: '' },
+    creativeSoul: { mainMessage: '', customMainMessage: '', cta: '', customCta: '', style: '', customStyle: '', magicEnhance: false, prompt: '' },
     assets: [],
   });
 
@@ -289,6 +292,66 @@ export default function VisualAdsGenerator({
       [section]: { ...prev[section], ...updates },
     }));
   }, []);
+
+  const normalizeWordLimitedValue = useCallback((value: string) => value.replace(/\s+/g, ' ').trim(), []);
+  const hasMoreThanThreeWords = useCallback((value: string) => {
+    const normalized = normalizeWordLimitedValue(value);
+    return normalized.length > 0 && normalized.split(' ').length > 3;
+  }, [normalizeWordLimitedValue]);
+  const getCustomSelectionLabel = useCallback((value?: string) => {
+    const normalized = normalizeWordLimitedValue(value || '');
+    return normalized || (language === 'ar' ? 'مخصص' : 'Custom');
+  }, [language, normalizeWordLimitedValue]);
+  const getSelectedTopicMeta = useCallback(() => {
+    if (state.creativeSoul.mainMessage === 'custom') {
+      const customValue = normalizeWordLimitedValue(state.creativeSoul.customMainMessage || '');
+      return {
+        label: customValue,
+        prompt: customValue,
+      };
+    }
+    const selectedTopic = adTopicChips.find((chip) => chip.id === state.creativeSoul.mainMessage);
+    return {
+      label: selectedTopic?.label || '',
+      prompt: selectedTopic?.prompt || '',
+    };
+  }, [state.creativeSoul.mainMessage, state.creativeSoul.customMainMessage, normalizeWordLimitedValue]);
+  const getSelectedCtaLabel = useCallback(() => {
+    if (state.creativeSoul.cta === 'custom') {
+      return normalizeWordLimitedValue(state.creativeSoul.customCta || '');
+    }
+    return ctaChips.find((chip) => chip.id === state.creativeSoul.cta)?.label || '';
+  }, [state.creativeSoul.cta, state.creativeSoul.customCta, normalizeWordLimitedValue]);
+  const getSelectedStyleMeta = useCallback(() => {
+    if (state.creativeSoul.style === 'custom') {
+      const customValue = normalizeWordLimitedValue(state.creativeSoul.customStyle || '');
+      return {
+        label: customValue,
+        prompt: customValue,
+      };
+    }
+    const selectedStyle = adStyleChips.find((chip) => chip.id === state.creativeSoul.style);
+    return {
+      label: selectedStyle?.label || '',
+      prompt: selectedStyle?.prompt || '',
+    };
+  }, [state.creativeSoul.style, state.creativeSoul.customStyle, normalizeWordLimitedValue]);
+  const customFieldToastShownRef = useRef<Record<'customMainMessage' | 'customCta' | 'customStyle', boolean>>({
+    customMainMessage: false,
+    customCta: false,
+    customStyle: false,
+  });
+  const handleCustomCreativeSoulChange = useCallback((field: 'customMainMessage' | 'customCta' | 'customStyle', value: string) => {
+    if (hasMoreThanThreeWords(value)) {
+      if (!customFieldToastShownRef.current[field]) {
+        toast.error(language === 'ar' ? 'اكتب من كلمة إلى ٣ كلمات كحد أقصى' : 'Use 1 to 3 words maximum');
+        customFieldToastShownRef.current[field] = true;
+      }
+      return;
+    }
+    customFieldToastShownRef.current[field] = false;
+    updateState('creativeSoul', { [field]: value } as Partial<VisualAdsState['creativeSoul']>);
+  }, [hasMoreThanThreeWords, language, updateState]);
 
   // Handle multiple file uploads (up to 3)
   const [uploadedImages, setUploadedImages] = useState<Array<{
@@ -464,6 +527,24 @@ export default function VisualAdsGenerator({
       setActiveStep(2);
       return;
     }
+    if (state.creativeSoul.mainMessage === 'custom' && !normalizeWordLimitedValue(state.creativeSoul.customMainMessage || '')) {
+      toast.error(language === 'ar' ? 'اكتب الفكرة المخصصة في القسم الأول' : 'Write your custom ad angle in section 1');
+      setActiveStep(3);
+      setOpenBriefSection(1);
+      return;
+    }
+    if (state.creativeSoul.cta === 'custom' && !normalizeWordLimitedValue(state.creativeSoul.customCta || '')) {
+      toast.error(language === 'ar' ? 'اكتب الدعوة المخصصة لاتخاذ إجراء في القسم الثاني' : 'Write your custom CTA in section 2');
+      setActiveStep(3);
+      setOpenBriefSection(2);
+      return;
+    }
+    if (state.creativeSoul.style === 'custom' && !normalizeWordLimitedValue(state.creativeSoul.customStyle || '')) {
+      toast.error(language === 'ar' ? 'اكتب النمط البصري المخصص في القسم الثالث' : 'Write your custom visual style in section 3');
+      setActiveStep(3);
+      setOpenBriefSection(3);
+      return;
+    }
     if (uploadedImages.some((asset) => asset.type === null)) {
       toast.error(language === 'ar' ? 'اختر نوع كل صورة قبل الإنشاء' : 'Select a type for each image before generating');
       setActiveStep(1);
@@ -475,7 +556,7 @@ export default function VisualAdsGenerator({
       return;
     }
     await onGenerate(state);
-  }, [state, onGenerate, language, uploadedImages]);
+  }, [state, onGenerate, language, uploadedImages, normalizeWordLimitedValue]);
 
   const handleAmp = useCallback(async () => {
     const text = state.creativeSoul.prompt.trim();
@@ -486,9 +567,9 @@ export default function VisualAdsGenerator({
       return;
     }
 
-    const selectedTopic = adTopicChips.find((chip) => chip.id === state.creativeSoul.mainMessage);
-    const ctaLabel = ctaChips.find((chip) => chip.id === state.creativeSoul.cta)?.label || '';
-    const selectedStyle = adStyleChips.find((chip) => chip.id === state.creativeSoul.style);
+    const selectedTopic = getSelectedTopicMeta();
+    const ctaLabel = getSelectedCtaLabel();
+    const selectedStyle = getSelectedStyleMeta();
     const tags = uploadedImages
       .map((asset, index) => {
         if (!asset.type) return null;
@@ -507,11 +588,11 @@ export default function VisualAdsGenerator({
           text,
           assets_count: uploadedImages.length,
           tag_list: tags,
-          topic_label: selectedTopic?.label || '',
-          topic_prompt: selectedTopic?.prompt || '',
+          topic_label: selectedTopic.label || '',
+          topic_prompt: selectedTopic.prompt || '',
           cta_text: ctaLabel,
-          style_label: selectedStyle?.label || '',
-          style_prompt: selectedStyle?.prompt || '',
+          style_label: selectedStyle.label || '',
+          style_prompt: selectedStyle.prompt || '',
           platform: state.campaignDNA.platform,
         },
       });
@@ -530,7 +611,7 @@ export default function VisualAdsGenerator({
     } finally {
       setIsAmping(false);
     }
-  }, [state.creativeSoul.prompt, state.creativeSoul.mainMessage, state.creativeSoul.cta, state.creativeSoul.style, uploadedImages, isAmping, language, updateState, assetTypeOptions]);
+  }, [state.creativeSoul.prompt, uploadedImages, isAmping, language, updateState, assetTypeOptions, getSelectedTopicMeta, getSelectedCtaLabel, getSelectedStyleMeta, state.campaignDNA.platform]);
 
   // Segmented control component
   const SegmentedControl = <T extends string>({
@@ -835,8 +916,8 @@ export default function VisualAdsGenerator({
       <div className="space-y-1">
         <StepHeader
           step={3}
-          title={language === 'ar' ? 'ماذا يقول الإعلان؟' : 'Tell us about your ad'}
-          subtitle={language === 'ar' ? '١-٣ اختيارية، و٤ مطلوبة' : '1–3 are optional, 4 is required'}
+          title={language === 'ar' ? 'أخبرنا عن بوستر الإعلان' : 'Tell us about your ad poster'}
+          subtitle={language === 'ar' ? '١-٣ تساعد على تشكيل الإعلان، و٤ مطلوبة' : '1–3 help shape the ad, 4 is required'}
           isActive={activeStep === 3}
           isCompleted={completedSteps.has(3)}
           isGenerating={isGenerating}
@@ -847,7 +928,9 @@ export default function VisualAdsGenerator({
 
             {/* Q1: What's the ad about? */}
             {(() => {
-              const selectedTopic = adTopicChips.find(c => c.id === state.creativeSoul.mainMessage);
+              const selectedTopic = state.creativeSoul.mainMessage === 'custom'
+                ? getCustomSelectionLabel(state.creativeSoul.customMainMessage)
+                : adTopicChips.find(c => c.id === state.creativeSoul.mainMessage)?.label;
               const isOpen = openBriefSection === 1;
               return (
                 <div className="rounded-xl border border-[#606062]/20 dark:border-[#858384]/20 overflow-hidden">
@@ -856,26 +939,35 @@ export default function VisualAdsGenerator({
                     onClick={() => setOpenBriefSection(isOpen ? null : 1)}
                     className="w-full flex items-center justify-between px-4 py-3 bg-white/40 dark:bg-white/5 hover:bg-white/60 dark:hover:bg-white/8 transition-colors"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-foreground">
-                        {language === 'ar' ? '١. عن ماذا يتحدث الإعلان؟' : "1. What's the ad about?"}
-                      </span>
+                    <div className="flex min-w-0 items-start gap-2">
+                      <div className="min-w-0">
+                        <span className="text-sm font-semibold text-foreground block">
+                          {language === 'ar' ? '١. ما الهدف الرئيسي من الإعلان؟' : "1. What's the ad about?"}
+                        </span>
+                        <span className="text-[11px] text-[#858384] block">
+                          {language === 'ar' ? 'اختياري - اختر فكرة الإعلان الأساسية أو اكتب فكرتك' : 'Optional - choose the main ad angle or write your own'}
+                        </span>
+                      </div>
                       {selectedTopic && !isOpen && (
                         <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] text-[10px] font-semibold">
-                          {selectedTopic.label}
+                          {selectedTopic}
                         </span>
                       )}
                     </div>
                     <span className={`text-[#858384] text-xs transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                   </button>
                   {isOpen && (
-                    <div className="px-4 pb-4 pt-2 flex flex-wrap gap-2">
+                    <div className="px-4 pb-4 pt-2 space-y-3">
+                      <p className="text-[11px] text-[#858384]">
+                        {language === 'ar' ? 'هذا يحدد الفكرة أو الرسالة التسويقية الأساسية للبوستر.' : 'This sets the main message or marketing angle of the poster.'}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
                       {adTopicChips.map((chip) => (
                         <button
                           key={chip.id}
                           onClick={() => {
                             const newVal = state.creativeSoul.mainMessage === chip.id ? '' : chip.id;
-                            updateState('creativeSoul', { mainMessage: newVal });
+                            updateState('creativeSoul', { mainMessage: newVal, customMainMessage: newVal ? '' : state.creativeSoul.customMainMessage });
                             setOpenBriefSection(4);
                           }}
                           type="button"
@@ -888,6 +980,32 @@ export default function VisualAdsGenerator({
                           {chip.label}
                         </button>
                       ))}
+                        <button
+                          type="button"
+                          onClick={() => updateState('creativeSoul', { mainMessage: state.creativeSoul.mainMessage === 'custom' ? '' : 'custom' })}
+                          className={`px-3 py-2 rounded-xl border text-[12px] font-medium transition-all ${
+                            state.creativeSoul.mainMessage === 'custom'
+                              ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)] scale-[1.03]'
+                              : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
+                          }`}
+                        >
+                          {language === 'ar' ? '✍️ مخصص' : '✍️ Custom'}
+                        </button>
+                      </div>
+                      {state.creativeSoul.mainMessage === 'custom' && (
+                        <div className="space-y-1.5">
+                          <input
+                            type="text"
+                            value={state.creativeSoul.customMainMessage || ''}
+                            onChange={(e) => handleCustomCreativeSoulChange('customMainMessage', e.target.value)}
+                            placeholder={language === 'ar' ? 'مثال: إطلاق رمضاني' : 'e.g. Summer launch'}
+                            className="w-full rounded-xl bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-orange-400/60"
+                          />
+                          <p className="text-[11px] text-[#858384]">
+                            {language === 'ar' ? 'اكتب من كلمة إلى ٣ كلمات كحد أقصى.' : 'Write 1 to 3 words maximum.'}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -896,7 +1014,9 @@ export default function VisualAdsGenerator({
 
             {/* Q2: What should people do? */}
             {(() => {
-              const selectedCta = ctaChips.find(c => c.id === state.creativeSoul.cta);
+              const selectedCta = state.creativeSoul.cta === 'custom'
+                ? getCustomSelectionLabel(state.creativeSoul.customCta)
+                : ctaChips.find(c => c.id === state.creativeSoul.cta)?.label;
               const isOpen = openBriefSection === 2;
               return (
                 <div className="rounded-xl border border-[#606062]/20 dark:border-[#858384]/20 overflow-hidden">
@@ -905,38 +1025,73 @@ export default function VisualAdsGenerator({
                     onClick={() => setOpenBriefSection(isOpen ? null : 2)}
                     className="w-full flex items-center justify-between px-4 py-3 bg-white/40 dark:bg-white/5 hover:bg-white/60 dark:hover:bg-white/8 transition-colors"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-foreground">
-                        {language === 'ar' ? '٢. ماذا تريد أن يفعلوا؟' : '2. What should people do?'}
-                      </span>
+                    <div className="flex min-w-0 items-start gap-2">
+                      <div className="min-w-0">
+                        <span className="text-sm font-semibold text-foreground block">
+                          {language === 'ar' ? '٢. ماذا يجب أن يفعل الناس؟' : '2. What should people do?'}
+                        </span>
+                        <span className="text-[11px] text-[#858384] block">
+                          {language === 'ar' ? 'اختياري - هذا هو زر الدعوة لاتخاذ إجراء (CTA)' : 'Optional - this is the call to action (CTA)'}
+                        </span>
+                      </div>
                       {selectedCta && !isOpen && (
                         <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] text-[10px] font-semibold">
-                          {selectedCta.label}
+                          {selectedCta}
                         </span>
                       )}
                     </div>
                     <span className={`text-[#858384] text-xs transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                   </button>
                   {isOpen && (
-                    <div className="px-4 pb-4 pt-2 flex flex-wrap gap-2">
-                      {ctaChips.map((chip) => (
+                    <div className="px-4 pb-4 pt-2 space-y-3">
+                      <p className="text-[11px] text-[#858384]">
+                        {language === 'ar' ? 'هذا يوضح ماذا تريد من المشاهد أن يفعل بعد رؤية الإعلان.' : 'This tells the poster what action you want the viewer to take.'}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {ctaChips.map((chip) => (
+                          <button
+                            key={chip.id}
+                            onClick={() => {
+                              const newVal = state.creativeSoul.cta === chip.id ? '' : chip.id;
+                              updateState('creativeSoul', { cta: newVal, customCta: newVal ? '' : state.creativeSoul.customCta });
+                              setOpenBriefSection(4);
+                            }}
+                            type="button"
+                            className={`px-3 py-2 rounded-xl border text-[12px] font-medium transition-all ${
+                              state.creativeSoul.cta === chip.id
+                                ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)] scale-[1.03]'
+                                : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
+                            }`}
+                          >
+                            {chip.label}
+                          </button>
+                        ))}
                         <button
-                          key={chip.id}
-                          onClick={() => {
-                            const newVal = state.creativeSoul.cta === chip.id ? '' : chip.id;
-                            updateState('creativeSoul', { cta: newVal });
-                            setOpenBriefSection(4);
-                          }}
                           type="button"
+                          onClick={() => updateState('creativeSoul', { cta: state.creativeSoul.cta === 'custom' ? '' : 'custom' })}
                           className={`px-3 py-2 rounded-xl border text-[12px] font-medium transition-all ${
-                            state.creativeSoul.cta === chip.id
+                            state.creativeSoul.cta === 'custom'
                               ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)] scale-[1.03]'
                               : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
                           }`}
                         >
-                          {chip.label}
+                          {language === 'ar' ? '✍️ مخصص' : '✍️ Custom'}
                         </button>
-                      ))}
+                      </div>
+                      {state.creativeSoul.cta === 'custom' && (
+                        <div className="space-y-1.5">
+                          <input
+                            type="text"
+                            value={state.creativeSoul.customCta || ''}
+                            onChange={(e) => handleCustomCreativeSoulChange('customCta', e.target.value)}
+                            placeholder={language === 'ar' ? 'مثال: حمّل الآن' : 'e.g. Join today'}
+                            className="w-full rounded-xl bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-orange-400/60"
+                          />
+                          <p className="text-[11px] text-[#858384]">
+                            {language === 'ar' ? 'اكتب من كلمة إلى ٣ كلمات كحد أقصى.' : 'Write 1 to 3 words maximum.'}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -945,7 +1100,9 @@ export default function VisualAdsGenerator({
 
             {/* Q3: Ad look & feel */}
             {(() => {
-              const selectedStyle = adStyleChips.find(s => s.id === state.creativeSoul.style);
+              const selectedStyle = state.creativeSoul.style === 'custom'
+                ? getCustomSelectionLabel(state.creativeSoul.customStyle)
+                : adStyleChips.find(s => s.id === state.creativeSoul.style)?.label;
               const isOpen = openBriefSection === 3;
               return (
                 <div className="rounded-xl border border-[#606062]/20 dark:border-[#858384]/20 overflow-hidden">
@@ -954,38 +1111,73 @@ export default function VisualAdsGenerator({
                     onClick={() => setOpenBriefSection(isOpen ? null : 3)}
                     className="w-full flex items-center justify-between px-4 py-3 bg-white/40 dark:bg-white/5 hover:bg-white/60 dark:hover:bg-white/8 transition-colors"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-foreground">
-                        {language === 'ar' ? '٣. كيف تريد أن يبدو الإعلان؟' : '3. How should the ad look?'}
-                      </span>
+                    <div className="flex min-w-0 items-start gap-2">
+                      <div className="min-w-0">
+                        <span className="text-sm font-semibold text-foreground block">
+                          {language === 'ar' ? '٣. كيف يجب أن يبدو الإعلان؟' : '3. How should the ad look?'}
+                        </span>
+                        <span className="text-[11px] text-[#858384] block">
+                          {language === 'ar' ? 'اختياري - اختر النمط البصري أو اكتب المزاج الذي تريده' : 'Optional - choose the visual style or write your own mood'}
+                        </span>
+                      </div>
                       {selectedStyle && !isOpen && (
                         <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] text-[10px] font-semibold">
-                          {selectedStyle.label}
+                          {selectedStyle}
                         </span>
                       )}
                     </div>
                     <span className={`text-[#858384] text-xs transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                   </button>
                   {isOpen && (
-                    <div className="px-4 pb-4 pt-2 grid grid-cols-2 gap-2">
-                      {adStyleChips.map((style) => (
+                    <div className="px-4 pb-4 pt-2 space-y-3">
+                      <p className="text-[11px] text-[#858384]">
+                        {language === 'ar' ? 'هذا يحدد إحساس التصميم مثل فاخر أو نظيف أو طبيعي.' : 'This controls the visual mood, like premium, clean, bold, or natural.'}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {adStyleChips.map((style) => (
+                          <button
+                            key={style.id}
+                            onClick={() => {
+                              const newVal = state.creativeSoul.style === style.id ? '' : style.id;
+                              updateState('creativeSoul', { style: newVal, customStyle: newVal ? '' : state.creativeSoul.customStyle });
+                              setOpenBriefSection(4);
+                            }}
+                            type="button"
+                            className={`px-3 py-2.5 rounded-xl border text-[12px] font-medium text-left transition-all ${
+                              state.creativeSoul.style === style.id
+                                ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)] scale-[1.02]'
+                                : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
+                            }`}
+                          >
+                            {style.label}
+                          </button>
+                        ))}
                         <button
-                          key={style.id}
-                          onClick={() => {
-                            const newVal = state.creativeSoul.style === style.id ? '' : style.id;
-                            updateState('creativeSoul', { style: newVal });
-                            setOpenBriefSection(4);
-                          }}
                           type="button"
+                          onClick={() => updateState('creativeSoul', { style: state.creativeSoul.style === 'custom' ? '' : 'custom' })}
                           className={`px-3 py-2.5 rounded-xl border text-[12px] font-medium text-left transition-all ${
-                            state.creativeSoul.style === style.id
+                            state.creativeSoul.style === 'custom'
                               ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)] scale-[1.02]'
                               : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
                           }`}
                         >
-                          {style.label}
+                          {language === 'ar' ? '✍️ مخصص' : '✍️ Custom'}
                         </button>
-                      ))}
+                      </div>
+                      {state.creativeSoul.style === 'custom' && (
+                        <div className="space-y-1.5">
+                          <input
+                            type="text"
+                            value={state.creativeSoul.customStyle || ''}
+                            onChange={(e) => handleCustomCreativeSoulChange('customStyle', e.target.value)}
+                            placeholder={language === 'ar' ? 'مثال: مرح ونظيف' : 'e.g. Bold luxury'}
+                            className="w-full rounded-xl bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-orange-400/60"
+                          />
+                          <p className="text-[11px] text-[#858384]">
+                            {language === 'ar' ? 'اكتب من كلمة إلى ٣ كلمات كحد أقصى.' : 'Write 1 to 3 words maximum.'}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1005,7 +1197,7 @@ export default function VisualAdsGenerator({
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-foreground">
-                        {language === 'ar' ? '٤. أي تفاصيل إضافية؟' : '4. Anything specific?'}
+                        {language === 'ar' ? '٤. التعليمات الإضافية' : '4. Extra instructions'}
                       </span>
                       <span className="text-[10px] font-semibold text-orange-400">
                         {language === 'ar' ? '(مطلوب)' : '(required)'}
@@ -1020,6 +1212,14 @@ export default function VisualAdsGenerator({
                   </button>
                   {isOpen && (
                     <div className="relative z-10 px-4 pb-4 pt-2" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                      <div className="mb-3 space-y-1">
+                        <p className="text-[11px] text-[#858384]">
+                          {language === 'ar' ? 'هذا هو الوصف الأساسي الذي سيُبنى عليه الإعلان. اكتب بوضوح ماذا تريد أن يظهر في البوستر.' : 'This is the main brief used to build the poster. Clearly describe what you want to appear in the ad.'}
+                        </p>
+                        <p className="text-[11px] text-[#858384]">
+                          {language === 'ar' ? 'زر تحسين الوصف يعيد صياغة هذا النص ليصبح أوضح للذكاء الاصطناعي.' : 'Enhance Brief rewrites this text to make it clearer for AI generation.'}
+                        </p>
+                      </div>
                       <div className="mb-3 flex justify-end">
                         <button
                           type="button"
@@ -1028,15 +1228,15 @@ export default function VisualAdsGenerator({
                           className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-3 py-2 text-xs font-bold text-white shadow-[0_4px_18px_rgba(249,115,22,0.28)] transition-all hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {isAmping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
-                          <span>AMP</span>
+                          <span>{language === 'ar' ? 'حسّن الوصف' : 'Enhance Brief'}</span>
                         </button>
                       </div>
                       <textarea
                         value={state.creativeSoul.prompt}
                         onChange={(e) => updateState('creativeSoul', { prompt: e.target.value })}
                         placeholder={language === 'ar'
-                          ? 'مثال: ركز على التطبيق، استخدم ألوان العلامة التجارية...'
-                          : 'e.g., Focus on the app, use brand colors, add a short caption...'}
+                          ? 'مثال: ركّز على شاشة التطبيق، استخدم ألوان العلامة التجارية، وضع عبارة قصيرة أسفل البوستر.'
+                          : 'e.g. Focus on the app screen, use brand colors, and place a short caption at the bottom.'}
                         rows={4}
                         onClick={(e) => e.stopPropagation()}
                         onPointerDown={(e) => e.stopPropagation()}

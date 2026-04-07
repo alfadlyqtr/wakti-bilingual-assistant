@@ -1092,9 +1092,20 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               'subscribe':    'Subscribe',
             };
 
-            const topicStr  = topicPrompts[visualState.creativeSoul.mainMessage] || '';
-            const styleStr  = stylePrompts[visualState.creativeSoul.style] || '';
-            const ctaStr    = ctaLabels[visualState.creativeSoul.cta] || '';
+            const normalizeShortValue = (value?: string | null) => (value || '').replace(/\s+/g, ' ').trim();
+            const customTopic = normalizeShortValue(visualState.creativeSoul.customMainMessage);
+            const customCta = normalizeShortValue(visualState.creativeSoul.customCta);
+            const customStyle = normalizeShortValue(visualState.creativeSoul.customStyle);
+
+            const topicStr  = visualState.creativeSoul.mainMessage === 'custom'
+              ? customTopic
+              : (topicPrompts[visualState.creativeSoul.mainMessage] || '');
+            const styleStr  = visualState.creativeSoul.style === 'custom'
+              ? customStyle
+              : (stylePrompts[visualState.creativeSoul.style] || '');
+            const ctaStr    = visualState.creativeSoul.cta === 'custom'
+              ? customCta
+              : (ctaLabels[visualState.creativeSoul.cta] || '');
             
             // Collect up to 3 images from assets array, compress them if they are data URIs
             const rawImages = (visualState.assets || [])

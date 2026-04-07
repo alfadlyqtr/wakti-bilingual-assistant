@@ -2747,62 +2747,104 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }, [lyricsCap, lyricsText]);
 
   // Build style string from chips + styleText
-  // GCC negative tag sets — styles that should be excluded when a GCC style is selected
-  const GCC_NEGATIVE_TAGS: Record<string, string[]> = {
-    'GCC Pop': ['egyptian', 'levantine', 'western pop', 'american accent', 'generic arabic'],
-    'Khaleeji Pop': ['egyptian', 'levantine', 'western pop', 'american accent', 'generic arabic'],
-    'GCC Romantic': ['egyptian', 'levantine', 'western pop', 'american accent'],
-    'GCC Elegant': ['egyptian', 'levantine', 'western pop', 'american accent'],
-    'GCC Party': ['egyptian', 'levantine', 'western', 'american accent'],
-    'GCC Wedding': ['egyptian', 'levantine', 'western', 'american accent'],
-    'GCC Radio Pop': ['egyptian', 'levantine', 'american accent', 'generic arabic'],
-    'GCC Dance Pop': ['egyptian', 'levantine', 'american accent'],
-    'GCC Electro Pop': ['egyptian', 'levantine', 'american accent'],
-    'GCC Synth Pop': ['egyptian', 'levantine', 'american accent'],
-    'Modern Khaleeji Fusion': ['egyptian', 'levantine', 'american accent'],
-    'English GCC Pop': ['egyptian', 'levantine'],
-    'GCC R&B Pop': ['egyptian', 'levantine', 'american accent'],
-    'Luxury GCC Pop': ['egyptian', 'levantine', 'american accent', 'generic arabic'],
-    'Cinematic GCC': ['egyptian', 'levantine', 'western pop'],
-    'GCC Anthem': ['egyptian', 'levantine', 'western pop', 'american accent'],
-    'National Event GCC': ['egyptian', 'levantine', 'western pop', 'american accent'],
-    'GCC Traditional': ['egyptian', 'levantine', 'western', 'electronic', 'american accent'],
-    'Sheilat': ['egyptian', 'levantine', 'western', 'electronic', 'american accent'],
-    'Samri': ['egyptian', 'levantine', 'western', 'electronic', 'american accent'],
-    'Jalsa': ['egyptian', 'levantine', 'western', 'electronic', 'american accent'],
-    'Liwa': ['egyptian', 'levantine', 'western pop', 'american accent'],
-    'GCC Shaabi': ['egyptian', 'levantine', 'western', 'electronic', 'american accent'],
-    'Zar': ['western', 'electronic', 'american accent'],
-    'Ardah': ['egyptian', 'levantine', 'western', 'electronic', 'american accent'],
-    'Khaleeji Trap': ['egyptian', 'levantine', 'american accent'],
-    'بوب خليجي': ['مصري', 'شامي', 'لهجة غربية'],
-    'خليجي عصري': ['مصري', 'شامي', 'لهجة غربية'],
-    'خليجي رومانسي': ['مصري', 'شامي', 'لهجة غربية'],
-    'خليجي أنيق': ['مصري', 'شامي', 'لهجة غربية'],
-    'خليجي حفلات': ['مصري', 'شامي'],
-    'خليجي أعراس': ['مصري', 'شامي'],
-    'خليجي إذاعي': ['مصري', 'شامي'],
-    'خليجي دانس': ['مصري', 'شامي'],
-    'خليجي إلكتروني': ['مصري', 'شامي'],
-    'خليجي سينث بوب': ['مصري', 'شامي'],
-    'فيوجن خليجي': ['مصري', 'شامي'],
-    'خليجي آر أند بي': ['مصري', 'شامي'],
-    'خليجي فاخر': ['مصري', 'شامي'],
-    'خليجي سينمائي': ['مصري', 'شامي'],
-    'خليجي جماهيري': ['مصري', 'شامي'],
-    'مناسبات وطنية خليجية': ['مصري', 'شامي'],
-    'خليجي تراثي': ['مصري', 'شامي', 'إلكتروني'],
-    'شيلات': ['مصري', 'شامي', 'إلكتروني'],
-    'سامري': ['مصري', 'شامي', 'إلكتروني'],
-    'جلسة': ['مصري', 'شامي', 'إلكتروني'],
-    'ليوان': ['مصري', 'شامي'],
+  // Narrow pronunciation-only negatives — blocks Arabic dialect drift, English stays allowed
+  const GCC_PRONUNCIATION_NEGATIVES: Record<string, string> = {
+    'English GCC Pop': '', 'إنجليزي بطابع خليجي': '',
+    'GCC Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'Khaleeji Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'GCC Romantic': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'GCC Elegant': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'GCC Party': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'GCC Wedding': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'GCC Radio Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'GCC Dance Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'GCC Electro Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'GCC Synth Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'Modern Khaleeji Fusion': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'GCC R&B Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'Luxury GCC Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'Cinematic GCC': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'GCC Anthem': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'National Event GCC': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'GCC Traditional': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'Sheilat': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'Samri': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'Jalsa': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'Liwa': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'GCC Shaabi': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'Zar': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'Ardah': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'Khaleeji Trap': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'بوب خليجي': 'نطق مصري، نطق شامي', 'خليجي عصري': 'نطق مصري، نطق شامي',
+    'خليجي رومانسي': 'نطق مصري، نطق شامي', 'خليجي أنيق': 'نطق مصري، نطق شامي',
+    'خليجي حفلات': 'نطق مصري، نطق شامي', 'خليجي أعراس': 'نطق مصري، نطق شامي',
+    'خليجي إذاعي': 'نطق مصري، نطق شامي', 'خليجي دانس': 'نطق مصري، نطق شامي',
+    'خليجي إلكتروني': 'نطق مصري، نطق شامي', 'خليجي سينث بوب': 'نطق مصري، نطق شامي',
+    'فيوجن خليجي': 'نطق مصري، نطق شامي', 'خليجي آر أند بي': 'نطق مصري، نطق شامي',
+    'خليجي فاخر': 'نطق مصري، نطق شامي', 'خليجي سينمائي': 'نطق مصري، نطق شامي',
+    'خليجي جماهيري': 'نطق مصري، نطق شامي', 'مناسبات وطنية خليجية': 'نطق مصري، نطق شامي',
+    'خليجي تراثي': 'نطق مصري، نطق شامي', 'شيلات': 'نطق مصري، نطق شامي',
+    'سامري': 'نطق مصري، نطق شامي', 'جلسة': 'نطق مصري، نطق شامي',
+    'ليوان': 'نطق مصري، نطق شامي',
+  };
+
+  // Default rhythm + instrument anchors per GCC style — auto-filled when user skips those sections
+  const GCC_STYLE_ANCHORS: Record<string, { rhythm: string; instrument: string; production?: string }> = {
+    'GCC Pop': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
+    'Khaleeji Pop': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
+    'GCC Romantic': { rhythm: 'adani rhythm', instrument: 'oud lead', production: 'soft strings' },
+    'GCC Elegant': { rhythm: 'adani rhythm', instrument: 'violin lead', production: 'strings texture' },
+    'GCC Party': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth bass' },
+    'GCC Wedding': { rhythm: 'wedding festive beat', instrument: 'mirwas percussion', production: 'tabl percussion' },
+    'GCC Radio Pop': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
+    'GCC Dance Pop': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth bass' },
+    'GCC Electro Pop': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
+    'GCC Synth Pop': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth pad' },
+    'Modern Khaleeji Fusion': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: '808 bass groove' },
+    'English GCC Pop': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
+    'GCC R&B Pop': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'electric piano lead' },
+    'Luxury GCC Pop': { rhythm: 'adani rhythm', instrument: 'violin lead', production: 'strings texture' },
+    'Cinematic GCC': { rhythm: 'marching anthem beat', instrument: 'strings lead', production: 'choir texture' },
+    'GCC Anthem': { rhythm: 'marching anthem beat', instrument: 'tabl percussion', production: 'choir texture' },
+    'National Event GCC': { rhythm: 'marching anthem beat', instrument: 'tabl percussion', production: 'choir lead' },
+    'GCC Traditional': { rhythm: 'khaleeji groove', instrument: 'oud lead', production: 'qanun texture' },
+    'Sheilat': { rhythm: 'samri rhythm', instrument: 'frame drum groove', production: 'mirwas percussion' },
+    'Samri': { rhythm: 'samri rhythm', instrument: 'frame drum groove', production: 'tabl percussion' },
+    'Jalsa': { rhythm: 'adani rhythm', instrument: 'oud lead', production: 'qanun texture' },
+    'Liwa': { rhythm: 'leiwah rhythm', instrument: 'tanbura lead', production: 'mirwas percussion' },
+    'GCC Shaabi': { rhythm: 'khaleeji groove', instrument: 'oud lead', production: 'riq groove' },
+    'Zar': { rhythm: 'leiwah rhythm', instrument: 'tanbura lead', production: 'frame drum groove' },
+    'Ardah': { rhythm: 'samri rhythm', instrument: 'tabl drum lead', production: 'mirwas texture' },
+    'Khaleeji Trap': { rhythm: 'trap beat', instrument: '808 bass groove', production: 'mirwas texture' },
+    'بوب خليجي': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
+    'خليجي عصري': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
+    'خليجي رومانسي': { rhythm: 'adani rhythm', instrument: 'oud lead', production: 'soft strings' },
+    'خليجي أنيق': { rhythm: 'adani rhythm', instrument: 'violin lead', production: 'strings texture' },
+    'خليجي حفلات': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth bass' },
+    'خليجي أعراس': { rhythm: 'wedding festive beat', instrument: 'mirwas percussion', production: 'tabl percussion' },
+    'خليجي إذاعي': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
+    'خليجي دانس': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth bass' },
+    'خليجي إلكتروني': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
+    'خليجي سينث بوب': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth pad' },
+    'فيوجن خليجي': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: '808 bass groove' },
+    'إنجليزي بطابع خليجي': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
+    'خليجي آر أند بي': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'electric piano lead' },
+    'خليجي فاخر': { rhythm: 'adani rhythm', instrument: 'violin lead', production: 'strings texture' },
+    'خليجي سينمائي': { rhythm: 'marching anthem beat', instrument: 'strings lead', production: 'choir texture' },
+    'خليجي جماهيري': { rhythm: 'marching anthem beat', instrument: 'tabl percussion', production: 'choir texture' },
+    'مناسبات وطنية خليجية': { rhythm: 'marching anthem beat', instrument: 'tabl percussion', production: 'choir lead' },
+    'خليجي تراثي': { rhythm: 'khaleeji groove', instrument: 'oud lead', production: 'qanun texture' },
+    'شيلات': { rhythm: 'samri rhythm', instrument: 'frame drum groove', production: 'mirwas percussion' },
+    'سامري': { rhythm: 'samri rhythm', instrument: 'frame drum groove', production: 'tabl percussion' },
+    'جلسة': { rhythm: 'adani rhythm', instrument: 'oud lead', production: 'qanun texture' },
+    'ليوان': { rhythm: 'leiwah rhythm', instrument: 'tanbura lead', production: 'mirwas percussion' },
   };
 
   function buildKieNegativeTags(): string {
     const negSet = new Set<string>();
     for (const tag of includeTags) {
-      const negs = GCC_NEGATIVE_TAGS[tag];
-      if (negs) negs.forEach((n) => negSet.add(n));
+      const neg = GCC_PRONUNCIATION_NEGATIVES[tag];
+      if (neg) neg.split(',').map((n) => n.trim()).forEach((n) => negSet.add(n));
     }
     return [...negSet].join(', ');
   }
@@ -2941,10 +2983,38 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       return mappings[value] ?? value;
     };
 
-    const parts = [...includeTags, ...rhythmTags, ...instrumentTags, ...moodTags]
+    // ── Anchored Compiler ──
+    // 1. Detect active GCC style (first includeTags entry that has an anchor)
+    const activeGccStyle = includeTags.find((t) => GCC_STYLE_ANCHORS[t]) ?? null;
+    const anchor = activeGccStyle ? GCC_STYLE_ANCHORS[activeGccStyle] : null;
+
+    // 2. User has selected rhythms / instruments — respect those, only auto-fill if empty
+    const userHasRhythm = rhythmTags.length > 0;
+    const userHasInstrument = instrumentTags.length > 0;
+
+    // 3. Build base style parts (expand style + mood tags)
+    const styleParts = [...includeTags, ...moodTags]
       .map((part) => expandStyleTag(part))
       .filter(Boolean);
+
+    // 4. Rhythm: use user selection, else inject anchor fallback
+    const rhythmParts = userHasRhythm
+      ? rhythmTags.map((part) => expandStyleTag(part)).filter(Boolean)
+      : anchor
+      ? [anchor.rhythm]
+      : [];
+
+    // 5. Instrument: use user selection, else inject anchor fallback + production hint
+    const instrumentParts = userHasInstrument
+      ? instrumentTags.map((part) => expandStyleTag(part)).filter(Boolean)
+      : anchor
+      ? [anchor.instrument, ...(anchor.production ? [anchor.production] : [])]
+      : [];
+
+    // 6. Compile: style → rhythm → instrument → free text
+    const parts = [...styleParts, ...rhythmParts, ...instrumentParts].filter(Boolean);
     if (styleText.trim()) parts.push(styleText.trim());
+
     return parts.join(', ').replace(/,\s*,/g, ',').trim();
   }
 
