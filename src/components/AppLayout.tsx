@@ -303,9 +303,16 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
         addDebug('QU Android → showPaywall(university_exclusive)');
         showPaywall(true, 'university_exclusive', purchaseCallback);
       } else if (isQUUser) {
-        // iOS + QU: $rc_three_month is the standard RC identifier mapped to the QU product in Default offering
-        addDebug('QU iOS → purchasePackage($rc_three_month)');
-        purchasePackage('$rc_three_month', purchaseCallback);
+        // iOS + QU: first dump getOfferings to see what the SDK actually has
+        addDebug('QU iOS → calling getOfferings first to inspect...');
+        getOfferings((offeringsResp: any) => {
+          const dump = JSON.stringify(offeringsResp);
+          alert(`[Debug] getOfferings response:\n${dump.substring(0, 800)}`);
+          addDebug(`Offerings dump: ${dump.substring(0, 300)}`);
+          // Now attempt the purchase
+          addDebug('QU iOS → purchasePackage($rc_three_month)');
+          purchasePackage('$rc_three_month', purchaseCallback);
+        });
       } else {
         addDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', purchaseCallback);
