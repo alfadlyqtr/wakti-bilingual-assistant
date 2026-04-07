@@ -10,11 +10,13 @@ export interface VisualAdsState {
     image: string | null;
     type: 'logo' | 'product' | 'screenshot' | 'person' | 'other' | null;
     customType?: string | null;
+    customTypeDraft?: string | null;
   };
   assets?: {
     image: string;
     type: 'logo' | 'product' | 'screenshot' | 'person' | 'other' | null;
     customType?: string | null;
+    customTypeDraft?: string | null;
   }[];
   campaignDNA: {
     platform: '9:16' | '1:1' | '16:9' | null;
@@ -358,10 +360,32 @@ export default function VisualAdsGenerator({
     image: string;
     type: 'logo' | 'product' | 'screenshot' | 'person' | 'other' | null;
     customType?: string | null;
+    customTypeDraft?: string | null;
   }>>([]);
   const hasAtLeastOneValidAsset = uploadedImages.some((asset) => asset.type !== null && (asset.type !== 'other' || Boolean(asset.customType?.trim())));
   const hasIncompleteAssetTags = uploadedImages.some((asset) => asset.type === null || (asset.type === 'other' && !asset.customType?.trim()));
   const canContinueToStep2 = uploadedImages.length > 0 && !hasIncompleteAssetTags;
+  const readyAssetIndexes = uploadedImages
+    .map((asset, index) => (asset.type !== null && (asset.type !== 'other' || Boolean(asset.customType?.trim())) ? index : -1))
+    .filter((index) => index !== -1);
+  const incompleteAssets = uploadedImages
+    .map((asset, index) => {
+      if (asset.type === null) {
+        return {
+          index,
+          message: language === 'ar' ? `الصورة ${index + 1} ما زالت تحتاج اختيار النوع.` : `Image ${index + 1} still needs a tag.`,
+        };
+      }
+      if (asset.type === 'other' && !asset.customType?.trim()) {
+        return {
+          index,
+          message: language === 'ar' ? `الصورة ${index + 1} ما زالت تحتاج وصفاً مخصصاً قصيراً.` : `Image ${index + 1} still needs a custom label.`,
+        };
+      }
+      return null;
+    })
+    .filter((item): item is { index: number; message: string } => Boolean(item));
+  const showPartialAssetStatus = readyAssetIndexes.length > 0 && incompleteAssets.length > 0;
   
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -375,7 +399,7 @@ export default function VisualAdsGenerator({
       return;
     }
 
-    const newImages: Array<{ image: string; type: 'logo' | 'product' | 'screenshot' | 'person' | 'other' | null; customType?: string | null }> = [];
+    const newImages: Array<{ image: string; type: 'logo' | 'product' | 'screenshot' | 'person' | 'other' | null; customType?: string | null; customTypeDraft?: string | null }> = [];
     let processed = 0;
     
     filesToProcess.forEach((file) => {
@@ -383,7 +407,7 @@ export default function VisualAdsGenerator({
       
       const reader = new FileReader();
       reader.onload = () => {
-        newImages.push({ image: reader.result as string, type: null, customType: null });
+        newImages.push({ image: reader.result as string, type: null, customType: null, customTypeDraft: null });
         processed++;
         
         if (processed === filesToProcess.length) {
@@ -402,6 +426,7 @@ export default function VisualAdsGenerator({
               image: allImages[uploadedImages.length]?.image || allImages[0]?.image || null,
               type: allImages[uploadedImages.length]?.type || null,
               customType: allImages[uploadedImages.length]?.customType || null,
+              customTypeDraft: allImages[uploadedImages.length]?.customTypeDraft || null,
             },
             assets: allImages,
           }));
@@ -416,7 +441,14 @@ export default function VisualAdsGenerator({
   const handleAssetTypeSelect = useCallback((index: number, type: 'logo' | 'product' | 'screenshot' | 'person' | 'other') => {
     setUploadedImages(prev => {
       const next = prev.map((asset, idx) => (
-        idx === index ? { ...asset, type, customType: type === 'other' ? asset.customType || '' : null } : asset
+        idx === index
+          ? {
+              ...asset,
+              type,
+              customType: type === 'other' ? asset.customType || null : null,
+              customTypeDraft: type === 'other' ? asset.customTypeDraft || asset.customType || '' : null,
+            }
+          : asset
       ));
       const nextUnassignedIndex = next.findIndex((asset) => asset.type === null);
       const nextOtherWithoutLabelIndex = next.findIndex((asset) => asset.type === 'other' && !asset.customType?.trim());
@@ -428,6 +460,7 @@ export default function VisualAdsGenerator({
           image: currentAsset?.image || next[0]?.image || null,
           type,
           customType: currentAsset?.customType || null,
+          customTypeDraft: currentAsset?.customTypeDraft || null,
         },
         assets: next,
       }));
@@ -465,6 +498,48 @@ export default function VisualAdsGenerator({
     });
   }, []);
 
+  const handleApplyCustomAssetLabel = useCallback((index: number) => {
+    setUploadedImages(prev => {
+      const draftValue = prev[index]?.customTypeDraft?.trim() || '';
+      if (!draftValue) {
+        toast.error(language === 'ar' ? 'اكتب وصفاً مخصصاً قصيراً أولاً' : 'Write a short custom label first');
+        return prev;
+      }
+
+      const next = prev.map((asset, idx) => (
+        idx === index ? { ...asset, customType: draftValue, customTypeDraft: draftValue } : asset
+      ));
+      const currentAsset = next[index] || null;
+
+      setState(prevState => ({
+        ...prevState,
+        brandAsset: {
+          image: currentAsset?.image || next[0]?.image || null,
+          type: currentAsset?.type || null,
+          customType: currentAsset?.customType || null,
+          customTypeDraft: currentAsset?.customTypeDraft || null,
+        },
+        assets: next,
+      }));
+
+      const hasUnassignedAssets = next.some((asset) => asset.type === null);
+      const hasOtherWithoutLabel = next.some((asset) => asset.type === 'other' && !asset.customType?.trim());
+
+      if (!hasUnassignedAssets && !hasOtherWithoutLabel && next.length > 0) {
+        setCompletedSteps(prevCompleted => new Set([...prevCompleted, 1]));
+      } else {
+        setCompletedSteps(prevCompleted => {
+          const nextCompleted = new Set(prevCompleted);
+          nextCompleted.delete(1);
+          return nextCompleted;
+        });
+      }
+
+      setActiveStep(1);
+      return next;
+    });
+  }, [language]);
+
   const handleCustomAssetLabelChange = useCallback((index: number, value: string) => {
     const sanitized = value
       .replace(/[^\p{L}\p{N}\s-]/gu, '')
@@ -477,7 +552,7 @@ export default function VisualAdsGenerator({
 
     setUploadedImages(prev => {
       const next = prev.map((asset, idx) => (
-        idx === index ? { ...asset, customType: sanitized } : asset
+        idx === index ? { ...asset, customTypeDraft: sanitized } : asset
       ));
       const currentAsset = next[index] || null;
 
@@ -487,6 +562,7 @@ export default function VisualAdsGenerator({
           image: currentAsset?.image || next[0]?.image || null,
           type: currentAsset?.type || null,
           customType: currentAsset?.customType || null,
+          customTypeDraft: currentAsset?.customTypeDraft || null,
         },
         assets: next,
       }));
@@ -671,13 +747,18 @@ export default function VisualAdsGenerator({
                     const asset = uploadedImages[idx];
 
                     if (asset) {
+                      const assetNeedsType = asset.type === null;
+                      const assetNeedsCustomLabel = asset.type === 'other' && !asset.customType?.trim();
+                      const assetIsIncomplete = assetNeedsType || assetNeedsCustomLabel;
                       return (
                       <div
                         key={idx}
                         className={`rounded-xl border p-2 transition-all duration-200 ${
-                          idx === selectedAssetIndex
-                            ? 'border-[#060541] dark:border-[#f2f2f2] ring-2 ring-[#060541]/20 dark:ring-[#f2f2f2]/20'
-                            : 'border-[#606062]/20 bg-white/20 dark:bg-white/5'
+                          assetIsIncomplete
+                            ? 'border-orange-400 ring-2 ring-orange-400/25 shadow-[0_0_0_1px_rgba(251,146,60,0.35)] bg-orange-500/5'
+                            : idx === selectedAssetIndex
+                              ? 'border-[#060541] dark:border-[#f2f2f2] ring-2 ring-[#060541]/20 dark:ring-[#f2f2f2]/20'
+                              : 'border-[#606062]/20 bg-white/20 dark:bg-white/5'
                         }`}
                       >
                         <button
@@ -706,6 +787,7 @@ export default function VisualAdsGenerator({
                                   image: newImages[nextSelectedIndex]?.image || newImages[0]?.image || null,
                                   type: newImages[nextSelectedIndex]?.type || newImages[0]?.type || null,
                                   customType: newImages[nextSelectedIndex]?.customType || newImages[0]?.customType || null,
+                                  customTypeDraft: newImages[nextSelectedIndex]?.customTypeDraft || newImages[0]?.customTypeDraft || null,
                                 },
                                 assets: newImages,
                               }));
@@ -745,7 +827,7 @@ export default function VisualAdsGenerator({
                             value={asset.type || ''}
                             onChange={(e) => handleAssetTypeSelect(idx, e.target.value as 'logo' | 'product' | 'screenshot' | 'person' | 'other')}
                             className={`w-full min-w-0 rounded-lg border bg-white/70 dark:bg-white/10 px-3 py-2 text-xs text-foreground outline-none transition-all focus:ring-2 ${
-                              !asset.type
+                              assetNeedsType
                                 ? 'border-orange-400 ring-2 ring-orange-400/25 shadow-[0_0_0_1px_rgba(251,146,60,0.35)]'
                                 : 'border-[#606062]/20 dark:border-[#858384]/30 focus:border-orange-400 focus:ring-orange-400/20'
                             }`}
@@ -758,13 +840,27 @@ export default function VisualAdsGenerator({
                             <option value="other">{language === 'ar' ? 'أخرى' : 'Other'}</option>
                           </select>
                           {asset.type === 'other' && (
-                            <input
-                              value={asset.customType || ''}
-                              onChange={(e) => handleCustomAssetLabelChange(idx, e.target.value)}
-                              placeholder={language === 'ar' ? 'مثال: عبوة ذهبية' : 'Ex: gold bottle'}
-                              maxLength={24}
-                              className="w-full rounded-lg border border-[#606062]/20 dark:border-[#858384]/30 bg-white/70 dark:bg-white/10 px-2 py-2 text-xs text-foreground outline-none transition-all focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20"
-                            />
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                value={asset.customTypeDraft || ''}
+                                onChange={(e) => handleCustomAssetLabelChange(idx, e.target.value)}
+                                placeholder={language === 'ar' ? 'مثال: عبوة ذهبية' : 'Ex: gold bottle'}
+                                maxLength={24}
+                                className={`min-w-0 flex-1 rounded-lg border bg-white/70 dark:bg-white/10 px-2 py-2 text-xs text-foreground outline-none transition-all focus:ring-2 ${
+                                  assetNeedsCustomLabel
+                                    ? 'border-orange-400 ring-2 ring-orange-400/25 shadow-[0_0_0_1px_rgba(251,146,60,0.35)] focus:border-orange-400 focus:ring-orange-400/25'
+                                    : 'border-[#606062]/20 dark:border-[#858384]/30 focus:border-orange-400 focus:ring-orange-400/20'
+                                }`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleApplyCustomAssetLabel(idx)}
+                                disabled={!asset.customTypeDraft?.trim() || asset.customTypeDraft?.trim() === asset.customType?.trim()}
+                                className="shrink-0 rounded-lg border border-orange-400/40 bg-orange-500/15 px-2 py-2 text-[11px] font-semibold text-orange-700 transition-all hover:bg-orange-500/25 disabled:cursor-not-allowed disabled:opacity-45 dark:text-orange-300"
+                              >
+                                {language === 'ar' ? 'تطبيق' : 'Apply'}
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -810,6 +906,24 @@ export default function VisualAdsGenerator({
                       ? 'إذا اخترت أخرى، اكتب وصفاً قصيراً من كلمتين كحد أقصى.'
                       : 'If you choose Other, add a short custom label with up to two words.'}
                   </p>
+                )}
+                {showPartialAssetStatus && (
+                  <div className="rounded-xl border border-orange-400/30 bg-orange-500/10 p-3 space-y-2.5">
+                    <div className="space-y-1.5">
+                      {readyAssetIndexes.map((index) => (
+                        <p key={`ready-${index}`} className="text-[11px] font-medium text-green-700 dark:text-green-300">
+                          {language === 'ar' ? `✓ الصورة ${index + 1} جاهزة.` : `✓ Image ${index + 1} is ready.`}
+                        </p>
+                      ))}
+                    </div>
+                    <div className="space-y-1.5">
+                      {incompleteAssets.map((item) => (
+                        <p key={`missing-${item.index}`} className="text-[11px] font-medium text-orange-700 dark:text-orange-300">
+                          {language === 'ar' ? `◌ ${item.message}` : `◌ ${item.message}`}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
                 )}
                 {canContinueToStep2 && (
                   <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 space-y-2">
