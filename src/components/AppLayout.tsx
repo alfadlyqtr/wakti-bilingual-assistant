@@ -303,16 +303,17 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
         addDebug('QU Android → showPaywall(university_exclusive)');
         showPaywall(true, 'university_exclusive', purchaseCallback);
       } else if (isQUUser) {
-        // iOS + QU: first dump getOfferings to see what the SDK actually has
-        addDebug('QU iOS → calling getOfferings first to inspect...');
-        getOfferings((offeringsResp: any) => {
-          const dump = JSON.stringify(offeringsResp);
-          alert(`[Debug] getOfferings response:\n${dump.substring(0, 800)}`);
-          addDebug(`Offerings dump: ${dump.substring(0, 300)}`);
-          // Now attempt the purchase
-          addDebug('QU iOS → purchasePackage($rc_three_month)');
+        // iOS + QU: use the package object already fetched at mount — this is what showed QAR 73
+        // activePackageObj is set by getOfferings in the useEffect above
+        if (activePackageObj) {
+          addDebug(`QU iOS → purchasePackage(OBJ: ${activePackageObj?.identifier})`);
+          alert(`[Debug] Using package object: ${activePackageObj?.identifier} / store: ${activePackageObj?.product?.identifier}`);
+          purchasePackage(activePackageObj, purchaseCallback);
+        } else {
+          addDebug('QU iOS → activePackageObj is null, falling back to $rc_three_month');
+          alert('[Debug] activePackageObj is NULL - getOfferings at mount never set it');
           purchasePackage('$rc_three_month', purchaseCallback);
-        });
+        }
       } else {
         addDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', purchaseCallback);
