@@ -307,7 +307,7 @@ const ShareButton: React.FC<ShareButtonProps> = ({
                     Promise.resolve(platform.action()).finally(() => setIsExpanded(false));
                   }}
                   className={`
-                    absolute ${config.button} ${config.padding}
+                    absolute ${config.button} ${platform.bgColor.includes('overflow-hidden') ? 'p-0' : config.padding}
                     flex items-center justify-center
                     rounded-full
                     ${platform.bgColor}
