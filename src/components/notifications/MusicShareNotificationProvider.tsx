@@ -33,13 +33,17 @@ export function MusicShareNotificationProvider({ children }: MusicShareNotificat
 
     let active = true;
 
-    getPendingMusicTrackShares()
-      .then((shares) => {
-        if (active) setPendingShares(shares);
-      })
-      .catch((error) => {
-        console.error('[MusicShareNotificationProvider] load error:', error);
-      });
+    const refresh = () => {
+      getPendingMusicTrackShares()
+        .then((shares) => {
+          if (active) setPendingShares(shares);
+        })
+        .catch((error) => {
+          console.error('[MusicShareNotificationProvider] refresh error:', error);
+        });
+    };
+
+    refresh();
 
     const channel = supabase
       .channel(`music-track-shares-${user.id}`)
@@ -48,20 +52,25 @@ export function MusicShareNotificationProvider({ children }: MusicShareNotificat
         schema: 'public',
         table: 'music_track_shares',
         filter: `recipient_id=eq.${user.id}`,
-      }, () => {
-        getPendingMusicTrackShares()
-          .then((shares) => {
-            if (active) setPendingShares(shares);
-          })
-          .catch((error) => {
-            console.error('[MusicShareNotificationProvider] refresh error:', error);
-          });
-      })
+      }, refresh)
       .subscribe();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    const handleFocus = () => refresh();
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleFocus);
+
+    const poll = setInterval(refresh, 30_000);
 
     return () => {
       active = false;
       supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(poll);
     };
   }, [user?.id]);
 
