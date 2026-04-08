@@ -300,7 +300,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log('[AuthContext] Cleaning up realtime session monitoring');
       supabase.removeChannel(channel);
     };
-  }, [user?.id]);
+  }, [user?.id, lastLoginTimestamp]);
 
   // Identify logged-in user in RevenueCat (via Natively SDK). No-op on web.
   // Also check subscription status via RevenueCat REST API

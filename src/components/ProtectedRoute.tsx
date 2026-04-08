@@ -32,6 +32,17 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   // --- Fix #2: hooks moved here (top of component) to satisfy Rules of Hooks ---
   const { isSubscribed, isGracePeriod, isAccessExpired, isNewUser, wasSubscribed, hasTrialStarted, isAdminGifted, profile, loading: isProfileLoading } = useUserProfile();
   const [accessCheckTick, setAccessCheckTick] = useState(0);
+  const [recentLoginGrace, setRecentLoginGrace] = useState(false);
+
+  useEffect(() => {
+    if (!lastLoginTimestamp) return;
+    const elapsed = Date.now() - lastLoginTimestamp;
+    if (elapsed < 5000) {
+      setRecentLoginGrace(true);
+      const timer = window.setTimeout(() => setRecentLoginGrace(false), 5000 - elapsed);
+      return () => clearTimeout(timer);
+    }
+  }, [lastLoginTimestamp]);
 
   // Enable subscription/IAP enforcement
   const TEMP_DISABLE_SUBSCRIPTION_CHECKS = false;
@@ -436,7 +447,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   }
 
   // TASK 1: Kill the 'Polite' Returns - Block by Default
-  if (subscriptionStatus.isLoading) {
+  if (subscriptionStatus.isLoading && !recentLoginGrace) {
     if (DEV) console.log("ProtectedRoute: Subscription pending - BLOCKING access");
     return (
       <div className="w-screen h-[100dvh] bg-background flex items-center justify-center overflow-hidden">
@@ -448,7 +459,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   }
 
   // CRITICAL: Block while profile is loading - never let children render during load
-  if (isProfileLoading) {
+  if (isProfileLoading && !recentLoginGrace) {
     if (DEV) console.log("ProtectedRoute: Profile loading - BLOCKING access");
     return (
       <div className="w-screen h-[100dvh] bg-background flex items-center justify-center overflow-hidden">
@@ -499,7 +510,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
           <CustomPaywallModal open={showPaywall} onOpenChange={setShowPaywall} variant={paywallVariant} />
         </Suspense>
       )}
-      {hasConfirmedAccess ? (
+      {(hasConfirmedAccess || (recentLoginGrace && !isLoading && user)) ? (
         children
       ) : (
         <div className="w-screen h-[100dvh] bg-[#0c0f14] flex items-center justify-center overflow-hidden">

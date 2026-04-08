@@ -824,7 +824,8 @@ export default function MusicStudio() {
   const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor'>('compose');
   const [videoMode, setVideoMode] = useState<'ai' | 'saved'>('ai');
   const [imageMode, setImageMode] = useState<'create' | 'saved'>('create');
-  const [musicQuotaHeader, setMusicQuotaHeader] = useState({ remaining: 30, limit: 30, used: 0 });
+  const [musicQuotaHeader, setMusicQuotaHeader] = useState<{ remaining: number; limit: number; used: number } | null>(null);
+  const { user: authUser } = useAuth();
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
@@ -842,6 +843,26 @@ export default function MusicStudio() {
       setMusicSubTab('editor');
     }
   }, [searchParams]);
+
+  // Always load quota when music tab is open, regardless of compose/saved sub-tab
+  useEffect(() => {
+    if (mainTab !== 'music' || !authUser) return;
+    let cancelled = false;
+    const fetchQuota = async () => {
+      try {
+        const { data, error } = await (supabase as any).rpc('can_generate_music');
+        if (!error && data && !cancelled) {
+          const used = data.generated ?? 0;
+          const limit = data.limit ?? 30;
+          setMusicQuotaHeader({ used, limit, remaining: Math.max(0, limit - used) });
+        }
+      } catch {}
+    };
+    fetchQuota();
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchQuota(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { cancelled = true; document.removeEventListener('visibilitychange', onVisible); };
+  }, [mainTab, authUser?.id]);
 
   const isArabic = language === 'ar';
 
@@ -1118,10 +1139,14 @@ export default function MusicStudio() {
             <h1 className="text-xl md:text-2xl font-bold">{language === 'ar' ? 'استوديو الموسيقى' : 'Music Studio'}</h1>
             <div className="text-right space-y-0.5 pt-0.5">
               <div className="text-[11px] font-semibold text-emerald-500 dark:text-emerald-400">
-                {language === 'ar' ? `المستخدم: ${musicQuotaHeader.used} / ${musicQuotaHeader.limit}` : `Used: ${musicQuotaHeader.used} / ${musicQuotaHeader.limit}`}
+                {musicQuotaHeader
+                  ? (language === 'ar' ? `المستخدم: ${musicQuotaHeader.used} / ${musicQuotaHeader.limit}` : `Used: ${musicQuotaHeader.used} / ${musicQuotaHeader.limit}`)
+                  : (language === 'ar' ? 'جارٍ التحميل...' : 'Loading...')}
               </div>
               <div className="text-[11px] text-muted-foreground/80 dark:text-muted-foreground/60">
-                {language === 'ar' ? `المتبقي: ${musicQuotaHeader.remaining} هذا الشهر` : `Remaining ${musicQuotaHeader.remaining} this month`}
+                {musicQuotaHeader
+                  ? (language === 'ar' ? `المتبقي: ${musicQuotaHeader.remaining} هذا الشهر` : `Remaining ${musicQuotaHeader.remaining} this month`)
+                  : ''}
               </div>
             </div>
           </div>
@@ -4741,7 +4766,7 @@ function EditorTab() {
     });
   }, [tracks]);
 
-  useEffect(() => { load(); loadPlaylists(); loadPosters(); }, [user?.id]);
+  useEffect(() => { load(); loadPlaylists(); }, [user?.id]);
 
   useEffect(() => {
     const handleReload = () => load();
