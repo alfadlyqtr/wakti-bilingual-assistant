@@ -12,9 +12,8 @@
  * - reminder_due (NEW)
  */
 
-// @ts-nocheck
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { supabase, ensurePassport } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { waktiToast } from '@/services/waktiToast';
 
@@ -24,7 +23,7 @@ interface NotificationHistoryRow {
   type: string;
   title: string;
   body: string;
-  data: Record<string, any>;
+  data: Record<string, unknown> | string | number | boolean | null;
   deep_link: string | null;
   is_read: boolean;
   push_sent: boolean;
@@ -32,7 +31,11 @@ interface NotificationHistoryRow {
 }
 
 // Map notification types to toast types and sounds
-const NOTIFICATION_CONFIG: Record<string, { toastType: string; sound: string; priority: string }> = {
+type ToastType = 'message' | 'contact' | 'event' | 'shared_task' | 'admin' | 'task';
+type ToastPriority = 'normal' | 'high' | 'low' | 'urgent';
+type ToastSound = 'chime' | 'ding' | 'beep';
+
+const NOTIFICATION_CONFIG: Record<string, { toastType: ToastType; sound: ToastSound; priority: ToastPriority }> = {
   message_received: { toastType: 'message', sound: 'chime', priority: 'normal' },
   contact_request: { toastType: 'contact', sound: 'ding', priority: 'normal' },
   maw3d_rsvp: { toastType: 'event', sound: 'beep', priority: 'normal' },
@@ -61,8 +64,6 @@ export function useNotificationHistory() {
     if (!user?.id) return;
 
     try {
-      await ensurePassport();
-      
       // Count unread notifications from last 24 hours
       const { count, error } = await supabase
         .from('notification_history')
@@ -88,8 +89,6 @@ export function useNotificationHistory() {
     if (!user?.id) return;
 
     try {
-      await ensurePassport();
-      
       const { data, error } = await supabase
         .from('notification_history')
         .select('*')
@@ -102,7 +101,7 @@ export function useNotificationHistory() {
         return;
       }
 
-      setRecentNotifications(data || []);
+      setRecentNotifications((data as unknown as NotificationHistoryRow[]) || []);
     } catch (error) {
       console.error('Error in fetchRecentNotifications:', error);
     }
@@ -113,8 +112,6 @@ export function useNotificationHistory() {
     if (!user?.id) return;
 
     try {
-      await ensurePassport();
-      
       const { error } = await supabase
         .from('notification_history')
         .update({ is_read: true })
@@ -141,8 +138,6 @@ export function useNotificationHistory() {
     if (!user?.id) return;
 
     try {
-      await ensurePassport();
-      
       const { error } = await supabase
         .from('notification_history')
         .update({ is_read: true })
@@ -187,6 +182,17 @@ export function useNotificationHistory() {
     if (DEV) console.log('🔔 Showed toast for notification:', notification.type, notification.title);
   }, [DEV]);
 
+  // Stable refs so the realtime useEffect never re-runs due to callback identity changes
+  const fetchUnreadCountRef = useRef(fetchUnreadCount);
+  const fetchRecentNotificationsRef = useRef(fetchRecentNotifications);
+  const showNotificationToastRef = useRef(showNotificationToast);
+
+  useEffect(() => {
+    fetchUnreadCountRef.current = fetchUnreadCount;
+    fetchRecentNotificationsRef.current = fetchRecentNotifications;
+    showNotificationToastRef.current = showNotificationToast;
+  }, [fetchUnreadCount, fetchRecentNotifications, showNotificationToast]);
+
   // Set up real-time subscription
   useEffect(() => {
     if (!user?.id) return;
@@ -204,11 +210,9 @@ export function useNotificationHistory() {
 
     const setup = async () => {
       try {
-        await ensurePassport();
-        
         // Initial fetch
-        await fetchUnreadCount();
-        await fetchRecentNotifications();
+        await fetchUnreadCountRef.current();
+        await fetchRecentNotificationsRef.current();
 
         if (DEV) console.log('🔔 Setting up notification_history subscription for user:', user.id);
 
@@ -225,7 +229,7 @@ export function useNotificationHistory() {
             if (DEV) console.log('🔔 New notification received:', notification.type, notification.title);
 
             // Show toast
-            await showNotificationToast(notification);
+            await showNotificationToastRef.current(notification);
 
             // Update counts and list
             setUnreadCount(prev => prev + 1);
@@ -248,7 +252,7 @@ export function useNotificationHistory() {
       globalSetupInProgress = false;
       globalUserId = null;
     };
-  }, [user?.id, DEV, fetchUnreadCount, fetchRecentNotifications, showNotificationToast]);
+  }, [user?.id, DEV]);
 
   return {
     unreadCount,

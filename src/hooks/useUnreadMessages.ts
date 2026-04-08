@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase, ensurePassport } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { waktiToast } from '@/services/waktiToast';
 
@@ -22,6 +22,7 @@ export function useUnreadMessages() {
   const [sharedTaskCount, setSharedTaskCount] = useState(0);
   const [perContactUnread, setPerContactUnread] = useState<Record<string, number>>({});
   const initializedRef = useRef(false);
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -31,7 +32,6 @@ export function useUnreadMessages() {
       if (DEV) console.log('⚠️ Real-time subscriptions disabled - fetching initial counts only');
       const fetchInitial = async () => {
         try {
-          await ensurePassport();
           await fetchUnreadCounts();
         } catch (e) {
           console.error('Error fetching initial counts:', e);
@@ -58,8 +58,6 @@ export function useUnreadMessages() {
 
     const setup = async () => {
       try {
-        await ensurePassport();
-
         // Get initial counts
         await fetchUnreadCounts();
 
@@ -141,7 +139,6 @@ export function useUnreadMessages() {
               console.log('📅 New Maw3d RSVP:', payload);
               
               // Check if this is for user's event
-              await ensurePassport();
               const { data: event } = await supabase
                 .from('maw3d_events')
                 .select('created_by, title')
@@ -177,7 +174,6 @@ export function useUnreadMessages() {
               console.log('📋 New shared task response:', payload);
               
               // Check if this is for user's task
-              await ensurePassport();
               const { data: task } = await supabase
                 .from('tr_tasks')
                 .select('user_id, title')
@@ -216,6 +212,7 @@ export function useUnreadMessages() {
     setup();
 
     const cleanup = () => {
+      if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
       if (messagesChannel) supabase.removeChannel(messagesChannel);
       if (contactsChannel) supabase.removeChannel(contactsChannel);
       if (maw3dChannel) supabase.removeChannel(maw3dChannel);
@@ -234,98 +231,110 @@ export function useUnreadMessages() {
   }, [user?.id]);
 
   const lastCountsRef = useRef<string>("");
-  const fetchUnreadCounts = async () => {
+  const fetchUnreadCounts = () => {
     if (!user) return;
 
-    try {
-      await ensurePassport();
-      if (DEV) console.log('📊 Fetching unread counts for user:', user.id);
-      
-      // Messages count
-      const { count: messageCount } = await supabase
-        .from('messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('recipient_id', user.id)
-        .eq('is_read', false);
+    // Debounce: cancel any pending fetch and wait 1000ms before executing
+    if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
 
-      if (DEV) console.log('📨 Total unread messages:', messageCount);
+    fetchTimeoutRef.current = setTimeout(async () => {
+      try {
+        if (DEV) console.log('📊 Fetching unread counts for user:', user.id);
 
-      // Per-contact unread counts with detailed logging
-      const { data: perContactData, error: perContactError } = await supabase
-        .from('messages')
-        .select('sender_id')
-        .eq('recipient_id', user.id)
-        .eq('is_read', false);
+        // Run all 5 queries in parallel
+        const [
+          { count: messageCount },
+          { data: perContactData, error: perContactError },
+          { count: contactRequestCount },
+          { count: eventRsvpCount },
+          { count: sharedTaskResponseCount }
+        ] = await Promise.all([
+          // Query 1: Messages count
+          supabase
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('recipient_id', user.id)
+            .eq('is_read', false),
 
-      if (perContactError) {
-        console.error('❌ Error fetching per-contact unread:', perContactError);
-      }
+          // Query 2: Per-contact unread data
+          supabase
+            .from('messages')
+            .select('sender_id')
+            .eq('recipient_id', user.id)
+            .eq('is_read', false),
 
-      if (DEV) console.log('📊 Per-contact unread data:', perContactData);
+          // Query 3: Contact requests count
+          supabase
+            .from('contacts')
+            .select('*', { count: 'exact', head: true })
+            .eq('contact_id', user.id)
+            .eq('status', 'pending'),
 
-      const perContactCounts: Record<string, number> = {};
-      perContactData?.forEach(msg => {
-        perContactCounts[msg.sender_id] = (perContactCounts[msg.sender_id] || 0) + 1;
-      });
+          // Query 4: Maw3d event RSVPs count (events user created)
+          supabase
+            .from('maw3d_rsvps')
+            .select(`
+              *,
+              maw3d_events!inner(created_by)
+            `, { count: 'exact', head: true })
+            .eq('maw3d_events.created_by', user.id)
+            .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
 
-      if (DEV) console.log('📊 Per-contact unread counts:', perContactCounts);
+          // Query 5: Shared task responses count
+          supabase
+            .from('tr_shared_responses')
+            .select(`
+              *,
+              tr_tasks!inner(user_id)
+            `, { count: 'exact', head: true })
+            .eq('tr_tasks.user_id', user.id)
+            .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
+        ]);
 
-      // Contact requests count
-      const { count: contactRequestCount } = await supabase
-        .from('contacts')
-        .select('*', { count: 'exact', head: true })
-        .eq('contact_id', user.id)
-        .eq('status', 'pending');
+        if (perContactError) {
+          console.error('❌ Error fetching per-contact unread:', perContactError);
+        }
 
-      // Maw3d event RSVPs count (events user created)
-      const { count: eventRsvpCount } = await supabase
-        .from('maw3d_rsvps')
-        .select(`
-          *,
-          maw3d_events!inner(created_by)
-        `, { count: 'exact', head: true })
-        .eq('maw3d_events.created_by', user.id)
-        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+        if (DEV) console.log('📨 Total unread messages:', messageCount);
+        if (DEV) console.log('📊 Per-contact unread data:', perContactData);
 
-      // Shared task responses count
-      const { count: sharedTaskResponseCount } = await supabase
-        .from('tr_shared_responses')
-        .select(`
-          *,
-          tr_tasks!inner(user_id)
-        `, { count: 'exact', head: true })
-        .eq('tr_tasks.user_id', user.id)
-        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-
-      setUnreadTotal(messageCount || 0);
-      setContactCount(contactRequestCount || 0);
-      setMaw3dEventCount(eventRsvpCount || 0);
-      setSharedTaskCount(sharedTaskResponseCount || 0);
-      setTaskCount(0); // Regular task count if needed
-      setPerContactUnread(perContactCounts);
-
-      if (DEV) {
-        const snapshot = JSON.stringify({
-          messages: messageCount,
-          contacts: contactRequestCount,
-          events: eventRsvpCount,
-          sharedTasks: sharedTaskResponseCount
+        const perContactCounts: Record<string, number> = {};
+        perContactData?.forEach(msg => {
+          perContactCounts[msg.sender_id] = (perContactCounts[msg.sender_id] || 0) + 1;
         });
-        if (snapshot !== lastCountsRef.current) {
-          lastCountsRef.current = snapshot;
-          console.log('📊 Final unread counts updated:', {
+
+        if (DEV) console.log('📊 Per-contact unread counts:', perContactCounts);
+
+        setUnreadTotal(messageCount || 0);
+        setContactCount(contactRequestCount || 0);
+        setMaw3dEventCount(eventRsvpCount || 0);
+        setSharedTaskCount(sharedTaskResponseCount || 0);
+        setTaskCount(0); // Regular task count if needed
+        setPerContactUnread(perContactCounts);
+
+        if (DEV) {
+          const snapshot = JSON.stringify({
             messages: messageCount,
             contacts: contactRequestCount,
             events: eventRsvpCount,
-            sharedTasks: sharedTaskResponseCount,
-            perContact: perContactCounts
+            sharedTasks: sharedTaskResponseCount
           });
+          if (snapshot !== lastCountsRef.current) {
+            lastCountsRef.current = snapshot;
+            console.log('📊 Final unread counts updated:', {
+              messages: messageCount,
+              contacts: contactRequestCount,
+              events: eventRsvpCount,
+              sharedTasks: sharedTaskResponseCount,
+              perContact: perContactCounts
+            });
+          }
         }
-      }
 
-    } catch (error) {
-      console.error('❌ Error fetching unread counts:', error);
-    }
+      } catch (error) {
+        console.error('❌ Error fetching unread counts:', error);
+      }
+    }, 1000);
   };
 
   return {

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { UserProfileProvider } from "@/contexts/UserProfileContext";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Analytics } from "@vercel/analytics/react";
 import { AppStoreBanner } from "@/components/AppStoreBanner";
@@ -104,13 +105,15 @@ function App() {
       <ThemeProvider>
         <TooltipProvider>
           <AuthProvider>
-            <BrowserRouter>
-              <ColorBlindFilters />
-              <div className="bg-background font-sans antialiased">
-                <ConsumerRouter />
-                <AppStoreBanner position="bottom" dismissible={true} />
-              </div>
-            </BrowserRouter>
+            <UserProfileProvider>
+              <BrowserRouter>
+                <ColorBlindFilters />
+                <div className="bg-background font-sans antialiased">
+                  <ConsumerRouter />
+                  <AppStoreBanner position="bottom" dismissible={true} />
+                </div>
+              </BrowserRouter>
+            </UserProfileProvider>
           </AuthProvider>
           <Toaster />
           <SpeedInsights />

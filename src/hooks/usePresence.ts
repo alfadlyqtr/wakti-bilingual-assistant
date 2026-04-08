@@ -126,31 +126,11 @@ export function usePresence(currentUserId?: string | null) {
             typing: false,
             last_seen: new Date().toISOString()
           } as PresencePayload);
-          // Persist last_seen to profiles table for reliable offline display
-          try {
-            await supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', currentUserId);
-          } catch (_) {}
         }
       });
 
-    // Set up heartbeat to update last_seen every 30s
-    const heartbeat = setInterval(async () => {
-      if (document.visibilityState === 'visible') {
-        await channel.track({
-          user_id: currentUserId,
-          typing: false,
-          last_seen: new Date().toISOString()
-        } as PresencePayload);
-        // Also persist to DB so other clients can show "last seen"
-        try {
-          await supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', currentUserId);
-        } catch (_) {}
-      }
-    }, 30000);
-
     // Cleanup
     return () => {
-      clearInterval(heartbeat);
       try {
         supabase.removeChannel(channel);
       } catch (_) {}

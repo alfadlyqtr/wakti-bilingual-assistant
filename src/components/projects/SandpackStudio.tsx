@@ -623,22 +623,15 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
           "react-dom": "^18.2.0",
           // UI/Icons
           "lucide-react": "^0.462.0",
-          "clsx": "^2.1.1",
-          "tailwind-merge": "^2.5.2",
           // Animation
-          "framer-motion": "^12.0.0",
           "@emotion/is-prop-valid": "^1.2.1",
           // Internationalization
           "i18next": "^23.7.6",
           "react-i18next": "^13.5.0",
           "i18next-browser-languagedetector": "^7.2.0",
           // Date/Time
-          "date-fns": "^3.6.0",
           "react-day-picker": "^8.10.1",
           // Charts & Data Viz
-          "recharts": "^2.12.7",
-          "chart.js": "^4.5.0",
-          "react-chartjs-2": "^5.2.0",
           "react-circular-progressbar": "^2.2.0",
           // Carousel/Slider
           "react-slick": "^0.30.2",

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, Suspense } from "react";
 import { useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase, ensurePassport } from "@/integrations/supabase/client";
@@ -495,7 +495,9 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   return (
     <>
       {CustomPaywallModal && (
-        <CustomPaywallModal open={showPaywall} onOpenChange={setShowPaywall} variant={paywallVariant} />
+        <Suspense fallback={null}>
+          <CustomPaywallModal open={showPaywall} onOpenChange={setShowPaywall} variant={paywallVariant} />
+        </Suspense>
       )}
       {hasConfirmedAccess ? (
         children

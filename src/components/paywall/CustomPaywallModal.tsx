@@ -1,0 +1,918 @@
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import { useTheme } from "@/providers/ThemeProvider";
+import { supabase } from "@/integrations/supabase/client";
+import { purchasePackage, restorePurchases, getOfferings, showPaywall } from "@/integrations/natively/purchasesBridge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Sparkles, RefreshCw, LogOut, Shield, MessageCircle, GraduationCap } from "lucide-react";
+import { Logo3D } from "@/components/Logo3D";
+import { toast } from "sonner";
+import type { PaywallVariant } from "@/components/ProtectedRoute";
+
+interface CustomPaywallModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  variant: PaywallVariant;
+}
+
+function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalProps) {
+  const { language, setLanguage } = useTheme();
+  const { signOut, user } = useAuth();
+  const { profile } = useUserProfile();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [loading, setLoading] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [price, setPrice] = useState<{ qar?: string; usd?: string }>({});
+  const [purchaseInProgress, setPurchaseInProgress] = useState(false);
+  const [debugLog, setDebugLog] = useState<string[]>([]);
+  const addDebug = (msg: string) => {
+    console.log('[DEBUG]', msg);
+    setDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
+  };
+  const [activePackageId, setActivePackageId] = useState<string>('$rc_monthly');
+  const [activePackageObj, setActivePackageObj] = useState<any>(null);
+  const [step, setStep] = useState(variant === 'new_user' ? 1 : 2);
+  const [editingName, setEditingName] = useState(false);
+  const [showFeatures, setShowFeatures] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [usernameInput, setUsernameInput] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [nameError, setNameError] = useState('');
+  const contactUrl = "https://wa.me/97433994166";
+  const rawName = profile?.display_name || (profile as any)?.first_name || profile?.username || user?.email || '';
+  const userName = rawName.includes('@') ? rawName.split('@')[0] : rawName;
+
+  const getDeviceOS = (): 'ios' | 'android' | 'other' => {
+    const ua = navigator.userAgent;
+    if (/iPad|iPhone|iPod/.test(ua)) return 'ios';
+    if (/Android/.test(ua)) return 'android';
+    return 'other';
+  };
+
+  useEffect(() => {
+    if (open) {
+      document.body.classList.add('paywall-open');
+    } else {
+      document.body.classList.remove('paywall-open');
+    }
+    return () => {
+      document.body.classList.remove('paywall-open');
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setStep(variant === 'new_user' ? 1 : 2);
+  }, [open, variant]);
+
+  useEffect(() => {
+    if (!open) return;
+    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+    getOfferings((resp) => {
+      console.log('[Offerings] Raw SDK response:', JSON.stringify(resp));
+      if (resp?.status !== 'SUCCESS') {
+        console.warn('[Offerings] SDK returned non-SUCCESS status:', resp?.status);
+        return;
+      }
+
+      const allRaw = resp?.offerings?.all;
+      let allOfferings: any[] = [];
+      if (Array.isArray(allRaw)) {
+        allOfferings = allRaw;
+      } else if (allRaw && typeof allRaw === 'object') {
+        allOfferings = Object.values(allRaw);
+      }
+      console.log('[Offerings] All offerings parsed:', allOfferings.map((o: any) => o?.identifier));
+
+      if (isQUUser) {
+        let quPkg: any = null;
+        const quOffering = allOfferings.find((o: any) => o.identifier === 'university_exclusive');
+        if (quOffering) {
+          quPkg = quOffering.availablePackages?.find((p: any) => p.identifier === 'qatar_university');
+        }
+        if (!quPkg) {
+          const defaultOffering = allOfferings.find((o: any) => o.identifier === 'Default') || resp?.offerings?.current;
+          quPkg = defaultOffering?.availablePackages?.find((p: any) => p.identifier === '$rc_three_month');
+        }
+        console.log('[Offerings] QU package:', quPkg ? `FOUND (${quPkg.identifier})` : 'NOT FOUND', quPkg?.product?.priceString);
+        if (quPkg?.product) {
+          const storeProductId = quPkg.product.identifier;
+          console.log('[Offerings] ✅ QU package set — RC pkg:', quPkg.identifier, '| Store product:', storeProductId, '| price:', quPkg.product.priceString);
+          setActivePackageId(storeProductId);
+          setActivePackageObj(quPkg);
+          setPrice({
+            qar: quPkg.product.priceString || 'QAR 73/month',
+            usd: quPkg.product.priceUSD || '$19.99/month',
+          });
+          return;
+        }
+        console.warn('[Offerings] ⚠️ QU package not found in any offering, falling back to default');
+      }
+
+      if (resp?.offerings?.current) {
+        const pkg = resp.offerings.current.availablePackages?.find(
+          (p: any) => p.identifier === '$rc_monthly'
+        ) || resp.offerings.current.availablePackages?.[0];
+        if (pkg?.product) {
+          const storeProductId = pkg.product.identifier;
+          console.log('[Offerings] ✅ Standard package set — RC pkg:', pkg.identifier, '| Store product:', storeProductId, '| price:', pkg.product.priceString);
+          setActivePackageId(storeProductId);
+          setActivePackageObj(pkg);
+          setPrice({
+            qar: pkg.product.priceString || 'QAR 92/month',
+            usd: pkg.product.priceUSD || '$25/month',
+          });
+        }
+      }
+    });
+  }, [open, user?.email]);
+
+  useEffect(() => {
+    if (!open || !purchaseInProgress) return;
+
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && purchaseInProgress) {
+        console.log('[Purchase] App re-foregrounded, checking subscription status...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        if (!user?.id) return;
+        try {
+          const { data, error } = await supabase.functions.invoke('check-subscription', {
+            body: { userId: user.id }
+          });
+          console.log('[Purchase] Post-foreground check result:', data, error);
+          if (data?.isSubscribed) {
+            toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
+            setPurchaseInProgress(false);
+            setLoading(false);
+            try {
+              localStorage.removeItem(`wakti_sub_status_${user.id}`);
+              window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
+            } catch {}
+            setTimeout(() => onOpenChange(false), 1000);
+          } else {
+            setPurchaseInProgress(false);
+            setLoading(false);
+          }
+        } catch (err) {
+          console.error('[Purchase] Post-foreground check failed:', err);
+          setPurchaseInProgress(false);
+          setLoading(false);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [open, purchaseInProgress, user?.id, language, onOpenChange]);
+
+  const handleSubscribe = async () => {
+    addDebug('--- BUTTON PRESSED ---');
+    setLoading(true);
+    setPurchaseInProgress(true);
+
+    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /Android/.test(navigator.userAgent);
+    addDebug(`QU:${isQUUser} iOS:${isIOS} Android:${isAndroid}`);
+    console.log('[Purchase] QU:', isQUUser, '| iOS:', isIOS);
+
+    const purchaseCallback = async (resp: any) => {
+      alert(`[Debug] SDK Response: status=${resp?.status}, msg=${resp?.message}, err=${resp?.error ? JSON.stringify(resp.error) : 'none'}`);
+      addDebug(`Callback fired! Status: ${resp?.status}`);
+      addDebug(`Callback message: ${resp?.message}`);
+      if (resp?.error) addDebug(`Callback error: ${JSON.stringify(resp.error)}`);
+      console.log('[Purchase] Response:', resp);
+
+      const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
+        resp.message.toLowerCase().includes('already subscribed');
+      const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
+
+      if (isPurchased || isAlreadySubscribed) {
+        if (user?.id) {
+          try {
+            await supabase
+              .from('profiles')
+              .update({
+                is_subscribed: true,
+                subscription_status: 'active',
+                plan_name: 'Wakti Monthly',
+                billing_start_date: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', user.id);
+            console.log('[Purchase] Supabase updated successfully');
+          } catch (err) {
+            console.error('[Purchase] Supabase update failed:', err);
+          }
+        }
+        toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
+        setPurchaseInProgress(false);
+        if (user?.id) {
+          try {
+            localStorage.removeItem(`wakti_sub_status_${user.id}`);
+            window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
+            window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+          } catch {}
+          supabase.functions.invoke('check-subscription', { body: { userId: user.id } })
+            .then(({ data }) => { console.log('[Purchase] Background RC sync:', data?.isSubscribed); })
+            .catch(err => { console.warn('[Purchase] Background RC sync failed:', err); });
+        }
+        setTimeout(() => onOpenChange(false), 1000);
+      } else if (resp?.status === 'ERROR') {
+        toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
+        setPurchaseInProgress(false);
+      }
+      setLoading(false);
+    };
+
+    try {
+      if (isQUUser && isAndroid) {
+        addDebug('QU Android → showPaywall(university_exclusive)');
+        showPaywall(true, 'university_exclusive', purchaseCallback);
+      } else if (isQUUser) {
+        addDebug('QU iOS → purchasePackage(qatar_university)');
+        alert('[Debug] QU iOS → purchasePackage(qatar_university)');
+        purchasePackage('qatar_university', purchaseCallback);
+      } else {
+        addDebug('Standard → purchasePackage($rc_monthly)');
+        purchasePackage('$rc_monthly', purchaseCallback);
+      }
+    } catch (e: any) {
+      addDebug(`TRY/CATCH ERROR: ${e?.message || String(e)}`);
+      setLoading(false);
+      setPurchaseInProgress(false);
+    }
+
+    setTimeout(() => {
+      if (purchaseInProgress) {
+        console.log('[Purchase] Callback timeout - waiting for visibilitychange');
+      }
+    }, 30000);
+  };
+
+  const handleRestore = () => {
+    setRestoring(true);
+    restorePurchases((resp: any) => {
+      console.log('[Restore] Native SDK response:', resp);
+      try {
+        const verifySubscription = () => {
+          if (!user?.id) {
+            toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
+            setRestoring(false);
+            return;
+          }
+          supabase.functions.invoke('check-subscription', {
+            body: { userId: user.id }
+          }).then(({ data, error }) => {
+            console.log('[Restore] Backend verification result:', data, error);
+            if (data?.isSubscribed) {
+              toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
+              setRestoring(false);
+              if (user?.id) {
+                try {
+                  localStorage.removeItem(`wakti_sub_status_${user.id}`);
+                  window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
+                } catch {}
+              }
+              setTimeout(() => onOpenChange(false), 1000);
+            } else {
+              toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
+              setRestoring(false);
+            }
+          }).catch(err => {
+            console.error('[Restore] Backend verification failed:', err);
+            toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
+            setRestoring(false);
+          });
+        };
+
+        if (resp?.status === 'SUCCESS') {
+          console.log('[Restore] Native restore completed, verifying with backend...');
+          verifySubscription();
+          return;
+        }
+        console.log('[Restore] Native restore status:', resp?.status, 'Error:', resp?.error);
+        console.log('[Restore] Trying backend verification as fallback...');
+        verifySubscription();
+      } catch (err) {
+        console.error('[Restore] Error in callback:', err);
+        toast.error(language === 'ar' ? 'حدث خطأ' : 'An error occurred');
+        setRestoring(false);
+      }
+    });
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    onOpenChange(false);
+    navigate('/login');
+  };
+
+  const handleSkip = async () => {
+    if (!user?.id) return;
+    try {
+      const { error: upsertError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          email: user.email || '',
+          free_access_start_at: new Date().toISOString(),
+          trial_popup_shown: true
+        }, { onConflict: 'id', ignoreDuplicates: false });
+      if (upsertError) {
+        console.error('[Paywall] Profile upsert failed:', upsertError);
+        await supabase
+          .from('profiles')
+          .update({
+            free_access_start_at: new Date().toISOString(),
+            trial_popup_shown: true
+          })
+          .eq('id', user.id);
+      }
+
+      try {
+        const now = new Date();
+        const pushMessages = [
+          { delayHours: 12, en: '12 hours left of your Wakti trial subscribe now and get 3 more free days', ar: 'باقي 12 ساعة على انتهاء تجربتك في وقتي اشترك الآن واحصل على 3 أيام مجانية إضافية' },
+          { delayHours: 22, en: '2 hours left of your Wakti trial subscribe now and get 3 more free days', ar: 'باقي ساعتين على انتهاء تجربتك في وقتي اشترك الآن واحصل على 3 أيام مجانية إضافية' },
+          { delayHours: 24, en: 'Your Wakti trial has ended. Subscribe to continue guess what you still get 3 more free days', ar: 'انتهت تجربتك في وقتي. اشترك للمتابعة والمفاجأة، لا تزال تحصل على 3 أيام مجانية' },
+        ];
+        for (const msg of pushMessages) {
+          const sendAt = new Date(now.getTime() + msg.delayHours * 60 * 60 * 1000);
+          supabase.functions.invoke('schedule-reminder-push', {
+            body: {
+              userId: user.id,
+              title: 'Wakti AI',
+              message: language === 'ar' ? msg.ar : msg.en,
+              scheduledFor: sendAt.toISOString(),
+              data: { type: 'trial_reminder' }
+            }
+          }).catch(() => {});
+        }
+      } catch {}
+
+      window.dispatchEvent(new CustomEvent('wakti-trial-started'));
+      window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+      onOpenChange(false);
+      toast.success(language === 'ar' ? 'مرحباً بك في وقتي!' : 'Welcome to Wakti!');
+
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      window.OneSignalDeferred.push(async function(OneSignal: any) {
+        try {
+          await OneSignal.Notifications.requestPermission();
+          console.log('[Paywall] OneSignal Web Push permission requested');
+        } catch (err) {
+          console.warn('[Paywall] OneSignal Web Push permission request failed:', err);
+        }
+      });
+    } catch (err) {
+      console.error('[Paywall] Skip/trial start failed:', err);
+    }
+  };
+
+  const subtitles = {
+    new_user: {
+      en: 'Unlock all Super AI features. Start your 3-day free trial now.',
+      ar: 'افتح جميع ميزات الذكاء الاصطناعي. ابدأ تجربتك المجانية لمدة 3 أيام الآن.'
+    },
+    cancelled: {
+      en: 'Welcome back to Wakti, nice to have you back!',
+      ar: 'مرحباً بعودتك إلى وقتي، سعداء بعودتك!'
+    },
+    trial_expired: {
+      en: 'Hope you enjoyed Wakti! Subscribe now and you still get 3 more free days.',
+      ar: 'نتمنى أنك استمتعت بوقتي! اشترك الآن ولا تزال تحصل على 3 أيام مجانية إضافية.'
+    }
+  };
+
+  const features = {
+    en: [
+      { title: 'WAKTI AI', sublabel: '(chat • search • study)' },
+      { title: 'Generator', sublabel: '(image • video • music)' },
+      { title: 'Maw3d Events' },
+      { title: 'Contacts & Messaging' },
+      { title: 'WAKTI Journal' },
+      { title: 'Voice Cloning' },
+      { title: 'Voice TTS' },
+      { title: 'My Documents' },
+      { title: 'Tasks & Reminders' },
+      { title: 'Tasjeel Voice Recorder', sublabel: '(meetings • lectures • summarization)' },
+      { title: 'Vitality' },
+      { title: 'Smart Text Generator' },
+      { title: 'AI Games' },
+      { title: 'Voice Translation' },
+      { title: 'Calendar' },
+      { title: 'AI Coding' },
+      { title: 'Diagrams' },
+      { title: 'PowerPoint Slides' },
+    ],
+    ar: [
+      { title: 'وقتي AI', sublabel: '(دردشة • بحث • دراسة)' },
+      { title: 'المولد', sublabel: '(صور • فيديو • موسيقى)' },
+      { title: 'مواعيد Maw3d' },
+      { title: 'جهات الاتصال والرسائل' },
+      { title: 'دفتر يوميات وقطي' },
+      { title: 'استنساخ الصوت' },
+      { title: 'تحويل النص لصوت' },
+      { title: 'مستنداتي' },
+      { title: 'المهام والتذكيرات' },
+      { title: 'تسجيل (Tasjeel) مسجل الصوت', sublabel: '(اجتماعات • محاضرات • تلخيص)' },
+      { title: 'الحيوية' },
+      { title: 'مولد النص الذكي' },
+      { title: 'ألعاب الذكاء الاصطناعي' },
+      { title: 'ترجمة الصوت' },
+      { title: 'التقويم' },
+      { title: 'الترميز بالذكاء الاصطناعي' },
+      { title: 'الرسوم البيانية' },
+      { title: 'شرائح PowerPoint' },
+    ]
+  };
+
+  const lang = (language as 'en' | 'ar') || 'en';
+  const subtitle = subtitles[variant]?.[lang] || subtitles.new_user.en;
+  const featureList = features[lang] || features.en;
+
+  const showXButton = false;
+  const showSkipButton = false;
+  const showRestorePurchases = (variant === 'cancelled' || variant === 'trial_expired') && step === 2;
+  const canDismiss = false;
+
+  return (
+    <Dialog open={open} onOpenChange={undefined}>
+      <DialogContent
+        className="w-[95vw] max-w-[95vw] sm:w-[90vw] sm:max-w-[500px] bg-gradient-to-br from-background via-background to-accent/5 border-accent/20 max-h-[90vh] overflow-y-auto rounded-xl"
+        dir={language === 'ar' ? 'rtl' : 'ltr'}
+        hideCloseButton
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        {/* Top bar: logo | language toggle */}
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col items-center gap-1">
+            <button
+              onClick={async () => { await supabase.auth.signOut(); navigate('/'); }}
+              className="hover:opacity-70 active:scale-95 transition-all duration-150"
+              aria-label="Log out"
+              title={language === 'ar' ? 'تسجيل الخروج' : 'Log out'}
+            >
+              <Logo3D size="sm" className="w-8 h-8" />
+            </button>
+            <button
+              onClick={async () => { await supabase.auth.signOut(); navigate('/'); }}
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full border border-foreground/20 text-foreground/50 hover:text-foreground/80 hover:border-foreground/40 hover:bg-foreground/5 active:scale-95 transition-all duration-150"
+              aria-label="Log out"
+            >
+              <LogOut className="w-2.5 h-2.5" />
+              {language === 'ar' ? 'خروج' : 'Log out'}
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            {(() => {
+              const other = language === 'ar' ? 'en' : 'ar';
+              const label = other === 'en' ? 'English' : 'العربية';
+              return (
+                <button
+                  className="px-3 py-1 text-xs rounded-full border bg-accent/20 border-accent text-foreground"
+                  onClick={() => setLanguage?.(other as any)}
+                >{label}</button>
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* ── STEP 1: Hello Wall (new_user only) ── */}
+        {step === 1 && (
+          <>
+            <style>{`
+              @keyframes wave-hand {
+                0%   { transform: rotate(0deg); }
+                10%  { transform: rotate(14deg); }
+                20%  { transform: rotate(-8deg); }
+                30%  { transform: rotate(14deg); }
+                40%  { transform: rotate(-4deg); }
+                50%  { transform: rotate(10deg); }
+                60%  { transform: rotate(0deg); }
+                100% { transform: rotate(0deg); }
+              }
+              @keyframes gradient-shift {
+                0%   { background-position: 0% 50%; }
+                50%  { background-position: 100% 50%; }
+                100% { background-position: 0% 50%; }
+              }
+              @keyframes float-up {
+                0%   { opacity: 0; transform: translateY(18px); }
+                100% { opacity: 1; transform: translateY(0); }
+              }
+              @keyframes sparkle-pop {
+                0%   { opacity: 0; transform: scale(0) rotate(0deg); }
+                60%  { opacity: 1; transform: scale(1.3) rotate(20deg); }
+                100% { opacity: 0.7; transform: scale(1) rotate(0deg); }
+              }
+              @keyframes pulse-glow {
+                0%, 100% { box-shadow: 0 0 40px hsl(200,100%,55%,0.6), 0 0 80px hsl(200,100%,55%,0.3); }
+                50%       { box-shadow: 0 0 60px hsl(200,100%,60%,0.9), 0 0 120px hsl(280,70%,60%,0.5), 0 0 160px hsl(200,100%,55%,0.2); }
+              }
+              @keyframes feature-fade {
+                0%   { opacity: 0; transform: translateY(10px); }
+                100% { opacity: 1; transform: translateY(0); }
+              }
+              .wave-emoji { display:inline-block; animation: wave-hand 1.8s ease-in-out 0.3s 2; transform-origin: 70% 80%; }
+              .gradient-text-animated {
+                background: linear-gradient(270deg, hsl(210,100%,75%), hsl(280,60%,80%), hsl(25,95%,70%), hsl(142,76%,65%), hsl(210,100%,75%));
+                background-size: 300% 300%;
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+                animation: gradient-shift 4s ease infinite;
+              }
+              .hello-float { animation: float-up 0.6s ease-out both; }
+              .hello-float-1 { animation-delay: 0.1s; }
+              .hello-float-2 { animation-delay: 0.25s; }
+              .hello-float-3 { animation-delay: 0.4s; }
+              .hello-float-4 { animation-delay: 0.55s; }
+              .hello-float-5 { animation-delay: 0.7s; }
+              .sparkle-1 { animation: sparkle-pop 1s ease-out 0.5s both; }
+              .sparkle-2 { animation: sparkle-pop 1s ease-out 0.8s both; }
+              .sparkle-3 { animation: sparkle-pop 1s ease-out 1.1s both; }
+              .continue-btn-glow { animation: pulse-glow 2.5s ease-in-out infinite; }
+            `}</style>
+
+            {(() => { const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa')); return null; })()}
+            <div className="space-y-4 py-2">
+              {/* Greeting */}
+              <div className="text-center space-y-2 pt-1 hello-float hello-float-1">
+                <div className="relative inline-block">
+                  <span className="wave-emoji text-5xl select-none">👋</span>
+                  <span className="sparkle-1 absolute -top-1 -right-3 text-lg select-none">✨</span>
+                  <span className="sparkle-2 absolute top-1 -left-4 text-sm select-none">⭐</span>
+                  <span className="sparkle-3 absolute -bottom-1 right-0 text-sm select-none">💫</span>
+                </div>
+                <h2 className="gradient-text-animated text-2xl font-bold leading-snug inline-flex items-center justify-center gap-2">
+                  {(() => {
+                    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+                    if (language === 'ar') {
+                      return (
+                        <>
+                          {isQUUser && <GraduationCap className="w-5 h-5 inline" style={{ color: '#8A1538' }} />}
+                          <span>أهلاً {userName ? userName + '،' : ''} مرحباً بك في وقتي!</span>
+                        </>
+                      );
+                    }
+                    return (
+                      <>
+                        {isQUUser && <GraduationCap className="w-5 h-5 inline" style={{ color: '#8A1538' }} />}
+                        <span>Hello{userName ? ' ' + userName : ''}, welcome to Wakti!</span>
+                      </>
+                    );
+                  })()}
+                </h2>
+                {/* Edit profile inline */}
+                {!editingName ? (
+                  <button
+                    onClick={() => {
+                      setNameInput(profile?.display_name || '');
+                      setUsernameInput(profile?.username || '');
+                      setNameError('');
+                      setEditingName(true);
+                    }}
+                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] rounded-full border ${
+                      user?.email?.toLowerCase().endsWith('@qu.edu.qa')
+                        ? 'border-[#8A1538] text-foreground/40 hover:text-foreground/70 hover:border-[#8A1538]/70 hover:bg-[#8A1538]/5'
+                        : 'border-foreground/20 text-foreground/40 hover:text-foreground/70 hover:border-foreground/35 hover:bg-foreground/5'
+                    } active:scale-95 transition-all duration-150`}
+                  >
+                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                    {language === 'ar' ? 'تعديل الملف الشخصي' : 'Set up your profile'}
+                  </button>
+                ) : (
+                  <div className="w-full mt-2 rounded-xl border border-foreground/15 bg-foreground/5 p-3 space-y-2 text-left">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-foreground/50 font-medium">{language === 'ar' ? 'الاسم الظاهر' : 'Display Name'}</label>
+                      <input
+                        autoFocus
+                        value={nameInput}
+                        onChange={e => setNameInput(e.target.value)}
+                        placeholder={language === 'ar' ? 'مثال: أحمد محمد' : 'e.g. John Smith'}
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-foreground/20 bg-background text-foreground placeholder:text-foreground/30 outline-none focus:border-[hsl(210,100%,65%)] focus:ring-1 focus:ring-[hsl(210,100%,65%,0.3)] transition-all"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-foreground/50 font-medium">{language === 'ar' ? 'اسم المستخدم' : 'Username'}</label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/40 text-xs">@</span>
+                        <input
+                          value={usernameInput}
+                          onChange={e => { setUsernameInput(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, '')); setNameError(''); }}
+                          placeholder={language === 'ar' ? 'مثال: ahmed99' : 'e.g. john99'}
+                          className="w-full pl-6 pr-3 py-1.5 text-xs rounded-lg border border-foreground/20 bg-background text-foreground placeholder:text-foreground/30 outline-none focus:border-[hsl(210,100%,65%)] focus:ring-1 focus:ring-[hsl(210,100%,65%,0.3)] transition-all"
+                        />
+                      </div>
+                      {nameError && <p className="text-[10px] text-red-400">{nameError}</p>}
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        disabled={savingName}
+                        onClick={async () => {
+                          if (!user?.id) return;
+                          if (!nameInput.trim() && !usernameInput.trim()) { setNameError(language === 'ar' ? 'يرجى إدخال اسم أو اسم مستخدم' : 'Please enter a name or username'); return; }
+                          setSavingName(true); setNameError('');
+                          try {
+                            const updates: Record<string, string> = {};
+                            if (nameInput.trim()) updates.display_name = nameInput.trim();
+                            if (usernameInput.trim()) updates.username = usernameInput.trim();
+                            const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
+                            if (error?.message?.includes('duplicate') || error?.message?.includes('unique')) {
+                              setNameError(language === 'ar' ? 'اسم المستخدم مأخوذ، جرب آخر' : 'Username taken, try another');
+                              setSavingName(false); return;
+                            }
+                            window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+                            setSavingName(false); setEditingName(false);
+                          } catch { setSavingName(false); }
+                        }}
+                        className="flex-1 py-1.5 text-xs rounded-lg bg-[hsl(210,100%,55%)] hover:bg-[hsl(210,100%,50%)] text-white font-medium disabled:opacity-50 active:scale-[0.98] transition-all"
+                      >{savingName ? '...' : (language === 'ar' ? 'حفظ' : 'Save')}</button>
+                      <button
+                        onClick={() => setEditingName(false)}
+                        className="px-3 py-1.5 text-xs rounded-lg border border-foreground/20 text-foreground/50 hover:text-foreground/80 hover:bg-foreground/5 transition-all"
+                      >{language === 'ar' ? 'إلغاء' : 'Cancel'}</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Pitch */}
+              {(() => {
+                const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+                return (
+                  <div className={`hello-float hello-float-2 rounded-xl px-4 py-3 text-center bg-gradient-to-br from-[hsl(210,100%,65%,0.12)] to-[hsl(280,70%,65%,0.1)] shadow-[0_0_24px_hsl(210,100%,65%,0.15),inset_0_1px_0_hsl(210,100%,65%,0.2)] border ${
+                    isQUUser ? 'border-[#8A1538]' : 'border-[hsl(210,100%,65%,0.3)]'
+                  }`}>
+                    <p className="text-sm font-semibold text-foreground/95 leading-relaxed">
+                      {isQUUser
+                        ? (language === 'ar'
+                            ? <>
+                                مرحباً بك. وقتي هو تطبيقك الفائق للدراسة والإنتاجية. استمتع <span style={{ color: '#8A1538', fontWeight: '800', fontSize: '1.05em', textShadow: '0 0 8px rgba(138, 21, 56, 0.6), 0 0 16px rgba(138, 21, 56, 0.4)' }}>بسعركم الأكاديمي الحصري</span>.
+                              </>
+                            : <>
+                                Welcome. Wakti is your ultimate academic and productivity AI. Benefit from your exclusive <span style={{ color: '#8A1538', fontWeight: '800', fontSize: '1.05em', textShadow: '0 0 8px rgba(138, 21, 56, 0.6), 0 0 16px rgba(138, 21, 56, 0.4)' }}>academic rate</span>.
+                              </>)
+                        : (language === 'ar'
+                            ? '🚀 وقتي هو تطبيق الذكاء الاصطناعي الشامل. لن تحتاج إلى أي تطبيق آخر بعد الآن.'
+                            : '🚀 Wakti AI is the ultimate Super AI app — one app for everything. You won\'t need any other AI ever again.')}
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {/* Feature grid - Collapsible */}
+              {(() => {
+                const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+                return (
+                  <div className={`hello-float hello-float-3 ${
+                    isQUUser ? 'rounded-xl border border-[#8A1538] p-2' : ''
+                  }`}>
+                    <button
+                      onClick={() => setShowFeatures(!showFeatures)}
+                      className="w-full flex items-center justify-center gap-1 py-2 text-xs font-medium text-[hsl(210,100%,65%)] hover:text-[hsl(210,100%,75%)] active:scale-[0.98] transition-all duration-150"
+                    >
+                      {showFeatures
+                        ? (language === 'ar' ? 'إخفاء المميزات ⌃' : 'Hide features ⌃')
+                        : (language === 'ar' ? 'عرض جميع المميزات ⌵' : 'See all features ⌵')
+                      }
+                    </button>
+                    {showFeatures && (
+                      <div className="grid grid-cols-2 gap-1.5 mt-2">
+                        {featureList.map((feature, i) => {
+                          const item = typeof feature === 'string' ? { title: feature } : feature;
+                          return (
+                            <div
+                              key={i}
+                              className="flex items-center gap-1.5 rounded-md px-2 py-1.5 bg-[hsl(210,100%,65%,0.06)] border border-[hsl(210,100%,65%,0.15)] min-w-0 hover:bg-[hsl(210,100%,65%,0.12)] hover:border-[hsl(210,100%,65%,0.35)] hover:shadow-[0_0_10px_hsl(210,100%,65%,0.2)] transition-all duration-200"
+                            >
+                              <div className="w-1.5 h-1.5 rounded-full bg-[hsl(142,76%,55%)] shadow-[0_0_6px_hsl(142,76%,55%)] flex-shrink-0" />
+                              <span className="flex flex-col min-w-0">
+                                <span className="text-xs font-medium text-foreground/90 leading-tight truncate">{item.title}</span>
+                                {item.sublabel ? (
+                                  <span className="text-[9px] text-[hsl(210,100%,65%)] leading-tight">{item.sublabel}</span>
+                                ) : null}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Promise */}
+              <p className="hello-float hello-float-4 text-center text-sm text-[hsl(45,100%,65%)] font-semibold">
+                {language === 'ar'
+                  ? '✨ نقوم دائماً بتحديث وإضافة ميزات جديدة!'
+                  : '✨ We constantly update and add new features!'}
+              </p>
+
+              {/* Debug Box */}
+              {debugLog.length > 0 && (
+                <div className="w-full text-left p-2 rounded bg-black/80 border border-red-500 max-h-32 overflow-y-auto">
+                  <p className="text-red-400 text-xs font-bold mb-1">SDK DEBUG LOG:</p>
+                  {debugLog.map((log, i) => (
+                    <div key={i} className="text-[10px] font-mono text-green-400 border-b border-white/10 pb-1 mb-1">{log}</div>
+                  ))}
+                </div>
+              )}
+
+              {/* Continue button */}
+              <div className="hello-float hello-float-5 px-1 pb-2">
+                <Button
+                  onClick={handleSkip}
+                  size="lg"
+                  className={`continue-btn-glow w-full min-h-[64px] bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:opacity-95 text-white font-bold text-xl tracking-wide active:scale-[0.98] transition-all duration-150 rounded-2xl shadow-[0_0_40px_hsl(200,100%,55%,0.6),0_0_80px_hsl(200,100%,55%,0.3),0_4px_20px_hsl(200,100%,55%,0.4)] ${
+                    user?.email?.toLowerCase().endsWith('@qu.edu.qa') ? 'border-2 border-[#8A1538]' : 'border-0'
+                  }`}
+                >
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  {language === 'ar' ? 'ابدأ مجاناً ✨' : 'Start Free ✨'}
+                </Button>
+                <p className="text-center text-sm font-medium text-cyan-400 mt-3">
+                  {language === 'ar' ? '24 ساعة مجاناً — لا بطاقة مطلوبة' : '24 hours free — no card required'}
+                </p>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ── STEP 2: The Ask (subscribe screen) ── */}
+        {step === 2 && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="sr-only">Subscribe to Wakti AI</DialogTitle>
+              <DialogDescription className="text-base pt-2 font-semibold text-accent-blue">
+                {subtitle}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              {/* Price */}
+              <div className="rounded-lg p-4 text-center space-y-1 border border-[hsl(210,100%,65%,0.2)] bg-[hsl(210,100%,65%,0.05)] shadow-[0_0_20px_hsl(210,100%,65%,0.08)]">
+                {(() => {
+                  const normalize = (s?: string) => s || '';
+                  const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+                  if (language === 'ar') {
+                    const usd = isQUUser ? '19.99 دولار أمريكي/شهر' : (normalize(price.usd).replace('/month', '/شهر').replace('$', '') + ' دولار أمريكي/شهر') || '25 دولار أمريكي/شهر';
+                    const qar = isQUUser ? 'ر.ق 73/شهر' : (normalize(price.qar).replace('/month', '/شهر').replace('QAR', 'ر.ق').trim() || 'ر.ق 92/شهر');
+                    const originalQarAr = isQUUser ? 'ر.ق 93' : null;
+                    const originalUsdAr = isQUUser ? '$25' : null;
+                    return (
+                      <>
+                        {isQUUser && (
+                          <>
+                            <div className="flex items-center justify-center gap-3 text-sm mb-2">
+                              <span className="relative inline-block text-muted-foreground/50 font-medium">
+                                {originalQarAr}
+                                <span className="absolute left-0 right-0 top-1/2 h-[2px] bg-cyan-400 transform -rotate-12 -translate-y-1/2 rounded-full shadow-[0_0_4px_rgba(34,211,238,0.8)]"></span>
+                              </span>
+                              <span className="text-muted-foreground/20">•</span>
+                              <span className="relative inline-block text-muted-foreground/50 font-medium">
+                                {originalUsdAr}
+                                <span className="absolute left-0 right-0 top-1/2 h-[2px] bg-cyan-400 transform -rotate-12 -translate-y-1/2 rounded-full shadow-[0_0_4px_rgba(34,211,238,0.8)]"></span>
+                              </span>
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-400/30 shadow-[0_0_12px_rgba(245,158,11,0.3)] mb-2">
+                              <span className="text-base">🎓</span>
+                              <span className="text-sm font-bold text-amber-400 tracking-wide">تم تطبيق الخصم الأكاديمي</span>
+                            </div>
+                          </>
+                        )}
+                        <div className="flex items-center justify-center gap-3">
+                          <p className="text-lg text-muted-foreground">{usd}</p>
+                          <span className="text-muted-foreground">•</span>
+                          <p className="text-2xl font-bold text-primary">{qar}</p>
+                        </div>
+                      </>
+                    );
+                  } else {
+                    const qar = isQUUser ? 'QAR 73/month' : (normalize(price.qar) || 'QAR 92/month');
+                    const usd = isQUUser ? '$19.99/month' : (normalize(price.usd) || '$25/month');
+                    const originalQar = isQUUser ? 'QAR 93' : null;
+                    const originalUsd = isQUUser ? '$25' : null;
+                    return (
+                      <>
+                        {isQUUser && (
+                          <>
+                            <div className="flex items-center justify-center gap-3 text-sm mb-2">
+                              <span className="relative inline-block text-muted-foreground/50 font-medium">
+                                {originalQar}
+                                <span className="absolute left-0 right-0 top-1/2 h-[2px] bg-cyan-400 transform -rotate-12 -translate-y-1/2 rounded-full shadow-[0_0_4px_rgba(34,211,238,0.8)]"></span>
+                              </span>
+                              <span className="text-muted-foreground/20">•</span>
+                              <span className="relative inline-block text-muted-foreground/50 font-medium">
+                                {originalUsd}
+                                <span className="absolute left-0 right-0 top-1/2 h-[2px] bg-cyan-400 transform -rotate-12 -translate-y-1/2 rounded-full shadow-[0_0_4px_rgba(34,211,238,0.8)]"></span>
+                              </span>
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-400/30 shadow-[0_0_12px_rgba(245,158,11,0.3)] mb-2">
+                              <span className="text-base">🎓</span>
+                              <span className="text-sm font-bold text-amber-400 tracking-wide">Academic Discount Applied</span>
+                            </div>
+                          </>
+                        )}
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3">
+                          <p className="text-xl sm:text-2xl font-bold text-primary">{qar}</p>
+                          <span className="hidden sm:inline text-muted-foreground">•</span>
+                          <p className="text-xs sm:text-sm text-muted-foreground">{usd} <span className="text-[9px] sm:text-[10px] align-middle opacity-60">USD</span></p>
+                        </div>
+                      </>
+                    );
+                  }
+                })()}
+              </div>
+
+              {/* Actions */}
+              <div className="space-y-2 pt-2">
+                <Button
+                  onClick={handleSubscribe}
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:from-[hsl(210,100%,60%)] hover:via-[hsl(195,100%,55%)] hover:to-[hsl(175,100%,50%)] text-white font-bold text-lg tracking-wide shadow-[0_0_30px_hsl(200,100%,55%,0.6),0_0_60px_hsl(200,100%,55%,0.3),0_4px_20px_hsl(200,100%,55%,0.4)] hover:shadow-[0_0_40px_hsl(200,100%,55%,0.8),0_0_80px_hsl(200,100%,55%,0.4)] active:scale-[0.98] transition-all duration-150 ring-2 ring-purple-500 ring-offset-1 ring-offset-background"
+                  size="lg"
+                  style={{minHeight: '56px'}}
+                >
+                  {loading ? (
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-5 h-5 mr-2" />
+                  )}
+                  {language === 'ar' ? 'اشترك الآن' : 'Subscribe Now'}
+                </Button>
+
+                {showRestorePurchases && (
+                  <Button
+                    onClick={handleRestore}
+                    disabled={restoring}
+                    variant="outline"
+                    className="w-full border-foreground/20 hover:border-foreground/40 hover:bg-foreground/5 text-foreground/80 font-medium transition-all"
+                  >
+                    {restoring ? (
+                      <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                    )}
+                    {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
+                  </Button>
+                )}
+
+                <button
+                  onClick={() => window.open(contactUrl, "_blank", "noopener,noreferrer")}
+                  className="w-full flex items-center justify-center gap-3 rounded-lg px-4 py-3 bg-[hsl(142,76%,55%,0.07)] border border-[hsl(142,76%,55%,0.4)] hover:bg-[hsl(142,76%,55%,0.12)] hover:border-[hsl(142,76%,55%,0.7)] hover:shadow-[0_0_16px_hsl(142,76%,55%,0.25)] active:scale-[0.98] transition-all duration-150 group"
+                >
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[hsl(142,76%,55%,0.15)] group-hover:bg-[hsl(142,76%,55%,0.25)] transition-colors">
+                    <MessageCircle className="w-4 h-4 text-[hsl(142,76%,60%)]" />
+                  </div>
+                  <div className={`flex flex-col ${language === 'ar' ? 'items-end' : 'items-start'}`}>
+                    <span className="text-sm font-semibold text-[hsl(142,76%,65%)]">{language === 'ar' ? 'تواصل معنا' : 'Contact Us'}</span>
+                    <span className="text-xs text-foreground/60">{language === 'ar' ? 'مشكلة في الدفع؟ نحن هنا للمساعدة' : 'Payment issues? We\'re here to help'}</span>
+                  </div>
+                </button>
+
+                {/* Terms */}
+                <div className="text-center pt-1">
+                  <a
+                    href="https://wakti.qa/privacy-terms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-muted-foreground hover:text-primary inline-flex items-center gap-1"
+                  >
+                    <Shield className="w-3 h-3" />
+                    {language === 'ar' ? 'الشروط والخصوصية' : 'Terms & Privacy'}
+                  </a>
+                </div>
+              </div>
+
+              {/* Secondary actions */}
+              <div className="flex items-center gap-2 pt-2">
+                <Button onClick={handleLogout} variant="ghost" size="sm" className="flex-1">
+                  <LogOut className="w-4 h-4 mr-1" />
+                  {language === 'ar' ? 'تسجيل الخروج' : 'Logout'}
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default CustomPaywallModal;

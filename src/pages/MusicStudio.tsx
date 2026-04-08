@@ -1442,6 +1442,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [audios, setAudios] = useState<Array<{ url: string; mime: string; meta?: any; createdAt: number; saved?: boolean }>>([]);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [lastNotice, setLastNotice] = useState<string | null>(null);
   const [songsUsed, setSongsUsed] = useState(0);
   const [songsLimit, setSongsLimit] = useState(5);
   const [songsRemaining, setSongsRemaining] = useState(5);
@@ -3137,6 +3138,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     setSubmitting(true);
     setGeneratedTracks([]);
     setLastError(null);
+    setLastNotice(null);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -3237,12 +3239,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
     const { taskId, recordId } = generatingTask;
     let cancelled = false;
-    let pollCount = 0;
-    const maxPolls = 36; // 36 × 5s = 3 minutes max
 
     const poll = async () => {
       if (cancelled) return;
-      pollCount++;
       try {
         const { data, error } = await supabase.functions.invoke('music-status', {
           body: { taskId, recordId },
@@ -3252,12 +3251,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
         if (error) {
           console.warn('[MusicStudio] music-status poll error:', error);
-          if (pollCount >= maxPolls) {
-            setGeneratingTask(null);
-            setSubmitting(false);
-            setLastError(language === 'ar' ? 'انتهت مهلة الانتظار. حاول التحقق من المحفوظات.' : 'Generation timed out. Check your Saved tab.');
-            toast.error(language === 'ar' ? 'انتهت مهلة الانتظار' : 'Generation timed out');
-          }
           return;
         }
 
@@ -3273,6 +3266,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
           setSongsUsed((v) => v + 1);
           setSongsRemaining((v) => Math.max(0, v - 1));
           setLastError(null);
+          setLastNotice(null);
           toast.success(language === 'ar' ? 'تم إنشاء الموسيقى بنجاح!' : 'Music generated successfully!');
           return;
         }
@@ -3282,17 +3276,14 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
           setSubmitting(false);
           const failMsg = data?.error || (language === 'ar' ? 'فشل الإنشاء' : 'Generation failed');
           setLastError(failMsg);
+          setLastNotice(null);
           toast.error(failMsg);
           return;
         }
 
-        // Still generating — keep polling
-        if (pollCount >= maxPolls) {
-          setGeneratingTask(null);
-          setSubmitting(false);
-          setLastError(language === 'ar' ? 'انتهت مهلة الانتظار. حاول التحقق من المحفوظات.' : 'Generation timed out. Check your Saved tab.');
-          toast.error(language === 'ar' ? 'انتهت مهلة الانتظار' : 'Generation timed out');
-        }
+        // Still generating — keep polling until Kie callback-backed status resolves
+        setLastError(null);
+        setLastNotice(null);
       } catch (e) {
         console.warn('[MusicStudio] music-status poll exception:', e);
       }
@@ -4015,6 +4006,13 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
           <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-400/20 text-red-300 text-xs">
             <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
             {lastError}
+          </div>
+        )}
+
+        {lastNotice && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-400/20 text-amber-200 text-xs">
+            <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+            {lastNotice}
           </div>
         )}
         </div>
