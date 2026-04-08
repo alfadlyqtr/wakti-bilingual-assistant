@@ -4738,6 +4738,12 @@ function EditorTab() {
   useEffect(() => { load(); loadPlaylists(); loadPosters(); }, [user?.id]);
 
   useEffect(() => {
+    const handleReload = () => load();
+    window.addEventListener('wakti-music-tracks-reload', handleReload);
+    return () => window.removeEventListener('wakti-music-tracks-reload', handleReload);
+  }, [user?.id]);
+
+  useEffect(() => {
     if (activePlayingTrackId && !tracks.some((track) => track.id === activePlayingTrackId)) {
       setActivePlayingTrackId(null);
     }

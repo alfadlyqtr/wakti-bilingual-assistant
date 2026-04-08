@@ -94,8 +94,8 @@ export function MusicShareNotificationPopup({
                 <div className="border-t border-white/10 bg-black/10 px-5 py-4">
                   <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-relaxed text-white/80">
                     {isAr
-                      ? 'إذا قبلت، سيتم حفظ هذا المقطع مباشرة في تبويب الموسيقى المحفوظة داخل Wakti.'
-                      : 'If you accept, this track will be saved directly in your Saved Music tab inside Wakti.'}
+                      ? 'إذا قبلت، سيتم حفظ هذا المقطع في مقاطعك المحفوظة تلقائياً.'
+                      : 'If you accept, this track will be saved to your music library automatically.'}
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
@@ -103,7 +103,7 @@ export function MusicShareNotificationPopup({
                       onClick={onDecline}
                       disabled={isSubmitting}
                       variant="outline"
-                      className="flex-1 border-white/15 bg-white/5 text-white hover:bg-white/10"
+                      className="flex-1 border border-red-500/70 bg-transparent text-red-400 hover:bg-red-500/10 hover:text-red-300 hover:border-red-400"
                     >
                       {isAr ? 'رفض' : 'Decline'}
                     </Button>
@@ -111,7 +111,8 @@ export function MusicShareNotificationPopup({
                       type="button"
                       onClick={onAccept}
                       disabled={isSubmitting}
-                      className="flex-1 bg-gradient-to-r from-fuchsia-500 via-purple-500 to-sky-500 text-white shadow-[0_10px_24px_rgba(168,85,247,0.35)] hover:opacity-95"
+                      variant="outline"
+                      className="flex-1 border border-emerald-500/70 bg-transparent text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 hover:border-emerald-400"
                     >
                       <CheckCircle2 className="mr-1 h-4 w-4" />
                       {isAr ? 'قبول وحفظ' : 'Accept & Save'}

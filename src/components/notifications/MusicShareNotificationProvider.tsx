@@ -1,5 +1,4 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,7 +18,6 @@ interface MusicShareNotificationProviderProps {
 export function MusicShareNotificationProvider({ children }: MusicShareNotificationProviderProps) {
   const { user } = useAuth();
   const { language } = useTheme();
-  const navigate = useNavigate();
   const [pendingShares, setPendingShares] = useState<MusicTrackShare[]>([]);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -94,8 +92,8 @@ export function MusicShareNotificationProvider({ children }: MusicShareNotificat
       await acceptMusicTrackShare(currentShare.id);
       setPendingShares((prev) => prev.filter((share) => share.id !== currentShare.id));
       setDismissedIds((prev) => prev.filter((id) => id !== currentShare.id));
-      toast.success(isAr ? 'تم حفظ المقطع في الموسيقى المحفوظة' : 'Track saved to your Music tab');
-      navigate('/music?subtab=editor');
+      window.dispatchEvent(new CustomEvent('wakti-music-tracks-reload'));
+      toast.success(isAr ? 'تم حفظ المقطع في الموسيقى المحفوظة ✓' : 'Track saved to your Music ✓');
     } catch (error: any) {
       console.error('[MusicShareNotificationProvider] accept error:', error);
       toast.error((isAr ? 'فشل حفظ المقطع' : 'Failed to save track') + (error?.message ? `: ${error.message}` : ''));
