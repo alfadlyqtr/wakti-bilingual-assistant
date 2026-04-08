@@ -4694,7 +4694,7 @@ function EditorTab() {
     try {
       const { data, error } = await (supabase as any)
         .from('user_music_tracks')
-        .select('id, created_at, task_id, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta')
+        .select('id, created_at, task_id, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta, source_audio_url')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(60);
@@ -4710,11 +4710,17 @@ function EditorTab() {
           return true;
         })
         .map((t: any) => {
-          let playUrl: string | null = t.signed_url;
-          if (!playUrl && t.storage_path) {
+          let playUrl: string | null = null;
+          if (t.storage_path) {
             const base = SUPABASE_URL.replace(/\/$/, '');
             const path = t.storage_path.startsWith('/') ? t.storage_path.slice(1) : t.storage_path;
             playUrl = `${base}/storage/v1/object/public/music/${path}`;
+          }
+          if (!playUrl && t.signed_url) {
+            playUrl = t.signed_url;
+          }
+          if (!playUrl && t.source_audio_url) {
+            playUrl = t.source_audio_url;
           }
           return { ...t, play_url: playUrl };
         });

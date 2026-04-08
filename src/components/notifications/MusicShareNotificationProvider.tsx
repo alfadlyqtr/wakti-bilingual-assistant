@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,11 +21,13 @@ export function MusicShareNotificationProvider({ children }: MusicShareNotificat
   const [pendingShares, setPendingShares] = useState<MusicTrackShare[]>([]);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const senderShareStatusRef = useRef<Record<string, MusicTrackShare['status']>>({});
 
   useEffect(() => {
     if (!user?.id) {
       setPendingShares([]);
       setDismissedIds([]);
+      senderShareStatusRef.current = {};
       return;
     }
 
@@ -71,6 +73,74 @@ export function MusicShareNotificationProvider({ children }: MusicShareNotificat
       clearInterval(poll);
     };
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      senderShareStatusRef.current = {};
+      return;
+    }
+
+    let active = true;
+
+    const seedSenderStatuses = async () => {
+      const { data, error } = await (supabase as any)
+        .from('music_track_shares')
+        .select('id, status, track_snapshot')
+        .eq('sender_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) {
+        console.error('[MusicShareNotificationProvider] sender seed error:', error);
+        return;
+      }
+
+      if (!active) return;
+
+      senderShareStatusRef.current = Object.fromEntries(
+        ((data || []) as Pick<MusicTrackShare, 'id' | 'status'>[]).map((share) => [share.id, share.status]),
+      );
+    };
+
+    seedSenderStatuses();
+
+    const senderChannel = supabase
+      .channel(`music-track-share-status-${user.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'music_track_shares',
+        filter: `sender_id=eq.${user.id}`,
+      }, (payload) => {
+        const share = payload.new as MusicTrackShare | null;
+        if (!share?.id) return;
+
+        const previousStatus = senderShareStatusRef.current[share.id];
+        senderShareStatusRef.current[share.id] = share.status;
+
+        if (previousStatus === share.status) return;
+
+        const trackTitle = share.track_snapshot?.title || (language === 'ar' ? 'المقطع' : 'your track');
+
+        if (share.status === 'accepted') {
+          toast.success(language === 'ar'
+            ? `تم قبول مشاركة ${trackTitle}`
+            : `Your shared track was accepted: ${trackTitle}`);
+        }
+
+        if (share.status === 'declined') {
+          toast.error(language === 'ar'
+            ? `تم رفض مشاركة ${trackTitle}`
+            : `Your shared track was declined: ${trackTitle}`);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      active = false;
+      supabase.removeChannel(senderChannel);
+    };
+  }, [language, user?.id]);
 
   const visibleShares = useMemo(
     () => pendingShares.filter((share) => !dismissedIds.includes(share.id)),
