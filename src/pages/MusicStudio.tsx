@@ -4464,7 +4464,7 @@ function EditorTab() {
   const { language } = useTheme();
   const { user } = useAuth();
   const isAr = language === 'ar';
-  const WaktiShareIcon = () => <img src="/assets/wakti-eye-soft.svg" alt="" className="h-5 w-5 object-contain" />;
+  const WaktiShareIcon = () => <img src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" alt="" className="w-full h-full object-contain rounded-full" />;
 
   // ── Saved sub-tab: tracks vs playlists vs posters
   const [savedSubTab, setSavedSubTab] = useState<'tracks' | 'playlists' | 'posters'>('tracks');
@@ -5082,7 +5082,7 @@ function EditorTab() {
                                   {
                                     name: 'wakti',
                                     icon: WaktiShareIcon,
-                                    bgColor: 'bg-gradient-to-br from-[#060541] via-violet-500 to-fuchsia-500',
+                                    bgColor: 'bg-[#0c0f14] border border-white/20',
                                     angle: 309,
                                     action: () => setShareTrackTarget({
                                       id: t.id,

@@ -309,7 +309,7 @@ const ShareButton: React.FC<ShareButtonProps> = ({
                   className={`
                     absolute ${config.button} ${config.padding}
                     flex items-center justify-center
-                    rounded-full border-none
+                    rounded-full
                     ${platform.bgColor}
                     ${textColorClass}
                     shadow-lg
