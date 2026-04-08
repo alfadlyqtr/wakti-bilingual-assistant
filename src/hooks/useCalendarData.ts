@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { getCalendarEntries, CalendarEntry, ProjectCalendarEntry } from "@/utils/calendarUtils";
 import { Maw3dService } from "@/services/maw3dService";
 import { TRService, TRTask, TRReminder } from "@/services/trService";
@@ -16,6 +16,7 @@ export function useCalendarData() {
   const [projectCalendarEntries, setProjectCalendarEntries] = useState<ProjectCalendarEntry[]>([]);
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const lastFetchRef = useRef<number>(0);
 
   // Load manual entries and listen for changes from other tabs/components
   useEffect(() => {
@@ -64,7 +65,8 @@ export function useCalendarData() {
   };
 
   // Maw3d, Tasks, Reminders, Project Calendar Entries
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (force = false) => {
+    if (!force && lastFetchRef.current && Date.now() - lastFetchRef.current < 5 * 60 * 1000) return;
     setLoading(true);
     try {
       const [maw3d, tasks, rems, projectEntries] = await Promise.all([
@@ -77,6 +79,7 @@ export function useCalendarData() {
       setTasks(tasks || []);
       setReminders(rems || []);
       setProjectCalendarEntries(projectEntries || []);
+      lastFetchRef.current = Date.now();
     } finally {
       setLoading(false);
     }
@@ -99,7 +102,7 @@ export function useCalendarData() {
 
   // Expose a manual refresh
   const refresh = async () => {
-    await fetchData();
+    await fetchData(true);
     return;
   };
 

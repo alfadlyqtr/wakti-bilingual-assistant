@@ -21,12 +21,6 @@ const SnapchatIcon = () => (
   </svg>
 );
 
-const FacebookIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-  </svg>
-);
-
 const MessagesIcon = () => (
   <MessageCircle className="w-5 h-5" />
 );
@@ -48,6 +42,14 @@ interface ShareButtonProps {
   className?: string;
   /** Callback when share is successful */
   onShare?: (platform: string) => void;
+  extraActions?: Array<{
+    name: string;
+    icon: React.ComponentType;
+    bgColor: string;
+    angle: number;
+    textColor?: string;
+    action: () => void | Promise<void>;
+  }>;
 }
 
 const ShareButton: React.FC<ShareButtonProps> = ({
@@ -57,6 +59,7 @@ const ShareButton: React.FC<ShareButtonProps> = ({
   size = 'md',
   className = '',
   onShare,
+  extraActions = [],
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -119,7 +122,7 @@ const ShareButton: React.FC<ShareButtonProps> = ({
 
   // Social platforms configuration - using actual brand colors
   // 7 buttons = 360/7 ≈ 51.4 degrees apart
-  const platforms = [
+  const builtInPlatforms = [
     {
       name: 'whatsapp',
       icon: WhatsAppIcon,
@@ -154,21 +157,10 @@ const ShareButton: React.FC<ShareButtonProps> = ({
       },
     },
     {
-      name: 'facebook',
-      icon: FacebookIcon,
-      bgColor: 'bg-[#1877F2]', // Facebook blue
-      angle: 154,
-      action: () => {
-        // Native share opens the real Facebook app
-        const fallbackUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
-        tryNativeShareOrFallback('facebook', fallbackUrl);
-      },
-    },
-    {
       name: 'email',
       icon: EmailIcon,
       bgColor: 'bg-[#EA4335]', // Gmail red / Email red
-      angle: 206,
+      angle: 154,
       action: () => {
         // Email works well with mailto: scheme
         const subject = encodeURIComponent(shareTitle);
@@ -182,7 +174,7 @@ const ShareButton: React.FC<ShareButtonProps> = ({
       name: 'messages',
       icon: MessagesIcon,
       bgColor: isIOS ? 'bg-[#007AFF]' : 'bg-[#34C759]', // iMessage blue for iOS, Android green
-      angle: 257,
+      angle: 206,
       action: () => {
         // Native share or SMS fallback
         const fallbackSms = `sms:?body=${encodeURIComponent(`${shareTitle}\n${shareUrl}`)}`;
@@ -210,7 +202,7 @@ const ShareButton: React.FC<ShareButtonProps> = ({
       name: 'copy',
       icon: () => copied ? <Check className="w-5 h-5" /> : <Link className="w-5 h-5" />,
       bgColor: copied ? 'bg-green-500' : 'bg-gradient-to-br from-violet-500 to-fuchsia-500', // Wakti colors
-      angle: 309,
+      angle: 257,
       action: async () => {
         try {
           await navigator.clipboard.writeText(shareUrl);
@@ -225,6 +217,8 @@ const ShareButton: React.FC<ShareButtonProps> = ({
       },
     },
   ];
+
+  const platforms = [...extraActions, ...builtInPlatforms];
 
   // Handle click outside to close
   useEffect(() => {
@@ -310,7 +304,7 @@ const ShareButton: React.FC<ShareButtonProps> = ({
                   key={platform.name}
                   onClick={(e) => {
                     e.stopPropagation();
-                    platform.action();
+                    Promise.resolve(platform.action()).finally(() => setIsExpanded(false));
                   }}
                   className={`
                     absolute ${config.button} ${config.padding}

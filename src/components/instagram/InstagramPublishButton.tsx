@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { emitEvent, onEvent } from '@/utils/eventBus';
 import { createPortal } from 'react-dom';
 import { Instagram, Loader2, Check, X, ExternalLink, Sparkles } from 'lucide-react';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
@@ -100,12 +101,9 @@ export default function InstagramPublishButton({
 
   useEffect(() => {
     checkConnection();
-    const onChanged = (e: Event) => {
-      const account = (e as CustomEvent).detail as IGAccount | null;
-      setIgAccount(account);
-    };
-    window.addEventListener('ig-account-changed', onChanged);
-    return () => window.removeEventListener('ig-account-changed', onChanged);
+    return onEvent('ig-account-changed', (detail) => {
+      setIgAccount(detail as IGAccount | null);
+    });
   }, [checkConnection]);
 
   // Handle OAuth callback code coming back from Meta — only ONE instance should exchange it
@@ -146,7 +144,7 @@ export default function InstagramPublishButton({
         }
         sharedConnectionCache = { account: data.account, expiresAt: Date.now() + 5 * 60_000 };
         setIgAccount(data.account);
-        window.dispatchEvent(new CustomEvent('ig-account-changed', { detail: data.account }));
+        emitEvent('ig-account-changed', data.account);
         toast.success(ar ? 'تم ربط حساب Instagram!' : 'Instagram connected!');
         setShowPanel(true);
       } catch (err: unknown) {
@@ -194,7 +192,7 @@ export default function InstagramPublishButton({
     });
     sharedConnectionCache = { account: null, expiresAt: Date.now() + 5 * 60_000 };
     setIgAccount(null);
-    window.dispatchEvent(new CustomEvent('ig-account-changed', { detail: null }));
+    emitEvent('ig-account-changed', null);
     setShowPanel(false);
     toast.success(ar ? 'تم قطع الاتصال بـ Instagram' : 'Instagram disconnected');
   };

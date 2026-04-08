@@ -13,7 +13,6 @@ import { useLocation, useNavigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useTheme } from "@/providers/ThemeProvider";
-import { purchasesLogin } from "@/integrations/natively/purchasesBridge";
 import { setupNotificationClickHandler } from "@/integrations/natively/notificationsBridge";
 import { toast } from "sonner";
 
@@ -51,16 +50,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   const unreadData = useUnreadMessages();
   const { user } = useAuth();
 
-  // Task 3: Identity Mapping â€” lock RevenueCat receipt to the exact Supabase account
-  React.useEffect(() => {
-    if (user?.id && user?.email) {
-      purchasesLogin(user.id, user.email);
-    }
-  }, [user?.id, user?.email]);
-
   const { language } = useTheme();
 
-  // Trial limit bouncer â€” during 24h trial, show friendly bilingual toast (NOT the full paywall)
+  // Trial limit bouncer — during 24h trial, show friendly bilingual toast (NOT the full paywall)
   React.useEffect(() => {
     const handleTrialLimit = (e: Event) => {
       const feature = (e as CustomEvent)?.detail?.feature || '';

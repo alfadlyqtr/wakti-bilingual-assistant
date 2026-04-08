@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect } from "react";
+import { onEvent } from "@/utils/eventBus";
 import { TranslationKey } from "@/utils/translationTypes";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -176,8 +177,7 @@ export const useWidgetManager = (language: "en" | "ar") => {
       });
     };
 
-    window.addEventListener('widgetSettingsChanged', handleWidgetSettingsChanged as any);
-    return () => window.removeEventListener('widgetSettingsChanged', handleWidgetSettingsChanged as any);
+    return onEvent('widgetSettingsChanged', handleWidgetSettingsChanged);
   }, []);
 
   useEffect(() => {

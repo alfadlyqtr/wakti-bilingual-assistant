@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { emitEvent, onEvent } from "@/utils/eventBus";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -50,9 +51,9 @@ export function TabletHeader() {
 
   // Listen for avatar update events to force refresh
   useEffect(() => {
-    const handleAvatarUpdate = (event: CustomEvent) => {
-      console.log('Avatar updated event received:', event.detail);
-      const newUrl = event.detail?.avatarUrl;
+    const handleAvatarUpdate = (detail: { avatarUrl: string | null; userId: string; timestamp: number }) => {
+      console.log('Avatar updated event received:', detail);
+      const newUrl = detail?.avatarUrl;
       // Immediately set the new avatar URL for instant display
       setImmediateAvatarUrl(newUrl);
       setAvatarKey(Date.now()); // Force re-render of avatar
@@ -60,11 +61,9 @@ export function TabletHeader() {
       refetchProfile();
     };
 
-    window.addEventListener('avatar-updated', handleAvatarUpdate as EventListener);
+    const cleanup = onEvent('avatar-updated', handleAvatarUpdate);
     
-    return () => {
-      window.removeEventListener('avatar-updated', handleAvatarUpdate as EventListener);
-    };
+    return cleanup;
   }, [refetchProfile]);
 
   // Clear immediate override once profile is updated with the new URL
@@ -217,7 +216,7 @@ export function TabletHeader() {
           {/* Voice Assistant mic button */}
           <VoiceAssistant
             onSaveEntry={(entry) => {
-              window.dispatchEvent(new CustomEvent('wakti-voice-add-entry', { detail: entry }));
+              emitEvent('wakti-voice-add-entry', entry);
             }}
           />
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { onEvent } from "@/utils/eventBus";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
@@ -43,14 +44,12 @@ export default function Dashboard() {
 
   // Listen for dashboard look changes from Settings page
   useEffect(() => {
-    const handleDashboardLookChange = (e: CustomEvent) => {
-      const val = e.detail;
+    const handleDashboardLookChange = (val: string) => {
       setDashboardLook(val);
       localStorage.setItem('wakti_dashboard_look', val);
       setRefreshKey(prev => prev + 1);
     };
-    window.addEventListener('dashboardLookChanged', handleDashboardLookChange as EventListener);
-    return () => window.removeEventListener('dashboardLookChanged', handleDashboardLookChange as EventListener);
+    return onEvent('dashboardLookChanged', handleDashboardLookChange);
   }, []);
 
   // Add a body class while on Dashboard so CSS can hide the scrollbar for this page only
@@ -89,11 +88,7 @@ export default function Dashboard() {
       setRefreshKey(prev => prev + 1);
     };
 
-    window.addEventListener('widgetSettingsChanged', handleWidgetSettingsChange);
-    
-    return () => {
-      window.removeEventListener('widgetSettingsChanged', handleWidgetSettingsChange);
-    };
+    return onEvent('widgetSettingsChanged', handleWidgetSettingsChange);
   }, []);
 
   // Use simplified widget manager - no complex data fetching

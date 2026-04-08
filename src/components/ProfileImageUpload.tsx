@@ -8,6 +8,7 @@ import { useUserProfile } from '@/hooks/useUserProfile';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
+import { emitEvent, onEvent } from '@/utils/eventBus';
 
 export function ProfileImageUpload({ showPreview = true }: { showPreview?: boolean }) {
   const { user } = useAuth();
@@ -237,9 +238,7 @@ export function ProfileImageUpload({ showPreview = true }: { showPreview?: boole
       await refetch();
 
       // Dispatch event to update avatars across the app
-      window.dispatchEvent(new CustomEvent('avatar-updated', { 
-        detail: { avatarUrl: cleanUrl, userId: user.id, timestamp: Date.now() } 
-      }));
+      emitEvent('avatar-updated', { avatarUrl: cleanUrl, userId: user.id, timestamp: Date.now() });
 
       toast.success(language === 'ar' ? 'تم تحديث الصورة الشخصية بنجاح' : 'Profile picture updated successfully');
       
@@ -302,9 +301,7 @@ export function ProfileImageUpload({ showPreview = true }: { showPreview?: boole
       await refetch();
 
       // Dispatch event to update avatars across the app
-      window.dispatchEvent(new CustomEvent('avatar-updated', { 
-        detail: { avatarUrl: null, userId: user.id, timestamp: Date.now() } 
-      }));
+      emitEvent('avatar-updated', { avatarUrl: null, userId: user.id, timestamp: Date.now() });
 
       toast.success(language === 'ar' ? 'تم حذف الصورة الشخصية' : 'Profile picture removed');
       
@@ -398,8 +395,7 @@ export function ProfileImageUpload({ showPreview = true }: { showPreview?: boole
       setAvatarKey(Date.now());
       refetch();
     };
-    window.addEventListener('avatar-updated', handleAvatarUpdate);
-    return () => window.removeEventListener('avatar-updated', handleAvatarUpdate);
+    return onEvent('avatar-updated', handleAvatarUpdate);
   }, [refetch]);
 
   return (

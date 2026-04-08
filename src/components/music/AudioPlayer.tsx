@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback, useId } from 'react';
+import { emitEvent, onEvent } from '@/utils/eventBus';
 import { Play, Pause, RotateCcw, Repeat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -7,9 +8,10 @@ interface AudioPlayerProps {
   src: string;
   className?: string;
   showLoopToggle?: boolean;
+  onPlaybackChange?: (isPlaying: boolean) => void;
 }
 
-export function AudioPlayer({ src, className = '', showLoopToggle = false }: AudioPlayerProps) {
+export function AudioPlayer({ src, className = '', showLoopToggle = false, onPlaybackChange }: AudioPlayerProps) {
   const { language } = useTheme();
   const playerId = useId();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -40,15 +42,18 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false }: Aud
     const handlePlay = () => {
       setIsPlaying(true);
       setIsLoading(false);
+      onPlaybackChange?.(true);
     };
 
     const handlePause = () => {
       setIsPlaying(false);
+      onPlaybackChange?.(false);
     };
 
     const handleEnded = () => {
       setIsPlaying(false);
       setCurrentTime(0);
+      onPlaybackChange?.(false);
     };
 
     const handleTimeUpdate = () => {
@@ -76,6 +81,7 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false }: Aud
       });
       setIsLoading(false);
       setIsPlaying(false);
+      onPlaybackChange?.(false);
       setError(language === 'ar' ? 'فشل تحميل الملف الصوتي' : 'Failed to load audio');
     };
 
@@ -96,8 +102,9 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false }: Aud
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('error', handleError);
+      onPlaybackChange?.(false);
     };
-  }, [language, src]);
+  }, [language, onPlaybackChange, src]);
 
   const cleanupRef = useRef<(() => void) | null>(null);
 
@@ -131,6 +138,7 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false }: Aud
     setCurrentTime(0);
     setDuration(0);
     setIsLoading(false);
+    onPlaybackChange?.(false);
     setError(cleanSrc ? null : (language === 'ar' ? 'لا يوجد ملف صوتي' : 'No audio URL'));
     cleanupRef.current?.();
     cleanupRef.current = null;
@@ -142,19 +150,17 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false }: Aud
       cleanupRef.current = null;
       audioRef.current = null;
       initializedSrcRef.current = null;
+      onPlaybackChange?.(false);
     };
-  }, [cleanSrc, language]);
+  }, [cleanSrc, language, onPlaybackChange]);
 
   // Listen for other players starting — pause this one if it's playing
   useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ playerId: string }>).detail;
+    return onEvent('wakti-audio-play', (detail) => {
       if (detail.playerId !== playerId && audioRef.current && !audioRef.current.paused) {
         audioRef.current.pause();
       }
-    };
-    window.addEventListener('wakti-audio-play', handler);
-    return () => window.removeEventListener('wakti-audio-play', handler);
+    });
   }, [playerId]);
 
   const togglePlay = () => {
@@ -165,7 +171,7 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false }: Aud
       audio.pause();
     } else {
       // Stop all other players before starting this one
-      window.dispatchEvent(new CustomEvent('wakti-audio-play', { detail: { playerId } }));
+      emitEvent('wakti-audio-play', { playerId });
       setIsLoading(true);
       audio.play().catch(err => {
         console.error('[AudioPlayer] Play error:', err);

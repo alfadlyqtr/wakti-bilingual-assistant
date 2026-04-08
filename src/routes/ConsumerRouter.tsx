@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
+import { MusicShareNotificationProvider } from "@/components/notifications/MusicShareNotificationProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { DebugContextProvider } from "@/hooks/useDebugContext";
 
@@ -121,9 +122,11 @@ export default function ConsumerRouter() {
         {/* ── Protected app routes ──────────────────────────────────────── */}
         <Route element={
           <GiftNotificationProvider>
-            <ErrorBoundary>
-              <AppLayout />
-            </ErrorBoundary>
+            <MusicShareNotificationProvider>
+              <ErrorBoundary>
+                <AppLayout />
+              </ErrorBoundary>
+            </MusicShareNotificationProvider>
           </GiftNotificationProvider>
         }>
           <Route path="/dashboard" element={<Dashboard />} />

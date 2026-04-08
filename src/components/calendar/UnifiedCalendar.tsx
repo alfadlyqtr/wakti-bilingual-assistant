@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { onEvent } from "@/utils/eventBus";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, 
   isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, getDay, 
   addWeeks, subWeeks, setMonth, getMonth, startOfYear, endOfYear, 
@@ -454,12 +455,9 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     }
 
     // Listen for live events (when already on calendar page)
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
+    return onEvent('wakti-voice-add-entry', (detail) => {
       addVoiceEntry(detail);
-    };
-    window.addEventListener('wakti-voice-add-entry', handler);
-    return () => window.removeEventListener('wakti-voice-add-entry', handler);
+    });
   }, [setManualEntries]);
 
   // Add a new manual calendar entry - optimized to prevent freezing

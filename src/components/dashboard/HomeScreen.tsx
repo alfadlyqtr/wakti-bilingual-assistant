@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { emitEvent, onEvent } from "@/utils/eventBus";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -2098,8 +2099,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         return next;
       });
     };
-    window.addEventListener('widgetSettingsChanged', handler);
-    return () => window.removeEventListener('widgetSettingsChanged', handler);
+    return onEvent('widgetSettingsChanged', handler);
   }, []);
 
   // Live update from Settings page background style changes
@@ -2118,8 +2118,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       setHsBg(updated);
       localStorage.setItem(LS_HSBG_KEY(), JSON.stringify(updated));
     };
-    window.addEventListener('homescreenBgChanged', handler);
-    return () => window.removeEventListener('homescreenBgChanged', handler);
+    return onEvent('homescreenBgChanged', handler);
   }, []);
 
   // ── Sensors ──
@@ -2306,7 +2305,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         } catch { /* silent */ }
       })();
     }
-    window.dispatchEvent(new Event('homescreenBgChanged'));
+    emitEvent('homescreenBgChanged');
     setBgPanelOpen(false);
   };
   const saveHeaderColor = (color: string) => {

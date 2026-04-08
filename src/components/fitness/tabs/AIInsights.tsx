@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { onEvent } from '@/utils/eventBus';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Copy, RefreshCw, Brain, TrendingUp, TrendingDown, Sun, Clock, Moon, CheckCircle, Volume2, Pause, RotateCcw, FileText, Send, MessageCircle, AlertCircle } from "lucide-react";
@@ -287,8 +288,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
       setInsights({} as Record<TimeWindow, any>);
       setLastGenerated({} as Record<TimeWindow, number>);
     };
-    window.addEventListener('wakti:clear-insights', handleClear);
-    return () => window.removeEventListener('wakti:clear-insights', handleClear);
+    return onEvent('wakti:clear-insights', handleClear);
   }, []);
 
   // Persist insights to localStorage whenever they change

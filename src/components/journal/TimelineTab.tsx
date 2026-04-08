@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { onEvent } from "@/utils/eventBus";
 import { JournalService, JournalDay, JournalCheckin } from "@/services/journalService";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useNavigate } from "react-router-dom";
@@ -142,8 +143,7 @@ export const TimelineTab: React.FC<{ selectedDate?: string }> = ({ selectedDate 
 
   useEffect(() => {
     const handleRefresh = () => setRefreshKey(k => k + 1);
-    window.addEventListener('refreshTimeline', handleRefresh);
-    return () => window.removeEventListener('refreshTimeline', handleRefresh);
+    return onEvent('refreshTimeline', handleRefresh);
   }, []);
 
   const dayByDate: Record<string, JournalDay> = useMemo(() => {

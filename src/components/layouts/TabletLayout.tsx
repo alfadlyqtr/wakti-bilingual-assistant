@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { onEvent } from "@/utils/eventBus";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { TabletHeader } from "@/components/TabletHeader";
 import { DesktopSidebar } from "@/components/DesktopSidebar";
@@ -17,9 +18,7 @@ export function TabletLayout({ children }: TabletLayoutProps) {
   );
 
   useEffect(() => {
-    const handler = (e: CustomEvent) => setDashboardLook(e.detail);
-    window.addEventListener('dashboardLookChanged', handler as EventListener);
-    return () => window.removeEventListener('dashboardLookChanged', handler as EventListener);
+    return onEvent('dashboardLookChanged', (detail) => setDashboardLook(detail));
   }, []);
 
   const isHomescreenLook = dashboardLook === 'homescreen';

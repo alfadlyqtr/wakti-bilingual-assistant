@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { emitEvent, onEvent } from '@/utils/eventBus';
 import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { createPortal } from 'react-dom';
 import { AudioPlayer } from '@/components/music/AudioPlayer';
+import { MusicSharePickerDialog } from '@/components/music/MusicSharePickerDialog';
 import ShareButton from '@/components/ui/ShareButton';
 import {
   Info,
@@ -57,12 +59,13 @@ import {
   Download,
   CheckCircle2,
   Copy,
+  Star,
 } from 'lucide-react';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import StudioImageGenerator from '@/components/studio/StudioImageGenerator';
 import SavedImagesTab from '@/components/studio/SavedImagesTab';
 import QRCodeCreator from '@/components/studio/QRCodeCreator';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 
 const normalizeAudioUrl = (url: string) => {
   if (!url) return '';
@@ -89,11 +92,42 @@ const normalizeAudioUrl = (url: string) => {
   return cleanUrl;
 };
 
+const saveAudioBlob = async (blob: Blob, filename: string) => {
+  const file = new File([blob], filename, { type: blob.type || 'audio/mpeg' });
+  if (navigator.share && navigator.canShare) {
+    try {
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Wakti Music',
+          text: 'Save your audio file',
+        });
+        return;
+      }
+    } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        return;
+      }
+    }
+  }
+
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+
+  setTimeout(() => {
+    document.body.removeChild(link);
+    URL.revokeObjectURL(objectUrl);
+  }, 100);
+};
+
 // Helper function to download audio files on mobile
 const handleDownload = async (url: string, filename: string) => {
   try {
-    // Detect iOS
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     const safeUrl = normalizeAudioUrl(url);
     if (!safeUrl) {
       throw new Error('Missing audio URL');
@@ -101,34 +135,8 @@ const handleDownload = async (url: string, filename: string) => {
     
     const response = await fetch(safeUrl);
     const blob = await response.blob();
-    
-    // On iOS, use Share API if available for better UX
-    if (isIOS && navigator.share && navigator.canShare) {
-      const file = new File([blob], filename, { type: 'audio/mpeg' });
-      if (navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'Wakti Music',
-          text: 'Download your music'
-        });
-        return;
-      }
-    }
-    
-    // Fallback: Standard download approach
-    const objectUrl = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = objectUrl;
-    link.download = filename;
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    
-    // Cleanup after a short delay
-    setTimeout(() => {
-      document.body.removeChild(link);
-      URL.revokeObjectURL(objectUrl);
-    }, 100);
+
+    await saveAudioBlob(blob, filename);
   } catch (error) {
     console.error('Download failed:', error);
     // Last resort: open in new tab
@@ -818,6 +826,7 @@ export default function MusicStudio() {
   const [imageMode, setImageMode] = useState<'create' | 'saved'>('create');
   const [musicQuotaHeader, setMusicQuotaHeader] = useState({ remaining: 30, limit: 30, used: 0 });
   const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const state = (location.state || {}) as any;
@@ -826,6 +835,13 @@ export default function MusicStudio() {
       setVideoMode('saved');
     }
   }, [location.state]);
+
+  useEffect(() => {
+    if (searchParams.get('subtab') === 'editor') {
+      setMainTab('music');
+      setMusicSubTab('editor');
+    }
+  }, [searchParams]);
 
   const isArabic = language === 'ar';
 
@@ -4215,7 +4231,7 @@ function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
 
     const startPlayback = () => {
       if (!desiredPlayingRef.current) return;
-      window.dispatchEvent(new CustomEvent('wakti-audio-play', { detail: { playerId: 'playlist-player' } }));
+      emitEvent('wakti-audio-play', { playerId: 'playlist-player' });
       audio.play().catch(() => {});
     };
 
@@ -4270,14 +4286,11 @@ function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
   }, [current?.id]);
 
   useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ playerId: string }>).detail;
+    return onEvent('wakti-audio-play', (detail) => {
       if (detail.playerId !== 'playlist-player' && audioRef.current && !audioRef.current.paused) {
         audioRef.current.pause();
       }
-    };
-    window.addEventListener('wakti-audio-play', handler);
-    return () => window.removeEventListener('wakti-audio-play', handler);
+    });
   }, []);
 
   const togglePlay = () => {
@@ -4288,7 +4301,7 @@ function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
       audio.pause();
     } else {
       desiredPlayingRef.current = true;
-      window.dispatchEvent(new CustomEvent('wakti-audio-play', { detail: { playerId: 'playlist-player' } }));
+      emitEvent('wakti-audio-play', { playerId: 'playlist-player' });
       audio.play().catch(() => {});
     }
   };
@@ -4451,6 +4464,7 @@ function EditorTab() {
   const { language } = useTheme();
   const { user } = useAuth();
   const isAr = language === 'ar';
+  const WaktiShareIcon = () => <img src="/assets/wakti-eye-soft.svg" alt="" className="h-5 w-5 object-contain" />;
 
   // ── Saved sub-tab: tracks vs playlists vs posters
   const [savedSubTab, setSavedSubTab] = useState<'tracks' | 'playlists' | 'posters'>('tracks');
@@ -4458,6 +4472,8 @@ function EditorTab() {
   // ── Tracks
   const [loading, setLoading] = useState(false);
   const [tracks, setTracks] = useState<SavedTrack[]>([]);
+  const [activePlayingTrackId, setActivePlayingTrackId] = useState<string | null>(null);
+  const [shareTrackTarget, setShareTrackTarget] = useState<{ id: string; title: string; coverUrl: string | null } | null>(null);
   const [deleteTrackTarget, setDeleteTrackTarget] = useState<{ id: string; storagePath: string | null } | null>(null);
 
   // ── Poster & Captions
@@ -4710,7 +4726,22 @@ function EditorTab() {
     }
   };
 
+  const sortedTracks = useMemo(() => {
+    return [...tracks].sort((a, b) => {
+      const aFavorite = !!(a.meta as any)?.favorite;
+      const bFavorite = !!(b.meta as any)?.favorite;
+      if (aFavorite !== bFavorite) return aFavorite ? -1 : 1;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [tracks]);
+
   useEffect(() => { load(); loadPlaylists(); loadPosters(); }, [user?.id]);
+
+  useEffect(() => {
+    if (activePlayingTrackId && !tracks.some((track) => track.id === activePlayingTrackId)) {
+      setActivePlayingTrackId(null);
+    }
+  }, [activePlayingTrackId, tracks]);
 
   const handleDeleteConfirm = async () => {
     if (!deleteTrackTarget) return;
@@ -4724,6 +4755,31 @@ function EditorTab() {
       toast.success(isAr ? 'تم الحذف بنجاح' : 'Deleted successfully');
     } catch (e: any) {
       toast.error((isAr ? 'فشل الحذف: ' : 'Delete failed: ') + (e?.message || String(e)));
+    }
+  };
+
+  const handleToggleFavorite = async (track: SavedTrack) => {
+    const currentMeta = ((track.meta as Record<string, unknown> | null) ?? {});
+    const nextFavorite = !Boolean((currentMeta as any).favorite);
+    const nextMeta = { ...currentMeta, favorite: nextFavorite };
+
+    setTracks((prev) => prev.map((item) => item.id === track.id ? { ...item, meta: nextMeta } : item));
+
+    try {
+      const { error } = await (supabase as any)
+        .from('user_music_tracks')
+        .update({ meta: nextMeta })
+        .eq('id', track.id)
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+
+      toast.success(nextFavorite
+        ? (isAr ? 'تمت إضافة المقطع إلى المفضلة' : 'Track added to favorites')
+        : (isAr ? 'تمت إزالة المقطع من المفضلة' : 'Track removed from favorites'));
+    } catch (e: any) {
+      setTracks((prev) => prev.map((item) => item.id === track.id ? track : item));
+      toast.error((isAr ? 'فشل تحديث المفضلة' : 'Failed to update favorite') + (e?.message ? `: ${e.message}` : ''));
     }
   };
 
@@ -4880,7 +4936,7 @@ function EditorTab() {
             </div>
           ) : (
             <div className="space-y-3">
-              {tracks.map((t) => {
+              {sortedTracks.map((t) => {
                 const durationSec = t.duration ?? t.requested_duration_seconds ?? null;
                 const durationLabel = durationSec
                   ? `${Math.floor(durationSec / 60)}:${String(Math.round(durationSec % 60)).padStart(2, '0')}`
@@ -4888,11 +4944,19 @@ function EditorTab() {
                 const trackTitle = t.title || (t.prompt ? t.prompt.slice(0, 40) : (isAr ? 'مقطع موسيقي' : 'Music Track'));
                 const styleTags: string[] = t.include_styles ?? [];
                 const metaTags = (t.meta as any)?.tags as string | null;
+                const isFavorite = Boolean((t.meta as any)?.favorite);
+                const isActivePlaying = activePlayingTrackId === t.id;
 
                 return (
                   <div key={t.id}
-                    className="relative overflow-hidden rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-gradient-to-br from-[#ffffff] via-[#f8f9fc] to-[#f3f5fb] dark:from-white/[0.04] dark:to-white/[0.02] shadow-[0_12px_32px_rgba(6,5,65,0.10)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]"
+                    className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br transition-all duration-300 ${isActivePlaying
+                      ? 'border-fuchsia-300 dark:border-fuchsia-400/40 from-[#fff5fd] via-[#f6eeff] to-[#eef6ff] dark:from-fuchsia-500/10 dark:via-purple-500/10 dark:to-sky-500/10 shadow-[0_16px_40px_rgba(168,85,247,0.18)] dark:shadow-[0_0_32px_rgba(217,70,239,0.22)]'
+                      : 'border-[#d9dde7] dark:border-white/10 from-[#ffffff] via-[#f8f9fc] to-[#f3f5fb] dark:from-white/[0.04] dark:to-white/[0.02] shadow-[0_12px_32px_rgba(6,5,65,0.10)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]'
+                    }`}
                   >
+                    {isActivePlaying && (
+                      <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-fuchsia-500 via-purple-500 to-sky-500" />
+                    )}
                     <div className="p-4 flex gap-4 items-start">
                       <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-gradient-to-br from-sky-100 to-purple-100 dark:from-sky-900/40 dark:to-purple-900/40 border border-[#d9dde7] dark:border-white/10 shadow-md">
                         {t.cover_url
@@ -4902,8 +4966,28 @@ function EditorTab() {
                       </div>
                       <div className="flex-1 min-w-0 space-y-1.5">
                         <div className="flex items-start justify-between gap-2">
-                          <p className="font-bold text-sm text-foreground truncate leading-tight">{trackTitle}</p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <p className="font-bold text-sm text-foreground truncate leading-tight">{trackTitle}</p>
+                              {isActivePlaying && (
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-400/20 whitespace-nowrap">
+                                  {isAr ? 'يعمل الآن' : 'Playing now'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button
+                              type="button"
+                              aria-label={isFavorite ? (isAr ? 'إزالة من المفضلة' : 'Remove from favorites') : (isAr ? 'إضافة إلى المفضلة' : 'Add to favorites')}
+                              onClick={() => handleToggleFavorite(t)}
+                              className={`p-1.5 rounded-lg transition-all active:scale-95 ${isFavorite
+                                ? 'text-amber-500 bg-amber-500/10 hover:bg-amber-500/15'
+                                : 'text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-500/10'
+                              }`}
+                            >
+                              <Star className={`h-3.5 w-3.5 ${isFavorite ? 'fill-current' : ''}`} />
+                            </button>
                             {durationLabel && (
                               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-400/20">{durationLabel}</span>
                             )}
@@ -4925,7 +5009,17 @@ function EditorTab() {
                         )}
                         {t.play_url && (
                           <div className="px-4 pb-4 space-y-3">
-                            <AudioPlayer src={t.play_url} className="w-full" showLoopToggle />
+                            <AudioPlayer
+                              src={t.play_url}
+                              className="w-full"
+                              showLoopToggle
+                              onPlaybackChange={(isPlaying) => {
+                                setActivePlayingTrackId((prev) => {
+                                  if (isPlaying) return t.id;
+                                  return prev === t.id ? null : prev;
+                                });
+                              }}
+                            />
                             <div className="flex items-center gap-2 justify-end">
                               {(() => {
                                 const completedPoster = posters.find(p => p.track_id === t.id && p.status === 'completed');
@@ -4968,14 +5062,7 @@ function EditorTab() {
                                         .download(t.storage_path);
                                       if (downloadError) throw downloadError;
 
-                                      const objectUrl = URL.createObjectURL(data);
-                                      const a = document.createElement('a');
-                                      a.href = objectUrl;
-                                      a.download = t.storage_path.split('/').pop() || `wakti-music-${t.id}.mp3`;
-                                      document.body.appendChild(a);
-                                      a.click();
-                                      document.body.removeChild(a);
-                                      URL.revokeObjectURL(objectUrl);
+                                      await saveAudioBlob(data, t.storage_path.split('/').pop() || `wakti-music-${t.id}.mp3`);
                                       return;
                                     }
 
@@ -4991,6 +5078,19 @@ function EditorTab() {
                               <ShareButton size="sm"
                                 shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${t.id}` : ''}
                                 shareTitle={isAr ? 'استمع إلى موسيقى من وقتي 🎵' : 'Listen to my Wakti music 🎵'}
+                                extraActions={[
+                                  {
+                                    name: 'wakti',
+                                    icon: WaktiShareIcon,
+                                    bgColor: 'bg-gradient-to-br from-[#060541] via-violet-500 to-fuchsia-500',
+                                    angle: 309,
+                                    action: () => setShareTrackTarget({
+                                      id: t.id,
+                                      title: trackTitle,
+                                      coverUrl: t.cover_url,
+                                    }),
+                                  },
+                                ]}
                               />
                             </div>
                           </div>
@@ -5004,6 +5104,13 @@ function EditorTab() {
           )}
         </>
       )}
+
+      <MusicSharePickerDialog
+        isOpen={!!shareTrackTarget}
+        track={shareTrackTarget}
+        onClose={() => setShareTrackTarget(null)}
+        onSent={() => setShareTrackTarget(null)}
+      />
 
       {/* ══ POSTER & CAPTIONS TAB ══════════════════════════════════════════════ */}
       {savedSubTab === 'posters' && (

@@ -1,6 +1,7 @@
 // @ts-nocheck
 
 import { useState, useEffect } from "react";
+import { emitEvent } from "@/utils/eventBus";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
 import { PageContainer } from "@/components/PageContainer";
@@ -208,7 +209,7 @@ export default function Settings() {
         .eq('id', user?.id);
 
       showSuccess(t("settingsUpdated", language));
-      window.dispatchEvent(new CustomEvent('widgetSettingsChanged', { detail: { ...newSettings, mode: dashboardLook } }));
+      emitEvent('widgetSettingsChanged', { ...newSettings, mode: dashboardLook });
     } catch (error) {
       console.error('Error updating widget setting:', error);
       showError(t("errorUpdatingSettings", language));
@@ -244,7 +245,7 @@ export default function Settings() {
       showSuccess(t("settingsUpdated", language));
       
       // Force dashboard to reload by dispatching a custom event
-      window.dispatchEvent(new CustomEvent('dashboardLookChanged', { detail: look }));
+      emitEvent('dashboardLookChanged', look);
     } catch (error) {
       console.error('Error updating dashboard look:', error);
       showError(t("errorUpdatingSettings", language));
@@ -261,7 +262,7 @@ export default function Settings() {
       await supabase.from('profiles').update({
         settings: { ...currentSettings, homescreenBg: payload }
       }).eq('id', user?.id);
-      window.dispatchEvent(new CustomEvent('homescreenBgChanged', { detail: payload }));
+      emitEvent('homescreenBgChanged', payload);
       showSuccess(t("settingsUpdated", language));
     } catch (error) {
       console.error('Error saving homescreen bg:', error);

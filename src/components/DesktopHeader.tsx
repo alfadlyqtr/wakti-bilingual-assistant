@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { emitEvent, onEvent } from "@/utils/eventBus";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -81,9 +82,9 @@ export function DesktopHeader() {
 
   // Listen for avatar update events to force refresh
   useEffect(() => {
-    const handleAvatarUpdate = (event: CustomEvent) => {
-      console.log('Avatar updated event received:', event.detail);
-      const newUrl = event.detail?.avatarUrl;
+    const handleAvatarUpdate = (detail: { avatarUrl: string | null; userId: string; timestamp: number }) => {
+      console.log('Avatar updated event received:', detail);
+      const newUrl = detail?.avatarUrl;
       // Immediately set the new avatar URL for instant display
       setImmediateAvatarUrl(newUrl);
       setAvatarKey(Date.now()); // Force re-render of avatar
@@ -91,11 +92,9 @@ export function DesktopHeader() {
       refetchProfile();
     };
 
-    window.addEventListener('avatar-updated', handleAvatarUpdate as EventListener);
+    const cleanup = onEvent('avatar-updated', handleAvatarUpdate);
     
-    return () => {
-      window.removeEventListener('avatar-updated', handleAvatarUpdate as EventListener);
-    };
+    return cleanup;
   }, [refetchProfile]);
 
   // Clear immediate override once profile is updated with the new URL
@@ -249,7 +248,7 @@ export function DesktopHeader() {
               console.log('[DesktopHeader] Dispatching voice entry event:', entry);
               // Store entry in sessionStorage so calendar can pick it up after navigation
               sessionStorage.setItem('wakti-pending-voice-entry', JSON.stringify(entry));
-              window.dispatchEvent(new CustomEvent('wakti-voice-add-entry', { detail: entry }));
+              emitEvent('wakti-voice-add-entry', entry);
               // Navigate to calendar if not already there
               if (!window.location.pathname.includes('/calendar')) {
                 navigate('/calendar');

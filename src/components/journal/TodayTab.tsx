@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { emitEvent } from "@/utils/eventBus";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -1680,7 +1681,7 @@ export const TodayTab: React.FC = () => {
             toast.success(language === 'ar' ? 'تم إنهاء اليوم وحفظه' : 'Day ended and saved');
             
             // Trigger Timeline refresh and navigate
-            window.dispatchEvent(new Event('refreshTimeline'));
+            emitEvent('refreshTimeline');
             // Immediately clear Today UI for a fresh start
             setMood(null);
             setTags([]);

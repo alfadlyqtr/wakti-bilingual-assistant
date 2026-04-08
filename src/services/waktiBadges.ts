@@ -1,3 +1,4 @@
+import { emitEvent } from '@/utils/eventBus';
 
 class WaktiBadgeService {
   private badges: Map<string, { count: number; priority: 'low' | 'normal' | 'high' | 'urgent' }> = new Map();
@@ -42,7 +43,7 @@ class WaktiBadgeService {
 
   private triggerBadgeUpdate(): void {
     // Trigger a custom event that components can listen to
-    window.dispatchEvent(new CustomEvent('badge-updated'));
+    emitEvent('badge-updated');
   }
 
   // Get total badge count for overall app badge
