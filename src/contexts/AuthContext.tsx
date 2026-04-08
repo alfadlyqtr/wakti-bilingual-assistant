@@ -25,11 +25,7 @@ interface AuthContextType {
   updateProfile: (updates: { full_name?: string; avatar_url?: string }) => Promise<{ error: any }>;
   updateEmail: (email: string) => Promise<{ error: any }>;
   updatePassword: (password: string) => Promise<{ error: any }>;
-  // Expose setters to allow manual context update when auth events don't fire
-  setUser: React.Dispatch<React.SetStateAction<User | null>>;
-  setSession: React.Dispatch<React.SetStateAction<Session | null>>;
-  setLoading: React.Dispatch<React.SetStateAction<boolean>>;
-  setLastLoginTimestamp: React.Dispatch<React.SetStateAction<number | null>>;
+  applyManualLoginRecovery: (recoveredUser: User, recoveredSession: Session, loginTimestamp: number) => void;
 }
 
 // SAFE default for when AuthProvider is not mounted (e.g., admin/public routes)
@@ -47,10 +43,7 @@ const defaultAuthContextValue: AuthContextType = {
   updateProfile: async () => ({ error: null }),
   updateEmail: async () => ({ error: null }),
   updatePassword: async () => ({ error: null }),
-  setUser: () => {},
-  setSession: () => {},
-  setLoading: () => {},
-  setLastLoginTimestamp: () => {},
+  applyManualLoginRecovery: () => {},
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -499,6 +492,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return { error };
   };
 
+  const applyManualLoginRecovery = useCallback((recoveredUser: User, recoveredSession: Session, loginTimestamp: number) => {
+    try { (window as any).__MANUAL_AUTH_LOCK = true; } catch {}
+    setUser(recoveredUser);
+    setSession(recoveredSession);
+    setLoading(false);
+    setLastLoginTimestamp(loginTimestamp);
+  }, []);
+
   const value = {
     user,
     session,
@@ -513,10 +514,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     updateProfile,
     updateEmail,
     updatePassword,
-    setUser,
-    setSession,
-    setLoading,
-    setLastLoginTimestamp,
+    applyManualLoginRecovery,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -24,7 +24,7 @@ export function LoginForm({
 }: LoginFormProps) {
   const navigate = useNavigate();
   const { language } = useTheme();
-  const { setUser: setAuthUser, setSession: setAuthSession, setLoading: setAuthLoading, setLastLoginTimestamp } = useAuth();
+  const { applyManualLoginRecovery } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -68,16 +68,9 @@ export function LoginForm({
           if (at && rt) {
             await supabase.auth.setSession({ access_token: at, refresh_token: rt });
             
-            // === SET MANUAL AUTH LOCK ===
-            // Set a 5-second "lock" to ignore bad auth events
-            try { (window as any).__MANUAL_AUTH_LOCK = true; } catch {}
-            
             // Manually update AuthContext because onAuthStateChange is not firing in iOS WebView
             console.log("LoginForm: Manually updating AuthContext.");
-            try { setAuthUser(data.user); } catch {}
-            try { setAuthSession((data as any)?.session ?? null); } catch {}
-            try { setAuthLoading(false); } catch {}
-            try { setLastLoginTimestamp(loginTimestamp); } catch {}
+            try { applyManualLoginRecovery(data.user, (data as any)?.session, loginTimestamp); } catch {}
             
             // === REGISTER ACTIVE SESSION FOR SINGLE-DEVICE LOGIN ===
             // Uses a stable login_id (UUID) that never rotates, unlike the access_token
