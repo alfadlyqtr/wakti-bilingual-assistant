@@ -63,6 +63,18 @@ export function useUnreadMessages() {
 
         // Set up real-time subscriptions with individual error handling
         // Each subscription is wrapped to prevent app crash if WebSocket fails (iOS WebView)
+        // StrictMode guard: remove existing channels before creating new ones
+        const channelNames = [
+          `unread-messages:${user.id}`,
+          `contact-requests:${user.id}`,
+          `maw3d-rsvps:${user.id}`,
+          `shared-task-responses:${user.id}`
+        ];
+        channelNames.forEach(name => {
+          const existing = supabase.getChannels().find(c => c.topic === `realtime:${name}`);
+          if (existing) supabase.removeChannel(existing);
+        });
+
         try {
           messagesChannel = supabase
             .channel(`unread-messages:${user.id}`)

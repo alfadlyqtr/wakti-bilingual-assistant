@@ -216,6 +216,10 @@ export function useNotificationHistory() {
 
         if (DEV) console.log('🔔 Setting up notification_history subscription for user:', user.id);
 
+        // StrictMode guard: remove existing channel before creating new one
+        const existingCh = supabase.getChannels().find(c => c.topic === `realtime:notification-history:${user.id}`);
+        if (existingCh) supabase.removeChannel(existingCh);
+
         // Subscribe to new notifications
         channel = supabase
           .channel(`notification-history:${user.id}`)

@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -43,12 +43,49 @@ interface UserProfileContextValue {
 
 export const UserProfileContext = createContext<UserProfileContextValue | undefined>(undefined);
 
+const PROFILE_CACHE_KEY = (uid: string) => `wakti_profile_${uid}`;
+const PROFILE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function readCachedProfile(uid: string): UserProfile | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY(uid));
+    if (!raw) return null;
+    const { data, _cachedAt } = JSON.parse(raw);
+    if (!data || !_cachedAt) return null;
+    if (Date.now() - _cachedAt > PROFILE_CACHE_TTL) return null;
+    return data as UserProfile;
+  } catch { return null; }
+}
+
+function writeCachedProfile(uid: string, data: UserProfile) {
+  try {
+    localStorage.setItem(PROFILE_CACHE_KEY(uid), JSON.stringify({ data, _cachedAt: Date.now() }));
+  } catch { /* quota exceeded or tracking prevention — non-fatal */ }
+}
+
 export function UserProfileProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+
+  // Try to hydrate from localStorage cache for instant render
+  const [profile, setProfile] = useState<UserProfile | null>(() => {
+    if (!user?.id) return null;
+    return readCachedProfile(user.id);
+  });
+  const profileRef = useRef<UserProfile | null>(profile);
+  // If we hydrated from cache, skip the loading state entirely
+  const [loading, setLoading] = useState(() => {
+    if (!user?.id) return true;
+    return readCachedProfile(user.id) === null;
+  });
   const [error, setError] = useState<string | null>(null);
   const IS_DEV = !import.meta.env.PROD;
+
+  const updateProfile = (p: UserProfile | null) => {
+    profileRef.current = p;
+    setProfile(p);
+    // Persist to localStorage for instant reopen
+    if (p && user?.id) writeCachedProfile(user.id, p);
+  };
 
   const normalizeAvatarUrl = (url: string | null | undefined) => {
     const raw = (url || '').trim();
@@ -106,7 +143,7 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
       console.error('Failed to create profile:', error);
       throw error;
     }
-  }, [user, IS_DEV]);
+  }, [user?.id, user?.email, user?.user_metadata?.country, user?.user_metadata?.country_code, user?.user_metadata?.city, IS_DEV]);
 
   const fetchProfile = useCallback(async () => {
     if (!user?.id) {
@@ -114,8 +151,10 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
       return;
     }
 
+    const isFirstLoad = profileRef.current === null;
+    if (isFirstLoad) setLoading(true);
+
     try {
-      setLoading(true);
       setError(null);
 
       if (IS_DEV) console.debug('Fetching profile for user:', user.id);
@@ -130,7 +169,7 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
         if (error.code === 'PGRST116') {
           if (IS_DEV) console.debug('Profile not found, creating new profile...');
           const newProfile = await createProfileIfMissing(user.id);
-          setProfile(newProfile);
+          updateProfile(newProfile);
         } else {
           console.error('Error fetching profile:', error);
           setError(error.message);
@@ -169,7 +208,7 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
           }
         }
 
-        setProfile(data);
+        updateProfile(data);
       }
     } catch (err) {
       console.error('Profile fetch error:', err);
@@ -177,7 +216,7 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
     } finally {
       setLoading(false);
     }
-  }, [user?.id, user?.email, user?.user_metadata, IS_DEV, createProfileIfMissing]);
+  }, [user?.id, user?.email, user?.user_metadata?.country, IS_DEV, createProfileIfMissing]);
 
   useEffect(() => {
     fetchProfile();
@@ -209,7 +248,7 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
         (payload) => {
           if (IS_DEV) console.debug('Profile updated (realtime):', { eventType: payload.eventType, when: payload.commit_timestamp });
           if (payload.new) {
-            setProfile(payload.new as UserProfile);
+            updateProfile(payload.new as UserProfile);
           }
         }
       )

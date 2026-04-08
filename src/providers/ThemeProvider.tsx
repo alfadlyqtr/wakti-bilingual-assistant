@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, getCachedSession } from "@/integrations/supabase/client";
 
 type Theme = "dark" | "light";
 type Language = "en" | "ar";
@@ -62,10 +62,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     // Sync language to database for push notifications (fire-and-forget, non-blocking)
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user?.id) {
-          // Cast needed until types are regenerated with new language column
-          await (supabase.from("profiles") as any).update({ language }).eq("id", user.id);
+        const { data: { session } } = await getCachedSession();
+        const uid = session?.user?.id;
+        if (uid) {
+          await (supabase.from("profiles") as any).update({ language }).eq("id", uid);
         }
       } catch {
         // Silent fail - localStorage is the source of truth for UI

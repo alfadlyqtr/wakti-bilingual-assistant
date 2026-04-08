@@ -3,6 +3,28 @@ import type { Session } from '@supabase/supabase-js';
 
 let __passportInFlight: Promise<void> | null = null;
 
+let __cachedSessionResult: { data: { session: Session | null } } | null = null;
+let __cachedSessionTs = 0;
+let __cachedSessionInFlight: Promise<{ data: { session: Session | null } }> | null = null;
+const SESSION_CACHE_TTL = 2000;
+
+export async function getCachedSession(): Promise<{ data: { session: Session | null } }> {
+  if (__cachedSessionResult && Date.now() - __cachedSessionTs < SESSION_CACHE_TTL) {
+    return __cachedSessionResult;
+  }
+  if (__cachedSessionInFlight) return __cachedSessionInFlight;
+  __cachedSessionInFlight = supabase.auth.getSession().then((result) => {
+    __cachedSessionResult = result;
+    __cachedSessionTs = Date.now();
+    __cachedSessionInFlight = null;
+    return result;
+  }).catch((err) => {
+    __cachedSessionInFlight = null;
+    throw err;
+  });
+  return __cachedSessionInFlight;
+}
+
 const isSessionValid = (session: Session | null | undefined, safetySeconds = 30): boolean => {
   if (!session) return false;
   const exp = session.expires_at;
@@ -13,7 +35,7 @@ const isSessionValid = (session: Session | null | undefined, safetySeconds = 30)
 
 export async function ensurePassport(timeoutMs = 4000): Promise<void> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getCachedSession();
     if (isSessionValid(session)) return;
   } catch (error) {
     console.error('[Supabase] Error getting session:', error);
@@ -50,7 +72,7 @@ export async function ensurePassport(timeoutMs = 4000): Promise<void> {
 
     (async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await getCachedSession();
         if (isSessionValid(session)) return settle(true);
         try {
           await supabase.auth.refreshSession();
@@ -81,6 +103,6 @@ export async function withPassport<T>(op: () => Promise<T>): Promise<T> {
 }
 
 export async function getCurrentUserId(): Promise<string | null> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await getCachedSession();
   return session?.user?.id ?? null;
 }

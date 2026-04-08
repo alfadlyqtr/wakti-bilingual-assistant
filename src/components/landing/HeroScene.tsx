@@ -91,19 +91,6 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
           </span>
         </Button>
 
-        {/* Login Button */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => navigate("/login")}
-          className="rounded-full border-blue-400/30 bg-[#0c0f14]/50 text-white/95 hover:text-white hover:bg-blue-500/10 hover:border-blue-300/50 transition-all duration-300 gap-1.5 px-4 h-9 backdrop-blur-sm shadow-[0_0_18px_hsla(210,100%,65%,0.35)] hover:shadow-[0_0_26px_hsla(210,100%,65%,0.55)]"
-        >
-          <span className="text-sm font-light tracking-wide">
-            {isArabic ? "دخول" : "Login"}
-          </span>
-          <ArrowRight className="h-3.5 w-3.5" />
-        </Button>
-
         {/* Language Switcher */}
         <Button
           variant="ghost"
@@ -117,6 +104,22 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
 
       {/* Main Content with parallax */}
       <motion.div className="relative z-10 flex flex-col items-center text-center px-6" style={{ y: contentY }}>
+
+        {/* Sign In Button - Above Logo (matches footer style) */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.6 }}
+          className="mb-6"
+        >
+          <button
+            onClick={() => navigate("/login")}
+            className="rounded-full px-10 py-2 text-[13px] font-medium tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] bg-[#0c0f14]/60 text-white/90 border border-blue-400/30 backdrop-blur-xl shadow-[0_0_15px_hsla(210,100%,65%,0.3)] hover:text-white hover:bg-blue-500/15 hover:border-blue-300/50 hover:shadow-[0_0_25px_hsla(210,100%,65%,0.5)]"
+          >
+            {isArabic ? "تسجيل الدخول" : "Sign in"}
+          </button>
+        </motion.div>
+
         {/* Logo with breathing animation */}
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
@@ -166,42 +169,12 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
           transition={{ delay: 0.7, duration: 0.8 }}
           className="flex flex-col items-center"
         >
-          <Button
+          <button
             onClick={() => navigate("/signup")}
-            size="lg"
-            className="px-10 py-6 rounded-full text-base font-semibold tracking-[0.05em] uppercase transition-all duration-300 active:scale-[0.96] relative overflow-hidden"
-            style={{
-              background: "linear-gradient(135deg, #e9ceb0 0%, #d4b896 50%, #e9ceb0 100%)",
-              color: "#060541",
-              boxShadow: "0 12px 40px rgba(233, 206, 176, 0.6), 0 0 80px rgba(233, 206, 176, 0.4), 0 0 120px rgba(233, 206, 176, 0.2), inset 0 1px 0 rgba(255,255,255,0.4)",
-              animation: "cta-breathe 2s ease-in-out infinite"
-            }}
+            className="rounded-full px-10 py-2 text-[13px] font-medium tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] bg-[#0c0f14]/60 text-white/90 border border-blue-400/30 backdrop-blur-xl shadow-[0_0_15px_hsla(210,100%,65%,0.3)] hover:text-white hover:bg-blue-500/15 hover:border-blue-300/50 hover:shadow-[0_0_25px_hsla(210,100%,65%,0.5)]"
           >
-            {/* Constant pulsing glow ring */}
-            <span 
-              className="absolute -inset-2 rounded-full"
-              style={{
-                background: "linear-gradient(135deg, rgba(233,206,176,0.8), rgba(245,230,211,0.6), rgba(233,206,176,0.8))",
-                filter: "blur(12px)",
-                zIndex: -1,
-                animation: "cta-pulse 1.5s ease-in-out infinite"
-              }}
-            />
-            {/* Inner shine */}
-            <span 
-              className="absolute inset-0 rounded-full opacity-60"
-              style={{
-                background: "linear-gradient(180deg, rgba(255,255,255,0.5) 0%, transparent 50%)",
-              }}
-            />
-            {isArabic ? (
-              <span dir="rtl" style={{ unicodeBidi: 'embed' }} className="relative z-10 drop-shadow-sm">
-                جرب وقتي AI <span style={{ color: '#1e3a5f', fontWeight: 800 }}>مجاناً</span>
-              </span>
-            ) : (
-              <span className="relative z-10 drop-shadow-sm">Try Wakti AI for <span style={{ color: '#1e3a5f', fontWeight: 800 }}>Free</span></span>
-            )}
-          </Button>
+            {isArabic ? "إنشاء حساب · جرب وقتي مجاناً" : "Create Account · Try Wakti for Free"}
+          </button>
         </motion.div>
       </motion.div>
 

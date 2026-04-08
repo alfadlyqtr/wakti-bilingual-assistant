@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { getCachedSession } from '@/integrations/supabase/auth';
 import { Maw3dEvent } from '@/types/maw3d';
 
 export function useOptimizedMaw3dEvents() {
@@ -13,13 +14,13 @@ export function useOptimizedMaw3dEvents() {
     try {
       setLoading(true);
       
-      // Get current user
-      const { data: userData, error: userError } = await supabase.auth.getUser();
+      // Get current user from cached session (avoids lock contention)
+      const { data: { session } } = await getCachedSession();
       
-      if (userError) throw userError;
-      if (!userData.user) {
+      if (!session?.user) {
         throw new Error('User not authenticated');
       }
+      const userData = { user: session.user };
 
       // Fetch ONLY the current user's events - explicit filtering for security
       const { data: eventsData, error: eventsError } = await supabase
@@ -69,6 +70,10 @@ export function useOptimizedMaw3dEvents() {
     fetchEventsAndCounts();
 
     // Set up real-time subscriptions for user's events only
+    // StrictMode guard: remove existing channel before creating new one
+    const existingChannel = supabase.getChannels().find(c => c.topic === 'realtime:maw3d-events-changes');
+    if (existingChannel) supabase.removeChannel(existingChannel);
+
     const eventsChannel = supabase
       .channel('maw3d-events-changes')
       .on('postgres_changes', { 

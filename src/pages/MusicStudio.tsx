@@ -825,6 +825,7 @@ export default function MusicStudio() {
   const [videoMode, setVideoMode] = useState<'ai' | 'saved'>('ai');
   const [imageMode, setImageMode] = useState<'create' | 'saved'>('create');
   const [musicQuotaHeader, setMusicQuotaHeader] = useState<{ remaining: number; limit: number; used: number } | null>(null);
+  const [editorEverVisited, setEditorEverVisited] = useState(false);
   const { user: authUser } = useAuth();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -1160,7 +1161,7 @@ export default function MusicStudio() {
               return (
                 <button
                   key={t.key}
-                  onClick={() => setMusicSubTab(t.key)}
+                  onClick={() => { if (t.key === 'editor') setEditorEverVisited(true); setMusicSubTab(t.key); }}
                   className={`relative flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 min-h-[44px] touch-manipulation ${
                     isActive
                       ? 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] text-white dark:text-[#060541] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.02]'
@@ -1173,12 +1174,17 @@ export default function MusicStudio() {
             })}
           </nav>
 
-          {musicSubTab === 'compose' ? (
+          <div className={musicSubTab === 'compose' ? undefined : 'hidden'}>
             <ComposeTab
-              onSaved={()=>setMusicSubTab('editor')}
+              onSaved={()=>{ setEditorEverVisited(true); setMusicSubTab('editor'); }}
               onQuotaChange={setMusicQuotaHeader}
             />
-          ) : <EditorTab />}
+          </div>
+          {editorEverVisited && (
+            <div className={musicSubTab === 'editor' ? undefined : 'hidden'}>
+              <EditorTab />
+            </div>
+          )}
         </>
       )}
 

@@ -66,40 +66,58 @@ export function LoginForm({
           const at = (data as any)?.session?.access_token;
           const rt = (data as any)?.session?.refresh_token;
           if (at && rt) {
-            await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+            // setSession is a safety net for iOS WebView — but signInWithPassword already stored
+            // the session in the SDK, so we don't need to await it. Fire-and-forget.
+            supabase.auth.setSession({ access_token: at, refresh_token: rt }).catch(() => {});
             
             // Manually update AuthContext because onAuthStateChange is not firing in iOS WebView
             console.log("LoginForm: Manually updating AuthContext.");
             try { applyManualLoginRecovery(data.user, (data as any)?.session, loginTimestamp); } catch {}
             
-            // === REGISTER ACTIVE SESSION FOR SINGLE-DEVICE LOGIN ===
-            // Uses a stable login_id (UUID) that never rotates, unlike the access_token
+            // === REGISTER ACTIVE SESSION (fire-and-forget — never block login) ===
             try {
               const loginId = crypto.randomUUID();
-              // Persist in sessionStorage so the Realtime listener can compare
               try { sessionStorage.setItem('wakti_login_id', loginId); } catch {}
-              await supabase
-                .from('user_active_sessions')
-                .upsert({ 
-                  user_id: data.user.id,
-                  session_id: at, // keep for backwards compat
-                  login_id: loginId,
-                  last_login: new Date().toISOString(),
-                  device_info: navigator.userAgent || 'Unknown Device'
-                });
-              console.log("LoginForm: Session registered with stable login_id");
+              // No await — fire and forget
+              Promise.resolve(
+                supabase
+                  .from('user_active_sessions')
+                  .upsert({ 
+                    user_id: data.user.id,
+                    session_id: at,
+                    login_id: loginId,
+                    last_login: new Date().toISOString(),
+                    device_info: navigator.userAgent || 'Unknown Device'
+                  })
+              )
+                .then(() => console.log("LoginForm: Session registered with stable login_id"))
+                .catch((err: any) => console.warn("LoginForm: Session registration failed (non-blocking):", err));
             } catch (sessionErr) {
-              console.error("LoginForm: Failed to register active session (non-blocking):", sessionErr);
               // Don't block login on session registration error
             }
+
+            // === PREFETCH PROFILE (fire-and-forget — don't block navigation) ===
+            const userId = data.user.id;
+            Promise.resolve(
+              supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', userId)
+                .single()
+            ).then(({ data: profileData }) => {
+                if (profileData) {
+                  try {
+                    localStorage.setItem(`wakti_profile_${userId}`, JSON.stringify({ data: profileData, _cachedAt: Date.now() }));
+                    console.log("LoginForm: Profile prefetched and cached in background");
+                    window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+                  } catch {}
+                }
+              })
+              .catch(() => {}); // non-blocking, UserProfileContext will fetch anyway
             
-            // === DELAYED NAVIGATION ===
-            // Small delay to let React finish state update before ProtectedRoute checks
-            console.log("LoginForm: Scheduling navigation to", redirectTo);
-            setTimeout(() => {
-              console.log("LoginForm: Navigating now to", redirectTo);
-              navigate(redirectTo);
-            }, 100);
+            // === NAVIGATE IMMEDIATELY ===
+            console.log("LoginForm: Navigating to", redirectTo);
+            navigate(redirectTo);
           }
         } catch (err) {
           console.error("LoginForm: Error during setSession or context update", err);

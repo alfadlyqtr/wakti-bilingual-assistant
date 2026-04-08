@@ -30,6 +30,7 @@ export default function MusicShare() {
   const [playUrl, setPlayUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -119,25 +120,27 @@ export default function MusicShare() {
       <div className="flex items-center justify-center p-4 pt-6">
         <div className="w-full max-w-sm">
           {/* Cover art hero */}
-          <div className="relative w-full aspect-square rounded-3xl overflow-hidden bg-gradient-to-br from-sky-900/60 to-purple-900/60 border border-white/10 shadow-[0_8px_40px_rgba(0,0,0,0.5)]">
-            {track.cover_url ? (
-              <img src={track.cover_url} alt={trackTitle} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <div className="text-center space-y-3">
-                  <div className="w-20 h-20 rounded-full bg-sky-500/20 border border-sky-400/30 flex items-center justify-center mx-auto">
-                    <span className="text-4xl">🎵</span>
+          <div className={`relative w-full aspect-square rounded-3xl p-2 bg-gradient-to-br from-sky-900/60 to-purple-900/60 shadow-[0_8px_40px_rgba(0,0,0,0.5)] transition-all duration-500 ${isPlaying ? 'music-playing-border' : 'border border-white/10'}`}>
+            <div className="relative w-full h-full rounded-2xl overflow-hidden">
+              {track.cover_url ? (
+                <img src={track.cover_url} alt={trackTitle} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <div className="text-center space-y-3">
+                    <div className="w-20 h-20 rounded-full bg-sky-500/20 border border-sky-400/30 flex items-center justify-center mx-auto">
+                      <span className="text-4xl">🎵</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-            {/* Gradient overlay at bottom */}
-            <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent" />
-            {durationLabel && (
-              <div className="absolute bottom-3 right-3 text-xs font-mono px-2 py-1 rounded-full bg-black/50 text-white/80 backdrop-blur-sm border border-white/10">
-                {durationLabel}
-              </div>
-            )}
+              )}
+              {/* Gradient overlay at bottom */}
+              <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent" />
+              {durationLabel && (
+                <div className="absolute bottom-3 right-3 text-xs font-mono px-2 py-1 rounded-full bg-black/50 text-white/80 backdrop-blur-sm border border-white/10">
+                  {durationLabel}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Apple iCloud-style card */}
@@ -172,7 +175,7 @@ export default function MusicShare() {
 
                 {/* Audio controls — narrower width */}
                 <div className="mx-8 rounded-2xl bg-white/[0.06] px-4 py-3 border border-white/[0.07]">
-                  <AudioPlayer src={playUrl} className="w-full" showLoopToggle />
+                  <AudioPlayer src={playUrl} className="w-full" showLoopToggle onPlaybackChange={setIsPlaying} />
                 </div>
 
                 {/* Wakti brand footer — colored and styled */}

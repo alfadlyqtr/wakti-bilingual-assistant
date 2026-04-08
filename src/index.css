@@ -2763,3 +2763,26 @@ body.homescreen-active .app-main-scroll > .dashboard-container {
 .hs-dock-bottom {
   padding-bottom: max(4px, env(safe-area-inset-bottom));
 }
+
+/* Music Share — animated spinning border when playing */
+@keyframes music-border-spin {
+  0%   { --music-border-angle: 0deg; }
+  100% { --music-border-angle: 360deg; }
+}
+
+@property --music-border-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.music-playing-border {
+  border: 2px solid transparent;
+  background-image:
+    linear-gradient(135deg, rgba(14,30,63,0.6), rgba(88,28,135,0.6)),
+    conic-gradient(from var(--music-border-angle), #38bdf8 0%, #818cf8 25%, #a78bfa 50%, #38bdf8 75%, #7eb8ff 100%);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  animation: music-border-spin 3s linear infinite;
+  box-shadow: 0 0 18px rgba(126, 184, 255, 0.35), 0 0 36px rgba(167, 139, 250, 0.2);
+}

@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState, Suspense } from "react";
 import { useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase, ensurePassport } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import Loading from "@/components/ui/loading";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { showPaywallIfNeeded } from "@/integrations/natively/purchasesBridge";
 
 export type PaywallVariant = 'new_user' | 'cancelled' | 'trial_expired';
+type AccessStamp = 'owner' | 'subscribed' | 'admin_gifted' | 'trial_active' | null;
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -32,7 +33,10 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   // --- Fix #2: hooks moved here (top of component) to satisfy Rules of Hooks ---
   const { isSubscribed, isGracePeriod, isAccessExpired, isNewUser, wasSubscribed, hasTrialStarted, isAdminGifted, profile, loading: isProfileLoading } = useUserProfile();
   const [accessCheckTick, setAccessCheckTick] = useState(0);
-  const [recentLoginGrace, setRecentLoginGrace] = useState(false);
+  const [recentLoginGrace, setRecentLoginGrace] = useState(() => {
+    if (!lastLoginTimestamp) return false;
+    return Date.now() - lastLoginTimestamp < 5000;
+  });
 
   useEffect(() => {
     if (!lastLoginTimestamp) return;
@@ -43,6 +47,60 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
       return () => clearTimeout(timer);
     }
   }, [lastLoginTimestamp]);
+
+  // Stable fingerprint of subscription-relevant profile fields.
+  // Prevents the subscription check from re-running on every profile object reference change.
+  const profileFingerprint = profile
+    ? `${profile.is_subscribed}|${(profile as any).admin_gifted}|${profile.payment_method}|${profile.next_billing_date}|${profile.free_access_start_at}|${profile.subscription_status}|${profile.plan_name}`
+    : 'null';
+
+  // Owner accounts that bypass all restrictions
+  const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
+  const ownerEmails = ownerAccounts.map(e => e.toLowerCase());
+  const isOwner = !!(user?.email && ownerEmails.includes(user.email.toLowerCase()));
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // STAMP ONCE, TRUST FOREVER
+  // The immigration officer checks the passport ONCE. Stamps it.
+  // The app trusts the stamp — no re-checking on every render.
+  // Stamp resets ONLY on logout (unmount) or user change.
+  // ═══════════════════════════════════════════════════════════════════════
+  const accessStampRef = useRef<AccessStamp>(null);
+  const stampLoggedRef = useRef(false);
+
+  // Reset stamp when user changes (different account login)
+  useEffect(() => {
+    if (!user?.id) {
+      accessStampRef.current = null;
+      stampLoggedRef.current = false;
+      return;
+    }
+    // Owner stamp is INSTANT — we have the email, no profile needed
+    if (isOwner && !accessStampRef.current) {
+      accessStampRef.current = 'owner';
+      if (DEV && !stampLoggedRef.current) {
+        stampLoggedRef.current = true;
+        console.log('ProtectedRoute: 🛂 STAMPED — owner. No further checks.');
+      }
+    }
+  }, [user?.id, isOwner]);
+
+  // Stamp non-owner users when profile confirms their key
+  useEffect(() => {
+    if (accessStampRef.current) return; // already stamped
+    if (!user?.id || isProfileLoading) return;
+    
+    if (isSubscribed) {
+      accessStampRef.current = 'subscribed';
+      if (DEV) console.log('ProtectedRoute: 🛂 STAMPED — subscribed.');
+    } else if (isAdminGifted) {
+      accessStampRef.current = 'admin_gifted';
+      if (DEV) console.log('ProtectedRoute: 🛂 STAMPED — admin gifted.');
+    } else if (isGracePeriod) {
+      accessStampRef.current = 'trial_active';
+      if (DEV) console.log('ProtectedRoute: 🛂 STAMPED — 24h trial active.');
+    }
+  }, [user?.id, isProfileLoading, isSubscribed, isAdminGifted, isGracePeriod]);
 
   // Enable subscription/IAP enforcement
   const TEMP_DISABLE_SUBSCRIPTION_CHECKS = false;
@@ -55,10 +113,6 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   const lastUserIdRef = useRef<string | null>(null);
   const trialJustStartedRef = useRef(false); // suppress paywall bounce-back after skip/X
   const accessDecisionRef = useRef<string>(''); // dedup access decision logs
-
-  // Owner accounts that bypass all restrictions
-  const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
-  const ownerEmails = ownerAccounts.map(e => e.toLowerCase());
 
   useEffect(() => {
     let mounted = true;
@@ -97,6 +151,8 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
       return;
     }
     const checkSubscriptionStatus = async () => {
+      // Already stamped — immigration officer said you're in. No re-check.
+      if (accessStampRef.current) return;
       if (inFlightRef.current) return; // prevent concurrent runs (StrictMode double effects)
       inFlightRef.current = true;
       try {
@@ -114,7 +170,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
 
       // Check if user is an owner account
       if (ownerEmails.includes((user.email || '').toLowerCase())) {
-        console.log('ProtectedRoute: Owner account detected, bypassing subscription checks');
+        if (DEV) console.log('ProtectedRoute: Owner — subscription check skipped');
         setSubscriptionStatus({ 
           isSubscribed: true, 
           isLoading: false, 
@@ -124,24 +180,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
       }
 
       try {
-        // Zero-Trust: always wait for live DB response — no timeouts, no cache
-        await ensurePassport();
-        console.log("ProtectedRoute: Fetching subscription status from database...");
-
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('is_subscribed, subscription_status, next_billing_date, billing_start_date, plan_name, payment_method')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        if (error) {
-          console.error('ProtectedRoute: Error fetching subscription status:', error);
-          setSubscriptionStatus({ 
-            isSubscribed: false, 
-            isLoading: false, 
-            needsPayment: true,
-            error: error.message 
-          });
+        if (isProfileLoading) {
           return;
         }
 
@@ -236,7 +275,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     // Only run subscription check when we have a user and auth is not loading
     destroyedRef.current = false; // reset on effect run
 
-    if (!isLoading && user) {
+    if (!isLoading && user && !isProfileLoading) {
       console.log("ProtectedRoute: Auth loaded, starting subscription check");
       // ZERO-LEAK FIX: Never prime isSubscribed from cache
       // Cache can only mark isLoading=false to stop the spinner, but access
@@ -272,7 +311,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
         retryTimerRef.current = null;
       }
     };
-  }, [user?.id, isLoading]);
+  }, [user?.id, isLoading, profileFingerprint, isProfileLoading]);
 
   // Listen for trial limit reached events — no-op here, AppLayout handles the UX
   // The full paywall only opens when the 24h trial expires or user was a cancelled subscriber
@@ -285,21 +324,9 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   // Listen for subscription updates from AppLayout (after purchase/restore)
   useEffect(() => {
     const handleSubscriptionUpdate = () => {
-      console.log('ProtectedRoute: Received subscription update event, refreshing profile...');
-      if (user?.id) {
-        // Directly fetch fresh profile data from database
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single()
-          .then(({ data, error }) => {
-            if (!error && data) {
-              console.log('ProtectedRoute: Fresh profile fetched, is_subscribed:', data.is_subscribed);
-              window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
-            }
-          });
-      }
+      console.log('ProtectedRoute: Received subscription update event, refreshing profile via context...');
+      // Let UserProfileContext handle the DB fetch — no redundant query here
+      window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
     };
 
     window.addEventListener('wakti-subscription-updated', handleSubscriptionUpdate);
@@ -340,6 +367,8 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     // SURGICAL FIX #1: Stop Trusting the Cache for Walls
     // Trust ONLY live profile data, not cached subscriptionStatus
     if (trialJustStartedRef.current) { setShowPaywall(false); return; }
+    // Stamped? Officer said you're in. No paywall. Ever.
+    if (accessStampRef.current) { setShowPaywall(false); return; }
     if (isSubscribed || subscriptionStatus.isSubscribed || isAdminGifted || isGracePeriod) { setShowPaywall(false); return; }
 
     // Priority order: cancelled > trial_expired > new_user
@@ -446,6 +475,23 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     return <>{children}</>;
   }
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // STAMP CHECK: If the immigration officer already stamped, let them through.
+  // No subscription check, no profile loading gate, no paywall. Instant.
+  // ═══════════════════════════════════════════════════════════════════════
+  if (accessStampRef.current) {
+    return (
+      <>
+        {CustomPaywallModal && (
+          <Suspense fallback={null}>
+            <CustomPaywallModal open={showPaywall} onOpenChange={setShowPaywall} variant={paywallVariant} />
+          </Suspense>
+        )}
+        {children}
+      </>
+    );
+  }
+
   // TASK 1: Kill the 'Polite' Returns - Block by Default
   if (subscriptionStatus.isLoading && !recentLoginGrace) {
     if (DEV) console.log("ProtectedRoute: Subscription pending - BLOCKING access");
@@ -473,8 +519,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   // ── THE 4 KEYS ──────────────────────────────────────────────────────────
   // A user gets in if they hold at least ONE of these keys. Nothing else.
 
-  // 1. Admin Account Key
-  const isOwner = user?.email && ownerEmails.includes(user.email.toLowerCase());
+  // 1. Admin Account Key (already computed above — isOwner)
 
   // 2. RevenueCat / Apple / Google Key
   const hasActivePayment = isSubscribed || subscriptionStatus.isSubscribed;
