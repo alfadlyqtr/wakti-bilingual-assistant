@@ -83,12 +83,12 @@ export default function AdminQuotas() {
         );
         if (!cancelled) {
           setMusicUsage(
-            error ? { generated: 0, extra_generations: 0, base_limit: 5, total_limit: 5 } : (data as MusicUsage)
+            error ? { generated: 0, extra_generations: 0, base_limit: 30, total_limit: 30 } : (data as MusicUsage)
           );
         }
       } catch {
         if (!cancelled)
-          setMusicUsage({ generated: 0, extra_generations: 0, base_limit: 5, total_limit: 5 });
+          setMusicUsage({ generated: 0, extra_generations: 0, base_limit: 30, total_limit: 30 });
       } finally {
         if (!cancelled) setIsMusicLoading(false);
       }

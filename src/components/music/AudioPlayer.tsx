@@ -23,6 +23,13 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
   const [error, setError] = useState<string | null>(null);
   const [isLooping, setIsLooping] = useState(false);
 
+  // Stable ref so inline arrow functions from parents never cause effect re-runs
+  const onPlaybackChangeRef = useRef(onPlaybackChange);
+  useEffect(() => { onPlaybackChangeRef.current = onPlaybackChange; });
+
+  const languageRef = useRef(language);
+  useEffect(() => { languageRef.current = language; });
+
   const cleanSrc = useMemo(() => {
     let cleanUrl = (src || '').trim();
     try {
@@ -42,18 +49,18 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
     const handlePlay = () => {
       setIsPlaying(true);
       setIsLoading(false);
-      onPlaybackChange?.(true);
+      onPlaybackChangeRef.current?.(true);
     };
 
     const handlePause = () => {
       setIsPlaying(false);
-      onPlaybackChange?.(false);
+      onPlaybackChangeRef.current?.(false);
     };
 
     const handleEnded = () => {
       setIsPlaying(false);
       setCurrentTime(0);
-      onPlaybackChange?.(false);
+      onPlaybackChangeRef.current?.(false);
     };
 
     const handleTimeUpdate = () => {
@@ -81,8 +88,8 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
       });
       setIsLoading(false);
       setIsPlaying(false);
-      onPlaybackChange?.(false);
-      setError(language === 'ar' ? 'فشل تحميل الملف الصوتي' : 'Failed to load audio');
+      onPlaybackChangeRef.current?.(false);
+      setError(languageRef.current === 'ar' ? 'فشل تحميل الملف الصوتي' : 'Failed to load audio');
     };
 
     audio.addEventListener('play', handlePlay);
@@ -102,15 +109,17 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('error', handleError);
-      onPlaybackChange?.(false);
+      onPlaybackChangeRef.current?.(false);
     };
-  }, [language, onPlaybackChange, src]);
+  // attachAudio only re-creates when src changes (cleanSrc drives audio teardown anyway)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src]);
 
   const cleanupRef = useRef<(() => void) | null>(null);
 
   const ensureAudio = useCallback(() => {
     if (!cleanSrc) {
-      setError(language === 'ar' ? 'لا يوجد ملف صوتي' : 'No audio URL');
+      setError(languageRef.current === 'ar' ? 'لا يوجد ملف صوتي' : 'No audio URL');
       return null;
     }
 
@@ -131,15 +140,16 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
     setIsLoading(true);
     audio.load();
     return audio;
-  }, [attachAudio, cleanSrc, isLooping, language]);
+  }, [attachAudio, cleanSrc, isLooping]);
 
+  // Only tear down and reset when the SOURCE itself changes — not on every parent re-render
   useEffect(() => {
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
     setIsLoading(false);
-    onPlaybackChange?.(false);
-    setError(cleanSrc ? null : (language === 'ar' ? 'لا يوجد ملف صوتي' : 'No audio URL'));
+    onPlaybackChangeRef.current?.(false);
+    setError(cleanSrc ? null : (languageRef.current === 'ar' ? 'لا يوجد ملف صوتي' : 'No audio URL'));
     cleanupRef.current?.();
     cleanupRef.current = null;
     audioRef.current = null;
@@ -150,9 +160,9 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
       cleanupRef.current = null;
       audioRef.current = null;
       initializedSrcRef.current = null;
-      onPlaybackChange?.(false);
+      onPlaybackChangeRef.current?.(false);
     };
-  }, [cleanSrc, language, onPlaybackChange]);
+  }, [cleanSrc]); // ← only cleanSrc, never onPlaybackChange or language
 
   // Listen for other players starting — pause this one if it's playing
   useEffect(() => {

@@ -209,7 +209,7 @@ export const help = {
   musicStep3: "3. Tap 'Generate'",
   musicStep4: "4. Wait for the AI to compose your track",
   musicStep5: "5. Play, download, or save the track",
-  musicQuota: "Monthly quota: 5 generations/month (default).",
+  musicQuota: "Monthly quota: 30 generations/month.",
   savedTracks: "Saved Tracks",
   savedTracksDesc: "View and manage all your generated music. Tap a track to play, download, share, or delete.",
   shareMusic: "Share Music",
