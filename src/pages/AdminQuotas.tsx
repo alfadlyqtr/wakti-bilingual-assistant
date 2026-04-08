@@ -3,7 +3,7 @@ import { Gift, Search, Plus, Mic, Music, X, Loader2, Zap, ArrowUpRight, CheckCir
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/integrations/supabase/client";
+import { ensurePassport, supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
@@ -77,6 +77,7 @@ export default function AdminQuotas() {
     (async () => {
       setIsMusicLoading(true);
       try {
+        await ensurePassport();
         const { data, error } = await (supabase as any).rpc(
           "admin_get_music_generations_monthly",
           { p_user_id: selectedUser.id, p_month: musicUsageMonth }
@@ -100,6 +101,7 @@ export default function AdminQuotas() {
     setIsSearching(true);
     setHasSearched(true);
     try {
+      await ensurePassport();
       const { data: quotasData, error } = await (supabase as any).rpc(
         "admin_get_voice_quotas",
         { p_user_id: null }
@@ -172,6 +174,7 @@ export default function AdminQuotas() {
     setIsGifting(true);
     setGiftDone(false);
     try {
+      await ensurePassport();
       let err: any = null;
       if (featureType === "music") {
         const { error } = await (supabase as any).rpc("admin_adjust_music_generations", {
@@ -227,8 +230,15 @@ export default function AdminQuotas() {
       );
       setQuotaAmount("");
       setGiftDone(true);
-    } catch {
-      toast.error("Failed to apply quota change");
+    } catch (error: any) {
+      const message = String(error?.message || "");
+      if (message.includes("No valid session") || message.includes("Invalid Refresh Token") || message.includes("refresh token")) {
+        try { await supabase.auth.signOut({ scope: 'local' as any }); } catch {}
+        toast.error("Your admin session expired. Please sign in again.");
+        window.location.replace("/mqtr");
+        return;
+      }
+      toast.error(error?.message || "Failed to apply quota change");
     } finally {
       setIsGifting(false);
     }

@@ -88,9 +88,9 @@ export async function ensurePassport(timeoutMs = 4000): Promise<void> {
     const timer = setTimeout(async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session) return settle(true);
+        if (isSessionValid(session, 0)) return settle(true);
       } catch (_e) { void _e; }
-      settle(true);
+      settle(false, new Error('No valid session'));
     }, timeoutMs);
   });
 

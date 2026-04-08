@@ -120,7 +120,7 @@ export default function MusicShare() {
       <div className="flex items-center justify-center p-4 pt-6">
         <div className="w-full max-w-sm">
           {/* Cover art hero */}
-          <div className={`relative w-full aspect-square rounded-3xl p-2 bg-gradient-to-br from-sky-900/60 to-purple-900/60 shadow-[0_8px_40px_rgba(0,0,0,0.5)] transition-all duration-500 ${isPlaying ? 'music-playing-border' : 'border border-white/10'}`}>
+          <div className={`relative w-full aspect-square rounded-3xl p-1 bg-gradient-to-br from-sky-900/60 to-purple-900/60 shadow-[0_8px_40px_rgba(0,0,0,0.5)] transition-all duration-500 ${isPlaying ? 'music-playing-border' : 'border border-white/10'}`}>
             <div className="relative w-full h-full rounded-2xl overflow-hidden">
               {track.cover_url ? (
                 <img src={track.cover_url} alt={trackTitle} className="w-full h-full object-cover" />

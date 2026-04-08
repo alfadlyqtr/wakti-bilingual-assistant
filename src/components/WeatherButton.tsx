@@ -139,10 +139,16 @@ export function WeatherButton() {
         <Button
           variant="ghost"
           size="sm"
-          className="h-9 px-3 py-1.5 rounded-full transition-all duration-300 hover:scale-105 relative overflow-hidden group border border-[#e9ceb0]/50 dark:border-[#606062]/50 bg-gradient-to-r from-[#e9ceb0]/20 to-[#e9ceb0]/10 dark:from-[#606062]/20 dark:to-[#858384]/10 hover:from-[#e9ceb0]/30 hover:to-[#e9ceb0]/20 dark:hover:from-[#606062]/30 dark:hover:to-[#858384]/20 shadow-sm hover:shadow-md"
+          className={`h-9 rounded-full transition-all duration-300 hover:scale-105 relative overflow-hidden group ${
+            !hasLocation 
+              ? 'w-9 px-0 opacity-40 hover:opacity-70 border border-[#e9ceb0]/30 dark:border-[#606062]/30 bg-transparent'
+              : 'px-3 py-1.5 border border-[#e9ceb0]/50 dark:border-[#606062]/50 bg-gradient-to-r from-[#e9ceb0]/20 to-[#e9ceb0]/10 dark:from-[#606062]/20 dark:to-[#858384]/10 hover:from-[#e9ceb0]/30 hover:to-[#e9ceb0]/20 dark:hover:from-[#606062]/30 dark:hover:to-[#858384]/20 shadow-sm hover:shadow-md'
+          }`}
         >
           <div className="flex items-center gap-2">
-            {isLoading ? (
+            {!hasLocation ? (
+              <Cloud className="h-4 w-4 text-[#060541] dark:text-white" />
+            ) : isLoading ? (
               <>
                 <div className="w-5 h-5 rounded-full bg-[#060541]/10 dark:bg-white/10 flex items-center justify-center">
                   <Loader2 className="h-3 w-3 animate-spin text-[#060541] dark:text-white" />

@@ -4,6 +4,7 @@ import { WaktiAIV2Service, AIMessage } from '@/services/WaktiAIV2Service';
 import { SavedConversationsService } from '@/services/SavedConversationsService';
 import { EnhancedFrontendMemory, ConversationMetadata } from '@/services/EnhancedFrontendMemory';
 import { useToastHelper } from "@/hooks/use-toast-helper";
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { StreamingBubbleHandle } from '@/components/wakti-ai-v2/StreamingBubble';
@@ -33,16 +34,33 @@ function stripTrailingActionJSON(text: string): string {
 }
 
 const WaktiAIV2 = () => {
+  const { user: authUser } = useAuth();
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionMessages, setSessionMessages] = useState<AIMessage[]>([]);
+  // Initialize from localStorage cache — instant render of previous messages
+  const [sessionMessages, setSessionMessages] = useState<AIMessage[]>(() => {
+    try {
+      const { messages } = EnhancedFrontendMemory.loadActiveConversation();
+      return Array.isArray(messages) && messages.length > 0 ? messages : [];
+    } catch { return []; }
+  });
   const [archivedConversations, setArchivedConversations] = useState<ConversationMetadata[]>([]);
   const [showConversations, setShowConversations] = useState(false);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(() => {
+    try {
+      const { conversationId } = EnhancedFrontendMemory.loadActiveConversation();
+      return conversationId;
+    } catch { return null; }
+  });
   const [activeTrigger, setActiveTrigger] = useState('chat');
   const [userProfile, setUserProfile] = useState<any>(null);
   const [personalTouch, setPersonalTouch] = useState<any>(null);
-  const [isNewConversation, setIsNewConversation] = useState(true);
+  const [isNewConversation, setIsNewConversation] = useState(() => {
+    try {
+      const { messages, conversationId } = EnhancedFrontendMemory.loadActiveConversation();
+      return !conversationId || !Array.isArray(messages) || messages.length === 0;
+    } catch { return true; }
+  });
   const [showTaskConfirmation, setShowTaskConfirmation] = useState(false);
   const [pendingTaskData, setPendingTaskData] = useState<any>(null);
   const [pendingReminderData, setPendingReminderData] = useState<any>(null);
@@ -68,11 +86,11 @@ const WaktiAIV2 = () => {
   const { showError } = useToastHelper();
   const { isDesktop } = useIsDesktop();
 
-  const canSendMessage = useMemo(() => !isLoading && !chatTrialLimitReached && userProfile?.id, [isLoading, chatTrialLimitReached, userProfile?.id]);
+  const canSendMessage = useMemo(() => !isLoading && !chatTrialLimitReached && !!(authUser?.id || userProfile?.id), [isLoading, chatTrialLimitReached, authUser?.id, userProfile?.id]);
 
   const loadUserProfile = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setUserProfile(user);
+    const user = authUser;
+    if (user) setUserProfile(user);
     if (!user?.id) return;
     // Mount-time backend check: has this user already exhausted their ai_chat trial?
     // Prevents the refresh loophole where chatTrialLimitReached resets to false on reload.
@@ -491,7 +509,7 @@ const WaktiAIV2 = () => {
 
         const streamedResp = await WaktiAIV2Service.sendStreamingMessage(
           messageContent,
-          userProfile.id,
+          authUser?.id || userProfile?.id,
           requestLanguage,
           convId,
           inputType, // 'vision'
@@ -587,7 +605,7 @@ const WaktiAIV2 = () => {
         if (trigger === 'search' && ytPrefix) {
           const response = await WaktiAIV2Service.sendMessage(
             messageContent,
-            userProfile.id,
+            authUser?.id || userProfile?.id,
             requestLanguage,
             convId,
             inputType,
@@ -633,7 +651,7 @@ const WaktiAIV2 = () => {
 
         const streamedResp = await WaktiAIV2Service.sendStreamingMessage(
           messageContent,
-          userProfile.id,
+          authUser?.id || userProfile?.id,
           requestLanguage,
           convId,
           inputType, // 'text' or other non-vision types
@@ -836,7 +854,7 @@ const WaktiAIV2 = () => {
       }
       // Study mode only persists when user explicitly stays in chat trigger
     }
-  }, [currentConversationId, language, sessionMessages, userProfile]);
+  }, [currentConversationId, language, sessionMessages, authUser, userProfile]);
 
   // Listen for search confirmation Yes/No card responses
   useEffect(() => {

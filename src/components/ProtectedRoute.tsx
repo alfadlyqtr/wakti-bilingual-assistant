@@ -67,40 +67,37 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   // ═══════════════════════════════════════════════════════════════════════
   const accessStampRef = useRef<AccessStamp>(null);
   const stampLoggedRef = useRef(false);
+  const stampUserRef = useRef<string | null>(null);
 
-  // Reset stamp when user changes (different account login)
-  useEffect(() => {
-    if (!user?.id) {
-      accessStampRef.current = null;
-      stampLoggedRef.current = false;
-      return;
-    }
-    // Owner stamp is INSTANT — we have the email, no profile needed
-    if (isOwner && !accessStampRef.current) {
+  // ── SYNCHRONOUS STAMP (runs during render, not after) ──────────────
+  // Setting a ref during render is safe — no re-render triggered.
+  // This means the stamp is available on the SAME render cycle.
+  if (!user?.id && accessStampRef.current) {
+    // User logged out — clear stamp
+    accessStampRef.current = null;
+    stampLoggedRef.current = false;
+    stampUserRef.current = null;
+  } else if (user?.id && stampUserRef.current !== user.id) {
+    // Different user — reset stamp for fresh check
+    accessStampRef.current = null;
+    stampLoggedRef.current = false;
+    stampUserRef.current = user.id;
+  }
+
+  if (!accessStampRef.current && user?.id) {
+    if (isOwner) {
       accessStampRef.current = 'owner';
-      if (DEV && !stampLoggedRef.current) {
-        stampLoggedRef.current = true;
-        console.log('ProtectedRoute: 🛂 STAMPED — owner. No further checks.');
-      }
+    } else if (!isProfileLoading) {
+      if (isSubscribed) accessStampRef.current = 'subscribed';
+      else if (isAdminGifted) accessStampRef.current = 'admin_gifted';
+      else if (isGracePeriod) accessStampRef.current = 'trial_active';
     }
-  }, [user?.id, isOwner]);
-
-  // Stamp non-owner users when profile confirms their key
-  useEffect(() => {
-    if (accessStampRef.current) return; // already stamped
-    if (!user?.id || isProfileLoading) return;
-    
-    if (isSubscribed) {
-      accessStampRef.current = 'subscribed';
-      if (DEV) console.log('ProtectedRoute: 🛂 STAMPED — subscribed.');
-    } else if (isAdminGifted) {
-      accessStampRef.current = 'admin_gifted';
-      if (DEV) console.log('ProtectedRoute: 🛂 STAMPED — admin gifted.');
-    } else if (isGracePeriod) {
-      accessStampRef.current = 'trial_active';
-      if (DEV) console.log('ProtectedRoute: 🛂 STAMPED — 24h trial active.');
+    // Log ONCE when stamp is first set
+    if (accessStampRef.current && !stampLoggedRef.current) {
+      stampLoggedRef.current = true;
+      if (DEV) console.log(`ProtectedRoute: 🛂 STAMPED — ${accessStampRef.current}. No further checks.`);
     }
-  }, [user?.id, isProfileLoading, isSubscribed, isAdminGifted, isGracePeriod]);
+  }
 
   // Enable subscription/IAP enforcement
   const TEMP_DISABLE_SUBSCRIPTION_CHECKS = false;
@@ -275,8 +272,8 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     // Only run subscription check when we have a user and auth is not loading
     destroyedRef.current = false; // reset on effect run
 
-    if (!isLoading && user && !isProfileLoading) {
-      console.log("ProtectedRoute: Auth loaded, starting subscription check");
+    if (!isLoading && user && !isProfileLoading && !accessStampRef.current) {
+      if (DEV) console.log("ProtectedRoute: Auth loaded, starting subscription check");
       // ZERO-LEAK FIX: Never prime isSubscribed from cache
       // Cache can only mark isLoading=false to stop the spinner, but access
       // decisions are made exclusively from live profile data (useUserProfile).
@@ -296,7 +293,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
       // Fire async refresh
       checkSubscriptionStatus();
     } else if (!isLoading && !user) {
-      console.log("ProtectedRoute: Auth loaded but no user, setting needs payment");
+      if (DEV) console.log("ProtectedRoute: Auth loaded but no user, setting needs payment");
       setSubscriptionStatus({ 
         isSubscribed: false, 
         isLoading: false, 
@@ -537,10 +534,14 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   const hasConfirmedAccess = !isLoading && !isProfileLoading && !subscriptionStatus.isLoading && isAllowedIn;
 
   // Log access decision only when values actually change (not on every render)
-  const accessDecisionSnapshot = DEV ? JSON.stringify({ email: user?.email, hasConfirmedAccess, isOwner: !!isOwner, hasActivePayment, hasAdminGift, isTimerActive, isAllowedIn, showPaywall, paywallVariant }) : '';
-  if (DEV && accessDecisionSnapshot !== accessDecisionRef.current) {
-    accessDecisionRef.current = accessDecisionSnapshot;
-    console.log('ProtectedRoute: Access decision (4 Keys):', JSON.parse(accessDecisionSnapshot));
+  // Skip entirely if stamped — component returns early before reaching here anyway,
+  // but guard just in case a future code path reaches this.
+  if (DEV && !accessStampRef.current) {
+    const accessDecisionSnapshot = JSON.stringify({ email: user?.email, hasConfirmedAccess, isOwner: !!isOwner, hasActivePayment, hasAdminGift, isTimerActive, isAllowedIn, showPaywall, paywallVariant });
+    if (accessDecisionSnapshot !== accessDecisionRef.current) {
+      accessDecisionRef.current = accessDecisionSnapshot;
+      console.log('ProtectedRoute: Access decision (4 Keys):', JSON.parse(accessDecisionSnapshot));
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
