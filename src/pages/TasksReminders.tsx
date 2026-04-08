@@ -18,9 +18,11 @@ import { useTRData } from '@/hooks/useTRData';
 import { PageTitle } from '@/components/PageTitle';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function TasksReminders() {
   const { language } = useTheme();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const incomingShareLink = searchParams.get('shared') || null;
   const [activeTab, setActiveTab] = useState(
@@ -122,7 +124,6 @@ export default function TasksReminders() {
     const next = !autoDelete24h;
     setAutoDelete24h(next);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       const uid = user?.id;
       if (uid) {
         await supabase

@@ -46,7 +46,8 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
   const loadExistingVoices = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) {
         console.error('User not authenticated');
         return;
@@ -222,7 +223,8 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
     try {
       // Get current user for debugging
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session: s2 } } = await supabase.auth.getSession();
+      const user = s2?.user;
       console.log('🎤 FRONTEND: Current user:', user ? `${user.id} (${user.email})` : 'NOT AUTHENTICATED');
       
       if (!user) {

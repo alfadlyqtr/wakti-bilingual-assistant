@@ -20,6 +20,8 @@ export function GiftNotificationProvider({ children }: GiftNotificationProviderP
           giftType={currentGift.giftType}
           amount={currentGift.amount}
           sender={currentGift.sender}
+          title={currentGift.title}
+          body={currentGift.body}
         />
       )}
     </>

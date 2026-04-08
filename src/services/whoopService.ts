@@ -315,8 +315,8 @@ export async function getWhoopStatus(): Promise<{ connected: boolean; lastSynced
 }
 
 export async function getCurrentUserId(): Promise<string | null> {
-  const { data } = await supabase.auth.getUser();
-  return data?.user?.id ?? null;
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user?.id ?? null;
 }
 
 export async function isWhoopConnected(): Promise<boolean> {

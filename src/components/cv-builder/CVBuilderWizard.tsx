@@ -2123,7 +2123,6 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
 
   const handleSaveCV = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast({ title: isRTL ? 'يرجى تسجيل الدخول أولاً' : 'Please login first', variant: 'destructive' });
         return;

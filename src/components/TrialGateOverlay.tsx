@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from "@/providers/ThemeProvider";
 
 interface TrialGateOverlayProps {
@@ -11,6 +12,7 @@ interface TrialGateOverlayProps {
 const TrialGateOverlay: React.FC<TrialGateOverlayProps> = ({ featureKey, limit, featureLabel }) => {
   const [blocked, setBlocked] = useState(false);
   const { language } = useTheme();
+  const { user: authUser } = useAuth();
 
   useEffect(() => {
     // Reset when featureKey/limit changes (e.g. switching submodes)
@@ -22,7 +24,7 @@ const TrialGateOverlay: React.FC<TrialGateOverlayProps> = ({ featureKey, limit, 
     let mounted = true;
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = authUser;
         if (!user?.id) return;
         const { data: profile } = await (supabase as any)
           .from('profiles')

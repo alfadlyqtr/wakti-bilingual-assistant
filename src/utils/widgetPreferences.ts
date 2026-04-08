@@ -63,8 +63,8 @@ export async function fetchRemoteWidgetPrefs() {
 
 export async function saveRemoteWidgetPrefs(widgetsDbPrefs: any) {
   try {
-    const { data } = await supabase.auth.getUser();
-    const userId = data?.user?.id;
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
     if (!userId) {
       console.error("No authenticated user found when saving widget prefs.");
       return;

@@ -164,6 +164,11 @@ export function useNotificationHistory() {
     }
     processedIdsRef.current.add(notification.id);
 
+    if (notification.type === 'admin_gifts') {
+      if (DEV) console.log('🎁 Skipping generic toast for admin gift popup:', notification.id);
+      return;
+    }
+
     const config = NOTIFICATION_CONFIG[notification.type] || {
       toastType: 'task' as const,
       sound: 'chime' as const,

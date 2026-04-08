@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import EventList from "@/components/events/EventList";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from '@/contexts/AuthContext';
 import { UserMenu } from "@/components/UserMenu";
 import { t } from "@/utils/translations";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -34,14 +35,15 @@ export default function Events() {
   const [activeTab, setActiveTab] = useState<string>("upcoming");
   const navigate = useNavigate();
   const { language } = useTheme();
+  const { user: authUser } = useAuth();
   
   // Initialize RSVP notifications
   useRsvpNotifications();
   
   const fetchEvents = async (type: "upcoming" | "past") => {
-    const { data: userData, error: userError } = await supabase.auth.getUser();
+    const userData = { user: authUser };
     
-    if (userError || !userData.user) {
+    if (!userData.user) {
       console.log('No authenticated user found');
       return [];
     }

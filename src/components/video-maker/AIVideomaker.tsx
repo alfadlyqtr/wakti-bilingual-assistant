@@ -171,7 +171,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     let mounted = true;
     (async () => {
       try {
-        const { data: { user: u } } = await supabase.auth.getUser();
+        const u = user;
         if (!u?.id) return;
         const { data: p } = await (supabase as any)
           .from('profiles')

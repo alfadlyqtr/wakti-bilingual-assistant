@@ -27,27 +27,48 @@ serve(async (req) => {
 
   try {
     let trackId = "";
+    let idPrefix = "";
 
     if (req.method === "GET") {
       const url = new URL(req.url);
       trackId = (url.searchParams.get("id") || "").trim();
+      idPrefix = (url.searchParams.get("id_prefix") || "").trim();
     } else {
       const body = await req.json().catch(() => ({}));
       trackId = (body?.id || "").toString().trim();
+      idPrefix = (body?.id_prefix || "").toString().trim();
     }
 
-    if (!trackId) {
+    if (!trackId && !idPrefix) {
       return new Response(JSON.stringify({ error: "Missing track id" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const { data, error } = await supabaseService
-      .from("user_music_tracks")
-      .select("id, created_at, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta")
-      .eq("id", trackId)
-      .maybeSingle();
+    let data: any = null;
+    let error: any = null;
+
+    if (trackId) {
+      // Legacy: exact UUID lookup
+      const result = await supabaseService
+        .from("user_music_tracks")
+        .select("id, created_at, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta")
+        .eq("id", trackId)
+        .maybeSingle();
+      data = result.data;
+      error = result.error;
+    } else {
+      // Pretty slug: lookup by UUID prefix (first 8 chars)
+      const result = await supabaseService
+        .from("user_music_tracks")
+        .select("id, created_at, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta")
+        .ilike("id", `${idPrefix}%`)
+        .limit(1)
+        .maybeSingle();
+      data = result.data;
+      error = result.error;
+    }
 
     if (error) {
       return new Response(JSON.stringify({ error: "Failed to fetch track" }), {

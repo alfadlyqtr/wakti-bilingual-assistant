@@ -164,12 +164,12 @@ export function BackendBookingsTab({ bookings, projectId, isRTL, onRefresh }: Ba
         if (error) throw error;
         toast.success(t('Service updated', 'تم تحديث الخدمة'));
       } else {
-        const user = await supabase.auth.getUser();
+        const { data: { session: _bs } } = await supabase.auth.getSession();
         const { error } = await supabase
           .from('project_collections')
           .insert([{
             project_id: projectId,
-            user_id: user.data.user?.id || '',
+            user_id: _bs?.user?.id || '',
             collection_name: 'booking_services',
             data: JSON.parse(JSON.stringify(serviceData))
           }]);
@@ -216,12 +216,12 @@ export function BackendBookingsTab({ bookings, projectId, isRTL, onRefresh }: Ba
           .update({ data: JSON.parse(JSON.stringify(settings)) })
           .eq('id', existing.id);
       } else {
-        const user = await supabase.auth.getUser();
+        const { data: { session: _bs2 } } = await supabase.auth.getSession();
         await supabase
           .from('project_collections')
           .insert([{
             project_id: projectId,
-            user_id: user.data.user?.id || '',
+            user_id: _bs2?.user?.id || '',
             collection_name: 'booking_settings',
             data: JSON.parse(JSON.stringify(settings))
           }]);

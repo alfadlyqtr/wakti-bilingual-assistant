@@ -206,7 +206,8 @@ export function ProductFormCard({ projectId, isRTL, onCancel, onSaved, onOpenInv
 
     setUploading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user?.id) {
         toast.error(t('Please log in to upload images', 'يرجى تسجيل الدخول لرفع الصور'));
         return;
@@ -244,13 +245,14 @@ export function ProductFormCard({ projectId, isRTL, onCancel, onSaved, onOpenInv
         compare_at_price: form.compare_at_price === '' ? null : Number(form.compare_at_price),
         stock_quantity: form.stock_quantity === '' ? 0 : Number(form.stock_quantity)
       } as Record<string, any>;
-      const user = await supabase.auth.getUser();
+      const { data: { session: sess } } = await supabase.auth.getSession();
+      const user = sess?.user;
       const { data: createdProduct, error } = await supabase
         .from('project_collections')
         .insert([
           {
             project_id: projectId,
-            user_id: user.data.user?.id || '',
+            user_id: user?.id || '',
             collection_name: 'products',
             data: JSON.parse(JSON.stringify(productData))
           }

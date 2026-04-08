@@ -16,19 +16,19 @@ export class Maw3dService {
       return authCache.user;
     }
 
-    const { data: userData, error: userError } = await supabase.auth.getUser();
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
-    if (userError || !userData.user) {
+    if (sessionError || !session?.user) {
       authCache = null;
       return null;
     }
 
     authCache = {
-      user: userData.user,
+      user: session.user,
       timestamp: now
     };
 
-    return userData.user;
+    return session.user;
   }
 
   // Events

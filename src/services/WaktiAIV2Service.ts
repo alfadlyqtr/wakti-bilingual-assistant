@@ -221,7 +221,7 @@ class WaktiAIV2ServiceClass {
     try {
       const now = Date.now();
       if (this.lastPTFetchAt && now - this.lastPTFetchAt < 2 * 60 * 1000) return; // 2 min throttle
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
       const uid = userId || user?.id;
       if (!uid) return;
       const { data, error } = await supabase
@@ -374,7 +374,7 @@ class WaktiAIV2ServiceClass {
   async refreshUserLocation(userId?: string) {
     try { this.locationCache = null; localStorage.removeItem('wakti_user_location'); } catch {}
     if (!userId) {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
       if (!user) return;
       userId = user.id;
     }
@@ -1605,7 +1605,7 @@ class WaktiAIV2ServiceClass {
     try {
       // Ensure user id
       if (!userId) {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
         if (!user) throw new Error('Authentication required');
         userId = user.id;
       }

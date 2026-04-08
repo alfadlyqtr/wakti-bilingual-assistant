@@ -153,7 +153,8 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
     setError(null);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       
       // Best-effort insert into chat_messages for realtime admin thread (user messages only)
       if (!isAdmin && user?.id) {

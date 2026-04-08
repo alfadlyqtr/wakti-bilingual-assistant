@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Edit, MapPin, Clock, Users, Calendar, ExternalLink, Navigation } from 'lucide-react';
 import ShareButton from '@/components/ui/ShareButton';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -50,6 +51,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { language } = useTheme();
+  const { user: authUser } = useAuth();
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [isOwner, setIsOwner] = useState(false);
@@ -120,7 +122,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
       // Check if current user is the owner (only for non-standalone mode)
       if (!standalone) {
         try {
-          const { data: userData } = await supabase.auth.getUser();
+          const userData = { user: authUser };
           console.log('User data for ownership check:', userData);
           if (userData.user) {
             setIsOwner(userData.user.id === data.organizer_id);

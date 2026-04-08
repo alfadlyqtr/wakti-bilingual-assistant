@@ -80,7 +80,8 @@ export function BackendChatTab({ rooms, projectId, isRTL, onRefresh }: BackendCh
     
     setSending(true);
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = { user: session?.user };
       
       const { error } = await supabase
         .from('project_chat_messages')

@@ -79,7 +79,8 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
     let cancelled = false;
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
         if (user && !cancelled) {
           const { data, error } = await supabase
             .from('user_personal_touch')
@@ -122,7 +123,8 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session: s2 } } = await supabase.auth.getSession();
+      const user = s2?.user;
       if (!user) {
         const { showError } = await import('@/hooks/use-toast-helper').then(m => ({ showError: m.useToastHelper }));
         console.error('❌ PT SAVE: No authenticated user');

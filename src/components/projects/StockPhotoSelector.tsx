@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface StockPhotoSelectorProps {
   userId: string;
@@ -292,7 +293,8 @@ export function StockPhotoSelector({
         }
 
         // Get the current user ID first to construct the correct path
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
         if (!user) {
           toast.error(isRTL ? 'يرجى تسجيل الدخول' : 'Please log in');
           continue;

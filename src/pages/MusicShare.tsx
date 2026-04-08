@@ -40,9 +40,13 @@ export default function MusicShare() {
         return;
       }
 
+      // Support both full UUID (legacy) and pretty slug (name-XXXXXXXX)
+      const isFullUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      const lookupParam = isFullUuid ? `id=${encodeURIComponent(id)}` : `id_prefix=${encodeURIComponent(id.slice(-8))}`;
+
       try {
         const response = await fetch(
-          `${SUPABASE_URL.replace(/\/$/, '')}/functions/v1/music-share-public?id=${encodeURIComponent(id)}`,
+          `${SUPABASE_URL.replace(/\/$/, '')}/functions/v1/music-share-public?${lookupParam}`,
           {
             method: 'GET',
             headers: {

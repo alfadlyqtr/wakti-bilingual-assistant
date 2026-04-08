@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -27,6 +28,7 @@ interface Event {
 export default function EventsPage() {
   const navigate = useNavigate();
   const { language } = useTheme();
+  const { user: authUser } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,7 +38,7 @@ export default function EventsPage() {
 
   const fetchEvents = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = authUser;
       
       if (!user) {
         console.log('No authenticated user found');

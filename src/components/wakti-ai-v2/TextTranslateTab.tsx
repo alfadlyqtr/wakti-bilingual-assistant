@@ -35,7 +35,7 @@ export default function TextTranslateTab() {
   useEffect(() => {
     (async () => {
       try {
-        const { data: { user: u } } = await supabase.auth.getUser();
+        const u = user;
         if (!u?.id) return;
         const { data: profile } = await (supabase as any)
           .from('profiles')

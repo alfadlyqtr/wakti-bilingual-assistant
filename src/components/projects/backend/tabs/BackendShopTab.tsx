@@ -216,12 +216,12 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh,
 
         toast.success(t('Product updated', 'تم تحديث المنتج'));
       } else {
-        const user = await supabase.auth.getUser();
+        const { data: { session: _s1 } } = await supabase.auth.getSession();
         const { data: createdProduct, error } = await supabase
           .from('project_collections')
           .insert([{
             project_id: projectId,
-            user_id: user.data.user?.id || '',
+            user_id: _s1?.user?.id || '',
             collection_name: 'products',
             data: JSON.parse(JSON.stringify(productData))
           }])
@@ -286,12 +286,12 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh,
           .eq('id', category.id);
         if (error) throw error;
       } else {
-        const user = await supabase.auth.getUser();
+        const { data: { session: _s2 } } = await supabase.auth.getSession();
         const { error } = await supabase
           .from('project_collections')
           .insert([{
             project_id: projectId,
-            user_id: user.data.user?.id || '',
+            user_id: _s2?.user?.id || '',
             collection_name: 'categories',
             data: JSON.parse(JSON.stringify(category))
           }]);
@@ -317,12 +317,12 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh,
           .eq('id', discount.id);
         if (error) throw error;
       } else {
-        const user = await supabase.auth.getUser();
+        const { data: { session: _s3 } } = await supabase.auth.getSession();
         const { error } = await supabase
           .from('project_collections')
           .insert([{
             project_id: projectId,
-            user_id: user.data.user?.id || '',
+            user_id: _s3?.user?.id || '',
             collection_name: 'discounts',
             data: JSON.parse(JSON.stringify({ ...discount, used_count: 0 }))
           }]);
@@ -354,12 +354,12 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh,
           .update({ data: JSON.parse(JSON.stringify(settings)) })
           .eq('id', existing.id);
       } else {
-        const user = await supabase.auth.getUser();
+        const { data: { session: _s4 } } = await supabase.auth.getSession();
         await supabase
           .from('project_collections')
           .insert([{
             project_id: projectId,
-            user_id: user.data.user?.id || '',
+            user_id: _s4?.user?.id || '',
             collection_name: 'shop_settings',
             data: JSON.parse(JSON.stringify(settings))
           }]);
@@ -1240,7 +1240,8 @@ function ProductModal({ open, onClose, product, categories, onSave, saving, isRT
     
     setUploading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session: _s5 } } = await supabase.auth.getSession();
+      const user = _s5?.user;
       if (!user?.id) {
         toast.error(t('Please log in to upload images', 'يرجى تسجيل الدخول لرفع الصور'));
         return;

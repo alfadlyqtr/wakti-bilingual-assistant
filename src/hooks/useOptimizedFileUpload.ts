@@ -1,6 +1,7 @@
 
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToastHelper } from './use-toast-helper';
 
 export interface OptimizedFile {
@@ -15,6 +16,7 @@ export interface OptimizedFile {
 }
 
 export function useOptimizedFileUpload() {
+  const { user: authUser } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<OptimizedFile[]>([]);
   const { showError, showSuccess } = useToastHelper();
@@ -48,7 +50,7 @@ export function useOptimizedFileUpload() {
     setIsUploading(true);
     
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = authUser;
       if (!user) {
         throw new Error('Authentication required');
       }

@@ -181,7 +181,7 @@ export function AIInsights() {
       toast.success(language === 'ar' ? 'تم إنشاء الرؤى' : 'Insights generated');
 
       // PUSH NOTIFICATION
-      const userId = (await supabase.auth.getUser()).data.user?.id;
+      const userId = user?.id;
       if (userId) {
         const winLabel = timeOfDay === 'morning' ? (language === 'ar' ? 'صباحي' : 'Morning') : 
                          timeOfDay === 'midday' ? (language === 'ar' ? 'منتصف النهار' : 'Midday') : 

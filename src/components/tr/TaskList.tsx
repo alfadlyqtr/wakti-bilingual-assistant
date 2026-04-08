@@ -28,7 +28,8 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const user = session?.user;
       if (!user) return;
       const { data } = await supabase.from('profiles').select('display_name, first_name, last_name').eq('id', user.id).single();
       const full = [data?.first_name, data?.last_name].filter(Boolean).join(' ');

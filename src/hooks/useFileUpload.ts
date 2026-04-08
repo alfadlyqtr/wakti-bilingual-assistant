@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToastHelper } from './use-toast-helper';
 
 export interface UploadedFile {
@@ -18,6 +19,7 @@ export interface FileUploadState {
 }
 
 export function useFileUpload() {
+  const { user: authUser } = useAuth();
   const [state, setState] = useState<FileUploadState>({
     isUploading: false,
     uploadedFiles: [],
@@ -97,7 +99,7 @@ export function useFileUpload() {
     setState(prev => ({ ...prev, isUploading: true, error: null }));
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = authUser;
       if (!user) throw new Error('User not authenticated');
 
       // First check for any PDF files in the selection

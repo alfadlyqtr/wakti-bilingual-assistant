@@ -14,6 +14,7 @@ import { Plus, Undo2, ChevronDown } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { formatTime } from "@/utils/datetime";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from '@/contexts/AuthContext';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const DEFAULT_TAGS: TagId[] = [
@@ -39,6 +40,7 @@ const faces: { value: MoodValue; color: string }[] = [
 
 export const TodayTab: React.FC = () => {
   const { language } = useTheme();
+  const { user: authUser } = useAuth();
   const location = useLocation();
   const { isMobile } = useIsMobile();
   const [date] = useState(getLocalDayString());
@@ -276,8 +278,7 @@ export const TodayTab: React.FC = () => {
   // Load user and their custom tags
   useEffect(() => {
     (async () => {
-      const { data: userRes } = await supabase.auth.getUser();
-      const uid = userRes?.user?.id || null;
+      const uid = authUser?.id || null;
       setUserId(uid);
       if (!uid) return;
       const { data, error } = await supabase
@@ -287,7 +288,7 @@ export const TodayTab: React.FC = () => {
         .maybeSingle();
       if (!error && data) {
         // Decide preferred name: username > metadata.username > metadata.full_name > display_name (ignore emails)
-        const meta = userRes?.user?.user_metadata || {};
+        const meta = authUser?.user_metadata || {};
         const candidates = [
           (data as any).username?.toString().trim(),
           meta.username?.toString().trim(),

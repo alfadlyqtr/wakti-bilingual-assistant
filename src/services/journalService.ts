@@ -38,8 +38,8 @@ export const JournalService = {
   },
 
   async updateCheckinTags(id: string, tags: string[]) {
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData?.user;
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) throw new Error("not_authenticated");
     const { data, error } = await supabase
       .from("journal_checkins")
@@ -53,8 +53,8 @@ export const JournalService = {
   },
 
   async upsertDay(payload: Omit<JournalDay, "id" | "created_at" | "updated_at" | "user_id">) {
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData?.user;
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) throw new Error("not_authenticated");
     const { data, error } = await supabase
       .from("journal_days")
@@ -66,8 +66,8 @@ export const JournalService = {
   },
 
   async deleteLastCheckin(date: string, mood_value: number) {
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData?.user;
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) throw new Error("not_authenticated");
     // Find latest checkin id for this date + mood
     const { data: found, error: findErr } = await supabase
@@ -91,8 +91,8 @@ export const JournalService = {
   },
 
   async deleteCheckin(id: string) {
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData?.user;
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) throw new Error("not_authenticated");
     const { error } = await supabase
       .from("journal_checkins")
@@ -104,8 +104,8 @@ export const JournalService = {
   },
 
   async deleteDayCheckins(date: string) {
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData?.user;
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) throw new Error("not_authenticated");
     const { error } = await supabase
       .from("journal_checkins")
@@ -117,8 +117,8 @@ export const JournalService = {
   },
 
   async updateCheckinNote(id: string, note: string | null) {
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData?.user;
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) throw new Error("not_authenticated");
     const { data, error } = await supabase
       .from("journal_checkins")
@@ -159,8 +159,8 @@ export const JournalService = {
   },
 
   async addCheckin(payload: Omit<JournalCheckin, "id" | "user_id" | "occurred_at">) {
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData?.user;
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) throw new Error("not_authenticated");
     const { data, error } = await supabase
       .from("journal_checkins")

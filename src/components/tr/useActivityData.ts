@@ -78,7 +78,8 @@ export function useActivityData(tasks: TRTask[]) {
       }
 
       // 3. Fetch assigned-to-me tasks + their subtasks
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (user) {
         const { data: assignmentData } = await supabase
           .from('tr_task_assignments')

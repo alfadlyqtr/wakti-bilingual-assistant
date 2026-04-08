@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Users, Clock, CheckCircle, XCircle, HelpCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -29,6 +30,7 @@ interface RSVPResponse {
 
 export default function RSVPSection({ eventId, rsvpEnabled, rsvpDeadline, isPublic }: RSVPSectionProps) {
   const { language } = useTheme();
+  const { user: authUser } = useAuth();
   const [rsvps, setRsvps] = useState<RSVPResponse[]>([]);
   const [userRsvp, setUserRsvp] = useState<RSVPResponse | null>(null);
   const [guestName, setGuestName] = useState('');
@@ -45,8 +47,7 @@ export default function RSVPSection({ eventId, rsvpEnabled, rsvpDeadline, isPubl
   }, [eventId, rsvpEnabled, isPublic]);
 
   const checkUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
+    setUser(authUser);
   };
 
   const fetchRSVPs = async () => {

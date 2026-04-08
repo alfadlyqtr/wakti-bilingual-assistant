@@ -299,7 +299,8 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
   const enableBackend = async () => {
     setEnabling(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) throw new Error('Not authenticated');
       
       const { error } = await supabase
@@ -351,7 +352,8 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
 
   // Collection handlers
   const handleAddItem = async (collectionName: string, data: Record<string, any>) => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session: s2 } } = await supabase.auth.getSession();
+    const user = s2?.user;
     if (!user) return;
 
     const { error } = await supabase

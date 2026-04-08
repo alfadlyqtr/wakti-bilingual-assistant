@@ -206,7 +206,8 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
           userLocationRef.current = loc;
         } else {
           // Fallback to profile location
-          const { data: { user } } = await supabase.auth.getUser();
+          const { data: { session: _tbSession } } = await supabase.auth.getSession();
+          const user = _tbSession?.user;
           if (user?.id) {
             const { data: profile } = await supabase
               .from('profiles')

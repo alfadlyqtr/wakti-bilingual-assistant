@@ -12,6 +12,7 @@ import { ChevronRight,
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { SimpleContactFormModal } from '@/components/support/SimpleContactFormModal';
 import { ChatThread } from '@/components/support/ChatThread';
 import { HelpAssistantChat } from '@/components/help/HelpAssistantChat';
@@ -19,6 +20,7 @@ import { formatDistanceToNow } from 'date-fns';
 
 export default function Help() {
   const { language } = useTheme();
+  const { user } = useAuth();
   const [openSections, setOpenSections] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState('guides');
   const [showContactModal, setShowContactModal] = useState(false);
@@ -618,7 +620,6 @@ export default function Help() {
   const loadSubmissions = async () => {
     setIsLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       const { data: profile } = await supabase

@@ -73,7 +73,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const user = session?.user;
       if (!user) return;
       setCurrentUserId(user.id);
       const { data } = await supabase

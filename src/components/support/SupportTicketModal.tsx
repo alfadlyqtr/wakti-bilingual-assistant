@@ -28,7 +28,7 @@ export function SupportTicketModal({ isOpen, onClose, onSubmitted }: SupportTick
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadUserProfile = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
     if (user) {
       const { data: profile } = await supabase
         .from('profiles')
@@ -113,7 +113,7 @@ export function SupportTicketModal({ isOpen, onClose, onSubmitted }: SupportTick
   };
 
   const uploadAttachments = async (ticketId: string): Promise<any[]> => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
     if (!user) return [];
 
     const uploadedAttachments = [];
@@ -156,7 +156,7 @@ export function SupportTicketModal({ isOpen, onClose, onSubmitted }: SupportTick
     setIsSubmitting(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
       if (!user) {
         throw new Error('You must be logged in to submit a ticket');
       }

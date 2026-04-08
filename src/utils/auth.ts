@@ -54,8 +54,8 @@ export const signIn = async (email: string, password: string) => {
 // Add back missing functions for backward compatibility
 export const getCurrentUser = async () => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user;
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user ?? null;
   } catch (error) {
     console.error('Error getting current user:', error);
     return null;
@@ -89,8 +89,9 @@ export const deleteUserAccount = async () => {
 
 export const updateUserPassword = async (currentPassword: string, newPassword: string) => {
   try {
-    // First get the current user
-    const { data: { user } } = await supabase.auth.getUser();
+    // First get the current user from cached session
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user?.email) {
       return { error: new Error('No user found') };
     }

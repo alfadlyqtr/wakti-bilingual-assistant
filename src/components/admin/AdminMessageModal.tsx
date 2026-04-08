@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Mail, Send, MessageSquare, User, Clock, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { supabase, callEdgeFunctionWithRetry } from "@/integrations/supabase/client";
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from "sonner";
 import { formatDistanceToNow } from 'date-fns';
 
@@ -31,6 +32,7 @@ interface AdminMessageModalProps {
 }
 
 export const AdminMessageModal = ({ message, isOpen, onClose, onResponded }: AdminMessageModalProps) => {
+  const { user: authUser } = useAuth();
   const [response, setResponse] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [currentMessage, setCurrentMessage] = useState<ContactSubmission | null>(null);
@@ -140,7 +142,7 @@ export const AdminMessageModal = ({ message, isOpen, onClose, onResponded }: Adm
 
     setIsSending(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = authUser;
 
       await callEdgeFunctionWithRetry<any>('admin-reply-to-user', {
         body: {

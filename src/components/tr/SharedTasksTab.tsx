@@ -124,7 +124,8 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string; onC
   useEffect(() => {
     if (!taskId) return;
     // Get current user's display name
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const user = session?.user;
       if (user) {
         const { data: p } = await supabase.from('profiles').select('display_name,first_name,last_name').eq('id', user.id).single();
         const full = [p?.first_name, p?.last_name].filter(Boolean).join(' ');
@@ -622,7 +623,8 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
   const [processingRequest, setProcessingRequest] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const user = session?.user;
       if (!user) return;
       setCurrentUserId(user.id);
       setCurrentUserName(await getProfileName(user.id));

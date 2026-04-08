@@ -49,7 +49,8 @@ function generateTitle(messages: any[]): string {
 export const SavedConversationsService = {
   // Upsert the active conversation — creates or updates based on conversation_id
   async upsertActiveConversation(messages: any[], conversationId: string): Promise<string> {
-    const { data: { user }, error: userErr } = await supabase.auth.getUser();
+    const { data: { session }, error: userErr } = await supabase.auth.getSession();
+    const user = session?.user;
     if (userErr || !user) throw new Error('Not authenticated');
 
     const normalized = normalizeMessages(messages);
@@ -111,8 +112,9 @@ export const SavedConversationsService = {
 
   // Mark a conversation as no longer active (when starting new chat)
   async deactivateConversation(conversationId: string): Promise<void> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+    const user = session.user;
     await (supabase as any)
       .from('ai_saved_conversations')
       .update({ is_active: false })
@@ -136,7 +138,8 @@ export const SavedConversationsService = {
 
   // List all conversations for current user (active first, then recent)
   async listConversations(): Promise<ConversationListItem[]> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) throw new Error('Not authenticated');
     const { data, error } = await (supabase as any)
       .from('ai_saved_conversations')

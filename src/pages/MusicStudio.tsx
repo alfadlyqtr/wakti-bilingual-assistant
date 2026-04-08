@@ -3188,7 +3188,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     setLastNotice(null);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
       const { data: quotaCheck, error: quotaError } = await (supabase as any).rpc('can_generate_music');
@@ -5119,7 +5118,7 @@ function EditorTab() {
                                 <RefreshCw className="h-3 w-3" />{isAr ? 'تنزيل' : 'Download'}
                               </button>
                               <ShareButton size="sm"
-                                shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${t.id}` : ''}
+                                shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${(t.title ? t.title.toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) + '-' : '') + t.id.slice(0, 8)}` : ''}
                                 shareTitle={isAr ? 'استمع إلى موسيقى من وقتي 🎵' : 'Listen to my Wakti music 🎵'}
                                 extraActions={[
                                   {

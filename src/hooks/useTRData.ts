@@ -2,8 +2,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { TRService, TRTask, TRReminder } from '@/services/trService';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const useTRData = () => {
+  const { user: authUser } = useAuth();
   const [tasks, setTasks] = useState<TRTask[]>([]);
   const [reminders, setReminders] = useState<TRReminder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,8 +55,7 @@ export const useTRData = () => {
     const attach = async () => {
       try {
         // Optionally scope tr_tasks by current user for less noise
-        const { data: user } = await supabase.auth.getUser();
-        const uid = user.user?.id;
+        const uid = authUser?.id;
 
         taskChannel = supabase
           .channel('rt-tr_tasks')
