@@ -40,13 +40,21 @@ export default function MusicShare() {
         return;
       }
 
-      // Support both full UUID (legacy) and pretty slug (name-XXXXXXXX)
-      const isFullUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-      const lookupParam = isFullUuid ? `id=${encodeURIComponent(id)}` : `id_prefix=${encodeURIComponent(id.slice(-8))}`;
+      // Support real short share codes, legacy full UUID links, and older pretty slugs ending with full UUID
+      const directUuidMatch = id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+      const trailingUuidMatch = id.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
+      const trackId = directUuidMatch?.[0] || trailingUuidMatch?.[1] || '';
+      const shareCode = trackId ? '' : id.split('-').pop() || '';
+
+      if (!trackId && !shareCode) {
+        setError(isAr ? 'رابط غير صالح' : 'Invalid link');
+        setLoading(false);
+        return;
+      }
 
       try {
         const response = await fetch(
-          `${SUPABASE_URL.replace(/\/$/, '')}/functions/v1/music-share-public?${lookupParam}`,
+          `${SUPABASE_URL.replace(/\/$/, '')}/functions/v1/music-share-public?${trackId ? `id=${encodeURIComponent(trackId)}` : `share_code=${encodeURIComponent(shareCode)}`}`,
           {
             method: 'GET',
             headers: {

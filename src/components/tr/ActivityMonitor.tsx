@@ -1,5 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -68,26 +70,14 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     new Set(tasks.filter(t => t.is_shared && t.share_link).map(t => t.id))
   );
 
-  // Owner display name (fetched from profile)
-  const [ownerName, setOwnerName] = useState<string>('You');
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      const user = session?.user;
-      if (!user) return;
-      setCurrentUserId(user.id);
-      const { data } = await supabase
-        .from('profiles')
-        .select('display_name, first_name, last_name')
-        .eq('id', user.id)
-        .single();
-      const fullName = [data?.first_name, data?.last_name].filter(Boolean).join(' ');
-      const name = data?.display_name || fullName || user.email?.split('@')[0] || 'You';
-      
-      setOwnerName(name);
-    });
-  }, []);
+  // Owner display name (from cached profile)
+  const { user: authUser } = useAuth();
+  const { profile: cachedProfile } = useUserProfile();
+  const currentUserId = authUser?.id ?? null;
+  const ownerName = useMemo(() => {
+    const fullName = [cachedProfile?.first_name, cachedProfile?.last_name].filter(Boolean).join(' ');
+    return cachedProfile?.display_name || fullName || authUser?.email?.split('@')[0] || 'You';
+  }, [cachedProfile?.display_name, cachedProfile?.first_name, cachedProfile?.last_name, authUser?.email]);
 
   // In-app shared task viewer (for Wakti users opening a share link)
   const [activeShareLink, setActiveShareLink] = useState<string | null>(incomingShareLink);

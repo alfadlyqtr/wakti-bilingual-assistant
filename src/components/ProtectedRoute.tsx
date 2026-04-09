@@ -69,6 +69,19 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   const stampLoggedRef = useRef(false);
   const stampUserRef = useRef<string | null>(null);
 
+  // ── Read cache directly for instant cold-start stamping ────────────
+  // When the device restarts, user.id is available before isProfileLoading
+  // resolves. We read the localStorage cache here to stamp immediately
+  // without waiting for the DB round-trip.
+  const getCachedProfileForStamp = (uid: string) => {
+    try {
+      const raw = localStorage.getItem(`wakti_profile_${uid}`);
+      if (!raw) return null;
+      const { data } = JSON.parse(raw);
+      return data || null;
+    } catch { return null; }
+  };
+
   // ── SYNCHRONOUS STAMP (runs during render, not after) ──────────────
   // Setting a ref during render is safe — no re-render triggered.
   // This means the stamp is available on the SAME render cycle.
@@ -87,10 +100,26 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   if (!accessStampRef.current && user?.id) {
     if (isOwner) {
       accessStampRef.current = 'owner';
-    } else if (!isProfileLoading) {
-      if (isSubscribed) accessStampRef.current = 'subscribed';
-      else if (isAdminGifted) accessStampRef.current = 'admin_gifted';
-      else if (isGracePeriod) accessStampRef.current = 'trial_active';
+    } else {
+      // Use live profile if available, otherwise fall back to localStorage cache
+      // This is the key fix: stamp BEFORE isProfileLoading resolves on cold restart
+      const profileForStamp = profile ?? getCachedProfileForStamp(user.id);
+      if (profileForStamp) {
+        const cachedIsSubscribed = profileForStamp.is_subscribed === true;
+        const cachedIsAdminGifted = profileForStamp.admin_gifted === true;
+        const cachedFreeAccessStart = profileForStamp.free_access_start_at;
+        const cachedInGracePeriod = cachedFreeAccessStart
+          ? (Date.now() - new Date(cachedFreeAccessStart).getTime()) < 24 * 60 * 60 * 1000
+          : false;
+        if (cachedIsSubscribed) accessStampRef.current = 'subscribed';
+        else if (cachedIsAdminGifted) accessStampRef.current = 'admin_gifted';
+        else if (cachedInGracePeriod) accessStampRef.current = 'trial_active';
+      } else if (!isProfileLoading) {
+        // No cache at all — fall back to computed values from context
+        if (isSubscribed) accessStampRef.current = 'subscribed';
+        else if (isAdminGifted) accessStampRef.current = 'admin_gifted';
+        else if (isGracePeriod) accessStampRef.current = 'trial_active';
+      }
     }
     // Log ONCE when stamp is first set
     if (accessStampRef.current && !stampLoggedRef.current) {

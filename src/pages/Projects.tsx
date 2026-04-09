@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import RippleGrid from '../components/landing/RippleGrid';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { supabase } from '@/integrations/supabase/client';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { Button } from '@/components/ui/button';
@@ -863,27 +864,8 @@ export default function Projects() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Trial user check — used to enforce 1 project limit
-  const [isTrialUser, setIsTrialUser] = useState(false);
-  useEffect(() => {
-    (async () => {
-      try {
-        const u = user;
-        if (!u?.id) return;
-        const { data: profile } = await (supabase as any)
-          .from('profiles')
-          .select('is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at')
-          .eq('id', u.id)
-          .single();
-        if (!profile) return;
-        const isPaid = profile.is_subscribed === true;
-        const isGifted = profile.admin_gifted === true;
-        const pm = profile.payment_method;
-        const isGift = pm && pm !== 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
-        const isOn24hTrial = profile.free_access_start_at != null;
-        if (!isPaid && !isGift && !isGifted && isOn24hTrial) setIsTrialUser(true);
-      } catch {}
-    })();
-  }, []);
+  const { isSubscribed, isAdminGifted, hasTrialStarted } = useUserProfile();
+  const isTrialUser = !isSubscribed && !isAdminGifted && hasTrialStarted;
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);

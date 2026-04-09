@@ -1,5 +1,7 @@
 // @ts-nocheck
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import {
   Users, Hash, Loader2, Clock, AlertTriangle,
   X, Check, UserPlus, Link2, Copy, CheckCircle, MessageCircle, ChevronDown, Send
@@ -121,17 +123,16 @@ const AssignedTaskCard: React.FC<{ assignment: Assignment; language: string; onC
   const [snoozeReason, setSnoozeReason] = useState('');
   const [sendingSnooze, setSendingSnooze] = useState(false);
 
+  const { user: _authUser } = useAuth();
+  const { profile: _cachedProfile } = useUserProfile();
+
   useEffect(() => {
     if (!taskId) return;
-    // Get current user's display name
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      const user = session?.user;
-      if (user) {
-        const { data: p } = await supabase.from('profiles').select('display_name,first_name,last_name').eq('id', user.id).single();
-        const full = [p?.first_name, p?.last_name].filter(Boolean).join(' ');
-        setVisitorName(p?.display_name || full || assignment.assignee_name);
-      }
-    });
+    // Get current user's display name from cached profile
+    if (_cachedProfile) {
+      const full = [_cachedProfile.first_name, _cachedProfile.last_name].filter(Boolean).join(' ');
+      setVisitorName(_cachedProfile.display_name || full || assignment.assignee_name);
+    }
     const load = async () => {
       setLoading(true);
       // Fetch task meta, subtasks, and responses in parallel
@@ -623,13 +624,11 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
   const [processingRequest, setProcessingRequest] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      const user = session?.user;
-      if (!user) return;
-      setCurrentUserId(user.id);
-      setCurrentUserName(await getProfileName(user.id));
-    });
-  }, []);
+    if (!_authUser?.id) return;
+    setCurrentUserId(_authUser.id);
+    const full = [_cachedProfile?.first_name, _cachedProfile?.last_name].filter(Boolean).join(' ');
+    setCurrentUserName(_cachedProfile?.display_name || full || 'Wakti User');
+  }, [_authUser?.id, _cachedProfile?.display_name, _cachedProfile?.first_name, _cachedProfile?.last_name]);
 
   const loadAssignments = useCallback(async () => {
     if (!currentUserId) return;

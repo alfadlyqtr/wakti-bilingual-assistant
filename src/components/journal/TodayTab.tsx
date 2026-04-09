@@ -15,6 +15,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { formatTime } from "@/utils/datetime";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const DEFAULT_TAGS: TagId[] = [
@@ -275,53 +276,47 @@ export const TodayTab: React.FC = () => {
   const defaultTagSet = useMemo(() => new Set(DEFAULT_TAGS), []);
   const customCount = useMemo(() => customTags.length, [customTags]);
 
-  // Load user and their custom tags
+  // Load user and their custom tags from cached profile
+  const { profile: _journalProfile } = useUserProfile();
   useEffect(() => {
-    (async () => {
-      const uid = authUser?.id || null;
-      setUserId(uid);
-      if (!uid) return;
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('custom_tags, display_name, username')
-        .eq('id', uid)
-        .maybeSingle();
-      if (!error && data) {
-        // Decide preferred name: username > metadata.username > metadata.full_name > display_name (ignore emails)
-        const meta = authUser?.user_metadata || {};
-        const candidates = [
-          (data as any).username?.toString().trim(),
-          meta.username?.toString().trim(),
-          meta.full_name?.toString().trim(),
-          (data as any).display_name?.toString().trim(),
-        ];
-        const preferred = candidates.find((n: any) => n && !String(n).includes('@')) || '';
-        setDisplayName(preferred || null);
-        // Handle custom tags
-        if (Array.isArray(data.custom_tags)) {
-          const cleaned = (data.custom_tags as string[])
-            .map(s => (s || '').toString().toLowerCase().replace(/\s+/g,'_'))
-            .filter(Boolean) as TagId[];
-          // Remove any custom tags that are now default tags
-          const validCustomTags = cleaned.filter(t => !defaultTagSet.has(t));
-          // Update DB if we filtered any out
-          if (validCustomTags.length !== cleaned.length) {
-            await supabase.from('profiles').update({ custom_tags: validCustomTags }).eq('id', uid);
-          }
-          setCustomTags(validCustomTags);
-          setAllTags([...
-            DEFAULT_TAGS,
-            ...validCustomTags
-          ] as TagId[]);
-        } else {
-          setAllTags([ ...DEFAULT_TAGS ]);
-        }
-      } else {
-        setAllTags([ ...DEFAULT_TAGS ]);
+    const uid = authUser?.id || null;
+    setUserId(uid);
+    if (!uid || !_journalProfile) {
+      setAllTags([ ...DEFAULT_TAGS ]);
+      return;
+    }
+    // Decide preferred name: username > metadata.username > metadata.full_name > display_name (ignore emails)
+    const meta = authUser?.user_metadata || {};
+    const candidates = [
+      _journalProfile.username?.toString().trim(),
+      meta.username?.toString().trim(),
+      meta.full_name?.toString().trim(),
+      _journalProfile.display_name?.toString().trim(),
+    ];
+    const preferred = candidates.find((n: any) => n && !String(n).includes('@')) || '';
+    setDisplayName(preferred || null);
+    // Handle custom tags from cached profile
+    const rawTags = _journalProfile.custom_tags;
+    if (Array.isArray(rawTags)) {
+      const cleaned = (rawTags as string[])
+        .map(s => (s || '').toString().toLowerCase().replace(/\s+/g,'_'))
+        .filter(Boolean) as TagId[];
+      // Remove any custom tags that are now default tags
+      const validCustomTags = cleaned.filter(t => !defaultTagSet.has(t));
+      // Update DB if we filtered any out (write-back only)
+      if (validCustomTags.length !== cleaned.length) {
+        supabase.from('profiles').update({ custom_tags: validCustomTags }).eq('id', uid);
       }
-    })();
+      setCustomTags(validCustomTags);
+      setAllTags([...
+        DEFAULT_TAGS,
+        ...validCustomTags
+      ] as TagId[]);
+    } else {
+      setAllTags([ ...DEFAULT_TAGS ]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [_journalProfile]);
 
   const arTagLabels: Partial<Record<TagId, string>> = {
     family: "العائلة",

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -29,33 +30,21 @@ export const SimpleContactFormModal: React.FC<ContactFormModalProps> = ({
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const { profile: _scfProfile } = useUserProfile();
+
   useEffect(() => {
     if (isOpen) {
       loadUserProfile();
     }
   }, [isOpen]);
 
-  const loadUserProfile = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user;
-      if (!user) return;
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('display_name, email')
-        .eq('id', user.id)
-        .single();
-
-      if (profile) {
-        setFormData(prev => ({
-          ...prev,
-          name: profile.display_name || '',
-          email: profile.email || user.email || '',
-        }));
-      }
-    } catch (error) {
-      console.error('Error loading profile:', error);
+  const loadUserProfile = () => {
+    if (_scfProfile) {
+      setFormData(prev => ({
+        ...prev,
+        name: _scfProfile.display_name || '',
+        email: _scfProfile.email || '',
+      }));
     }
   };
 

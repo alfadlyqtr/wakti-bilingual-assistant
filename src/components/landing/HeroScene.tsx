@@ -171,15 +171,35 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
         >
           <button
             onClick={() => navigate("/signup")}
-            className="rounded-full px-10 py-2 text-[13px] font-medium tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] bg-[#0c0f14]/60 text-white/90 border border-blue-400/30 backdrop-blur-xl shadow-[0_0_15px_hsla(210,100%,65%,0.3)] hover:text-white hover:bg-blue-500/15 hover:border-blue-300/50 hover:shadow-[0_0_25px_hsla(210,100%,65%,0.5)]"
+            className="relative overflow-hidden rounded-full px-10 py-2 text-[13px] font-semibold tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] bg-[#0c0f14]/70 text-white border border-blue-300/35 backdrop-blur-xl shadow-[0_0_18px_hsla(210,100%,65%,0.32),inset_0_1px_0_rgba(255,255,255,0.08)] hover:text-white hover:bg-blue-500/18 hover:border-blue-200/55 hover:shadow-[0_0_30px_hsla(210,100%,65%,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]"
           >
-            {isArabic ? "إنشاء حساب · جرب وقتي مجاناً" : "Create Account · Try Wakti for Free"}
+            <span className="pointer-events-none absolute inset-0 rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.12)_0%,rgba(255,255,255,0.03)_35%,transparent_100%)]" />
+            <span className="pointer-events-none absolute inset-y-[3px] left-[8px] w-10 rounded-full bg-blue-300/10 blur-md" />
+            <span className="relative z-10 inline-flex items-center gap-1.5">
+              {isArabic ? (
+                <span dir="rtl" className="inline-flex items-center gap-1.5">
+                  <ArrowRight className="h-3.5 w-3.5 rotate-180 text-blue-200" />
+                  <span>
+                    <span className="text-white">إنشاء حساب</span>
+                    <span className="text-white/65"> · جرب وقتي مجاناً</span>
+                  </span>
+                </span>
+              ) : (
+                <>
+                  <span>
+                    <span className="text-white">Create Account</span>
+                    <span className="text-white/65"> · Try Wakti for Free</span>
+                  </span>
+                  <ArrowRight className="h-3.5 w-3.5 text-blue-200" />
+                </>
+              )}
+            </span>
           </button>
         </motion.div>
       </motion.div>
 
       {/* Scroll Indicator */}
-      <ScrollIndicator className="absolute bottom-32 inset-x-0 z-10 flex justify-center" language={language} />
+      <ScrollIndicator className="absolute bottom-20 inset-x-0 z-10 flex justify-center" language={language} />
     </section>
   );
 }

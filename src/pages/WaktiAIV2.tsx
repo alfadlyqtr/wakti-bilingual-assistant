@@ -5,6 +5,7 @@ import { SavedConversationsService } from '@/services/SavedConversationsService'
 import { EnhancedFrontendMemory, ConversationMetadata } from '@/services/EnhancedFrontendMemory';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { supabase } from '@/integrations/supabase/client';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { StreamingBubbleHandle } from '@/components/wakti-ai-v2/StreamingBubble';
@@ -88,35 +89,20 @@ const WaktiAIV2 = () => {
 
   const canSendMessage = useMemo(() => !isLoading && !chatTrialLimitReached && !!(authUser?.id || userProfile?.id), [isLoading, chatTrialLimitReached, authUser?.id, userProfile?.id]);
 
-  const loadUserProfile = async () => {
+  const { profile: cachedProfile, isSubscribed, isAdminGifted, hasTrialStarted } = useUserProfile();
+
+  const loadUserProfile = () => {
     const user = authUser;
     if (user) setUserProfile(user);
     if (!user?.id) return;
-    // Mount-time backend check: has this user already exhausted their ai_chat trial?
+    // Mount-time check using cached profile: has this user already exhausted their ai_chat trial?
     // Prevents the refresh loophole where chatTrialLimitReached resets to false on reload.
-    try {
-      const { data: profile } = await (supabase as any)
-        .from('profiles')
-        .select('trial_usage, is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at')
-        .eq('id', user.id)
-        .single();
-      if (profile) {
-        const isPaid = profile.is_subscribed === true;
-        const isGifted = profile.admin_gifted === true;
-        const pm = profile.payment_method;
-        const isGift = pm && pm !== 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
-        // Token limits ONLY apply to users on the 24-hour trial (free_access_start_at is set)
-        const isOn24hTrial = profile.free_access_start_at != null;
-        if (!isPaid && !isGift && !isGifted && isOn24hTrial) {
-          const usage = (profile.trial_usage as Record<string, number>) ?? {};
-          const aiChatUsed = typeof usage['ai_chat'] === 'number' ? usage['ai_chat'] : 0;
-          if (aiChatUsed >= 15) {
-            setChatTrialLimitReached(true);
-          }
-        }
+    if (cachedProfile && !isSubscribed && !isAdminGifted && hasTrialStarted) {
+      const usage = (cachedProfile.trial_usage as Record<string, number>) ?? {};
+      const aiChatUsed = typeof usage['ai_chat'] === 'number' ? usage['ai_chat'] : 0;
+      if (aiChatUsed >= 15) {
+        setChatTrialLimitReached(true);
       }
-    } catch {
-      // non-critical — if check fails, backend will block on next send
     }
   };
 

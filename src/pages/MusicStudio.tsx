@@ -60,6 +60,7 @@ import {
   CheckCircle2,
   Copy,
   Star,
+  Search,
 } from 'lucide-react';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import StudioImageGenerator from '@/components/studio/StudioImageGenerator';
@@ -4172,6 +4173,7 @@ type SavedTrack = {
   signed_url: string | null;
   storage_path: string | null;
   mime: string | null;
+  share_code?: string | null;
   meta: Record<string, unknown> | null;
   play_url?: string | null;
 };
@@ -4502,6 +4504,7 @@ function EditorTab() {
   // ── Tracks
   const [loading, setLoading] = useState(false);
   const [tracks, setTracks] = useState<SavedTrack[]>([]);
+  const [trackSearch, setTrackSearch] = useState('');
   const [activePlayingTrackId, setActivePlayingTrackId] = useState<string | null>(null);
   const [shareTrackTarget, setShareTrackTarget] = useState<{ id: string; title: string; coverUrl: string | null } | null>(null);
   const [deleteTrackTarget, setDeleteTrackTarget] = useState<{ id: string; storagePath: string | null } | null>(null);
@@ -4724,7 +4727,7 @@ function EditorTab() {
     try {
       const { data, error } = await (supabase as any)
         .from('user_music_tracks')
-        .select('id, created_at, task_id, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta, source_audio_url')
+        .select('id, created_at, task_id, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta, source_audio_url, share_code')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(60);
@@ -4770,6 +4773,18 @@ function EditorTab() {
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
   }, [tracks]);
+
+  const filteredTracks = useMemo(() => {
+    const q = trackSearch.trim().toLowerCase();
+    if (!q) return sortedTracks;
+    return sortedTracks.filter((t) => {
+      const title = (t.title || '').toLowerCase();
+      const prompt = (t.prompt || '').toLowerCase();
+      const styles = (t.include_styles || []).join(' ').toLowerCase();
+      const metaTags = String((t.meta as any)?.tags || '').toLowerCase();
+      return title.includes(q) || prompt.includes(q) || styles.includes(q) || metaTags.includes(q);
+    });
+  }, [sortedTracks, trackSearch]);
 
   useEffect(() => { load(); loadPlaylists(); }, [user?.id]);
 
@@ -4921,10 +4936,14 @@ function EditorTab() {
           </button>
         )}
         {savedSubTab === 'playlists' && (
-          <button type="button" onClick={() => setShowCreatePlaylist(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9c5f3] dark:border-purple-400/20 bg-[#f3e8ff] dark:bg-purple-500/10 text-[#7c3aed] dark:text-purple-300 shadow-[0_4px_12px_rgba(124,58,237,0.10)] dark:shadow-none hover:bg-[#eadcff] dark:hover:bg-purple-500/20 active:scale-95 transition-all">
-            <Plus className="h-3 w-3" />
-            {isAr ? 'قائمة جديدة' : 'New Playlist'}
+          <button
+            type="button"
+            onClick={() => setShowCreatePlaylist(true)}
+            title={isAr ? 'قائمة جديدة' : 'New Playlist'}
+            aria-label={isAr ? 'قائمة جديدة' : 'New Playlist'}
+            className="relative inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border-[2.5px] border-[#b78a33] bg-[#3b3b3b] text-black shadow-[0_6px_16px_rgba(0,0,0,0.28)] hover:brightness-105 active:scale-95 transition-all"
+          >
+            <Plus className="h-[18px] w-[18px] stroke-[3.25] text-[#111111] drop-shadow-[0_1px_0_rgba(255,255,255,0.18)]" />
           </button>
         )}
       </div>
@@ -4978,7 +4997,25 @@ function EditorTab() {
             </div>
           ) : (
             <div className="space-y-3">
-              {sortedTracks.map((t) => {
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
+                <Input
+                  value={trackSearch}
+                  onChange={(e) => setTrackSearch(e.target.value)}
+                  placeholder={isAr ? 'ابحث في المقاطع...' : 'Search songs...'}
+                  className="h-10 pl-9 rounded-xl border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-[0_6px_18px_rgba(6,5,65,0.06)] dark:shadow-none"
+                />
+              </div>
+
+              {filteredTracks.length === 0 ? (
+                <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-8 flex flex-col items-center gap-3 text-center">
+                  <div className="w-12 h-12 rounded-full bg-[#f7f8fc] dark:bg-white/[0.05] border border-[#e4e7ef] dark:border-transparent flex items-center justify-center">
+                    <Search className="h-5 w-5 text-muted-foreground/40" />
+                  </div>
+                  <p className="text-sm text-muted-foreground/80 dark:text-muted-foreground/60">{isAr ? 'لا توجد نتائج مطابقة.' : 'No songs match your search.'}</p>
+                  <p className="text-xs text-muted-foreground/60 dark:text-muted-foreground/40">{isAr ? 'جرّب عنواناً أو كلمات من الوصف أو نوع الموسيقى.' : 'Try a title, prompt words, or style tags.'}</p>
+                </div>
+              ) : filteredTracks.map((t) => {
                 const durationSec = t.duration ?? t.requested_duration_seconds ?? null;
                 const durationLabel = durationSec
                   ? `${Math.floor(durationSec / 60)}:${String(Math.round(durationSec % 60)).padStart(2, '0')}`
@@ -5118,7 +5155,7 @@ function EditorTab() {
                                 <RefreshCw className="h-3 w-3" />{isAr ? 'تنزيل' : 'Download'}
                               </button>
                               <ShareButton size="sm"
-                                shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${(t.title ? t.title.toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) + '-' : '') + t.id.slice(0, 8)}` : ''}
+                                shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${(t.title ? t.title.toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) + '-' : '') + (t.share_code || t.id)}` : ''}
                                 shareTitle={isAr ? 'استمع إلى موسيقى من وقتي 🎵' : 'Listen to my Wakti music 🎵'}
                                 extraActions={[
                                   {

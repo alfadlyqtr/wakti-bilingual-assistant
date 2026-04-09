@@ -1,5 +1,7 @@
 // @ts-nocheck
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import {
   CheckCircle2, Clock, AlertTriangle, MessageCircle,
   ChevronDown, RefreshCw, Send, BellOff, Loader2, User2
@@ -24,7 +26,12 @@ export const InAppSharedTaskViewer: React.FC<InAppSharedTaskViewerProps> = ({
   const [task, setTask] = useState<TRTask | null>(null);
   const [subtasks, setSubtasks] = useState<TRSubtask[]>([]);
   const [responses, setResponses] = useState<TRSharedResponse[]>([]);
-  const [visitorName, setVisitorName] = useState<string>('');
+  const { user: authUser } = useAuth();
+  const { profile: cachedProfile } = useUserProfile();
+  const visitorName = useMemo(() => {
+    const fullName = [cachedProfile?.first_name, cachedProfile?.last_name].filter(Boolean).join(' ');
+    return cachedProfile?.display_name || fullName || authUser?.email?.split('@')[0] || 'Wakti User';
+  }, [cachedProfile?.display_name, cachedProfile?.first_name, cachedProfile?.last_name, authUser?.email]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [comment, setComment] = useState('');
@@ -33,22 +40,6 @@ export const InAppSharedTaskViewer: React.FC<InAppSharedTaskViewerProps> = ({
   const [showSnooze, setShowSnooze] = useState(false);
   const [sendingSnooze, setSendingSnooze] = useState(false);
   const [processingSubtask, setProcessingSubtask] = useState<string | null>(null);
-
-  // Get logged-in user's display name from profile
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      const user = session?.user;
-      if (!user) return;
-      const { data } = await supabase
-        .from('profiles')
-        .select('display_name, first_name, last_name')
-        .eq('id', user.id)
-        .single();
-      const fullName = [data?.first_name, data?.last_name].filter(Boolean).join(' ');
-      const name = data?.display_name || fullName || user.email?.split('@')[0] || 'Wakti User';
-      setVisitorName(name);
-    });
-  }, []);
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);

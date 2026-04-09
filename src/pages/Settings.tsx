@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { emitEvent } from "@/utils/eventBus";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { PageContainer } from "@/components/PageContainer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -96,21 +97,17 @@ export default function Settings() {
     showActivityStatus: true
   });
 
+  const { profile: cachedProfile, refetch: refetchProfile } = useUserProfile();
+
   useEffect(() => {
-    if (user) {
-      loadSettings();
+    if (cachedProfile) {
+      loadSettingsFromProfile();
     }
-  }, [user]);
+  }, [cachedProfile]);
 
-  const loadSettings = async () => {
+  const loadSettingsFromProfile = () => {
     try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('settings, auto_approve_contacts')
-        .eq('id', user?.id)
-        .single();
-
-      const s = profile?.settings as any;
+      const s = cachedProfile?.settings as any;
 
       // Load dashboard widgets (legacy key 'widgets' maps to dashboard)
       if (s?.dashboardWidgets) {
@@ -156,7 +153,7 @@ export default function Settings() {
       }
 
       setPrivacySettings({
-        autoApproveContacts: profile?.auto_approve_contacts || false,
+        autoApproveContacts: cachedProfile?.auto_approve_contacts || false,
         profileVisibility: s?.privacy?.profileVisibility !== false,
         showActivityStatus: s?.privacy?.activityStatus !== false
       });
@@ -187,13 +184,7 @@ export default function Settings() {
     else setDashboardWidgets(newSettings);
 
     try {
-      const { data: currentProfile } = await supabase
-        .from('profiles')
-        .select('settings')
-        .eq('id', user?.id)
-        .single();
-
-      const currentSettings = (currentProfile?.settings as any) || {};
+      const currentSettings = (cachedProfile?.settings as any) || {};
       const storageKey = isHomescreen ? 'homescreenWidgets' : 'dashboardWidgets';
 
       await supabase
@@ -209,6 +200,7 @@ export default function Settings() {
         .eq('id', user?.id);
 
       showSuccess(t("settingsUpdated", language));
+      refetchProfile();
       emitEvent('widgetSettingsChanged', { ...newSettings, mode: dashboardLook });
     } catch (error) {
       console.error('Error updating widget setting:', error);
@@ -224,13 +216,7 @@ export default function Settings() {
       setDashboardLook(look);
       localStorage.setItem('wakti_dashboard_look', look);
 
-      const { data: currentProfile } = await supabase
-        .from('profiles')
-        .select('settings')
-        .eq('id', user?.id)
-        .single();
-
-      const currentSettings = currentProfile?.settings || {};
+      const currentSettings = (cachedProfile?.settings as any) || {};
 
       await supabase
         .from('profiles')
@@ -243,6 +229,7 @@ export default function Settings() {
         .eq('id', user?.id);
 
       showSuccess(t("settingsUpdated", language));
+      refetchProfile();
       
       // Force dashboard to reload by dispatching a custom event
       emitEvent('dashboardLookChanged', look);
@@ -255,15 +242,14 @@ export default function Settings() {
 
   const saveHomescreenBg = async (mode: BgMode, color1: string, color2: string, color3: string, angle: number, glow: boolean) => {
     try {
-      const { data: currentProfile } = await supabase
-        .from('profiles').select('settings').eq('id', user?.id).single();
-      const currentSettings = (currentProfile?.settings as any) || {};
+      const currentSettings = (cachedProfile?.settings as any) || {};
       const payload = { mode, color1, color2, color3, angle, glow };
       await supabase.from('profiles').update({
         settings: { ...currentSettings, homescreenBg: payload }
       }).eq('id', user?.id);
       emitEvent('homescreenBgChanged', payload);
       showSuccess(t("settingsUpdated", language));
+      refetchProfile();
     } catch (error) {
       console.error('Error saving homescreen bg:', error);
       showError(t("errorUpdatingSettings", language));
@@ -281,13 +267,7 @@ export default function Settings() {
           .update({ auto_approve_contacts: value })
           .eq('id', user?.id);
       } else {
-        const { data: currentProfile } = await supabase
-          .from('profiles')
-          .select('settings')
-          .eq('id', user?.id)
-          .single();
-
-        const currentSettings = currentProfile?.settings || {};
+        const currentSettings = (cachedProfile?.settings as any) || {};
         const privacySettings = currentSettings.privacy || {};
 
         const updatedPrivacy = {
@@ -307,6 +287,7 @@ export default function Settings() {
       }
 
       showSuccess(language === 'ar' ? 'تم تحديث إعدادات الخصوصية' : 'Privacy settings updated');
+      refetchProfile();
     } catch (error) {
       console.error('Error updating privacy setting:', error);
       showError(language === 'ar' ? 'خطأ في تحديث الإعدادات' : 'Error updating settings');

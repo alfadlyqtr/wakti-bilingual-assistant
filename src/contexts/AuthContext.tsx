@@ -411,8 +411,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Clear any app-level cached flags that might drive auto-login flows
     try {
       localStorage.removeItem('admin_session');
-      // Remove Supabase auth caches + ALL wakti_ prefixed keys to prevent cross-user state leaks
-      // (personal touch nickname, conversation history, location cache, quota cache, etc.)
+      // Remove Supabase auth caches + wakti_ prefixed keys to prevent cross-user state leaks.
+      // NOTE: wakti_profile_* is intentionally preserved — it is keyed by user.id so there
+      // is no cross-user risk, and preserving it gives instant cold-start render on next sign-in.
       for (const store of [localStorage, sessionStorage]) {
         try {
           const keys: string[] = [];
@@ -422,7 +423,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             if (
               k.startsWith('sb-') ||
               k.startsWith('wakti-auth') ||
-              k.startsWith('wakti_')
+              (k.startsWith('wakti_') && !k.startsWith('wakti_profile_'))
             ) keys.push(k);
           }
           keys.forEach((k) => store.removeItem(k));

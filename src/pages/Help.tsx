@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { SimpleContactFormModal } from '@/components/support/SimpleContactFormModal';
 import { ChatThread } from '@/components/support/ChatThread';
 import { HelpAssistantChat } from '@/components/help/HelpAssistantChat';
@@ -21,6 +22,7 @@ import { formatDistanceToNow } from 'date-fns';
 export default function Help() {
   const { language } = useTheme();
   const { user } = useAuth();
+  const { profile: _helpProfile } = useUserProfile();
   const [openSections, setOpenSections] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState('guides');
   const [showContactModal, setShowContactModal] = useState(false);
@@ -622,19 +624,14 @@ export default function Help() {
     try {
       if (!user) return;
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('id', user.id)
-        .single();
-
-      if (!profile?.email) return;
-      if (!userEmail) setUserEmail(profile.email);
+      const profileEmail = _helpProfile?.email;
+      if (!profileEmail) return;
+      if (!userEmail) setUserEmail(profileEmail);
 
       const { data, error } = await supabase
         .from('contact_submissions')
         .select('*')
-        .eq('email', profile.email)
+        .eq('email', profileEmail)
         .order('created_at', { ascending: false });
 
       if (error) throw error;

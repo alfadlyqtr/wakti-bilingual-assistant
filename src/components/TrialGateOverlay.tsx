@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { useTheme } from "@/providers/ThemeProvider";
 
 interface TrialGateOverlayProps {
@@ -13,6 +13,7 @@ const TrialGateOverlay: React.FC<TrialGateOverlayProps> = ({ featureKey, limit, 
   const [blocked, setBlocked] = useState(false);
   const { language } = useTheme();
   const { user: authUser } = useAuth();
+  const { profile: cachedProfile, isSubscribed, isAdminGifted, hasTrialStarted } = useUserProfile();
 
   useEffect(() => {
     // Reset when featureKey/limit changes (e.g. switching submodes)
@@ -21,44 +22,25 @@ const TrialGateOverlay: React.FC<TrialGateOverlayProps> = ({ featureKey, limit, 
     // Empty featureKey means OPEN / unlimited — never block
     if (!featureKey) return;
 
-    let mounted = true;
-    (async () => {
-      try {
-        const user = authUser;
-        if (!user?.id) return;
-        const { data: profile } = await (supabase as any)
-          .from('profiles')
-          .select('trial_usage, is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at')
-          .eq('id', user.id)
-          .single();
-        if (!profile || !mounted) return;
-        const isPaid = profile.is_subscribed === true;
-        const isGifted = profile.admin_gifted === true;
-        // Real payment methods: gift, apple, google, stripe (NOT 'manual' — old DB default)
-        const pm = profile.payment_method;
-        const hasRealPaymentMethod = pm != null && typeof pm === 'string' && pm.trim().length > 0 && pm !== 'manual';
-        const isActiveSubscriber =
-          hasRealPaymentMethod && profile.next_billing_date != null && new Date(profile.next_billing_date) > new Date();
-        // Token limits ONLY apply to users on the 24-hour trial (free_access_start_at is set)
-        const isOn24hTrial = profile.free_access_start_at != null;
-        if (isPaid || isActiveSubscriber || isGifted || !isOn24hTrial) return;
-        const usage = (profile.trial_usage as Record<string, number>) ?? {};
-        const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
-        if (current >= limit) {
-          if (mounted) setBlocked(true);
-        }
-      } catch {
-        // non-critical — backend will block anyway
+    // Paid / gifted / no trial started — never block
+    if (isSubscribed || isAdminGifted || !hasTrialStarted) return;
+
+    // Check cached trial_usage
+    if (cachedProfile) {
+      const usage = (cachedProfile.trial_usage as Record<string, number>) ?? {};
+      const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
+      if (current >= limit) {
+        setBlocked(true);
       }
-    })();
+    }
 
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail?.feature === featureKey) setBlocked(true);
     };
     window.addEventListener('wakti-trial-limit-reached', handler);
-    return () => { mounted = false; window.removeEventListener('wakti-trial-limit-reached', handler); };
-  }, [featureKey, limit]);
+    return () => { window.removeEventListener('wakti-trial-limit-reached', handler); };
+  }, [featureKey, limit, isSubscribed, isAdminGifted, hasTrialStarted, cachedProfile]);
 
   if (!blocked) return null;
 

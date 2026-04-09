@@ -23,24 +23,15 @@ export default function Dashboard() {
     return cached === 'dashboard' ? 'dashboard' : 'homescreen';
   });
 
-  // Sync from Supabase (source of truth) + cache to localStorage
+  // Sync from cached profile (source of truth) + cache to localStorage
   useEffect(() => {
-    if (!user) return;
-    (async () => {
-      try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('settings')
-          .eq('id', user.id)
-          .single();
-        const savedLook = (profile?.settings as any)?.dashboardLook;
-        if (savedLook === 'dashboard' || savedLook === 'homescreen') {
-          setDashboardLook(savedLook);
-          localStorage.setItem('wakti_dashboard_look', savedLook);
-        }
-      } catch { /* silent */ }
-    })();
-  }, [user]);
+    if (!profile) return;
+    const savedLook = (profile.settings as any)?.dashboardLook;
+    if (savedLook === 'dashboard' || savedLook === 'homescreen') {
+      setDashboardLook(savedLook);
+      localStorage.setItem('wakti_dashboard_look', savedLook);
+    }
+  }, [profile]);
 
   // Listen for dashboard look changes from Settings page
   useEffect(() => {

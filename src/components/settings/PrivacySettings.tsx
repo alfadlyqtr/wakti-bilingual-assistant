@@ -1,5 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -17,47 +19,26 @@ interface PrivacySettings {
 export const PrivacySettings: React.FC = () => {
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
+  const { user } = useAuth();
+  const { profile: cachedProfile, refetch: refetchProfile, loading: profileLoading } = useUserProfile();
   const [settings, setSettings] = useState<PrivacySettings>({
     autoApproveContacts: false,
     profileVisibility: true,
     showActivityStatus: true
   });
-  const [isLoading, setIsLoading] = useState(true);
 
+  // Load privacy settings from cached profile
   useEffect(() => {
-    loadPrivacySettings();
-  }, []);
-
-  const loadPrivacySettings = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user;
-      if (!user) return;
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('auto_approve_contacts, settings')
-        .eq('id', user.id)
-        .single();
-
-      if (profile) {
-        setSettings({
-          autoApproveContacts: profile.auto_approve_contacts || false,
-          profileVisibility: profile.settings?.privacy?.profileVisibility !== false,
-          showActivityStatus: profile.settings?.privacy?.activityStatus !== false
-        });
-      }
-    } catch (error) {
-      console.error('Error loading privacy settings:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    if (!cachedProfile) return;
+    setSettings({
+      autoApproveContacts: cachedProfile.auto_approve_contacts || false,
+      profileVisibility: (cachedProfile.settings as any)?.privacy?.profileVisibility !== false,
+      showActivityStatus: (cachedProfile.settings as any)?.privacy?.activityStatus !== false
+    });
+  }, [cachedProfile]);
 
   const updatePrivacySetting = async (key: keyof PrivacySettings, value: boolean) => {
     try {
-      const { data: { session: s2 } } = await supabase.auth.getSession();
-      const user = s2?.user;
       if (!user) return;
 
       const newSettings = { ...settings, [key]: value };
@@ -69,14 +50,8 @@ export const PrivacySettings: React.FC = () => {
           .update({ auto_approve_contacts: value })
           .eq('id', user.id);
       } else {
-        // Update privacy settings in the settings JSONB column
-        const { data: currentProfile } = await supabase
-          .from('profiles')
-          .select('settings')
-          .eq('id', user.id)
-          .single();
-
-        const currentSettings = currentProfile?.settings || {};
+        // Use cached profile settings as merge base
+        const currentSettings = (cachedProfile?.settings as any) || {};
         const privacySettings = currentSettings.privacy || {};
 
         const updatedPrivacy = {
@@ -96,6 +71,7 @@ export const PrivacySettings: React.FC = () => {
       }
 
       showSuccess(language === 'ar' ? 'تم تحديث إعدادات الخصوصية' : 'Privacy settings updated');
+      refetchProfile();
     } catch (error) {
       console.error('Error updating privacy setting:', error);
       showError(language === 'ar' ? 'خطأ في تحديث الإعدادات' : 'Error updating settings');
@@ -104,7 +80,7 @@ export const PrivacySettings: React.FC = () => {
     }
   };
 
-  if (isLoading) {
+  if (profileLoading && !cachedProfile) {
     return (
       <Card>
         <CardHeader>

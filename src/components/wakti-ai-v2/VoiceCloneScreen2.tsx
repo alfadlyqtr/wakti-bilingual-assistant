@@ -1,5 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,23 +46,17 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
     loadExistingVoices();
   }, []);
 
+  const { user: _vcUser } = useAuth();
+  const { profile: _vcProfile } = useUserProfile();
+
   const loadExistingVoices = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user;
-      if (!user) {
+      if (!_vcUser) {
         console.error('User not authenticated');
         return;
       }
 
-      // Get user's profile to access email
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('id', user.id)
-        .single();
-
-      const userEmail = profile?.email || user.email;
+      const userEmail = _vcProfile?.email || _vcUser.email;
       
       if (!userEmail) {
         console.error('User email not found');
@@ -73,7 +69,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       const { data, error } = await supabase
         .from('user_voice_clones')
         .select('id, voice_name, voice_id, user_email, created_at, expires_at, last_used_at')
-        .or(`user_id.eq.${user.id},user_email.eq.${userEmail}`)
+        .or(`user_id.eq.${_vcUser.id},user_email.eq.${userEmail}`)
         .order('created_at', { ascending: false });
 
       if (error) {

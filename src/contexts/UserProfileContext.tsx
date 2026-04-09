@@ -13,7 +13,9 @@ interface UserProfile {
   country?: string;
   country_code?: string;
   city?: string;
+  created_at?: string;
   updated_at?: string;
+  last_seen?: string | null;
   // Subscription/grace fields
   is_subscribed: boolean;
   subscription_status?: string | null;
@@ -23,6 +25,18 @@ interface UserProfile {
   trial_popup_shown?: boolean | null;
   payment_method?: string | null;
   next_billing_date?: string | null;
+  billing_start_date?: string | null;
+  admin_gifted?: boolean;
+  // Trial usage tracking
+  trial_usage?: any;
+  // Settings & preferences
+  settings?: any;
+  notification_preferences?: any;
+  auto_approve_contacts?: boolean;
+  custom_tags?: any;
+  calendar_feed_token?: string | null;
+  is_logged_in?: boolean;
+  language?: string | null;
 }
 
 interface UserProfileContextValue {
@@ -46,14 +60,17 @@ export const UserProfileContext = createContext<UserProfileContextValue | undefi
 const PROFILE_CACHE_KEY = (uid: string) => `wakti_profile_${uid}`;
 const PROFILE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-function readCachedProfile(uid: string): UserProfile | null {
+// Always returns cached data if it exists — regardless of TTL.
+// Staleness is checked separately so we can show stale data instantly
+// and refresh in the background.
+function readCachedProfile(uid: string): { data: UserProfile; stale: boolean } | null {
   try {
     const raw = localStorage.getItem(PROFILE_CACHE_KEY(uid));
     if (!raw) return null;
     const { data, _cachedAt } = JSON.parse(raw);
-    if (!data || !_cachedAt) return null;
-    if (Date.now() - _cachedAt > PROFILE_CACHE_TTL) return null;
-    return data as UserProfile;
+    if (!data) return null;
+    const stale = !_cachedAt || (Date.now() - _cachedAt > PROFILE_CACHE_TTL);
+    return { data: data as UserProfile, stale };
   } catch { return null; }
 }
 
@@ -66,24 +83,17 @@ function writeCachedProfile(uid: string, data: UserProfile) {
 export function UserProfileProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
 
-  // Try to hydrate from localStorage cache for instant render
-  const [profile, setProfile] = useState<UserProfile | null>(() => {
-    if (!user?.id) return null;
-    return readCachedProfile(user.id);
-  });
-  const profileRef = useRef<UserProfile | null>(profile);
-  // If we hydrated from cache, skip the loading state entirely
-  const [loading, setLoading] = useState(() => {
-    if (!user?.id) return true;
-    return readCachedProfile(user.id) === null;
-  });
+  // Start with null — we'll hydrate reactively once user.id is known
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const profileRef = useRef<UserProfile | null>(null);
+  // Start loading=true; cleared as soon as we have ANY data (cache or fresh)
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const IS_DEV = !import.meta.env.PROD;
 
   const updateProfile = (p: UserProfile | null) => {
     profileRef.current = p;
     setProfile(p);
-    // Persist to localStorage for instant reopen
     if (p && user?.id) writeCachedProfile(user.id, p);
   };
 
@@ -151,8 +161,19 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
       return;
     }
 
-    const isFirstLoad = profileRef.current === null;
-    if (isFirstLoad) setLoading(true);
+    // ── Stale-first: show cache immediately, even if expired ──────────────
+    const cached = readCachedProfile(user.id);
+    if (cached) {
+      // Hydrate instantly — UI renders NOW, no spinner
+      if (profileRef.current === null) {
+        profileRef.current = cached.data;
+        setProfile(cached.data);
+        setLoading(false);
+      }
+      // If fresh, skip the network round-trip entirely
+      if (!cached.stale) return;
+    }
+    // ─────────────────────────────────────────────────────────────────────
 
     try {
       setError(null);
@@ -172,47 +193,53 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
           updateProfile(newProfile);
         } else {
           console.error('Error fetching profile:', error);
-          setError(error.message);
+          // Only set error if we have no cached data to fall back on
+          if (!cached) setError(error.message);
         }
       } else {
         if (IS_DEV) console.debug('Profile fetched successfully:', data);
-
-        if (data?.avatar_url) {
-          const normalized = normalizeAvatarUrl(data.avatar_url);
-          if (normalized && normalized !== data.avatar_url) {
-            try {
-              await supabase
-                .from('profiles')
-                .update({ avatar_url: normalized })
-                .eq('id', user.id);
-              data.avatar_url = normalized;
-            } catch {}
-          }
-        }
-
-        if (!data.country && user?.user_metadata?.country) {
-          if (IS_DEV) console.debug('Syncing country from user_metadata to profile');
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({
-              country: user.user_metadata.country,
-              country_code: user.user_metadata.country_code || null,
-              city: data.city || user.user_metadata.city || null
-            })
-            .eq('id', user.id);
-
-          if (!updateError) {
-            data.country = user.user_metadata.country;
-            data.country_code = user.user_metadata.country_code || null;
-            data.city = data.city || user.user_metadata.city || null;
-          }
-        }
-
         updateProfile(data);
+
+        // ── Defer non-critical writes (avatar normalization, country sync)
+        // These happen AFTER the UI is already rendered — no blocking
+        setTimeout(async () => {
+          if (data?.avatar_url) {
+            const normalized = normalizeAvatarUrl(data.avatar_url);
+            if (normalized && normalized !== data.avatar_url) {
+              try {
+                await supabase
+                  .from('profiles')
+                  .update({ avatar_url: normalized })
+                  .eq('id', user.id);
+              } catch {}
+            }
+          }
+
+          if (!data.country && user?.user_metadata?.country) {
+            if (IS_DEV) console.debug('Syncing country from user_metadata to profile');
+            const { error: updateError } = await supabase
+              .from('profiles')
+              .update({
+                country: user.user_metadata.country,
+                country_code: user.user_metadata.country_code || null,
+                city: data.city || user.user_metadata.city || null
+              })
+              .eq('id', user.id);
+
+            if (!updateError) {
+              updateProfile({
+                ...data,
+                country: user.user_metadata.country,
+                country_code: user.user_metadata.country_code || null,
+                city: data.city || user.user_metadata.city || null
+              });
+            }
+          }
+        }, 0);
       }
     } catch (err) {
       console.error('Profile fetch error:', err);
-      setError('Failed to fetch profile');
+      if (!cached) setError('Failed to fetch profile');
     } finally {
       setLoading(false);
     }
@@ -262,7 +289,7 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
   const isSubscribed = profile?.is_subscribed ?? false;
 
   const isAdminGifted = (() => {
-    if ((profile as any)?.admin_gifted === true) return true;
+    if (profile?.admin_gifted === true) return true;
     const pm = profile?.payment_method;
     if (!pm || pm === 'manual') return false;
     if (!profile?.next_billing_date) return false;
@@ -271,7 +298,7 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
 
   const isGracePeriod = (() => {
     if (profile?.is_subscribed) return false;
-    if ((profile as any)?.admin_gifted === true) return false;
+    if (profile?.admin_gifted === true) return false;
     const pm = profile?.payment_method;
     if (pm && pm !== 'manual' && profile?.next_billing_date && new Date(profile.next_billing_date) > new Date()) return false;
     const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;
@@ -286,7 +313,7 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
 
   const isAccessExpired = (() => {
     if (profile?.is_subscribed) return false;
-    if ((profile as any)?.admin_gifted === true) return false;
+    if (profile?.admin_gifted === true) return false;
     const pm = profile?.payment_method;
     if (pm && pm !== 'manual' && profile?.next_billing_date && new Date(profile.next_billing_date) > new Date()) return false;
     const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;

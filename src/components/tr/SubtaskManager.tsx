@@ -1,5 +1,7 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -34,18 +36,13 @@ export const SubtaskManager: React.FC<SubtaskManagerProps> = ({
   refreshTrigger,
 }) => {
   const { language } = useTheme();
-  const [ownerName, setOwnerName] = useState<string>('Owner');
+  const { user: authUser } = useAuth();
+  const { profile: cachedProfile } = useUserProfile();
+  const ownerName = useMemo(() => {
+    const full = [cachedProfile?.first_name, cachedProfile?.last_name].filter(Boolean).join(' ');
+    return cachedProfile?.display_name || full || authUser?.email?.split('@')[0] || 'Owner';
+  }, [cachedProfile?.display_name, cachedProfile?.first_name, cachedProfile?.last_name, authUser?.email]);
   const [subtasks, setSubtasks] = useState<TRSubtask[]>([]);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      const user = session?.user;
-      if (!user) return;
-      const { data } = await supabase.from('profiles').select('display_name, first_name, last_name').eq('id', user.id).single();
-      const full = [data?.first_name, data?.last_name].filter(Boolean).join(' ');
-      setOwnerName(data?.display_name || full || user.email?.split('@')[0] || 'Owner');
-    });
-  }, []);
   const [loading, setLoading] = useState(true);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Mic, Search, MessageCircle } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { supabase } from '@/integrations/supabase/client';
 import { DEFAULT_VOICES } from './TalkBackSettings';
 import { getNativeLocation } from '@/integrations/natively/locationBridge';
@@ -85,6 +86,7 @@ function cleanSearchQuery(transcript: string): string {
 
 export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage }: TalkBubbleProps) {
   const { language, theme } = useTheme();
+  const { profile: _tbCachedProfile } = useUserProfile();
   const t = useCallback((en: string, ar: string) => (language === 'ar' ? ar : en), [language]);
   const tLang = useCallback((lang: 'ar' | 'en', en: string, ar: string) => (lang === 'ar' ? ar : en), []);
   const [isHolding, setIsHolding] = useState(false);
@@ -205,21 +207,12 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
           setUserLocation(loc);
           userLocationRef.current = loc;
         } else {
-          // Fallback to profile location
-          const { data: { session: _tbSession } } = await supabase.auth.getSession();
-          const user = _tbSession?.user;
-          if (user?.id) {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('city, country')
-              .eq('id', user.id)
-              .maybeSingle();
-            if (profile && (profile.city || profile.country)) {
-              const loc = { city: profile.city || undefined, country: profile.country || undefined };
-              console.log('[Talk] Fetched user location from profile:', loc);
-              setUserLocation(loc);
-              userLocationRef.current = loc;
-            }
+          // Fallback to profile location from cached profile (passed via prop or localStorage)
+          if (_tbCachedProfile && (_tbCachedProfile.city || _tbCachedProfile.country)) {
+            const loc = { city: _tbCachedProfile.city || undefined, country: _tbCachedProfile.country || undefined };
+            console.log('[Talk] Got location from cached profile:', loc);
+            setUserLocation(loc);
+            userLocationRef.current = loc;
           }
         }
       } catch (e) {

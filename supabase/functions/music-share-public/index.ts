@@ -27,19 +27,19 @@ serve(async (req) => {
 
   try {
     let trackId = "";
-    let idPrefix = "";
+    let shareCode = "";
 
     if (req.method === "GET") {
       const url = new URL(req.url);
       trackId = (url.searchParams.get("id") || "").trim();
-      idPrefix = (url.searchParams.get("id_prefix") || "").trim();
+      shareCode = (url.searchParams.get("share_code") || "").trim();
     } else {
       const body = await req.json().catch(() => ({}));
       trackId = (body?.id || "").toString().trim();
-      idPrefix = (body?.id_prefix || "").toString().trim();
+      shareCode = (body?.share_code || "").toString().trim();
     }
 
-    if (!trackId && !idPrefix) {
+    if (!trackId && !shareCode) {
       return new Response(JSON.stringify({ error: "Missing track id" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -53,18 +53,17 @@ serve(async (req) => {
       // Legacy: exact UUID lookup
       const result = await supabaseService
         .from("user_music_tracks")
-        .select("id, created_at, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta")
+        .select("id, created_at, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta, share_code")
         .eq("id", trackId)
         .maybeSingle();
       data = result.data;
       error = result.error;
     } else {
-      // Pretty slug: lookup by UUID prefix (first 8 chars)
+      // Real short-link lookup by share_code
       const result = await supabaseService
         .from("user_music_tracks")
-        .select("id, created_at, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta")
-        .ilike("id", `${idPrefix}%`)
-        .limit(1)
+        .select("id, created_at, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta, share_code")
+        .eq("share_code", shareCode)
         .maybeSingle();
       data = result.data;
       error = result.error;

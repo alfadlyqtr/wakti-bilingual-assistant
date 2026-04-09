@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,22 +28,15 @@ export function SupportTicketModal({ isOpen, onClose, onSubmitted }: SupportTick
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const loadUserProfile = async () => {
-    const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
-    if (user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('display_name, email')
-        .eq('id', user.id)
-        .single();
-      
-      if (profile) {
-        setFormData(prev => ({
-          ...prev,
-          name: profile.display_name || '',
-          email: profile.email || ''
-        }));
-      }
+  const { profile: _stmProfile } = useUserProfile();
+
+  const loadUserProfile = () => {
+    if (_stmProfile) {
+      setFormData(prev => ({
+        ...prev,
+        name: _stmProfile.display_name || '',
+        email: _stmProfile.email || ''
+      }));
     }
   };
 

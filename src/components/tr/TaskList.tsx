@@ -1,5 +1,7 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -24,18 +26,13 @@ interface TaskListProps {
 
 export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksChanged }) => {
   const { language } = useTheme();
-  const [ownerName, setOwnerName] = useState<string>('Owner');
+  const { user: authUser } = useAuth();
+  const { profile: cachedProfile } = useUserProfile();
+  const ownerName = useMemo(() => {
+    const full = [cachedProfile?.first_name, cachedProfile?.last_name].filter(Boolean).join(' ');
+    return cachedProfile?.display_name || full || authUser?.email?.split('@')[0] || 'Owner';
+  }, [cachedProfile?.display_name, cachedProfile?.first_name, cachedProfile?.last_name, authUser?.email]);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      const user = session?.user;
-      if (!user) return;
-      const { data } = await supabase.from('profiles').select('display_name, first_name, last_name').eq('id', user.id).single();
-      const full = [data?.first_name, data?.last_name].filter(Boolean).join(' ');
-      setOwnerName(data?.display_name || full || user.email?.split('@')[0] || 'Owner');
-    });
-  }, []);
   // gridLayoutTasks: tasks explicitly set to grid. Default is LIST (better for mobile)
   const [gridLayoutTasks, setGridLayoutTasks] = useState<Set<string>>(new Set());
   const [subtaskVersion, setSubtaskVersion] = useState<Record<string, number>>({});

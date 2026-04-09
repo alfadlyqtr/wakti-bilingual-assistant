@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { toast } from 'sonner';
@@ -166,31 +167,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Trial access check — Ads Creator is locked for 24-hour trial users
-  const [isTrialUser, setIsTrialUser] = useState(false);
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const u = user;
-        if (!u?.id) return;
-        const { data: p } = await (supabase as any)
-          .from('profiles')
-          .select('is_subscribed, admin_gifted, payment_method, next_billing_date, free_access_start_at')
-          .eq('id', u.id)
-          .single();
-        if (!p || !mounted) return;
-        const isPaid = p.is_subscribed === true;
-        const isGifted = p.admin_gifted === true;
-        const pm = p.payment_method;
-        const hasActivePaid = pm && pm !== 'manual' && p.next_billing_date && new Date(p.next_billing_date) > new Date();
-        const isOn24hTrial = p.free_access_start_at != null;
-        if (!isPaid && !isGifted && !hasActivePaid && isOn24hTrial) {
-          setIsTrialUser(true);
-        }
-      } catch { /* non-critical */ }
-    })();
-    return () => { mounted = false; };
-  }, [user?.id]);
+  const { isSubscribed, isAdminGifted, hasTrialStarted } = useUserProfile();
+  const isTrialUser = !isSubscribed && !isAdminGifted && hasTrialStarted;
 
   // Ads Creator state
   const [cinemaVision, setCinemaVision] = useState('');

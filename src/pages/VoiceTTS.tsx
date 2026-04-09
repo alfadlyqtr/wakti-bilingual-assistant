@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import EnhancedAudioControls from '@/components/tasjeel/EnhancedAudioControls';
 import { Card } from '@/components/ui/card';
 import { formatDate } from '@/utils/datetime';
@@ -86,27 +87,8 @@ export default function VoiceTTS() {
   const [text, setText] = useState('');
 
   // Trial user check — used to enforce 250 char TTS limit
-  const [isTrialUser, setIsTrialUser] = useState(false);
-  useEffect(() => {
-    (async () => {
-      try {
-        const u = user;
-        if (!u?.id) return;
-        const { data: profile } = await (supabase as any)
-          .from('profiles')
-          .select('is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at')
-          .eq('id', u.id)
-          .single();
-        if (!profile) return;
-        const isPaid = profile.is_subscribed === true;
-        const isGifted = profile.admin_gifted === true;
-        const pm = profile.payment_method;
-        const isGift = pm && pm !== 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
-        const isOn24hTrial = profile.free_access_start_at != null;
-        if (!isPaid && !isGift && !isGifted && isOn24hTrial) setIsTrialUser(true);
-      } catch {}
-    })();
-  }, []);
+  const { isSubscribed, isAdminGifted, hasTrialStarted } = useUserProfile();
+  const isTrialUser = !isSubscribed && !isAdminGifted && hasTrialStarted;
   const [voices, setVoices] = useState<VoiceClone[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
   const [selectedStyle, setSelectedStyle] = useState<keyof typeof VOICE_STYLES>('neutral');
