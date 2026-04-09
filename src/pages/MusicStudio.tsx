@@ -4183,6 +4183,7 @@ type Playlist = {
   name: string;
   trackIds: string[];
   createdAt: number;
+  isSystem?: boolean;
 };
 
 // ─── Playlist storage helpers (Supabase-backed) ───────────────────────────────
@@ -4685,6 +4686,7 @@ function EditorTab() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: true });
       if (error) throw error;
+
       const pls: Playlist[] = (data || []).map((row: any) => ({
         id: row.id,
         name: row.name,
@@ -4840,6 +4842,33 @@ function EditorTab() {
     }
   };
 
+  const favoriteTrackIds = useMemo(() => {
+    return tracks
+      .filter((track) => Boolean((track.meta as any)?.favorite))
+      .map((track) => track.id);
+  }, [tracks]);
+
+  const favoritesPlaylist = useMemo<Playlist | null>(() => {
+    if (favoriteTrackIds.length === 0) return null;
+    return {
+      id: '__favorites__',
+      name: isAr ? 'المفضلة' : 'Favorites',
+      trackIds: favoriteTrackIds,
+      createdAt: Number.MAX_SAFE_INTEGER,
+      isSystem: true,
+    };
+  }, [favoriteTrackIds, isAr]);
+
+  const visiblePlaylists = useMemo(() => {
+    return favoritesPlaylist ? [favoritesPlaylist, ...playlists] : playlists;
+  }, [favoritesPlaylist, playlists]);
+
+  useEffect(() => {
+    if (activePlaylist?.isSystem && favoriteTrackIds.length === 0) setActivePlaylist(null);
+    if (editingPlaylist?.isSystem && favoriteTrackIds.length === 0) setEditingPlaylist(null);
+    if (deletePlaylistTarget?.isSystem && favoriteTrackIds.length === 0) setDeletePlaylistTarget(null);
+  }, [activePlaylist?.isSystem, editingPlaylist?.isSystem, deletePlaylistTarget?.isSystem, favoriteTrackIds.length]);
+
   const handleCreatePlaylist = async () => {
     const name = newPlaylistName.trim();
     if (!name || !user) return;
@@ -4864,6 +4893,7 @@ function EditorTab() {
   };
 
   const toggleTrackInPlaylist = async (pl: Playlist, trackId: string) => {
+    if (pl.isSystem) return;
     const has = pl.trackIds.includes(trackId);
     const newTrackIds = has ? pl.trackIds.filter(id => id !== trackId) : [...pl.trackIds, trackId];
     const updated: Playlist = { ...pl, trackIds: newTrackIds };
@@ -4884,6 +4914,7 @@ function EditorTab() {
   };
 
   const handleDeletePlaylist = async (pl: Playlist) => {
+    if (pl.isSystem) return;
     setPlaylists(prev => prev.filter(p => p.id !== pl.id));
     if (activePlaylist?.id === pl.id) setActivePlaylist(null);
     if (editingPlaylist?.id === pl.id) setEditingPlaylist(null);
@@ -4963,7 +4994,7 @@ function EditorTab() {
           />
           <div className="flex gap-2">
             <button onClick={handleCreatePlaylist} disabled={!newPlaylistName.trim()}
-              className="flex-1 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-purple-500 to-sky-500 text-white active:scale-95 transition-all disabled:opacity-40">
+              className="flex-1 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-purple-500 to-sky-500 text-white shadow-[0_4px_16px_rgba(128,0,255,0.4)] hover:shadow-[0_4px_24px_rgba(128,0,255,0.6)] active:scale-95 transition-all disabled:opacity-40">
               {isAr ? 'إنشاء' : 'Create'}
             </button>
             <button onClick={() => { setShowCreatePlaylist(false); setNewPlaylistName(''); }}
@@ -5043,7 +5074,7 @@ function EditorTab() {
                           : <div className="w-full h-full flex items-center justify-center"><Music className="h-6 w-6 text-sky-400/50" /></div>
                         }
                       </div>
-                      <div className="flex-1 min-w-0 space-y-1.5">
+                      <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 min-w-0">
@@ -5342,7 +5373,7 @@ function EditorTab() {
       {/* ══ MY PLAYLISTS TAB ═══════════════════════════════════════════════════ */}
       {savedSubTab === 'playlists' && (
         <div className="space-y-3">
-          {playlists.length === 0 ? (
+          {visiblePlaylists.length === 0 ? (
             <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-[#ffffff] dark:bg-white/[0.02] shadow-[0_12px_32px_rgba(6,5,65,0.08)] dark:shadow-none p-10 flex flex-col items-center gap-3 text-center">
               <div className="w-12 h-12 rounded-full bg-[#f7f8fc] dark:bg-white/[0.05] border border-[#e4e7ef] dark:border-transparent flex items-center justify-center">
                 <ListMusic className="h-6 w-6 text-muted-foreground/40" />
@@ -5354,16 +5385,16 @@ function EditorTab() {
               </button>
             </div>
           ) : (
-            playlists.map(pl => {
+            visiblePlaylists.map(pl => {
               const isOpen = editingPlaylist?.id === pl.id;
               const pickerOpen = pickerPlaylistId === pl.id;
               const plTracks = pl.trackIds.map(id => tracks.find(t => t.id === id)).filter(Boolean) as SavedTrack[];
+
               return (
                 <div key={pl.id} className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-gradient-to-br from-[#ffffff] via-[#f8f9fc] to-[#f3f5fb] dark:from-white/[0.04] dark:to-white/[0.03] shadow-[0_12px_32px_rgba(6,5,65,0.10)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)] overflow-hidden">
-                  {/* Playlist header */}
                   <div className="flex items-center gap-3 p-3 border-b border-[#eef1f6] dark:border-transparent">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#efe7ff] to-[#dff0ff] dark:from-purple-900/50 dark:to-sky-900/50 border border-[#d9c5f3] dark:border-purple-400/20 flex items-center justify-center flex-shrink-0 shadow-[0_4px_12px_rgba(124,58,237,0.10)] dark:shadow-none">
-                      <ListMusic className="h-4 w-4 text-purple-400" />
+                    <div className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 shadow-[0_4px_12px_rgba(124,58,237,0.10)] dark:shadow-none ${pl.isSystem ? 'bg-gradient-to-br from-[#fff6d8] to-[#ffe9a8] dark:from-amber-500/20 dark:to-yellow-500/20 border-[#f2c96d] dark:border-amber-400/20' : 'bg-gradient-to-br from-[#efe7ff] to-[#dff0ff] dark:from-purple-900/50 dark:to-sky-900/50 border-[#d9c5f3] dark:border-purple-400/20'}`}>
+                      {pl.isSystem ? <Star className="h-4 w-4 text-amber-500 fill-current" /> : <ListMusic className="h-4 w-4 text-purple-400" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-foreground truncate">{pl.name}</p>
@@ -5380,8 +5411,8 @@ function EditorTab() {
                       <button
                         onClick={() => setPickerPlaylistId(pickerOpen ? null : pl.id)}
                         title={isAr ? 'إضافة أو إزالة المقاطع' : 'Add or remove tracks'}
-                        className={`p-2 rounded-xl transition-all active:scale-95 ${pickerOpen ? 'bg-[#dff0ff] dark:bg-sky-500/20 text-[#0284c7] dark:text-sky-300 border border-[#bfdbfe] dark:border-transparent shadow-[0_4px_12px_rgba(2,132,199,0.10)] dark:shadow-none' : 'text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground bg-[#ffffff] dark:bg-transparent border border-[#e5e7eb] dark:border-transparent hover:bg-[#f8f9fc] dark:hover:bg-white/[0.06]'}`}
-                      >
+                        disabled={pl.isSystem}
+                        className={`p-2 rounded-xl transition-all active:scale-95 ${pickerOpen ? 'bg-[#dff0ff] dark:bg-sky-500/20 text-[#0284c7] dark:text-sky-300 border border-[#bfdbfe] dark:border-transparent shadow-[0_4px_12px_rgba(2,132,199,0.10)] dark:shadow-none' : 'text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground bg-[#ffffff] dark:bg-transparent border border-[#e5e7eb] dark:border-transparent hover:bg-[#f8f9fc] dark:hover:bg-white/[0.06]'}`}>
                         <Plus className="h-3.5 w-3.5" />
                       </button>
                       <button onClick={() => setEditingPlaylist(isOpen ? null : pl)}
@@ -5389,23 +5420,23 @@ function EditorTab() {
                         className="p-2 rounded-xl text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground bg-[#ffffff] dark:bg-transparent border border-[#e5e7eb] dark:border-transparent hover:bg-[#f8f9fc] dark:hover:bg-white/[0.06] transition-all active:scale-95">
                         {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                       </button>
-                      <button onClick={() => setDeletePlaylistTarget(pl)}
-                        title={isAr ? 'حذف القائمة' : 'Delete playlist'}
-                        className="p-2 rounded-xl text-muted-foreground/40 bg-[#ffffff] dark:bg-transparent border border-[#e5e7eb] dark:border-transparent hover:text-red-400 hover:bg-red-500/10 transition-colors active:scale-95">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {!pl.isSystem && (
+                        <button onClick={() => setDeletePlaylistTarget(pl)}
+                          title={isAr ? 'حذف القائمة' : 'Delete playlist'}
+                          className="p-2 rounded-xl text-muted-foreground/40 bg-[#ffffff] dark:bg-transparent border border-[#e5e7eb] dark:border-transparent hover:text-red-400 hover:bg-red-500/10 transition-colors active:scale-95">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
-                  {/* Expand: playlist details + controls */}
                   {isOpen && (
                     <div className="border-t border-[#eef1f6] dark:border-white/10 p-3 space-y-2 bg-[#fcfefd] dark:bg-transparent">
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => setActivePlaylist(activePlaylist?.id === pl.id ? null : pl)}
                           disabled={pl.trackIds.length === 0}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 disabled:opacity-40 ${activePlaylist?.id === pl.id ? 'border-[#d9c5f3] dark:border-purple-400/30 bg-[#efe7ff] dark:bg-purple-500/15 text-[#7c3aed] dark:text-purple-300 shadow-[0_4px_12px_rgba(124,58,237,0.10)] dark:shadow-none' : 'border-[#d9dde7] dark:border-white/10 bg-[#ffffff] dark:bg-transparent text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20'}`}
-                        >
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 disabled:opacity-40 ${activePlaylist?.id === pl.id ? 'border-[#d9c5f3] dark:border-purple-400/30 bg-[#efe7ff] dark:bg-purple-500/15 text-[#7c3aed] dark:text-purple-300 shadow-[0_4px_12px_rgba(124,58,237,0.10)] dark:shadow-none' : 'border-[#d9dde7] dark:border-white/10 bg-[#ffffff] dark:bg-transparent text-[#6b7280] dark:text-muted-foreground hover:text-[#060541] dark:hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20'}`}>
                           <Play className="h-3 w-3" />
                           {activePlaylist?.id === pl.id ? (isAr ? 'يتم التشغيل' : 'Playing') : (isAr ? 'تشغيل' : 'Play')}
                         </button>
@@ -5439,45 +5470,46 @@ function EditorTab() {
                                   : <div className="w-7 h-7 rounded-lg bg-[#f7f8fc] dark:bg-white/[0.06] border border-[#e4e7ef] dark:border-transparent flex items-center justify-center flex-shrink-0"><Music className="h-3 w-3 text-muted-foreground/40" /></div>
                                 }
                                 <span className="text-xs text-foreground truncate flex-1">{tTitle}</span>
-                                <button
-                                  onClick={() => toggleTrackInPlaylist(pl, t.id)}
-                                  title={isAr ? 'إزالة من القائمة' : 'Remove from playlist'}
-                                  className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
+                                {!pl.isSystem && (
+                                  <button
+                                    onClick={() => toggleTrackInPlaylist(pl, t.id)}
+                                    title={isAr ? 'إزالة من القائمة' : 'Remove from playlist'}
+                                    className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                )}
                               </div>
                             );
                           })}
                         </div>
                       )}
-                    </div>
-                  )}
 
-                  {/* Separate library picker only when explicitly requested */}
-                  {pickerOpen && (
-                    <div className="border-t border-[#eef1f6] dark:border-white/10 p-3 space-y-2 bg-[#f8fafc] dark:bg-white/[0.02]">
-                      <p className="text-[10px] text-muted-foreground/60 font-semibold uppercase tracking-wider">
-                        {isAr ? 'أضف من مقاطعك المحفوظة' : 'Add from your saved tracks'}
-                      </p>
-                      {tracks.length === 0 ? (
-                        <p className="text-xs text-muted-foreground/40">{isAr ? 'لا توجد مقاطع محفوظة.' : 'No saved tracks.'}</p>
-                      ) : (
-                        <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                          {tracks.filter(t => !pl.trackIds.includes(t.id)).map(t => {
-                            const tTitle = t.title || (isAr ? 'مقطع موسيقي' : 'Music Track');
-                            return (
-                              <button key={t.id} onClick={() => toggleTrackInPlaylist(pl, t.id)}
-                                className="w-full flex items-center gap-2 px-2 py-2 rounded-xl text-left transition-all active:scale-[0.98] bg-[#ffffff] dark:bg-transparent border border-[#e5e7eb] dark:border-transparent hover:bg-[#f8f9fc] dark:hover:bg-white/[0.04] shadow-[0_2px_8px_rgba(6,5,65,0.04)] dark:shadow-none">
-                                <div className="w-4 h-4 rounded-md border flex items-center justify-center flex-shrink-0 transition-colors border-[#d1d5db] dark:border-white/20" />
-                                {t.cover_url
-                                  ? <img src={t.cover_url} alt={tTitle} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
-                                  : <div className="w-7 h-7 rounded-lg bg-[#f7f8fc] dark:bg-white/[0.06] border border-[#e4e7ef] dark:border-transparent flex items-center justify-center flex-shrink-0"><Music className="h-3 w-3 text-muted-foreground/40" /></div>
-                                }
-                                <span className="text-xs text-foreground truncate flex-1">{tTitle}</span>
-                              </button>
-                            );
-                          })}
+                      {pickerOpen && !pl.isSystem && (
+                        <div className="pt-2 border-t border-[#eef1f6] dark:border-white/10 space-y-2">
+                          <p className="text-[10px] text-muted-foreground/60 font-semibold uppercase tracking-wider">
+                            {isAr ? 'إضافة مقاطع إلى القائمة' : 'Add tracks to playlist'}
+                          </p>
+                          {tracks.filter(t => !pl.trackIds.includes(t.id)).length === 0 ? (
+                            <p className="text-xs text-muted-foreground/40">{isAr ? 'كل المقاطع موجودة بالفعل في هذه القائمة.' : 'All tracks are already in this playlist.'}</p>
+                          ) : (
+                            <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                              {tracks.filter(t => !pl.trackIds.includes(t.id)).map(t => {
+                                const tTitle = t.title || (isAr ? 'مقطع موسيقي' : 'Music Track');
+                                return (
+                                  <button key={t.id} onClick={() => toggleTrackInPlaylist(pl, t.id)}
+                                    className="w-full flex items-center gap-2 px-2 py-2 rounded-xl text-left transition-all active:scale-[0.98] bg-[#ffffff] dark:bg-transparent border border-[#e5e7eb] dark:border-transparent hover:bg-[#f8f9fc] dark:hover:bg-white/[0.04] shadow-[0_2px_8px_rgba(6,5,65,0.04)] dark:shadow-none">
+                                    <div className="w-4 h-4 rounded-md border flex items-center justify-center flex-shrink-0 transition-colors border-[#d1d5db] dark:border-white/20" />
+                                    {t.cover_url
+                                      ? <img src={t.cover_url} alt={tTitle} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
+                                      : <div className="w-7 h-7 rounded-lg bg-[#f7f8fc] dark:bg-white/[0.06] border border-[#e4e7ef] dark:border-transparent flex items-center justify-center flex-shrink-0"><Music className="h-3 w-3 text-muted-foreground/40" /></div>
+                                    }
+                                    <span className="text-xs text-foreground truncate flex-1">{tTitle}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -5488,7 +5520,6 @@ function EditorTab() {
           )}
         </div>
       )}
-
       {/* ── Delete track dialog ── */}
       <AlertDialog open={!!deleteTrackTarget} onOpenChange={(open) => !open && setDeleteTrackTarget(null)}>
         <AlertDialogContent>
