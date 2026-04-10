@@ -205,7 +205,7 @@ async function ampMusicLyricsWithOpenAI(
   const payload = {
     model: "gpt-4o-mini",
     temperature: 0.7,
-    max_tokens: 1200,
+    max_tokens: durationSeconds >= 90 ? 2000 : 1200,
     messages: [
       {
         role: "system",

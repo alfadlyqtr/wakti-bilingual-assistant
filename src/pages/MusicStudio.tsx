@@ -1485,6 +1485,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   // Minimal mode only: styles include/exclude + prompt + duration
   const [submitting, setSubmitting] = useState(false);
   const [amping, setAmping] = useState(false);
+  const [ampMode, setAmpMode] = useState<'idea' | 'expand'>('expand');
   const [vocalType, setVocalType] = useState<'auto'|'none'|'female'|'male'>('auto');
   const [vocalsOpen, setVocalsOpen] = useState(false);
   const [lyricsOpen, setLyricsOpen] = useState(false);
@@ -2464,22 +2465,18 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       if (title.trim()) contextParts.push(`Title: ${title.trim()}`);
       
       const context = contextParts.length > 0 ? contextParts.join('\n') + '\n\n' : '';
-      const fullInput = context + `User lyrics:\n${userInput}`;
-      
+      const modeHint = ampMode === 'idea'
+        ? 'MODE: The user is giving you an IDEA or concept — generate completely fresh lyrics from scratch based on this idea.\n\n'
+        : 'MODE: The user is giving you existing LYRICS — preserve their exact words and expand around them into a full song structure.\n\n';
+      const fullInput = context + modeHint + `User input:\n${userInput}`;
       const { data, error } = await supabase.functions.invoke('music-amp', {
-        body: { 
-          text: fullInput, 
-          mode: 'lyrics',
-          duration: duration 
-        }
+        body: { text: fullInput, mode: 'lyrics', duration: duration }
       });
-      
       if (error) throw error;
       const expandedLyrics = (data?.text || '').toString();
       if (!expandedLyrics) throw new Error(isAr ? 'تعذّر التوسيع' : 'Expansion failed');
-      
       setLyricsText(expandedLyrics);
-      toast.success(isAr ? 'تم توسيع الكلمات' : 'Lyrics expanded');
+      toast.success(isAr ? (ampMode === 'idea' ? 'تم إنشاء الكلمات' : 'تم توسيع الكلمات') : (ampMode === 'idea' ? 'Lyrics generated' : 'Lyrics expanded'));
     } catch (e: any) {
       toast.error((isAr ? 'فشل: ' : 'Failed: ') + (e?.message || String(e)));
     } finally {
@@ -3222,7 +3219,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
       const kieStyle = buildKieStyleString();
       const kieNegativeTags = buildKieNegativeTags();
-      const durationTarget = Math.min(120, duration);
+      const durationTarget = Math.min(150, duration);
 
       const invokeBody: Record<string, unknown> = {
         title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
@@ -3997,7 +3994,31 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
             <span className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-rose-300">{isAr ? 'مطلوب' : 'Must'}</span>
           </div>
           <div className="space-y-3">
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1 p-0.5 rounded-lg bg-black/5 dark:bg-white/[0.06] border border-black/10 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setAmpMode('idea')}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${
+                    ampMode === 'idea'
+                      ? 'bg-purple-500 text-white shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {isAr ? 'فكرة' : 'Idea'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAmpMode('expand')}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${
+                    ampMode === 'expand'
+                      ? 'bg-purple-500 text-white shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {isAr ? 'توسيع' : 'Expand'}
+                </button>
+              </div>
               <button
                 type="button"
                 disabled={amping || submitting}
@@ -4005,8 +4026,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border border-purple-200 dark:border-purple-400/30 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-300 shadow-[0_4px_12px_rgba(168,85,247,0.10)] dark:shadow-none hover:bg-purple-100 dark:hover:bg-purple-500/20 active:scale-95 transition-all disabled:opacity-50"
               >
                 {amping
-                  ? <><Loader2 className="h-3 w-3 animate-spin" />{isAr ? 'تحسين...' : 'Amping...'}</>
-                  : <><Sparkles className="h-3 w-3" />{isAr ? 'تحسين Amp' : 'Amp'}</>
+                  ? <><Loader2 className="h-3 w-3 animate-spin" />{isAr ? 'جاري...' : 'Working...'}</>
+                  : <><Sparkles className="h-3 w-3" />{isAr ? 'Amp' : 'Amp'}</>
                 }
               </button>
             </div>
@@ -4028,7 +4049,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
             <div className="flex items-center gap-3 pt-1">
               <select
                 value={duration}
-                onChange={(e) => setDuration(Math.min(120, Math.max(10, parseInt(e.target.value || '30'))))}
+                onChange={(e) => setDuration(Math.min(150, Math.max(10, parseInt(e.target.value || '30'))))}
                 title={isAr ? 'المدة' : 'Duration'}
                 className="flex-shrink-0 px-3 py-2 rounded-xl border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.04)] dark:shadow-none text-foreground text-sm focus:border-sky-400/50 focus:outline-none"
               >
@@ -4037,6 +4058,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 <option value={60}>1:00</option>
                 <option value={90}>1:30</option>
                 <option value={120}>2:00</option>
+                <option value={150}>2:30</option>
               </select>
               <button
                 type="button"
