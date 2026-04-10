@@ -4092,6 +4092,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               <span>{Array.from(lyricsText).length}/{lyricsCap}</span>
             </div>
 
+            <p className="text-[11px] font-semibold text-[#606062] dark:text-white/60 text-center">
+              {isAr ? 'اقرأ الكلمات جيدًا قبل الإنشاء، الذكاء الاصطناعي ليس إنسانًا 😉' : 'Please read the lyrics carefully before generating, AI is not human 😉'}
+            </p>
+
             <div className="flex items-center gap-3 pt-1">
               <select
                 value={duration}
