@@ -1284,7 +1284,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       return [
         {
           title: 'خليجي — أساسي',
-          items: ['بوب خليجي','خليجي رومانسي','خليجي أنيق','خليجي حفلات','خليجي أعراس']
+          items: ['بوب خليجي','خليجي رومانسي','خليجي أنيق','خليجي حفلات','خليجي أعراس','خليجي راب']
         },
         {
           title: 'خليجي — راديو وكروس أوفر',
@@ -1371,7 +1371,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     return [
       {
         title: 'GCC — Core',
-        items: ['GCC Pop','GCC Romantic','GCC Elegant','GCC Party','GCC Wedding']
+        items: ['GCC Pop','GCC Romantic','GCC Elegant','GCC Party','GCC Wedding','GCC Rap']
       },
       {
         title: 'GCC — Radio & Crossover',
@@ -1529,6 +1529,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       return {
         // GCC Core
         'بوب خليجي': ['طبلة', 'دربوكة', 'طار', 'جيتار كهربائي', 'سينث باد'],
+        'خليجي راب': ['808 باص', 'هاي-هات', 'طبلة', 'دربوكة', 'سينث باص'],
         'خليجي عصري': ['طبلة', 'دربوكة', 'جيتار كهربائي', 'سينث باد', 'باص جيتار'],
         'خليجي رومانسي': ['قانون', 'ناي', 'كمان', 'بيانو', 'تشيلو'],
         'خليجي أنيق': ['قانون', 'ناي', 'كمان', 'بيانو'],
@@ -1564,6 +1565,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     return {
       // ── GCC Core ──
       'GCC Pop': ['808 bass groove', 'trap hi-hats', 'mirwas percussion', 'synth lead', 'bass guitar', 'hand claps'],
+      'GCC Rap': ['808 bass groove', 'trap hi-hats', 'mirwas percussion', 'darbuka percussion', 'synth bass', 'hand claps'],
       'GCC Romantic': ['violin lead', 'ney texture', 'piano melody', 'cello texture', 'riq percussion'],
       'GCC Elegant': ['violin lead', 'qanun texture', 'piano melody', 'ney texture', 'strings pad'],
       'GCC Party': ['mirwas lead', 'darbuka percussion', 'frame drum groove', 'hand claps', 'synth lead'],
@@ -1800,6 +1802,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const STYLE_RHYTHM_MAPPING: Record<string, string[]> = {
     // ── Arabic style names → Arabic rhythm names ──
     'بوب خليجي': ['تراب بيت', 'إيقاع خليجي'],
+    'خليجي راب': ['تراب بيت', 'إيقاع خليجي'],
     'خليجي رومانسي': ['عدني', 'بالاد هادئ'],
     'خليجي أنيق': ['عدني', 'خليجي متمايل'],
     'خليجي حفلات': ['إيقاع خليجي', 'إيقاع تصفيق'],
@@ -1843,6 +1846,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'أفروبيتس': ['أفرو خليجي', 'بوب ٤/٤'],
     // ── English style names → English rhythm names ──
     'GCC Pop': ['Trap Beat', 'Gulf Groove'],
+    'GCC Rap': ['Trap Beat', 'Gulf Groove'],
     'Khaleeji Pop': ['Trap Beat', 'Gulf Groove'],
     'GCC Romantic': ['Adani', 'Ballad Slow Groove'],
     'GCC Elegant': ['Adani', 'Khaleeji Shuffle'],
@@ -2065,6 +2069,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const STYLE_MOOD_MAPPING: Record<string, string[]> = {
     // ── Arabic style names → Arabic mood names ──
     'بوب خليجي': ['مفعم بالطاقة', 'واثق', 'جريء'],
+    'خليجي راب': ['واثق', 'جريء', 'مكثف'],
     'خليجي رومانسي': ['رومانسي', 'عاطفي', 'حنون'],
     'خليجي أنيق': ['فاخر', 'واثق', 'مشع'],
     'خليجي حفلات': ['مفعم بالطاقة', 'حفلة', 'سعيد'],
@@ -2114,6 +2119,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'أفروبيت': ['مفعم بالطاقة', 'سعيد', 'متمايل'],
     // ── English style names → English mood names ──
     'GCC Pop': ['energetic', 'confident', 'bold'],
+    'GCC Rap': ['confident', 'bold', 'intense'],
     'Khaleeji Pop': ['energetic', 'confident', 'bold'],
     'GCC Romantic': ['romantic', 'emotional', 'tender'],
     'GCC Elegant': ['luxurious', 'confident', 'radiant'],
@@ -2898,6 +2904,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const GCC_PRONUNCIATION_NEGATIVES: Record<string, string> = {
     'English GCC Pop': '', 'إنجليزي بطابع خليجي': '',
     'GCC Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'GCC Rap': 'egyptian arabic pronunciation, levantine arabic pronunciation',
     'Khaleeji Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
     'GCC Romantic': 'egyptian arabic pronunciation, levantine arabic pronunciation',
     'GCC Elegant': 'egyptian arabic pronunciation, levantine arabic pronunciation',
@@ -2922,7 +2929,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'Zar': 'egyptian arabic pronunciation, levantine arabic pronunciation',
     'Ardah': 'egyptian arabic pronunciation, levantine arabic pronunciation',
     'Khaleeji Trap': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'بوب خليجي': 'نطق مصري، نطق شامي', 'خليجي عصري': 'نطق مصري، نطق شامي',
+    'بوب خليجي': 'نطق مصري، نطق شامي', 'خليجي راب': 'نطق مصري، نطق شامي', 'خليجي عصري': 'نطق مصري، نطق شامي',
     'خليجي رومانسي': 'نطق مصري، نطق شامي', 'خليجي أنيق': 'نطق مصري، نطق شامي',
     'خليجي حفلات': 'نطق مصري، نطق شامي', 'خليجي أعراس': 'نطق مصري، نطق شامي',
     'خليجي إذاعي': 'نطق مصري، نطق شامي', 'خليجي دانس': 'نطق مصري، نطق شامي',
@@ -2938,6 +2945,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   // Default rhythm + instrument anchors per GCC style — auto-filled when user skips those sections
   const GCC_STYLE_ANCHORS: Record<string, { rhythm: string; instrument: string; production?: string }> = {
     'GCC Pop': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
+    'GCC Rap': { rhythm: 'trap beat', instrument: '808 bass groove', production: 'mirwas percussion' },
     'Khaleeji Pop': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
     'GCC Romantic': { rhythm: 'adani rhythm', instrument: 'oud lead', production: 'soft strings' },
     'GCC Elegant': { rhythm: 'adani rhythm', instrument: 'violin lead', production: 'strings texture' },
@@ -2964,6 +2972,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'Ardah': { rhythm: 'samri rhythm', instrument: 'tabl drum lead', production: 'mirwas texture' },
     'Khaleeji Trap': { rhythm: 'trap beat', instrument: '808 bass groove', production: 'mirwas texture' },
     'بوب خليجي': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
+    'خليجي راب': { rhythm: 'trap beat', instrument: '808 bass groove', production: 'mirwas percussion' },
     'خليجي عصري': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
     'خليجي رومانسي': { rhythm: 'adani rhythm', instrument: 'oud lead', production: 'soft strings' },
     'خليجي أنيق': { rhythm: 'adani rhythm', instrument: 'violin lead', production: 'strings texture' },
@@ -3004,6 +3013,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const mappings: Record<string, string> = {
         // ── GCC Core (compressed tag format) ──
         'GCC Pop': 'khaleeji pop, gulf arabic, catchy hook, polished, strict khaleeji dialect',
+        'GCC Rap': 'khaleeji rap, gulf arabic, urban rhythmic flow, strict khaleeji dialect',
         'Khaleeji Pop': 'khaleeji pop, gulf arabic, authentic khaleeji sound, strict khaleeji dialect',
         'GCC Romantic': 'khaleeji romantic ballad, gulf arabic, warm emotional, strict khaleeji dialect',
         'GCC Elegant': 'khaleeji elegant pop, gulf arabic, refined classy, strict khaleeji dialect',
@@ -3099,6 +3109,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         'إيقاع نادي': 'بيت نادي راقص',
         // ── Arabic style chips (compressed) ──
         'بوب خليجي': 'بوب خليجي عصري، لهجة خليجية صارمة',
+        'خليجي راب': 'راب خليجي، إيقاع حضري، لهجة خليجية صارمة',
         'خليجي عصري': 'خليجي عصري، لهجة خليجية',
         'خليجي رومانسي': 'خليجي رومانسي، بالاد دافئ، لهجة خليجية صارمة',
         'خليجي أنيق': 'خليجي أنيق، راقٍ مصقول، لهجة خليجية صارمة',
@@ -5006,7 +5017,7 @@ function EditorTab() {
       )}
 
       {/* ── Active Playlist Player ── */}
-      {activePlaylist && (
+      {savedSubTab === 'playlists' && activePlaylist && (
         <PlaylistPlayer
           playlist={activePlaylist}
           tracks={tracks}
@@ -5058,14 +5069,15 @@ function EditorTab() {
                 const isActivePlaying = activePlayingTrackId === t.id;
 
                 return (
-                  <div key={t.id}
+                  <div
+                    key={t.id}
                     className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br transition-all duration-300 ${isActivePlaying
                       ? 'border-fuchsia-300 dark:border-fuchsia-400/40 from-[#fff5fd] via-[#f6eeff] to-[#eef6ff] dark:from-fuchsia-500/10 dark:via-purple-500/10 dark:to-sky-500/10 shadow-[0_16px_40px_rgba(168,85,247,0.18)] dark:shadow-[0_0_32px_rgba(217,70,239,0.22)]'
                       : 'border-[#d9dde7] dark:border-white/10 from-[#ffffff] via-[#f8f9fc] to-[#f3f5fb] dark:from-white/[0.04] dark:to-white/[0.02] shadow-[0_12px_32px_rgba(6,5,65,0.10)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]'
                     }`}
                   >
                     {isActivePlaying && (
-                      <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-fuchsia-500 via-purple-500 to-sky-500" />
+                      <div className="music-playing-top-line pointer-events-none absolute inset-x-0 top-0 h-1.5" />
                     )}
                     <div className="p-4 flex gap-4 items-start">
                       <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-gradient-to-br from-sky-100 to-purple-100 dark:from-sky-900/40 dark:to-purple-900/40 border border-[#d9dde7] dark:border-white/10 shadow-md">
@@ -5137,8 +5149,7 @@ function EditorTab() {
                                 const kieTrackId = (t.meta as any)?.kie_track_id as string | undefined;
                                 const isValidAudioId = !!kieTrackId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(kieTrackId);
                                 const canCreatePoster = !!t.task_id && isValidAudioId;
-                                
-                                // Always show completed poster button if exists
+
                                 const posterButton = completedPoster ? (
                                   <button type="button"
                                     onClick={() => setSavedSubTab('posters')}
@@ -5160,7 +5171,7 @@ function EditorTab() {
                                     {isAr ? 'بوستر وتسميات' : 'Poster & Captions'}
                                   </button>
                                 ) : null;
-                                
+
                                 return posterButton;
                               })()}
                               <button type="button"
@@ -5386,6 +5397,8 @@ function EditorTab() {
             </div>
           ) : (
             visiblePlaylists.map(pl => {
+              if (activePlaylist?.id === pl.id) return null;
+
               const isOpen = editingPlaylist?.id === pl.id;
               const pickerOpen = pickerPlaylistId === pl.id;
               const plTracks = pl.trackIds.map(id => tracks.find(t => t.id === id)).filter(Boolean) as SavedTrack[];

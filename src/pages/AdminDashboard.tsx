@@ -49,7 +49,7 @@ export default function AdminDashboard() {
     setLoading(true);
     try {
       const [pulseRes, metricsRes, brainRes] = await Promise.all([
-        supabase.from("ceo_pulse_summary").select("*").single(),
+        supabase.rpc("get_ceo_pulse_summary").single(),
         supabase
           .from("app_metrics")
           .select("platform, downloads, revenue")

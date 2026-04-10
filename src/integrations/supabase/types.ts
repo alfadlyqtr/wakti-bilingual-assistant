@@ -6771,6 +6771,16 @@ export type Database = {
           role: string
         }[]
       }
+      get_ceo_pulse_summary: {
+        Args: never
+        Returns: {
+          active_gift_users: number
+          active_paid_users: number
+          conversion_rate: number
+          current_mrr: number
+          total_users: number
+        }[]
+      }
       get_admin_dashboard_stats: {
         Args: never
         Returns: {
