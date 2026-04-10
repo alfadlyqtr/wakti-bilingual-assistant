@@ -5,7 +5,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
 import ShareButton from '@/components/ui/ShareButton';
 import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
 import {
@@ -46,6 +45,11 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
   // Lightbox
   const [lightboxImage, setLightboxImage] = useState<SavedImage | null>(null);
   const [lightboxZoom, setLightboxZoom] = useState(1);
+  const lightboxZoomRef = useRef(1);
+  const lightboxImageRef = useRef<HTMLImageElement | null>(null);
+  const lightboxSliderRef = useRef<HTMLInputElement | null>(null);
+  const lightboxPctRef = useRef<HTMLSpanElement | null>(null);
+  const lightboxContainerRef = useRef<HTMLDivElement | null>(null);
   const pinchDistanceRef = useRef<number | null>(null);
   const pinchStartZoomRef = useRef(1);
 
@@ -73,39 +77,71 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
   }, [loadImages]);
 
   useEffect(() => {
-    setLightboxZoom(1);
+    lightboxZoomRef.current = 1;
     pinchDistanceRef.current = null;
     pinchStartZoomRef.current = 1;
+    setLightboxZoom(1);
   }, [lightboxImage]);
 
   const clampZoom = useCallback((value: number) => Math.min(3, Math.max(1, value)), []);
 
-  const getTouchDistance = (touches: React.TouchList) => {
+  const applyLightboxZoom = useCallback((value: number) => {
+    const nextZoom = clampZoom(value);
+    lightboxZoomRef.current = nextZoom;
+    if (lightboxImageRef.current) {
+      lightboxImageRef.current.style.transform = `scale(${nextZoom})`;
+    }
+    if (lightboxSliderRef.current) {
+      lightboxSliderRef.current.value = String(nextZoom);
+    }
+    if (lightboxPctRef.current) {
+      lightboxPctRef.current.textContent = `${Math.round(nextZoom * 100)}%`;
+    }
+  }, [clampZoom]);
+
+  const getTouchDistance = (touches: TouchList) => {
     if (touches.length < 2) return null;
     const dx = touches[0].clientX - touches[1].clientX;
     const dy = touches[0].clientY - touches[1].clientY;
     return Math.hypot(dx, dy);
   };
 
-  const handleImageTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    const distance = getTouchDistance(event.touches);
-    if (distance == null) return;
-    pinchDistanceRef.current = distance;
-    pinchStartZoomRef.current = lightboxZoom;
-  };
+  useEffect(() => {
+    const el = lightboxContainerRef.current;
+    if (!el || !lightboxImage) return;
 
-  const handleImageTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
-    const distance = getTouchDistance(event.touches);
-    if (distance == null || pinchDistanceRef.current == null) return;
-    event.preventDefault();
-    const nextZoom = pinchStartZoomRef.current * (distance / pinchDistanceRef.current);
-    setLightboxZoom(clampZoom(nextZoom));
-  };
+    const onTouchStart = (e: TouchEvent) => {
+      const dist = getTouchDistance(e.touches);
+      if (dist == null) return;
+      pinchDistanceRef.current = dist;
+      pinchStartZoomRef.current = lightboxZoomRef.current;
+    };
 
-  const handleImageTouchEnd = () => {
-    pinchDistanceRef.current = null;
-    pinchStartZoomRef.current = lightboxZoom;
-  };
+    const onTouchMove = (e: TouchEvent) => {
+      const dist = getTouchDistance(e.touches);
+      if (dist == null || pinchDistanceRef.current == null) return;
+      e.preventDefault();
+      const nextZoom = pinchStartZoomRef.current * (dist / pinchDistanceRef.current);
+      applyLightboxZoom(nextZoom);
+    };
+
+    const onTouchEnd = () => {
+      pinchDistanceRef.current = null;
+      pinchStartZoomRef.current = lightboxZoomRef.current;
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    el.addEventListener('touchcancel', onTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [lightboxImage, applyLightboxZoom]);
 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
@@ -190,100 +226,9 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
     return entry ? (language === 'ar' ? entry.ar : entry.en) : s;
   };
 
-  // ─── Lightbox ───
-  const Lightbox = () => {
-    if (!lightboxImage) return null;
-    return createPortal(
-      <div
-        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-sm"
-        onClick={() => {
-          setLightboxImage(null);
-          setLightboxZoom(1);
-        }}
-      >
-        <button
-          onClick={() => {
-            setLightboxImage(null);
-            setLightboxZoom(1);
-          }}
-          className="absolute top-6 right-6 z-10 h-12 w-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-xl text-white flex items-center justify-center active:scale-90 transition-all border border-white/20 shadow-lg"
-          aria-label="Close"
-        >
-          <X className="h-6 w-6" />
-        </button>
-
-        <div
-          className="flex flex-col items-center gap-4 px-4 w-full"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div
-            className="w-full max-w-5xl max-h-[70vh] overflow-auto rounded-2xl"
-            onTouchStart={handleImageTouchStart}
-            onTouchMove={handleImageTouchMove}
-            onTouchEnd={handleImageTouchEnd}
-            onTouchCancel={handleImageTouchEnd}
-          >
-            <div className="flex items-center justify-center min-h-[40vh] py-2">
-              <img
-                src={lightboxImage.image_url.replace(/%20/g, ' ').trim()}
-                alt="Saved"
-                className="max-w-[95vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl transition-transform duration-150"
-                style={{ transform: `scale(${lightboxZoom})`, transformOrigin: 'center center' }}
-              />
-            </div>
-          </div>
-
-          <div className="w-full max-w-sm rounded-2xl bg-black/60 backdrop-blur-xl border border-white/10 px-4 py-3">
-            <div className="flex items-center justify-between gap-3 text-white/90 text-sm font-medium">
-              <span>{language === 'ar' ? 'التكبير' : 'Zoom'}</span>
-              <span>{Math.round(lightboxZoom * 100)}%</span>
-            </div>
-            <div className="mt-4 px-1">
-              <Slider
-                value={[lightboxZoom]}
-                onValueChange={(value) => setLightboxZoom(clampZoom(value[0] ?? 1))}
-                min={1}
-                max={3}
-                step={0.05}
-                aria-label={language === 'ar' ? 'شريط تكبير الصورة' : 'Image zoom slider'}
-                className="py-3 [&_[data-slot=slider-track]]:h-3 [&_[data-slot=slider-thumb]]:h-7 [&_[data-slot=slider-thumb]]:w-7"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom action bar */}
-        <div
-          className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-black/60 backdrop-blur-xl rounded-2xl px-4 py-2.5 border border-white/10"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            onClick={() => handleDownload(lightboxImage.image_url)}
-            className="flex items-center gap-1.5 text-white/90 text-sm font-medium active:scale-95 transition-transform"
-          >
-            <Download className="h-4 w-4" /> {language === 'ar' ? 'تحميل' : 'Download'}
-          </button>
-          <div className="w-px h-5 bg-white/20" />
-          <ShareButton
-            shareUrl={`${window.location.origin}/image/${lightboxImage.id}`}
-            shareTitle={language === 'ar' ? 'صورة من Wakti AI' : 'Image from Wakti AI'}
-            shareDescription={language === 'ar' ? 'تم إنشاؤها بواسطة Wakti AI' : 'Created with Wakti AI'}
-            size="sm"
-          />
-          <div className="w-px h-5 bg-white/20" />
-          <button
-            onClick={() => handleDelete(lightboxImage.id)}
-            disabled={deletingId === lightboxImage.id}
-            className="flex items-center gap-1.5 text-red-400 text-sm font-medium active:scale-95 transition-transform"
-          >
-            {deletingId === lightboxImage.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-            {language === 'ar' ? 'حذف' : 'Delete'}
-          </button>
-        </div>
-      </div>,
-      document.body
-    );
-  };
+  const closeLightbox = useCallback(() => {
+    setLightboxImage(null);
+  }, []);
 
   // ─── Loading state ───
   if (loading) {
@@ -326,7 +271,88 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
   // ─── Gallery ───
   return (
     <>
-      <Lightbox />
+      {lightboxImage && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+          onClick={closeLightbox}
+        >
+          <button
+            onClick={closeLightbox}
+            className="absolute top-6 right-6 z-10 h-12 w-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-xl text-white flex items-center justify-center active:scale-90 transition-all border border-white/20 shadow-lg"
+            aria-label="Close"
+          >
+            <X className="h-6 w-6" />
+          </button>
+
+          <div
+            className="flex flex-col items-center gap-4 px-4 w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              ref={lightboxContainerRef}
+              className="w-full max-w-5xl max-h-[70vh] overflow-hidden rounded-2xl touch-none overscroll-none select-none"
+            >
+              <div className="flex items-center justify-center min-h-[40vh] py-2">
+                <img
+                  ref={lightboxImageRef}
+                  src={lightboxImage.image_url.replace(/%20/g, ' ').trim()}
+                  alt="Saved"
+                  className="max-w-[95vw] max-h-[65vh] object-contain rounded-2xl shadow-2xl select-none pointer-events-none"
+                  style={{ transform: 'scale(1)', transformOrigin: 'center center', willChange: 'transform' }}
+                />
+              </div>
+            </div>
+
+            <div className="w-full max-w-sm rounded-2xl bg-black/60 backdrop-blur-xl border border-white/10 px-4 py-3">
+              <div className="flex items-center justify-between gap-3 text-white/90 text-sm font-medium">
+                <span>{language === 'ar' ? 'التكبير' : 'Zoom'}</span>
+                <span ref={lightboxPctRef}>100%</span>
+              </div>
+              <input
+                ref={lightboxSliderRef}
+                type="range"
+                min="1"
+                max="3"
+                step="0.02"
+                defaultValue="1"
+                onInput={(e) => applyLightboxZoom(Number((e.target as HTMLInputElement).value))}
+                className="saved-image-zoom-slider mt-4 block h-14 w-full cursor-pointer touch-manipulation"
+                aria-label={language === 'ar' ? 'شريط تكبير الصورة' : 'Image zoom slider'}
+              />
+            </div>
+          </div>
+
+          {/* Bottom action bar */}
+          <div
+            className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-black/60 backdrop-blur-xl rounded-2xl px-4 py-2.5 border border-white/10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => handleDownload(lightboxImage.image_url)}
+              className="flex items-center gap-1.5 text-white/90 text-sm font-medium active:scale-95 transition-transform"
+            >
+              <Download className="h-4 w-4" /> {language === 'ar' ? 'تحميل' : 'Download'}
+            </button>
+            <div className="w-px h-5 bg-white/20" />
+            <ShareButton
+              shareUrl={`${window.location.origin}/image/${lightboxImage.id}`}
+              shareTitle={language === 'ar' ? 'صورة من Wakti AI' : 'Image from Wakti AI'}
+              shareDescription={language === 'ar' ? 'تم إنشاؤها بواسطة Wakti AI' : 'Created with Wakti AI'}
+              size="sm"
+            />
+            <div className="w-px h-5 bg-white/20" />
+            <button
+              onClick={() => handleDelete(lightboxImage.id)}
+              disabled={deletingId === lightboxImage.id}
+              className="flex items-center gap-1.5 text-red-400 text-sm font-medium active:scale-95 transition-transform"
+            >
+              {deletingId === lightboxImage.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              {language === 'ar' ? 'حذف' : 'Delete'}
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
       <div className="space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">

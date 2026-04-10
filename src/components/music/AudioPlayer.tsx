@@ -9,9 +9,10 @@ interface AudioPlayerProps {
   className?: string;
   showLoopToggle?: boolean;
   onPlaybackChange?: (isPlaying: boolean) => void;
+  onProgressChange?: (progress: { currentTime: number; duration: number; isPlaying: boolean }) => void;
 }
 
-export function AudioPlayer({ src, className = '', showLoopToggle = false, onPlaybackChange }: AudioPlayerProps) {
+export function AudioPlayer({ src, className = '', showLoopToggle = false, onPlaybackChange, onProgressChange }: AudioPlayerProps) {
   const { language } = useTheme();
   const playerId = useId();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -26,9 +27,19 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
   // Stable ref so inline arrow functions from parents never cause effect re-runs
   const onPlaybackChangeRef = useRef(onPlaybackChange);
   useEffect(() => { onPlaybackChangeRef.current = onPlaybackChange; });
+  const onProgressChangeRef = useRef(onProgressChange);
+  useEffect(() => { onProgressChangeRef.current = onProgressChange; });
 
   const languageRef = useRef(language);
   useEffect(() => { languageRef.current = language; });
+
+  const emitProgress = useCallback((nextCurrentTime: number, nextDuration: number, nextIsPlaying: boolean) => {
+    onProgressChangeRef.current?.({
+      currentTime: nextCurrentTime,
+      duration: Number.isFinite(nextDuration) ? nextDuration : 0,
+      isPlaying: nextIsPlaying,
+    });
+  }, []);
 
   const cleanSrc = useMemo(() => {
     let cleanUrl = (src || '').trim();
@@ -50,27 +61,32 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
       setIsPlaying(true);
       setIsLoading(false);
       onPlaybackChangeRef.current?.(true);
+      emitProgress(audio.currentTime, audio.duration, true);
     };
 
     const handlePause = () => {
       setIsPlaying(false);
       onPlaybackChangeRef.current?.(false);
+      emitProgress(audio.currentTime, audio.duration, false);
     };
 
     const handleEnded = () => {
       setIsPlaying(false);
       setCurrentTime(0);
       onPlaybackChangeRef.current?.(false);
+      emitProgress(0, audio.duration, false);
     };
 
     const handleTimeUpdate = () => {
       setCurrentTime(audio.currentTime);
+      emitProgress(audio.currentTime, audio.duration, !audio.paused && !audio.ended);
     };
 
     const handleLoadedMetadata = () => {
       setDuration(audio.duration);
       setIsLoading(false);
       setError(null);
+      emitProgress(audio.currentTime, audio.duration, !audio.paused && !audio.ended);
     };
 
     const handleCanPlay = () => {
@@ -89,6 +105,7 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
       setIsLoading(false);
       setIsPlaying(false);
       onPlaybackChangeRef.current?.(false);
+      emitProgress(audio.currentTime, audio.duration, false);
       setError(languageRef.current === 'ar' ? 'فشل تحميل الملف الصوتي' : 'Failed to load audio');
     };
 
@@ -110,10 +127,11 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
       audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('error', handleError);
       onPlaybackChangeRef.current?.(false);
+      emitProgress(audio.currentTime, audio.duration, false);
     };
   // attachAudio only re-creates when src changes (cleanSrc drives audio teardown anyway)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src]);
+  }, [emitProgress, src]);
 
   const cleanupRef = useRef<(() => void) | null>(null);
 
@@ -149,6 +167,7 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
     setDuration(0);
     setIsLoading(false);
     onPlaybackChangeRef.current?.(false);
+    emitProgress(0, 0, false);
     setError(cleanSrc ? null : (languageRef.current === 'ar' ? 'لا يوجد ملف صوتي' : 'No audio URL'));
     cleanupRef.current?.();
     cleanupRef.current = null;
@@ -161,6 +180,7 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
       audioRef.current = null;
       initializedSrcRef.current = null;
       onPlaybackChangeRef.current?.(false);
+      emitProgress(0, 0, false);
     };
   }, [cleanSrc]); // ← only cleanSrc, never onPlaybackChange or language
 

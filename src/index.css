@@ -135,6 +135,49 @@
   z-index: 50;
 }
 
+.saved-image-zoom-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+.saved-image-zoom-slider:focus {
+  outline: none;
+}
+
+.saved-image-zoom-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.saved-image-zoom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: hsl(25 95% 60%);
+  border: 3px solid rgba(12, 15, 20, 0.92);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08), 0 4px 18px rgba(0, 0, 0, 0.45);
+  margin-top: -10px;
+}
+
+.saved-image-zoom-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.saved-image-zoom-slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(12, 15, 20, 0.92);
+  border-radius: 9999px;
+  background: hsl(25 95% 60%);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08), 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+
 @layer base {
   :root {
     /* Light theme - Enhanced with vibrant artistic touches */

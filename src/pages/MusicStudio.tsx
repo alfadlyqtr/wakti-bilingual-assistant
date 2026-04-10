@@ -4553,6 +4553,7 @@ function EditorTab() {
   const [trackSearch, setTrackSearch] = useState('');
   const [activePlayingTrackId, setActivePlayingTrackId] = useState<string | null>(null);
   const [expandedLyricsTrackId, setExpandedLyricsTrackId] = useState<string | null>(null);
+  const lyricsScrollRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [shareTrackTarget, setShareTrackTarget] = useState<{ id: string; title: string; coverUrl: string | null } | null>(null);
   const [deleteTrackTarget, setDeleteTrackTarget] = useState<{ id: string; storagePath: string | null } | null>(null);
 
@@ -4846,7 +4847,16 @@ function EditorTab() {
     if (activePlayingTrackId && !tracks.some((track) => track.id === activePlayingTrackId)) {
       setActivePlayingTrackId(null);
     }
-  }, [activePlayingTrackId, tracks]);
+  }, [tracks, activePlayingTrackId]);
+
+  const syncLyricsScroll = (trackId: string, progress: { currentTime: number; duration: number; isPlaying: boolean }) => {
+    const panel = lyricsScrollRefs.current[trackId];
+    if (!panel || !progress.isPlaying || progress.duration <= 0) return;
+    const maxScroll = panel.scrollHeight - panel.clientHeight;
+    if (maxScroll <= 0) return;
+    const ratio = Math.min(1, Math.max(0, progress.currentTime / progress.duration));
+    panel.scrollTop = maxScroll * ratio;
+  };
 
   const handleDeleteConfirm = async () => {
     if (!deleteTrackTarget) return;
@@ -5101,6 +5111,7 @@ function EditorTab() {
                 const trackLyrics = (t.prompt || '').trim();
                 const hasLyrics = trackLyrics.length > 0;
                 const isLyricsExpanded = expandedLyricsTrackId === t.id;
+                const lyricsPreview = trackLyrics.split('\n').map((line) => line.trim()).filter(Boolean).slice(0, 2).join(' ');
                 const styleTags: string[] = t.include_styles ?? [];
                 const metaTags = (t.meta as any)?.tags as string | null;
                 const isFavorite = Boolean((t.meta as any)?.favorite);
@@ -5167,117 +5178,142 @@ function EditorTab() {
                             ))}
                           </div>
                         )}
-                        {t.play_url && (
-                          <div className="px-4 pb-4 space-y-3">
-                            <AudioPlayer
-                              src={t.play_url}
-                              className="w-full"
-                              showLoopToggle
-                              onPlaybackChange={(isPlaying) => {
-                                setActivePlayingTrackId((prev) => {
-                                  if (isPlaying) return t.id;
-                                  return prev === t.id ? null : prev;
-                                });
-                              }}
-                            />
-                            {hasLyrics && (
-                              <div className="flex justify-start">
-                                <button
-                                  type="button"
-                                  onClick={() => setExpandedLyricsTrackId((prev) => prev === t.id ? null : t.id)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-sky-300/30 dark:border-sky-400/20 bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300 shadow-[0_4px_12px_rgba(14,165,233,0.10)] dark:shadow-none hover:bg-sky-100 dark:hover:bg-sky-500/20 active:scale-95 transition-all whitespace-nowrap"
-                                >
-                                  {isAr ? 'الكلمات' : 'Lyrics'}
-                                  {isLyricsExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                                </button>
-                              </div>
-                            )}
-                            {hasLyrics && isLyricsExpanded && (
-                              <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-[#f8fafc] dark:bg-white/[0.04] px-4 py-3 shadow-[0_6px_18px_rgba(6,5,65,0.06)] dark:shadow-none">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700/80 dark:text-sky-300/80 mb-2">
-                                  {isAr ? 'الكلمات' : 'Lyrics'}
-                                </p>
-                                <pre className="whitespace-pre-wrap break-words text-xs leading-6 text-[#060541]/85 dark:text-white/80 font-inherit m-0">
-                                  {trackLyrics}
-                                </pre>
-                              </div>
-                            )}
-                            <div className="flex items-center gap-2 justify-end">
-                              {(() => {
-                                const completedPoster = posters.find(p => p.track_id === t.id && p.status === 'completed');
-                                const isGenerating = generatingPosterTrackIds.includes(t.id) || posters.some(p => p.track_id === t.id && p.status === 'generating');
-                                const kieTrackId = (t.meta as any)?.kie_track_id as string | undefined;
-                                const isValidAudioId = !!kieTrackId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(kieTrackId);
-                                const canCreatePoster = !!t.task_id && isValidAudioId;
-
-                                const posterButton = completedPoster ? (
-                                  <button type="button"
-                                    onClick={() => setSavedSubTab('posters')}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-emerald-400/30 dark:border-emerald-400/20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 shadow-[0_4px_12px_rgba(16,185,129,0.10)] dark:shadow-none hover:bg-emerald-100 dark:hover:bg-emerald-500/20 active:scale-95 transition-all whitespace-nowrap">
-                                    <CheckCircle2 className="h-3 w-3" />
-                                    {isAr ? 'بوستر وتسميات ✓' : 'Poster & Captions ✓'}
-                                  </button>
-                                ) : isGenerating ? (
-                                  <button type="button" disabled
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#f0c8f0] dark:border-pink-400/20 bg-[#fdf0ff] dark:bg-pink-500/10 text-[#9333ea] dark:text-pink-300 opacity-70 whitespace-nowrap">
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                    {isAr ? 'جاري الإنشاء...' : 'Generating...'}
-                                  </button>
-                                ) : canCreatePoster ? (
-                                  <button type="button"
-                                    onClick={() => handleCreatePoster({ ...t, meta: { ...(t.meta as any), kie_track_id: kieTrackId } } as any)}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#f0c8f0] dark:border-pink-400/20 bg-[#fdf0ff] dark:bg-pink-500/10 text-[#9333ea] dark:text-pink-300 shadow-[0_4px_12px_rgba(147,51,234,0.10)] dark:shadow-none hover:bg-[#f8e4ff] dark:hover:bg-pink-500/20 active:scale-95 transition-all whitespace-nowrap">
-                                    <Film className="h-3 w-3" />
-                                    {isAr ? 'بوستر وتسميات' : 'Poster & Captions'}
-                                  </button>
-                                ) : null;
-
-                                return posterButton;
-                              })()}
-                              <button type="button"
-                                onClick={async () => {
-                                  try {
-                                    if (t.storage_path) {
-                                      const { data, error: downloadError } = await supabase.storage
-                                        .from('music')
-                                        .download(t.storage_path);
-                                      if (downloadError) throw downloadError;
-
-                                      await saveAudioBlob(data, t.storage_path.split('/').pop() || `wakti-music-${t.id}.mp3`);
-                                      return;
-                                    }
-
-                                    await handleDownload(t.play_url || '', `wakti-music-${t.id}.mp3`);
-                                  } catch (error) {
-                                    console.error('Track download failed:', error);
-                                    await handleDownload(t.play_url || '', `wakti-music-${t.id}.mp3`);
-                                  }
-                                }}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:shadow-none text-muted-foreground hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20 active:scale-95 transition-all">
-                                <RefreshCw className="h-3 w-3" />{isAr ? 'تنزيل' : 'Download'}
-                              </button>
-                              <ShareButton size="sm"
-                                shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${(t.title ? t.title.toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) + '-' : '') + (t.share_code || t.id)}` : ''}
-                                shareTitle={isAr ? 'استمع إلى موسيقى من وقتي 🎵' : 'Listen to my Wakti music 🎵'}
-                                extraActions={[
-                                  {
-                                    name: 'wakti',
-                                    icon: WaktiShareIcon,
-                                    bgColor: 'bg-transparent !p-0 overflow-hidden',
-                                    angle: 309,
-                                    action: () => setShareTrackTarget({
-                                      id: t.id,
-                                      title: trackTitle,
-                                      coverUrl: t.cover_url,
-                                    }),
-                                  },
-                                ]}
-                              />
-                            </div>
-                          </div>
-                        )}
                       </div>
                     </div>
+                    {t.play_url && (
+                      <div className="px-4 pb-4 space-y-3">
+                        <AudioPlayer
+                          src={t.play_url}
+                          className="w-full"
+                          showLoopToggle
+                          onPlaybackChange={(isPlaying) => {
+                            setActivePlayingTrackId((prev) => {
+                              if (isPlaying) return t.id;
+                              return prev === t.id ? null : prev;
+                            });
+                          }}
+                          onProgressChange={(progress) => syncLyricsScroll(t.id, progress)}
+                        />
+                        {hasLyrics && (
+                          <div className="w-full overflow-hidden rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-gradient-to-b from-[#f8fafc] via-[#f3f7ff] to-[#eef4ff] dark:from-white/[0.05] dark:via-white/[0.035] dark:to-white/[0.03] shadow-[0_10px_24px_rgba(6,5,65,0.08)] dark:shadow-none">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedLyricsTrackId((prev) => prev === t.id ? null : t.id)}
+                              className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left border-b border-[#d9dde7] dark:border-white/10 bg-white/70 dark:bg-white/[0.03] hover:bg-white/90 dark:hover:bg-white/[0.05] transition-all"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700/85 dark:text-sky-300/85">
+                                  {isAr ? 'الكلمات' : 'Lyrics'}
+                                </p>
+                                {!isLyricsExpanded && lyricsPreview && (
+                                  <p className="mt-1 text-[11px] italic text-[#606062] dark:text-white/45 truncate">
+                                    {lyricsPreview}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className="text-[10px] text-[#606062] dark:text-white/45 whitespace-nowrap">
+                                  {isActivePlaying
+                                    ? (isAr ? 'تتحرك مع التشغيل' : 'Follows playback')
+                                    : (isLyricsExpanded
+                                      ? (isAr ? 'مرر للقراءة' : 'Scroll to read')
+                                      : (isAr ? 'اضغط للعرض' : 'Tap to view'))}
+                                </span>
+                                {isLyricsExpanded ? <ChevronUp className="h-3.5 w-3.5 text-sky-700 dark:text-sky-300" /> : <ChevronDown className="h-3.5 w-3.5 text-sky-700 dark:text-sky-300" />}
+                              </div>
+                            </button>
+                            {isLyricsExpanded && (
+                              <div className="relative px-4 py-3">
+                                <div className="pointer-events-none absolute inset-x-4 top-3 h-5 bg-gradient-to-b from-[#eef4ff] via-[#eef4ff]/75 to-transparent dark:from-[#171b22] dark:via-[#171b22]/70 dark:to-transparent z-10 rounded-t-xl" />
+                                <div className="pointer-events-none absolute inset-x-4 bottom-3 h-5 bg-gradient-to-t from-[#eef4ff] via-[#eef4ff]/75 to-transparent dark:from-[#171b22] dark:via-[#171b22]/70 dark:to-transparent z-10 rounded-b-xl" />
+                                <div
+                                  ref={(node) => {
+                                    lyricsScrollRefs.current[t.id] = node;
+                                  }}
+                                  className="relative z-0 max-h-[6.6rem] overflow-y-auto scroll-smooth px-2 py-1"
+                                >
+                                  <pre className={`whitespace-pre-wrap break-words text-[17px] leading-[2.15] text-[#060541]/88 dark:text-white/82 font-inherit italic tracking-[0.01em] m-0 transition-all duration-500 ${isActivePlaying ? 'opacity-100' : 'opacity-90'}`}>
+                                    {trackLyrics}
+                                  </pre>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 justify-end">
+                          {(() => {
+                            const completedPoster = posters.find(p => p.track_id === t.id && p.status === 'completed');
+                            const isGenerating = generatingPosterTrackIds.includes(t.id) || posters.some(p => p.track_id === t.id && p.status === 'generating');
+                            const kieTrackId = (t.meta as any)?.kie_track_id as string | undefined;
+                            const isValidAudioId = !!kieTrackId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(kieTrackId);
+                            const canCreatePoster = !!t.task_id && isValidAudioId;
+
+                            const posterButton = completedPoster ? (
+                              <button type="button"
+                                onClick={() => setSavedSubTab('posters')}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-emerald-400/30 dark:border-emerald-400/20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 shadow-[0_4px_12px_rgba(16,185,129,0.10)] dark:shadow-none hover:bg-emerald-100 dark:hover:bg-emerald-500/20 active:scale-95 transition-all whitespace-nowrap">
+                                <CheckCircle2 className="h-3 w-3" />
+                                {isAr ? 'بوستر وتسميات ✓' : 'Poster & Captions ✓'}
+                              </button>
+                            ) : isGenerating ? (
+                              <button type="button" disabled
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#f0c8f0] dark:border-pink-400/20 bg-[#fdf0ff] dark:bg-pink-500/10 text-[#9333ea] dark:text-pink-300 opacity-70 whitespace-nowrap">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                {isAr ? 'جاري الإنشاء...' : 'Generating...'}
+                              </button>
+                            ) : canCreatePoster ? (
+                              <button type="button"
+                                onClick={() => handleCreatePoster({ ...t, meta: { ...(t.meta as any), kie_track_id: kieTrackId } } as any)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#f0c8f0] dark:border-pink-400/20 bg-[#fdf0ff] dark:bg-pink-500/10 text-[#9333ea] dark:text-pink-300 shadow-[0_4px_12px_rgba(147,51,234,0.10)] dark:shadow-none hover:bg-[#f8e4ff] dark:hover:bg-pink-500/20 active:scale-95 transition-all whitespace-nowrap">
+                                <Film className="h-3 w-3" />
+                                {isAr ? 'بوستر وتسميات' : 'Poster & Captions'}
+                              </button>
+                            ) : null;
+
+                            return posterButton;
+                          })()}
+                          <button type="button"
+                            onClick={async () => {
+                              try {
+                                if (t.storage_path) {
+                                  const { data, error: downloadError } = await supabase.storage
+                                    .from('music')
+                                    .download(t.storage_path);
+                                  if (downloadError) throw downloadError;
+
+                                  await saveAudioBlob(data, t.storage_path.split('/').pop() || `wakti-music-${t.id}.mp3`);
+                                  return;
+                                }
+
+                                await handleDownload(t.play_url || '', `wakti-music-${t.id}.mp3`);
+                              } catch (error) {
+                                console.error('Track download failed:', error);
+                                await handleDownload(t.play_url || '', `wakti-music-${t.id}.mp3`);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:shadow-none text-muted-foreground hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20 active:scale-95 transition-all">
+                            <RefreshCw className="h-3 w-3" />{isAr ? 'تنزيل' : 'Download'}
+                          </button>
+                          <ShareButton size="sm"
+                            shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${(t.title ? t.title.toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) + '-' : '') + (t.share_code || t.id)}` : ''}
+                            shareTitle={isAr ? 'استمع إلى موسيقى من وقتي 🎵' : 'Listen to my Wakti music 🎵'}
+                            extraActions={[
+                              {
+                                name: 'wakti',
+                                icon: WaktiShareIcon,
+                                bgColor: 'bg-transparent !p-0 overflow-hidden',
+                                angle: 309,
+                                action: () => setShareTrackTarget({
+                                  id: t.id,
+                                  title: trackTitle,
+                                  coverUrl: t.cover_url,
+                                }),
+                              },
+                            ]}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
