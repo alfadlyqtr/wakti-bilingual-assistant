@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
-import { purchasePackage, restorePurchases, getOfferings, showPaywall } from "@/integrations/natively/purchasesBridge";
+import { purchasePackage, restorePurchases, showPaywall } from "@/integrations/natively/purchasesBridge";
 import {
   Dialog,
   DialogContent,
@@ -33,15 +33,16 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
-  const [price, setPrice] = useState<{ qar?: string; usd?: string }>({});
   const [purchaseInProgress, setPurchaseInProgress] = useState(false);
+  const isQUUserDisplay = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+  const price = isQUUserDisplay
+    ? { qar: 'QAR 73/month', usd: '$19.99/month' }
+    : { qar: 'QAR 92/month', usd: '$25/month' };
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const addDebug = (msg: string) => {
     console.log('[DEBUG]', msg);
     setDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
   };
-  const [activePackageId, setActivePackageId] = useState<string>('$rc_monthly');
-  const [activePackageObj, setActivePackageObj] = useState<any>(null);
   const [step, setStep] = useState(variant === 'new_user' ? 1 : 2);
   const [editingName, setEditingName] = useState(false);
   const [showFeatures, setShowFeatures] = useState(false);
@@ -75,68 +76,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     if (!open) return;
     setStep(variant === 'new_user' ? 1 : 2);
   }, [open, variant]);
-
-  useEffect(() => {
-    if (!open) return;
-    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    getOfferings((resp) => {
-      console.log('[Offerings] Raw SDK response:', JSON.stringify(resp));
-      if (resp?.status !== 'SUCCESS') {
-        console.warn('[Offerings] SDK returned non-SUCCESS status:', resp?.status);
-        return;
-      }
-
-      const allRaw = resp?.offerings?.all;
-      let allOfferings: any[] = [];
-      if (Array.isArray(allRaw)) {
-        allOfferings = allRaw;
-      } else if (allRaw && typeof allRaw === 'object') {
-        allOfferings = Object.values(allRaw);
-      }
-      console.log('[Offerings] All offerings parsed:', allOfferings.map((o: any) => o?.identifier));
-
-      if (isQUUser) {
-        let quPkg: any = null;
-        const quOffering = allOfferings.find((o: any) => o.identifier === 'university_exclusive');
-        if (quOffering) {
-          quPkg = quOffering.availablePackages?.find((p: any) => p.identifier === 'qatar_university');
-        }
-        if (!quPkg) {
-          const defaultOffering = allOfferings.find((o: any) => o.identifier === 'Default') || resp?.offerings?.current;
-          quPkg = defaultOffering?.availablePackages?.find((p: any) => p.identifier === '$rc_three_month');
-        }
-        console.log('[Offerings] QU package:', quPkg ? `FOUND (${quPkg.identifier})` : 'NOT FOUND', quPkg?.product?.priceString);
-        if (quPkg?.product) {
-          const storeProductId = quPkg.product.identifier;
-          console.log('[Offerings] ✅ QU package set — RC pkg:', quPkg.identifier, '| Store product:', storeProductId, '| price:', quPkg.product.priceString);
-          setActivePackageId(storeProductId);
-          setActivePackageObj(quPkg);
-          setPrice({
-            qar: quPkg.product.priceString || 'QAR 73/month',
-            usd: quPkg.product.priceUSD || '$19.99/month',
-          });
-          return;
-        }
-        console.warn('[Offerings] ⚠️ QU package not found in any offering, falling back to default');
-      }
-
-      if (resp?.offerings?.current) {
-        const pkg = resp.offerings.current.availablePackages?.find(
-          (p: any) => p.identifier === '$rc_monthly'
-        ) || resp.offerings.current.availablePackages?.[0];
-        if (pkg?.product) {
-          const storeProductId = pkg.product.identifier;
-          console.log('[Offerings] ✅ Standard package set — RC pkg:', pkg.identifier, '| Store product:', storeProductId, '| price:', pkg.product.priceString);
-          setActivePackageId(storeProductId);
-          setActivePackageObj(pkg);
-          setPrice({
-            qar: pkg.product.priceString || 'QAR 92/month',
-            usd: pkg.product.priceUSD || '$25/month',
-          });
-        }
-      }
-    });
-  }, [open, user?.email]);
 
   useEffect(() => {
     if (!open || !purchaseInProgress) return;
@@ -216,7 +155,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
           }
         }
         toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
-        setPurchaseInProgress(false);
         if (user?.id) {
           try {
             localStorage.removeItem(`wakti_sub_status_${user.id}`);
@@ -230,8 +168,9 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
         setTimeout(() => onOpenChange(false), 1000);
       } else if (resp?.status === 'ERROR') {
         toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
-        setPurchaseInProgress(false);
       }
+      // Always reset loading — covers SUCCESS, ERROR, CANCELLED, and any other status
+      setPurchaseInProgress(false);
       setLoading(false);
     };
 

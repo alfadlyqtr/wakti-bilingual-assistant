@@ -35,7 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { purchasePackage, restorePurchases, getOfferings, showPaywall } from "@/integrations/natively/purchasesBridge";
+import { purchasePackage, restorePurchases, showPaywall } from "@/integrations/natively/purchasesBridge";
 import { MyGallery } from "@/components/social/MyGallery";
 import { ContactsEmbedded } from "@/components/account/ContactsEmbedded";
 import { WishlistsEmbedded } from "@/components/account/WishlistsEmbedded";
@@ -268,45 +268,13 @@ export default function Account() {
   const { isNewUser, wasSubscribed, isAccessExpired, profile } = useUserProfile();
   const paywallVariant: PaywallVariant = isAccessExpired ? 'trial_expired' : wasSubscribed ? 'cancelled' : 'new_user';
 
-  // Direct native purchase — 
+  // Direct native purchase
   const [isBillingPurchasing, setIsBillingPurchasing] = useState(false);
-  const [billingPackageObj, setBillingPackageObj] = useState<any>(null);
   const [billingDebugLog, setBillingDebugLog] = useState<string[]>([]);
   const addBillingDebug = (msg: string) => {
     console.log('[BillingDebug]', msg);
     setBillingDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
   };
-
-  useEffect(() => {
-    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    getOfferings((resp: any) => {
-      if (resp?.status !== 'SUCCESS') return;
-      const allRaw = resp?.offerings?.all;
-      const allOfferings: any[] = Array.isArray(allRaw) ? allRaw : (allRaw && typeof allRaw === 'object' ? Object.values(allRaw) : []);
-      
-      if (isQUUser) {
-        let quPkg: any = null;
-        // First try university_exclusive → qatar_university
-        const quOffering = allOfferings.find((o: any) => o?.identifier === 'university_exclusive');
-        if (quOffering) quPkg = quOffering.availablePackages?.find((p: any) => p?.identifier === 'qatar_university');
-        // Fallback: try Default offering → $rc_three_month
-        if (!quPkg) {
-          const defaultOffering = allOfferings.find((o: any) => o.identifier === 'Default') || resp?.offerings?.current;
-          quPkg = defaultOffering?.availablePackages?.find((p: any) => p?.identifier === '$rc_three_month');
-        }
-        if (quPkg) {
-          console.log('[BillingOfferings] QU package found:', quPkg.identifier);
-          setBillingPackageObj(quPkg);
-        }
-      } else {
-        const pkg = resp.offerings?.current?.availablePackages?.find((p: any) => p.identifier === '$rc_monthly') || resp.offerings?.current?.availablePackages?.[0];
-        if (pkg) {
-          console.log('[BillingOfferings] Standard package found for iOS');
-          setBillingPackageObj(pkg);
-        }
-      }
-    });
-  }, [user?.email]);
 
   const handleBillingSubscribe = () => {
     addBillingDebug('--- BUTTON PRESSED ---');
@@ -355,6 +323,7 @@ export default function Account() {
       } else if (resp?.status === 'ERROR') {
         toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
       }
+      // Always reset — covers SUCCESS, ERROR, CANCELLED, and any other status
       setIsBillingPurchasing(false);
     };
 
