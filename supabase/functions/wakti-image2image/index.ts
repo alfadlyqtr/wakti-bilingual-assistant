@@ -65,6 +65,15 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const MODEL_FAST = Deno.env.get("RUNWARE_FAST_MODEL") || "google:4@1";
 const MODEL_BEST = Deno.env.get("RUNWARE_BEST_FAST_MODEL") || "google:4@3";
 
+function isRetryableRunwareErrorMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("\"status\":502")
+    || normalized.includes("\"status\":503")
+    || normalized.includes("\"status\":504")
+    || normalized.includes("timed out")
+    || normalized.includes("abort");
+}
+
 const isArabic = (s: string) => /[\u0600-\u06FF]/.test(s || "");
 
 async function translateToEnglishIfArabic(prompt: string): Promise<string> {
@@ -197,6 +206,16 @@ async function callRunwareI2I(finalPrompt: string, referenceImages: string[], mo
   return j;
 }
 
+async function callRunwareI2IWithRetry(finalPrompt: string, referenceImages: string[], model: string): Promise<unknown> {
+  try {
+    return await callRunwareI2I(finalPrompt, referenceImages, model);
+  } catch (err) {
+    const message = String((err as Error)?.message || err || "");
+    if (!isRetryableRunwareErrorMessage(message)) throw err;
+    return await callRunwareI2I(finalPrompt, referenceImages, model);
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -250,7 +269,7 @@ serve(async (req: Request) => {
     }
 
     const finalPrompt = await translateToEnglishIfArabic(user_prompt);
-    const rw = await callRunwareI2I(finalPrompt, referenceUrls, selectedModel);
+    const rw = await callRunwareI2IWithRetry(finalPrompt, referenceUrls, selectedModel);
     const node = (pickFirstResultNode(rw) || rw) as Record<string, unknown>;
 
     // Extract the Runware output — prefer dataURI (stable), fallback to URL

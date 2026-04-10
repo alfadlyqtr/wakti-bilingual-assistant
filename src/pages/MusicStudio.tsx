@@ -1566,7 +1566,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     return {
       // ── GCC Core ──
       'GCC Pop': ['808 bass groove', 'trap hi-hats', 'mirwas percussion', 'synth lead', 'bass guitar', 'hand claps'],
-      'GCC Rap': ['808 bass groove', 'trap hi-hats', 'mirwas percussion', 'darbuka percussion', 'synth bass', 'hand claps'],
+      'GCC Rap': ['808 bass groove', 'trap hi-hats', 'drill hats', 'punchy kick', 'snare rolls', 'darbuka percussion', 'mirwas percussion', 'synth bass'],
       'GCC Romantic': ['violin lead', 'ney texture', 'piano melody', 'cello texture', 'riq percussion'],
       'GCC Elegant': ['violin lead', 'qanun texture', 'piano melody', 'ney texture', 'strings pad'],
       'GCC Party': ['mirwas lead', 'darbuka percussion', 'frame drum groove', 'hand claps', 'synth lead'],
@@ -1847,7 +1847,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'أفروبيتس': ['أفرو خليجي', 'بوب ٤/٤'],
     // ── English style names → English rhythm names ──
     'GCC Pop': ['Trap Beat', 'Gulf Groove'],
-    'GCC Rap': ['Trap Beat', 'Gulf Groove'],
+    'GCC Rap': ['Trap Beat', 'Drill Beat'],
     'Khaleeji Pop': ['Trap Beat', 'Gulf Groove'],
     'GCC Romantic': ['Adani', 'Ballad Slow Groove'],
     'GCC Elegant': ['Adani', 'Khaleeji Shuffle'],
@@ -2901,7 +2901,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const GCC_PRONUNCIATION_NEGATIVES: Record<string, string> = {
     'English GCC Pop': '', 'إنجليزي بطابع خليجي': '',
     'GCC Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'GCC Rap': 'egyptian arabic pronunciation, levantine arabic pronunciation',
+    'GCC Rap': 'egyptian arabic pronunciation, levantine arabic pronunciation, ballad, orchestral pop, wedding chant, traditional folk lead, soft romantic pop',
     'Khaleeji Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
     'GCC Romantic': 'egyptian arabic pronunciation, levantine arabic pronunciation',
     'GCC Elegant': 'egyptian arabic pronunciation, levantine arabic pronunciation',
@@ -2942,7 +2942,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   // Default rhythm + instrument anchors per GCC style — auto-filled when user skips those sections
   const GCC_STYLE_ANCHORS: Record<string, { rhythm: string; instrument: string; production?: string }> = {
     'GCC Pop': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
-    'GCC Rap': { rhythm: 'trap beat', instrument: '808 bass groove', production: 'mirwas percussion' },
+    'GCC Rap': { rhythm: 'drill beat', instrument: '808 bass groove', production: 'trap hi-hats' },
     'Khaleeji Pop': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
     'GCC Romantic': { rhythm: 'adani rhythm', instrument: 'oud lead', production: 'soft strings' },
     'GCC Elegant': { rhythm: 'adani rhythm', instrument: 'violin lead', production: 'strings texture' },
@@ -3010,7 +3010,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const mappings: Record<string, string> = {
         // ── GCC Core (compressed tag format) ──
         'GCC Pop': 'khaleeji pop, gulf arabic, catchy hook, polished, strict khaleeji dialect',
-        'GCC Rap': 'khaleeji rap, gulf arabic, urban rhythmic flow, strict khaleeji dialect',
+        'GCC Rap': 'khaleeji rap, gulf arabic, hard 808s, punchy trap drums, drill energy, rap flow, spoken bars, minimal sung hook, urban street energy, strict khaleeji dialect',
         'Khaleeji Pop': 'khaleeji pop, gulf arabic, authentic khaleeji sound, strict khaleeji dialect',
         'GCC Romantic': 'khaleeji romantic ballad, gulf arabic, warm emotional, strict khaleeji dialect',
         'GCC Elegant': 'khaleeji elegant pop, gulf arabic, refined classy, strict khaleeji dialect',
@@ -3475,6 +3475,18 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       {composeStep === 1 && (
         <div className={cardCls}>
           <StepBar current={1} />
+          <div className="mb-4 rounded-2xl border border-[#d7d8de] dark:border-[#606062]/30 bg-gradient-to-br from-[#fcfefd] via-[#f7f8fb] to-[#fcfefd] dark:from-[#0c0f14] dark:via-[#141820] dark:to-[#0c0f14] px-4 py-3 shadow-[0_8px_24px_rgba(6,5,65,0.06)] dark:shadow-[0_2px_20px_hsla(0,0%,0%,0.5),0_1px_8px_hsla(240,20%,40%,0.4)]">
+            <p className="text-sm leading-6 text-[#060541]/80 dark:text-[#f2f2f2]/85">
+              {isAr
+                ? 'ابدأ باسم المقطع، ثم اختر النمط المناسب. يمكن للذكاء الاصطناعي مساعدتك باقتراح الإيقاعات والمزاج والآلات، أو يمكنك تخصيصها بنفسك.'
+                : 'Start with your track name, then choose the right style. AI can help suggest rhythms, moods, and instruments, or you can fine-tune everything yourself.'}
+            </p>
+            <p className="mt-1 text-sm leading-6 text-[#606062] dark:text-[#858384]">
+              {isAr
+                ? 'بعدها اختر نوع الصوت: تلقائي، آلي، نسائي أو رجالي، ثم أضف الكلمات باستخدام فكرة أو توسيع. غالباً يستغرق الإنشاء من دقيقة إلى دقيقتين.'
+                : 'Then choose vocals: Auto, Instrumental, Female, or Male, and finish your lyrics with Idea or Expand. Most tracks take around 1–2 minutes to generate.'}
+            </p>
+          </div>
           <div className="text-center pb-5">
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[#f7f8fc] dark:bg-white/[0.04] border border-[#e4e6ed] dark:border-white/10 mb-4">
               <Music className="h-7 w-7 text-[#060541] dark:text-white/60" />
@@ -4540,6 +4552,7 @@ function EditorTab() {
   const [tracks, setTracks] = useState<SavedTrack[]>([]);
   const [trackSearch, setTrackSearch] = useState('');
   const [activePlayingTrackId, setActivePlayingTrackId] = useState<string | null>(null);
+  const [expandedLyricsTrackId, setExpandedLyricsTrackId] = useState<string | null>(null);
   const [shareTrackTarget, setShareTrackTarget] = useState<{ id: string; title: string; coverUrl: string | null } | null>(null);
   const [deleteTrackTarget, setDeleteTrackTarget] = useState<{ id: string; storagePath: string | null } | null>(null);
 
@@ -5085,6 +5098,9 @@ function EditorTab() {
                   ? `${Math.floor(durationSec / 60)}:${String(Math.round(durationSec % 60)).padStart(2, '0')}`
                   : null;
                 const trackTitle = t.title || (t.prompt ? t.prompt.slice(0, 40) : (isAr ? 'مقطع موسيقي' : 'Music Track'));
+                const trackLyrics = (t.prompt || '').trim();
+                const hasLyrics = trackLyrics.length > 0;
+                const isLyricsExpanded = expandedLyricsTrackId === t.id;
                 const styleTags: string[] = t.include_styles ?? [];
                 const metaTags = (t.meta as any)?.tags as string | null;
                 const isFavorite = Boolean((t.meta as any)?.favorite);
@@ -5164,6 +5180,28 @@ function EditorTab() {
                                 });
                               }}
                             />
+                            {hasLyrics && (
+                              <div className="flex justify-start">
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedLyricsTrackId((prev) => prev === t.id ? null : t.id)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-sky-300/30 dark:border-sky-400/20 bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300 shadow-[0_4px_12px_rgba(14,165,233,0.10)] dark:shadow-none hover:bg-sky-100 dark:hover:bg-sky-500/20 active:scale-95 transition-all whitespace-nowrap"
+                                >
+                                  {isAr ? 'الكلمات' : 'Lyrics'}
+                                  {isLyricsExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                </button>
+                              </div>
+                            )}
+                            {hasLyrics && isLyricsExpanded && (
+                              <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-[#f8fafc] dark:bg-white/[0.04] px-4 py-3 shadow-[0_6px_18px_rgba(6,5,65,0.06)] dark:shadow-none">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700/80 dark:text-sky-300/80 mb-2">
+                                  {isAr ? 'الكلمات' : 'Lyrics'}
+                                </p>
+                                <pre className="whitespace-pre-wrap break-words text-xs leading-6 text-[#060541]/85 dark:text-white/80 font-inherit m-0">
+                                  {trackLyrics}
+                                </pre>
+                              </div>
+                            )}
                             <div className="flex items-center gap-2 justify-end">
                               {(() => {
                                 const completedPoster = posters.find(p => p.track_id === t.id && p.status === 'completed');

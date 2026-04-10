@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
 import ShareButton from '@/components/ui/ShareButton';
 import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
 import {
@@ -44,6 +45,9 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
 
   // Lightbox
   const [lightboxImage, setLightboxImage] = useState<SavedImage | null>(null);
+  const [lightboxZoom, setLightboxZoom] = useState(1);
+  const pinchDistanceRef = useRef<number | null>(null);
+  const pinchStartZoomRef = useRef(1);
 
   const loadImages = useCallback(async () => {
     if (!user?.id) return;
@@ -67,6 +71,41 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
   useEffect(() => {
     loadImages();
   }, [loadImages]);
+
+  useEffect(() => {
+    setLightboxZoom(1);
+    pinchDistanceRef.current = null;
+    pinchStartZoomRef.current = 1;
+  }, [lightboxImage]);
+
+  const clampZoom = useCallback((value: number) => Math.min(3, Math.max(1, value)), []);
+
+  const getTouchDistance = (touches: React.TouchList) => {
+    if (touches.length < 2) return null;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.hypot(dx, dy);
+  };
+
+  const handleImageTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    const distance = getTouchDistance(event.touches);
+    if (distance == null) return;
+    pinchDistanceRef.current = distance;
+    pinchStartZoomRef.current = lightboxZoom;
+  };
+
+  const handleImageTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    const distance = getTouchDistance(event.touches);
+    if (distance == null || pinchDistanceRef.current == null) return;
+    event.preventDefault();
+    const nextZoom = pinchStartZoomRef.current * (distance / pinchDistanceRef.current);
+    setLightboxZoom(clampZoom(nextZoom));
+  };
+
+  const handleImageTouchEnd = () => {
+    pinchDistanceRef.current = null;
+    pinchStartZoomRef.current = lightboxZoom;
+  };
 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
@@ -157,22 +196,61 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
     return createPortal(
       <div
         className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-sm"
-        onClick={() => setLightboxImage(null)}
+        onClick={() => {
+          setLightboxImage(null);
+          setLightboxZoom(1);
+        }}
       >
         <button
-          onClick={() => setLightboxImage(null)}
+          onClick={() => {
+            setLightboxImage(null);
+            setLightboxZoom(1);
+          }}
           className="absolute top-6 right-6 z-10 h-12 w-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-xl text-white flex items-center justify-center active:scale-90 transition-all border border-white/20 shadow-lg"
           aria-label="Close"
         >
           <X className="h-6 w-6" />
         </button>
 
-        <img
-          src={lightboxImage.image_url.replace(/%20/g, ' ').trim()}
-          alt="Saved"
-          className="max-w-[95vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl"
+        <div
+          className="flex flex-col items-center gap-4 px-4 w-full"
           onClick={(e) => e.stopPropagation()}
-        />
+        >
+          <div
+            className="w-full max-w-5xl max-h-[70vh] overflow-auto rounded-2xl"
+            onTouchStart={handleImageTouchStart}
+            onTouchMove={handleImageTouchMove}
+            onTouchEnd={handleImageTouchEnd}
+            onTouchCancel={handleImageTouchEnd}
+          >
+            <div className="flex items-center justify-center min-h-[40vh] py-2">
+              <img
+                src={lightboxImage.image_url.replace(/%20/g, ' ').trim()}
+                alt="Saved"
+                className="max-w-[95vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl transition-transform duration-150"
+                style={{ transform: `scale(${lightboxZoom})`, transformOrigin: 'center center' }}
+              />
+            </div>
+          </div>
+
+          <div className="w-full max-w-sm rounded-2xl bg-black/60 backdrop-blur-xl border border-white/10 px-4 py-3">
+            <div className="flex items-center justify-between gap-3 text-white/90 text-sm font-medium">
+              <span>{language === 'ar' ? 'التكبير' : 'Zoom'}</span>
+              <span>{Math.round(lightboxZoom * 100)}%</span>
+            </div>
+            <div className="mt-4 px-1">
+              <Slider
+                value={[lightboxZoom]}
+                onValueChange={(value) => setLightboxZoom(clampZoom(value[0] ?? 1))}
+                min={1}
+                max={3}
+                step={0.05}
+                aria-label={language === 'ar' ? 'شريط تكبير الصورة' : 'Image zoom slider'}
+                className="py-3 [&_[data-slot=slider-track]]:h-3 [&_[data-slot=slider-thumb]]:h-7 [&_[data-slot=slider-thumb]]:w-7"
+              />
+            </div>
+          </div>
+        </div>
 
         {/* Bottom action bar */}
         <div

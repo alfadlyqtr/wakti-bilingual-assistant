@@ -80,6 +80,15 @@ const STEPS = parseInt(Deno.env.get("WAKTI_T2I_STEPS") ?? "28", 10);
 const CFG = parseFloat(Deno.env.get("WAKTI_T2I_CFG") ?? "5.5");
 const TIMEOUT_MS = parseInt(Deno.env.get("WAKTI_T2I_TIMEOUT_MS") ?? "180000", 10);
 
+function isRetryableRunwareErrorMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("runware error 502")
+    || normalized.includes("runware error 503")
+    || normalized.includes("runware error 504")
+    || normalized.includes("timed out")
+    || normalized.includes("abort");
+}
+
 function getDimensionsForModel(model: string): { width: number; height: number } {
   if (model === "google:4@3") return { width: 1536, height: 2752 };
   if (model === "google:4@2") return { width: 768, height: 1376 };
@@ -185,6 +194,16 @@ async function runwareGenerate(positivePrompt: string, model: string, signal?: A
   } finally { clearTimeout(tid); }
 }
 
+async function runwareGenerateWithRetry(positivePrompt: string, model: string, signal?: AbortSignal) {
+  try {
+    return await runwareGenerate(positivePrompt, model, signal);
+  } catch (err) {
+    const message = String((err as any)?.message || err || "");
+    if (!isRetryableRunwareErrorMessage(message)) throw err;
+    return await runwareGenerate(positivePrompt, model, signal);
+  }
+}
+
 Deno.serve(async (req)=>{
   if (req.method === "OPTIONS") return new Response("ok", { headers: { ...cors } });
   const startTime = Date.now();
@@ -222,7 +241,7 @@ Deno.serve(async (req)=>{
     const translated = await translateIfArabic(prompt);
     usedModel = quality === "best_fast" ? MODEL_BEST : MODEL_FAST;
 
-    const { url } = await runwareGenerate(translated, usedModel, req.signal);
+    const { url } = await runwareGenerateWithRetry(translated, usedModel, req.signal);
     if (!url) {
       await logAI({
         functionName: "text2image",

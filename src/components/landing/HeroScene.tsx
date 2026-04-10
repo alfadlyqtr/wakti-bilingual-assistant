@@ -177,11 +177,33 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
             <span className="pointer-events-none absolute inset-y-[3px] left-[8px] w-10 rounded-full bg-blue-300/10 blur-md" />
             <span className="relative z-10 inline-flex items-center gap-1.5">
               {isArabic ? (
-                <span dir="rtl" className="inline-flex items-center gap-1.5">
-                  <ArrowRight className="h-3.5 w-3.5 rotate-180 text-blue-200" />
-                  <span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span dir="rtl">
                     <span className="text-white">إنشاء حساب</span>
                     <span className="text-white/65"> · جرب وقتي مجاناً</span>
+                  </span>
+                  <span className="relative inline-flex h-4 w-5 items-center justify-center">
+                    <motion.span
+                      animate={{ opacity: [0, 1, 0, 0, 0, 0, 0], scale: [0.88, 0.88, 0.88, 0.88, 0.88, 0.88, 0.88], x: [0, 0, 0, 0, 0, 0, 0] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut", times: [0, 0.12, 0.24, 0.25, 0.5, 0.75, 1] }}
+                      className="absolute inset-0 flex items-center justify-center"
+                    >
+                      <ArrowRight className="h-3.5 w-3.5 rotate-180 text-blue-200" />
+                    </motion.span>
+                    <motion.span
+                      animate={{ opacity: [0, 0, 0, 1, 0, 0, 0], scale: [1.12, 1.12, 1.12, 1.12, 1.12, 1.12, 1.12], x: [0, 0, 0, 0, 0, 0, 0] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut", times: [0, 0.24, 0.25, 0.42, 0.54, 0.75, 1] }}
+                      className="absolute inset-0 flex items-center justify-center"
+                    >
+                      <ArrowRight className="h-4 w-4 rotate-180 text-blue-200/95" />
+                    </motion.span>
+                    <motion.span
+                      animate={{ opacity: [0, 0, 0, 0, 0, 1, 0], scale: [1.18, 1.18, 1.18, 1.18, 1.18, 1.18, 1.18], x: [0, 0, 0, 0, 0, 0, 0] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut", times: [0, 0.5, 0.54, 0.55, 0.7, 0.82, 1] }}
+                      className="absolute inset-0 flex items-center justify-center"
+                    >
+                      <ArrowRight className="h-5 w-5 rotate-180 text-blue-200/85" />
+                    </motion.span>
                   </span>
                 </span>
               ) : (
@@ -190,7 +212,29 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
                     <span className="text-white">Create Account</span>
                     <span className="text-white/65"> · Try Wakti for Free</span>
                   </span>
-                  <ArrowRight className="h-3.5 w-3.5 text-blue-200" />
+                  <span className="relative inline-flex h-4 w-5 items-center justify-center">
+                    <motion.span
+                      animate={{ opacity: [0, 1, 0, 0, 0, 0, 0], scale: [0.88, 0.88, 0.88, 0.88, 0.88, 0.88, 0.88], x: [0, 0, 0, 0, 0, 0, 0] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut", times: [0, 0.12, 0.24, 0.25, 0.5, 0.75, 1] }}
+                      className="absolute inset-0 flex items-center justify-center"
+                    >
+                      <ArrowRight className="h-3.5 w-3.5 text-blue-200" />
+                    </motion.span>
+                    <motion.span
+                      animate={{ opacity: [0, 0, 0, 1, 0, 0, 0], scale: [1.12, 1.12, 1.12, 1.12, 1.12, 1.12, 1.12], x: [0, 0, 0, 0, 0, 0, 0] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut", times: [0, 0.24, 0.25, 0.42, 0.54, 0.75, 1] }}
+                      className="absolute inset-0 flex items-center justify-center"
+                    >
+                      <ArrowRight className="h-4 w-4 text-blue-200/95" />
+                    </motion.span>
+                    <motion.span
+                      animate={{ opacity: [0, 0, 0, 0, 0, 1, 0], scale: [1.18, 1.18, 1.18, 1.18, 1.18, 1.18, 1.18], x: [0, 0, 0, 0, 0, 0, 0] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut", times: [0, 0.5, 0.54, 0.55, 0.7, 0.82, 1] }}
+                      className="absolute inset-0 flex items-center justify-center"
+                    >
+                      <ArrowRight className="h-5 w-5 text-blue-200/85" />
+                    </motion.span>
+                  </span>
                 </>
               )}
             </span>
