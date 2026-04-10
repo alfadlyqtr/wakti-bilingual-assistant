@@ -1485,13 +1485,22 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   // Minimal mode only: styles include/exclude + prompt + duration
   const [submitting, setSubmitting] = useState(false);
   const [amping, setAmping] = useState(false);
-  const [ampMode, setAmpMode] = useState<'idea' | 'expand'>('expand');
+  const [ampMode, setAmpMode] = useState<'idea' | 'expand' | 'gcc_enhance'>('expand');
   const [vocalType, setVocalType] = useState<'auto'|'none'|'female'|'male'>('auto');
   const [vocalsOpen, setVocalsOpen] = useState(false);
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [audios, setAudios] = useState<Array<{ url: string; mime: string; meta?: any; createdAt: number; saved?: boolean }>>([]);
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastNotice, setLastNotice] = useState<string | null>(null);
+
+  const isGccStyleSelected = useMemo(() => {
+    const gccKeywords = ['gcc', 'khaleeji', 'khaleeji', 'gulf', 'خليجي', 'خليج', 'شلات', 'شيلة', 'sheilat', 'samri', 'jalsa', 'جلسة', 'عرضة', 'ardah'];
+    return includeTags.some((tag) => {
+      const value = (tag || '').toLowerCase();
+      return gccKeywords.some((keyword) => value.includes(keyword));
+    });
+  }, [includeTags]);
+
   const [songsUsed, setSongsUsed] = useState(0);
   const [songsLimit, setSongsLimit] = useState(30);
   const [songsRemaining, setSongsRemaining] = useState(30);
@@ -2449,6 +2458,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       toast.error(isAr ? 'اكتب كلمات أولاً' : 'Write some lyrics first');
       return;
     }
+    if (ampMode === 'gcc_enhance' && !lyricsText.trim()) {
+      toast.error(isAr ? 'اكتب كلمات أولاً للتحسين الخليجي' : 'Write lyrics first for GCC Enhance');
+      return;
+    }
     if (hasBannedInput()) {
       toast.error(isAr ? 'تحتوي المدخلات على ألفاظ غير مسموحة.' : 'Inputs contain disallowed words.');
       return;
@@ -2467,22 +2480,30 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const context = contextParts.length > 0 ? contextParts.join('\n') + '\n\n' : '';
       const modeHint = ampMode === 'idea'
         ? 'MODE: The user is giving you an IDEA or concept — generate completely fresh lyrics from scratch based on this idea.\n\n'
-        : 'MODE: The user is giving you existing LYRICS — preserve their exact words and expand around them into a full song structure.\n\n';
+        : ampMode === 'gcc_enhance'
+          ? 'MODE: The user is giving you existing ARABIC lyrics. Do not rewrite, reorder, add, or remove words. Only prepare the Arabic portions for authentic Gulf singing with minimal surgical pronunciation help where truly needed.\n\n'
+          : 'MODE: The user is giving you existing LYRICS — preserve their exact words and expand around them into a full song structure.\n\n';
       const fullInput = context + modeHint + `User input:\n${userInput}`;
       const { data, error } = await supabase.functions.invoke('music-amp', {
-        body: { text: fullInput, mode: 'lyrics', duration: duration }
+        body: { text: fullInput, mode: ampMode === 'gcc_enhance' ? 'gcc-enhance' : 'lyrics', duration: duration }
       });
       if (error) throw error;
       const expandedLyrics = (data?.text || '').toString();
       if (!expandedLyrics) throw new Error(isAr ? 'تعذّر التوسيع' : 'Expansion failed');
       setLyricsText(expandedLyrics);
-      toast.success(isAr ? (ampMode === 'idea' ? 'تم إنشاء الكلمات' : 'تم توسيع الكلمات') : (ampMode === 'idea' ? 'Lyrics generated' : 'Lyrics expanded'));
+      toast.success(isAr ? (ampMode === 'idea' ? 'تم إنشاء الكلمات' : ampMode === 'gcc_enhance' ? 'تم التحسين الخليجي' : 'تم توسيع الكلمات') : (ampMode === 'idea' ? 'Lyrics generated' : ampMode === 'gcc_enhance' ? 'GCC enhanced' : 'Lyrics expanded'));
     } catch (e: any) {
       toast.error((isAr ? 'فشل: ' : 'Failed: ') + (e?.message || String(e)));
     } finally {
       setAmping(false);
     }
   }
+
+  useEffect(() => {
+    if (!isGccStyleSelected && ampMode === 'gcc_enhance') {
+      setAmpMode('expand');
+    }
+  }, [isGccStyleSelected, ampMode]);
 
   // Caps: style max 350, lyrics gets remaining up to overall 800 (title excluded from cap)
   const limit = 2350;
@@ -4030,6 +4051,19 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 >
                   {isAr ? 'توسيع' : 'Expand'}
                 </button>
+                {isGccStyleSelected && (
+                  <button
+                    type="button"
+                    onClick={() => setAmpMode('gcc_enhance')}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${
+                      ampMode === 'gcc_enhance'
+                        ? 'bg-purple-500 text-white shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {isAr ? 'تحسين خليجي' : 'GCC Enhance'}
+                  </button>
+                )}
               </div>
               <button
                 type="button"

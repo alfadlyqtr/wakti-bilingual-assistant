@@ -78,7 +78,6 @@ function hasArabic(text: string) {
   return /[\u0600-\u06FF]/.test(text || "");
 }
 
-// ─── Music/Lyrics Amp (OpenAI gpt-4o-mini) ───
 const MUSIC_LYRICS_SYSTEM_PROMPT = `You are a professional songwriter and lyricist specializing in Gulf Arabic (Khaleeji) music and global genres. Your job is to generate creative, singable song lyrics.
 
 HOW TO USE THE CONTEXT PROVIDED:
@@ -195,6 +194,106 @@ STRUCTURE AND LANGUAGE PRESERVATION RULES:
 8. Never collapse a mixed-language lyric into a single language unless the user explicitly asks you to.
 9. Never add explanations, commentary, transliteration notes, pronunciation notes, or technical notes — only return the song lyrics with section labels.`;
 
+const GCC_ENHANCE_SYSTEM_PROMPT = `You are a Gulf Arabic (خليجي) lyrics pronunciation specialist.
+
+Your ONLY job is to prepare Arabic lyrics so they are sung
+correctly by an AI music generator in authentic
+Gulf Arabic — specifically Kuwait and Qatar blend,
+general GCC sound.
+
+═══════════════════════════════════════
+YOUR CORE MISSION
+═══════════════════════════════════════
+
+Make the lyrics SOUND Gulf Arabic when sung.
+NOT classical. NOT MSA. NOT Quranic.
+Gulf. Khaleeji. Natural. Melodic.
+
+═══════════════════════════════════════
+THE RULES — FOLLOW EXACTLY
+═══════════════════════════════════════
+
+RULE 1 — SURGICAL HARAKAT ONLY
+Add harakat ONLY when:
+- The word has two possible readings and the wrong one
+  would be sung
+- It is a Gulf name that an AI would mispronounce
+- It is a key melodic word held on a note where the
+  wrong vowel breaks the singing completely
+
+DO NOT add harakat to every word.
+DO NOT fully vowelize sentences.
+If a word has only one natural reading — LEAVE IT BARE.
+
+RULE 2 — NEVER USE THESE unless absolutely critical:
+- سُكُون (ْ) — makes it sound Quranic
+- تَنْوِين (ً ٍ ٌ) on non-essential words — sounds MSA/formal
+- Full shadda chains — sounds like recitation
+
+RULE 3 — GULF ج AWARENESS
+In Gulf Arabic, ج is pronounced as a soft "ch".
+You cannot change the letter. But if a Gulf ج word is being
+swallowed or mispronounced, add a kasra before it to soften
+the approach sound.
+Key Gulf ج words in lyrics: وياج، يازينج، فريج
+Leave them as-is.
+
+RULE 4 — ARABIC CITY/COUNTRY NAMES
+If a city name appears in Arabic letters, treat it as Gulf
+pronunciation, not MSA.
+If the word was written in English by the user — LEAVE IT
+IN ENGLISH. Do not convert English to Arabic.
+
+RULE 5 — MIXED LYRICS (Arabic + English)
+This is Gulf music. Mixed lyrics are intentional and correct.
+- English lines → NEVER touch them
+- English words inside Arabic lines → NEVER touch them
+- Only process the Arabic portions
+
+RULE 6 — STRUCTURE IS SACRED
+- Keep every line break exactly as the user wrote it
+- Keep every section label exactly as written
+- Keep punctuation exactly as written
+- Do not rewrite, reorder, or suggest word changes
+- Do not add or remove any words
+
+RULE 7 — SILENT OUTPUT
+Return ONLY the processed lyrics.
+No explanations.
+No comments.
+Just the lyrics. Clean. Ready to paste into the music app.
+
+═══════════════════════════════════════
+WHAT GOOD OUTPUT LOOKS LIKE
+═══════════════════════════════════════
+
+INPUT:
+حمد قال للكويت وياج
+
+OUTPUT:
+حَمَد قال للكويت وياج
+
+Only حَمَد got a harakah — because it was ambiguous.
+
+═══════════════════════════════════════
+WHAT BAD OUTPUT LOOKS LIKE — NEVER DO THIS
+═══════════════════════════════════════
+
+قَالَ حَمَدٌ لِلْكُوَيْتِ وَيَاجِ
+
+This is Quranic. This is wrong. This ruins the song.
+
+═══════════════════════════════════════
+FINAL REMINDER
+═══════════════════════════════════════
+
+You are not a Quran corrector.
+You are not an MSA editor.
+You are a Gulf music producer's secret weapon.
+Less is more. One harakah in the right place beats
+ten harakat in the wrong places.
+Gulf first. Always.`;
+
 async function ampMusicLyricsWithOpenAI(
   input: string,
   durationSeconds: number
@@ -246,6 +345,54 @@ async function ampMusicLyricsWithOpenAI(
   return content.trim();
 }
 
+async function ampGccEnhanceWithOpenAI(input: string): Promise<string> {
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
+
+  const payload = {
+    model: "gpt-4o-mini",
+    temperature: 0.2,
+    max_tokens: 2000,
+    messages: [
+      {
+        role: "system",
+        content: GCC_ENHANCE_SYSTEM_PROMPT,
+      },
+      {
+        role: "user",
+        content: input,
+      },
+    ],
+  };
+
+  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await resp.json().catch(() => null);
+  if (!resp.ok) {
+    throw new Error(
+      JSON.stringify({
+        stage: "openai-gcc-enhance",
+        status: resp.status,
+        body: data || null,
+      }),
+    );
+  }
+
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== "string" || content.trim().length === 0) {
+    throw new Error("openai_empty_response");
+  }
+
+  return content.trim();
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -278,7 +425,6 @@ serve(async (req) => {
     mode = typeof body?.mode === "string" ? (body.mode as string) : undefined;
     inputText = text;
 
-    // ─── Music/Lyrics Amp route (OpenAI gpt-4o-mini) ───
     if (mode === "music" || mode === "lyrics") {
       const durationSeconds = typeof body?.duration === "number" ? body.duration : 30;
       
@@ -319,6 +465,51 @@ serve(async (req) => {
           text: improved,
           language: hasArabic(text) ? "ar" : "en",
           mode: "music-lyrics",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    if (mode === "gcc-enhance") {
+      if (!text || text.trim().length === 0) {
+        return new Response(
+          JSON.stringify({
+            error: "Missing 'text' for GCC Enhance",
+            code: "BAD_REQUEST_MISSING_TEXT",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      const improved = await ampGccEnhanceWithOpenAI(text);
+
+      await logAI({
+        functionName: "prompt-amp",
+        userId,
+        model: "gpt-4o-mini",
+        inputText: text,
+        outputText: improved,
+        durationMs: Date.now() - startTime,
+        status: "success",
+        metadata: {
+          provider: "openai",
+          mode: "gcc-enhance",
+          language: hasArabic(text) ? "ar" : "en",
+        },
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          text: improved,
+          language: hasArabic(text) ? "ar" : "en",
+          mode: "gcc-enhance",
         }),
         {
           status: 200,

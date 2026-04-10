@@ -236,12 +236,9 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     };
 
     try {
-      if (isQUUser && isAndroid) {
-        addDebug('QU Android → showPaywall(university_exclusive)');
+      if (isQUUser) {
+        addDebug('QU → showPaywall(university_exclusive)');
         showPaywall(true, 'university_exclusive', purchaseCallback);
-      } else if (isQUUser) {
-        addDebug('QU iOS → purchasePackage(activePackageObj || qatar_university)');
-        purchasePackage(activePackageObj || 'qatar_university', purchaseCallback);
       } else {
         addDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', purchaseCallback);
