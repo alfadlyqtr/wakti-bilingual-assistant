@@ -4553,7 +4553,10 @@ function EditorTab() {
   const [trackSearch, setTrackSearch] = useState('');
   const [activePlayingTrackId, setActivePlayingTrackId] = useState<string | null>(null);
   const [expandedLyricsTrackId, setExpandedLyricsTrackId] = useState<string | null>(null);
-  const lyricsScrollRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [activeLyricsLineByTrackId, setActiveLyricsLineByTrackId] = useState<Record<string, number>>({});
+  const lyricsLineRefs = useRef<Record<string, Record<number, HTMLDivElement | null>>>({});
+  const lyricsWheelRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const stepLyricsLineRef = useRef<(trackId: string, lineCount: number, dir: 1 | -1) => void>(() => {});
   const [shareTrackTarget, setShareTrackTarget] = useState<{ id: string; title: string; coverUrl: string | null } | null>(null);
   const [deleteTrackTarget, setDeleteTrackTarget] = useState<{ id: string; storagePath: string | null } | null>(null);
 
@@ -4849,14 +4852,35 @@ function EditorTab() {
     }
   }, [tracks, activePlayingTrackId]);
 
-  const syncLyricsScroll = (trackId: string, progress: { currentTime: number; duration: number; isPlaying: boolean }) => {
-    const panel = lyricsScrollRefs.current[trackId];
-    if (!panel || !progress.isPlaying || progress.duration <= 0) return;
-    const maxScroll = panel.scrollHeight - panel.clientHeight;
-    if (maxScroll <= 0) return;
-    const ratio = Math.min(1, Math.max(0, progress.currentTime / progress.duration));
-    panel.scrollTop = maxScroll * ratio;
+  const stepLyricsLine = (trackId: string, lineCount: number, direction: 1 | -1) => {
+    setActiveLyricsLineByTrackId((prev) => {
+      const current = prev[trackId] ?? 0;
+      const next = Math.min(lineCount - 1, Math.max(0, current + direction));
+      if (next === current) return prev;
+      requestAnimationFrame(() => {
+        lyricsLineRefs.current[trackId]?.[next]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
+      return { ...prev, [trackId]: next };
+    });
   };
+  stepLyricsLineRef.current = stepLyricsLine;
+
+  useEffect(() => {
+    const entries = Object.entries(lyricsWheelRefs.current);
+    const cleanups: (() => void)[] = [];
+    entries.forEach(([trackId, el]) => {
+      if (!el) return;
+      const handler = (e: WheelEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const lineCount = Object.keys(lyricsLineRefs.current[trackId] ?? {}).length;
+        stepLyricsLineRef.current(trackId, lineCount, e.deltaY > 0 ? 1 : -1);
+      };
+      el.addEventListener('wheel', handler, { passive: false });
+      cleanups.push(() => el.removeEventListener('wheel', handler));
+    });
+    return () => cleanups.forEach(fn => fn());
+  }, [expandedLyricsTrackId]);
 
   const handleDeleteConfirm = async () => {
     if (!deleteTrackTarget) return;
@@ -5111,7 +5135,9 @@ function EditorTab() {
                 const trackLyrics = (t.prompt || '').trim();
                 const hasLyrics = trackLyrics.length > 0;
                 const isLyricsExpanded = expandedLyricsTrackId === t.id;
+                const lyricLines = trackLyrics.split('\n').map((line) => line.trim()).filter(Boolean);
                 const lyricsPreview = trackLyrics.split('\n').map((line) => line.trim()).filter(Boolean).slice(0, 2).join(' ');
+                const activeLyricsLine = activeLyricsLineByTrackId[t.id] ?? 0;
                 const styleTags: string[] = t.include_styles ?? [];
                 const metaTags = (t.meta as any)?.tags as string | null;
                 const isFavorite = Boolean((t.meta as any)?.favorite);
@@ -5192,7 +5218,6 @@ function EditorTab() {
                               return prev === t.id ? null : prev;
                             });
                           }}
-                          onProgressChange={(progress) => syncLyricsScroll(t.id, progress)}
                         />
                         {hasLyrics && (
                           <div className="w-full overflow-hidden rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-gradient-to-b from-[#f8fafc] via-[#f3f7ff] to-[#eef4ff] dark:from-white/[0.05] dark:via-white/[0.035] dark:to-white/[0.03] shadow-[0_10px_24px_rgba(6,5,65,0.08)] dark:shadow-none">
@@ -5213,28 +5238,52 @@ function EditorTab() {
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 <span className="text-[10px] text-[#606062] dark:text-white/45 whitespace-nowrap">
-                                  {isActivePlaying
-                                    ? (isAr ? 'تتحرك مع التشغيل' : 'Follows playback')
-                                    : (isLyricsExpanded
-                                      ? (isAr ? 'مرر للقراءة' : 'Scroll to read')
-                                      : (isAr ? 'اضغط للعرض' : 'Tap to view'))}
+                                  {isLyricsExpanded
+                                    ? (isAr ? 'مرر لأعلى/أسفل' : 'Swipe up/down')
+                                    : (isAr ? 'اضغط للعرض' : 'Tap to view')}
                                 </span>
                                 {isLyricsExpanded ? <ChevronUp className="h-3.5 w-3.5 text-sky-700 dark:text-sky-300" /> : <ChevronDown className="h-3.5 w-3.5 text-sky-700 dark:text-sky-300" />}
                               </div>
                             </button>
                             {isLyricsExpanded && (
-                              <div className="relative px-4 py-3">
+                              <div
+                                ref={(node) => { lyricsWheelRefs.current[t.id] = node; }}
+                                className="relative px-4 py-3 select-none"
+                                onTouchStart={(e) => { (e.currentTarget as any)._lyricsTouchY = e.touches[0].clientY; }}
+                                onTouchEnd={(e) => {
+                                  const startY = (e.currentTarget as any)._lyricsTouchY ?? 0;
+                                  const diff = startY - e.changedTouches[0].clientY;
+                                  if (Math.abs(diff) > 20) stepLyricsLine(t.id, lyricLines.length, diff > 0 ? 1 : -1);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'ArrowDown') { e.preventDefault(); stepLyricsLine(t.id, lyricLines.length, 1); }
+                                  if (e.key === 'ArrowUp')   { e.preventDefault(); stepLyricsLine(t.id, lyricLines.length, -1); }
+                                }}
+                                tabIndex={0}
+                              >
                                 <div className="pointer-events-none absolute inset-x-4 top-3 h-5 bg-gradient-to-b from-[#eef4ff] via-[#eef4ff]/75 to-transparent dark:from-[#171b22] dark:via-[#171b22]/70 dark:to-transparent z-10 rounded-t-xl" />
                                 <div className="pointer-events-none absolute inset-x-4 bottom-3 h-5 bg-gradient-to-t from-[#eef4ff] via-[#eef4ff]/75 to-transparent dark:from-[#171b22] dark:via-[#171b22]/70 dark:to-transparent z-10 rounded-b-xl" />
-                                <div
-                                  ref={(node) => {
-                                    lyricsScrollRefs.current[t.id] = node;
-                                  }}
-                                  className="relative z-0 max-h-[6.6rem] overflow-y-auto scroll-smooth px-2 py-1"
-                                >
-                                  <pre className={`whitespace-pre-wrap break-words text-[17px] leading-[2.15] text-[#060541]/88 dark:text-white/82 font-inherit italic tracking-[0.01em] m-0 transition-all duration-500 ${isActivePlaying ? 'opacity-100' : 'opacity-90'}`}>
-                                    {trackLyrics}
-                                  </pre>
+                                <div className="relative z-0 max-h-[6.6rem] overflow-hidden px-2 py-1">
+                                  <div className="space-y-3 py-3">
+                                    {lyricLines.map((line, lineIdx) => {
+                                      const isActiveLine = lineIdx === activeLyricsLine;
+                                      return (
+                                        <div
+                                          key={`${t.id}-lyric-${lineIdx}`}
+                                          ref={(node) => {
+                                            if (!lyricsLineRefs.current[t.id]) lyricsLineRefs.current[t.id] = {};
+                                            lyricsLineRefs.current[t.id][lineIdx] = node;
+                                          }}
+                                          className={`text-center whitespace-pre-wrap break-words font-inherit italic tracking-[0.01em] transition-all duration-500 ${isActiveLine
+                                            ? 'text-[18px] leading-[1.9] text-[#060541] dark:text-white font-semibold opacity-100 scale-[1.02]'
+                                            : 'text-[15px] leading-[1.8] text-[#606062]/70 dark:text-white/38 opacity-60 blur-[0.6px] scale-[0.985]'
+                                          }`}
+                                        >
+                                          {line}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               </div>
                             )}

@@ -321,7 +321,6 @@ export default function Account() {
     // loads the correct non-default offering and its products on demand.
     // Standard users: use purchasePackage with $rc_monthly from Default offering.
     const billingCallback = async (resp: any) => {
-      alert(`[Debug] SDK Response: status=${resp?.status}, msg=${resp?.message}, err=${resp?.error ? JSON.stringify(resp.error) : 'none'}`);
       addBillingDebug(`Callback fired! Status: ${resp?.status}`);
       addBillingDebug(`Callback message: ${resp?.message}`);
       if (resp?.error) addBillingDebug(`Callback error: ${JSON.stringify(resp.error)}`);
@@ -366,9 +365,8 @@ export default function Account() {
         showPaywall(true, 'university_exclusive', billingCallback);
       } else if (isQUUser) {
         // iOS + QU: purchasePackage with RC package ID — confirmed working April 1
-        addBillingDebug('QU iOS → purchasePackage(qatar_university)');
-        alert('[Debug] Billing QU iOS → purchasePackage(qatar_university)');
-        purchasePackage('qatar_university', billingCallback);
+        addBillingDebug('QU iOS → purchasePackage(billingPackageObj || qatar_university)');
+        purchasePackage(billingPackageObj || 'qatar_university', billingCallback);
       } else {
         addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);

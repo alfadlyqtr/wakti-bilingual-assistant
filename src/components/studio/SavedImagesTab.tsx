@@ -52,6 +52,12 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
   const lightboxContainerRef = useRef<HTMLDivElement | null>(null);
   const pinchDistanceRef = useRef<number | null>(null);
   const pinchStartZoomRef = useRef(1);
+  const panXRef = useRef(0);
+  const panYRef = useRef(0);
+  const panStartXRef = useRef(0);
+  const panStartYRef = useRef(0);
+  const panStartTouchXRef = useRef(0);
+  const panStartTouchYRef = useRef(0);
 
   const loadImages = useCallback(async () => {
     if (!user?.id) return;
@@ -80,24 +86,34 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
     lightboxZoomRef.current = 1;
     pinchDistanceRef.current = null;
     pinchStartZoomRef.current = 1;
+    panXRef.current = 0;
+    panYRef.current = 0;
     setLightboxZoom(1);
   }, [lightboxImage]);
 
   const clampZoom = useCallback((value: number) => Math.min(3, Math.max(1, value)), []);
 
+  const applyTransform = useCallback((zoom: number, x: number, y: number) => {
+    if (lightboxImageRef.current) {
+      lightboxImageRef.current.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
+    }
+  }, []);
+
   const applyLightboxZoom = useCallback((value: number) => {
     const nextZoom = clampZoom(value);
     lightboxZoomRef.current = nextZoom;
-    if (lightboxImageRef.current) {
-      lightboxImageRef.current.style.transform = `scale(${nextZoom})`;
+    if (nextZoom <= 1) {
+      panXRef.current = 0;
+      panYRef.current = 0;
     }
+    applyTransform(nextZoom, panXRef.current, panYRef.current);
     if (lightboxSliderRef.current) {
       lightboxSliderRef.current.value = String(nextZoom);
     }
     if (lightboxPctRef.current) {
       lightboxPctRef.current.textContent = `${Math.round(nextZoom * 100)}%`;
     }
-  }, [clampZoom]);
+  }, [clampZoom, applyTransform]);
 
   const getTouchDistance = (touches: TouchList) => {
     if (touches.length < 2) return null;
@@ -111,26 +127,43 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
     if (!el || !lightboxImage) return;
 
     const onTouchStart = (e: TouchEvent) => {
-      const dist = getTouchDistance(e.touches);
-      if (dist == null) return;
-      pinchDistanceRef.current = dist;
-      pinchStartZoomRef.current = lightboxZoomRef.current;
+      if (e.touches.length === 2) {
+        const dist = getTouchDistance(e.touches);
+        if (dist == null) return;
+        pinchDistanceRef.current = dist;
+        pinchStartZoomRef.current = lightboxZoomRef.current;
+      } else if (e.touches.length === 1 && lightboxZoomRef.current > 1) {
+        panStartTouchXRef.current = e.touches[0].clientX;
+        panStartTouchYRef.current = e.touches[0].clientY;
+        panStartXRef.current = panXRef.current;
+        panStartYRef.current = panYRef.current;
+      }
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      const dist = getTouchDistance(e.touches);
-      if (dist == null || pinchDistanceRef.current == null) return;
       e.preventDefault();
-      const nextZoom = pinchStartZoomRef.current * (dist / pinchDistanceRef.current);
-      applyLightboxZoom(nextZoom);
+      if (e.touches.length === 2) {
+        const dist = getTouchDistance(e.touches);
+        if (dist == null || pinchDistanceRef.current == null) return;
+        const nextZoom = pinchStartZoomRef.current * (dist / pinchDistanceRef.current);
+        applyLightboxZoom(nextZoom);
+      } else if (e.touches.length === 1 && lightboxZoomRef.current > 1) {
+        const dx = e.touches[0].clientX - panStartTouchXRef.current;
+        const dy = e.touches[0].clientY - panStartTouchYRef.current;
+        panXRef.current = panStartXRef.current + dx;
+        panYRef.current = panStartYRef.current + dy;
+        applyTransform(lightboxZoomRef.current, panXRef.current, panYRef.current);
+      }
     };
 
-    const onTouchEnd = () => {
-      pinchDistanceRef.current = null;
-      pinchStartZoomRef.current = lightboxZoomRef.current;
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        pinchDistanceRef.current = null;
+        pinchStartZoomRef.current = lightboxZoomRef.current;
+      }
     };
 
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
     el.addEventListener('touchmove', onTouchMove, { passive: false });
     el.addEventListener('touchend', onTouchEnd, { passive: true });
     el.addEventListener('touchcancel', onTouchEnd, { passive: true });
@@ -141,7 +174,7 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
       el.removeEventListener('touchend', onTouchEnd);
       el.removeEventListener('touchcancel', onTouchEnd);
     };
-  }, [lightboxImage, applyLightboxZoom]);
+  }, [lightboxImage, applyLightboxZoom, applyTransform]);
 
   const handleDelete = async (id: string) => {
     setDeletingId(id);

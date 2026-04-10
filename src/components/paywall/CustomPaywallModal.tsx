@@ -188,7 +188,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     console.log('[Purchase] QU:', isQUUser, '| iOS:', isIOS);
 
     const purchaseCallback = async (resp: any) => {
-      alert(`[Debug] SDK Response: status=${resp?.status}, msg=${resp?.message}, err=${resp?.error ? JSON.stringify(resp.error) : 'none'}`);
       addDebug(`Callback fired! Status: ${resp?.status}`);
       addDebug(`Callback message: ${resp?.message}`);
       if (resp?.error) addDebug(`Callback error: ${JSON.stringify(resp.error)}`);
@@ -241,9 +240,8 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
         addDebug('QU Android → showPaywall(university_exclusive)');
         showPaywall(true, 'university_exclusive', purchaseCallback);
       } else if (isQUUser) {
-        addDebug('QU iOS → purchasePackage(qatar_university)');
-        alert('[Debug] QU iOS → purchasePackage(qatar_university)');
-        purchasePackage('qatar_university', purchaseCallback);
+        addDebug('QU iOS → purchasePackage(activePackageObj || qatar_university)');
+        purchasePackage(activePackageObj || 'qatar_university', purchaseCallback);
       } else {
         addDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', purchaseCallback);
