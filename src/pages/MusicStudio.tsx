@@ -1486,6 +1486,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [submitting, setSubmitting] = useState(false);
   const [amping, setAmping] = useState(false);
   const [ampMode, setAmpMode] = useState<'idea' | 'expand' | 'gcc_enhance'>('expand');
+  const skipLyricsCapRef = useRef(false);
   const [vocalType, setVocalType] = useState<'auto'|'none'|'female'|'male'>('auto');
   const [vocalsOpen, setVocalsOpen] = useState(false);
   const [lyricsOpen, setLyricsOpen] = useState(false);
@@ -2494,6 +2495,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       if (error) throw error;
       const expandedLyrics = (data?.text || '').toString();
       if (!expandedLyrics) throw new Error(isAr ? 'تعذّر التوسيع' : 'Expansion failed');
+      if (ampMode === 'gcc_enhance') skipLyricsCapRef.current = true;
       setLyricsText(expandedLyrics);
       toast.success(isAr ? (ampMode === 'idea' ? 'تم إنشاء الكلمات' : ampMode === 'gcc_enhance' ? 'تم التحسين الخليجي' : 'تم توسيع الكلمات') : (ampMode === 'idea' ? 'Lyrics generated' : ampMode === 'gcc_enhance' ? 'GCC enhanced' : 'Lyrics expanded'));
     } catch (e: any) {
@@ -2908,6 +2910,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   // Ensure lyrics never exceed current cap when style changes
   useEffect(() => {
+    if (skipLyricsCapRef.current) { skipLyricsCapRef.current = false; return; }
     const cap = lyricsCap;
     if (Array.from(lyricsText || '').length > cap) {
       setLyricsText(Array.from(lyricsText).slice(0, cap).join(''));
@@ -2916,6 +2919,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   // Ensure lyrics respect the current character cap when duration changes
   useEffect(() => {
+    if (skipLyricsCapRef.current) { skipLyricsCapRef.current = false; return; }
     if (!lyricsText) return;
     const capped = Array.from(lyricsText).slice(0, lyricsCap).join('');
     if (capped !== lyricsText) setLyricsText(capped);

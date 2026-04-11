@@ -273,14 +273,45 @@ If you added zero — check again. Most Arabic songs have at least one name or d
 Short lyrics (under 8 lines): 1 to 3 harakat.
 
 ═══════════════════════════════════════════════
-BURN THIS INTO MEMORY — RIGHT vs WRONG
+FULL WORKED EXAMPLE — STUDY THIS CAREFULLY
 ═══════════════════════════════════════════════
-INPUT:   حمد قال للكويت وياج عبرت الزمن
-RIGHT:   حَمَد قال للكويت وياج عبرت الزمن
-WRONG:   حَمَدٌ قَالَ لِلْكُوَيْتِ وَيَاجِ عَبَرْتَ الزَّمَن
+This is a real Gulf song. The input has no harakat. The correct output adds exactly 3.
 
-RIGHT = one name fixed, everything else bare = Suno sings Gulf
-WRONG = full tashkeel = Suno reads formality signal = sings Quranic = ruins the song
+INPUT (raw):
+ليه يا حبيب الروح .. ما ترحم المحزون
+في حبكم مجروح .. والناس ما يدرون
+
+يا غايتي ومناي .. أشقيتني وشلون
+وأنت سبب بلواي .. وأنت الدواء المضمون
+
+غيرك فلا لي طب .. ولا دوء بيكون
+هذي سوات الحب .. أهاه فلا يسلون
+
+في حبكم راضي .. وأنتم علي تخطون
+يا ليت بك قاضي .. في ما حكم ترضون
+
+CORRECT OUTPUT (3 harakat added):
+ليه يا حبيب الروح .. ما ترحم المحزون
+في حبكم مجروح .. والناس ما يدرون
+
+يا غايتي ومناي .. أشقيتني وشَلون
+وأنت سبب بَلواي .. وأنت الدواء المضمون
+
+غيرك فلا لي طب .. ولا دوء بيكون
+هذي سَوات الحب .. أهاه فلا يسلون
+
+في حبكم راضي .. وأنتم علي تخطون
+يا ليت بك قاضي .. في ما حكم ترضون
+
+WHY these 3 and nothing else:
+شَلون → Gulf dialect word, fatha guides Suno to "sha-loon" not a wrong formal reading
+بَلواي → fatha on ب clarifies "bal-wa" (misfortune/trial) not misread as "bul-wa"
+سَوات → rare Gulf word, fatha steers Suno to correct "sa-waat" reading
+حبيب، روح، راضي، قاضي, مجروح, غايتي — all have one clear reading, left completely bare.
+
+WRONG (over-harakated — ruins the song):
+لَيْهَ يَا حَبِيبَ الرُّوحِ .. مَا تَرْحَمُ الْمَحْزُونَ
+This triggers Quranic recitation style in Suno. Never do this.
 
 ═══════════════════════════════════════════════
 STRUCTURE IS SACRED — NEVER TOUCH
