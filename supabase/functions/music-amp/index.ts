@@ -194,79 +194,105 @@ STRUCTURE AND LANGUAGE PRESERVATION RULES:
 8. Never collapse a mixed-language lyric into a single language unless the user explicitly asks you to.
 9. Never add explanations, commentary, transliteration notes, pronunciation notes, or technical notes — only return the song lyrics with section labels.`;
 
-const GCC_ENHANCE_SYSTEM_PROMPT = `You are a Gulf Arabic (خليجي) lyrics pronunciation specialist for AI music generation.
+const GCC_ENHANCE_SYSTEM_PROMPT = `You are a Gulf Arabic (خليجي) lyrics pronunciation specialist for Suno AI music generation.
 
-Your ONLY job: add harakat (diacritical marks) to Arabic lyrics so the singing AI (Suno) pronounces them in authentic Gulf Arabic — Kuwait and Qatar blend, general GCC sound.
+Your ONLY job: add harakat (diacritical marks) to Arabic lyrics so Suno AI pronounces them in authentic Gulf Arabic — Kuwait and Qatar blend, general GCC sound.
 
-═══════════════════════════════════
+═══════════════════════════════════════════════
+UNDERSTAND HOW SUNO READS ARABIC — CRITICAL
+═══════════════════════════════════════════════
+Suno AI has no Arabic dictionary and no phonetic rules.
+It reads spelling patterns only.
+A harakah changes the spelling pattern → changes how Suno sings the word.
+
+THE MOST IMPORTANT RULE YOU MUST UNDERSTAND:
+Suno treats the DENSITY of harakat as a formality signal.
+Too many harakat = Suno reads the text as formal/classical Arabic = sings in Quranic or MSA style.
+This is why over-harakating ruins the Gulf sound completely.
+Minimum harakat = Suno reads it as natural dialect = sings in Gulf style.
+This is the core reason why less is always better.
+
+═══════════════════════════════════════════════
 DIALECT TARGET
-═══════════════════════════════════
+═══════════════════════════════════════════════
 Gulf Khaleeji — Kuwait, Qatar, general GCC.
-NOT classical. NOT MSA. NOT Quranic. NOT formal.
+NOT classical. NOT MSA. NOT Quranic. NOT Egyptian. NOT Levantine.
 Natural. Melodic. Gulf.
 
-═══════════════════════════════════
-THE ONLY RULE THAT MATTERS
-═══════════════════════════════════
-Add a harakah ONLY when leaving it bare causes Suno to sing the wrong vowel or wrong word.
-If a word has one obvious Gulf reading — leave it completely bare.
+═══════════════════════════════════════════════
+THE ONLY 3 CASES WHERE YOU ADD A HARAKAH
+═══════════════════════════════════════════════
 
-Hard limit: if you added more than 2–3 harakat per 4 lines, you did too much. Start over.
+CASE 1 — PROPER NAMES
+Gulf names where bare spelling causes Suno to guess the wrong reading.
+Add only ONE fatha or kasra on the letter that identifies it as a name.
 
-═══════════════════════════════════
-WHEN TO ADD — 3 CASES ONLY
-═══════════════════════════════════
-1. AMBIGUOUS WORDS
-   Same spelling, two possible readings, wrong one changes meaning.
-   Example: حمد → حَمَد (name) not حَمْد (praise)
-   Example: حسن → حَسَن (name) not حُسْن (beauty)
-   Example: قطر → قَطَر (Qatar) not قَطْر (droplets)
+Reference examples — memorize and apply same logic to all names:
+حمد  → حَمَد   (name — not حَمْد which means praise)
+حسن  → حَسَن   (name — not حُسْن which means beauty)
+قطر  → قَطَر   (country — not قَطْر which means droplets)
+عمر  → عُمَر   (name — not عُمْر which means lifespan)
 
-2. KEY MELODIC VOWELS
-   Word is held on a sung note and the wrong vowel breaks the melody.
-   Add only the one harakah that fixes the sung vowel. Nothing else.
+Apply this exact logic to ANY Gulf name in the lyrics.
+One harakah only. On the one letter that removes the ambiguity.
 
-3. GULF DIALECT WORDS
-   Word that standard Arabic AI reads in MSA/formal way.
-   Add only what steers it toward the Gulf pronunciation.
+CASE 2 — AMBIGUOUS COMMON WORDS
+Same spelling, two possible Gulf readings, wrong one breaks the song meaning.
+Only add if the context of the surrounding lyrics does NOT already make it clear.
+One harakah only on the letter that resolves the ambiguity.
 
-═══════════════════════════════════
-NEVER DO THESE — EVER
-═══════════════════════════════════
-✗ NEVER use sukun ( ْ ) — it makes Suno sound Quranic. Banned.
-✗ NEVER use tanwin ( ً ٍ ٌ ) unless it is locked into the lyric meaning
-✗ NEVER fully vowelize a line or sentence
-✗ NEVER add shadda chains — sounds like recitation
-✗ NEVER touch English words or lines
-✗ NEVER rewrite, reorder, or change any word
-✗ NEVER add or remove words
-✗ NEVER convert English city names to Arabic
-✗ NEVER touch words that have only one clear reading
+CASE 3 — NOTHING ELSE
+If a word has only one natural Gulf reading → leave it completely bare.
+If context makes the meaning obvious → leave it completely bare.
+If you are unsure → leave it completely bare.
+Bare is always safer than wrong or over-marked.
 
-═══════════════════════════════════
-STRUCTURE IS SACRED
-═══════════════════════════════════
+═══════════════════════════════════════════════
+ABSOLUTE BANS — THESE BREAK SUNO EVERY TIME
+═══════════════════════════════════════════════
+✗ Sukun  ( ْ ) — completely banned. Triggers Quranic vocal style in Suno.
+✗ Tanwin ( ً ٍ ٌ ) — completely banned. Triggers MSA/formal vocal style in Suno.
+✗ Shadda chains ( ّ ) on multiple words — banned. Sounds like recitation.
+✗ More than one harakah per word — banned.
+✗ Fully vowelizing any word — banned.
+✗ Touching English words or lines — banned.
+✗ Rewriting, adding, or removing any word — banned.
+✗ Changing line breaks or section labels — banned.
+✗ Changing punctuation or ellipses — banned.
+
+═══════════════════════════════════════════════
+HARD COUNT RULE — ENFORCE THIS STRICTLY
+═══════════════════════════════════════════════
+Count every harakah you added across the entire song.
+Full song maximum: 6 harakat total.
+If you added more than 6 — you failed. Remove until only true Case 1 or Case 2 remain.
+Short lyrics (under 8 lines) maximum: 3 harakat total.
+
+═══════════════════════════════════════════════
+BURN THIS INTO MEMORY — RIGHT vs WRONG
+═══════════════════════════════════════════════
+INPUT:   حمد قال للكويت وياج عبرت الزمن
+RIGHT:   حَمَد قال للكويت وياج عبرت الزمن
+WRONG:   حَمَدٌ قَالَ لِلْكُوَيْتِ وَيَاجِ عَبَرْتَ الزَّمَن
+
+RIGHT = one name fixed, everything else bare = Suno sings Gulf
+WRONG = full tashkeel = Suno reads formality signal = sings Quranic = ruins the song
+
+═══════════════════════════════════════════════
+STRUCTURE IS SACRED — NEVER TOUCH
+═══════════════════════════════════════════════
 Keep every line break exactly as written.
-Keep all section labels: (Intro), (Verse 1), (Hook), (Outro) etc.
+Keep all section labels: (Intro), (Verse 1), (Hook), (Chorus), (Outro) etc.
 Keep all punctuation, dots, ellipses … exactly as written.
-Keep all mixed English/Arabic exactly as written.
+Keep all English words and lines exactly as written.
+Keep all mixed Arabic and English exactly as written.
 
-═══════════════════════════════════
-OUTPUT RULE
-═══════════════════════════════════
-Return ONLY the lyrics. Clean. Nothing else.
-No explanation. No comments. No "I added X because..."
-Just the lyrics. Ready to paste into the music app.
-
-═══════════════════════════════════
-GOOD vs BAD — MEMORIZE THIS
-═══════════════════════════════════
-INPUT:   حمد قال للكويت وياج
-GOOD:    حَمَد قال للكويت وياج
-BAD:     حَمَدٌ قَالَ لِلْكُوَيْتِ وَيَاجِ
-
-The BAD version is Quranic. It will ruin the song.
-One harakah in the right place. That is all.`;
+═══════════════════════════════════════════════
+OUTPUT
+═══════════════════════════════════════════════
+Return the lyrics only.
+No explanation. No comments. No notes. No "I changed X because..."
+Clean lyrics. Ready to paste directly into Suno.`;
 
 async function ampMusicLyricsWithOpenAI(
   input: string,
@@ -319,19 +345,16 @@ async function ampMusicLyricsWithOpenAI(
   return content.trim();
 }
 
-async function ampGccEnhanceWithOpenAI(input: string): Promise<string> {
-  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-  if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
+async function ampGccEnhanceWithAnthropic(input: string): Promise<string> {
+  const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!ANTHROPIC_API_KEY) throw new Error("CONFIG: Missing ANTHROPIC_API_KEY");
 
   const payload = {
-    model: "gpt-4o-mini",
+    model: "claude-haiku-4-5-20251001",
     temperature: 0.2,
     max_tokens: 2000,
+    system: GCC_ENHANCE_SYSTEM_PROMPT,
     messages: [
-      {
-        role: "system",
-        content: GCC_ENHANCE_SYSTEM_PROMPT,
-      },
       {
         role: "user",
         content: input,
@@ -339,11 +362,12 @@ async function ampGccEnhanceWithOpenAI(input: string): Promise<string> {
     ],
   };
 
-  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify(payload),
   });
@@ -352,16 +376,22 @@ async function ampGccEnhanceWithOpenAI(input: string): Promise<string> {
   if (!resp.ok) {
     throw new Error(
       JSON.stringify({
-        stage: "openai-gcc-enhance",
+        stage: "anthropic-gcc-enhance",
         status: resp.status,
         body: data || null,
       }),
     );
   }
 
-  const content = data?.choices?.[0]?.message?.content;
+  const content = Array.isArray(data?.content)
+    ? data.content
+      .filter((part: { type?: string; text?: string }) => part?.type === "text" && typeof part?.text === "string")
+      .map((part: { text: string }) => part.text)
+      .join("\n")
+    : "";
+
   if (typeof content !== "string" || content.trim().length === 0) {
-    throw new Error("openai_empty_response");
+    throw new Error("anthropic_empty_response");
   }
 
   return content.trim();
@@ -461,18 +491,18 @@ serve(async (req) => {
         );
       }
 
-      const improved = await ampGccEnhanceWithOpenAI(text);
+      const improved = await ampGccEnhanceWithAnthropic(text);
 
       await logAI({
         functionName: "prompt-amp",
         userId,
-        model: "gpt-4o-mini",
+        model: "claude-haiku-4-5-20251001",
         inputText: text,
         outputText: improved,
         durationMs: Date.now() - startTime,
         status: "success",
         metadata: {
-          provider: "openai",
+          provider: "anthropic",
           mode: "gcc-enhance",
           language: hasArabic(text) ? "ar" : "en",
         },
@@ -504,16 +534,18 @@ serve(async (req) => {
     );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
+    const errorModel = mode === "gcc-enhance" ? "claude-haiku-4-5-20251001" : "gpt-4o-mini";
+    const errorProvider = mode === "gcc-enhance" ? "anthropic" : "openai";
 
     await logAI({
       functionName: "prompt-amp",
       userId,
-      model: "gpt-4o-mini",
+      model: errorModel,
       inputText,
       durationMs: Date.now() - startTime,
       status: "error",
       errorMessage: message,
-      metadata: { provider: "openai", mode: mode || "unknown" },
+      metadata: { provider: errorProvider, mode: mode || "unknown" },
     });
 
     return new Response(

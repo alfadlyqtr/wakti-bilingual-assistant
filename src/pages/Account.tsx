@@ -329,9 +329,9 @@ export default function Account() {
 
     try {
       if (isQUUser) {
-        // QU: showPaywall with university_exclusive offering (works on both iOS + Android)
-        addBillingDebug('QU → showPaywall(university_exclusive)');
-        showPaywall(true, 'university_exclusive', billingCallback);
+        // QU: showPaywall with qu_discount offering (works on both iOS + Android)
+        addBillingDebug('QU → showPaywall(qu_discount)');
+        showPaywall(true, 'qu_discount', billingCallback);
       } else {
         addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);

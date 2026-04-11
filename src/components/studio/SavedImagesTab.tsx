@@ -95,7 +95,7 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
 
   const applyTransform = useCallback((zoom: number, x: number, y: number) => {
     if (lightboxImageRef.current) {
-      lightboxImageRef.current.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
+      lightboxImageRef.current.style.transform = `scale(${zoom}) translate(${x / zoom}px, ${y / zoom}px)`;
     }
   }, []);
 
@@ -323,7 +323,7 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
           >
             <div
               ref={lightboxContainerRef}
-              className="w-full max-w-5xl max-h-[70vh] overflow-hidden rounded-2xl touch-none overscroll-none select-none"
+              className="w-full max-w-5xl max-h-[70vh] overflow-visible rounded-2xl touch-none overscroll-none select-none"
             >
               <div className="flex items-center justify-center min-h-[40vh] py-2">
                 <img
