@@ -123,7 +123,9 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isAndroid = /Android/.test(navigator.userAgent);
+    const sdkOnWindow = !!(window as any).NativelyPurchases;
     addDebug(`QU:${isQUUser} iOS:${isIOS} Android:${isAndroid}`);
+    addDebug(`NativelyPurchases on window: ${sdkOnWindow}`);
     console.log('[Purchase] QU:', isQUUser, '| iOS:', isIOS);
 
     const purchaseCallback = async (resp: any) => {

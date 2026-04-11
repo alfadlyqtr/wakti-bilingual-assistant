@@ -8,9 +8,18 @@ function getInstance(): any | null {
   try {
     if (typeof window === 'undefined') return null;
     const Ctor = (window as any).NativelyPurchases;
-    if (!Ctor) return null;
-    return new Ctor();
-  } catch {
+    if (!Ctor) {
+      console.warn('[PurchasesBridge] NativelyPurchases not on window - SDK not loaded');
+      return null;
+    }
+    const instance = new Ctor();
+    if (!instance) {
+      console.warn('[PurchasesBridge] new NativelyPurchases() returned null/undefined');
+      return null;
+    }
+    return instance;
+  } catch (err) {
+    console.error('[PurchasesBridge] getInstance() threw:', err);
     return null;
   }
 }
