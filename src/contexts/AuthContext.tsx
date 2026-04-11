@@ -305,10 +305,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Identify logged-in user in RevenueCat (via Natively SDK). No-op on web.
   // Also check subscription status via RevenueCat REST API
   useEffect(() => {
-    if (!nativelyReady) return;
+    let t1: ReturnType<typeof setTimeout> | undefined;
+    let t2: ReturnType<typeof setTimeout> | undefined;
     try {
       if (user?.id) {
+        // Call immediately, then retry at 2s and 5s to handle SDK async load race
         purchasesLogin(user.id, user.email || '');
+        t1 = setTimeout(() => purchasesLogin(user.id, user.email || ''), 2000);
+        t2 = setTimeout(() => purchasesLogin(user.id, user.email || ''), 5000);
         
         // Request push notification permission first (required by Natively/OneSignal)
         // This registers the device with OneSignal, then we set the external ID
@@ -353,11 +357,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // This effect fires on transient auth nulls (token refresh, session blips).
         // Unlinking the OneSignal external_id here causes "not subscribed" errors
         // and the "burst then dead" push pattern. Only unlink on explicit signOut().
+        return;
       }
     } catch (error) {
       console.warn('AuthContext: Natively identify failed', error);
+      return;
     }
-  }, [nativelyReady, user?.id, user?.email]);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [user?.id, user?.email]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({

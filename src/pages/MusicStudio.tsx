@@ -2494,6 +2494,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       });
       if (error) throw error;
       const expandedLyrics = (data?.text || '').toString();
+      console.log('[GCC-AMP] raw response:', JSON.stringify(expandedLyrics));
+      console.log('[GCC-AMP] data object:', data);
       if (!expandedLyrics) throw new Error(isAr ? 'تعذّر التوسيع' : 'Expansion failed');
       if (ampMode === 'gcc_enhance') skipLyricsCapRef.current = true;
       setLyricsText(expandedLyrics);
@@ -2910,7 +2912,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   // Ensure lyrics never exceed current cap when style changes
   useEffect(() => {
-    if (skipLyricsCapRef.current) { skipLyricsCapRef.current = false; return; }
+    if (skipLyricsCapRef.current) return;
     const cap = lyricsCap;
     if (Array.from(lyricsText || '').length > cap) {
       setLyricsText(Array.from(lyricsText).slice(0, cap).join(''));
@@ -2919,7 +2921,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   // Ensure lyrics respect the current character cap when duration changes
   useEffect(() => {
-    if (skipLyricsCapRef.current) { skipLyricsCapRef.current = false; return; }
+    if (skipLyricsCapRef.current) {
+      skipLyricsCapRef.current = false;
+      return;
+    }
     if (!lyricsText) return;
     const capped = Array.from(lyricsText).slice(0, lyricsCap).join('');
     if (capped !== lyricsText) setLyricsText(capped);
