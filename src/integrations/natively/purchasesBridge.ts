@@ -74,8 +74,13 @@ export function restorePurchases(callback?: (resp: any) => void) {
 
 export function purchasePackage(packageIdOrObj: string | any, callback?: (resp: any) => void) {
   const p = getInstance();
-  if (!p || !packageIdOrObj) return;
-  try { p.purchasePackage(packageIdOrObj, callback || function () {}); } catch {}
+  if (!p || !packageIdOrObj) {
+    if (callback) callback({ status: 'FAILED', error: 'SDK not ready' });
+    return;
+  }
+  try { p.purchasePackage(packageIdOrObj, callback || function () {}); } catch {
+    if (callback) callback({ status: 'FAILED', error: 'SDK call failed' });
+  }
 }
 
 export function getOfferings(callback?: (resp: any) => void) {
@@ -90,8 +95,13 @@ export function showPaywall(
   callback?: (resp: any) => void
 ) {
   const p = getInstance();
-  if (!p) return;
+  if (!p) {
+    if (callback) callback({ status: 'FAILED', error: 'SDK not ready' });
+    return;
+  }
   try {
     p.showPaywall(showCloseButton, offeringId, callback || function () {});
-  } catch {}
+  } catch {
+    if (callback) callback({ status: 'FAILED', error: 'SDK call failed' });
+  }
 }

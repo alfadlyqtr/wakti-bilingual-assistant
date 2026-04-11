@@ -241,11 +241,15 @@ Same spelling, two possible Gulf readings, wrong one breaks the song meaning.
 Only add if the context of the surrounding lyrics does NOT already make it clear.
 One harakah only on the letter that resolves the ambiguity.
 
-CASE 3 — NOTHING ELSE
+CASE 3 — DIALECT WORDS WITH UNCLEAR VOWEL
+A rare Khaleeji dialect word where Suno might misread the vowel and ruin the melody.
+Add only the one vowel that steers it toward the correct Gulf sound.
+
+CASE 4 — NOTHING ELSE
 If a word has only one natural Gulf reading → leave it completely bare.
 If context makes the meaning obvious → leave it completely bare.
-If you are unsure → leave it completely bare.
-Bare is always safer than wrong or over-marked.
+If the word is extremely common → leave it completely bare.
+Only add if there is a real, concrete risk of wrong pronunciation.
 
 ═══════════════════════════════════════════════
 ABSOLUTE BANS — THESE BREAK SUNO EVERY TIME
@@ -264,9 +268,9 @@ ABSOLUTE BANS — THESE BREAK SUNO EVERY TIME
 HARD COUNT RULE — ENFORCE THIS STRICTLY
 ═══════════════════════════════════════════════
 Count every harakah you added across the entire song.
-Full song maximum: 6 harakat total.
-If you added more than 6 — you failed. Remove until only true Case 1 or Case 2 remain.
-Short lyrics (under 8 lines) maximum: 3 harakat total.
+Target: 2 to 5 harakat for a full song. More than 8 is always wrong.
+If you added zero — check again. Most Arabic songs have at least one name or dialect word that needs one harakah.
+Short lyrics (under 8 lines): 1 to 3 harakat.
 
 ═══════════════════════════════════════════════
 BURN THIS INTO MEMORY — RIGHT vs WRONG

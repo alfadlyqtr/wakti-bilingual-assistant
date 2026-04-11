@@ -320,10 +320,13 @@ export default function Account() {
         }
         toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
         queryClient.invalidateQueries({ queryKey: ['subscription'] });
+      } else if (resp?.status === 'FAILED') {
+        addBillingDebug(`SDK not ready: ${resp?.error}`);
+        toast.error(language === 'ar' ? 'التطبيق غير جاهز، حاول مجدداً' : 'App not ready, please try again');
       } else if (resp?.status === 'ERROR') {
         toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
       }
-      // Always reset — covers SUCCESS, ERROR, CANCELLED, and any other status
+      // Always reset — covers SUCCESS, ERROR, FAILED, CANCELLED, and any other status
       setIsBillingPurchasing(false);
     };
 
@@ -340,6 +343,10 @@ export default function Account() {
       addBillingDebug(`TRY/CATCH ERROR: ${e?.message || String(e)}`);
       setIsBillingPurchasing(false);
     }
+
+    setTimeout(() => {
+      setIsBillingPurchasing(false);
+    }, 10000);
   };
   
   // Restore purchases state

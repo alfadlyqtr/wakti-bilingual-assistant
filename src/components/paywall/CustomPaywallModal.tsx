@@ -166,10 +166,13 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
             .catch(err => { console.warn('[Purchase] Background RC sync failed:', err); });
         }
         setTimeout(() => onOpenChange(false), 1000);
+      } else if (resp?.status === 'FAILED') {
+        addDebug(`SDK not ready: ${resp?.error}`);
+        toast.error(language === 'ar' ? 'التطبيق غير جاهز، حاول مجدداً' : 'App not ready, please try again');
       } else if (resp?.status === 'ERROR') {
         toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
       }
-      // Always reset loading — covers SUCCESS, ERROR, CANCELLED, and any other status
+      // Always reset loading — covers SUCCESS, ERROR, FAILED, CANCELLED, and any other status
       setPurchaseInProgress(false);
       setLoading(false);
     };
@@ -188,11 +191,10 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
       setPurchaseInProgress(false);
     }
 
-    setTimeout(() => {
-      if (purchaseInProgress) {
-        console.log('[Purchase] Callback timeout - waiting for visibilitychange');
-      }
-    }, 30000);
+    const safetyTimer = setTimeout(() => {
+      setPurchaseInProgress(false);
+      setLoading(false);
+    }, 10000);
   };
 
   const handleRestore = () => {

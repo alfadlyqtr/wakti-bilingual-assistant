@@ -753,21 +753,26 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     try {
       const text = parsedText.mainText;
       if (!text) return;
+      const shareTitle = parsedGenerated.hasFillFormat && parsedGenerated.subject
+        ? parsedGenerated.subject
+        : 'Wakti • Smart Text';
+      const shareText = parsedGenerated.hasFillFormat && parsedGenerated.message
+        ? parsedGenerated.message
+        : text;
       if (navigator.share) {
         await navigator.share({
-          title: 'Wakti • Smart Text',
-          text,
+          title: shareTitle,
+          text: shareText,
         });
       } else {
-        // Fallback: try mailto as a basic share option
-        const mailto = `mailto:?subject=${encodeURIComponent('Wakti • Smart Text')}&body=${encodeURIComponent(text)}`;
+        const mailto = `mailto:?subject=${encodeURIComponent(shareTitle)}&body=${encodeURIComponent(shareText)}`;
         window.location.href = mailto;
       }
     } catch (e) {
       console.error('Share failed:', e);
       setError(e?.message || 'Share failed');
     }
-  }, [parsedText.mainText]);
+  }, [parsedGenerated.hasFillFormat, parsedGenerated.message, parsedGenerated.subject, parsedText.mainText]);
 
   const handleGenerate = useCallback(async () => {
     if (!canGenerate) return;
