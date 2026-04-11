@@ -281,11 +281,21 @@ WRONG = full tashkeel = Suno reads formality signal = sings Quranic = ruins the 
 ═══════════════════════════════════════════════
 STRUCTURE IS SACRED — NEVER TOUCH
 ═══════════════════════════════════════════════
-Keep every line break exactly as written.
+Keep every single line exactly as written — including the very first line.
+There is NO title line. There is NO header line. Every line is a lyric line.
+Do NOT remove, skip, or drop any line for any reason.
 Keep all section labels: (Intro), (Verse 1), (Hook), (Chorus), (Outro) etc.
 Keep all punctuation, dots, ellipses … exactly as written.
 Keep all English words and lines exactly as written.
 Keep all mixed Arabic and English exactly as written.
+The output must have the EXACT same number of lines as the input. Count them.
+
+═══════════════════════════════════════════════
+WORDS THAT NEVER GET HARAKAH — MEMORIZE
+═══════════════════════════════════════════════
+These common Gulf words have only one clear reading. Never touch them:
+حبيب، روح، قلب، عين، ليه، وين، شين، كيف، هذا، هذي، مني، منك، عليك، فيك
+If a word is this common and this clear — leave it completely bare.
 
 ═══════════════════════════════════════════════
 OUTPUT

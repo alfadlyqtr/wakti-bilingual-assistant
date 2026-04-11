@@ -2485,7 +2485,11 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
           : 'MODE: The user is giving you existing LYRICS — preserve their exact words and expand around them into a full song structure.\n\n';
       const fullInput = context + modeHint + `User input:\n${userInput}`;
       const { data, error } = await supabase.functions.invoke('music-amp', {
-        body: { text: fullInput, mode: ampMode === 'gcc_enhance' ? 'gcc-enhance' : 'lyrics', duration: duration }
+        body: {
+          text: ampMode === 'gcc_enhance' ? lyricsText : fullInput,
+          mode: ampMode === 'gcc_enhance' ? 'gcc-enhance' : 'lyrics',
+          duration: duration
+        }
       });
       if (error) throw error;
       const expandedLyrics = (data?.text || '').toString();
