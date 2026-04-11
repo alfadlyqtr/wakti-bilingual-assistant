@@ -2494,8 +2494,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       });
       if (error) throw error;
       const expandedLyrics = (data?.text || '').toString();
-      console.log('[GCC-AMP] raw response:', JSON.stringify(expandedLyrics));
-      console.log('[GCC-AMP] data object:', data);
       if (!expandedLyrics) throw new Error(isAr ? 'تعذّر التوسيع' : 'Expansion failed');
       if (ampMode === 'gcc_enhance') skipLyricsCapRef.current = true;
       setLyricsText(expandedLyrics);
@@ -2910,16 +2908,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   // No more mirroring chips into a single prompt; we compose at send-time
 
-  // Ensure lyrics never exceed current cap when style changes
-  useEffect(() => {
-    if (skipLyricsCapRef.current) return;
-    const cap = lyricsCap;
-    if (Array.from(lyricsText || '').length > cap) {
-      setLyricsText(Array.from(lyricsText).slice(0, cap).join(''));
-    }
-  }, [styleText, lyricsCap]);
-
-  // Ensure lyrics respect the current character cap when duration changes
+  // Ensure lyrics never exceed current cap when style or duration changes
   useEffect(() => {
     if (skipLyricsCapRef.current) {
       skipLyricsCapRef.current = false;
@@ -2928,7 +2917,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     if (!lyricsText) return;
     const capped = Array.from(lyricsText).slice(0, lyricsCap).join('');
     if (capped !== lyricsText) setLyricsText(capped);
-  }, [lyricsCap, lyricsText]);
+  }, [lyricsCap]);
 
   // Build style string from chips + styleText
   // Narrow pronunciation-only negatives — blocks Arabic dialect drift, English stays allowed
