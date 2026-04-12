@@ -142,10 +142,10 @@ export function WeatherButton() {
           className={`h-9 rounded-full transition-all duration-300 hover:scale-105 relative overflow-hidden group ${
             !hasLocation 
               ? 'w-9 px-0 opacity-40 hover:opacity-70 border border-[#e9ceb0]/30 dark:border-[#606062]/30 bg-transparent'
-              : 'px-3 py-1.5 border border-[#e9ceb0]/50 dark:border-[#606062]/50 bg-gradient-to-r from-[#e9ceb0]/20 to-[#e9ceb0]/10 dark:from-[#606062]/20 dark:to-[#858384]/10 hover:from-[#e9ceb0]/30 hover:to-[#e9ceb0]/20 dark:hover:from-[#606062]/30 dark:hover:to-[#858384]/20 shadow-sm hover:shadow-md'
+              : 'h-7.5 px-1.5 py-0.5 border border-[#e9ceb0]/50 dark:border-[#606062]/50 bg-gradient-to-r from-[#e9ceb0]/20 to-[#e9ceb0]/10 dark:from-[#606062]/20 dark:to-[#858384]/10 hover:from-[#e9ceb0]/30 hover:to-[#e9ceb0]/20 dark:hover:from-[#606062]/30 dark:hover:to-[#858384]/20 shadow-sm hover:shadow-md'
           }`}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             {!hasLocation ? (
               <Cloud className="h-4 w-4 text-[#060541] dark:text-white" />
             ) : isLoading ? (

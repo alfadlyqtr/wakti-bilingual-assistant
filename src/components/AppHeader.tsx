@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo, ChevronLeft, Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut } from "lucide-react";
+import { Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo, ChevronLeft, Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo3D } from "@/components/Logo3D";
 import { MobileSlideDownNav } from "@/components/MobileSlideDownNav";
@@ -252,6 +252,41 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   const logoRef = useRef<HTMLDivElement>(null);
   const { isMobile } = useIsMobile();
 
+  const [bgMusicSrc, setBgMusicSrc] = useState<string | null>(null);
+  const bgAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    // Indicator only — no audio
+    const offIndicator = onEvent('wakti-bg-music-indicator-on', () => {
+      setBgMusicSrc('active');
+    });
+    // Start actual audio playback (AppHeader owns the Audio — never unmounts)
+    const offStart = onEvent('wakti-bg-music-start', ({ src }) => {
+      if (bgAudioRef.current && bgAudioRef.current.src === src && !bgAudioRef.current.paused) {
+        setBgMusicSrc('active');
+        return;
+      }
+      if (bgAudioRef.current) {
+        bgAudioRef.current.pause();
+        bgAudioRef.current = null;
+      }
+      const audio = new Audio(src);
+      audio.loop = true;
+      bgAudioRef.current = audio;
+      setBgMusicSrc('active');
+      audio.play().catch(() => {});
+    });
+    // Stop everything
+    const offPause = onEvent('wakti-bg-music-pause', () => {
+      if (bgAudioRef.current) {
+        bgAudioRef.current.pause();
+        bgAudioRef.current = null;
+      }
+      setBgMusicSrc(null);
+    });
+    return () => { offIndicator(); offStart(); offPause(); };
+  }, []);
+
   const handleLogoClick = () => {
     if (!isMobile) return;
 
@@ -297,24 +332,14 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
     >
       <div
         className={cn(
-          "relative flex items-center justify-between",
+          isMobile ? "relative flex items-center" : "relative flex items-center justify-between",
           isMobile
-            ? "mx-0 h-16 rounded-none border-b border-border bg-background/90 px-2 shadow-md"
-            : "mx-auto h-16 max-w-[1280px] rounded-[2rem] border border-border/60 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70 px-4 py-2"
+            ? "mx-0 h-16 rounded-none border-b border-border bg-background/90 pl-2 pr-2 shadow-md"
+            : "w-full h-16 rounded-[1rem] border border-border/60 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70 px-4 py-2"
         )}
-        style={
-          isMobile
-            ? undefined
-            : {
-                marginLeft: 'calc(var(--current-sidebar-width, var(--sidebar-mini-width, 70px)) + 0.75rem)',
-                marginRight: '0.75rem',
-                width: 'calc(100% - (var(--current-sidebar-width, var(--sidebar-mini-width, 70px)) + 1.5rem))',
-                overflow: 'hidden',
-                borderRadius: '1rem'
-              }
-        }
+        style={isMobile ? undefined : { borderRadius: '1rem' }}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           {isMobile ? (
             location.pathname !== '/dashboard' ? (
               /* Back button with logo — takes user back to homescreen */
@@ -324,21 +349,29 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
                 aria-label="Back to Home"
               >
                 <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
-                <div className="rounded-[0.5rem] overflow-hidden">
-                  <Logo3D size="sm" />
+                <div className="ml-0.5 flex flex-col items-center justify-center leading-none">
+                  <div className={cn(
+                    "rounded-[0.5rem] overflow-hidden transition-all",
+                    bgMusicSrc && "ring-2 ring-emerald-400/80 shadow-[0_0_8px_hsla(142,76%,55%,0.6)]"
+                  )}>
+                    <Logo3D size="sm" />
+                  </div>
+                  <span
+                    className={cn(
+                      "text-[10px] font-semibold mt-0.5 transition-colors",
+                      theme === 'dark' ? "text-[hsl(210,100%,82%)]" : "text-[hsl(243,84%,14%)]"
+                    )}
+                  >
+                    {language === 'ar' ? 'الرئيسية' : 'Home'}
+                  </span>
                 </div>
-                <span
-                  className={cn(
-                    "text-sm font-semibold ml-0.5 transition-colors",
-                    theme === 'dark' ? "text-[hsl(210,100%,82%)]" : "text-[hsl(243,84%,14%)]"
-                  )}
-                >
-                  {language === 'ar' ? 'الرئيسية' : 'Home'}
-                </span>
               </button>
             ) : (
             <div ref={logoRef}>
-              <div className="relative rounded-xl p-[2px] transition-all bg-transparent shadow-none">
+              <div className={cn(
+                "relative rounded-xl p-[2px] transition-all",
+                bgMusicSrc ? "bg-emerald-400/30 shadow-[0_0_10px_hsla(142,76%,55%,0.5)]" : "bg-transparent shadow-none"
+              )}>
                 <div className="rounded-[0.70rem] overflow-hidden">
                   <Logo3D size="sm" onClick={handleLogoClick} />
                 </div>
@@ -350,12 +383,16 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
               <div
                 className={cn(
                   "relative rounded-xl p-[2px] transition-all",
-                  logoGlowClassName,
-                  shouldGlowLogo
-                    ? theme === 'dark'
-                      ? "bg-[linear-gradient(135deg,rgba(147,197,253,0.75)_0%,rgba(168,85,247,0.70)_50%,rgba(59,130,246,0.75)_100%)] shadow-[0_0_18px_rgba(59,130,246,0.28),0_0_32px_rgba(168,85,247,0.20)]"
-                      : "bg-[linear-gradient(135deg,rgba(6,5,65,0.78)_0%,rgba(233,206,176,0.82)_55%,rgba(6,5,65,0.74)_100%)] shadow-[0_0_22px_rgba(6,5,65,0.28),0_0_44px_rgba(233,206,176,0.30)]"
-                    : "bg-transparent shadow-none"
+                  bgMusicSrc
+                    ? "bg-emerald-400/30 shadow-[0_0_12px_hsla(142,76%,55%,0.55)]"
+                    : cn(
+                        logoGlowClassName,
+                        shouldGlowLogo
+                          ? theme === 'dark'
+                            ? "bg-[linear-gradient(135deg,rgba(147,197,253,0.75)_0%,rgba(168,85,247,0.70)_50%,rgba(59,130,246,0.75)_100%)] shadow-[0_0_18px_rgba(59,130,246,0.28),0_0_32px_rgba(168,85,247,0.20)]"
+                            : "bg-[linear-gradient(135deg,rgba(6,5,65,0.78)_0%,rgba(233,206,176,0.82)_55%,rgba(6,5,65,0.74)_100%)] shadow-[0_0_22px_rgba(6,5,65,0.28),0_0_44px_rgba(233,206,176,0.30)]"
+                          : "bg-transparent shadow-none"
+                      )
                 )}
               >
                 <div className="rounded-[0.70rem] overflow-hidden">
@@ -366,7 +403,23 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
           )}
           {/* Page title removed — clean header */}
         </div>
-        <div className="flex items-center space-x-2">
+        <div className={cn("flex items-center shrink-0", isMobile ? "gap-1" : "space-x-2")}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "rounded-full h-8 w-8 p-0 border ring-1 ring-offset-2 ring-offset-background shadow-sm hover:shadow-md transition-all",
+              bgMusicSrc
+                ? "border-emerald-400/70 dark:border-emerald-400/60 ring-emerald-400/30 dark:ring-emerald-400/20 bg-emerald-500/10 shadow-[0_0_10px_hsla(142,76%,55%,0.35)]"
+                : "border-black/10 dark:border-white/15 ring-black/5 dark:ring-white/10 bg-white/80 dark:bg-white/5"
+            )}
+            aria-label="Background music indicator"
+            type="button"
+            tabIndex={-1}
+          >
+            <Play className={cn("h-4 w-4 fill-current", bgMusicSrc ? "text-emerald-400" : "text-foreground/80")} />
+          </Button>
+
           {/* Voice Assistant mic button */}
           <VoiceAssistant
             onSaveEntry={(entry) => {
@@ -441,7 +494,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 p-0 rounded-full relative">
                 <span className="relative">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-background/60 border border-border/60">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-background/60 border border-border/60">
                     <Settings className="h-4 w-4 text-foreground/80" />
                   </span>
                   <UnreadBadge count={unreadTotal} size="sm" className="-right-0.5 -top-0.5" />

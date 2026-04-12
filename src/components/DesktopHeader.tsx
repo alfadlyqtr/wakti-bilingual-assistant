@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { emitEvent, onEvent } from "@/utils/eventBus";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -17,7 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Logo3D } from "@/components/Logo3D";
 import { t } from "@/utils/translations";
-import { Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut, Calendar, CalendarClock, Mic, Sparkles, ListTodo } from "lucide-react";
+import { Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut, Calendar, CalendarClock, Mic, Sparkles, ListTodo, Play } from "lucide-react";
 import { UnreadBadge } from "./UnreadBadge";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useUserProfile } from "@/hooks/useUserProfile";
@@ -164,6 +164,15 @@ export function DesktopHeader() {
 
   const isHomescreenMode = (localStorage.getItem('wakti_dashboard_look') ?? 'homescreen') !== 'dashboard';
 
+  const [bgMusicSrc, setBgMusicSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    const offIndicator = onEvent('wakti-bg-music-indicator-on', () => { setBgMusicSrc('active'); });
+    const offStart = onEvent('wakti-bg-music-start', () => { setBgMusicSrc('active'); });
+    const offPause = onEvent('wakti-bg-music-pause', () => { setBgMusicSrc(null); });
+    return () => { offIndicator(); offStart(); offPause(); };
+  }, []);
+
   // Define menu items with icons and vibrant colors
   const menuItems = [
     { 
@@ -242,6 +251,27 @@ export function DesktopHeader() {
         </div>
 
         <div className="flex items-center space-x-4 relative z-10">
+          {/* Play / Background music indicator */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "rounded-full h-9 w-9 p-0 border backdrop-blur-sm shadow-xl transition-all duration-300 hover:scale-105",
+              bgMusicSrc
+                ? "border-emerald-400/70 dark:border-emerald-400/60 bg-emerald-500/10 hover:bg-emerald-500/15 shadow-[0_0_10px_hsla(142,76%,55%,0.35)]"
+                : "border-white/30 dark:border-white/20 bg-white/20 dark:bg-white/10 hover:bg-white/30 dark:hover:bg-white/15"
+            )}
+            style={{
+              boxShadow: bgMusicSrc
+                ? '0 0 10px hsla(142, 76%, 55%, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25)'
+                : 'inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 6px 18px rgba(0, 0, 0, 0.18)'
+            }}
+            aria-label="Background music indicator"
+            type="button"
+          >
+            <Play className={cn("h-4 w-4 fill-current", bgMusicSrc ? "text-emerald-400" : "text-foreground/80")} />
+          </Button>
+
           {/* Voice Assistant mic button */}
           <VoiceAssistant
             onSaveEntry={(entry) => {

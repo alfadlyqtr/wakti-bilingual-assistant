@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { emitEvent, onEvent } from '@/utils/eventBus';
+import { bgAudio } from '@/utils/bgAudio';
 import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { Button } from '@/components/ui/button';
@@ -61,6 +62,7 @@ import {
   Copy,
   Star,
   Search,
+  Radio,
 } from 'lucide-react';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import StudioImageGenerator from '@/components/studio/StudioImageGenerator';
@@ -1486,7 +1488,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [submitting, setSubmitting] = useState(false);
   const [amping, setAmping] = useState(false);
   const [ampMode, setAmpMode] = useState<'idea' | 'expand' | 'gcc_enhance'>('expand');
-  const skipLyricsCapRef = useRef(false);
+  const isGccEnhanceRef = useRef(false);
+  const [lyricsKey, setLyricsKey] = useState(0);
+  const [lyricsDisplayMode, setLyricsDisplayMode] = useState(false);
   const [vocalType, setVocalType] = useState<'auto'|'none'|'female'|'male'>('auto');
   const [vocalsOpen, setVocalsOpen] = useState(false);
   const [lyricsOpen, setLyricsOpen] = useState(false);
@@ -2495,8 +2499,16 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       if (error) throw error;
       const expandedLyrics = (data?.text || '').toString();
       if (!expandedLyrics) throw new Error(isAr ? 'تعذّر التوسيع' : 'Expansion failed');
-      if (ampMode === 'gcc_enhance') skipLyricsCapRef.current = true;
-      setLyricsText(expandedLyrics);
+      if (ampMode === 'gcc_enhance') {
+        isGccEnhanceRef.current = true;
+        setLyricsText(expandedLyrics);
+        setLyricsKey((prev) => prev + 1);
+        setLyricsDisplayMode(true);
+        setTimeout(() => { isGccEnhanceRef.current = false; }, 500);
+      } else {
+        setLyricsText(expandedLyrics);
+        setLyricsDisplayMode(false);
+      }
       toast.success(isAr ? (ampMode === 'idea' ? 'تم إنشاء الكلمات' : ampMode === 'gcc_enhance' ? 'تم التحسين الخليجي' : 'تم توسيع الكلمات') : (ampMode === 'idea' ? 'Lyrics generated' : ampMode === 'gcc_enhance' ? 'GCC enhanced' : 'Lyrics expanded'));
     } catch (e: any) {
       toast.error((isAr ? 'فشل: ' : 'Failed: ') + (e?.message || String(e)));
@@ -2908,16 +2920,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   // No more mirroring chips into a single prompt; we compose at send-time
 
-  // Ensure lyrics never exceed current cap when style or duration changes
-  useEffect(() => {
-    if (skipLyricsCapRef.current) {
-      skipLyricsCapRef.current = false;
-      return;
-    }
-    if (!lyricsText) return;
-    const capped = Array.from(lyricsText).slice(0, lyricsCap).join('');
-    if (capped !== lyricsText) setLyricsText(capped);
-  }, [lyricsCap]);
 
   // Build style string from chips + styleText
   // Narrow pronunciation-only negatives — blocks Arabic dialect drift, English stays allowed
@@ -3482,11 +3484,79 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     <button
       type="button"
       onClick={() => goToStep(toStep)}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-[#f7f8fc] dark:bg-white/[0.04] text-[#606062] dark:text-white/50 hover:border-[#c0c4d0] dark:hover:border-white/20 hover:text-[#060541] dark:hover:text-white/80 active:scale-95 transition-all mb-3"
+      className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-2xl text-[11px] font-bold border border-violet-200/90 dark:border-violet-400/25 bg-gradient-to-r from-[#ffffff] via-[#f3e8ff] to-[#ede9fe] dark:from-[#181d2b] dark:via-[#251c46] dark:to-[#141824] text-[#5b21b6] dark:text-violet-100 shadow-[0_8px_20px_rgba(139,92,246,0.18)] dark:shadow-[0_0_24px_hsla(280,70%,65%,0.18)] hover:from-[#ffffff] hover:via-[#ede9fe] hover:to-[#ddd6fe] dark:hover:from-[#21193a] dark:hover:via-[#31235a] dark:hover:to-[#1a2130] hover:border-violet-300 dark:hover:border-violet-300/40 hover:text-[#4c1d95] dark:hover:text-white active:scale-95 transition-all"
     >
-      <ArrowRight className="h-3.5 w-3.5 rotate-180" />
-      {isAr ? 'رجوع' : 'Back'}
+      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gradient-to-br from-violet-500/20 to-fuchsia-500/10 dark:from-violet-400/25 dark:to-fuchsia-400/15 shadow-inner shadow-violet-500/20">
+        <ArrowRight className="h-3 w-3 rotate-180 text-violet-600 dark:text-violet-100" />
+      </span>
+      <span>{isAr ? 'رجوع' : 'Back'}</span>
     </button>
+  );
+
+  const StepNextBtn = ({
+    onClick,
+    disabled,
+    label,
+    shortLabel,
+    ready,
+    title,
+  }: {
+    onClick: () => void;
+    disabled?: boolean;
+    label: string;
+    shortLabel?: string;
+    ready?: boolean;
+    title?: string;
+  }) => (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      title={title}
+      className={`inline-flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 rounded-2xl text-[11px] font-bold text-white active:scale-95 transition-all whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 ${
+        ready
+          ? 'bg-gradient-to-r from-emerald-500 via-cyan-500 to-sky-500 shadow-[0_10px_24px_rgba(16,185,129,0.26)] dark:shadow-[0_0_24px_hsla(160,80%,55%,0.30)]'
+          : 'bg-gradient-to-r from-[#060541] via-[#4338ca] to-[#7c3aed] shadow-[0_10px_24px_rgba(76,29,149,0.24)] dark:shadow-[0_0_24px_hsla(280,70%,65%,0.24)] hover:brightness-110'
+      }`}
+    >
+      {shortLabel ? (
+        <>
+          <span className="inline sm:hidden">{shortLabel}</span>
+          <span className="hidden sm:inline">{label}</span>
+        </>
+      ) : (
+        <span>{label}</span>
+      )}
+      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/18 border border-white/20">
+        <ArrowRight className="h-3 w-3" />
+      </span>
+    </button>
+  );
+
+  const StepHeader = ({
+    icon,
+    title,
+    badge,
+    backToStep,
+    next,
+  }: {
+    icon?: React.ReactNode;
+    title: string;
+    badge?: React.ReactNode;
+    backToStep?: 1 | 2 | 3 | 4;
+    next?: React.ReactNode;
+  }) => (
+    <div className="flex items-center justify-between gap-2 pb-1">
+      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+        {icon ? <span className="shrink-0">{icon}</span> : null}
+        <span className="text-sm font-extrabold text-[#060541] dark:text-white uppercase tracking-normal sm:tracking-wider truncate">{title}</span>
+        {badge ? <span className="shrink-0">{badge}</span> : null}
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        {backToStep ? <BackBtn toStep={backToStep} /> : null}
+        {next}
+      </div>
+    </div>
   );
 
   const cardCls = "rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4";
@@ -3550,28 +3620,22 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       {composeStep === 2 && composeDetailsVisible && (
         <div className={`${cardCls} space-y-3`}>
           <StepBar current={2} />
-          <BackBtn toStep={1} />
+          <StepHeader
+            icon={<Music className="h-5 w-5 text-sky-400" />}
+            title={isAr ? 'أسلوب الموسيقى' : 'Music Style'}
+            backToStep={1}
+            next={
+              <StepNextBtn
+                onClick={() => goToStep(3)}
+                disabled={includeTags.length === 0}
+                title={includeTags.length === 0 ? (isAr ? 'اختر نمطًا أولاً' : 'Pick a style first') : undefined}
+                ready={step2ReadyToProceed}
+                label={isAr ? 'التالي: الصوت' : 'Next: Vocals'}
+                shortLabel={isAr ? 'التالي' : 'Next'}
+              />
+            }
+          />
           <TrackChip />
-          <div className="flex items-center justify-between pb-1">
-            <div className="flex items-center gap-2">
-              <Music className="h-5 w-5 text-sky-400" />
-              <span className="text-sm font-bold text-[#060541] dark:text-white uppercase tracking-wider">{isAr ? 'أسلوب الموسيقى' : 'Music Style'}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => includeTags.length > 0 ? goToStep(3) : undefined}
-              disabled={includeTags.length === 0}
-              title={includeTags.length === 0 ? (isAr ? 'اختر نمطًا أولاً' : 'Pick a style first') : undefined}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-semibold text-white active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 ${
-                step2ReadyToProceed
-                  ? 'bg-emerald-500 dark:bg-emerald-500 animate-pulse shadow-[0_0_20px_rgba(16,185,129,0.7)]'
-                  : 'bg-[#060541] dark:bg-white/10 hover:opacity-90'
-              }`}
-            >
-              {isAr ? 'التالي: الصوت' : 'Next: Vocals'}
-              <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
           <>
             <div className="rounded-xl border border-sky-200 dark:border-sky-400/20 bg-sky-50/80 dark:bg-sky-500/10 px-3 py-2 text-[11px] sm:text-[10px] text-sky-700 dark:text-sky-200">
               {isAr ? 'اختر النمط والإيقاع والمزاج والآلات. هذه الاختيارات تبني الهوية الموسيقية.' : 'Choose the style, rhythm, mood, and instruments. These selections build the musical identity.'}
@@ -3978,13 +4042,14 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       {composeStep === 3 && composeDetailsVisible && (
         <div className={`${cardCls} space-y-3`}>
           <StepBar current={3} />
-          <BackBtn toStep={2} />
+          <StepHeader
+            icon={<Mic className="h-5 w-5 text-emerald-400" />}
+            title={isAr ? 'الصوت' : 'Vocals'}
+            badge={<span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-300">{isAr ? 'اختياري' : 'Optional'}</span>}
+            backToStep={2}
+            next={<StepNextBtn onClick={() => goToStep(4)} label={isAr ? 'التالي: الكلمات' : 'Next: Lyrics'} shortLabel={isAr ? 'التالي' : 'Next'} />}
+          />
           <TrackChip />
-          <div className="flex items-center gap-2 pb-1">
-            <Mic className="h-5 w-5 text-emerald-400" />
-            <span className="text-sm font-bold text-[#060541] dark:text-white uppercase tracking-wider">{isAr ? 'الصوت' : 'Vocals'}</span>
-            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-300">{isAr ? 'اختياري' : 'Optional'}</span>
-          </div>
           <div className="flex flex-wrap gap-2">
             {(['auto', 'none', 'female', 'male'] as const).map((v) => {
               const labels: Record<string, { en: string; ar: string }> = {
@@ -4005,16 +4070,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               );
             })}
           </div>
-          <div className="flex justify-end pt-2">
-            <button
-              type="button"
-              onClick={() => goToStep(4)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-semibold bg-[#060541] dark:bg-white/10 hover:opacity-90 text-white active:scale-95 transition-all"
-            >
-              {isAr ? 'التالي: الكلمات' : 'Next: Lyrics'}
-              <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
         </div>
       )}
 
@@ -4022,12 +4077,12 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       {composeStep === 4 && composeDetailsVisible && (
         <div className={`${cardCls} space-y-3`}>
           <StepBar current={4} />
-          <BackBtn toStep={3} />
+          <StepHeader
+            title={isAr ? 'الكلمات' : 'Lyrics'}
+            badge={<span className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-rose-300">{isAr ? 'مطلوب' : 'Must'}</span>}
+            backToStep={3}
+          />
           <TrackChip />
-          <div className="flex items-center gap-2 pb-1">
-            <span className="text-sm font-bold text-[#060541] dark:text-white uppercase tracking-wider">{isAr ? 'الكلمات' : 'Lyrics'}</span>
-            <span className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-rose-300">{isAr ? 'مطلوب' : 'Must'}</span>
-          </div>
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1 p-0.5 rounded-lg bg-black/5 dark:bg-white/[0.06] border border-black/10 dark:border-white/10">
@@ -4079,17 +4134,41 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 }
               </button>
             </div>
-            <Textarea
-              value={lyricsText}
-              onChange={(e) => {
-                const raw = e.target.value || '';
-                const capped = Array.from(raw).slice(0, lyricsCap).join('');
-                setLyricsText(capped);
-              }}
-              placeholder={isAr ? 'اكتب فكرة أو كلمات أولاً، ثم اضغط Amp...' : 'Write an idea or some lyrics first, then click Amp →'}
-              rows={5}
-              className="bg-[#fcfefd] dark:bg-white/[0.04] border-[#d9dde7] dark:border-white/10 shadow-[0_4px_12px_rgba(6,5,65,0.04)] dark:shadow-none focus:border-purple-400/50 focus:ring-purple-400/20 rounded-xl resize-none"
-            />
+            {lyricsDisplayMode ? (
+              <div className="space-y-2">
+                <div
+                  dir={/[\u0600-\u06FF]/.test(lyricsText) ? 'rtl' : 'ltr'}
+                  className="min-h-[140px] whitespace-pre-wrap bg-[#fcfefd] dark:bg-white/[0.04] border border-[#d9dde7] dark:border-white/10 shadow-[0_4px_12px_rgba(6,5,65,0.04)] dark:shadow-none rounded-xl px-3 py-2 text-base leading-8 text-right text-[#060541] dark:text-white [font-family:'Noto_Sans_Arabic','Segoe_UI','Tahoma','Arial',sans-serif]"
+                >
+                  {lyricsText || (isAr ? 'اكتب فكرة أو كلمات أولاً، ثم اضغط Amp...' : 'Write an idea or some lyrics first, then click Amp →')}
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setLyricsDisplayMode(false)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-white/[0.04] text-[#060541] dark:text-white/80 hover:bg-[#f7f8fc] dark:hover:bg-white/[0.08] active:scale-95 transition-all"
+                  >
+                    <Pencil className="h-3 w-3" />
+                    {isAr ? 'تعديل' : 'Edit'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <Textarea
+                key={lyricsKey}
+                value={lyricsText}
+                dir={/[\u0600-\u06FF]/.test(lyricsText) ? 'rtl' : 'ltr'}
+                onChange={(e) => {
+                  if (isGccEnhanceRef.current) return;
+                  const raw = e.target.value || '';
+                  const capped = Array.from(raw).slice(0, lyricsCap).join('');
+                  setLyricsText(capped);
+                }}
+                placeholder={isAr ? 'اكتب فكرة أو كلمات أولاً، ثم اضغط Amp...' : 'Write an idea or some lyrics first, then click Amp →'}
+                rows={5}
+                className="bg-[#fcfefd] dark:bg-white/[0.04] border-[#d9dde7] dark:border-white/10 shadow-[0_4px_12px_rgba(6,5,65,0.04)] dark:shadow-none focus:border-purple-400/50 focus:ring-purple-400/20 rounded-xl resize-none text-base leading-8 text-right [font-family:'Noto_Sans_Arabic','Segoe_UI','Tahoma','Arial',sans-serif]"
+              />
+            )}
             <div className="flex justify-end text-[10px] text-muted-foreground/70 dark:text-muted-foreground/50">
               <span>{Array.from(lyricsText).length}/{lyricsCap}</span>
             </div>
@@ -4592,6 +4671,11 @@ function EditorTab() {
   const [tracks, setTracks] = useState<SavedTrack[]>([]);
   const [trackSearch, setTrackSearch] = useState('');
   const [activePlayingTrackId, setActivePlayingTrackId] = useState<string | null>(null);
+  const [bgMusicTrackId, setBgMusicTrackId] = useState<string | null>(() => {
+    try { return sessionStorage.getItem('wakti-bg-music-track-id') || null; } catch { return null; }
+  });
+  const bgMusicTrackIdRef = useRef<string | null>(bgMusicTrackId);
+
   const [expandedLyricsTrackId, setExpandedLyricsTrackId] = useState<string | null>(null);
   const [activeLyricsLineByTrackId, setActiveLyricsLineByTrackId] = useState<Record<string, number>>({});
   const lyricsLineRefs = useRef<Record<string, Record<number, HTMLDivElement | null>>>({});
@@ -4850,6 +4934,19 @@ function EditorTab() {
           return { ...t, play_url: playUrl };
         });
       setTracks(withUrls);
+      // Restore AppHeader indicator if a bg track was previously activated
+      const savedBgId = bgMusicTrackIdRef.current;
+      if (savedBgId) {
+        const match = withUrls.find((t: any) => t.id === savedBgId);
+        if (match?.play_url) {
+          emitEvent('wakti-bg-music-indicator-on');
+        } else {
+          // Track no longer exists — clear the saved state
+          bgMusicTrackIdRef.current = null;
+          setBgMusicTrackId(null);
+          try { sessionStorage.removeItem('wakti-bg-music-track-id'); } catch {}
+        }
+      }
     } catch (e) {
       console.error('[EditorTab] Load error:', e);
     } finally {
@@ -4910,14 +5007,21 @@ function EditorTab() {
     const cleanups: (() => void)[] = [];
     entries.forEach(([trackId, el]) => {
       if (!el) return;
-      const handler = (e: WheelEvent) => {
+      const wheelHandler = (e: WheelEvent) => {
         e.preventDefault();
         e.stopPropagation();
         const lineCount = Object.keys(lyricsLineRefs.current[trackId] ?? {}).length;
         stepLyricsLineRef.current(trackId, lineCount, e.deltaY > 0 ? 1 : -1);
       };
-      el.addEventListener('wheel', handler, { passive: false });
-      cleanups.push(() => el.removeEventListener('wheel', handler));
+      const touchMoveHandler = (e: TouchEvent) => {
+        e.preventDefault();
+      };
+      el.addEventListener('wheel', wheelHandler, { passive: false });
+      el.addEventListener('touchmove', touchMoveHandler, { passive: false });
+      cleanups.push(() => {
+        el.removeEventListener('wheel', wheelHandler);
+        el.removeEventListener('touchmove', touchMoveHandler);
+      });
     });
     return () => cleanups.forEach(fn => fn());
   }, [expandedLyricsTrackId]);
@@ -5182,6 +5286,7 @@ function EditorTab() {
                 const metaTags = (t.meta as any)?.tags as string | null;
                 const isFavorite = Boolean((t.meta as any)?.favorite);
                 const isActivePlaying = activePlayingTrackId === t.id;
+                const isBgMusic = bgMusicTrackId === t.id;
 
                 return (
                   <div
@@ -5206,11 +5311,6 @@ function EditorTab() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 min-w-0">
                               <p className="font-bold text-sm text-foreground truncate leading-tight">{trackTitle}</p>
-                              {isActivePlaying && (
-                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-400/20 whitespace-nowrap">
-                                  {isAr ? 'يعمل الآن' : 'Playing now'}
-                                </span>
-                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -5235,15 +5335,6 @@ function EditorTab() {
                             </button>
                           </div>
                         </div>
-                        {(styleTags.length > 0 || metaTags) && (
-                          <div className="flex flex-wrap gap-1">
-                            {(metaTags ? [metaTags] : styleTags).slice(0, 3).map((tag, i) => (
-                              <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-[#f7f8fc] dark:bg-white/[0.06] text-muted-foreground/80 dark:text-muted-foreground/70 border border-[#e4e7ef] dark:border-white/[0.06]">
-                                {typeof tag === 'string' ? tag.slice(0, 20) : tag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     </div>
                     {t.play_url && (
@@ -5257,8 +5348,50 @@ function EditorTab() {
                               if (isPlaying) return t.id;
                               return prev === t.id ? null : prev;
                             });
+                            if (isPlaying && bgMusicTrackIdRef.current === t.id) {
+                              bgAudio.sync(t.play_url!);
+                            }
                           }}
                         />
+                        {/* Background play activator + style chip inline */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isBgMusic) {
+                                bgMusicTrackIdRef.current = null;
+                                setBgMusicTrackId(null);
+                                try { sessionStorage.removeItem('wakti-bg-music-track-id'); } catch {}
+                                bgAudio.stop();
+                                emitEvent('wakti-bg-music-pause');
+                              } else {
+                                bgMusicTrackIdRef.current = t.id;
+                                setBgMusicTrackId(t.id);
+                                try { sessionStorage.setItem('wakti-bg-music-track-id', t.id); } catch {}
+                                emitEvent('wakti-bg-music-indicator-on');
+                              }
+                            }}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all active:scale-95 border ${
+                              isBgMusic
+                                ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-400 dark:text-emerald-300 shadow-[0_0_12px_hsla(142,76%,55%,0.25)]'
+                                : 'bg-red-500/10 border-red-400/40 text-red-400 dark:text-red-300 hover:bg-red-500/15 hover:border-red-400/60'
+                            }`}
+                            title={isAr ? 'تشغيل في الخلفية' : 'Play in background'}
+                          >
+                            <Radio className="h-3.5 w-3.5" />
+                            <span>{isAr ? 'تشغيل في الخلفية' : 'Play in background'}</span>
+                            {isBgMusic && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            )}
+                          </button>
+                          {(styleTags.length > 0 || metaTags) && (
+                            (metaTags ? [metaTags] : styleTags).slice(0, 2).map((tag, i) => (
+                              <span key={i} className="text-[10px] px-2 py-1 rounded-xl bg-[#f7f8fc] dark:bg-white/[0.06] text-muted-foreground/80 dark:text-muted-foreground/70 border border-[#e4e7ef] dark:border-white/[0.06] whitespace-nowrap">
+                                {typeof tag === 'string' ? tag.slice(0, 20) : tag}
+                              </span>
+                            ))
+                          )}
+                        </div>
                         {hasLyrics && (
                           <div className="w-full overflow-hidden rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-gradient-to-b from-[#f8fafc] via-[#f3f7ff] to-[#eef4ff] dark:from-white/[0.05] dark:via-white/[0.035] dark:to-white/[0.03] shadow-[0_10px_24px_rgba(6,5,65,0.08)] dark:shadow-none">
                             <button

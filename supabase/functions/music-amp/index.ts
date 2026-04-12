@@ -175,26 +175,39 @@ GCC PHONETIC NUANCE RULES:
 STRUCTURE AND LANGUAGE PRESERVATION RULES:
 1. Preserve the user's original words whenever they provide lyrics. Expand around them instead of replacing their voice.
 2. If the user gives only a short phrase, idea, hook, or emotional seed, build a full song from that seed.
-3. Track duration determines structure:
-   - 30s: [Verse] + [Chorus] (minimal)
-   - 60s: [Verse] + [Chorus] + [Verse 2] + [Chorus]
-   - 90s+: [Verse] + [Chorus] + [Verse 2] + [Chorus] + [Bridge] + [Chorus]
-4. Output ONLY the structured lyrics with section labels like:
+3. Track duration is a hard limit for structure density. Do not write a long song for a short track.
+4. Track duration determines structure:
+   - 30s: [Verse] + [Chorus] only. Keep it compact and immediately singable. No Outro.
+   - 60s: [Verse] + [Chorus] + [Verse 2] + [Chorus]. Do not add bridge. Outro only if extremely short and only if there is clear room for it.
+   - 90s+: [Verse] + [Chorus] + [Verse 2] + [Chorus] + [Bridge] + [Chorus]. A short [Outro] is allowed only if it still fits naturally.
+5. Keep section length proportional to duration:
+   - 30s: about 2-4 short lines per section
+   - 60s: about 4 lines per section
+   - 90s+: 4-6 lines per main section
+6. Outro awareness:
+   - Never spend a large share of a short track on intro or outro padding.
+   - For 30s tracks, finish inside the chorus instead of adding a separate outro.
+   - For 60s tracks, only use a tiny outro if it is truly needed.
+   - For 90s+ tracks, an outro is optional, not mandatory.
+7. If the user already provided lyrics, expand only enough to fit the duration target. Do not over-extend the song.
+8. Output ONLY the structured lyrics with section labels like:
    [Verse]
    [lyrics]
 
    [Chorus]
    [lyrics]
-5. Preserve language exactly according to user intent:
+9. Preserve language exactly according to user intent:
    - Arabic stays Arabic
    - English stays English
    - mixed Arabic + English stays mixed
-6. If the user provides lyrics in both Arabic and English, or even part of a line in each language, preserve and expand that exact bilingual spirit.
-7. If the user only mentions an idea for a bilingual song, produce a natural bilingual result if the request clearly implies that.
-8. Never collapse a mixed-language lyric into a single language unless the user explicitly asks you to.
-9. Never add explanations, commentary, transliteration notes, pronunciation notes, or technical notes — only return the song lyrics with section labels.`;
+10. If the user provides lyrics in both Arabic and English, or even part of a line in each language, preserve and expand that exact bilingual spirit.
+11. If the user only mentions an idea for a bilingual song, produce a natural bilingual result if the request clearly implies that.
+12. Never collapse a mixed-language lyric into a single language unless the user explicitly asks you to.
+13. Never add explanations, commentary, transliteration notes, pronunciation notes, or technical notes — only return the song lyrics with section labels.`;
 
-const GCC_ENHANCE_SYSTEM_PROMPT = `You are a Gulf Arabic (خليجي) lyrics pronunciation specialist for Suno AI music generation.
+const GCC_ENHANCE_SYSTEM_PROMPT = `IMPORTANT: You MUST add harakat to at least 4-6 pronunciation-critical words when the lyric is long enough. Returning zero harakat is always wrong.
+
+You are a Gulf Arabic (خليجي) lyrics pronunciation specialist for Suno AI music generation.
 
 Your ONLY job: add harakat (diacritical marks) to Arabic lyrics so Suno AI pronounces them in authentic Gulf Arabic — Kuwait and Qatar blend, general GCC sound.
 
@@ -268,14 +281,15 @@ ABSOLUTE BANS — THESE BREAK SUNO EVERY TIME
 HARD COUNT RULE — ENFORCE THIS STRICTLY
 ═══════════════════════════════════════════════
 Count every harakah you added across the entire song.
-Target: 2 to 5 harakat for a full song. More than 8 is always wrong.
+Target: 4 to 6 harakat for a full song when the lyric is medium or long. More than 8 is always wrong.
 If you added zero — check again. Most Arabic songs have at least one name or dialect word that needs one harakah.
-Short lyrics (under 8 lines): 1 to 3 harakat.
+Short lyrics (under 8 lines): 2 to 4 harakat.
+Prefer spreading them across the most ambiguity-prone GCC words instead of stacking too many marks into one section.
 
 ═══════════════════════════════════════════════
 FULL WORKED EXAMPLE — STUDY THIS CAREFULLY
 ═══════════════════════════════════════════════
-This is a real Gulf song. The input has no harakat. The correct output adds exactly 3.
+This is a real Gulf song. The input has no harakat. This example shows a light-touch version with 3 harakat, but for medium or long lyrics you should usually add 4 to 6 if needed for pronunciation.
 
 INPUT (raw):
 ليه يا حبيب الروح .. ما ترحم المحزون
@@ -290,7 +304,7 @@ INPUT (raw):
 في حبكم راضي .. وأنتم علي تخطون
 يا ليت بك قاضي .. في ما حكم ترضون
 
-CORRECT OUTPUT (3 harakat added):
+CORRECT OUTPUT (light example with 3 harakat added):
 ليه يا حبيب الروح .. ما ترحم المحزون
 في حبكم مجروح .. والناس ما يدرون
 
@@ -303,7 +317,7 @@ CORRECT OUTPUT (3 harakat added):
 في حبكم راضي .. وأنتم علي تخطون
 يا ليت بك قاضي .. في ما حكم ترضون
 
-WHY these 3 and nothing else:
+WHY these 3 work in this lighter example:
 شَلون → Gulf dialect word, fatha guides Suno to "sha-loon" not a wrong formal reading
 بَلواي → fatha on ب clarifies "bal-wa" (misfortune/trial) not misread as "bul-wa"
 سَوات → rare Gulf word, fatha steers Suno to correct "sa-waat" reading
@@ -346,6 +360,12 @@ async function ampMusicLyricsWithOpenAI(
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
 
+  const durationInstruction = durationSeconds <= 30
+    ? "HARD DURATION LIMIT: 30 seconds. Write only [Verse] + [Chorus]. Keep each section compact, about 2-4 short lines. No Verse 2. No Bridge. No Outro. End inside the chorus."
+    : durationSeconds <= 60
+      ? "HARD DURATION LIMIT: 60 seconds. Write [Verse] + [Chorus] + [Verse 2] + [Chorus]. Keep the song concise. No Bridge. Outro only if it is extremely short and truly fits."
+      : "HARD DURATION LIMIT: 90+ seconds. Write [Verse] + [Chorus] + [Verse 2] + [Chorus] + [Bridge] + [Chorus]. [Outro] is optional, not required.";
+
   const payload = {
     model: "gpt-4o-mini",
     temperature: 0.7,
@@ -357,7 +377,7 @@ async function ampMusicLyricsWithOpenAI(
       },
       {
         role: "user",
-        content: `Track duration: ${durationSeconds}s\n\n${input}`,
+        content: `Track duration: ${durationSeconds}s\n${durationInstruction}\n\n${input}`,
       },
     ],
   };

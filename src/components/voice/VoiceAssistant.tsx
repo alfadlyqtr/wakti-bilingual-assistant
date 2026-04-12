@@ -1630,13 +1630,13 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onSaveEntry }) =
         <button
           onClick={handleOpen}
           aria-label={t('Voice assistant', 'المساعد الصوتي')}
-          className="rounded-full flex items-center justify-center h-9 w-9 transition-transform active:scale-90"
+          className="rounded-full flex items-center justify-center h-8 w-8 transition-transform active:scale-90"
           style={{
             background: isDark
               ? 'linear-gradient(135deg, hsl(210, 100%, 65%) 0%, hsl(280, 70%, 65%) 100%)'
-              : 'linear-gradient(135deg, #060541 0%, hsl(260, 70%, 25%) 100%)',
+              : 'linear-gradient(135deg, #060541 0%, hsl(260 70% 25%) 100%)',
             boxShadow: isDark
-              ? '0 0 12px hsla(210, 100%, 65%, 0.4)'
+              ? '0 4px 14px hsla(210, 100%, 65%, 0.35), 0 2px 10px hsla(280, 70%, 65%, 0.25)'
               : '0 2px 8px hsla(243, 84%, 14%, 0.25)',
           }}
         >

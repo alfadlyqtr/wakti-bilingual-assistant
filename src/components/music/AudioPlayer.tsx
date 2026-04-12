@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback, useId } from 'react';
 import { emitEvent, onEvent } from '@/utils/eventBus';
-import { Play, Pause, RotateCcw, Repeat } from 'lucide-react';
+import { Play, Pause, RotateCcw, RotateCw, Repeat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -217,6 +217,12 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
     audio.currentTime = Math.max(0, audio.currentTime - 10);
   };
 
+  const forward = () => {
+    const audio = ensureAudio() || audioRef.current;
+    if (!audio) return;
+    audio.currentTime = Math.min(duration || 0, audio.currentTime + 10);
+  };
+
   const toggleLoop = () => {
     const nextLoop = !isLooping;
     setIsLooping(nextLoop);
@@ -276,6 +282,17 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
                   title={language === 'ar' ? 'الرجوع 10 ثوان' : 'Rewind 10s'}
                 >
                   <RotateCcw className="h-4 w-4" />
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={forward}
+                  disabled={isLoading}
+                  className="h-9 w-9"
+                  title={language === 'ar' ? 'تقديم 10 ثوان' : 'Forward 10s'}
+                >
+                  <RotateCw className="h-4 w-4" />
                 </Button>
 
                 {showLoopToggle && (
