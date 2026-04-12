@@ -7,7 +7,6 @@ type EventMap = {
   'wakti-voice-add-entry': unknown;
   'wakti-audio-play': { playerId: string };
   'wakti-bg-music-indicator-on': void;
-  'wakti-bg-music-start': { src: string };
   'wakti-bg-music-pause': void;
   'wakti:clear-insights': void;
   'badge-updated': void;

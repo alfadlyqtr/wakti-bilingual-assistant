@@ -32,9 +32,10 @@ interface SavedImage {
 
 interface SavedImagesTabProps {
   onCreate: () => void;
+  refreshKey?: number;
 }
 
-export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
+export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabProps) {
   const { language } = useTheme();
   const { user } = useAuth();
 
@@ -81,6 +82,12 @@ export default function SavedImagesTab({ onCreate }: SavedImagesTabProps) {
   useEffect(() => {
     loadImages();
   }, [loadImages]);
+
+  useEffect(() => {
+    if (refreshKey === undefined || refreshKey === 0) return;
+    const t = setTimeout(() => loadImages(), 800);
+    return () => clearTimeout(t);
+  }, [refreshKey, loadImages]);
 
   useEffect(() => {
     lightboxZoomRef.current = 1;

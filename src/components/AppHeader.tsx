@@ -16,7 +16,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo, ChevronLeft, Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut, Play } from "lucide-react";
+import { Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo, ChevronLeft, Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut, Play, Pause, RotateCcw, RotateCw, Repeat } from "lucide-react";
+import { bgAudio } from "@/utils/bgAudio";
 import { cn } from "@/lib/utils";
 import { Logo3D } from "@/components/Logo3D";
 import { MobileSlideDownNav } from "@/components/MobileSlideDownNav";
@@ -253,43 +254,75 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   const { isMobile } = useIsMobile();
 
   const [bgMusicSrc, setBgMusicSrc] = useState<string | null>(null);
-  const bgAudioRef = useRef<HTMLAudioElement | null>(null);
-  const bgAudioSrcRef = useRef<string | null>(null);
+  const [miniPlayerOpen, setMiniPlayerOpen] = useState(false);
+  const [bgIsPlaying, setBgIsPlaying] = useState(false);
+  const [bgIsLooping, setBgIsLooping] = useState(true);
+  const [bgCurrentTime, setBgCurrentTime] = useState(0);
+  const [bgDuration, setBgDuration] = useState(0);
+  const miniPlayerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Indicator only — no audio
     const offIndicator = onEvent('wakti-bg-music-indicator-on', () => {
       setBgMusicSrc('active');
+      const a = bgAudio.audio;
+      if (a) { setBgIsPlaying(!a.paused); setBgDuration(a.duration || 0); setBgCurrentTime(a.currentTime); }
     });
-    // Start actual audio playback (AppHeader owns the Audio — never unmounts)
-    const offStart = onEvent('wakti-bg-music-start', ({ src }) => {
-      // Already playing the same song — skip
-      if (bgAudioRef.current && bgAudioSrcRef.current === src && !bgAudioRef.current.paused) {
-        setBgMusicSrc('active');
-        return;
-      }
-      if (bgAudioRef.current) {
-        bgAudioRef.current.pause();
-        bgAudioRef.current = null;
-      }
-      const audio = new Audio(src);
-      audio.loop = true;
-      bgAudioRef.current = audio;
-      bgAudioSrcRef.current = src;
-      setBgMusicSrc('active');
-      audio.play().catch(() => {});
-    });
-    // Stop everything
     const offPause = onEvent('wakti-bg-music-pause', () => {
-      if (bgAudioRef.current) {
-        bgAudioRef.current.pause();
-        bgAudioRef.current = null;
-      }
-      bgAudioSrcRef.current = null;
       setBgMusicSrc(null);
+      setMiniPlayerOpen(false);
+      setBgIsPlaying(false);
     });
-    return () => { offIndicator(); offStart(); offPause(); };
+    return () => { offIndicator(); offPause(); };
   }, []);
+
+  // Sync mini-player state with bgAudio when open
+  useEffect(() => {
+    if (!miniPlayerOpen) return;
+    const audio = bgAudio.audio;
+    if (!audio) return;
+    const onPlay = () => setBgIsPlaying(true);
+    const onPause = () => setBgIsPlaying(false);
+    const onTimeUpdate = () => { setBgCurrentTime(audio.currentTime); setBgDuration(audio.duration || 0); };
+    audio.addEventListener('play', onPlay);
+    audio.addEventListener('pause', onPause);
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    setBgIsPlaying(!audio.paused);
+    setBgDuration(audio.duration || 0);
+    setBgCurrentTime(audio.currentTime);
+    return () => {
+      audio.removeEventListener('play', onPlay);
+      audio.removeEventListener('pause', onPause);
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+    };
+  }, [miniPlayerOpen]);
+
+  // Close mini-player on outside click
+  useEffect(() => {
+    if (!miniPlayerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (miniPlayerRef.current && !miniPlayerRef.current.contains(e.target as Node)) {
+        setMiniPlayerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [miniPlayerOpen]);
+
+  const bgTogglePlay = () => {
+    const audio = bgAudio.audio;
+    if (!audio) return;
+    if (audio.paused) { audio.play().catch(() => {}); } else { audio.pause(); }
+  };
+  const bgRewind = () => { const a = bgAudio.audio; if (a) a.currentTime = Math.max(0, a.currentTime - 10); };
+  const bgForward = () => { const a = bgAudio.audio; if (a) a.currentTime = Math.min(a.duration || 0, a.currentTime + 10); };
+  const bgToggleLoop = () => { const a = bgAudio.audio; if (!a) return; a.loop = !a.loop; setBgIsLooping(a.loop); };
+  const bgSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    const a = bgAudio.audio;
+    if (!a || !bgDuration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    a.currentTime = ((e.clientX - rect.left) / rect.width) * bgDuration;
+  };
+  const fmtTime = (s: number) => { if (!isFinite(s)) return '0:00'; return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`; };
 
   const handleLogoClick = () => {
     if (!isMobile) return;
@@ -408,21 +441,57 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
           {/* Page title removed — clean header */}
         </div>
         <div className={cn("flex items-center shrink-0", isMobile ? "gap-1" : "space-x-2")}>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              "rounded-full h-8 w-8 p-0 border ring-1 ring-offset-2 ring-offset-background shadow-sm hover:shadow-md transition-all",
-              bgMusicSrc
-                ? "border-emerald-400/70 dark:border-emerald-400/60 ring-emerald-400/30 dark:ring-emerald-400/20 bg-emerald-500/10 shadow-[0_0_10px_hsla(142,76%,55%,0.35)]"
-                : "border-black/10 dark:border-white/15 ring-black/5 dark:ring-white/10 bg-white/80 dark:bg-white/5"
+          {/* Bg music indicator + mini-player */}
+          <div className="relative" ref={miniPlayerRef}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => bgMusicSrc && setMiniPlayerOpen(o => !o)}
+              className={cn(
+                "rounded-full h-8 w-8 p-0 border ring-1 ring-offset-2 ring-offset-background shadow-sm hover:shadow-md transition-all",
+                bgMusicSrc
+                  ? "border-emerald-400/70 dark:border-emerald-400/60 ring-emerald-400/30 dark:ring-emerald-400/20 bg-emerald-500/10 shadow-[0_0_10px_hsla(142,76%,55%,0.35)] cursor-pointer"
+                  : "border-black/10 dark:border-white/15 ring-black/5 dark:ring-white/10 bg-white/80 dark:bg-white/5 pointer-events-none"
+              )}
+              aria-label="Background music"
+              type="button"
+            >
+              {bgMusicSrc && bgIsPlaying
+                ? <Pause className="h-4 w-4 fill-current text-emerald-400" />
+                : <Play className={cn("h-4 w-4 fill-current", bgMusicSrc ? "text-emerald-400" : "text-foreground/80")} />
+              }
+            </Button>
+
+            {/* Thin vertical icon-only strip dropdown */}
+            {bgMusicSrc && (
+              <div
+                className={cn(
+                  "absolute right-0 top-9 z-50 flex flex-col items-center gap-1 p-1 rounded-2xl border border-emerald-400/20 bg-background/95 backdrop-blur-md shadow-[0_8px_24px_hsla(0,0%,0%,0.5)] transition-all duration-200 origin-top",
+                  miniPlayerOpen ? "opacity-100 scale-y-100 pointer-events-auto" : "opacity-0 scale-y-0 pointer-events-none"
+                )}
+              >
+                <button type="button" onClick={bgTogglePlay}
+                  className="h-8 w-8 rounded-full flex items-center justify-center bg-emerald-500/15 border border-emerald-400/30 text-emerald-400 hover:bg-emerald-500/25 transition-all active:scale-90">
+                  {bgIsPlaying ? <Pause className="h-3.5 w-3.5 fill-current" /> : <Play className="h-3.5 w-3.5 fill-current" />}
+                </button>
+                <button type="button" onClick={bgRewind} aria-label="Rewind 10s"
+                  className="h-8 w-8 rounded-full flex items-center justify-center text-foreground/60 hover:text-foreground hover:bg-white/10 transition-all active:scale-90">
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </button>
+                <button type="button" onClick={bgForward} aria-label="Forward 10s"
+                  className="h-8 w-8 rounded-full flex items-center justify-center text-foreground/60 hover:text-foreground hover:bg-white/10 transition-all active:scale-90">
+                  <RotateCw className="h-3.5 w-3.5" />
+                </button>
+                <button type="button" onClick={bgToggleLoop} aria-label="Toggle loop"
+                  className={cn(
+                    "h-8 w-8 rounded-full flex items-center justify-center transition-all active:scale-90",
+                    bgIsLooping ? "text-emerald-400 bg-emerald-500/15 border border-emerald-400/25" : "text-foreground/40 hover:text-foreground/70 hover:bg-white/10"
+                  )}>
+                  <Repeat className="h-3.5 w-3.5" />
+                </button>
+              </div>
             )}
-            aria-label="Background music indicator"
-            type="button"
-            tabIndex={-1}
-          >
-            <Play className={cn("h-4 w-4 fill-current", bgMusicSrc ? "text-emerald-400" : "text-foreground/80")} />
-          </Button>
+          </div>
 
           {/* Voice Assistant mic button */}
           <VoiceAssistant

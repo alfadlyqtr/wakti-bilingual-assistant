@@ -10,9 +10,10 @@ interface AudioPlayerProps {
   showLoopToggle?: boolean;
   onPlaybackChange?: (isPlaying: boolean) => void;
   onProgressChange?: (progress: { currentTime: number; duration: number; isPlaying: boolean }) => void;
+  externalAudio?: HTMLAudioElement | null;
 }
 
-export function AudioPlayer({ src, className = '', showLoopToggle = false, onPlaybackChange, onProgressChange }: AudioPlayerProps) {
+export function AudioPlayer({ src, className = '', showLoopToggle = false, onPlaybackChange, onProgressChange, externalAudio }: AudioPlayerProps) {
   const { language } = useTheme();
   const playerId = useId();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -117,8 +118,9 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
     audio.addEventListener('canplay', handleCanPlay);
     audio.addEventListener('error', handleError);
 
+    const isExternal = !!externalAudioRef.current;
     return () => {
-      audio.pause();
+      if (!isExternal) audio.pause();
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('ended', handleEnded);
@@ -126,14 +128,18 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('error', handleError);
-      onPlaybackChangeRef.current?.(false);
-      emitProgress(audio.currentTime, audio.duration, false);
+      if (!isExternal) {
+        onPlaybackChangeRef.current?.(false);
+        emitProgress(audio.currentTime, audio.duration, false);
+      }
     };
   // attachAudio only re-creates when src changes (cleanSrc drives audio teardown anyway)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emitProgress, src]);
 
   const cleanupRef = useRef<(() => void) | null>(null);
+  const externalAudioRef = useRef<HTMLAudioElement | null>(externalAudio ?? null);
+  useEffect(() => { externalAudioRef.current = externalAudio ?? null; });
 
   const ensureAudio = useCallback(() => {
     if (!cleanSrc) {
@@ -147,21 +153,50 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
 
     cleanupRef.current?.();
 
-    const audio = new Audio(cleanSrc);
+    // Use external audio (shared singleton) if provided, else create own
+    const audio = externalAudioRef.current ?? new Audio(cleanSrc);
     audio.loop = isLooping;
     audioRef.current = audio;
     initializedSrcRef.current = cleanSrc;
     cleanupRef.current = attachAudio(audio);
-    setCurrentTime(0);
-    setDuration(0);
-    setError(null);
-    setIsLoading(true);
-    audio.load();
+    if (!externalAudioRef.current) {
+      setCurrentTime(0);
+      setDuration(0);
+      setError(null);
+      setIsLoading(true);
+      audio.load();
+    } else {
+      // Sync UI to current state of external audio
+      setCurrentTime(audio.currentTime);
+      setDuration(audio.duration || 0);
+      setIsPlaying(!audio.paused && !audio.ended);
+      setIsLoading(false);
+      setError(null);
+    }
     return audio;
   }, [attachAudio, cleanSrc, isLooping]);
 
   // Only tear down and reset when the SOURCE itself changes — not on every parent re-render
   useEffect(() => {
+    // If external audio is active and playing, auto-attach on mount
+    if (externalAudioRef.current && !externalAudioRef.current.paused) {
+      const ea = externalAudioRef.current;
+      audioRef.current = ea;
+      initializedSrcRef.current = cleanSrc;
+      cleanupRef.current = attachAudio(ea);
+      setCurrentTime(ea.currentTime);
+      setDuration(ea.duration || 0);
+      setIsPlaying(true);
+      setIsLoading(false);
+      setError(null);
+      return () => {
+        cleanupRef.current?.();
+        cleanupRef.current = null;
+        audioRef.current = null;
+        initializedSrcRef.current = null;
+      };
+    }
+
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
@@ -179,14 +214,18 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
       cleanupRef.current = null;
       audioRef.current = null;
       initializedSrcRef.current = null;
-      onPlaybackChangeRef.current?.(false);
-      emitProgress(0, 0, false);
+      if (!externalAudioRef.current) {
+        onPlaybackChangeRef.current?.(false);
+        emitProgress(0, 0, false);
+      }
     };
-  }, [cleanSrc]); // ← only cleanSrc, never onPlaybackChange or language
+  }, [cleanSrc, externalAudio]); // re-run when externalAudio changes too
 
   // Listen for other players starting — pause this one if it's playing
+  // But never pause the shared bg audio singleton
   useEffect(() => {
     return onEvent('wakti-audio-play', (detail) => {
+      if (externalAudioRef.current) return; // shared bg audio — never pause
       if (detail.playerId !== playerId && audioRef.current && !audioRef.current.paused) {
         audioRef.current.pause();
       }

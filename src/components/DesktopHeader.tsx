@@ -168,9 +168,8 @@ export function DesktopHeader() {
 
   useEffect(() => {
     const offIndicator = onEvent('wakti-bg-music-indicator-on', () => { setBgMusicSrc('active'); });
-    const offStart = onEvent('wakti-bg-music-start', () => { setBgMusicSrc('active'); });
     const offPause = onEvent('wakti-bg-music-pause', () => { setBgMusicSrc(null); });
-    return () => { offIndicator(); offStart(); offPause(); };
+    return () => { offIndicator(); offPause(); };
   }, []);
 
   // Define menu items with icons and vibrant colors
