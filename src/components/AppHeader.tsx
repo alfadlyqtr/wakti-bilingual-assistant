@@ -254,6 +254,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
 
   const [bgMusicSrc, setBgMusicSrc] = useState<string | null>(null);
   const bgAudioRef = useRef<HTMLAudioElement | null>(null);
+  const bgAudioSrcRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Indicator only — no audio
@@ -262,7 +263,8 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
     });
     // Start actual audio playback (AppHeader owns the Audio — never unmounts)
     const offStart = onEvent('wakti-bg-music-start', ({ src }) => {
-      if (bgAudioRef.current && bgAudioRef.current.src === src && !bgAudioRef.current.paused) {
+      // Already playing the same song — skip
+      if (bgAudioRef.current && bgAudioSrcRef.current === src && !bgAudioRef.current.paused) {
         setBgMusicSrc('active');
         return;
       }
@@ -273,6 +275,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
       const audio = new Audio(src);
       audio.loop = true;
       bgAudioRef.current = audio;
+      bgAudioSrcRef.current = src;
       setBgMusicSrc('active');
       audio.play().catch(() => {});
     });
@@ -282,6 +285,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
         bgAudioRef.current.pause();
         bgAudioRef.current = null;
       }
+      bgAudioSrcRef.current = null;
       setBgMusicSrc(null);
     });
     return () => { offIndicator(); offStart(); offPause(); };

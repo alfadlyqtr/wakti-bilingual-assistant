@@ -5363,7 +5363,6 @@ function EditorTab() {
                                 setBgMusicTrackId(null);
                                 try { sessionStorage.removeItem('wakti-bg-music-track-id'); } catch {}
                                 bgAudio.stop();
-                                emitEvent('wakti-bg-music-pause');
                               } else {
                                 bgMusicTrackIdRef.current = t.id;
                                 setBgMusicTrackId(t.id);
