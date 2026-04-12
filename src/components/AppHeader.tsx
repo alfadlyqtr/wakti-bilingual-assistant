@@ -369,14 +369,14 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
     >
       <div
         className={cn(
-          isMobile ? "relative flex items-center" : "relative flex items-center justify-between",
+          isMobile ? "relative flex items-center justify-between" : "relative flex items-center justify-between",
           isMobile
             ? "mx-0 h-16 rounded-none border-b border-border bg-background/90 pl-2 pr-2 shadow-md"
             : "w-full h-16 rounded-[1rem] border border-border/60 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70 px-4 py-2"
         )}
         style={isMobile ? undefined : { borderRadius: '1rem' }}
       >
-        <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div className={cn("flex items-center gap-2", isMobile ? "" : "flex-1 min-w-0")}>
           {isMobile ? (
             location.pathname !== '/dashboard' ? (
               /* Back button with logo — takes user back to homescreen */
@@ -440,7 +440,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
           )}
           {/* Page title removed — clean header */}
         </div>
-        <div className={cn("flex items-center shrink-0", isMobile ? "gap-1" : "space-x-2")}>
+        <div className={cn("flex items-center shrink-0", isMobile ? "gap-3" : "space-x-2")}>
           {/* Bg music indicator + mini-player */}
           <div className="relative" ref={miniPlayerRef}>
             <Button

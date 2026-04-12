@@ -4937,6 +4937,8 @@ function EditorTab() {
   const [playlistsLoading, setPlaylistsLoading] = useState(false);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [displayLimit, setDisplayLimit] = useState(60);
+  const [hasMoreTracks, setHasMoreTracks] = useState(false);
   const [editingPlaylist, setEditingPlaylist] = useState<Playlist | null>(null);
   const [pickerPlaylistId, setPickerPlaylistId] = useState<string | null>(null);
   const [activePlaylist, setActivePlaylist] = useState<Playlist | null>(null);
@@ -5000,8 +5002,7 @@ function EditorTab() {
         .from('user_music_tracks')
         .select('id, created_at, task_id, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta, source_audio_url, share_code')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(60);
+        .order('created_at', { ascending: false });
       if (error) throw error;
       const withUrls = (data || [])
         .filter((t: any) => {
@@ -5069,6 +5070,16 @@ function EditorTab() {
       return title.includes(q) || prompt.includes(q) || styles.includes(q) || metaTags.includes(q);
     });
   }, [sortedTracks, trackSearch]);
+
+  const displayedTracks = useMemo(() => {
+    const result = filteredTracks.slice(0, displayLimit);
+    setHasMoreTracks(filteredTracks.length > displayLimit);
+    return result;
+  }, [filteredTracks, displayLimit]);
+
+  const handleLoadMore = () => {
+    setDisplayLimit(prev => prev + 60);
+  };
 
   useEffect(() => { load(); loadPlaylists(); }, [user?.id]);
 
@@ -5356,6 +5367,12 @@ function EditorTab() {
                   className="h-10 pl-9 rounded-xl border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-[0_6px_18px_rgba(6,5,65,0.06)] dark:shadow-none"
                 />
               </div>
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50/60 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-400/20">
+                <Download className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  {isAr ? 'تذكير: قم بتنزيل أغانيك لحفظها محلياً' : 'Reminder: Please download your songs to save them locally'}
+                </p>
+              </div>
 
               {filteredTracks.length === 0 ? (
                 <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-8 flex flex-col items-center gap-3 text-center">
@@ -5365,7 +5382,7 @@ function EditorTab() {
                   <p className="text-sm text-muted-foreground/80 dark:text-muted-foreground/60">{isAr ? 'لا توجد نتائج مطابقة.' : 'No songs match your search.'}</p>
                   <p className="text-xs text-muted-foreground/60 dark:text-muted-foreground/40">{isAr ? 'جرّب عنواناً أو كلمات من الوصف أو نوع الموسيقى.' : 'Try a title, prompt words, or style tags.'}</p>
                 </div>
-              ) : filteredTracks.map((t) => {
+              ) : displayedTracks.map((t) => {
                 const durationSec = t.duration ?? t.requested_duration_seconds ?? null;
                 const durationLabel = durationSec
                   ? `${Math.floor(durationSec / 60)}:${String(Math.round(durationSec % 60)).padStart(2, '0')}`
@@ -5638,6 +5655,19 @@ function EditorTab() {
                   </div>
                 );
               })}
+              
+              {/* Load More Button */}
+              {hasMoreTracks && (
+                <div className="flex justify-center pt-4">
+                  <button
+                    onClick={handleLoadMore}
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:shadow-none text-muted-foreground hover:text-foreground hover:border-[#c7cddd] dark:hover:border-white/20 active:scale-95 transition-all"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                    {isAr ? 'تحميل المزيد' : 'Load More'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </>
