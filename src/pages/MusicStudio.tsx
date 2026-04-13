@@ -4845,10 +4845,12 @@ function MusicTrackYouTubeDialog({
   track,
   language,
   onClose,
+  onPublished,
 }: {
   track: { id: string; title: string | null; prompt: string | null; cover_url: string | null; play_url?: string | null; storage_path: string | null };
   language: string;
   onClose: () => void;
+  onPublished?: (videoUrl: string) => void;
 }) {
   const isAr = language === 'ar';
   const { user } = useAuth();
@@ -5148,12 +5150,14 @@ function MusicTrackYouTubeDialog({
                     {!savedImagesLoading && savedImages.length > 0 && (
                       <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
                         {savedImages.map((img) => (
-                          <button key={img.id} type="button"
-                            aria-label={isAr ? 'اختر هذه الصورة' : 'Select this image'}
-                            onClick={() => { setSelectedSavedImageUrl(img.image_url); setCoverMode('saved'); setSavedImagesOpen(false); }}
-                            className={`aspect-square rounded-xl overflow-hidden border-2 transition-all active:scale-95 ${selectedSavedImageUrl === img.image_url && coverMode === 'saved' ? 'border-sky-400' : 'border-transparent hover:border-white/30'}`}>
-                            <img src={img.image_url} alt="" className="w-full h-full object-cover" />
-                          </button>
+                          <div key={img.id} className="aspect-square">
+                            <button type="button"
+                              aria-label={isAr ? 'اختر هذه الصورة' : 'Select this image'}
+                              onClick={() => { setSelectedSavedImageUrl(img.image_url); setCoverMode('saved'); setSavedImagesOpen(false); }}
+                              className={`w-full h-full rounded-xl overflow-hidden border-2 transition-all active:scale-95 ${selectedSavedImageUrl === img.image_url && coverMode === 'saved' ? 'border-sky-400' : 'border-transparent hover:border-white/30'}`}>
+                              <img src={img.image_url} alt="" className="w-full h-full object-cover" />
+                            </button>
+                          </div>
                         ))}
                       </div>
                     )}
@@ -5217,7 +5221,7 @@ function MusicTrackYouTubeDialog({
                 description={track.prompt || ''}
                 isShort={false}
                 language={language}
-                onPublished={() => { onClose(); }}
+                onPublished={(result) => { onPublished?.(result.videoUrl); onClose(); }}
               />
             </div>
           )}
@@ -5580,7 +5584,7 @@ function EditorTab() {
     setDisplayLimit(prev => prev + 60);
   };
 
-  useEffect(() => { load(); loadPlaylists(); }, [user?.id]);
+  useEffect(() => { load(); loadPlaylists(); loadPosters(); }, [user?.id]);
 
   useEffect(() => {
     const handleReload = () => load();
@@ -6015,16 +6019,23 @@ function EditorTab() {
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                             )}
                           </button>
-                          {t.play_url && (
-                            <button
-                              type="button"
-                              onClick={() => setTrackYouTubeTarget(t)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all active:scale-95 border border-red-400/25 dark:border-red-400/20 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20"
-                            >
-                              <Youtube className="h-3.5 w-3.5" />
-                              <span>{isAr ? 'نشر على يوتيوب' : 'Publish to YouTube'}</span>
-                            </button>
-                          )}
+                          {t.play_url && (() => {
+                            const ytUrl = (t.meta as any)?.youtube_url as string | undefined;
+                            return ytUrl ? (
+                              <a href={ytUrl} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all active:scale-95 border border-emerald-400/30 dark:border-emerald-400/20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                <span>{isAr ? 'تم النشر ✓' : 'Published ✓'}</span>
+                              </a>
+                            ) : (
+                              <button type="button"
+                                onClick={() => setTrackYouTubeTarget(t)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all active:scale-95 border border-red-400/25 dark:border-red-400/20 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20">
+                                <Youtube className="h-3.5 w-3.5" />
+                                <span>{isAr ? 'نشر على يوتيوب' : 'Publish to YouTube'}</span>
+                              </button>
+                            );
+                          })()}
                         </div>
                         {hasLyrics && (
                           <div className="w-full overflow-hidden rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-gradient-to-b from-[#f8fafc] via-[#f3f7ff] to-[#eef4ff] dark:from-white/[0.05] dark:via-white/[0.035] dark:to-white/[0.03] shadow-[0_10px_24px_rgba(6,5,65,0.08)] dark:shadow-none">
@@ -6203,6 +6214,16 @@ function EditorTab() {
           track={trackYouTubeTarget}
           language={language}
           onClose={() => setTrackYouTubeTarget(null)}
+          onPublished={async (videoUrl) => {
+            const id = trackYouTubeTarget.id;
+            const currentMeta = ((trackYouTubeTarget.meta as Record<string, unknown> | null) ?? {});
+            const nextMeta = { ...currentMeta, youtube_url: videoUrl };
+            setTracks(prev => prev.map(t => t.id === id ? { ...t, meta: nextMeta } : t));
+            try {
+              await (supabase as any).from('user_music_tracks').update({ meta: nextMeta }).eq('id', id);
+            } catch { /* non-critical */ }
+            setTrackYouTubeTarget(null);
+          }}
         />
       )}
 
