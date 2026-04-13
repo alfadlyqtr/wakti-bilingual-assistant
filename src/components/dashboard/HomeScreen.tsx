@@ -282,10 +282,12 @@ function GridIcon({ app, language, editMode, onTap, isDark, glowEnabled = false,
     >
       <LiquidIcon app={app} size={64} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} badgeCount={badgeCount} />
       <span
-        className="text-[11px] font-semibold text-center leading-tight"
+        className="text-[11px] font-bold text-center leading-tight text-white px-2 py-0.5 rounded-md"
         style={{
-          color: isDark ? "#fff" : "#060541",
-          textShadow: isDark ? "0 1px 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.6)" : "none",
+          background: 'rgba(0,0,0,0.35)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          textShadow: '0 1px 3px rgba(0,0,0,0.8)',
           maxWidth: 72,
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -1243,16 +1245,20 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
       onClick={editMode ? undefined : onClick}
       className="rounded-3xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-all select-none relative"
       style={{
-        backdropFilter: 'blur(12px) saturate(140%)',
-        WebkitBackdropFilter: 'blur(12px) saturate(140%)',
-        boxShadow: `0 2px 12px ${glow}18, 0 1px 4px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)`,
-        border: '0.5px solid rgba(180,190,200,0.12)',
+        backdropFilter: hasBg ? 'blur(28px) saturate(160%)' : 'blur(12px) saturate(140%)',
+        WebkitBackdropFilter: hasBg ? 'blur(28px) saturate(160%)' : 'blur(12px) saturate(140%)',
+        boxShadow: hasBg
+          ? `0 4px 24px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)`
+          : `0 2px 12px ${glow}18, 0 1px 4px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)`,
+        border: hasBg ? '0.5px solid rgba(255,255,255,0.22)' : '0.5px solid rgba(180,190,200,0.12)',
       }}
     >
-      {/* Background layer — very low opacity for high see-through */}
-      <div className="absolute inset-0" style={{ background: bg, opacity: 0.06 }} />
-      {/* Frosted glass shimmer overlay — minimal */}
-      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.02) 0%, transparent 60%)' }} />
+      {/* Frosted tint layer when any wallpaper/bg is active — subtle dark for readability */}
+      {hasBg && <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.18)' }} />}
+      {/* Background layer — tinted accent, translucent */}
+      <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? 0.3 : 0.06 }} />
+      {/* Frosted glass shimmer overlay */}
+      <div className="absolute inset-0 pointer-events-none" style={{ background: hasBg ? 'linear-gradient(145deg, rgba(255,255,255,0.1) 0%, transparent 50%)' : 'linear-gradient(145deg, rgba(255,255,255,0.02) 0%, transparent 60%)' }} />
       <div className="relative z-10 w-full h-full">{children}</div>
     </div>
   );
@@ -1546,8 +1552,8 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
     >
       <LiquidIcon app={app} size={60} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} badgeCount={badgeCount} />
       <span
-        className="text-[11px] font-semibold text-center leading-tight mt-1.5"
-        style={{ color: isDark ? '#fff' : '#060541', textShadow: isDark ? '0 1px 4px rgba(0,0,0,0.95)' : 'none', maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
+        className="text-[11px] font-bold text-center leading-tight mt-1.5 text-white px-2 py-0.5 rounded-md"
+        style={{ background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', textShadow: '0 1px 3px rgba(0,0,0,0.8)', maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
       >
         {name}
       </span>
@@ -2559,35 +2565,38 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const hasBg  = hasUserImage || (!!bgImage && !hsBgActive);
   const wallpaperTranslateY = `${(bgPositionY - 50) * 1.2}%`;
 
-  // Greeting text — custom header color overrides, then BG/theme defaults
-  const headColor = headerColor || (hasBg ? "#ffffff" : isDark ? "#f2f2f2" : "#060541");
-  const subColor  = headerColor ? `${headerColor}b3` : (hasBg ? "rgba(255,255,255,0.72)" : isDark ? "rgba(242,242,242,0.55)" : "rgba(6,5,65,0.55)");
+  // Whether any custom/user background is active (wallpaper image OR solid/gradient)
+  const hasAnyBg = hasBg || (hsBgActive && !hasUserImage);
 
-  // Stat card surface
-  const statCardBase = hasBg
-    ? "bg-white/10 backdrop-blur-xl border border-white/25"
+  // Greeting text — custom header color overrides, then universal white-on-blur when any bg, else theme default
+  const headColor = headerColor || (hasAnyBg ? "#ffffff" : isDark ? "#f2f2f2" : "#060541");
+  const subColor  = headerColor ? `${headerColor}b3` : (hasAnyBg ? "rgba(255,255,255,0.72)" : isDark ? "rgba(242,242,242,0.55)" : "rgba(6,5,65,0.55)");
+
+  // Stat card surface — frosted glass with dark tint so white text is always readable
+  const statCardBase = hasAnyBg
+    ? "bg-black/30 backdrop-blur-xl border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.2)]"
     : isDark
       ? "bg-white/[0.06] backdrop-blur-xl border border-white/10"
       : "bg-white backdrop-blur-xl border border-[#060541]/10 shadow-[0_2px_12px_rgba(6,5,65,0.08)]";
 
-  const statNumBase = hasBg || isDark ? "" : "!text-[#060541]";
-  const statLblColor = hasBg ? "rgba(255,255,255,0.65)" : isDark ? "rgba(242,242,242,0.5)" : "rgba(6,5,65,0.55)";
+  const statNumBase = hasAnyBg || isDark ? "" : "!text-[#060541]";
+  const statLblColor = hasAnyBg ? "rgba(255,255,255,0.65)" : isDark ? "rgba(242,242,242,0.5)" : "rgba(6,5,65,0.55)";
 
   // Dock glass
-  const dockGlass = hasBg
-    ? "bg-white/15 backdrop-blur-2xl border border-white/25 shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.3)]"
+  const dockGlass = hasAnyBg
+    ? "bg-black/40 backdrop-blur-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.15)]"
     : isDark
       ? "bg-white/[0.08] backdrop-blur-2xl border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]"
       : "bg-[#060541]/90 backdrop-blur-2xl border border-[#060541]/20 shadow-[0_8px_32px_rgba(6,5,65,0.25),inset_0_1px_0_rgba(255,255,255,0.15)]";
 
   // Quote glass
-  const quoteGlass = hasBg
-    ? "bg-black/25 backdrop-blur-xl border border-white/15"
+  const quoteGlass = hasAnyBg
+    ? "bg-black/30 backdrop-blur-xl border border-white/15"
     : isDark
       ? "bg-white/[0.06] backdrop-blur-xl border border-white/10"
       : "bg-[#060541]/[0.06] backdrop-blur-xl border border-[#060541]/10 shadow-sm";
-  const quoteTextColor   = hasBg || isDark ? "rgba(255,255,255,0.9)" : "#060541";
-  const quoteAuthorColor = hasBg || isDark ? "rgba(255,255,255,0.45)" : "rgba(6,5,65,0.5)";
+  const quoteTextColor   = hasAnyBg || isDark ? "rgba(255,255,255,0.9)" : "#060541";
+  const quoteAuthorColor = hasAnyBg || isDark ? "rgba(255,255,255,0.45)" : "rgba(6,5,65,0.5)";
 
   // Edit bar glass
   const editBarGlass = "bg-black/40 backdrop-blur-xl border-b border-white/10";
@@ -3070,7 +3079,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                           editMode={editMode}
                           language={language}
                           theme={theme}
-                          hasBg={hasBg || hasCustomBg}
+                          hasBg={hasAnyBg}
                           statCardBase={statCardBase}
                           statLblColor={statLblColor}
                           pendingTasks={pendingTasks}
@@ -3099,7 +3108,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         app={app}
                         editMode={editMode}
                         language={language}
-                        isDark={isDark || hasBg || hasCustomBg}
+                        isDark={isDark || hasAnyBg}
                         glowEnabled={hsBg.glow}
                         navigate={navigate}
                         gridArea={gp}

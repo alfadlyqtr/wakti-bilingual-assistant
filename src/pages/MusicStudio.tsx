@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { emitEvent, onEvent } from '@/utils/eventBus';
 import { bgAudio } from '@/utils/bgAudio';
 import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
+import YouTubePublishBar from '@/components/youtube/YouTubePublishBar';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -63,6 +64,8 @@ import {
   Star,
   Search,
   Radio,
+  RotateCcw,
+  RotateCw,
 } from 'lucide-react';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import StudioImageGenerator from '@/components/studio/StudioImageGenerator';
@@ -727,6 +730,15 @@ function VideoThumbnail({ fallbackDuration }: {
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
+                    {v.signedUrl && v.storage_path && (
+                      <YouTubePublishBar
+                        fileUrl={v.signedUrl}
+                        title={v.title || (language === 'ar' ? 'فيديو من وقتي' : 'Video from Wakti')}
+                        description=""
+                        isShort={false}
+                        language={language}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -823,13 +835,19 @@ function GeneratingWidget({ isAr }: { isAr: boolean }) {
 
 export default function MusicStudio() {
   const { language } = useTheme();
-  const [mainTab, setMainTab] = useState<'studio' | 'music' | 'video' | 'image' | 'qrcode'>('studio');
-  const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor'>('compose');
+  const [mainTab, setMainTab] = useState<'studio' | 'music' | 'video' | 'image' | 'qrcode'>(() => {
+    try { return sessionStorage.getItem(PL_BG_KEY) === '1' ? 'music' : 'studio'; } catch { return 'studio'; }
+  });
+  const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor'>(() => {
+    try { return sessionStorage.getItem(PL_BG_KEY) === '1' ? 'editor' : 'compose'; } catch { return 'compose'; }
+  });
   const [videoMode, setVideoMode] = useState<'ai' | 'saved'>('ai');
   const [imageMode, setImageMode] = useState<'create' | 'saved'>('create');
   const [savedImagesRefreshKey, setSavedImagesRefreshKey] = useState(0);
   const [musicQuotaHeader, setMusicQuotaHeader] = useState<{ remaining: number; limit: number; used: number } | null>(null);
-  const [editorEverVisited, setEditorEverVisited] = useState(false);
+  const [editorEverVisited, setEditorEverVisited] = useState(() => {
+    try { return sessionStorage.getItem(PL_BG_KEY) === '1'; } catch { return false; }
+  });
   const { user: authUser } = useAuth();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -3252,7 +3270,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         style: kieStyle || (language === 'ar' ? 'بوب عربي' : 'pop'),
         customMode: true,
         instrumental,
-        model: 'V5_5',
+        model: 'V5',
         duration_seconds: durationTarget,
         styleWeight: 0.8,
         weirdnessConstraint: 0.3,
@@ -4374,7 +4392,9 @@ function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
     .filter(Boolean) as SavedTrack[];
 
   const [shuffle, setShuffle] = useState(false);
-  const [loop, setLoop] = useState(false);
+  const [loopMode, setLoopMode] = useState<'none' | 'one' | 'all'>(() => {
+    try { return (bgAudio.loopMode as 'none' | 'one' | 'all') || 'none'; } catch { return 'none'; }
+  });
 
   // Restore idx from sessionStorage if bg was active for this playlist
   const [currentIdx, setCurrentIdx] = useState(() => {
@@ -4393,12 +4413,25 @@ function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
   const bgActiveRef = useRef(bgActive);
   useEffect(() => { bgActiveRef.current = bgActive; }, [bgActive]);
 
+  // Keep loopModeRef in sync and update bgAudio
+  useEffect(() => {
+    loopModeRef.current = loopMode;
+    bgAudio.setLoopMode(loopMode);
+  }, [loopMode]);
+
+  // Wire bgAudio track-change callback so module-level advancement updates React idx
+  useEffect(() => {
+    bgAudio.setOnTrackChange((idx) => setCurrentIdx(idx));
+    return () => { bgAudio.setOnTrackChange(null); };
+  }, []);
+
   const [order, setOrder] = useState<number[]>(() => plTracks.map((_, i) => i));
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const orderRef = useRef<number[]>(order);
   const currentIdxRef = useRef(currentIdx);
-  const loopRef = useRef(loop);
+  const loopModeRef = useRef(loopMode);
   const desiredPlayingRef = useRef(false);
+  const handleEndedRef = useRef<() => void>(() => {});
   const progressBarRef = useRef<HTMLDivElement | null>(null);
   const isScrubbingRef = useRef(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -4416,10 +4449,6 @@ function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
   useEffect(() => {
     currentIdxRef.current = currentIdx;
   }, [currentIdx]);
-
-  useEffect(() => {
-    loopRef.current = loop;
-  }, [loop]);
 
   useEffect(() => {
     if (shuffle) {
@@ -4446,14 +4475,27 @@ function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
       audioRef.current.src = '';
     }
 
-    setCurrentTime(0);
-    setProgress(0);
-    setDuration(0);
-
-    // In bg mode, use the shared singleton; otherwise create a private Audio
-    const audio = bgActiveRef.current ? bgAudio.getOrCreate(url, false) : new Audio(url);
-    if (!bgActiveRef.current) audio.preload = 'auto';
-    audioRef.current = audio;
+    // In bg mode, attach to the already-playing singleton — don't reset display
+    let audio: HTMLAudioElement;
+    if (bgActiveRef.current) {
+      audio = bgAudio.getOrCreate(url, false);
+      audioRef.current = audio;
+      // Immediately sync UI from live audio state
+      const ct = audio.currentTime || 0;
+      const dur = audio.duration || 0;
+      setCurrentTime(ct);
+      setDuration(dur);
+      setProgress(dur > 0 ? (ct / dur) * 100 : 0);
+      setIsPlaying(!audio.paused);
+      desiredPlayingRef.current = !audio.paused;
+    } else {
+      audio = new Audio(url);
+      audio.preload = 'auto';
+      audioRef.current = audio;
+      setCurrentTime(0);
+      setProgress(0);
+      setDuration(0);
+    }
 
     const startPlayback = () => {
       if (!desiredPlayingRef.current) return;
@@ -4475,7 +4517,7 @@ function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
         desiredPlayingRef.current = true;
         setCurrentIdx(next);
         try { sessionStorage.setItem(PL_IDX_KEY, String(next)); } catch {}
-      } else if (loopRef.current) {
+      } else if (loopModeRef.current === 'all') {
         desiredPlayingRef.current = true;
         setCurrentIdx(0);
         try { sessionStorage.setItem(PL_IDX_KEY, '0'); } catch {}
@@ -4484,6 +4526,7 @@ function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
         setIsPlaying(false);
       }
     };
+    handleEndedRef.current = handleEnded;
 
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
@@ -4496,8 +4539,7 @@ function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
     audio.addEventListener('pause', handlePause);
 
     if (bgActiveRef.current) {
-      // Register the persistent onEnded so it fires even when unmounted
-      bgAudio.setOnEnded(handleEnded);
+      // bgAudio manages ended internally — just attach UI listeners and sync state
       desiredPlayingRef.current = true;
       if (audio.paused) audio.play().catch(() => {});
       if (audio.readyState >= 2) {
@@ -4547,22 +4589,30 @@ function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
     const next = !bgActive;
     setBgActive(next);
     bgActiveRef.current = next;
-    try {
-      if (next) {
+    if (next) {
+      try {
         sessionStorage.setItem(PL_BG_KEY, '1');
         sessionStorage.setItem(PL_ID_KEY, playlist.id);
         sessionStorage.setItem(PL_IDX_KEY, String(currentIdxRef.current));
-        // If playing, move to singleton immediately
-        const url = plTracks[order[currentIdxRef.current] ?? 0]?.play_url;
-        if (url && isPlaying) bgAudio.playPlaylist(url, () => {});
-        else if (url) emitEvent('wakti-bg-music-indicator-on');
-      } else {
+      } catch {}
+      // Build full ordered URL list
+      const urls = orderRef.current
+        .map(ti => plTracks[ti]?.play_url)
+        .filter(Boolean) as string[];
+      // Adopt the already-playing private audio so playback continues uninterrupted
+      const currentUrl = urls[currentIdxRef.current];
+      if (audioRef.current && currentUrl) {
+        bgAudio.adoptAudio(audioRef.current, currentUrl);
+      }
+      bgAudio.startPlaylist(urls, currentIdxRef.current, loopModeRef.current, (idx) => setCurrentIdx(idx));
+    } else {
+      try {
         sessionStorage.removeItem(PL_BG_KEY);
         sessionStorage.removeItem(PL_ID_KEY);
         sessionStorage.removeItem(PL_IDX_KEY);
-        bgAudio.stop();
-      }
-    } catch {}
+      } catch {}
+      bgAudio.stop();
+    }
   };
 
   const togglePlay = () => {
@@ -4579,14 +4629,16 @@ function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
   };
 
   const goNext = () => {
-    const next = currentIdx + 1;
     desiredPlayingRef.current = isPlaying || desiredPlayingRef.current;
+    if (bgActiveRef.current) { bgAudio.next(); return; }
+    const next = currentIdx + 1;
     if (next < order.length) setCurrentIdx(next);
-    else if (loop) setCurrentIdx(0);
+    else if (loopMode === 'all') setCurrentIdx(0);
   };
 
   const goPrev = () => {
     desiredPlayingRef.current = isPlaying || desiredPlayingRef.current;
+    if (bgActiveRef.current) { bgAudio.prev(); return; }
     if (currentIdx > 0) setCurrentIdx(currentIdx - 1);
   };
 
@@ -4698,10 +4750,14 @@ function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
       </div>
 
       {/* Controls */}
-      <div className="flex items-center justify-center gap-3">
-        <button title={isAr ? 'المقطع السابق' : 'Previous track'} onClick={goPrev} disabled={currentIdx === 0 && !loop}
+      <div className="flex items-center justify-center gap-2">
+        <button title={isAr ? 'المقطع السابق' : 'Previous track'} onClick={goPrev} disabled={currentIdx === 0 && loopMode !== 'all'}
           className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-white/10 active:scale-95 transition-all disabled:opacity-30">
           <SkipForward className="h-4 w-4 rotate-180" />
+        </button>
+        <button title={isAr ? 'تغريد -10 ثواني' : 'Rewind 10s'} onClick={() => { const a = audioRef.current; if (a) a.currentTime = Math.max(0, a.currentTime - 10); }}
+          className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-white/10 active:scale-95 transition-all">
+          <RotateCcw className="h-4 w-4" />
         </button>
         <button title={isAr ? 'تشغيل أو إيقاف القائمة' : 'Play or pause playlist'} onClick={togglePlay}
           className="p-3 rounded-2xl bg-gradient-to-br from-purple-500 to-sky-500 text-white shadow-[0_4px_16px_rgba(128,0,255,0.4)] hover:shadow-[0_4px_24px_rgba(128,0,255,0.6)] active:scale-95 transition-all">
@@ -4710,7 +4766,11 @@ function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
             : <Play className="h-5 w-5" />
           }
         </button>
-        <button title={isAr ? 'المقطع التالي' : 'Next track'} onClick={goNext} disabled={currentIdx >= order.length - 1 && !loop}
+        <button title={isAr ? 'تقدم +10 ثواني' : 'Forward 10s'} onClick={() => { const a = audioRef.current; if (a) a.currentTime = Math.min(a.duration || 0, a.currentTime + 10); }}
+          className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-white/10 active:scale-95 transition-all">
+          <RotateCw className="h-4 w-4" />
+        </button>
+        <button title={isAr ? 'المقطع التالي' : 'Next track'} onClick={goNext} disabled={currentIdx >= order.length - 1 && loopMode !== 'all'}
           className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-white/10 active:scale-95 transition-all disabled:opacity-30">
           <SkipForward className="h-4 w-4" />
         </button>
@@ -4722,9 +4782,16 @@ function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
           className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-semibold border transition-all active:scale-95 ${shuffle ? 'border-purple-400/50 bg-purple-500/15 text-purple-300' : 'border-white/10 text-muted-foreground hover:border-white/20'}`}>
           <Shuffle className="h-3 w-3" />{isAr ? 'عشوائي' : 'Shuffle'}
         </button>
-        <button title={isAr ? 'تشغيل أو إيقاف التكرار' : 'Toggle loop'} onClick={() => setLoop(v => !v)}
-          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-semibold border transition-all active:scale-95 ${loop ? 'border-sky-400/50 bg-sky-500/15 text-sky-300' : 'border-white/10 text-muted-foreground hover:border-white/20'}`}>
-          <Repeat className="h-3 w-3" />{isAr ? 'تكرار' : 'Loop'}
+        <button
+          title={isAr ? 'وضع التكرار' : 'Loop mode'}
+          onClick={() => setLoopMode(m => m === 'none' ? 'one' : m === 'one' ? 'all' : 'none')}
+          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-semibold border transition-all active:scale-95 ${
+            loopMode === 'none' ? 'border-white/10 text-muted-foreground hover:border-white/20'
+            : loopMode === 'one' ? 'border-amber-400/50 bg-amber-500/15 text-amber-300'
+            : 'border-sky-400/50 bg-sky-500/15 text-sky-300'
+          }`}>
+          <Repeat className="h-3 w-3" />
+          {loopMode === 'none' ? (isAr ? 'تكرار' : 'Loop') : loopMode === 'one' ? (isAr ? 'تكرار واحد' : 'Loop One') : (isAr ? 'تكرار الكل' : 'Loop All')}
         </button>
       </div>
 
@@ -4756,7 +4823,9 @@ function EditorTab() {
   const WaktiShareIcon = () => <img src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" alt="" className="w-full h-full object-cover rounded-full" />;
 
   // ── Saved sub-tab: tracks vs playlists vs posters
-  const [savedSubTab, setSavedSubTab] = useState<'tracks' | 'playlists' | 'posters'>('tracks');
+  const [savedSubTab, setSavedSubTab] = useState<'tracks' | 'playlists' | 'posters'>(() => {
+    try { return sessionStorage.getItem(PL_BG_KEY) === '1' ? 'playlists' : 'tracks'; } catch { return 'tracks'; }
+  });
 
   // ── Tracks
   const [loading, setLoading] = useState(false);
@@ -4965,6 +5034,19 @@ function EditorTab() {
         createdAt: new Date(row.created_at).getTime(),
       }));
       setPlaylists(pls);
+      // Restore activePlaylist if bg music was active for a playlist
+      try {
+        if (sessionStorage.getItem(PL_BG_KEY) === '1') {
+          const bgId = sessionStorage.getItem(PL_ID_KEY);
+          if (bgId) {
+            const match = pls.find(p => p.id === bgId);
+            if (match) {
+              setActivePlaylist(match);
+              setSavedSubTab('playlists');
+            }
+          }
+        }
+      } catch {}
       // One-time migration: push any old localStorage playlists to Supabase
       if (pls.length === 0) {
         const local = getLocalPlaylists();
@@ -5811,6 +5893,16 @@ function EditorTab() {
                             <Share2 className="h-4 w-4" />
                           </button>
                         </div>
+                        {/* YouTube publish bar */}
+                        <div className="flex justify-start">
+                          <YouTubePublishBar
+                            fileUrl={poster.video_url!}
+                            title={linkedTrack?.title || (isAr ? 'مقطع موسيقي من وقتي' : 'Music track from Wakti')}
+                            description={linkedTrack?.prompt || ''}
+                            isShort={false}
+                            language={language}
+                          />
+                        </div>
                       </div>
                     )}
 
@@ -5869,37 +5961,6 @@ function EditorTab() {
                           <Play className="h-3.5 w-3.5" />
                         </button>
                       )}
-                      {pl.trackIds.length > 0 && (
-                        <button
-                          type="button"
-                          title={isAr ? 'تشغيل في الخلفية' : 'Play in background'}
-                          onClick={() => {
-                            const isBg = isPlBgActive;
-                            if (isBg) {
-                              try { sessionStorage.removeItem(PL_BG_KEY); sessionStorage.removeItem(PL_ID_KEY); sessionStorage.removeItem(PL_IDX_KEY); } catch {}
-                              setBgPlaylistId(null);
-                              bgAudio.stop();
-                            } else {
-                              try { sessionStorage.setItem(PL_BG_KEY, '1'); sessionStorage.setItem(PL_ID_KEY, pl.id); sessionStorage.setItem(PL_IDX_KEY, '0'); } catch {}
-                              setBgPlaylistId(pl.id);
-                              const firstTrack = pl.trackIds.map(id => tracks.find(t => t.id === id)).find(t => t?.play_url);
-                              if (firstTrack?.play_url) {
-                                bgAudio.playPlaylist(firstTrack.play_url, () => {});
-                              } else {
-                                emitEvent('wakti-bg-music-indicator-on');
-                              }
-                              setActivePlaylist(pl);
-                            }
-                          }}
-                          className={`p-2 rounded-xl transition-all active:scale-95 border ${
-                            isPlBgActive
-                              ? 'bg-emerald-500/15 dark:bg-emerald-500/15 border-emerald-400/40 text-emerald-500 dark:text-emerald-400 shadow-[0_0_8px_hsla(142,76%,55%,0.2)]'
-                              : 'text-[#6b7280] dark:text-muted-foreground hover:text-emerald-500 dark:hover:text-emerald-400 bg-[#ffffff] dark:bg-transparent border-[#e5e7eb] dark:border-transparent hover:bg-emerald-500/5 dark:hover:bg-emerald-500/10'
-                          }`}
-                        >
-                          <Radio className="h-3.5 w-3.5" />
-                        </button>
-                      )}
                       <button
                         onClick={() => setPickerPlaylistId(pickerOpen ? null : pl.id)}
                         title={isAr ? 'إضافة أو إزالة المقاطع' : 'Add or remove tracks'}
@@ -5932,14 +5993,39 @@ function EditorTab() {
                           <Play className="h-3 w-3" />
                           {activePlaylist?.id === pl.id ? (isAr ? 'يتم التشغيل' : 'Playing') : (isAr ? 'تشغيل' : 'Play')}
                         </button>
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-[#ffffff] dark:bg-transparent text-[#6b7280] dark:text-muted-foreground shadow-[0_2px_8px_rgba(6,5,65,0.04)] dark:shadow-none">
-                          <Shuffle className="h-3 w-3" />
-                          {isAr ? 'عشوائي' : 'Shuffle'}
-                        </span>
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-[#ffffff] dark:bg-transparent text-[#6b7280] dark:text-muted-foreground shadow-[0_2px_8px_rgba(6,5,65,0.04)] dark:shadow-none">
-                          <Repeat className="h-3 w-3" />
-                          {isAr ? 'بالترتيب / تكرار' : 'Ordered / Loop'}
-                        </span>
+                        {pl.trackIds.length > 0 && (
+                          <button
+                            type="button"
+                            title={isAr ? 'تشغيل في الخلفية' : 'Play in background'}
+                            onClick={() => {
+                              const isBg = isPlBgActive;
+                              if (isBg) {
+                                try { sessionStorage.removeItem(PL_BG_KEY); sessionStorage.removeItem(PL_ID_KEY); sessionStorage.removeItem(PL_IDX_KEY); } catch {}
+                                setBgPlaylistId(null);
+                                bgAudio.stop();
+                              } else {
+                                try { sessionStorage.setItem(PL_BG_KEY, '1'); sessionStorage.setItem(PL_ID_KEY, pl.id); sessionStorage.setItem(PL_IDX_KEY, '0'); } catch {}
+                                setBgPlaylistId(pl.id);
+                                const firstTrack = pl.trackIds.map(id => tracks.find(t => t.id === id)).find(t => t?.play_url);
+                                if (firstTrack?.play_url) {
+                                  bgAudio.playPlaylist(firstTrack.play_url, () => { /* onEnded wired inside PlaylistPlayer once mounted */ });
+                                } else {
+                                  emitEvent('wakti-bg-music-indicator-on');
+                                }
+                                setActivePlaylist(pl);
+                              }
+                            }}
+                            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all active:scale-95 border ${
+                              isPlBgActive
+                                ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-400 dark:text-emerald-300 shadow-[0_0_12px_hsla(142,76%,55%,0.25)]'
+                                : 'bg-red-500/10 border-red-400/40 text-red-400 dark:text-red-300 hover:bg-red-500/15 hover:border-red-400/60'
+                            }`}
+                          >
+                            <Radio className="h-3.5 w-3.5" />
+                            <span>{isAr ? 'تشغيل في الخلفية' : 'Play in background'}</span>
+                            {isPlBgActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+                          </button>
+                        )}
                       </div>
 
                       <p className="text-[10px] text-muted-foreground/60 font-semibold uppercase tracking-wider">

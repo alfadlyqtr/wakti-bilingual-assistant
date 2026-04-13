@@ -82,7 +82,7 @@ serve(async (req) => {
     const title = (body?.title || "").toString().trim();
     const customMode = Boolean(body?.customMode ?? true);
     const instrumental = Boolean(body?.instrumental ?? false);
-    const model = (body?.model || "V5_5").toString();
+    const model = (body?.model || "V5").toString();
     const negativeTags = (body?.negativeTags || "").toString().trim();
     const vocalGender = body?.vocalGender as "m" | "f" | undefined;
     const styleWeight = typeof body?.styleWeight === "number" ? body.styleWeight : undefined;

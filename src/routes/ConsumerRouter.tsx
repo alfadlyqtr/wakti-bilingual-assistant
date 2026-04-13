@@ -72,6 +72,7 @@ const ProjectSlugRedirect = lazy(() => import("@/pages/ProjectSlugRedirect"));
 const ProjectPreview = lazy(() => import("@/pages/ProjectPreview"));
 const ChatbotPage = lazy(() => import("@/pages/ChatbotPage"));
 const InstagramConnectCallback = lazy(() => import("@/pages/InstagramConnectCallback"));
+const GoogleAuthCallback = lazy(() => import("@/pages/GoogleAuthCallback"));
 const MyWishlists = lazy(() => import("@/pages/MyWishlists"));
 const ContactGallery = lazy(() => import("@/pages/ContactGallery"));
 
@@ -118,6 +119,7 @@ export default function ConsumerRouter() {
         <Route path="/wallet-pass" element={<WalletPass />} />
         <Route path="/qr/view" element={<QRTextView />} />
         <Route path="/instagram-connect-callback" element={<InstagramConnectCallback />} />
+        <Route path="/auth/google/callback" element={<GoogleAuthCallback />} />
 
         {/* ── Protected app routes ──────────────────────────────────────── */}
         <Route element={

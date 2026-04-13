@@ -15,6 +15,88 @@ type KieMusicTrack = {
   title?: string;
 };
 
+async function upsertPosterForCurrentUser(
+  db: any,
+  userId: string,
+  trackId: string,
+  taskId: string,
+  audioId: string,
+  author: string,
+  source: {
+    status: string;
+    video_url: string | null;
+    kie_poster_task_id: string | null;
+  },
+) {
+  const payload = {
+    user_id: userId,
+    track_id: trackId,
+    kie_task_id: taskId,
+    kie_audio_id: audioId,
+    kie_poster_task_id: source.kie_poster_task_id,
+    author,
+    status: source.status,
+    video_url: source.video_url,
+  };
+
+  const { data: existingLocal } = await db
+    .from("user_music_posters")
+    .select("id")
+    .eq("track_id", trackId)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingLocal?.id) {
+    const { data: updatedRow, error: updateErr } = await db
+      .from("user_music_posters")
+      .update(payload)
+      .eq("id", existingLocal.id)
+      .select("id")
+      .single();
+    if (updateErr) throw updateErr;
+    return { data: updatedRow };
+  }
+
+  const { data: insertedRow, error: insertErr } = await db
+    .from("user_music_posters")
+    .insert(payload)
+    .select("id")
+    .single();
+  if (insertErr) throw insertErr;
+  return { data: insertedRow };
+}
+
+async function uploadVideoToStorage(db: any, supabaseUrl: string, serviceKey: string, videoUrl: string, posterId: string): Promise<string | null> {
+  try {
+    const resp = await fetch(videoUrl);
+    if (!resp.ok) return null;
+    const blob = await resp.arrayBuffer();
+    const storagePath = `music-posters/${posterId}.mp4`;
+    const uploadResp = await fetch(
+      `${supabaseUrl}/storage/v1/object/${storagePath}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${serviceKey}`,
+          'Content-Type': 'video/mp4',
+          'x-upsert': 'true',
+        },
+        body: blob,
+      }
+    );
+    if (!uploadResp.ok) {
+      console.error('[poster] storage upload failed:', await uploadResp.text());
+      return null;
+    }
+    return `${supabaseUrl}/storage/v1/object/public/${storagePath}`;
+  } catch (e) {
+    console.error('[poster] uploadVideoToStorage error:', e);
+    return null;
+  }
+}
+
 async function recoverAudioIdFromTask(db: any, taskId: string, trackId: string, userId: string, apiKey: string) {
   const { data: trackRow } = await db
     .from("user_music_tracks")
@@ -92,9 +174,12 @@ serve(async (req) => {
         const cbBody = await req.json();
         console.log("[poster] callback payload:", JSON.stringify(cbBody).slice(0, 500));
         const taskId = cbBody?.data?.taskId;
-        const videoUrl = cbBody?.data?.response?.videoUrl;
-        if (taskId && videoUrl) {
-          await db.from("user_music_posters").update({ status: "completed", video_url: videoUrl }).eq("kie_poster_task_id", taskId);
+        const rawVideoUrl = cbBody?.data?.response?.videoUrl;
+        if (taskId && rawVideoUrl) {
+          // Find the poster row to get its id for storage path
+          const { data: posterRow } = await db.from("user_music_posters").select("id").eq("kie_poster_task_id", taskId).maybeSingle();
+          const storedUrl = posterRow ? await uploadVideoToStorage(db, SUPABASE_URL, SUPABASE_SERVICE_KEY, rawVideoUrl, posterRow.id) : null;
+          await db.from("user_music_posters").update({ status: "completed", video_url: storedUrl ?? rawVideoUrl }).eq("kie_poster_task_id", taskId);
         }
       } catch (e) {
         console.error("[poster] callback parse error:", e);
@@ -152,6 +237,23 @@ serve(async (req) => {
         await db.from("user_music_posters").delete().eq("id", existing.id);
       }
 
+      // Check existing poster for any user
+      const { data: existingAnyUser } = await db
+        .from("user_music_posters")
+        .select("id, status, video_url, created_at, kie_poster_task_id, user_id")
+        .eq("kie_audio_id", audioId)
+        .or(`kie_task_id.eq.${taskId}`)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+
+      if (existingAnyUser) {
+        const { data: row } = await upsertPosterForCurrentUser(db, user.id, trackId, taskId, audioId, author, {
+          status: existingAnyUser.status,
+          video_url: existingAnyUser.video_url,
+          kie_poster_task_id: existingAnyUser.kie_poster_task_id,
+        });
+        return json({ posterId: row.id, status: existingAnyUser.status, videoUrl: existingAnyUser.video_url });
+      }
+
       // ── Call KIE exactly per docs ──
       const callBackUrl = `${SUPABASE_URL}/functions/v1/music-poster?cb=1`;
       const kieBody = { taskId, audioId, callBackUrl, author, domainName: "wakti.ai" };
@@ -173,8 +275,8 @@ serve(async (req) => {
         const msg = String((kieData as any).msg ?? "");
         if (msg.toLowerCase().includes("already exists") || msg.toLowerCase().includes("mp4 record")) {
           console.log("[poster] KIE says already exists — querying record-info by audioId");
-          // If we have a DB row, return it
-          if (existing) return json({ posterId: existing.id, status: existing.status, taskId: existing.kie_poster_task_id });
+          // If we already have a local row, return it
+          if (existing) return json({ posterId: existing.id, status: existing.status, taskId: existing.kie_poster_task_id, videoUrl: existing.video_url ?? null });
           // No DB row — find the KIE task by querying record-info with audioId
           let kiePosterTaskId: string | null = null;
           let videoUrl: string | null = null;
@@ -194,12 +296,12 @@ serve(async (req) => {
             console.error("[poster] record-info lookup error:", e);
           }
           const status = (successFlag === "SUCCESS" && videoUrl) ? "completed" : "generating";
-          const { data: stubRow, error: stubErr } = await db
-            .from("user_music_posters")
-            .insert({ user_id: user.id, track_id: trackId, kie_task_id: taskId, kie_audio_id: audioId, kie_poster_task_id: kiePosterTaskId, author, status, video_url: videoUrl })
-            .select("id").single();
-          if (stubErr) throw stubErr;
-          return json({ posterId: stubRow.id, status, taskId: kiePosterTaskId, videoUrl });
+          const { data: row } = await upsertPosterForCurrentUser(db, user.id, trackId, taskId, audioId, author, {
+            status,
+            video_url: videoUrl,
+            kie_poster_task_id: kiePosterTaskId,
+          });
+          return json({ posterId: row.id, status, taskId: kiePosterTaskId, videoUrl });
         }
         throw new Error(`Generation failed: ${msg || "Unknown error"}`);
       }
@@ -208,12 +310,11 @@ serve(async (req) => {
       const kiePosterTaskId = (kieData as any).data?.taskId ?? null;
       console.log("[poster] KIE success, poster taskId:", kiePosterTaskId);
 
-      const { data: row, error: insertErr } = await db
-        .from("user_music_posters")
-        .insert({ user_id: user.id, track_id: trackId, kie_task_id: taskId, kie_audio_id: audioId, kie_poster_task_id: kiePosterTaskId, author, status: "generating", video_url: null })
-        .select("id").single();
-      if (insertErr) throw insertErr;
-
+      const { data: row } = await upsertPosterForCurrentUser(db, user.id, trackId, taskId, audioId, author, {
+        status: "generating",
+        video_url: null,
+        kie_poster_task_id: kiePosterTaskId,
+      });
       return json({ posterId: row.id, status: "generating", taskId: kiePosterTaskId });
     }
 
@@ -274,8 +375,10 @@ serve(async (req) => {
         const videoUrl = d.data?.response?.videoUrl ?? null;
 
         if (flag === "SUCCESS" && videoUrl) {
-          await db.from("user_music_posters").update({ status: "completed", video_url: videoUrl }).eq("id", posterId);
-          return json({ status: "completed", videoUrl });
+          const storedUrl = await uploadVideoToStorage(db, SUPABASE_URL, SUPABASE_SERVICE_KEY, videoUrl, posterId);
+          const finalUrl = storedUrl ?? videoUrl;
+          await db.from("user_music_posters").update({ status: "completed", video_url: finalUrl }).eq("id", posterId);
+          return json({ status: "completed", videoUrl: finalUrl });
         }
         if (flag === "CREATE_TASK_FAILED" || flag === "GENERATE_MP4_FAILED") {
           const errMsg = d.data?.errorMessage || "Generation failed";

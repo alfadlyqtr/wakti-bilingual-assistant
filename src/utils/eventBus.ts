@@ -8,6 +8,7 @@ type EventMap = {
   'wakti-audio-play': { playerId: string };
   'wakti-bg-music-indicator-on': void;
   'wakti-bg-music-pause': void;
+  'wakti-bg-loop-change': 'none' | 'one' | 'all';
   'wakti:clear-insights': void;
   'badge-updated': void;
   'refreshTimeline': void;

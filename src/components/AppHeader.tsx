@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo, ChevronLeft, Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut, Play, Pause, RotateCcw, RotateCw, Repeat } from "lucide-react";
+import { Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo, ChevronLeft, Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut, Play, Pause, RotateCcw, RotateCw, Repeat, SkipForward } from "lucide-react";
 import { bgAudio } from "@/utils/bgAudio";
 import { cn } from "@/lib/utils";
 import { Logo3D } from "@/components/Logo3D";
@@ -256,7 +256,8 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   const [bgMusicSrc, setBgMusicSrc] = useState<string | null>(null);
   const [miniPlayerOpen, setMiniPlayerOpen] = useState(false);
   const [bgIsPlaying, setBgIsPlaying] = useState(false);
-  const [bgIsLooping, setBgIsLooping] = useState(true);
+  const [bgLoopMode, setBgLoopMode] = useState<'none' | 'one' | 'all'>('none');
+  const [bgIsPlaylist, setBgIsPlaylist] = useState(false);
   const [bgCurrentTime, setBgCurrentTime] = useState(0);
   const [bgDuration, setBgDuration] = useState(0);
   const miniPlayerRef = useRef<HTMLDivElement>(null);
@@ -266,13 +267,18 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
       setBgMusicSrc('active');
       const a = bgAudio.audio;
       if (a) { setBgIsPlaying(!a.paused); setBgDuration(a.duration || 0); setBgCurrentTime(a.currentTime); }
+      setBgLoopMode(bgAudio.loopMode);
+      setBgIsPlaylist(bgAudio.plUrls.length > 0);
     });
     const offPause = onEvent('wakti-bg-music-pause', () => {
       setBgMusicSrc(null);
       setMiniPlayerOpen(false);
       setBgIsPlaying(false);
     });
-    return () => { offIndicator(); offPause(); };
+    const offLoop = onEvent('wakti-bg-loop-change', (detail: any) => {
+      setBgLoopMode(detail as 'none' | 'one' | 'all');
+    });
+    return () => { offIndicator(); offPause(); offLoop(); };
   }, []);
 
   // Sync mini-player state with bgAudio when open
@@ -308,14 +314,20 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
     return () => document.removeEventListener('mousedown', handler);
   }, [miniPlayerOpen]);
 
-  const bgTogglePlay = () => {
+  const bgTogglePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
     const audio = bgAudio.audio;
     if (!audio) return;
     if (audio.paused) { audio.play().catch(() => {}); } else { audio.pause(); }
   };
-  const bgRewind = () => { const a = bgAudio.audio; if (a) a.currentTime = Math.max(0, a.currentTime - 10); };
-  const bgForward = () => { const a = bgAudio.audio; if (a) a.currentTime = Math.min(a.duration || 0, a.currentTime + 10); };
-  const bgToggleLoop = () => { const a = bgAudio.audio; if (!a) return; a.loop = !a.loop; setBgIsLooping(a.loop); };
+  const bgRewind = (e: React.MouseEvent) => { e.stopPropagation(); const a = bgAudio.audio; if (a) a.currentTime = Math.max(0, a.currentTime - 10); };
+  const bgForward = (e: React.MouseEvent) => { e.stopPropagation(); const a = bgAudio.audio; if (a) a.currentTime = Math.min(a.duration || 0, a.currentTime + 10); };
+  const bgCycleLoop = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = bgLoopMode === 'none' ? 'one' : bgLoopMode === 'one' ? 'all' : 'none';
+    bgAudio.setLoopMode(next);
+    setBgLoopMode(next);
+  };
   const bgSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     const a = bgAudio.audio;
     if (!a || !bgDuration) return;
@@ -462,33 +474,72 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
               }
             </Button>
 
-            {/* Thin vertical icon-only strip dropdown */}
+            {/* Liquid glass mini-player — vertical strip */}
             {bgMusicSrc && (
               <div
                 className={cn(
-                  "absolute right-0 top-9 z-50 flex flex-col items-center gap-1 p-1 rounded-2xl border border-emerald-400/20 bg-background/95 backdrop-blur-md shadow-[0_8px_24px_hsla(0,0%,0%,0.5)] transition-all duration-200 origin-top",
+                  "absolute right-0 top-10 z-50 transition-all duration-300 origin-top",
                   miniPlayerOpen ? "opacity-100 scale-y-100 pointer-events-auto" : "opacity-0 scale-y-0 pointer-events-none"
                 )}
               >
-                <button type="button" onClick={bgTogglePlay}
-                  className="h-8 w-8 rounded-full flex items-center justify-center bg-emerald-500/15 border border-emerald-400/30 text-emerald-400 hover:bg-emerald-500/25 transition-all active:scale-90">
-                  {bgIsPlaying ? <Pause className="h-3.5 w-3.5 fill-current" /> : <Play className="h-3.5 w-3.5 fill-current" />}
-                </button>
-                <button type="button" onClick={bgRewind} aria-label="Rewind 10s"
-                  className="h-8 w-8 rounded-full flex items-center justify-center text-foreground/60 hover:text-foreground hover:bg-white/10 transition-all active:scale-90">
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </button>
-                <button type="button" onClick={bgForward} aria-label="Forward 10s"
-                  className="h-8 w-8 rounded-full flex items-center justify-center text-foreground/60 hover:text-foreground hover:bg-white/10 transition-all active:scale-90">
-                  <RotateCw className="h-3.5 w-3.5" />
-                </button>
-                <button type="button" onClick={bgToggleLoop} aria-label="Toggle loop"
-                  className={cn(
-                    "h-8 w-8 rounded-full flex items-center justify-center transition-all active:scale-90",
-                    bgIsLooping ? "text-emerald-400 bg-emerald-500/15 border border-emerald-400/25" : "text-foreground/40 hover:text-foreground/70 hover:bg-white/10"
-                  )}>
-                  <Repeat className="h-3.5 w-3.5" />
-                </button>
+                <div className="flex flex-col items-center gap-1 px-1.5 py-2 rounded-2xl"
+                  style={{
+                    background: 'linear-gradient(180deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.06) 60%, rgba(16,185,129,0.10) 100%)',
+                    backdropFilter: 'blur(28px) saturate(200%)',
+                    WebkitBackdropFilter: 'blur(28px) saturate(200%)',
+                    border: '1px solid rgba(255,255,255,0.20)',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.45), 0 2px 12px rgba(16,185,129,0.18), inset 0 1px 0 rgba(255,255,255,0.18)',
+                  }}
+                >
+                  {/* Play / Pause */}
+                  <button type="button" onClick={bgTogglePlay} aria-label="Play or pause"
+                    className="h-9 w-9 rounded-xl flex items-center justify-center transition-all active:scale-90"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(16,185,129,0.85) 0%, rgba(5,150,105,0.95) 100%)',
+                      boxShadow: '0 0 18px rgba(16,185,129,0.55), inset 0 1px 0 rgba(255,255,255,0.28)',
+                    }}>
+                    {bgIsPlaying
+                      ? <Pause className="h-4 w-4 fill-current text-white" />
+                      : <Play className="h-4 w-4 fill-current text-white" />}
+                  </button>
+                  {/* Rewind */}
+                  <button type="button" onClick={bgRewind} aria-label="Rewind 10s"
+                    className="h-8 w-8 rounded-xl flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all active:scale-90">
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </button>
+                  {/* Forward */}
+                  <button type="button" onClick={bgForward} aria-label="Forward 10s"
+                    className="h-8 w-8 rounded-xl flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all active:scale-90">
+                    <RotateCw className="h-3.5 w-3.5" />
+                  </button>
+                  {/* Prev — playlist only */}
+                  {bgIsPlaylist && (
+                    <button type="button" onClick={(e) => { e.stopPropagation(); bgAudio.prev(); }} aria-label="Previous track"
+                      className="h-8 w-8 rounded-xl flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all active:scale-90">
+                      <SkipForward className="h-3.5 w-3.5 rotate-180" />
+                    </button>
+                  )}
+                  {/* Next — playlist only */}
+                  {bgIsPlaylist && (
+                    <button type="button" onClick={(e) => { e.stopPropagation(); bgAudio.next(); }} aria-label="Next track"
+                      className="h-8 w-8 rounded-xl flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all active:scale-90">
+                      <SkipForward className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {/* Divider */}
+                  <div className="h-px w-5 bg-white/15 my-0.5" />
+                  {/* Loop */}
+                  <button type="button" onClick={bgCycleLoop} aria-label="Loop mode"
+                    className="h-8 w-8 rounded-xl flex items-center justify-center transition-all active:scale-90 relative"
+                    style={bgLoopMode !== 'none' ? {
+                      background: 'rgba(16,185,129,0.22)',
+                      boxShadow: '0 0 10px rgba(16,185,129,0.35)',
+                    } : {}}>
+                    <Repeat className={cn("h-3.5 w-3.5", bgLoopMode !== 'none' ? "text-emerald-400" : "text-white/50")} />
+                    {bgLoopMode === 'one' && <span className="absolute -top-0.5 -right-0.5 text-[7px] font-bold leading-none bg-amber-400 text-black rounded-full w-3 h-3 flex items-center justify-center">1</span>}
+                    {bgLoopMode === 'all' && <span className="absolute -top-0.5 -right-0.5 text-[7px] font-bold leading-none bg-sky-400 text-black rounded-full w-3 h-3 flex items-center justify-center">∞</span>}
+                  </button>
+                </div>
               </div>
             )}
           </div>
