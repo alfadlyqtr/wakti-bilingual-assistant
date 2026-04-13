@@ -78,9 +78,7 @@ export function useYouTubeConnection() {
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 
     if (isNativelyApp()) {
-      // x-safari-https:// forces true system Safari — the ONLY browser Google allows for OAuth
-      // All Natively browser methods open an in-app browser which Google also blocks
-      window.location.href = authUrl.replace('https://', 'x-safari-https://');
+      openInSafari(authUrl);
     } else {
       window.location.href = authUrl;
     }
