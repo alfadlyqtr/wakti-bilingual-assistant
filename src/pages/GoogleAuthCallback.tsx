@@ -20,10 +20,12 @@ export default function GoogleAuthCallback() {
       const state = searchParams.get('state');
 
       let redirectAfter = '/studio';
+      let stateAccessToken: string | null = null;
       try {
         if (state) {
           const decoded = JSON.parse(atob(state));
           if (decoded.redirect_after) redirectAfter = decoded.redirect_after;
+          if (decoded.access_token) stateAccessToken = decoded.access_token;
         }
       } catch { /* ignore */ }
 
@@ -45,7 +47,8 @@ export default function GoogleAuthCallback() {
 
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
+        const accessToken = session?.access_token ?? stateAccessToken;
+        if (!accessToken) {
           setStatus('error');
           setMessage('You are not logged in. Please log in to Wakti first.');
           setTimeout(() => navigate('/login'), 3000);
@@ -57,7 +60,7 @@ export default function GoogleAuthCallback() {
         const resp = await fetch(`${SUPABASE_URL}/functions/v1/youtube-oauth-callback`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${session.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
             'apikey': SUPABASE_ANON_KEY,
             'Content-Type': 'application/json',
           },

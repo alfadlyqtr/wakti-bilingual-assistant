@@ -55,10 +55,15 @@ export function useYouTubeConnection() {
     checkConnection();
   }, [checkConnection]);
 
-  const connectYouTube = useCallback(() => {
+  const connectYouTube = useCallback(async () => {
     const origin = window.location.origin;
     const redirectUri = `${origin}/auth/google/callback`;
-    const state = btoa(JSON.stringify({ origin, redirect_after: window.location.pathname }));
+    const { data: { session } } = await supabase.auth.getSession();
+    const state = btoa(JSON.stringify({
+      origin,
+      redirect_after: window.location.pathname,
+      access_token: session?.access_token ?? null,
+    }));
 
     const params = new URLSearchParams({
       client_id: GOOGLE_CLIENT_ID,
@@ -73,7 +78,9 @@ export function useYouTubeConnection() {
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 
     if (isNativelyApp()) {
-      openInSafari(authUrl);
+      // x-safari-https:// forces true system Safari — the ONLY browser Google allows for OAuth
+      // All Natively browser methods open an in-app browser which Google also blocks
+      window.location.href = authUrl.replace('https://', 'x-safari-https://');
     } else {
       window.location.href = authUrl;
     }
