@@ -5506,6 +5506,13 @@ function EditorTab() {
                             <div className="flex items-center gap-2 min-w-0">
                               <p className="font-bold text-sm text-foreground truncate leading-tight">{trackTitle}</p>
                             </div>
+                            <p className="mt-1 text-[11px] text-muted-foreground truncate">
+                              {new Date(t.created_at).toLocaleDateString(isAr ? 'ar-SA' : 'en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })}
+                            </p>
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             <button

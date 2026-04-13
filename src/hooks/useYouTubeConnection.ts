@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
+import { openInSafari, isNativelyApp } from '@/integrations/natively/browserBridge';
 
 const GOOGLE_CLIENT_ID = '255003091302-ll68065ch6fc94nkpbvd4kskq6ltl7g5.apps.googleusercontent.com';
 const YT_SCOPE = 'https://www.googleapis.com/auth/youtube.upload';
@@ -69,7 +70,13 @@ export function useYouTubeConnection() {
       state,
     });
 
-    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+
+    if (isNativelyApp()) {
+      openInSafari(authUrl);
+    } else {
+      window.location.href = authUrl;
+    }
   }, []);
 
   const disconnectYouTube = useCallback(async () => {
