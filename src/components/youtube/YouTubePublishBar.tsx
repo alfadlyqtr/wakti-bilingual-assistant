@@ -196,7 +196,7 @@ export default function YouTubePublishBar({
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent
-          className="max-w-md border-white/10 bg-[#0c0f14] text-white"
+          className="max-w-md border-white/10 bg-[#0c0f14] text-white z-[99999]"
           title={isAr ? 'النشر على يوتيوب' : 'Publish to YouTube'}
           description={isAr ? 'أدخل بيانات الفيديو قبل النشر' : 'Enter your video details before publishing'}
         >

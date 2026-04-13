@@ -4853,7 +4853,6 @@ function MusicTrackYouTubeDialog({
   const isAr = language === 'ar';
   const { user } = useAuth();
   const SUPABASE_URL_LOCAL = (import.meta as any).env?.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co';
-  const { connection, connectYouTube, uploadToYouTube } = useYouTubeConnection();
 
   type CoverMode = 'default' | 'upload' | 'saved';
   type Stage = 'pick' | 'rendering' | 'publish';
@@ -4870,12 +4869,6 @@ function MusicTrackYouTubeDialog({
   const [renderedVideoUrl, setRenderedVideoUrl] = useState<string | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [renderProgress, setRenderProgress] = useState(0);
-  const [ytTitle, setYtTitle] = useState('');
-  const [ytDescription, setYtDescription] = useState('');
-  const [ytAudience, setYtAudience] = useState<'not_made_for_kids' | 'made_for_kids'>('not_made_for_kids');
-  const [ytUploading, setYtUploading] = useState(false);
-  const [ytDone, setYtDone] = useState(false);
-  const [ytUrl, setYtUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const effectiveCover =
@@ -5052,8 +5045,6 @@ function MusicTrackYouTubeDialog({
 
       setRenderProgress(100);
       setRenderedVideoUrl(videoUrl);
-      setYtTitle(track.title || (isAr ? 'مقطع موسيقي من وقتي' : 'Music track from Wakti'));
-      setYtDescription(track.prompt || '');
       setStage('publish');
     } catch (err: unknown) {
       setRenderError(err instanceof Error ? err.message : (isAr ? 'فشل تحويل الصوت لفيديو' : 'Failed to convert audio to video'));
@@ -5148,20 +5139,24 @@ function MusicTrackYouTubeDialog({
                 </button>
                 {savedImagesOpen && (
                   <div className="mt-1.5 p-2 rounded-2xl border border-white/10 bg-white/[0.02]">
-                    {savedImagesLoading
-                      ? <div className="py-5 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-white/40" /></div>
-                      : savedImages.length === 0
-                        ? <p className="py-4 text-center text-xs text-white/40">{isAr ? 'لا توجد صور محفوظة' : 'No saved images'}</p>
-                        : <div className="grid grid-cols-4 gap-1.5 max-h-44 overflow-y-auto">
-                            {savedImages.map((img) => (
-                              <button key={img.id} type="button"
-                                aria-label={isAr ? 'اختر هذه الصورة' : 'Select this image'}
-                                onClick={() => { setSelectedSavedImageUrl(img.image_url); setCoverMode('saved'); setSavedImagesOpen(false); }}
-                                className={`aspect-square rounded-xl overflow-hidden border-2 transition-all active:scale-95 ${selectedSavedImageUrl === img.image_url && coverMode === 'saved' ? 'border-sky-400' : 'border-transparent hover:border-white/30'}`}>
-                                <img src={img.image_url} alt="" className="w-full h-full object-cover" />
-                              </button>
-                            ))}
-                          </div>}
+                    {savedImagesLoading && (
+                      <div className="py-5 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-white/40" /></div>
+                    )}
+                    {!savedImagesLoading && savedImages.length === 0 && (
+                      <p className="py-4 text-center text-xs text-white/40">{isAr ? 'لا توجد صور محفوظة' : 'No saved images'}</p>
+                    )}
+                    {!savedImagesLoading && savedImages.length > 0 && (
+                      <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                        {savedImages.map((img) => (
+                          <button key={img.id} type="button"
+                            aria-label={isAr ? 'اختر هذه الصورة' : 'Select this image'}
+                            onClick={() => { setSelectedSavedImageUrl(img.image_url); setCoverMode('saved'); setSavedImagesOpen(false); }}
+                            className={`aspect-square rounded-xl overflow-hidden border-2 transition-all active:scale-95 ${selectedSavedImageUrl === img.image_url && coverMode === 'saved' ? 'border-sky-400' : 'border-transparent hover:border-white/30'}`}>
+                            <img src={img.image_url} alt="" className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -5214,97 +5209,16 @@ function MusicTrackYouTubeDialog({
             <div className="space-y-3">
               <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 flex items-center gap-2.5">
                 <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
-                <p className="text-xs text-emerald-300">{isAr ? 'تم تحويل الأغنية إلى فيديو بنجاح' : 'Song successfully rendered as video'}</p>
+                <p className="text-xs text-emerald-300">{isAr ? 'تم تحويل الأغنية إلى فيديو بنجاح' : 'Song successfully converted to video'}</p>
               </div>
-
-              {ytDone && ytUrl ? (
-                <button type="button" onClick={() => window.open(ytUrl, '_blank')}
-                  className="w-full py-2.5 rounded-2xl text-sm font-bold border border-emerald-400/30 bg-emerald-500/10 text-emerald-300 flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
-                  <CheckCircle2 className="h-4 w-4" />
-                  {isAr ? 'تم النشر — اضغط للمشاهدة' : 'Published — tap to view'}
-                </button>
-              ) : (
-                <div className="space-y-3">
-                  {/* Title */}
-                  <div className="space-y-1">
-                    <p className="text-xs text-white/60">{isAr ? 'العنوان' : 'Title'}</p>
-                    <input
-                      type="text"
-                      value={ytTitle}
-                      onChange={(e) => setYtTitle(e.target.value)}
-                      placeholder={isAr ? 'عنوان الفيديو' : 'Video title'}
-                      className="w-full px-3 py-2 rounded-xl bg-white/[0.05] border border-white/10 text-white text-sm placeholder:text-white/30 outline-none focus:border-sky-400/40"
-                    />
-                  </div>
-
-                  {/* Description */}
-                  <div className="space-y-1">
-                    <p className="text-xs text-white/60">{isAr ? 'الوصف (اختياري)' : 'Description (optional)'}</p>
-                    <textarea
-                      value={ytDescription}
-                      onChange={(e) => setYtDescription(e.target.value.slice(0, 1000))}
-                      placeholder={isAr ? 'وصف قصير...' : 'Short description...'}
-                      rows={2}
-                      className="w-full px-3 py-2 rounded-xl bg-white/[0.05] border border-white/10 text-white text-sm placeholder:text-white/30 outline-none focus:border-sky-400/40 resize-none"
-                    />
-                  </div>
-
-                  {/* Audience */}
-                  <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => setYtAudience('not_made_for_kids')}
-                      className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${
-                        ytAudience === 'not_made_for_kids' ? 'border-sky-400/40 bg-sky-500/10 text-sky-300' : 'border-white/10 text-white/50 hover:bg-white/[0.04]'
-                      }`}>
-                      {isAr ? 'عام' : 'General'}
-                    </button>
-                    <button type="button" onClick={() => setYtAudience('made_for_kids')}
-                      className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${
-                        ytAudience === 'made_for_kids' ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-300' : 'border-white/10 text-white/50 hover:bg-white/[0.04]'
-                      }`}>
-                      {isAr ? 'للأطفال' : 'For kids'}
-                    </button>
-                  </div>
-
-                  {/* Publish button */}
-                  <button type="button"
-                    disabled={ytUploading || !ytTitle.trim()}
-                    onClick={async () => {
-                      if (!connection.connected) { await connectYouTube(); return; }
-                      if (ytUploading) return;
-                      setYtUploading(true);
-                      try {
-                        const result = await uploadToYouTube({
-                          fileUrl: renderedVideoUrl!,
-                          title: ytTitle.trim(),
-                          description: ytDescription.trim() ? `${ytDescription.trim()}\n\nGenerated by Wakti AI` : 'Generated by Wakti AI',
-                          tags: [],
-                          privacy: 'public',
-                          isShort: false,
-                          audience: ytAudience,
-                        });
-                        setYtUrl(result.videoUrl);
-                        setYtDone(true);
-                        toast.success(isAr ? 'تم النشر على يوتيوب!' : 'Published to YouTube!');
-                        onClose();
-                      } catch (err: unknown) {
-                        toast.error(err instanceof Error ? err.message : (isAr ? 'فشل النشر' : 'Publish failed'));
-                      } finally {
-                        setYtUploading(false);
-                      }
-                    }}
-                    className="w-full py-3 rounded-2xl font-bold text-sm bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-[0_4px_20px_rgba(239,68,68,0.35)] active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2">
-                    {ytUploading ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" />{isAr ? 'جاري الرفع...' : 'Uploading...'}</>
-                    ) : connection.connecting ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" />{isAr ? 'جاري الربط...' : 'Connecting...'}</>
-                    ) : !connection.connected ? (
-                      <><Youtube className="h-4 w-4" />{isAr ? 'ربط يوتيوب أولاً' : 'Connect YouTube first'}</>
-                    ) : (
-                      <><Youtube className="h-4 w-4" />{isAr ? 'نشر على يوتيوب' : 'Publish to YouTube'}</>
-                    )}
-                  </button>
-                </div>
-              )}
+              <YouTubePublishBar
+                fileUrl={renderedVideoUrl}
+                title={track.title || (isAr ? 'مقطع موسيقي من وقتي' : 'Music track from Wakti')}
+                description={track.prompt || ''}
+                isShort={false}
+                language={language}
+                onPublished={() => { onClose(); }}
+              />
             </div>
           )}
         </div>
