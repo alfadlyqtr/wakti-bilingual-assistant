@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
-import { openInSafari, isNativelyApp } from '@/integrations/natively/browserBridge';
+import { toast } from 'sonner';
 
 const GOOGLE_CLIENT_ID = '255003091302-ll68065ch6fc94nkpbvd4kskq6ltl7g5.apps.googleusercontent.com';
 const YT_SCOPE = 'https://www.googleapis.com/auth/youtube.upload';
@@ -77,12 +77,14 @@ export function useYouTubeConnection() {
 
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 
-    if (isNativelyApp()) {
-      // x-safari-https:// is an iOS URL scheme that bypasses ALL WebView/in-app browser
-      // restrictions and hands the URL directly to system Safari.
-      // Natively's openExternalURL opens its own browser component which Google also blocks.
-      window.location.href = authUrl.replace('https://', 'x-safari-https://');
+    // Natively docs: window.natively.openExternalURL(url, true) opens system Safari
+    // This is REQUIRED for Google OAuth which blocks WebViews and in-app browsers
+    const natively = (window as any).natively;
+    if (natively && typeof natively.openExternalURL === 'function') {
+      toast.info('[DEBUG] Opening via natively.openExternalURL(url, true)');
+      natively.openExternalURL(authUrl, true);
     } else {
+      toast.info('[DEBUG] No natively SDK, using location.href');
       window.location.href = authUrl;
     }
   }, []);
