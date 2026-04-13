@@ -78,7 +78,10 @@ export function useYouTubeConnection() {
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 
     if (isNativelyApp()) {
-      openInSafari(authUrl);
+      // x-safari-https:// is an iOS URL scheme that bypasses ALL WebView/in-app browser
+      // restrictions and hands the URL directly to system Safari.
+      // Natively's openExternalURL opens its own browser component which Google also blocks.
+      window.location.href = authUrl.replace('https://', 'x-safari-https://');
     } else {
       window.location.href = authUrl;
     }
