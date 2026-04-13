@@ -165,6 +165,9 @@ const handleDownload = async (url: string, filename: string) => {
   signedUrl?: string | null;
   thumbnailSignedUrl?: string | null;
   source?: 'user' | 'ai';
+  youtube_video_id?: string | null;
+  youtube_video_url?: string | null;
+  youtube_published_at?: string | null;
  }
 
  function VideoPlayer({ url, storagePath, language }: { url: string; storagePath?: string | null; language: string }) {
@@ -326,7 +329,7 @@ function VideoThumbnail({ fallbackDuration }: {
     try {
       const { data, error } = await (supabase as any)
         .from('user_videos')
-        .select('id, title, thumbnail_url, storage_path, duration_seconds, is_public, created_at, video_url')
+        .select('id, title, thumbnail_url, storage_path, duration_seconds, is_public, created_at, video_url, youtube_video_id, youtube_video_url, youtube_published_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -374,6 +377,9 @@ function VideoThumbnail({ fallbackDuration }: {
         signedUrl: v.video_url || null,
         thumbnailSignedUrl: v.source_image_url || null,
         source: 'ai',
+        youtube_video_id: null,
+        youtube_video_url: null,
+        youtube_published_at: null,
       }));
 
       const merged = [...withUrls, ...aiVideos].sort(
@@ -737,6 +743,22 @@ function VideoThumbnail({ fallbackDuration }: {
                         description=""
                         isShort={false}
                         language={language}
+                        initialYoutubeUrl={v.youtube_video_url || null}
+                        onPublished={async (result) => {
+                          if (!user || v.source !== 'user') return;
+                          const payload = {
+                            youtube_video_id: result.videoId,
+                            youtube_video_url: result.videoUrl,
+                            youtube_published_at: new Date().toISOString(),
+                          };
+                          const { error } = await (supabase as any)
+                            .from('user_videos')
+                            .update(payload)
+                            .eq('id', v.id)
+                            .eq('user_id', user.id);
+                          if (error) throw error;
+                          setSavedVideos((prev) => prev.map((x) => (x.id === v.id ? { ...x, ...payload } : x)));
+                        }}
                       />
                     )}
                   </div>
@@ -4854,6 +4876,9 @@ function EditorTab() {
     video_url: string | null;
     created_at: string;
     kie_poster_task_id: string | null;
+    youtube_video_id?: string | null;
+    youtube_video_url?: string | null;
+    youtube_published_at?: string | null;
   };
   const [posters, setPosters] = useState<MusicPoster[]>([]);
   const [postersLoading, setPostersLoading] = useState(false);
@@ -5908,6 +5933,22 @@ function EditorTab() {
                             description={linkedTrack?.prompt || ''}
                             isShort={false}
                             language={language}
+                            initialYoutubeUrl={poster.youtube_video_url || null}
+                            onPublished={async (result) => {
+                              if (!user) return;
+                              const payload = {
+                                youtube_video_id: result.videoId,
+                                youtube_video_url: result.videoUrl,
+                                youtube_published_at: new Date().toISOString(),
+                              };
+                              const { error } = await (supabase as any)
+                                .from('user_music_posters')
+                                .update(payload)
+                                .eq('id', poster.id)
+                                .eq('user_id', user.id);
+                              if (error) throw error;
+                              setPosters((prev) => prev.map((x) => (x.id === poster.id ? { ...x, ...payload } : x)));
+                            }}
                           />
                         </div>
                       </div>

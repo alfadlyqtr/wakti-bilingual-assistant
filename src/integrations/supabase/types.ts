@@ -4961,6 +4961,9 @@ export type Database = {
           track_id: string
           user_id: string
           video_url: string | null
+          youtube_published_at: string | null
+          youtube_video_id: string | null
+          youtube_video_url: string | null
         }
         Insert: {
           author?: string | null
@@ -4974,6 +4977,9 @@ export type Database = {
           track_id: string
           user_id: string
           video_url?: string | null
+          youtube_published_at?: string | null
+          youtube_video_id?: string | null
+          youtube_video_url?: string | null
         }
         Update: {
           author?: string | null
@@ -4987,6 +4993,9 @@ export type Database = {
           track_id?: string
           user_id?: string
           video_url?: string | null
+          youtube_published_at?: string | null
+          youtube_video_id?: string | null
+          youtube_video_url?: string | null
         }
         Relationships: [
           {
@@ -5354,6 +5363,9 @@ export type Database = {
           user_id: string
           video_url: string | null
           view_count: number | null
+          youtube_published_at: string | null
+          youtube_video_id: string | null
+          youtube_video_url: string | null
         }
         Insert: {
           aspect_ratio?: string | null
@@ -5374,6 +5386,9 @@ export type Database = {
           user_id: string
           video_url?: string | null
           view_count?: number | null
+          youtube_published_at?: string | null
+          youtube_video_id?: string | null
+          youtube_video_url?: string | null
         }
         Update: {
           aspect_ratio?: string | null
@@ -5394,6 +5409,9 @@ export type Database = {
           user_id?: string
           video_url?: string | null
           view_count?: number | null
+          youtube_published_at?: string | null
+          youtube_video_id?: string | null
+          youtube_video_url?: string | null
         }
         Relationships: []
       }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Loader2, Youtube, CheckCircle2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { useYouTubeConnection } from '@/hooks/useYouTubeConnection';
@@ -14,6 +14,8 @@ type Props = {
   tags?: string[];
   isShort?: boolean;
   language?: string;
+  initialYoutubeUrl?: string | null;
+  onPublished?: (result: { videoId: string; videoUrl: string }) => void | Promise<void>;
 };
 
 export default function YouTubePublishBar({
@@ -23,15 +25,22 @@ export default function YouTubePublishBar({
   tags = [],
   isShort = false,
   language = 'en',
+  initialYoutubeUrl = null,
+  onPublished,
 }: Props) {
   const isAr = language === 'ar';
   const { connection, connectYouTube, uploadToYouTube } = useYouTubeConnection();
-  const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
-  const [ytUrl, setYtUrl] = useState<string | null>(null);
+  const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'error'>(initialYoutubeUrl ? 'done' : 'idle');
+  const [ytUrl, setYtUrl] = useState<string | null>(initialYoutubeUrl);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState(title);
   const [draftDescription, setDraftDescription] = useState('');
   const [audience, setAudience] = useState<'made_for_kids' | 'not_made_for_kids'>('not_made_for_kids');
+
+  useEffect(() => {
+    setYtUrl(initialYoutubeUrl);
+    setUploadState(initialYoutubeUrl ? 'done' : 'idle');
+  }, [initialYoutubeUrl]);
 
   const handlePublish = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -73,6 +82,7 @@ export default function YouTubePublishBar({
         isShort: true,
         audience,
       });
+      await onPublished?.(result);
       setYtUrl(result.videoUrl);
       setUploadState('done');
       setIsDialogOpen(false);

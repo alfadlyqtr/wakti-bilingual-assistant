@@ -344,7 +344,7 @@ serve(async (req) => {
       if (reqUrl.searchParams.get("list") === "1") {
         const { data, error } = await db
           .from("user_music_posters")
-          .select("id, track_id, author, status, video_url, created_at, kie_poster_task_id")
+          .select("id, track_id, author, status, video_url, created_at, kie_poster_task_id, youtube_video_id, youtube_video_url, youtube_published_at")
           .eq("user_id", user.id).order("created_at", { ascending: false }).limit(50);
         if (error) throw error;
         return json({ posters: data ?? [] });
