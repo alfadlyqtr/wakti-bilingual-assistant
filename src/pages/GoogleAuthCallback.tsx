@@ -15,8 +15,8 @@ export default function GoogleAuthCallback() {
     didRun.current = true;
 
     const run = async () => {
-      const ytCode = searchParams.get('yt_code');
-      const ytError = searchParams.get('yt_error');
+      const ytCode = searchParams.get('yt_code') || searchParams.get('code');
+      const ytError = searchParams.get('yt_error') || searchParams.get('error');
       const state = searchParams.get('state');
 
       let redirectAfter = '/studio';
