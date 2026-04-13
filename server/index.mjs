@@ -4,10 +4,12 @@ import https from 'https';
 import http from 'http';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { createWriteStream, mkdirSync, unlinkSync, existsSync } from 'fs';
+import { createWriteStream, mkdirSync, unlinkSync, existsSync, readFileSync } from 'fs';
+import { mkdir, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import Anthropic from '@anthropic-ai/sdk';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 const execFileAsync = promisify(execFile);
 
@@ -291,7 +293,88 @@ app.post('/api/cinema/stitch', async (req, res) => {
   }
 });
 
+// ── Music Track → MP4: loop cover image + merge MP3 audio ──
+app.post('/api/music/to-mp4', async (req, res) => {
+  const workDir = join(tmpdir(), `music_mp4_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+
+  try {
+    const { audio_url, cover_url, track_id, user_id, visualizer } = req.body || {};
+
+    if (!audio_url || !cover_url || !user_id) {
+      return res.status(400).json({ error: 'audio_url, cover_url, user_id required' });
+    }
+
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return res.status(500).json({ error: 'Supabase env vars not configured' });
+    }
+
+    await mkdir(workDir, { recursive: true });
+
+    const coverPath = join(workDir, 'cover.jpg');
+    const audioPath = join(workDir, 'audio.mp3');
+    const outputPath = join(workDir, 'output.mp4');
+
+    console.log('[music/to-mp4] Downloading cover...');
+    await downloadFile(cover_url, coverPath);
+    console.log('[music/to-mp4] Downloading audio...');
+    await downloadFile(audio_url, audioPath);
+
+    // Build ffmpeg args
+    // -loop 1: loop the still image; -shortest: stop when audio ends
+    const vfFilter = visualizer
+      ? 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,zoompan=z=\'min(zoom+0.0004,1.12)\':x=\'iw/2-(iw/zoom/2)\':y=\'ih/2-(ih/zoom/2)\':d=10000:s=1280x720:fps=25,format=yuv420p'
+      : 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p';
+
+    const ffmpegArgs = [
+      '-loop', '1',
+      '-i', coverPath,
+      '-i', audioPath,
+      '-vf', vfFilter,
+      '-c:v', 'libx264',
+      '-preset', 'fast',
+      '-crf', '22',
+      '-c:a', 'aac',
+      '-b:a', '192k',
+      '-shortest',
+      '-movflags', '+faststart',
+      '-y',
+      outputPath,
+    ];
+
+    console.log('[music/to-mp4] Running FFmpeg...');
+    await execFileAsync('ffmpeg', ffmpegArgs, { maxBuffer: 500 * 1024 * 1024 });
+    console.log('[music/to-mp4] FFmpeg done, uploading to storage...');
+
+    const mp4Buffer = readFileSync(outputPath);
+    const fileName = `music-videos/${user_id}/${track_id || Date.now()}.mp4`;
+
+    const supabase = createSupabaseClient(supabaseUrl, supabaseServiceKey);
+    const { error: uploadErr } = await supabase.storage
+      .from('videos')
+      .upload(fileName, mp4Buffer, { contentType: 'video/mp4', upsert: true });
+
+    if (uploadErr) {
+      console.error('[music/to-mp4] Storage upload error:', uploadErr);
+      return res.status(500).json({ error: 'Storage upload failed', details: uploadErr.message });
+    }
+
+    const { data: pubData } = supabase.storage.from('videos').getPublicUrl(fileName);
+    const videoUrl = pubData?.publicUrl || null;
+
+    console.log('[music/to-mp4] Done:', videoUrl);
+    res.json({ success: true, video_url: videoUrl, storage_path: fileName });
+
+  } catch (err) {
+    console.error('[music/to-mp4] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err?.message || 'mp4_error' });
+  } finally {
+    try { await rm(workDir, { recursive: true, force: true }); } catch {}
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => { console.log(`Vision proxy listening on http://localhost:${PORT}`); });
-// Allow long-running requests (cinema stitch can take several minutes)
+// Allow long-running requests (cinema stitch / music mp4 can take several minutes)
 server.setTimeout(10 * 60 * 1000);

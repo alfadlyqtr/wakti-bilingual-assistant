@@ -21,6 +21,7 @@ import {
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useYouTubeConnection } from '@/hooks/useYouTubeConnection';
 import { toast } from 'sonner';
 import { createPortal } from 'react-dom';
 import { AudioPlayer } from '@/components/music/AudioPlayer';
@@ -66,6 +67,8 @@ import {
   Radio,
   RotateCcw,
   RotateCw,
+  Youtube,
+  ImagePlus,
 } from 'lucide-react';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import StudioImageGenerator from '@/components/studio/StudioImageGenerator';
@@ -3295,7 +3298,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         model: 'V5',
         duration_seconds: durationTarget,
         styleWeight: 0.8,
-        weirdnessConstraint: 0.3,
+        weirdnessConstraint: 0.35,
         audioWeight: 0.7,
       };
 
@@ -4837,6 +4840,480 @@ function PlaylistPlayer({ playlist, tracks, isAr, onClose }: {
   );
 }
 
+// ─── MusicTrackYouTubeDialog ────────────────────────────────────────────────────
+function MusicTrackYouTubeDialog({
+  track,
+  language,
+  onClose,
+}: {
+  track: { id: string; title: string | null; prompt: string | null; cover_url: string | null; play_url?: string | null; storage_path: string | null };
+  language: string;
+  onClose: () => void;
+}) {
+  const isAr = language === 'ar';
+  const { user } = useAuth();
+  const SUPABASE_URL_LOCAL = (import.meta as any).env?.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co';
+  const { connection, connectYouTube, uploadToYouTube } = useYouTubeConnection();
+
+  type CoverMode = 'default' | 'upload' | 'saved';
+  type Stage = 'pick' | 'rendering' | 'publish';
+
+  const [stage, setStage] = useState<Stage>('pick');
+  const [coverMode, setCoverMode] = useState<CoverMode>('default');
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [uploadedImagePreview, setUploadedImagePreview] = useState<string | null>(null);
+  const [savedImages, setSavedImages] = useState<Array<{ id: string; image_url: string }>>([]);
+  const [savedImagesLoading, setSavedImagesLoading] = useState(false);
+  const [savedImagesOpen, setSavedImagesOpen] = useState(false);
+  const [selectedSavedImageUrl, setSelectedSavedImageUrl] = useState<string | null>(null);
+  const [visualizerOn, setVisualizerOn] = useState(false);
+  const [renderedVideoUrl, setRenderedVideoUrl] = useState<string | null>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
+  const [renderProgress, setRenderProgress] = useState(0);
+  const [ytTitle, setYtTitle] = useState('');
+  const [ytDescription, setYtDescription] = useState('');
+  const [ytAudience, setYtAudience] = useState<'not_made_for_kids' | 'made_for_kids'>('not_made_for_kids');
+  const [ytUploading, setYtUploading] = useState(false);
+  const [ytDone, setYtDone] = useState(false);
+  const [ytUrl, setYtUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const effectiveCover =
+    coverMode === 'upload' ? uploadedImageUrl :
+    coverMode === 'saved' ? selectedSavedImageUrl :
+    track.cover_url;
+
+  const previewCoverSrc =
+    coverMode === 'upload' ? (uploadedImagePreview || uploadedImageUrl) :
+    coverMode === 'saved' ? selectedSavedImageUrl :
+    track.cover_url;
+
+  const getAudioUrl = () => {
+    if (track.play_url) return track.play_url;
+    if (track.storage_path) {
+      const base = SUPABASE_URL_LOCAL.replace(/\/$/, '');
+      const path = track.storage_path.startsWith('/') ? track.storage_path.slice(1) : track.storage_path;
+      return `${base}/storage/v1/object/public/music/${path}`;
+    }
+    return null;
+  };
+
+  const loadSavedImages = async () => {
+    if (!user) return;
+    setSavedImagesLoading(true);
+    try {
+      const { data } = await (supabase as any)
+        .from('user_generated_images')
+        .select('id, image_url')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      setSavedImages(data || []);
+    } catch { /* ignore */ } finally {
+      setSavedImagesLoading(false);
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error(isAr ? 'الصورة أكبر من 10MB' : 'Image must be under 10MB');
+      return;
+    }
+    setUploadedImagePreview(URL.createObjectURL(file));
+    try {
+      const ext = file.name.split('.').pop() || 'jpg';
+      const path = `yt-covers/${user.id}/${track.id}-${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from('images').upload(path, file, { contentType: file.type, upsert: true });
+      if (uploadErr) throw uploadErr;
+      const { data: pub } = supabase.storage.from('images').getPublicUrl(path);
+      setUploadedImageUrl(pub?.publicUrl || null);
+      setCoverMode('upload');
+    } catch {
+      toast.error(isAr ? 'فشل رفع الصورة' : 'Image upload failed');
+      setUploadedImagePreview(null);
+    }
+  };
+
+  const handleRender = async () => {
+    const audioUrl = getAudioUrl();
+    if (!audioUrl) { toast.error(isAr ? 'ملف الصوت غير متاح' : 'Audio file not available'); return; }
+    if (!effectiveCover) { toast.error(isAr ? 'يرجى اختيار صورة أولاً' : 'Please choose a cover image first'); return; }
+    if (!user) { toast.error(isAr ? 'يجب تسجيل الدخول أولاً' : 'Please log in first'); return; }
+
+    setStage('rendering');
+    setRenderError(null);
+    setRenderProgress(0);
+
+    try {
+      // Load the cover image
+      const img = await new Promise<HTMLImageElement>((res, rej) => {
+        const i = new Image();
+        i.crossOrigin = 'anonymous';
+        i.onload = () => res(i);
+        i.onerror = rej;
+        i.src = effectiveCover!;
+      });
+
+      // Load the audio
+      const audioCtx = new AudioContext();
+      const audioResp = await fetch(audioUrl);
+      const audioArrayBuffer = await audioResp.arrayBuffer();
+      const audioBuffer = await audioCtx.decodeAudioData(audioArrayBuffer);
+      const durationSec = audioBuffer.duration;
+
+      setRenderProgress(10);
+
+      // Set up canvas 1280×720
+      const canvas = document.createElement('canvas');
+      canvas.width = 1280;
+      canvas.height = 720;
+      const ctx = canvas.getContext('2d')!;
+
+      // Draw cover image centered/fitted with black bars
+      const scale = Math.min(1280 / img.width, 720 / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      const x = (1280 - w) / 2;
+      const y = (720 - h) / 2;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, 1280, 720);
+      ctx.drawImage(img, x, y, w, h);
+
+      // Canvas video stream
+      const videoStream = (canvas as any).captureStream(25) as MediaStream;
+
+      // Audio stream via Web Audio → MediaStreamDestination
+      const dest = audioCtx.createMediaStreamDestination();
+      const src = audioCtx.createBufferSource();
+      src.buffer = audioBuffer;
+      src.connect(dest);
+
+      // Combine streams
+      const combined = new MediaStream([
+        ...videoStream.getVideoTracks(),
+        ...dest.stream.getAudioTracks(),
+      ]);
+
+      // Pick best supported video format
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+        ? 'video/webm;codecs=vp9,opus'
+        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+          ? 'video/webm;codecs=vp8,opus'
+          : 'video/webm';
+
+      const recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 2_500_000 });
+      const chunks: BlobPart[] = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+      setRenderProgress(15);
+
+      // Start recording
+      recorder.start(500);
+      src.start(0);
+
+      // Progress ticker
+      const startTime = Date.now();
+      const ticker = setInterval(() => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        const pct = Math.min(95, 15 + (elapsed / durationSec) * 80);
+        setRenderProgress(Math.round(pct));
+      }, 500);
+
+      // Wait for audio to finish
+      await new Promise<void>((res) => { src.onended = () => res(); });
+
+      clearInterval(ticker);
+      recorder.stop();
+      await audioCtx.close();
+
+      setRenderProgress(97);
+
+      // Collect blob
+      const videoBlob = await new Promise<Blob>((res) => {
+        recorder.onstop = () => res(new Blob(chunks, { type: mimeType }));
+      });
+
+      setRenderProgress(98);
+
+      // Upload to Supabase videos bucket
+      const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+      const fileName = `music-videos/${user.id}/${track.id}-${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from('videos').upload(fileName, videoBlob, {
+        contentType: mimeType.split(';')[0],
+        upsert: true,
+      });
+      if (uploadErr) throw uploadErr;
+
+      const { data: pubData } = supabase.storage.from('videos').getPublicUrl(fileName);
+      const videoUrl = pubData?.publicUrl || null;
+      if (!videoUrl) throw new Error(isAr ? 'لم يتم إنشاء الفيديو' : 'Video was not created');
+
+      setRenderProgress(100);
+      setRenderedVideoUrl(videoUrl);
+      setYtTitle(track.title || (isAr ? 'مقطع موسيقي من وقتي' : 'Music track from Wakti'));
+      setYtDescription(track.prompt || '');
+      setStage('publish');
+    } catch (err: unknown) {
+      setRenderError(err instanceof Error ? err.message : (isAr ? 'فشل تحويل الصوت لفيديو' : 'Failed to convert audio to video'));
+      setStage('pick');
+    }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 w-full sm:max-w-md bg-[#0c0f14] border border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-full bg-red-500/15 border border-red-400/30 flex items-center justify-center">
+              <Youtube className="h-3.5 w-3.5 text-red-400" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">
+                {stage === 'publish' ? (isAr ? 'نشر على يوتيوب' : 'Publish to YouTube') : (isAr ? 'نشر الأغنية على يوتيوب' : 'Publish Song to YouTube')}
+              </p>
+              {stage === 'pick' && <p className="text-[11px] text-white/50 mt-0.5">{isAr ? 'اختر غلافاً ثم اضغط تحويل' : 'Choose a cover then tap Render'}</p>}
+            </div>
+          </div>
+          <button type="button" onClick={onClose} aria-label={isAr ? 'إغلاق' : 'Close'} className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-3 max-h-[82vh] overflow-y-auto">
+          {stage === 'pick' && (
+            <>
+              {/* Cover preview */}
+              <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/[0.07]">
+                <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-white/10 border border-white/10">
+                  {previewCoverSrc
+                    ? <img src={previewCoverSrc} alt="" className="w-full h-full object-cover" />
+                    : <div className="w-full h-full flex items-center justify-center"><Music className="h-5 w-5 text-white/30" /></div>}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-white truncate">{track.title || (isAr ? 'مقطع موسيقي' : 'Music Track')}</p>
+                  <p className="text-[11px] text-white/40 mt-0.5">{isAr ? 'فيديو 16:9 على يوتيوب' : '16:9 YouTube video'}</p>
+                </div>
+              </div>
+
+              <p className="text-[11px] font-semibold text-white/50 uppercase tracking-wider">{isAr ? 'صورة الغلاف' : 'Cover Image'}</p>
+
+              {/* Option 1: Default cover */}
+              <button type="button" onClick={() => { setCoverMode('default'); setSavedImagesOpen(false); }}
+                className={`w-full flex items-center gap-3 p-3 rounded-2xl border transition-all active:scale-[0.98] ${coverMode === 'default' ? 'border-sky-400/50 bg-sky-500/10' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'}`}>
+                <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 bg-white/10 border border-white/10">
+                  {track.cover_url ? <img src={track.cover_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Music className="h-4 w-4 text-white/30" /></div>}
+                </div>
+                <div className="flex-1 text-left min-w-0">
+                  <p className="text-sm font-semibold text-white">{isAr ? 'غلاف الأغنية الافتراضي' : 'Default song cover'}</p>
+                  <p className="text-[11px] text-white/45 mt-0.5">{isAr ? 'الغلاف المحفوظ مع المقطع' : 'Cover saved with this track'}</p>
+                </div>
+                {coverMode === 'default' && <CheckCircle2 className="h-4 w-4 text-sky-400 flex-shrink-0" />}
+              </button>
+
+              {/* Option 2: Upload */}
+              <button type="button" onClick={() => { fileInputRef.current?.click(); setSavedImagesOpen(false); }}
+                className={`w-full flex items-center gap-3 p-3 rounded-2xl border transition-all active:scale-[0.98] ${coverMode === 'upload' ? 'border-sky-400/50 bg-sky-500/10' : 'border-dashed border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'}`}>
+                {uploadedImagePreview || uploadedImageUrl
+                  ? <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 border border-white/10"><img src={uploadedImagePreview || uploadedImageUrl || ''} alt="" className="w-full h-full object-cover" /></div>
+                  : <div className="w-11 h-11 rounded-xl flex-shrink-0 bg-white/[0.04] border border-white/10 flex items-center justify-center"><ImagePlus className="h-4 w-4 text-white/30" /></div>}
+                <div className="flex-1 text-left min-w-0">
+                  <p className="text-sm font-semibold text-white">{isAr ? 'رفع صورة من جهازك' : 'Upload from device'}</p>
+                  <p className="text-[11px] text-white/45 mt-0.5">JPG, PNG — {isAr ? 'حتى 10MB' : 'up to 10MB'}</p>
+                </div>
+                {coverMode === 'upload' && uploadedImageUrl && <CheckCircle2 className="h-4 w-4 text-sky-400 flex-shrink-0" />}
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                aria-label={isAr ? 'رفع صورة مخصصة' : 'Upload custom cover image'} onChange={handleImageUpload} />
+
+              {/* Option 3: Saved images */}
+              <div>
+                <button type="button"
+                  onClick={() => { setSavedImagesOpen(v => !v); if (!savedImagesOpen && savedImages.length === 0) loadSavedImages(); }}
+                  className={`w-full flex items-center gap-3 p-3 rounded-2xl border transition-all active:scale-[0.98] ${coverMode === 'saved' ? 'border-sky-400/50 bg-sky-500/10' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'}`}>
+                  {coverMode === 'saved' && selectedSavedImageUrl
+                    ? <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 border border-white/10"><img src={selectedSavedImageUrl} alt="" className="w-full h-full object-cover" /></div>
+                    : <div className="w-11 h-11 rounded-xl flex-shrink-0 bg-white/[0.04] border border-white/10 flex items-center justify-center"><ImageIcon className="h-4 w-4 text-white/30" /></div>}
+                  <div className="flex-1 text-left min-w-0">
+                    <p className="text-sm font-semibold text-white">{isAr ? 'من الصور المحفوظة' : 'Pick from saved images'}</p>
+                    <p className="text-[11px] text-white/45 mt-0.5">{isAr ? 'صورك المحفوظة في وقتي' : 'Your images saved in Wakti'}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {coverMode === 'saved' && selectedSavedImageUrl && <CheckCircle2 className="h-4 w-4 text-sky-400" />}
+                    <ChevronDown className={`h-3.5 w-3.5 text-white/40 transition-transform ${savedImagesOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                </button>
+                {savedImagesOpen && (
+                  <div className="mt-1.5 p-2 rounded-2xl border border-white/10 bg-white/[0.02]">
+                    {savedImagesLoading
+                      ? <div className="py-5 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-white/40" /></div>
+                      : savedImages.length === 0
+                        ? <p className="py-4 text-center text-xs text-white/40">{isAr ? 'لا توجد صور محفوظة' : 'No saved images'}</p>
+                        : <div className="grid grid-cols-4 gap-1.5 max-h-44 overflow-y-auto">
+                            {savedImages.map((img) => (
+                              <button key={img.id} type="button"
+                                aria-label={isAr ? 'اختر هذه الصورة' : 'Select this image'}
+                                onClick={() => { setSelectedSavedImageUrl(img.image_url); setCoverMode('saved'); setSavedImagesOpen(false); }}
+                                className={`aspect-square rounded-xl overflow-hidden border-2 transition-all active:scale-95 ${selectedSavedImageUrl === img.image_url && coverMode === 'saved' ? 'border-sky-400' : 'border-transparent hover:border-white/30'}`}>
+                                <img src={img.image_url} alt="" className="w-full h-full object-cover" />
+                              </button>
+                            ))}
+                          </div>}
+                  </div>
+                )}
+              </div>
+
+              {/* Visualizer toggle */}
+              <div className="flex items-center justify-between px-4 py-3 rounded-2xl border border-white/10 bg-white/[0.03]">
+                <div>
+                  <p className="text-sm font-semibold text-white">{isAr ? 'تأثير مرئي' : 'Visualizer effect'}</p>
+                  <p className="text-[11px] text-white/45 mt-0.5">
+                    {visualizerOn ? (isAr ? 'تكبير بطيء خفيف' : 'Subtle slow zoom') : (isAr ? 'صورة ثابتة — أسرع' : 'Static — faster render')}
+                  </p>
+                </div>
+                <button type="button" role="switch" aria-checked={visualizerOn}
+                  aria-label={isAr ? 'تفعيل التأثير المرئي' : 'Toggle visualizer effect'}
+                  onClick={() => setVisualizerOn(v => !v)}
+                  className={`relative w-11 h-6 rounded-full border transition-all flex-shrink-0 ${visualizerOn ? 'bg-sky-500 border-sky-400' : 'bg-white/10 border-white/20'}`}>
+                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${visualizerOn ? 'left-5' : 'left-0.5'}`} />
+                </button>
+              </div>
+
+              {renderError && <p className="text-xs text-red-400 text-center px-2">{renderError}</p>}
+
+              <button type="button" onClick={handleRender} disabled={!effectiveCover}
+                className="w-full py-3 rounded-2xl font-bold text-sm bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-[0_4px_20px_rgba(239,68,68,0.35)] hover:shadow-[0_4px_28px_rgba(239,68,68,0.5)] active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none">
+                {isAr ? 'تحويل وإعداد الفيديو' : 'Render Video'}
+              </button>
+            </>
+          )}
+
+          {stage === 'rendering' && (
+            <div className="py-10 flex flex-col items-center gap-5">
+              <div className="relative">
+                <div className="w-16 h-16 rounded-full border-2 border-red-400/30 border-t-red-400 animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center"><Youtube className="h-6 w-6 text-red-400" /></div>
+              </div>
+              <p className="text-sm font-semibold text-white">{isAr ? 'جاري تحويل الأغنية إلى فيديو...' : 'Converting your song into a video...'}</p>
+              <div className="w-full px-2 space-y-1.5">
+                <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-red-500 to-rose-400 rounded-full transition-all duration-500"
+                    style={{ width: `${renderProgress}%` }}
+                  />
+                </div>
+                <p className="text-xs text-white/40 text-center">{renderProgress}%</p>
+              </div>
+            </div>
+          )}
+
+          {stage === 'publish' && renderedVideoUrl && (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 flex items-center gap-2.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                <p className="text-xs text-emerald-300">{isAr ? 'تم تحويل الأغنية إلى فيديو بنجاح' : 'Song successfully rendered as video'}</p>
+              </div>
+
+              {ytDone && ytUrl ? (
+                <button type="button" onClick={() => window.open(ytUrl, '_blank')}
+                  className="w-full py-2.5 rounded-2xl text-sm font-bold border border-emerald-400/30 bg-emerald-500/10 text-emerald-300 flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
+                  <CheckCircle2 className="h-4 w-4" />
+                  {isAr ? 'تم النشر — اضغط للمشاهدة' : 'Published — tap to view'}
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  {/* Title */}
+                  <div className="space-y-1">
+                    <p className="text-xs text-white/60">{isAr ? 'العنوان' : 'Title'}</p>
+                    <input
+                      type="text"
+                      value={ytTitle}
+                      onChange={(e) => setYtTitle(e.target.value)}
+                      placeholder={isAr ? 'عنوان الفيديو' : 'Video title'}
+                      className="w-full px-3 py-2 rounded-xl bg-white/[0.05] border border-white/10 text-white text-sm placeholder:text-white/30 outline-none focus:border-sky-400/40"
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div className="space-y-1">
+                    <p className="text-xs text-white/60">{isAr ? 'الوصف (اختياري)' : 'Description (optional)'}</p>
+                    <textarea
+                      value={ytDescription}
+                      onChange={(e) => setYtDescription(e.target.value.slice(0, 1000))}
+                      placeholder={isAr ? 'وصف قصير...' : 'Short description...'}
+                      rows={2}
+                      className="w-full px-3 py-2 rounded-xl bg-white/[0.05] border border-white/10 text-white text-sm placeholder:text-white/30 outline-none focus:border-sky-400/40 resize-none"
+                    />
+                  </div>
+
+                  {/* Audience */}
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setYtAudience('not_made_for_kids')}
+                      className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${
+                        ytAudience === 'not_made_for_kids' ? 'border-sky-400/40 bg-sky-500/10 text-sky-300' : 'border-white/10 text-white/50 hover:bg-white/[0.04]'
+                      }`}>
+                      {isAr ? 'عام' : 'General'}
+                    </button>
+                    <button type="button" onClick={() => setYtAudience('made_for_kids')}
+                      className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${
+                        ytAudience === 'made_for_kids' ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-300' : 'border-white/10 text-white/50 hover:bg-white/[0.04]'
+                      }`}>
+                      {isAr ? 'للأطفال' : 'For kids'}
+                    </button>
+                  </div>
+
+                  {/* Publish button */}
+                  <button type="button"
+                    disabled={ytUploading || !ytTitle.trim()}
+                    onClick={async () => {
+                      if (!connection.connected) { await connectYouTube(); return; }
+                      if (ytUploading) return;
+                      setYtUploading(true);
+                      try {
+                        const result = await uploadToYouTube({
+                          fileUrl: renderedVideoUrl!,
+                          title: ytTitle.trim(),
+                          description: ytDescription.trim() ? `${ytDescription.trim()}\n\nGenerated by Wakti AI` : 'Generated by Wakti AI',
+                          tags: [],
+                          privacy: 'public',
+                          isShort: false,
+                          audience: ytAudience,
+                        });
+                        setYtUrl(result.videoUrl);
+                        setYtDone(true);
+                        toast.success(isAr ? 'تم النشر على يوتيوب!' : 'Published to YouTube!');
+                        onClose();
+                      } catch (err: unknown) {
+                        toast.error(err instanceof Error ? err.message : (isAr ? 'فشل النشر' : 'Publish failed'));
+                      } finally {
+                        setYtUploading(false);
+                      }
+                    }}
+                    className="w-full py-3 rounded-2xl font-bold text-sm bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-[0_4px_20px_rgba(239,68,68,0.35)] active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2">
+                    {ytUploading ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" />{isAr ? 'جاري الرفع...' : 'Uploading...'}</>
+                    ) : connection.connecting ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" />{isAr ? 'جاري الربط...' : 'Connecting...'}</>
+                    ) : !connection.connected ? (
+                      <><Youtube className="h-4 w-4" />{isAr ? 'ربط يوتيوب أولاً' : 'Connect YouTube first'}</>
+                    ) : (
+                      <><Youtube className="h-4 w-4" />{isAr ? 'نشر على يوتيوب' : 'Publish to YouTube'}</>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ─── EditorTab ─────────────────────────────────────────────────────────────────
 function EditorTab() {
   const { language } = useTheme();
@@ -4866,6 +5343,7 @@ function EditorTab() {
   const stepLyricsLineRef = useRef<(trackId: string, lineCount: number, dir: 1 | -1) => void>(() => {});
   const [shareTrackTarget, setShareTrackTarget] = useState<{ id: string; title: string; coverUrl: string | null } | null>(null);
   const [deleteTrackTarget, setDeleteTrackTarget] = useState<{ id: string; storagePath: string | null } | null>(null);
+  const [trackYouTubeTarget, setTrackYouTubeTarget] = useState<SavedTrack | null>(null);
 
   // ── Poster & Captions
   type MusicPoster = {
@@ -5538,6 +6016,15 @@ function EditorTab() {
                                 year: 'numeric',
                               })}
                             </p>
+                            {(styleTags.length > 0 || metaTags) && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {(metaTags ? [metaTags] : styleTags).slice(0, 2).map((tag, i) => (
+                                  <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-[#f7f8fc] dark:bg-white/[0.06] text-muted-foreground/80 dark:text-muted-foreground/70 border border-[#e4e7ef] dark:border-white/[0.06] whitespace-nowrap">
+                                    {typeof tag === 'string' ? tag.slice(0, 20) : tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             <button
@@ -5580,7 +6067,7 @@ function EditorTab() {
                             }
                           }}
                         />
-                        {/* Background play activator + style chip inline */}
+                        {/* Background play activator + YouTube inline */}
                         <div className="flex items-center gap-2 flex-wrap">
                           <button
                             type="button"
@@ -5614,12 +6101,15 @@ function EditorTab() {
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                             )}
                           </button>
-                          {(styleTags.length > 0 || metaTags) && (
-                            (metaTags ? [metaTags] : styleTags).slice(0, 2).map((tag, i) => (
-                              <span key={i} className="text-[10px] px-2 py-1 rounded-xl bg-[#f7f8fc] dark:bg-white/[0.06] text-muted-foreground/80 dark:text-muted-foreground/70 border border-[#e4e7ef] dark:border-white/[0.06] whitespace-nowrap">
-                                {typeof tag === 'string' ? tag.slice(0, 20) : tag}
-                              </span>
-                            ))
+                          {t.play_url && (
+                            <button
+                              type="button"
+                              onClick={() => setTrackYouTubeTarget(t)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all active:scale-95 border border-red-400/25 dark:border-red-400/20 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20"
+                            >
+                              <Youtube className="h-3.5 w-3.5" />
+                              <span>{isAr ? 'نشر على يوتيوب' : 'Publish to YouTube'}</span>
+                            </button>
                           )}
                         </div>
                         {hasLyrics && (
@@ -5793,6 +6283,14 @@ function EditorTab() {
         onClose={() => setShareTrackTarget(null)}
         onSent={() => setShareTrackTarget(null)}
       />
+
+      {trackYouTubeTarget && (
+        <MusicTrackYouTubeDialog
+          track={trackYouTubeTarget}
+          language={language}
+          onClose={() => setTrackYouTubeTarget(null)}
+        />
+      )}
 
       {/* ══ POSTER & CAPTIONS TAB ══════════════════════════════════════════════ */}
       {savedSubTab === 'posters' && (
