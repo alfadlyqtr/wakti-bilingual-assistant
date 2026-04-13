@@ -94,69 +94,25 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
   const hasArabic = (s: string) => /[\u0600-\u06FF]/.test(s || '');
 
-  // ─── EXIF orientation reader (raw bytes) ───
-  const readExifOrientation = (buffer: ArrayBuffer): number => {
-    try {
-      const view = new DataView(buffer);
-      // Must start with JPEG SOI marker
-      if (view.byteLength < 4 || view.getUint16(0, false) !== 0xFFD8) return 1;
-      let offset = 2;
-      while (offset + 4 <= view.byteLength) {
-        const marker = view.getUint16(offset, false);
-        const segLen = view.getUint16(offset + 2, false);
-        if (marker === 0xFFE1) {
-          // APP1 — check for Exif header "Exif\0\0"
-          if (offset + 10 > view.byteLength) break;
-          const exifHeader = view.getUint32(offset + 4, false);
-          if (exifHeader !== 0x45786966) { offset += 2 + segLen; continue; } // not "Exif"
-          const tiffBase = offset + 10; // after "Exif\0\0"
-          if (tiffBase + 8 > view.byteLength) break;
-          const littleEndian = view.getUint16(tiffBase, false) === 0x4949;
-          const ifdOffset = view.getUint32(tiffBase + 4, littleEndian);
-          const ifdAbs = tiffBase + ifdOffset;
-          if (ifdAbs + 2 > view.byteLength) break;
-          const numTags = view.getUint16(ifdAbs, littleEndian);
-          for (let i = 0; i < numTags; i++) {
-            const tagOff = ifdAbs + 2 + i * 12;
-            if (tagOff + 12 > view.byteLength) break;
-            if (view.getUint16(tagOff, littleEndian) === 0x0112) {
-              return view.getUint16(tagOff + 8, littleEndian);
-            }
-          }
-          return 1;
-        }
-        if ((marker & 0xFF00) !== 0xFF00) break;
-        offset += 2 + segLen;
-      }
-    } catch { /* ignore */ }
-    return 1;
-  };
-
   // ─── EXIF-aware orientation normalizer ───
+  // Uses createImageBitmap() which auto-applies EXIF orientation (handles iPhone HEIC→JPEG,
+  // Android camera photos, all orientations). Falls back to raw base64 if unsupported.
   const normalizeImageOrientation = async (file: File): Promise<string> => {
-    const isJpeg = file.type === 'image/jpeg' || file.type === 'image/jpg'
-      || /\.(jpe?g)$/i.test(file.name);
     const mimeOut = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
     const q = mimeOut === 'image/jpeg' ? 0.92 : undefined;
 
-    // Read EXIF orientation from raw bytes (only meaningful for JPEG)
-    let orientation = 1;
-    if (isJpeg) {
-      try {
-        const buf = typeof file.arrayBuffer === 'function'
-          ? await file.arrayBuffer()
-          : await new Promise<ArrayBuffer>((res, rej) => {
-              const fr = new FileReader();
-              fr.onload = () => res(fr.result as ArrayBuffer);
-              fr.onerror = rej;
-              fr.readAsArrayBuffer(file);
-            });
-        orientation = readExifOrientation(buf);
-      } catch { orientation = 1; }
-    }
-
-    // If no rotation needed, return plain base64
-    if (orientation === 1) {
+    try {
+      // createImageBitmap with imageOrientation:'from-image' applies EXIF rotation natively
+      const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      return canvas.toDataURL(mimeOut, q);
+    } catch {
+      // Fallback: raw base64 (orientation may be wrong on very old browsers)
       return new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
@@ -164,42 +120,6 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         reader.readAsDataURL(file);
       });
     }
-
-    // Rotation needed — decode image then redraw rotated on canvas
-    const objectUrl = URL.createObjectURL(file);
-    return new Promise<string>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        URL.revokeObjectURL(objectUrl);
-        const swap = orientation >= 5 && orientation <= 8;
-        const w = swap ? img.height : img.width;
-        const h = swap ? img.width : img.height;
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d')!;
-        switch (orientation) {
-          case 2: ctx.transform(-1, 0, 0, 1, img.width, 0); break;
-          case 3: ctx.transform(-1, 0, 0, -1, img.width, img.height); break;
-          case 4: ctx.transform(1, 0, 0, -1, 0, img.height); break;
-          case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;
-          case 6: ctx.transform(0, 1, -1, 0, img.height, 0); break;
-          case 7: ctx.transform(0, -1, -1, 0, img.height, img.width); break;
-          case 8: ctx.transform(0, -1, 1, 0, 0, img.width); break;
-        }
-        ctx.drawImage(img, 0, 0);
-        resolve(canvas.toDataURL(mimeOut, q));
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        // Last-resort fallback — raw base64 (display CSS will handle orientation)
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      };
-      img.src = objectUrl;
-    });
   };
 
   // ─── File upload handler ───
