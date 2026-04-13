@@ -130,6 +130,7 @@ export function useYouTubeConnection() {
     tags = [] as string[],
     privacy = 'public',
     isShort = false,
+    audience = 'not_made_for_kids',
   }: {
     fileUrl: string;
     title: string;
@@ -137,6 +138,7 @@ export function useYouTubeConnection() {
     tags?: string[];
     privacy?: 'public' | 'private' | 'unlisted';
     isShort?: boolean;
+    audience?: 'made_for_kids' | 'not_made_for_kids';
   }): Promise<{ videoId: string; videoUrl: string }> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('Not authenticated');
@@ -155,6 +157,7 @@ export function useYouTubeConnection() {
         tags,
         privacy,
         is_short: isShort,
+        audience,
       }),
     });
 

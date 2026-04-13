@@ -134,6 +134,7 @@ async function initiateResumableUpload(
     description: string;
     tags: string[];
     privacy: string;
+    madeForKids: boolean;
   },
   contentType: string,
   contentLength: number
@@ -147,7 +148,7 @@ async function initiateResumableUpload(
     },
     status: {
       privacyStatus: metadata.privacy,
-      selfDeclaredMadeForKids: false,
+      selfDeclaredMadeForKids: metadata.madeForKids,
     },
   });
 
@@ -220,6 +221,7 @@ Deno.serve(async (req: Request) => {
       tags = [],
       privacy = "public",
       is_short = false,
+      audience = "not_made_for_kids",
     } = body;
 
     if (!file_url) return jsonResponse({ error: "Missing file_url" }, 400);
@@ -228,6 +230,11 @@ Deno.serve(async (req: Request) => {
     const validPrivacy = ["public", "private", "unlisted"];
     if (!validPrivacy.includes(privacy)) {
       return jsonResponse({ error: "Invalid privacy value. Must be public, private, or unlisted." }, 400);
+    }
+
+    const validAudience = ["made_for_kids", "not_made_for_kids"];
+    if (!validAudience.includes(audience)) {
+      return jsonResponse({ error: "Invalid audience value. Must be made_for_kids or not_made_for_kids." }, 400);
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -260,7 +267,13 @@ Deno.serve(async (req: Request) => {
     // Step 1: Initiate resumable upload session
     const uploadUrl = await initiateResumableUpload(
       accessToken,
-      { title: finalTitle, description: finalDescription, tags, privacy },
+      {
+        title: finalTitle,
+        description: finalDescription,
+        tags,
+        privacy,
+        madeForKids: audience === "made_for_kids",
+      },
       contentType,
       contentLength
     );

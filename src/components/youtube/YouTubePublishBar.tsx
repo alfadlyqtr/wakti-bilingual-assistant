@@ -28,10 +28,10 @@ export default function YouTubePublishBar({
   const { connection, connectYouTube, uploadToYouTube } = useYouTubeConnection();
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
   const [ytUrl, setYtUrl] = useState<string | null>(null);
-  const [publishType, setPublishType] = useState<'short' | 'video'>(isShort ? 'short' : 'video');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState(title);
   const [draftDescription, setDraftDescription] = useState('');
+  const [audience, setAudience] = useState<'made_for_kids' | 'not_made_for_kids'>('not_made_for_kids');
 
   const handlePublish = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -70,7 +70,8 @@ export default function YouTubePublishBar({
         description: finalDescription,
         tags,
         privacy: 'public',
-        isShort: publishType === 'short',
+        isShort: true,
+        audience,
       });
       setYtUrl(result.videoUrl);
       setUploadState('done');
@@ -148,11 +149,15 @@ export default function YouTubePublishBar({
           <DialogHeader>
             <DialogTitle>{isAr ? 'النشر على يوتيوب' : 'Publish to YouTube'}</DialogTitle>
             <DialogDescription>
-              {isAr ? 'أدخل العنوان والوصف ثم اختر شورت أو فيديو.' : 'Enter the title and description, then choose Short or Video.'}
+              {isAr ? 'أدخل العنوان والوصف ثم حدد جمهور الفيديو.' : 'Enter the title and description, then choose the video audience.'}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
+            <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              {isAr ? 'سيتم رفع هذا الملصق كـ YouTube Short لأنه فيديو بوستر عمودي، لكنه لا يزال فيديو على يوتيوب.' : 'This poster will upload as a YouTube Short because it is a vertical poster video, but it is still a YouTube video.'}
+            </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium text-white/90">
                 {isAr ? 'العنوان' : 'Title'}
@@ -182,26 +187,26 @@ export default function YouTubePublishBar({
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-white/90">
-                {isAr ? 'نوع النشر' : 'Publish type'}
+                {isAr ? 'الجمهور' : 'Audience'}
               </label>
-              <div className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.04] p-1">
+              <div className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.04] p-1 flex-wrap gap-1">
                 <button
                   type="button"
-                  onClick={() => setPublishType('short')}
-                  className={publishType === 'short'
-                    ? 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/20 text-red-300'
-                    : 'px-3 py-1.5 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground'}
-                >
-                  {isAr ? 'شورت' : 'Short'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPublishType('video')}
-                  className={publishType === 'video'
+                  onClick={() => setAudience('not_made_for_kids')}
+                  className={audience === 'not_made_for_kids'
                     ? 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/20 text-blue-300'
                     : 'px-3 py-1.5 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground'}
                 >
-                  {isAr ? 'فيديو' : 'Video'}
+                  {isAr ? 'ليس مخصصًا للأطفال' : 'Not made for kids'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAudience('made_for_kids')}
+                  className={audience === 'made_for_kids'
+                    ? 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/20 text-emerald-300'
+                    : 'px-3 py-1.5 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground'}
+                >
+                  {isAr ? 'مخصص للأطفال' : 'Made for kids'}
                 </button>
               </div>
             </div>
@@ -222,9 +227,7 @@ export default function YouTubePublishBar({
               disabled={false}
               className="bg-gradient-to-r from-red-500 to-pink-500 text-white hover:opacity-90"
             >
-              {publishType === 'short'
-                ? (isAr ? 'نشر كشورت' : 'Publish as Short')
-                : (isAr ? 'نشر كفيديو' : 'Publish as Video')}
+              {isAr ? 'نشر على يوتيوب' : 'Publish to YouTube'}
             </Button>
           </DialogFooter>
         </DialogContent>
