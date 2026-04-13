@@ -25,9 +25,10 @@ export default function YouTubePublishBar({
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
   const [ytUrl, setYtUrl] = useState<string | null>(null);
 
-  const handlePublish = async () => {
+  const handlePublish = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!connection.connected) {
-      connectYouTube();
+      await connectYouTube();
       return;
     }
     if (uploadState === 'done' && ytUrl) {
@@ -84,6 +85,15 @@ export default function YouTubePublishBar({
       <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-red-400/20 bg-red-500/10 text-red-400 opacity-70">
         <Loader2 className="h-3 w-3 animate-spin" />
         {isAr ? 'جاري الرفع إلى يوتيوب...' : 'Uploading to YouTube...'}
+      </div>
+    );
+  }
+
+  if (connection.connecting) {
+    return (
+      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-red-400/20 bg-red-500/10 text-red-400 opacity-70">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        {isAr ? 'جاري الفتح...' : 'Opening...'}
       </div>
     );
   }

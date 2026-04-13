@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { isNativelyApp } from '@/integrations/natively/browserBridge';
 
 const GOOGLE_CLIENT_ID = '255003091302-ll68065ch6fc94nkpbvd4kskq6ltl7g5.apps.googleusercontent.com';
 const YT_SCOPE = 'https://www.googleapis.com/auth/youtube.upload';
@@ -8,6 +9,7 @@ const YT_SCOPE = 'https://www.googleapis.com/auth/youtube.upload';
 export type YouTubeConnectionState = {
   connected: boolean;
   loading: boolean;
+  connecting: boolean;
   channelTitle: string | null;
   channelThumbnail: string | null;
 };
@@ -18,6 +20,7 @@ export function useYouTubeConnection() {
   const [connection, setConnection] = useState<YouTubeConnectionState>({
     connected: false,
     loading: true,
+    connecting: false,
     channelTitle: null,
     channelThumbnail: null,
   });
@@ -27,7 +30,7 @@ export function useYouTubeConnection() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        setConnection({ connected: false, loading: false, channelTitle: null, channelThumbnail: null });
+        setConnection({ connected: false, loading: false, connecting: false, channelTitle: null, channelThumbnail: null });
         return;
       }
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/youtube-oauth-callback`, {
@@ -43,11 +46,12 @@ export function useYouTubeConnection() {
       setConnection({
         connected: !!json.connected,
         loading: false,
+        connecting: false,
         channelTitle: json.channel_title || null,
         channelThumbnail: json.channel_thumbnail || null,
       });
     } catch {
-      setConnection({ connected: false, loading: false, channelTitle: null, channelThumbnail: null });
+      setConnection({ connected: false, loading: false, connecting: false, channelTitle: null, channelThumbnail: null });
     }
   }, []);
 
@@ -56,36 +60,49 @@ export function useYouTubeConnection() {
   }, [checkConnection]);
 
   const connectYouTube = useCallback(async () => {
-    const origin = window.location.origin;
-    const redirectUri = `${origin}/auth/google/callback`;
-    const { data: { session } } = await supabase.auth.getSession();
-    const state = btoa(JSON.stringify({
-      origin,
-      redirect_after: window.location.pathname,
-      access_token: session?.access_token ?? null,
-    }));
+    setConnection(prev => ({ ...prev, connecting: true }));
+    try {
+      const origin = window.location.origin;
+      const redirectUri = `${origin}/auth/google/callback`;
+      const { data: { session } } = await supabase.auth.getSession();
 
-    const params = new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      redirect_uri: redirectUri,
-      response_type: 'code',
-      scope: YT_SCOPE,
-      access_type: 'offline',
-      prompt: 'consent',
-      state,
-    });
+      if (!session) {
+        toast.error('Please log in first');
+        setConnection(prev => ({ ...prev, connecting: false }));
+        return;
+      }
 
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+      const state = btoa(JSON.stringify({
+        origin,
+        redirect_after: window.location.pathname,
+        access_token: session.access_token,
+      }));
 
-    // Natively docs: window.natively.openExternalURL(url, true) opens system Safari
-    // This is REQUIRED for Google OAuth which blocks WebViews and in-app browsers
-    const natively = (window as any).natively;
-    if (natively && typeof natively.openExternalURL === 'function') {
-      toast.info('[DEBUG] Opening via natively.openExternalURL(url, true)');
-      natively.openExternalURL(authUrl, true);
-    } else {
-      toast.info('[DEBUG] No natively SDK, using location.href');
-      window.location.href = authUrl;
+      const params = new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: YT_SCOPE,
+        access_type: 'offline',
+        prompt: 'consent',
+        state,
+      });
+
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+
+      const natively = (window as any).natively;
+      if (isNativelyApp() && natively && typeof natively.openExternalURL === 'function') {
+        // Enable debug temporarily so we see an alert if the native app version is too old
+        natively.setDebug(true);
+        natively.openExternalURL(authUrl, true);
+        natively.setDebug(false);
+      } else {
+        window.location.href = authUrl;
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to start YouTube connection';
+      toast.error(msg);
+      setConnection(prev => ({ ...prev, connecting: false }));
     }
   }, []);
 
@@ -102,7 +119,7 @@ export function useYouTubeConnection() {
         },
         body: JSON.stringify({ action: 'disconnect' }),
       });
-      setConnection({ connected: false, loading: false, channelTitle: null, channelThumbnail: null });
+      setConnection({ connected: false, loading: false, connecting: false, channelTitle: null, channelThumbnail: null });
     } catch { /* ignore */ }
   }, []);
 
