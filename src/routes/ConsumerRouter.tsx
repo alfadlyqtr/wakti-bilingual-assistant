@@ -1,5 +1,6 @@
-import { lazy, Suspense } from "react";
+import React, { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
+import { AppShellSkeleton } from "@/components/ui/AppShellSkeleton";
 import { AppLayout } from "@/components/AppLayout";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
 import { MusicShareNotificationProvider } from "@/components/notifications/MusicShareNotificationProvider";
@@ -78,15 +79,42 @@ const ContactGallery = lazy(() => import("@/pages/ContactGallery"));
 
 function PageFallback() {
   return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <div className="flex items-center justify-center min-h-[30vh]">
+      <div className="w-5 h-5 border-2 border-primary/40 border-t-primary rounded-full animate-spin" />
     </div>
   );
 }
 
+function usePrefetchCriticalPages() {
+  React.useEffect(() => {
+    const id = window.requestIdleCallback
+      ? window.requestIdleCallback(() => {
+          import("@/pages/Dashboard");
+          import("@/pages/TasksReminders");
+          import("@/pages/Calendar");
+          import("@/pages/Contacts");
+          import("@/pages/WaktiAIV2");
+          import("@/pages/Tasjeel");
+        }, { timeout: 4000 })
+      : window.setTimeout(() => {
+          import("@/pages/Dashboard");
+          import("@/pages/TasksReminders");
+          import("@/pages/Calendar");
+          import("@/pages/Contacts");
+          import("@/pages/WaktiAIV2");
+          import("@/pages/Tasjeel");
+        }, 3000);
+    return () => {
+      if (window.cancelIdleCallback) window.cancelIdleCallback(id as number);
+      else window.clearTimeout(id as number);
+    };
+  }, []);
+}
+
 export default function ConsumerRouter() {
+  usePrefetchCriticalPages();
   return (
-    <Suspense fallback={<PageFallback />}>
+    <Suspense fallback={<AppShellSkeleton />}>
       <Routes>
         {/* ── Public / Auth ─────────────────────────────────────────────── */}
         <Route path="/" element={<RootHandler />} />

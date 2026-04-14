@@ -4966,15 +4966,12 @@ function MusicTrackYouTubeDialog({
       canvas.height = 720;
       const ctx = canvas.getContext('2d')!;
 
-      // Draw cover image centered/fitted with black bars
+      // Pre-compute cover image layout
       const scale = Math.min(1280 / img.width, 720 / img.height);
       const w = img.width * scale;
       const h = img.height * scale;
       const x = (1280 - w) / 2;
       const y = (720 - h) / 2;
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, 1280, 720);
-      ctx.drawImage(img, x, y, w, h);
 
       // Canvas video stream
       const videoStream = (canvas as any).captureStream(25) as MediaStream;
@@ -4983,7 +4980,105 @@ function MusicTrackYouTubeDialog({
       const dest = audioCtx.createMediaStreamDestination();
       const src = audioCtx.createBufferSource();
       src.buffer = audioBuffer;
-      src.connect(dest);
+
+      // Analyser for visualizer (only wired when visualizerOn)
+      let analyser: AnalyserNode | null = null;
+      let timeData: Uint8Array | null = null;
+      if (visualizerOn) {
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = 0.85;
+        timeData = new Uint8Array(analyser.fftSize);
+        src.connect(analyser);
+        analyser.connect(dest);
+      } else {
+        src.connect(dest);
+      }
+
+      // Animation loop — redraws every frame so MediaRecorder captures motion
+      let rafId = 0;
+      const drawFrame = () => {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, 1280, 720);
+        ctx.drawImage(img, x, y, w, h);
+
+        if (visualizerOn && analyser && timeData) {
+          analyser.getByteTimeDomainData(timeData);
+
+          const baseY = 620;
+          const waveHeight = 78;
+          const pointCount = 180;
+          const slice = Math.max(1, Math.floor(timeData.length / pointCount));
+
+          ctx.save();
+
+          const glowGradient = ctx.createLinearGradient(0, baseY - waveHeight, 0, baseY + waveHeight);
+          glowGradient.addColorStop(0, 'hsla(190, 85%, 70%, 0.18)');
+          glowGradient.addColorStop(1, 'hsla(280, 80%, 65%, 0.06)');
+
+          ctx.beginPath();
+          ctx.moveTo(0, baseY);
+          for (let i = 0; i < pointCount; i++) {
+            const sample = timeData[Math.min(timeData.length - 1, i * slice)];
+            const normalized = (sample - 128) / 128;
+            const px = (i / (pointCount - 1)) * 1280;
+            const py = baseY + normalized * waveHeight;
+            ctx.lineTo(px, py);
+          }
+          ctx.lineTo(1280, 720);
+          ctx.lineTo(0, 720);
+          ctx.closePath();
+          ctx.fillStyle = glowGradient;
+          ctx.fill();
+
+          ctx.beginPath();
+          for (let i = 0; i < pointCount; i++) {
+            const sample = timeData[Math.min(timeData.length - 1, i * slice)];
+            const normalized = (sample - 128) / 128;
+            const px = (i / (pointCount - 1)) * 1280;
+            const py = baseY + normalized * waveHeight;
+            if (i === 0) {
+              ctx.moveTo(px, py);
+            } else {
+              ctx.lineTo(px, py);
+            }
+          }
+
+          const strokeGradient = ctx.createLinearGradient(0, baseY - waveHeight, 1280, baseY + waveHeight);
+          strokeGradient.addColorStop(0, 'hsla(185, 100%, 78%, 0.95)');
+          strokeGradient.addColorStop(0.5, 'hsla(210, 100%, 72%, 1)');
+          strokeGradient.addColorStop(1, 'hsla(280, 85%, 72%, 0.95)');
+          ctx.strokeStyle = strokeGradient;
+          ctx.lineWidth = 5;
+          ctx.lineJoin = 'round';
+          ctx.lineCap = 'round';
+          ctx.shadowColor = 'hsla(210, 100%, 70%, 0.7)';
+          ctx.shadowBlur = 18;
+          ctx.stroke();
+
+          ctx.beginPath();
+          for (let i = 0; i < pointCount; i++) {
+            const sample = timeData[Math.min(timeData.length - 1, i * slice)];
+            const normalized = (sample - 128) / 128;
+            const px = (i / (pointCount - 1)) * 1280;
+            const py = baseY + normalized * waveHeight;
+            if (i === 0) {
+              ctx.moveTo(px, py);
+            } else {
+              ctx.lineTo(px, py);
+            }
+          }
+          ctx.strokeStyle = 'hsla(0, 0%, 100%, 0.9)';
+          ctx.lineWidth = 1.6;
+          ctx.shadowBlur = 0;
+          ctx.stroke();
+
+          ctx.restore();
+        }
+
+        rafId = requestAnimationFrame(drawFrame);
+      };
+      drawFrame();
 
       // Combine streams
       const combined = new MediaStream([
@@ -5020,6 +5115,7 @@ function MusicTrackYouTubeDialog({
       await new Promise<void>((res) => { src.onended = () => res(); });
 
       clearInterval(ticker);
+      cancelAnimationFrame(rafId);
       recorder.stop();
       await audioCtx.close();
 

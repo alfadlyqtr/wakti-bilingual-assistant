@@ -458,6 +458,13 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     } catch {}
   }
 
+  // ── PASSPORT CHECK ─────────────────────────────────────────────────────
+  // If the passport is already stamped, trust it unconditionally.
+  // No redirect to login, no session re-check, no paywall. Walk through.
+  if (accessStampRef.current) {
+    effectiveHasSession = true;
+  }
+
   if (!effectiveHasSession && isLoading) {
     if (DEV) {
       const key = location.pathname;
@@ -491,6 +498,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   }
 
   // Proper authentication check - redirect appropriately if not authenticated
+  // NOTE: stamped users never reach this line (effectiveHasSession forced true above)
   if (!effectiveHasSession) {
     if (DEV) console.log("ProtectedRoute: No valid user/session, redirecting to login");
     return <Navigate to="/login" state={{ from: location }} replace />;
@@ -502,8 +510,8 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // STAMP CHECK: If the immigration officer already stamped, let them through.
-  // No subscription check, no profile loading gate, no paywall. Instant.
+  // STAMP CHECK: Stamped users already bypassed the redirect above.
+  // Render children immediately — no subscription/profile/paywall gates.
   // ═══════════════════════════════════════════════════════════════════════
   if (accessStampRef.current) {
     return (
