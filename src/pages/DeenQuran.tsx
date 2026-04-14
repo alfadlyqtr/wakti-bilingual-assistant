@@ -12,7 +12,8 @@ const APP_DEFAULT_RECITER_ID = "maher_al_mueaqly";
 const RECITER_STORAGE_KEY = "deen_selected_reciter_mp3q";
 const QURAN_PROGRESS_STORAGE_KEY = "deen_quran_last_progress";
 const QURAN_BOOKMARKS_STORAGE_KEY = "deen_quran_bookmarks";
-const MP3QURAN_API = "https://www.mp3quran.net/api/v3/reciters?language=eng";
+const MP3QURAN_API_EN = "https://www.mp3quran.net/api/v3/reciters?language=eng";
+const MP3QURAN_API_AR = "https://www.mp3quran.net/api/v3/reciters?language=ar";
 const FALLBACK_RECITERS: ReciterOption[] = [
   { id: "maher_al_mueaqly", labelEn: "Maher Al Muaiqly", labelAr: "ماهر المعيقلي", server: "https://server8.mp3quran.net/mhm/", surahList: new Set(Array.from({length:114},(_,i)=>i+1)) },
   { id: "mishari_rashed_alafasy", labelEn: "Mishary Alafasy", labelAr: "مشاري العفاسي", server: "https://server8.mp3quran.net/afs/", surahList: new Set(Array.from({length:114},(_,i)=>i+1)) },
@@ -233,11 +234,19 @@ export default function DeenQuran() {
     const loadReciters = async () => {
       setRecitersLoading(true);
       try {
-        const res = await fetch(MP3QURAN_API);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json() as { reciters: Mp3QuranReciter[] };
+        const [resEn, resAr] = await Promise.all([
+          fetch(MP3QURAN_API_EN),
+          fetch(MP3QURAN_API_AR),
+        ]);
+        if (!resEn.ok) throw new Error(`HTTP ${resEn.status}`);
+        if (!resAr.ok) throw new Error(`HTTP ${resAr.status}`);
+        const dataEn = await resEn.json() as { reciters: Mp3QuranReciter[] };
+        const dataAr = await resAr.json() as { reciters: Mp3QuranReciter[] };
+        const arabicNameById = new Map(
+          (dataAr.reciters ?? []).map((reciter) => [String(reciter.id), reciter.name])
+        );
         const mapped: ReciterOption[] = [];
-        for (const reciter of (data.reciters ?? [])) {
+        for (const reciter of (dataEn.reciters ?? [])) {
           const moshaf = reciter.moshaf?.find((m) => m.surah_total >= 50) ?? reciter.moshaf?.[0];
           if (!moshaf?.server) continue;
           const surahNums = moshaf.surah_list
@@ -247,7 +256,7 @@ export default function DeenQuran() {
           mapped.push({
             id: String(reciter.id),
             labelEn: reciter.name,
-            labelAr: reciter.name,
+            labelAr: arabicNameById.get(String(reciter.id)) || reciter.name,
             server: moshaf.server,
             surahList: new Set(surahNums),
           });
@@ -467,20 +476,12 @@ export default function DeenQuran() {
         const currentTime = el?.currentTime ?? 0;
         const wasPlaying = el ? !el.paused : false;
         if (currentSrc) {
-          // bgAudio.play() creates its own new Audio() at module scope — survives React unmount
-          bgAudio.play(currentSrc);
-          const bgEl = bgAudio.audio!;
-          // Seek to current position so nothing is restarted
-          if (currentTime > 0) {
-            bgEl.addEventListener("canplay", function seekOnce() {
-              bgEl.currentTime = currentTime;
-              bgEl.removeEventListener("canplay", seekOnce);
-            }, { once: true });
-          }
-          if (!wasPlaying) bgEl.pause();
-          // Point audioRef at bgAudio's element so Deen controls keep working
+          // playFrom creates its own module-level Audio element — survives React unmount
+          bgAudio.playFrom(currentSrc, currentTime, !wasPlaying);
+          // Silence the React-owned element so both don't play at once
           if (el) { el.pause(); el.src = ""; }
-          audioRef.current = bgEl;
+          // Point audioRef at bgAudio's own element so Deen controls keep working
+          audioRef.current = bgAudio.audio!;
         }
         try { sessionStorage.setItem(DEEN_BG_KEY, "1"); } catch {}
       } else {
@@ -951,7 +952,7 @@ export default function DeenQuran() {
       {/* Header */}
       {screen !== "listen-player" && (
         <div className="sticky top-0 z-20 px-4 pt-4 pb-3" style={{ background: headerBg, backdropFilter: "blur(16px)", borderBottom: `1px solid ${cardBorder}` }}>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3" style={{ direction: "ltr" }}>
             <button
               onClick={handleBackNavigation}
               className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 transition-all"
@@ -962,7 +963,7 @@ export default function DeenQuran() {
               }}
               title={isAr ? "رجوع" : "Back"}
             >
-              <ArrowLeft className="w-4 h-4" style={{ color: textPrimary, transform: isAr ? "rotate(180deg)" : undefined }} />
+              <ArrowLeft className="w-4 h-4" style={{ color: textPrimary }} />
             </button>
             <div className="flex-1 min-w-0">
               <h1 className="text-base font-bold truncate" style={{ color: textPrimary }}>{currentTitle}</h1>
@@ -1372,7 +1373,7 @@ export default function DeenQuran() {
             </div>
           ) : activeSurah ? (
             <div className="flex flex-col gap-3">
-              <div className="flex items-stretch gap-3">
+              <div className="flex items-stretch gap-3" style={{ direction: "ltr" }}>
                 <button
                   onClick={handleBackNavigation}
                   className="w-11 rounded-2xl flex items-center justify-center active:scale-95 transition-all flex-shrink-0"
@@ -1383,7 +1384,7 @@ export default function DeenQuran() {
                   }}
                   title={isAr ? "رجوع" : "Back"}
                 >
-                  <ArrowLeft className="w-4 h-4" style={{ color: textPrimary, transform: isAr ? "rotate(180deg)" : undefined }} />
+                  <ArrowLeft className="w-4 h-4" style={{ color: textPrimary }} />
                 </button>
                 <div
                   className="flex-1 rounded-3xl p-5"
