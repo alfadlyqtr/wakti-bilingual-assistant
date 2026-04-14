@@ -744,7 +744,7 @@ function VideoThumbnail({ fallbackDuration }: {
                         fileUrl={v.signedUrl}
                         title={v.title || (language === 'ar' ? 'فيديو من وقتي' : 'Video from Wakti')}
                         description=""
-                        isShort={false}
+                        isShort={true}
                         language={language}
                         initialYoutubeUrl={v.youtube_video_url || null}
                         onPublished={async (result) => {
@@ -6465,7 +6465,7 @@ function EditorTab() {
                             fileUrl={poster.video_url!}
                             title={linkedTrack?.title || (isAr ? 'مقطع موسيقي من وقتي' : 'Music track from Wakti')}
                             description={linkedTrack?.prompt || ''}
-                            isShort={false}
+                            isShort={true}
                             language={language}
                             initialYoutubeUrl={poster.youtube_video_url || null}
                             onPublished={async (result) => {

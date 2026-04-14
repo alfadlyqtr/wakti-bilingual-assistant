@@ -174,7 +174,7 @@ export default function YouTubePublishBar({
         description: finalDescription,
         tags: finalTags,
         privacy: 'public',
-        isShort: true,
+        isShort,
         audience,
       });
       await onPublished?.(result);
