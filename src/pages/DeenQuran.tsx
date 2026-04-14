@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, Play, Pause, Bookmark, BookmarkCheck, BookOpen, MessageCircle, RotateCcw, ChevronRight, ChevronDown, X, Volume2, Clock, Check, ListMusic, Settings2, ListVideo, SkipBack, SkipForward, RotateCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, Search, Play, Pause, Bookmark, BookmarkCheck, BookOpen, MessageCircle, RotateCcw, ChevronRight, ChevronDown, X, Volume2, Clock, Check, ListMusic, Settings2, ListVideo, SkipBack, SkipForward, RotateCw } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -509,8 +509,10 @@ export default function DeenQuran() {
       saveProgress(activeSurah?.number ?? ayah.number, ayah.numberInSurah);
       const ayahIndex = activeSurah?.ayahs.findIndex((item) => item.numberInSurah === ayah.numberInSurah) ?? -1;
 
-      // Fetch per-ayah audio URL from alquran.cloud via proxy using ar.alafasy audio edition
-      const audioData = await fetchFromProxy(`ayah/${ayah.number}`, "ar.alafasy");
+      // Fetch per-ayah audio URL from alquran.cloud via proxy
+      // English mode → en.walk (Ibrahim Walk English recitation), Arabic → ar.alafasy
+      const audioEdition = isAr ? "ar.alafasy" : "en.walk";
+      const audioData = await fetchFromProxy(`ayah/${ayah.number}`, audioEdition);
       const audioUrl: string = audioData?.data?.audio ?? "";
       if (!audioUrl) {
         toast.error(isAr ? "الصوت غير متاح" : "Audio unavailable");
@@ -1666,7 +1668,7 @@ export default function DeenQuran() {
                   </div>
 
                   {/* ── Bismillah ── */}
-                  {activeSurah.number !== 9 && readerPage === 0 && (
+                  {activeSurah.number !== 9 && activeSurah.number !== 1 && readerPage === 0 && (
                     <p className="text-center mb-5" dir="rtl" style={{
                       fontFamily: "'Noto Sans Arabic', serif",
                       fontSize: "19px", lineHeight: "2",
@@ -1677,32 +1679,34 @@ export default function DeenQuran() {
                     </p>
                   )}
 
-                  {/* ── Arabic mode: one flowing Mushaf paragraph ── */}
+                  {/* ── Arabic mode: per-ayah cards (same layout as English) ── */}
                   {isAr ? (
-                    <p className="text-justify" dir="rtl" style={{
-                      fontFamily: "'Noto Sans Arabic', 'Amiri', serif",
-                      fontSize: "21px", lineHeight: "2.5",
-                      color: pageTxt, wordSpacing: "0.06em",
-                    }}>
+                    <div className="flex flex-col" dir="rtl">
                       {activeSurah.ayahs.slice(pageBreaks[readerPage], pageBreaks[readerPage + 1]).map((ayah, idx) => {
                         const globalIdx = pageBreaks[readerPage] + idx;
                         const isPlaying = playing && currentPlaybackAyahIndex === globalIdx;
                         const isBookmarked = bookmarkedAyahs.has(ayah.numberInSurah);
                         return (
-                          <span
+                          <button
                             key={ayah.numberInSurah}
                             onClick={() => { const trans = activeTrans[globalIdx] ?? null; setSelectedAyah(ayah); setSelectedAyahTrans(trans); setShowActionSheet(true); setShowExplanation(true); setExplanation(""); handleExplainForAyah(ayah); if (activeSurah) saveProgress(activeSurah.number, ayah.numberInSurah); }}
-                            className="cursor-pointer"
-                            style={{ color: isPlaying ? gold : pageTxt, textShadow: isPlaying && isDark ? `0 0 12px ${goldGlow}` : "none", borderBottom: isBookmarked ? `1px solid ${goldGlow}` : "none" }}
+                            className="w-full text-right py-3 active:scale-[0.99] transition-all duration-150"
+                            style={{ borderBottom: `1px solid ${goldFaint}` }}
                           >
-                            {ayah.text}
-                            {" "}
-                            <span style={{ color: markerTxt, fontFamily: "'Noto Sans Arabic', serif" }}>{ayahMark(ayah.numberInSurah)}</span>
-                            {" "}
-                          </span>
+                            <p style={{
+                              fontFamily: "'Noto Sans Arabic', 'Amiri', serif",
+                              fontSize: "21px", lineHeight: "2.2",
+                              color: isPlaying ? gold : pageTxt,
+                              textShadow: isPlaying && isDark ? `0 0 12px ${goldGlow}` : "none",
+                              textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
+                            }}>
+                              <span style={{ color: markerTxt, fontFamily: "'Noto Sans Arabic', serif", marginLeft: "0.4em" }}>{ayahMark(ayah.numberInSurah)}</span>
+                              {" "}{ayah.text}
+                            </p>
+                          </button>
                         );
                       })}
-                    </p>
+                    </div>
                   ) : (
                     /* ── English mode: each ayah as its own line ── */
                     <div className="flex flex-col" dir="ltr">
