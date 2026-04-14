@@ -145,7 +145,8 @@ serve(async (req) => {
       if (personaModel) kiePayload.personaModel = personaModel;
     }
 
-    console.log("[music-generate] Calling KIE.ai generate", { model, customMode, instrumental });
+    console.log("[music-generate] Calling KIE.ai generate", { model, customMode, instrumental, styleLen: style.length, negLen: negativeTags.length, promptLen: prompt.length });
+    console.log("[music-generate] KIE payload", JSON.stringify(kiePayload));
 
     const kieResp = await fetch("https://api.kie.ai/api/v1/generate", {
       method: "POST",
@@ -158,6 +159,7 @@ serve(async (req) => {
 
     if (!kieResp.ok) {
       const errText = await kieResp.text();
+      console.error("[music-generate] KIE.ai non-2xx:", kieResp.status, errText);
       throw new Error(`KIE.ai error: ${kieResp.status} ${errText}`);
     }
 

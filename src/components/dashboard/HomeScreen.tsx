@@ -79,6 +79,7 @@ const ALL_APPS = [
   { id: "voice",     nameEn: "Voice",     nameAr: "صوت",      path: "/tools/voice-studio", icon: Mic,             gradient: "from-pink-400 to-pink-600",       glow: "#f472b6" },
   { id: "game",      nameEn: "Game",      nameAr: "لعبة",     path: "/tools/game",         icon: Gamepad2,        gradient: "from-red-500 to-red-700",         glow: "#ef4444" },
   { id: "account",   nameEn: "Account",   nameAr: "حسابي",    path: "/account",            icon: Users,           gradient: "from-slate-500 to-slate-700",     glow: "#94a3b8", isAvatarIcon: true },
+  { id: "deen",      nameEn: "Deen",      nameAr: "دين",      path: "/deen",               icon: BookOpen,        gradient: "from-sky-500 to-indigo-600",      glow: "#38bdf8" },
 ];
 
 const DEFAULT_ORDER = ALL_APPS.map(a => a.id);

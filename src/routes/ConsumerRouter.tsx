@@ -76,6 +76,11 @@ const InstagramConnectCallback = lazy(() => import("@/pages/InstagramConnectCall
 const GoogleAuthCallback = lazy(() => import("@/pages/GoogleAuthCallback"));
 const MyWishlists = lazy(() => import("@/pages/MyWishlists"));
 const ContactGallery = lazy(() => import("@/pages/ContactGallery"));
+const Deen = lazy(() => import("@/pages/Deen"));
+const DeenQuran = lazy(() => import("@/pages/DeenQuran"));
+const DeenHadith = lazy(() => import("@/pages/DeenHadith"));
+const DeenAsk = lazy(() => import("@/pages/DeenAsk"));
+const DeenStudy = lazy(() => import("@/pages/DeenStudy"));
 
 function PageFallback() {
   return (
@@ -201,6 +206,11 @@ export default function ConsumerRouter() {
           <Route path="/whoop/callback" element={<FitnessWhoopCallback />} />
           <Route path="/wishlists" element={<MyWishlists />} />
           <Route path="/gallery/:userId" element={<ContactGallery />} />
+          <Route path="/deen" element={<Deen />} />
+          <Route path="/deen/quran" element={<DeenQuran />} />
+          <Route path="/deen/hadith" element={<DeenHadith />} />
+          <Route path="/deen/ask" element={<DeenAsk />} />
+          <Route path="/deen/study" element={<DeenStudy />} />
         </Route>
 
         {/* ── Preview & slug routes ──────────────────────────────────────── */}

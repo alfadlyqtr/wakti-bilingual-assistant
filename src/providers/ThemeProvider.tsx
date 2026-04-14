@@ -29,7 +29,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     try {
       const stored = localStorage.getItem("theme") as Theme | null;
       if (stored === "dark" || stored === "light") return stored;
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "dark";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     } catch { return "dark"; }
   });
   const [language, setLanguage] = useState<Language>(() => {

@@ -322,6 +322,8 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   };
   const bgRewind = (e: React.MouseEvent) => { e.stopPropagation(); const a = bgAudio.audio; if (a) a.currentTime = Math.max(0, a.currentTime - 10); };
   const bgForward = (e: React.MouseEvent) => { e.stopPropagation(); const a = bgAudio.audio; if (a) a.currentTime = Math.min(a.duration || 0, a.currentTime + 10); };
+  const bgPrev = (e: React.MouseEvent) => { e.stopPropagation(); if (bgIsPlaylist) bgAudio.prev(); };
+  const bgNext = (e: React.MouseEvent) => { e.stopPropagation(); if (bgIsPlaylist) bgAudio.next(); };
   const bgCycleLoop = (e: React.MouseEvent) => {
     e.stopPropagation();
     const next = bgLoopMode === 'none' ? 'one' : bgLoopMode === 'one' ? 'all' : 'none';
@@ -496,7 +498,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
                     className="h-9 w-9 rounded-xl flex items-center justify-center transition-all active:scale-90"
                     style={{
                       background: 'linear-gradient(135deg, rgba(16,185,129,0.85) 0%, rgba(5,150,105,0.95) 100%)',
-                      boxShadow: '0 0 18px rgba(16,185,129,0.55), inset 0 1px 0 rgba(255,255,255,0.28)',
+                      boxShadow: '0 4px 18px rgba(16,185,129,0.30), inset 0 1px 0 rgba(255,255,255,0.18)'
                     }}>
                     {bgIsPlaying
                       ? <Pause className="h-4 w-4 fill-current text-white" />
@@ -512,22 +514,26 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
                     className="h-8 w-8 rounded-xl flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all active:scale-90">
                     <RotateCw className="h-3.5 w-3.5" />
                   </button>
-                  {/* Prev — playlist only */}
-                  {bgIsPlaylist && (
-                    <button type="button" onClick={(e) => { e.stopPropagation(); bgAudio.prev(); }} aria-label="Previous track"
-                      className="h-8 w-8 rounded-xl flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all active:scale-90">
-                      <SkipForward className="h-3.5 w-3.5 rotate-180" />
-                    </button>
-                  )}
-                  {/* Next — playlist only */}
-                  {bgIsPlaylist && (
-                    <button type="button" onClick={(e) => { e.stopPropagation(); bgAudio.next(); }} aria-label="Next track"
-                      className="h-8 w-8 rounded-xl flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all active:scale-90">
-                      <SkipForward className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                  {/* Divider */}
-                  <div className="h-px w-5 bg-white/15 my-0.5" />
+                  {/* Previous */}
+                  <button
+                    type="button"
+                    onClick={bgPrev}
+                    aria-label="Previous track"
+                    disabled={!bgIsPlaylist}
+                    className="h-8 w-8 rounded-xl flex items-center justify-center transition-all active:scale-90 disabled:opacity-35 disabled:cursor-not-allowed text-white/60 hover:text-white hover:bg-white/10"
+                  >
+                    <SkipForward className="h-3.5 w-3.5 rotate-180" />
+                  </button>
+                  {/* Next */}
+                  <button
+                    type="button"
+                    onClick={bgNext}
+                    aria-label="Next track"
+                    disabled={!bgIsPlaylist}
+                    className="h-8 w-8 rounded-xl flex items-center justify-center transition-all active:scale-90 disabled:opacity-35 disabled:cursor-not-allowed text-white/60 hover:text-white hover:bg-white/10"
+                  >
+                    <SkipForward className="h-3.5 w-3.5" />
+                  </button>
                   {/* Loop */}
                   <button type="button" onClick={bgCycleLoop} aria-label="Loop mode"
                     className="h-8 w-8 rounded-xl flex items-center justify-center transition-all active:scale-90 relative"

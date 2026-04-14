@@ -85,6 +85,32 @@ export const bgAudio = {
   },
 
   /**
+   * Single-track mode starting from a specific time.
+   * Always creates a fresh module-level Audio element (never uses a React-owned one).
+   * Safe to call when transferring from a React component that is about to unmount.
+   */
+  playFrom(src: string, startTime = 0, paused = false) {
+    _plUrls = [];
+    _plIdx = 0;
+    _plLoop = 'none';
+    _onTrackChange = null;
+    // Always create a fresh element owned by this module
+    if (_audio) { _audio.pause(); _audio.removeEventListener('ended', _onEndedHandler); _audio.src = ''; }
+    _audio = new Audio(src);
+    _audio.loop = true;
+    _src = src;
+    if (startTime > 0) {
+      const seek = () => {
+        if (_audio) { _audio.currentTime = startTime; }
+        _audio?.removeEventListener('loadedmetadata', seek);
+      };
+      _audio.addEventListener('loadedmetadata', seek);
+    }
+    if (!paused) _audio.play().catch(() => {});
+    emitEvent('wakti-bg-music-indicator-on');
+  },
+
+  /**
    * Playlist mode: store the full URL list and start playing from startIdx.
    * Track advancement happens entirely in _onEndedHandler — no React needed.
    */

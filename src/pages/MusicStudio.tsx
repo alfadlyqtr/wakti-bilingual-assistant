@@ -2967,45 +2967,48 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   // Build style string from chips + styleText
   // Narrow pronunciation-only negatives — blocks Arabic dialect drift, English stays allowed
+  const GCC_DIALECT_BLOCK = 'egyptian arabic pronunciation, levantine arabic pronunciation, iraqi arabic pronunciation, moroccan arabic pronunciation, fusha pronunciation';
+  const GCC_DIALECT_BLOCK_AR = 'نطق مصري، نطق شامي، نطق عراقي، نطق مغربي، نطق فصيح';
+
   const GCC_PRONUNCIATION_NEGATIVES: Record<string, string> = {
     'English GCC Pop': '', 'إنجليزي بطابع خليجي': '',
-    'GCC Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'GCC Rap': 'egyptian arabic pronunciation, levantine arabic pronunciation, ballad, orchestral pop, wedding chant, traditional folk lead, soft romantic pop',
-    'Khaleeji Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'GCC Romantic': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'GCC Elegant': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'GCC Party': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'GCC Wedding': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'GCC Radio Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'GCC Dance Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'GCC Electro Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'GCC Synth Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'Modern Khaleeji Fusion': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'GCC R&B Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'Luxury GCC Pop': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'Cinematic GCC': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'GCC Anthem': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'National Event GCC': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'GCC Traditional': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'Sheilat': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'Samri': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'Jalsa': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'Liwa': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'GCC Shaabi': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'Zar': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'Ardah': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'Khaleeji Trap': 'egyptian arabic pronunciation, levantine arabic pronunciation',
-    'بوب خليجي': 'نطق مصري، نطق شامي', 'خليجي راب': 'نطق مصري، نطق شامي', 'خليجي عصري': 'نطق مصري، نطق شامي',
-    'خليجي رومانسي': 'نطق مصري، نطق شامي', 'خليجي أنيق': 'نطق مصري، نطق شامي',
-    'خليجي حفلات': 'نطق مصري، نطق شامي', 'خليجي أعراس': 'نطق مصري، نطق شامي',
-    'خليجي إذاعي': 'نطق مصري، نطق شامي', 'خليجي دانس': 'نطق مصري، نطق شامي',
-    'خليجي إلكتروني': 'نطق مصري، نطق شامي', 'خليجي سينث بوب': 'نطق مصري، نطق شامي',
-    'فيوجن خليجي': 'نطق مصري، نطق شامي', 'خليجي آر أند بي': 'نطق مصري، نطق شامي',
-    'خليجي فاخر': 'نطق مصري، نطق شامي', 'خليجي سينمائي': 'نطق مصري، نطق شامي',
-    'خليجي جماهيري': 'نطق مصري، نطق شامي', 'مناسبات وطنية خليجية': 'نطق مصري، نطق شامي',
-    'خليجي تراثي': 'نطق مصري، نطق شامي', 'شيلات': 'نطق مصري، نطق شامي',
-    'سامري': 'نطق مصري، نطق شامي', 'جلسة': 'نطق مصري، نطق شامي',
-    'ليوان': 'نطق مصري، نطق شامي',
+    'GCC Pop': GCC_DIALECT_BLOCK,
+    'GCC Rap': `${GCC_DIALECT_BLOCK}, ballad, orchestral pop, wedding chant, traditional folk lead, soft romantic pop`,
+    'Khaleeji Pop': GCC_DIALECT_BLOCK,
+    'GCC Romantic': GCC_DIALECT_BLOCK,
+    'GCC Elegant': GCC_DIALECT_BLOCK,
+    'GCC Party': GCC_DIALECT_BLOCK,
+    'GCC Wedding': GCC_DIALECT_BLOCK,
+    'GCC Radio Pop': GCC_DIALECT_BLOCK,
+    'GCC Dance Pop': GCC_DIALECT_BLOCK,
+    'GCC Electro Pop': GCC_DIALECT_BLOCK,
+    'GCC Synth Pop': GCC_DIALECT_BLOCK,
+    'Modern Khaleeji Fusion': GCC_DIALECT_BLOCK,
+    'GCC R&B Pop': GCC_DIALECT_BLOCK,
+    'Luxury GCC Pop': GCC_DIALECT_BLOCK,
+    'Cinematic GCC': GCC_DIALECT_BLOCK,
+    'GCC Anthem': GCC_DIALECT_BLOCK,
+    'National Event GCC': GCC_DIALECT_BLOCK,
+    'GCC Traditional': GCC_DIALECT_BLOCK,
+    'Sheilat': GCC_DIALECT_BLOCK,
+    'Samri': GCC_DIALECT_BLOCK,
+    'Jalsa': GCC_DIALECT_BLOCK,
+    'Liwa': GCC_DIALECT_BLOCK,
+    'GCC Shaabi': GCC_DIALECT_BLOCK,
+    'Zar': GCC_DIALECT_BLOCK,
+    'Ardah': GCC_DIALECT_BLOCK,
+    'Khaleeji Trap': GCC_DIALECT_BLOCK,
+    'بوب خليجي': GCC_DIALECT_BLOCK_AR, 'خليجي راب': GCC_DIALECT_BLOCK_AR, 'خليجي عصري': GCC_DIALECT_BLOCK_AR,
+    'خليجي رومانسي': GCC_DIALECT_BLOCK_AR, 'خليجي أنيق': GCC_DIALECT_BLOCK_AR,
+    'خليجي حفلات': GCC_DIALECT_BLOCK_AR, 'خليجي أعراس': GCC_DIALECT_BLOCK_AR,
+    'خليجي إذاعي': GCC_DIALECT_BLOCK_AR, 'خليجي دانس': GCC_DIALECT_BLOCK_AR,
+    'خليجي إلكتروني': GCC_DIALECT_BLOCK_AR, 'خليجي سينث بوب': GCC_DIALECT_BLOCK_AR,
+    'فيوجن خليجي': GCC_DIALECT_BLOCK_AR, 'خليجي آر أند بي': GCC_DIALECT_BLOCK_AR,
+    'خليجي فاخر': GCC_DIALECT_BLOCK_AR, 'خليجي سينمائي': GCC_DIALECT_BLOCK_AR,
+    'خليجي جماهيري': GCC_DIALECT_BLOCK_AR, 'مناسبات وطنية خليجية': GCC_DIALECT_BLOCK_AR,
+    'خليجي تراثي': GCC_DIALECT_BLOCK_AR, 'شيلات': GCC_DIALECT_BLOCK_AR,
+    'سامري': GCC_DIALECT_BLOCK_AR, 'جلسة': GCC_DIALECT_BLOCK_AR,
+    'ليوان': GCC_DIALECT_BLOCK_AR,
   };
 
   // Default rhythm + instrument anchors per GCC style — auto-filled when user skips those sections
@@ -3078,36 +3081,36 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
       const mappings: Record<string, string> = {
         // ── GCC Core (compressed tag format) ──
-        'GCC Pop': 'khaleeji pop, gulf arabic, catchy hook, polished, strict khaleeji dialect',
-        'GCC Rap': 'khaleeji rap, gulf arabic, hard 808s, punchy trap drums, drill energy, rap flow, spoken bars, minimal sung hook, urban street energy, strict khaleeji dialect',
-        'Khaleeji Pop': 'khaleeji pop, gulf arabic, authentic khaleeji sound, strict khaleeji dialect',
-        'GCC Romantic': 'khaleeji romantic ballad, gulf arabic, warm emotional, strict khaleeji dialect',
-        'GCC Elegant': 'khaleeji elegant pop, gulf arabic, refined classy, strict khaleeji dialect',
-        'GCC Party': 'khaleeji party anthem, gulf arabic, high energy, celebratory, strict khaleeji dialect',
-        'GCC Wedding': 'khaleeji wedding, gulf arabic, festive joyful, traditional energy, strict khaleeji dialect',
+        'GCC Pop': 'khaleeji pop, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, mirwas percussion, polished production',
+        'GCC Rap': 'khaleeji rap, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, 808 bass, trap hi-hats, confident rap flow',
+        'Khaleeji Pop': 'khaleeji pop, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, mirwas percussion, modern production',
+        'GCC Romantic': 'khaleeji romantic ballad, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, oud lead, warm strings',
+        'GCC Elegant': 'khaleeji elegant pop, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, oud texture, refined production',
+        'GCC Party': 'khaleeji party anthem, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, mirwas percussion, energetic',
+        'GCC Wedding': 'khaleeji wedding, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, frame drums, festive traditional',
         // ── GCC Radio & Crossover ──
-        'GCC Radio Pop': 'khaleeji radio pop, gulf arabic, mainstream commercial, radio-friendly, strict khaleeji dialect',
-        'GCC Dance Pop': 'khaleeji dance pop, gulf arabic, uptempo danceable, strict khaleeji dialect',
-        'GCC Electro Pop': 'khaleeji electro pop, gulf arabic, electronic production, strict khaleeji dialect',
-        'GCC Synth Pop': 'khaleeji synth pop, gulf arabic, glossy synthesizer-led, strict khaleeji dialect',
-        'Modern Khaleeji Fusion': 'modern khaleeji fusion, gulf arabic, western-gulf hybrid, youth-oriented, strict khaleeji dialect',
-        'English GCC Pop': 'gulf arabic pop, english lyrics, khaleeji musical identity, gulf flavor',
+        'GCC Radio Pop': 'khaleeji radio pop, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, synth lead, commercial production',
+        'GCC Dance Pop': 'khaleeji dance pop, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, club beat, uptempo',
+        'GCC Electro Pop': 'khaleeji electro pop, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, synth pad, electronic production',
+        'GCC Synth Pop': 'khaleeji synth pop, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, synth lead, glossy production',
+        'Modern Khaleeji Fusion': 'modern khaleeji fusion, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, western-gulf hybrid',
+        'English GCC Pop': 'gulf pop, english vocals, khaleeji instrumental identity, khaleeji musical sound, gulf flavor',
         // ── GCC Rich & Event ──
-        'GCC R&B Pop': 'khaleeji r&b pop, gulf arabic, smooth urban vocal, strict khaleeji dialect',
-        'Luxury GCC Pop': 'luxury khaleeji pop, gulf arabic, premium orchestral, confident, strict khaleeji dialect',
-        'Cinematic GCC': 'cinematic khaleeji, gulf arabic, dramatic orchestral, sweeping atmosphere, strict khaleeji dialect',
-        'GCC Anthem': 'khaleeji anthem, gulf arabic, powerful chorus, proud bold, strict khaleeji dialect',
-        'National Event GCC': 'gulf national anthem, ceremonial khaleeji, patriotic majestic, strict khaleeji dialect',
+        'GCC R&B Pop': 'khaleeji r&b, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, smooth urban production',
+        'Luxury GCC Pop': 'luxury khaleeji pop, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, orchestral strings, confident',
+        'Cinematic GCC': 'cinematic khaleeji, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, orchestral, dramatic',
+        'GCC Anthem': 'khaleeji anthem, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, powerful chorus, proud bold',
+        'National Event GCC': 'gulf national anthem, ceremonial khaleeji, gulf arabic vocal, khaleeji pronunciation, majestic patriotic',
         // ── GCC Heritage ──
-        'GCC Traditional': 'khaleeji traditional, gulf arabic folk, acoustic heritage, strict khaleeji dialect',
-        'Sheilat': 'khaleeji sheilat, gulf arabic folk, group male vocal, call-and-response, strict khaleeji dialect',
-        'Samri': 'samri, najdi gulf folk, martial ceremonial, sword-dance energy, strict khaleeji dialect',
-        'Jalsa': 'khaleeji jalsa, intimate gulf session, acoustic delicate, strict khaleeji dialect',
-        'Liwa': 'liwa, afro-gulf coastal, polyrhythmic, east african gulf tradition, strict khaleeji dialect',
-        'GCC Shaabi': 'khaleeji shaabi, gulf folk, calm intimate, melodic solo vocal, strict khaleeji dialect',
-        'Zar': 'zar, gulf african trance, hypnotic ritual, bahraini style, strict khaleeji dialect',
-        'Ardah': 'ardah, saudi martial ceremony, classical arabic poetry, stately dignified, strict khaleeji dialect',
-        'Khaleeji Trap': 'khaleeji trap, gulf arabic trap fusion, urban street, strict khaleeji dialect',
+        'GCC Traditional': 'khaleeji traditional, gulf arabic folk vocal, khaleeji pronunciation, gulf dialect delivery, acoustic oud',
+        'Sheilat': 'khaleeji sheilat, najdi gulf male vocal, khaleeji pronunciation, frame drum, group call-and-response',
+        'Samri': 'samri, najdi gulf folk, khaleeji pronunciation, gulf dialect delivery, frame drums, ceremonial martial',
+        'Jalsa': 'khaleeji jalsa, intimate gulf session, gulf arabic vocal, khaleeji pronunciation, acoustic oud, delicate',
+        'Liwa': 'liwa, afro-gulf coastal, gulf arabic vocal, khaleeji pronunciation, polyrhythmic frame drums',
+        'GCC Shaabi': 'khaleeji shaabi, gulf folk vocal, khaleeji pronunciation, gulf dialect delivery, intimate melodic',
+        'Zar': 'zar, gulf african trance, gulf arabic vocal, khaleeji pronunciation, hypnotic ritual percussion',
+        'Ardah': 'ardah, saudi martial ceremony, gulf arabic vocal, khaleeji pronunciation, stately dignified',
+        'Khaleeji Trap': 'khaleeji trap, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, 808 bass, urban street',
         // ── Other Arabic ──
         'Egyptian': 'egyptian pop, egyptian arabic, warm melodic, egyptian dialect',
         'Egyptian Shaabi': 'egyptian shaabi, cairo street, fast compressed, egyptian street dialect',
@@ -3286,9 +3289,11 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const instrumental = vocalType === 'none';
       const vocalGender: 'm' | 'f' | undefined =
         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
-      const kieStyle = buildKieStyleString();
-      const kieNegativeTags = buildKieNegativeTags();
+      const kieStyle = buildKieStyleString().slice(0, 1000);
+      const kieNegativeTags = buildKieNegativeTags().slice(0, 200);
       const durationTarget = Math.min(150, duration);
+
+      const finalLyrics = lyricsText.trim() || styleText.trim();
 
       const invokeBody: Record<string, unknown> = {
         title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
@@ -3297,12 +3302,12 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         instrumental,
         model: 'V5',
         duration_seconds: durationTarget,
-        styleWeight: 0.8,
-        weirdnessConstraint: 0.35,
+        styleWeight: isGccStyleSelected ? 0.85 : 0.8,
+        weirdnessConstraint: isGccStyleSelected ? 0.28 : 0.35,
         audioWeight: 0.7,
       };
 
-      if (!instrumental) invokeBody.prompt = lyricsText.trim() || styleText.trim();
+      if (!instrumental) invokeBody.prompt = finalLyrics;
       if (vocalGender) invokeBody.vocalGender = vocalGender;
       if (kieNegativeTags) invokeBody.negativeTags = kieNegativeTags;
 
