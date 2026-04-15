@@ -2,7 +2,38 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, Copy, Check, ScrollText, Send, Sparkles, BookText } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/integrations/supabase/client";
+
+function cleanSummary(raw: string): string {
+  if (!raw) return "";
+  let text = raw.trim();
+
+  // If the whole thing is a JSON blob (Gemini failed to parse), extract the summary field
+  if (text.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed?.summary === "string" && parsed.summary.length > 0) {
+        text = parsed.summary.trim();
+      }
+    } catch {
+      // Try regex extraction as last resort
+      const m = text.match(/"summary"\s*:\s*"([\s\S]*?)(?<!\\)"/);
+      if (m) text = m[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim();
+    }
+  }
+
+  // Strip markdown symbols Gemini sometimes adds despite being told not to
+  text = text
+    .replace(/^#{1,6}\s+/gm, "")        // ## headings
+    .replace(/\*\*(.+?)\*\*/g, "$1")    // **bold**
+    .replace(/\*(.+?)\*/g, "$1")        // *italic*
+    .replace(/^[\*\-]\s+/gm, "")        // * bullet or - bullet at line start
+    .replace(/\\"/g, '"')               // escaped quotes
+    .replace(/\\n/g, "\n")              // escaped newlines
+    .trim();
+
+  return text;
+}
 
 interface EvidenceResult {
   source_type: "quran" | "hadith";
@@ -35,12 +66,23 @@ interface ExplanationResponse {
   hadith_summary?: string;
 }
 
+interface IntentMeta {
+  question_type?: string;
+  normalized_topic?: string;
+  likely_disputed?: boolean;
+  needs_caution?: boolean;
+}
+
 interface ChatTurn {
   id: number;
   query: string;
   results: SearchResponse | null;
   explanation: ExplanationResponse | null;
   explaining: boolean;
+  clarify?: string;
+  topic?: string;
+  intent?: IntentMeta;
+  meta?: { sufficient?: boolean; [key: string]: unknown };
 }
 
 const TRUNCATE_CHARS = 220;
@@ -232,7 +274,7 @@ export default function DeenAsk() {
     setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   };
 
-  const autoExplain = async (turnId: number, q: string, quranResults: SearchResponse["quran_results"], hadithResults: SearchResponse["hadith_results"], currentTurns: ChatTurn[]) => {
+  const autoExplain = async (turnId: number, q: string, quranResults: SearchResponse["quran_results"], hadithResults: SearchResponse["hadith_results"], currentTurns: ChatTurn[], intentTopic?: string, intent?: IntentMeta, meta?: { sufficient?: boolean; [key: string]: unknown }) => {
     updateTurn(turnId, { explaining: true });
 
     const priorContext = currentTurns
@@ -249,13 +291,16 @@ export default function DeenAsk() {
           quran_results: quranResults,
           hadith_results: hadithResults,
           prior_context: priorContext || undefined,
+          intent_topic: intentTopic || undefined,
+          intent: intent || undefined,
+          meta: meta || undefined,
         },
       });
       if (error) throw error;
       updateTurn(turnId, {
         explaining: false,
         explanation: {
-          summary: data?.summary ?? "",
+          summary: cleanSummary(data?.summary ?? ""),
           quran_summary: data?.quran_summary ?? "",
           hadith_summary: data?.hadith_summary ?? "",
         },
@@ -288,10 +333,30 @@ export default function DeenAsk() {
     let hasAnyResults = false;
 
     try {
+      // Get the most recent topic from prior turns for follow-up awareness
+      const priorTopic = turns
+        .filter((t) => t.topic)
+        .slice(-1)
+        .map((t) => t.topic!)
+        .join("");
+
       const { data, error } = await supabase.functions.invoke("deen-search", {
-        body: { query: q, language, limit: 5 },
+        body: { query: q, language, prior_topic: priorTopic || undefined },
       });
       if (error) throw error;
+
+      // If the search engine asks a clarifying question, surface it as the AI reply
+      if (data?.clarify) {
+        updateTurn(id, {
+          results: { query: q, quran_results: [], hadith_results: [], meta: data?.meta },
+          clarify: data.clarify,
+          topic: data?.intent?.topic || "",
+          explanation: { summary: data.clarify, quran_summary: "", hadith_summary: "" },
+        });
+        setSearching(false);
+        return;
+      }
+
       quranResults = Array.isArray(data?.quran_results) ? data.quran_results : [];
       hadithResults = Array.isArray(data?.hadith_results) ? data.hadith_results : [];
       hasAnyResults = quranResults.length > 0 || hadithResults.length > 0;
@@ -302,6 +367,9 @@ export default function DeenAsk() {
           hadith_results: hadithResults,
           meta: data?.meta,
         },
+        topic: data?.intent?.normalized_topic || data?.intent?.topic || "",
+        intent: data?.intent ?? undefined,
+        meta: data?.meta ?? undefined,
       });
     } catch {
       updateTurn(id, {
@@ -312,10 +380,9 @@ export default function DeenAsk() {
     }
 
     setTurns((currentTurns) => {
-      const hasPrior = currentTurns.some((t) => t.id !== id && t.explanation?.summary);
-      if (hasAnyResults || hasPrior) {
-        autoExplain(id, q, quranResults, hadithResults, currentTurns);
-      }
+      const thisTurn = currentTurns.find((t) => t.id === id);
+      // Always attempt explanation — deen-explain handles zero-source case via intent awareness
+      autoExplain(id, q, quranResults, hadithResults, currentTurns, thisTurn?.topic, thisTurn?.intent, thisTurn?.meta);
       return currentTurns;
     });
   };
@@ -430,16 +497,6 @@ export default function DeenAsk() {
                 </div>
               )}
 
-              {/* No results */}
-              {turn.results && !turnHasResults && (
-                <div className="rounded-2xl p-4" style={emptyCardBg}>
-                  <p className={`text-sm leading-relaxed ${textColor}`}>
-                    {isAr
-                      ? "لم أجد آية أو حديثاً مرتبطاً بهذا بالتحديد. جرّب سؤالاً مختلفاً أو كلمات أبسط."
-                      : "I couldn't find a Quran verse or Hadith specifically for this. Try rephrasing or a simpler keyword."}
-                  </p>
-                </div>
-              )}
 
               {/* Sources */}
               {turnHasResults && (

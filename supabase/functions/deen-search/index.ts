@@ -8,6 +8,93 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
+// ─────────────────────────────────────────────────────────────
+// ISLAMIC BRAIN — question classification types
+// ─────────────────────────────────────────────────────────────
+type QuestionType =
+  | "reference_lookup"   // user wants a specific verse or hadith
+  | "simple_evidence"    // "what does quran/hadith say about X"
+  | "fiqh_question"      // ruling / permissibility / obligation
+  | "followup"           // continuation of prior conversation
+  | "sensitive"          // apostasy, takfir, divorce, punishments etc.
+  | "general_islamic";   // general knowledge / explanation
+
+type SourcePreference = "quran_only" | "hadith_only" | "both";
+
+type IntentResult = {
+  question_type: QuestionType;
+  normalized_topic: string;       // clean Islamic topic, e.g. "zakat on worn gold jewelry"
+  source_preference: SourcePreference;
+  likely_disputed: boolean;       // is this a known scholarly debate?
+  needs_caution: boolean;         // high-stakes / sensitive ruling
+  clarification_needed: boolean;  // too vague to search well
+  clarification_prompt?: string;  // what to ask the user
+  followup_anchor?: string;       // prior topic to stay anchored on
+};
+
+async function classifyQuestion(
+  query: string,
+  priorTopic: string | null,
+  language: "ar" | "en",
+  geminiKey: string,
+): Promise<IntentResult> {
+  const prompt = `You are an Islamic AI assistant. Classify this question and output ONLY valid JSON, no other text:
+{
+  "question_type": "reference_lookup"|"simple_evidence"|"fiqh_question"|"followup"|"sensitive"|"general_islamic",
+  "normalized_topic": "clean Islamic topic in English e.g. 'repentance tawbah forgiveness'",
+  "source_preference": "quran_only"|"hadith_only"|"both",
+  "likely_disputed": false,
+  "needs_caution": false,
+  "clarification_needed": false,
+  "clarification_prompt": null,
+  "followup_anchor": null
+}
+Rules:
+- fiqh_question: ruling/permissibility/halal/haram/obligation
+- sensitive: apostasy, divorce, punishments, inheritance
+- reference_lookup: specific verse or hadith by reference number
+- simple_evidence: what does Quran/hadith say about X
+- general_islamic: general knowledge, explanation, story
+- normalized_topic: translate to correct Islamic concept. "repentance and forgiveness" -> "repentance tawbah forgiveness sins"
+- source_preference: "hadith_only" if user says "give me a hadith", "quran_only" if asks for Quran verse, else "both"
+- Prior topic: ${priorTopic ? `"${priorTopic}"` : "none"}
+- Language: ${language}
+
+Question: "${query}"
+
+JSON only:`;
+
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 300, responseMimeType: "application/json" },
+      }),
+    },
+  );
+
+  if (!resp.ok) throw new Error(`classify_failed:${resp.status}`);
+  const data = await resp.json();
+  const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+  const cleaned = rawText.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
+
+  return {
+    question_type: parsed.question_type ?? "general_islamic",
+    normalized_topic: parsed.normalized_topic ?? query,
+    source_preference: parsed.source_preference ?? "both",
+    likely_disputed: parsed.likely_disputed ?? false,
+    needs_caution: parsed.needs_caution ?? false,
+    clarification_needed: parsed.clarification_needed ?? false,
+    clarification_prompt: parsed.clarification_prompt ?? undefined,
+    followup_anchor: parsed.followup_anchor ?? undefined,
+  };
+}
+
 const COLLECTION_ALIASES = [
   { id: "bukhari", aliases: ["bukhari", "al-bukhari", "albukhari", "بخاري", "البخاري"] },
   { id: "muslim", aliases: ["muslim", "مسلم", "صحيح مسلم"] },
@@ -169,10 +256,13 @@ serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   try {
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
+
     const body = await req.json().catch(() => ({}));
     const query = String(body?.query ?? body?.question ?? "").trim();
     const language: "ar" | "en" = body?.language === "ar" ? "ar" : "en";
     const limit = Math.max(1, Math.min(Number(body?.limit ?? 5), 8));
+    const priorTopic: string | null = typeof body?.prior_topic === "string" ? body.prior_topic.trim() || null : null;
 
     if (!query) return json({ error: "missing_query" }, 400);
 
@@ -182,6 +272,34 @@ serve(async (req) => {
       { auth: { persistSession: false } },
     );
 
+    // ── Step 1: Classify question with the Islamic brain ──────────
+    let intent: IntentResult;
+    try {
+      intent = await classifyQuestion(query, priorTopic, language, GEMINI_API_KEY);
+    } catch {
+      intent = {
+        question_type: "general_islamic",
+        normalized_topic: query,
+        source_preference: "both",
+        likely_disputed: false,
+        needs_caution: false,
+        clarification_needed: false,
+      };
+    }
+
+    // ── Step 2: If too vague, return clarification prompt ─────────
+    if (intent.clarification_needed && intent.clarification_prompt) {
+      return json({
+        query,
+        quran_results: [],
+        hadith_results: [],
+        intent,
+        clarify: intent.clarification_prompt,
+        meta: { found: false, quran_count: 0, hadith_count: 0 },
+      });
+    }
+
+    // ── Step 3: Direct reference lookups (bypass AI search) ──────
     const quranRef = parseQuranReference(query);
     if (quranRef) {
       const { data, error } = await supabase
@@ -207,7 +325,13 @@ serve(async (req) => {
             grade: "",
           }]
         : [];
-      return json({ query, quran_results: quranResults, hadith_results: [], meta: { found: quranResults.length > 0, quran_count: quranResults.length, hadith_count: 0 } });
+      return json({
+        query,
+        quran_results: quranResults,
+        hadith_results: [],
+        intent,
+        meta: { found: quranResults.length > 0, quran_count: quranResults.length, hadith_count: 0, sufficient: true },
+      });
     }
 
     const hadithRef = parseHadithReference(query);
@@ -241,29 +365,111 @@ serve(async (req) => {
           grade: data.grade || "",
         }];
       }
-      return json({ query, quran_results: [], hadith_results: result, meta: { found: result.length > 0, quran_count: 0, hadith_count: result.length } });
+      return json({
+        query,
+        quran_results: [],
+        hadith_results: result,
+        intent,
+        meta: { found: result.length > 0, quran_count: 0, hadith_count: result.length, sufficient: true },
+      });
     }
 
-    const searchQuery = buildSearchTerms(query);
-    const { data, error } = await supabase.rpc("search_deen_sources", {
-      query_text: searchQuery,
-      result_limit: limit,
-    });
-    if (error) throw error;
+    // ── Step 4: Smart search using normalized_topic + cascading fallback ──
+    // Build ordered list of search attempts: full topic → fewer keywords → raw stripped query
+    const rawStripped = buildSearchTerms(query);
+    const topicWords = intent.normalized_topic
+      .replace(/[?؟!,.']/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .split(" ")
+      .filter((w) => w.length >= 2);
 
-    const rows = Array.isArray(data) ? data as SearchRow[] : [];
-    const quranResults = rows.filter((row) => row.source_type === "quran").map((row) => mapSearchRow(row, language));
-    const hadithResults = rows.filter((row) => row.source_type === "hadith").map((row) => mapSearchRow(row, language));
+    const followupPrefix = intent.followup_anchor
+      ? intent.followup_anchor.split(" ").filter((w) => w.length >= 2).slice(0, 3).join(" ")
+      : null;
+
+    // Build cascading attempts: most specific → progressively shorter
+    const searchAttempts: string[] = [];
+
+    if (followupPrefix) {
+      searchAttempts.push(`${followupPrefix} ${topicWords.slice(0, 3).join(" ")}`);
+      searchAttempts.push(followupPrefix);
+    }
+
+    if (topicWords.length >= 3) searchAttempts.push(topicWords.join(" "));
+    if (topicWords.length >= 2) searchAttempts.push(topicWords.slice(0, 2).join(" "));
+    if (topicWords.length >= 1) searchAttempts.push(topicWords[0]);
+    if (rawStripped !== topicWords.join(" ") && rawStripped.length >= 2) searchAttempts.push(rawStripped);
+
+    // Deduplicate while preserving order
+    const seen = new Set<string>();
+    const uniqueAttempts = searchAttempts.filter((a) => {
+      const k = a.trim().toLowerCase();
+      if (seen.has(k) || k.length < 2) return false;
+      seen.add(k);
+      return true;
+    });
+
+    let rows: SearchRow[] = [];
+    let usedQuery = uniqueAttempts[0] ?? rawStripped;
+
+    for (const attempt of uniqueAttempts) {
+      const { data, error } = await supabase.rpc("search_deen_sources", {
+        query_text: attempt,
+        result_limit: limit,
+      });
+      if (error) throw error;
+      const found = Array.isArray(data) ? data as SearchRow[] : [];
+      if (found.length > 0) {
+        rows = found;
+        usedQuery = attempt;
+        break;
+      }
+    }
+
+    // ── Step 5: Evidence-type filtering by question type ─────────
+    // fiqh/sensitive: hadith is primary — if we have hadith, suppress weak Quran-only results
+    // hadith_only preference: remove quran rows
+    // quran_only preference: remove hadith rows
+    if (intent.source_preference === "hadith_only") {
+      rows = rows.filter((r) => r.source_type === "hadith");
+    } else if (intent.source_preference === "quran_only") {
+      rows = rows.filter((r) => r.source_type === "quran");
+    } else if (intent.question_type === "fiqh_question" || intent.question_type === "sensitive") {
+      const hadithRows = rows.filter((r) => r.source_type === "hadith");
+      const quranRows = rows.filter((r) => r.source_type === "quran");
+      // Only include quran results if we also have hadith — prevents weak quran matches from dominating fiqh answers
+      if (hadithRows.length > 0) {
+        // Keep top 2 quran + top 3 hadith for fiqh (hadith-weighted)
+        rows = [...quranRows.slice(0, 2), ...hadithRows.slice(0, 3)];
+      } else {
+        rows = [...quranRows, ...hadithRows];
+      }
+    }
+
+    const quranResults = rows.filter((r) => r.source_type === "quran").map((r) => mapSearchRow(r, language));
+    const hadithResults = rows.filter((r) => r.source_type === "hadith").map((r) => mapSearchRow(r, language));
+
+    // ── Step 6: Sufficiency signal ────────────────────────────────
+    // A fiqh/sensitive question is only "sufficient" if we have direct hadith evidence
+    const hasSufficientEvidence =
+      intent.question_type === "reference_lookup" ||
+      intent.question_type === "simple_evidence" ||
+      intent.question_type === "general_islamic"
+        ? rows.length > 0
+        : hadithResults.length > 0; // fiqh/sensitive/followup requires hadith
 
     return json({
       query,
       quran_results: quranResults,
       hadith_results: hadithResults,
+      intent,
       meta: {
         found: quranResults.length > 0 || hadithResults.length > 0,
         quran_count: quranResults.length,
         hadith_count: hadithResults.length,
-        search_query: searchQuery,
+        search_query: usedQuery,
+        sufficient: hasSufficientEvidence,
       },
     });
   } catch (error) {

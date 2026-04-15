@@ -1535,6 +1535,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const isGccEnhanceRef = useRef(false);
   const [lyricsKey, setLyricsKey] = useState(0);
   const [lyricsDisplayMode, setLyricsDisplayMode] = useState(false);
+  const [gccOriginalLyrics, setGccOriginalLyrics] = useState('');
   const [vocalType, setVocalType] = useState<'auto'|'none'|'female'|'male'>('auto');
   const [vocalsOpen, setVocalsOpen] = useState(false);
   const [lyricsOpen, setLyricsOpen] = useState(false);
@@ -1583,81 +1584,104 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }, [RHYTHM_GROUPS]);
 
   // Style to recommended instruments mapping
+  // ALL values use canonical English instrument IDs (same as INSTRUMENT_GROUPS English items)
+  // Arabic style names map to the SAME English canonical IDs — display translation is separate
   const STYLE_INSTRUMENT_MAPPING = useMemo<Record<string, string[]>>(() => {
-    if (language === 'ar') {
-      return {
-        // GCC Core
-        'بوب خليجي': ['طبلة', 'دربوكة', 'طار', 'جيتار كهربائي', 'سينث باد'],
-        'خليجي راب': ['808 باص', 'هاي-هات', 'طبلة', 'دربوكة', 'سينث باص'],
-        'خليجي عصري': ['طبلة', 'دربوكة', 'جيتار كهربائي', 'سينث باد', 'باص جيتار'],
-        'خليجي رومانسي': ['قانون', 'ناي', 'كمان', 'بيانو', 'تشيلو'],
-        'خليجي أنيق': ['قانون', 'ناي', 'كمان', 'بيانو'],
-        'خليجي حفلات': ['طبلة', 'دربوكة', 'طار', 'تصفيق يدوي', 'سينث باد'],
-        'خليجي أعراس': ['طبلة', 'دربوكة', 'دف', 'تصفيق يدوي', 'هتاف جماعي'],
-        // GCC Radio & Crossover
-        'خليجي إذاعي': ['جيتار كهربائي', 'باص جيتار', 'طقم درامز', 'سينث باد', 'بيانو'],
-        'خليجي دانس': ['طقم درامز', 'باص جيتار', 'سينث ليد', 'طبلة', 'تصفيق يدوي'],
-        'خليجي إلكتروني': ['سينث ليد', 'سينث باد', 'طقم درامز', 'باص جيتار', 'طبلة'],
-        'خليجي سينث بوب': ['سينث ليد', 'سينث باد', 'طقم درامز', 'باص جيتار'],
-        'فيوجن خليجي': ['جيتار كهربائي', 'باص جيتار', 'طقم درامز', 'سينث باد', 'طبلة'],
-        'إنجليزي بطابع خليجي': ['سينث ليد', 'جيتار كهربائي', 'باص جيتار', 'طقم درامز', 'إيقاع خليجي'],
-        // GCC Rich & Event
-        'خليجي آر أند بي': ['بيانو كهربائي', 'باص جيتار', 'طقم درامز', 'سينث باد', 'طبلة'],
-        'خليجي فاخر': ['بيانو', 'وتريات', 'باص جيتار', 'سينث باد', 'طبلة ناعمة'],
-        'خليجي سينمائي': ['وتريات', 'بيانو', 'سينث باد', 'طقم درامز', 'كورس'],
-        'خليجي جماهيري': ['طبلة', 'دربوكة', 'تصفيق يدوي', 'كورس', 'سينث باد'],
-        'مناسبات وطنية خليجية': ['طقم درامز', 'كورس', 'وتريات', 'تصفيق يدوي', 'سينث باد'],
-        // GCC Heritage
-        'خليجي تراثي': ['قانون', 'ناي', 'رق', 'طبلة', 'رباب'],
-        'شيلات': ['طبلة', 'دربوكة', 'طار', 'هتاف جماعي'],
-        'سامري': ['طبلة', 'دربوكة', 'طار', 'رباب'],
-        'جلسة': ['عود', 'قانون', 'طبلة', 'رق', 'ناي'],
-        'ليوان': ['طبلة', 'دربوكة', 'طار'],
-        'شعبي خليجي': ['طار', 'طبلة', 'دربوكة', 'رباب', 'هتاف جماعي'],
-        // Other Arabic
-        'مصري': ['عود', 'قانون', 'ناي', 'طبلة', 'دربوكة', 'رق'],
-        'شعبي مصري': ['طقم درامز', 'سينث ليد', 'باص جيتار', 'جيتار كهربائي', 'دربوكة'],
-        'مهرجانات': ['طقم درامز', 'سينث ليد', 'باص جيتار', 'إيقاع'],
-        'أناشيد': ['دف'],
-      };
-    }
-    return {
+    const map: Record<string, string[]> = {
       // ── GCC Core ──
-      'GCC Pop': ['808 bass groove', 'trap hi-hats', 'mirwas percussion', 'synth lead', 'bass guitar', 'hand claps'],
-      'GCC Rap': ['808 bass groove', 'trap hi-hats', 'drill hats', 'punchy kick', 'snare rolls', 'darbuka percussion', 'mirwas percussion', 'synth bass'],
-      'GCC Romantic': ['violin lead', 'ney texture', 'piano melody', 'cello texture', 'riq percussion'],
-      'GCC Elegant': ['violin lead', 'qanun texture', 'piano melody', 'ney texture', 'strings pad'],
-      'GCC Party': ['mirwas lead', 'darbuka percussion', 'frame drum groove', 'hand claps', 'synth lead'],
-      'GCC Wedding': ['mirwas lead', 'darbuka percussion', 'daff groove', 'tabl percussion', 'hand claps'],
+      'GCC Pop':              ['mirwas', 'darbuka', 'tar', 'synth lead', 'synth pad'],
+      'بوب خليجي':            ['mirwas', 'darbuka', 'tar', 'synth lead', 'synth pad'],
+      'GCC Rap':              ['808 bass', 'hi-hat', 'darbuka', 'mirwas', 'synth bass'],
+      'خليجي راب':            ['808 bass', 'hi-hat', 'darbuka', 'mirwas', 'synth bass'],
+      'Modern Khaleeji Fusion':['darbuka', 'mirwas', 'electric guitar', 'synth pad', 'bass guitar'],
+      'خليجي عصري':           ['darbuka', 'mirwas', 'electric guitar', 'synth pad', 'bass guitar'],
+      'GCC Romantic':         ['qanun', 'ney', 'violin', 'soft piano', 'cello'],
+      'خليجي رومانسي':        ['qanun', 'ney', 'violin', 'soft piano', 'cello'],
+      'GCC Elegant':          ['qanun', 'ney', 'violin', 'piano', 'strings'],
+      'خليجي أنيق':           ['qanun', 'ney', 'violin', 'piano', 'strings'],
+      'GCC Party':            ['mirwas', 'darbuka', 'tar', 'hand claps', 'synth lead'],
+      'خليجي حفلات':          ['mirwas', 'darbuka', 'tar', 'hand claps', 'synth lead'],
+      'GCC Wedding':          ['mirwas', 'darbuka', 'daff', 'hand claps', 'group chant'],
+      'خليجي أعراس':          ['mirwas', 'darbuka', 'daff', 'hand claps', 'group chant'],
       // ── GCC Radio & Crossover ──
-      'GCC Radio Pop': ['mirwas groove', 'darbuka percussion', 'bass guitar', 'drum kit', 'synth pad'],
-      'GCC Dance Pop': ['mirwas groove', 'darbuka percussion', 'hand claps', 'bass guitar', 'synth lead'],
-      'GCC Electro Pop': ['mirwas groove', 'darbuka percussion', 'synth lead', 'synth bass', 'drum kit'],
-      'GCC Synth Pop': ['mirwas groove', 'darbuka percussion', 'synth lead', 'synth pad', 'drum kit'],
-      'Modern Khaleeji Fusion': ['mirwas groove', 'darbuka percussion', 'frame drum texture', 'bass guitar', 'synth pad'],
-      'English GCC Pop': ['mirwas groove', 'darbuka percussion', 'hand claps', 'bass guitar', 'synth lead'],
+      'GCC Radio Pop':        ['mirwas', 'darbuka', 'bass guitar', 'drum kit', 'synth pad'],
+      'خليجي إذاعي':          ['mirwas', 'darbuka', 'bass guitar', 'drum kit', 'synth pad'],
+      'GCC Dance Pop':        ['mirwas', 'darbuka', 'hand claps', 'bass guitar', 'synth lead'],
+      'خليجي دانس':           ['mirwas', 'darbuka', 'hand claps', 'bass guitar', 'synth lead'],
+      'GCC Electro Pop':      ['mirwas', 'darbuka', 'synth lead', 'synth bass', 'drum kit'],
+      'خليجي إلكتروني':       ['mirwas', 'darbuka', 'synth lead', 'synth bass', 'drum kit'],
+      'GCC Synth Pop':        ['mirwas', 'darbuka', 'synth lead', 'synth pad', 'drum kit'],
+      'خليجي سينث بوب':       ['mirwas', 'darbuka', 'synth lead', 'synth pad', 'drum kit'],
+      'English GCC Pop':      ['mirwas', 'darbuka', 'hand claps', 'bass guitar', 'synth lead'],
+      'إنجليزي بطابع خليجي': ['mirwas', 'darbuka', 'hand claps', 'bass guitar', 'synth lead'],
+      'فيوجن خليجي':          ['electric guitar', 'bass guitar', 'drum kit', 'synth pad', 'darbuka'],
       // ── GCC Rich & Event ──
-      'GCC R&B Pop': ['mirwas groove', 'darbuka percussion', 'electric piano lead', 'bass guitar', 'strings texture'],
-      'Luxury GCC Pop': ['violin lead', 'strings texture', 'piano melody', 'riq percussion', 'synth pad'],
-      'Cinematic GCC': ['strings lead', 'tabl percussion', 'choir texture', 'piano melody', 'synth pad'],
-      'GCC Anthem': ['tabl percussion', 'darbuka groove', 'hand claps', 'choir texture', 'drum kit'],
-      'National Event GCC': ['tabl percussion', 'darbuka groove', 'choir lead', 'strings texture', 'drum kit'],
-      // ── GCC Heritage — oud IS authentic here ──
-      'GCC Traditional': ['oud lead', 'qanun texture', 'ney melody', 'tabla percussion', 'riq groove'],
-      'Sheilat': ['frame drum groove', 'mirwas percussion', 'darbuka percussion', 'tabl lead'],
-      'Samri': ['frame drum groove', 'mirwas percussion', 'darbuka percussion', 'rebab texture'],
-      'Jalsa': ['oud lead', 'qanun texture', 'riq groove', 'tabla percussion', 'ney melody'],
-      'Liwa': ['tanbura lead', 'frame drum groove', 'mirwas percussion', 'darbuka percussion'],
-      'GCC Shaabi': ['oud lead', 'qanun texture', 'riq groove', 'tabla percussion', 'ney melody'],
-      'Zar': ['tanbura lead', 'frame drum groove', 'brass cymbals', 'mirwas percussion'],
-      'Ardah': ['tabl drum lead', 'tabl turki groove', 'darbuka percussion', 'mirwas texture'],
-      'Khaleeji Trap': ['808 bass groove', 'trap hi-hats', 'mirwas texture', 'darbuka percussion', 'synth lead'],
+      'GCC R&B Pop':          ['electric piano', 'bass guitar', 'drum kit', 'synth pad', 'darbuka'],
+      'خليجي آر أند بي':      ['electric piano', 'bass guitar', 'drum kit', 'synth pad', 'darbuka'],
+      'Luxury GCC Pop':       ['violin', 'strings', 'piano', 'riq', 'synth pad'],
+      'خليجي فاخر':           ['violin', 'strings', 'piano', 'riq', 'synth pad'],
+      'Cinematic GCC':        ['strings', 'tabl', 'choir', 'piano', 'synth pad'],
+      'خليجي سينمائي':        ['strings', 'tabl', 'choir', 'piano', 'synth pad'],
+      'GCC Anthem':           ['tabl', 'darbuka', 'hand claps', 'choir', 'drum kit'],
+      'خليجي جماهيري':        ['tabl', 'darbuka', 'hand claps', 'choir', 'drum kit'],
+      'National Event GCC':   ['tabl', 'darbuka', 'choir', 'strings', 'drum kit'],
+      'مناسبات وطنية خليجية': ['tabl', 'darbuka', 'choir', 'strings', 'drum kit'],
+      // ── GCC Heritage ──
+      'GCC Traditional':      ['qanun', 'ney', 'riq', 'tabla', 'rebab'],
+      'خليجي تراثي':          ['qanun', 'ney', 'riq', 'tabla', 'rebab'],
+      'Sheilat':              ['frame drum', 'mirwas', 'darbuka', 'tabl'],
+      'شيلات':                ['frame drum', 'mirwas', 'darbuka', 'tabl'],
+      'Samri':                ['frame drum', 'mirwas', 'darbuka', 'rebab'],
+      'سامري':                ['frame drum', 'mirwas', 'darbuka', 'rebab'],
+      'Jalsa':                ['oud', 'qanun', 'tabla', 'riq', 'ney'],
+      'جلسة':                 ['oud', 'qanun', 'tabla', 'riq', 'ney'],
+      'Liwa':                 ['tanbura', 'frame drum', 'mirwas', 'darbuka'],
+      'ليوان':                ['tanbura', 'frame drum', 'mirwas', 'darbuka'],
+      'GCC Shaabi':           ['oud', 'qanun', 'riq', 'tabla', 'ney'],
+      'شعبي خليجي':           ['tar', 'tabla', 'darbuka', 'rebab', 'group chant'],
+      'Khaleeji Trap':        ['808 bass', 'trap hi-hats', 'mirwas', 'darbuka', 'synth lead'],
       // ── Other Arabic ──
-      'Egyptian': ['oud lead', 'qanun texture', 'ney melody', 'tabla percussion', 'darbuka groove'],
-      'Egyptian Shaabi': ['drum machine groove', 'synth lead', 'bass guitar', 'darbuka percussion'],
-      'Anasheed': ['daff groove'],
-      'Arabic Pop': ['piano lead', 'violin texture', 'tabla percussion', 'electric guitar'],
-      'Levant Pop': ['piano lead', 'violin texture', 'acoustic guitar', 'drum kit'],
+      'Egyptian':             ['oud', 'qanun', 'ney', 'tabla', 'darbuka'],
+      'مصري':                 ['oud', 'qanun', 'ney', 'tabla', 'darbuka'],
+      'Egyptian Shaabi':      ['drum machine', 'synth lead', 'bass guitar', 'darbuka'],
+      'شعبي مصري':            ['drum kit', 'synth lead', 'bass guitar', 'electric guitar', 'darbuka'],
+      'مهرجانات':             ['drum kit', 'synth lead', 'bass guitar', 'percussion'],
+      'Anasheed':             ['daff'],
+      'أناشيد':               ['daff'],
+      'Arabic Pop':           ['piano', 'violin', 'tabla', 'electric guitar'],
+      'بوب عربي':             ['piano', 'violin', 'tabla', 'electric guitar'],
+      'Levant Pop':           ['piano', 'violin', 'acoustic guitar', 'drum kit'],
+      'شامي':                 ['piano', 'violin', 'acoustic guitar', 'drum kit'],
+      'Khaleeji Pop':         ['mirwas', 'darbuka', 'tar', 'synth lead', 'synth pad'],
+    };
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Canonical→Arabic display label map (for chip rendering when language=ar) ──
+  const INSTRUMENT_DISPLAY_AR: Record<string, string> = {
+    'oud': 'عود', 'qanun': 'قانون', 'ney': 'ناي', 'riq': 'رق', 'darbuka': 'دربوكة',
+    'tabla': 'طبلة', 'mirwas': 'مرواس', 'tabl': 'طبل', 'tabl turki': 'طبل تركي',
+    'frame drum': 'طار', 'daff': 'دف', 'tar': 'طار', 'tanbura': 'طنبورة',
+    'mijwiz': 'مجوز', 'rebab': 'رباب', 'gulf percussion': 'إيقاع خليجي',
+    'violin': 'كمان', 'viola': 'فيولا', 'cello': 'تشيلو', 'contrabass': 'كونترباص', 'strings': 'وتريات',
+    'piano': 'بيانو', 'electric piano': 'بيانو كهربائي', 'soft piano': 'بيانو ناعم', 'organ': 'أورغ', 'accordion': 'أكورديون',
+    'acoustic guitar': 'جيتار أكوستيك', 'electric guitar': 'جيتار كهربائي', 'bass guitar': 'باص جيتار',
+    'upright bass': 'باص وترى', 'synth bass': 'سينث باص',
+    'drum kit': 'طقم درامز', 'percussion': 'إيقاع', 'hand claps': 'تصفيق يدوي',
+    'snare': 'سنير', 'hi-hat': 'هاي-هات', 'cymbals': 'صنجات',
+    'drum machine': 'درام ماشين', '808 bass': '808 باص',
+    'flute': 'فلوت', 'clarinet': 'كلارينيت', 'saxophone': 'ساكسفون',
+    'trumpet': 'ترومبيت', 'trombone': 'ترومبون', 'french horn': 'هورن فرنسي',
+    'brass section': 'قسم النحاس', 'harmonica': 'هارمونيكا', 'whistle': 'صفارة',
+    'synth lead': 'سينث ليد', 'synth pad': 'سينث باد', 'warm pad': 'باد دافئ',
+    'analog pad': 'باد تناظري', 'string pad': 'باد أوتار', 'pluck': 'بلاك', 'arpeggiator': 'أربجياتور',
+    'choir': 'كورس', 'group chant': 'هتاف جماعي', 'sub bass': 'ساب باص', 'atmospheric fx': 'مؤثرات جوية',
+    'trap hi-hats': 'هاي-هات تراب',
+  };
+
+  // ── Non-GCC/Arabic styles recommended instruments (English canonical) ──
+  const ENGLISH_INSTRUMENT_MAP: Record<string, string[]> = {
       // ── Pop ──
       'pop': ['piano', 'electric guitar', 'bass guitar', 'drum kit', 'synth pad', 'claps'],
       'Dance Pop': ['synth bass', 'drum kit', 'synth lead', 'bass guitar', 'claps', 'synth pad'],
@@ -1844,18 +1868,114 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'Zydeco': ['accordion', 'washboard', 'bass guitar', 'drum kit', 'fiddle'],
       'Cajun': ['accordion', 'fiddle', 'acoustic guitar', 'triangle', 'upright bass'],
       'Industrial': ['drum machine', 'synth bass', 'distorted synth', 'noise generator', 'electric guitar'],
-    };
-  }, [language]);
+  };
 
-  // Get recommended instruments for current style selection
+  // Mood → extra instrument boosters
+  const MOOD_INSTRUMENT_BOOST: Record<string, string[]> = {
+    'romantic': ['violin', 'soft piano', 'cello', 'ney'],
+    'رومانسي': ['violin', 'soft piano', 'cello', 'ney'],
+    'melancholic': ['violin', 'ney', 'cello', 'piano'],
+    'حزين': ['violin', 'ney', 'cello', 'piano'],
+    'energetic': ['drum kit', 'synth lead', 'bass guitar'],
+    'نشيط': ['drum kit', 'synth lead', 'bass guitar'],
+    'epic': ['strings', 'choir', 'tabl', 'drum kit'],
+    'ملحمي': ['strings', 'choir', 'tabl', 'drum kit'],
+    'party': ['mirwas', 'darbuka', 'hand claps', 'synth lead'],
+    'حفلة': ['mirwas', 'darbuka', 'hand claps', 'synth lead'],
+    'calm': ['soft piano', 'ney', 'strings', 'acoustic guitar'],
+    'هادئ': ['soft piano', 'ney', 'strings', 'acoustic guitar'],
+    'cinematic': ['strings', 'choir', 'piano', 'synth pad'],
+    'سينمائي': ['strings', 'choir', 'piano', 'synth pad'],
+    'dark': ['synth pad', 'cello', 'strings', 'analog pad'],
+    'داكن': ['synth pad', 'cello', 'strings', 'analog pad'],
+  };
+
+  // Rhythm → extra instrument hints
+  const RHYTHM_INSTRUMENT_HINT: Record<string, string[]> = {
+    'Adani': ['riq', 'tabla', 'ney'],
+    'عدني': ['riq', 'tabla', 'ney'],
+    'Samri Rhythm': ['frame drum', 'mirwas', 'rebab'],
+    'سامري': ['frame drum', 'mirwas', 'rebab'],
+    'Wedding Beat': ['mirwas', 'daff', 'hand claps'],
+    'إيقاع أعراس': ['mirwas', 'daff', 'hand claps'],
+    'Trap Beat': ['808 bass', 'hi-hat', 'snare'],
+    'تراب بيت': ['808 bass', 'hi-hat', 'snare'],
+    'Ballad Slow Groove': ['soft piano', 'strings', 'cello'],
+    'بالاد هادئ': ['soft piano', 'strings', 'cello'],
+    'Gulf Groove': ['mirwas', 'darbuka', 'riq'],
+    'إيقاع خليجي': ['mirwas', 'darbuka', 'riq'],
+    'Khaleeji Shuffle': ['mirwas', 'tabla', 'riq'],
+    'خليجي متمايل': ['mirwas', 'tabla', 'riq'],
+    'Club Beat': ['drum kit', 'synth bass', 'synth lead'],
+    'إيقاع نادي': ['drum kit', 'synth bass', 'synth lead'],
+  };
+
+  const GCC_UNSAFE_RECOMMENDED_INSTRUMENTS = useMemo(() => new Set([
+    '808 bass',
+    'trap hi-hats',
+    'hi-hat',
+    'synth lead',
+    'synth bass',
+  ]), []);
+
+  const GCC_SAFE_RECOMMENDED_INSTRUMENTS = useMemo(() => [
+    'oud',
+    'qanun',
+    'ney',
+    'riq',
+    'darbuka',
+    'tabla',
+    'tar',
+    'mirwas',
+    'rebab',
+    'soft piano',
+    'cello',
+    'strings',
+    'warm pad',
+    'hand claps',
+    'group chant',
+  ], []);
+
+  const GCC_UNSAFE_RECOMMENDED_RHYTHMS = useMemo(() => new Set([
+    'Trap Beat',
+    'تراب بيت',
+    'Drill Beat',
+    'دريل بيت',
+    'Club Beat',
+    'إيقاع نادي',
+  ]), []);
+
+  const GCC_SAFE_RECOMMENDED_RHYTHMS = useMemo(() => (
+    language === 'ar'
+      ? ['إيقاع خليجي', 'خليجي متمايل', 'عدني', 'سامري', 'إيقاع أعراس', 'إيقاع تصفيق']
+      : ['Gulf Groove', 'Khaleeji Shuffle', 'Adani', 'Samri Rhythm', 'Wedding Beat', 'Clap-Driven Groove']
+  ), [language]);
+
+  // Get recommended instruments for current style + rhythm + mood
   const recommendedInstruments = useMemo(() => {
     const recommended: string[] = [];
     for (const style of includeTags) {
       const mapped = STYLE_INSTRUMENT_MAPPING[style];
       if (mapped) recommended.push(...mapped);
     }
-    return [...new Set(recommended)];
-  }, [includeTags, STYLE_INSTRUMENT_MAPPING]);
+    for (const rhythm of rhythmTags) {
+      const hint = RHYTHM_INSTRUMENT_HINT[rhythm];
+      if (hint) recommended.push(...hint);
+    }
+    for (const mood of moodTags) {
+      const boost = MOOD_INSTRUMENT_BOOST[mood];
+      if (boost) recommended.push(...boost);
+    }
+    const uniqueRecommended = [...new Set(recommended)];
+    if (!isGccStyleSelected) return uniqueRecommended;
+
+    const filtered = uniqueRecommended.filter((inst) => !GCC_UNSAFE_RECOMMENDED_INSTRUMENTS.has(inst));
+    const merged = [...filtered];
+    for (const fallback of GCC_SAFE_RECOMMENDED_INSTRUMENTS) {
+      if (!merged.includes(fallback)) merged.push(fallback);
+    }
+    return merged;
+  }, [includeTags, rhythmTags, moodTags, STYLE_INSTRUMENT_MAPPING, isGccStyleSelected, GCC_UNSAFE_RECOMMENDED_INSTRUMENTS, GCC_SAFE_RECOMMENDED_INSTRUMENTS]);
 
   // Style → recommended rhythms (top 2)
   const STYLE_RHYTHM_MAPPING: Record<string, string[]> = {
@@ -2400,10 +2520,19 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const recommendedRhythms = useMemo(() => {
     for (const style of includeTags) {
       const mapped = STYLE_RHYTHM_MAPPING[style];
-      if (mapped) return mapped.slice(0, 2);
+      if (mapped) {
+        if (!isGccStyleSelected) return mapped.slice(0, 2);
+
+        const filtered = mapped.filter((rhythm) => !GCC_UNSAFE_RECOMMENDED_RHYTHMS.has(rhythm));
+        const merged = [...filtered];
+        for (const fallback of GCC_SAFE_RECOMMENDED_RHYTHMS) {
+          if (!merged.includes(fallback)) merged.push(fallback);
+        }
+        return merged.slice(0, 2);
+      }
     }
     return [];
-  }, [includeTags]);
+  }, [includeTags, isGccStyleSelected, GCC_UNSAFE_RECOMMENDED_RHYTHMS, GCC_SAFE_RECOMMENDED_RHYTHMS]);
 
   const recommendedMoods = useMemo(() => {
     for (const style of includeTags) {
@@ -2436,15 +2565,15 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const INSTRUMENT_GROUPS = useMemo<Array<{ title: string; items: string[] }>>(() => {
     if (language === 'ar') {
       return [
-        { title: 'تراثي عربي وخليجي', items: ['عود','قانون','ناي','رق','دربوكة','طبلة','طار','دف','مجوز','رباب','إيقاع خليجي'] },
-        { title: 'أوتار', items: ['كمان','فيولا','تشيلو','كونترباص','وتريات'] },
-        { title: 'مفاتيح', items: ['بيانو','بيانو كهربائي','بيانو ناعم','أورغ','أكورديون'] },
-        { title: 'جيتارات وباص', items: ['جيتار أكوستيك','جيتار كهربائي','باص جيتار','باص وترى','سينث باص'] },
-        { title: 'إيقاع وطبول', items: ['طقم درامز','إيقاع','تصفيق يدوي','سنير','هاي-هات','صنجات','درام ماشين','808 باص'] },
-        { title: 'نفخ ونحاس', items: ['فلوت','كلارينيت','ساكسفون','ترومبيت','ترومبون','هورن فرنسي','قسم النحاس','هارمونيكا','صفارة'] },
-        { title: 'عالمي', items: ['سيتار','طبول ستيل','مزمار قربة','بانجو','ماندولين'] },
-        { title: 'سينث وجو', items: ['سينث ليد','سينث باد','باد دافئ','باد تناظري','باد أوتار','بلاك','أربجياتور'] },
-        { title: 'صوت وجماعي', items: ['كورس','هتاف جماعي','ساب باص','مؤثرات جوية'] },
+        { title: 'تراثي عربي وخليجي', items: ['oud','qanun','ney','riq','darbuka','tabla','tar','daff','mirwas','rebab','gulf percussion'] },
+        { title: 'أوتار', items: ['violin','viola','cello','contrabass','strings'] },
+        { title: 'مفاتيح', items: ['piano','electric piano','soft piano','organ','accordion'] },
+        { title: 'جيتارات وباص', items: ['acoustic guitar','electric guitar','bass guitar','upright bass','synth bass'] },
+        { title: 'إيقاع وطبول', items: ['drum kit','percussion','hand claps','snare','hi-hat','cymbals','drum machine','808 bass'] },
+        { title: 'نفخ ونحاس', items: ['flute','clarinet','saxophone','trumpet','trombone','french horn','brass section','harmonica','whistle'] },
+        { title: 'عالمي', items: ['sitar','steel drums','bagpipe','banjo','mandolin'] },
+        { title: 'سينث وجو', items: ['synth lead','synth pad','warm pad','analog pad','string pad','pluck','arpeggiator'] },
+        { title: 'صوت وجماعي', items: ['choir','group chant','sub bass','atmospheric fx'] },
       ];
     }
     return [
@@ -2545,6 +2674,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       if (!expandedLyrics) throw new Error(isAr ? 'تعذّر التوسيع' : 'Expansion failed');
       if (ampMode === 'gcc_enhance') {
         isGccEnhanceRef.current = true;
+        setGccOriginalLyrics(lyricsText);
         setLyricsText(expandedLyrics);
         setLyricsKey((prev) => prev + 1);
         setLyricsDisplayMode(true);
@@ -3171,11 +3301,46 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'سامري': 'إيقاع سامري',
     };
 
+    // ── Micro-performance descriptor — appended to every GCC Layer 1 ──
+    // Targets: dialogue mouthfeel, vocal attack, Khaleeji phrasing, Gulf sentence flow
+    const GCC_MICRO_PERF: Record<string, string> = {
+      // Pop / crossover — warm conversational attack, ornamented phrasing
+      'GCC Pop':               'khaleeji conversational mouthfeel, soft vocal attack, ornamented gulf phrasing',
+      'Khaleeji Pop':          'khaleeji conversational mouthfeel, soft vocal attack, ornamented gulf phrasing',
+      'GCC Romantic':          'intimate khaleeji mouthfeel, breathy vocal attack, melismatic gulf line endings',
+      'GCC Elegant':           'refined khaleeji mouthfeel, controlled vocal attack, graceful gulf sentence flow',
+      'GCC Radio Pop':         'polished khaleeji mouthfeel, clean vocal attack, commercial gulf phrasing',
+      'GCC Dance Pop':         'punchy khaleeji mouthfeel, rhythmic vocal attack, uptempo gulf sentence flow',
+      'GCC Electro Pop':       'crisp khaleeji mouthfeel, sharp vocal attack, modern gulf delivery',
+      'GCC Synth Pop':         'glossy khaleeji mouthfeel, layered vocal attack, electronic gulf phrasing',
+      'Modern Khaleeji Fusion':'balanced khaleeji mouthfeel, hybrid vocal attack, western-gulf sentence blend',
+      'English GCC Pop':       'khaleeji-flavored mouthfeel, clear vocal attack, gulf-accented delivery',
+      'GCC R&B Pop':           'smooth khaleeji mouthfeel, sultry vocal attack, urban gulf phrasing',
+      'Luxury GCC Pop':        'lush khaleeji mouthfeel, warm vocal attack, premium gulf sentence flow',
+      'Cinematic GCC':         'dramatic khaleeji mouthfeel, wide vocal attack, sweeping gulf phrasing',
+      'GCC Anthem':            'proud khaleeji mouthfeel, powerful vocal attack, majestic gulf sentence flow',
+      'National Event GCC':    'ceremonial khaleeji mouthfeel, strong vocal attack, patriotic gulf delivery',
+      'GCC Party':             'festive khaleeji mouthfeel, energetic vocal attack, celebratory gulf flow',
+      'GCC Wedding':           'joyful khaleeji mouthfeel, bright vocal attack, traditional gulf phrasing',
+      'GCC Rap':               'rhythmic khaleeji mouthfeel, punchy vocal attack, street gulf sentence flow',
+      'Khaleeji Trap':         'urban khaleeji mouthfeel, aggressive vocal attack, trap gulf phrasing',
+      // Heritage / folk — deeper dialect texture
+      'GCC Traditional':       'heritage khaleeji mouthfeel, natural vocal attack, folk gulf sentence flow',
+      'Sheilat':               'masculine khaleeji mouthfeel, group vocal attack, proud najdi sentence flow',
+      'Samri':                 'percussive khaleeji mouthfeel, strong vocal attack, samri rhythmic phrasing',
+      'Ardah':                 'martial khaleeji mouthfeel, stately vocal attack, dignified gulf delivery',
+      'Jalsa':                 'intimate khaleeji mouthfeel, soft vocal attack, acoustic gulf sentence flow',
+      'Liwa':                  'polyrhythmic khaleeji mouthfeel, afro-gulf vocal attack, coastal phrasing',
+      'GCC Shaabi':            'folk khaleeji mouthfeel, popular vocal attack, direct gulf sentence flow',
+      'Zar':                   'hypnotic khaleeji mouthfeel, ritualistic vocal attack, spirit gulf phrasing',
+    };
+
     // ── Layer 1 (THE LAW): resolve anchor from GCC_LAYER1 map ──
     const primaryStyle = includeTags[0] ?? null;
     const genreAnchor = primaryStyle
       ? (GCC_LAYER1[primaryStyle] ?? primaryStyle)
       : null;
+    const microPerf = primaryStyle ? (GCC_MICRO_PERF[primaryStyle] ?? null) : null;
 
     // ── Layer 2: Core instruments (user-selected, capped at 6; fallback to GCC anchor defaults) ──
     const gccAnchor = primaryStyle ? GCC_STYLE_ANCHORS[primaryStyle] : null;
@@ -3198,9 +3363,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     // ── Layer 5: User freeform text ──
     const freeText = styleText.trim() || null;
 
-    // ── Assemble all 5 layers ──
+    // ── Assemble all layers: 1 → 1.5 (micro-perf) → 2 → 3 → 4 → 5 ──
     const parts: string[] = [];
     if (genreAnchor) parts.push(genreAnchor);
+    if (microPerf) parts.push(microPerf);
     if (instrumentLayer.length > 0) parts.push(instrumentLayer.join(', '));
     if (rhythmLabel) parts.push(rhythmLabel);
     if (moodLabel) parts.push(moodLabel);
@@ -4085,7 +4251,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                                     : 'bg-white dark:bg-white/[0.09] border-[#d9dde7] dark:border-white/20 text-[#374151] dark:text-white/90 hover:border-purple-300 dark:hover:border-purple-400/40 hover:text-purple-600 dark:hover:text-purple-200 dark:hover:bg-purple-500/15'
                               }`}
                             >
-                              {inst}
+                              {language === 'ar' ? (INSTRUMENT_DISPLAY_AR[inst] ?? inst) : inst}
                             </button>
                           );
                         })}
@@ -4197,16 +4363,36 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
             </div>
             {lyricsDisplayMode ? (
               <div className="space-y-2">
-                <div
-                  dir={/[\u0600-\u06FF]/.test(lyricsText) ? 'rtl' : 'ltr'}
-                  className="min-h-[140px] whitespace-pre-wrap bg-[#fcfefd] dark:bg-white/[0.04] border border-[#d9dde7] dark:border-white/10 shadow-[0_4px_12px_rgba(6,5,65,0.04)] dark:shadow-none rounded-xl px-3 py-2 text-base leading-8 text-right text-[#060541] dark:text-white [font-family:'Noto_Sans_Arabic','Segoe_UI','Tahoma','Arial',sans-serif]"
-                >
-                  {lyricsText || (isAr ? 'اكتب فكرة أو كلمات أولاً، ثم اضغط Amp...' : 'Write an idea or some lyrics first, then click Amp →')}
+                {gccOriginalLyrics && (
+                  <div className="rounded-xl border border-amber-300/50 dark:border-amber-400/20 bg-amber-50/60 dark:bg-amber-500/5 px-3 py-2 space-y-1">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                      <span>✦</span>
+                      <span>{isAr ? 'قبل التحسين' : 'Before'}</span>
+                    </div>
+                    <div
+                      dir="rtl"
+                      className="whitespace-pre-wrap text-[12px] leading-7 text-amber-900/70 dark:text-amber-200/50 line-through decoration-amber-400/40 [font-family:'Noto_Sans_Arabic','Segoe_UI','Tahoma','Arial',sans-serif]"
+                    >
+                      {gccOriginalLyrics}
+                    </div>
+                  </div>
+                )}
+                <div className="rounded-xl border border-emerald-300/50 dark:border-emerald-400/20 bg-emerald-50/60 dark:bg-emerald-500/5 px-3 py-2 space-y-1">
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <span>✦</span>
+                    <span>{isAr ? 'بعد التحسين الخليجي' : 'GCC Enhanced'}</span>
+                  </div>
+                  <div
+                    dir={/[\u0600-\u06FF]/.test(lyricsText) ? 'rtl' : 'ltr'}
+                    className="whitespace-pre-wrap text-base leading-8 text-[#060541] dark:text-white [font-family:'Noto_Sans_Arabic','Segoe_UI','Tahoma','Arial',sans-serif]"
+                  >
+                    {lyricsText || (isAr ? 'اكتب فكرة أو كلمات أولاً، ثم اضغط Amp...' : 'Write an idea or some lyrics first, then click Amp →')}
+                  </div>
                 </div>
                 <div className="flex justify-end">
                   <button
                     type="button"
-                    onClick={() => setLyricsDisplayMode(false)}
+                    onClick={() => { setLyricsDisplayMode(false); setGccOriginalLyrics(''); }}
                     className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-white/[0.04] text-[#060541] dark:text-white/80 hover:bg-[#f7f8fc] dark:hover:bg-white/[0.08] active:scale-95 transition-all"
                   >
                     <Pencil className="h-3 w-3" />
