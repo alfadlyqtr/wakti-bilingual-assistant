@@ -32,16 +32,29 @@ type IntentResult = {
   followup_anchor?: string;       // prior topic to stay anchored on
 };
 
+type ConversationTurn = {
+  question: string;
+  answer: string;
+  topic: string;
+};
+
 async function classifyQuestion(
   query: string,
   priorTopic: string | null,
+  conversationHistory: ConversationTurn[],
   language: "ar" | "en",
   geminiKey: string,
 ): Promise<IntentResult> {
+  const convoBlock = conversationHistory.length > 0
+    ? conversationHistory.map((t) =>
+        `User asked: "${t.question}"\nTopic was: ${t.topic || 'unknown'}\nAnswer snippet: ${t.answer.slice(0, 150)}`
+      ).join("\n---\n")
+    : "none";
+
   const prompt = `You are an Islamic AI assistant. Classify this question and output ONLY valid JSON, no other text:
 {
   "question_type": "reference_lookup"|"simple_evidence"|"fiqh_question"|"followup"|"sensitive"|"general_islamic",
-  "normalized_topic": "clean Islamic topic in English e.g. 'repentance tawbah forgiveness'",
+  "normalized_topic": "clean Islamic search terms in English for database lookup",
   "source_preference": "quran_only"|"hadith_only"|"both",
   "likely_disputed": false,
   "needs_caution": false,
@@ -54,45 +67,59 @@ Rules:
 - sensitive: apostasy, divorce, punishments, inheritance
 - reference_lookup: specific verse or hadith by reference number
 - simple_evidence: what does Quran/hadith say about X
-- general_islamic: general knowledge, explanation, story
-- normalized_topic: translate to correct Islamic concept. "repentance and forgiveness" -> "repentance tawbah forgiveness sins"
-- source_preference: "hadith_only" if user says "give me a hadith", "quran_only" if asks for Quran verse, else "both"
+- general_islamic: general knowledge, explanation, story, dua request
+- followup: continuation of the conversation below — user is asking more about the SAME topic
+- normalized_topic: CRITICAL — this is used for database full-text search. Generate the BEST possible search keywords.
+  * Include the core Islamic concept in English: "prayer fajr missed sleeping", "patience sabr trials"
+  * For follow-ups: COMBINE the prior topic with the new request. Example: prior topic was "feeling far from Allah" and user says "give me a dua" → normalized_topic should be "dua supplication closeness to Allah repentance"
+  * For Quran questions: include "quran" + the topic. Example: "What does the Quran say about patience?" → "patience sabr quran trials hardship"
+  * Always include Arabic transliteration of key terms: sabr, tawbah, salah, zakat, etc.
+- source_preference: "hadith_only" if user explicitly says "give me a hadith", "quran_only" if asks specifically for Quran verse, else "both"
+- followup_anchor: if this is a follow-up, set this to the prior topic so we can search with context
 - Prior topic: ${priorTopic ? `"${priorTopic}"` : "none"}
+- Conversation history:\n${convoBlock}
 - Language: ${language}
 
 Question: "${query}"
 
 JSON only:`;
 
-  const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0, maxOutputTokens: 300, responseMimeType: "application/json" },
-      }),
-    },
-  );
-
-  if (!resp.ok) throw new Error(`classify_failed:${resp.status}`);
-  const data = await resp.json();
-  const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-  const cleaned = rawText.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
-  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
-
-  return {
-    question_type: parsed.question_type ?? "general_islamic",
-    normalized_topic: parsed.normalized_topic ?? query,
-    source_preference: parsed.source_preference ?? "both",
-    likely_disputed: parsed.likely_disputed ?? false,
-    needs_caution: parsed.needs_caution ?? false,
-    clarification_needed: parsed.clarification_needed ?? false,
-    clarification_prompt: parsed.clarification_prompt ?? undefined,
-    followup_anchor: parsed.followup_anchor ?? undefined,
-  };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0, maxOutputTokens: 400, responseMimeType: "application/json" },
+        }),
+        signal: controller.signal,
+      },
+    );
+    clearTimeout(timer);
+    if (!resp.ok) throw new Error(`classify_failed:${resp.status}`);
+    const data = await resp.json();
+    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    const cleaned = rawText.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
+    return {
+      question_type: parsed.question_type ?? "general_islamic",
+      normalized_topic: parsed.normalized_topic ?? query,
+      source_preference: parsed.source_preference ?? "both",
+      likely_disputed: parsed.likely_disputed ?? false,
+      needs_caution: parsed.needs_caution ?? false,
+      clarification_needed: parsed.clarification_needed ?? false,
+      clarification_prompt: parsed.clarification_prompt ?? undefined,
+      followup_anchor: parsed.followup_anchor ?? undefined,
+    };
+  } catch {
+    clearTimeout(timer);
+    throw new Error("classify_timeout_or_failed");
+  }
 }
 
 const COLLECTION_ALIASES = [
@@ -224,14 +251,6 @@ function parseHadithReference(query: string) {
   return null;
 }
 
-function buildSearchTerms(query: string) {
-  const normalized = query
-    .replace(/[?؟!,.']/g, " ")
-    .replace(/\b(i|my|me|we|our|you|your|he|she|they|their|it|its|him|her|us|do|did|done|be|been|being|am|was|were|has|have|had|will|shall|may|might|must|ought|let|just|only|also|very|really|actually|quite|so|if|but|and|or|nor|yet|then|that|this|these|those|there|here|can|could|should|would|does|what|when|how|about|tell|the|is|are|a|an|of|to|for|in|on|while|meaning|mean|means|explain|quran|hadith|islam|islamic|say|says|said|get|go|going|want|like|need|make|take)\b/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return normalized.length >= 2 ? normalized : query.trim();
-}
 
 function mapSearchRow(row: SearchRow, language: "ar" | "en") {
   const isArabic = language === "ar";
@@ -263,6 +282,7 @@ serve(async (req) => {
     const language: "ar" | "en" = body?.language === "ar" ? "ar" : "en";
     const limit = Math.max(1, Math.min(Number(body?.limit ?? 5), 8));
     const priorTopic: string | null = typeof body?.prior_topic === "string" ? body.prior_topic.trim() || null : null;
+    const conversationHistory: ConversationTurn[] = Array.isArray(body?.conversation_history) ? body.conversation_history : [];
 
     if (!query) return json({ error: "missing_query" }, 400);
 
@@ -275,7 +295,7 @@ serve(async (req) => {
     // ── Step 1: Classify question with the Islamic brain ──────────
     let intent: IntentResult;
     try {
-      intent = await classifyQuestion(query, priorTopic, language, GEMINI_API_KEY);
+      intent = await classifyQuestion(query, priorTopic, conversationHistory, language, GEMINI_API_KEY);
     } catch {
       intent = {
         question_type: "general_islamic",
@@ -374,57 +394,31 @@ serve(async (req) => {
       });
     }
 
-    // ── Step 4: Smart search using normalized_topic + cascading fallback ──
-    // Build ordered list of search attempts: full topic → fewer keywords → raw stripped query
-    const rawStripped = buildSearchTerms(query);
-    const topicWords = intent.normalized_topic
-      .replace(/[?؟!,.']/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .split(" ")
-      .filter((w) => w.length >= 2);
+    // ── Step 4: Fast GIN FTS search ──
+    const topic = intent.normalized_topic.trim();
+    const searchTerms = [topic];
+    if (topic.toLowerCase() !== query.toLowerCase()) searchTerms.push(query.trim());
 
-    const followupPrefix = intent.followup_anchor
-      ? intent.followup_anchor.split(" ").filter((w) => w.length >= 2).slice(0, 3).join(" ")
-      : null;
-
-    // Build cascading attempts: most specific → progressively shorter
-    const searchAttempts: string[] = [];
-
-    if (followupPrefix) {
-      searchAttempts.push(`${followupPrefix} ${topicWords.slice(0, 3).join(" ")}`);
-      searchAttempts.push(followupPrefix);
+    // For follow-ups, also try combined anchor + topic
+    if (intent.followup_anchor) {
+      const combined = `${intent.followup_anchor} ${topic}`.trim();
+      if (!searchTerms.includes(combined)) searchTerms.unshift(combined);
     }
 
-    if (topicWords.length >= 3) searchAttempts.push(topicWords.join(" "));
-    if (topicWords.length >= 2) searchAttempts.push(topicWords.slice(0, 2).join(" "));
-    if (topicWords.length >= 1) searchAttempts.push(topicWords[0]);
-    if (rawStripped !== topicWords.join(" ") && rawStripped.length >= 2) searchAttempts.push(rawStripped);
-
-    // Deduplicate while preserving order
-    const seen = new Set<string>();
-    const uniqueAttempts = searchAttempts.filter((a) => {
-      const k = a.trim().toLowerCase();
-      if (seen.has(k) || k.length < 2) return false;
-      seen.add(k);
-      return true;
-    });
-
     let rows: SearchRow[] = [];
-    let usedQuery = uniqueAttempts[0] ?? rawStripped;
+    let usedQuery = topic;
 
-    for (const attempt of uniqueAttempts) {
-      const { data, error } = await supabase.rpc("search_deen_sources", {
-        query_text: attempt,
+    for (const term of searchTerms) {
+      const { data, error } = await supabase.rpc("search_deen_fts", {
+        query_text: term,
         result_limit: limit,
       });
-      if (error) throw error;
-      const found = Array.isArray(data) ? data as SearchRow[] : [];
-      if (found.length > 0) {
-        rows = found;
-        usedQuery = attempt;
+      if (error) {
+        console.error("[deen-search] FTS error:", error.message);
         break;
       }
+      const found = Array.isArray(data) ? data as SearchRow[] : [];
+      if (found.length > 0) { rows = found; usedQuery = term; break; }
     }
 
     // ── Step 5: Evidence-type filtering by question type ─────────

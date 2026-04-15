@@ -83,6 +83,8 @@ const WaktiAIV2 = () => {
   const visionInFlightRef = useRef<boolean>(false);
   const lastTriggerRef = useRef<string>('chat');
   const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveInFlightRef = useRef<boolean>(false);
+  const saveDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const { language } = useTheme();
   const { showError } = useToastHelper();
   const { isDesktop } = useIsDesktop();
@@ -278,14 +280,24 @@ const WaktiAIV2 = () => {
     return () => window.removeEventListener('wakti-chat-input-resized', handler as EventListener);
   }, []);
 
-  // Auto-save active conversation to DB (called after every message)
-  const autoSaveActiveConversation = useCallback(async (messages: any[], convId: string) => {
+  // Auto-save active conversation to DB — debounced + locked to prevent concurrent duplicate inserts
+  const autoSaveActiveConversation = useCallback((messages: any[], convId: string) => {
     if (!convId || messages.length === 0) return;
-    try {
-      await SavedConversationsService.upsertActiveConversation(messages, convId);
-    } catch {}
-    // Also keep localStorage in sync as offline cache
+    // Always sync localStorage immediately (offline cache, no race condition risk)
     EnhancedFrontendMemory.saveActiveConversation(messages, convId);
+    // Debounce DB save: cancel any pending save and schedule a new one 500ms out
+    if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
+    saveDebounceRef.current = setTimeout(async () => {
+      // In-flight lock: if a DB save is already running, skip this one
+      if (saveInFlightRef.current) return;
+      saveInFlightRef.current = true;
+      try {
+        await SavedConversationsService.upsertActiveConversation(messages, convId);
+      } catch {}
+      finally {
+        saveInFlightRef.current = false;
+      }
+    }, 500);
   }, []);
 
   const handleSelectConversation = useCallback(async (id: string) => {

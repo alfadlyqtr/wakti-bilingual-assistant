@@ -248,6 +248,18 @@ export default function DeenAsk() {
   const [searching, setSearching] = useState(false);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const turnCounter = useRef(0);
+  const [userName, setUserName] = useState("");
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      const userId = data?.session?.user?.id;
+      if (!userId) return;
+      supabase.from("profiles").select("display_name, username").eq("id", userId).maybeSingle()
+        .then(({ data: profile }) => {
+          setUserName(profile?.display_name || profile?.username || "");
+        });
+    });
+  }, []);
 
   useEffect(() => {
     document.body.classList.add("deen-ask-page");
@@ -294,6 +306,7 @@ export default function DeenAsk() {
           intent_topic: intentTopic || undefined,
           intent: intent || undefined,
           meta: meta || undefined,
+          user_name: userName || undefined,
         },
       });
       if (error) throw error;
@@ -333,15 +346,28 @@ export default function DeenAsk() {
     let hasAnyResults = false;
 
     try {
-      // Get the most recent topic from prior turns for follow-up awareness
-      const priorTopic = turns
-        .filter((t) => t.topic)
-        .slice(-1)
-        .map((t) => t.topic!)
-        .join("");
+      // Build conversation history for follow-up awareness (last 2 complete turns)
+      const recentHistory = turns
+        .filter((t) => t.explanation?.summary)
+        .slice(-2)
+        .map((t) => ({
+          question: t.query,
+          answer: t.explanation!.summary.slice(0, 300),
+          topic: t.topic || "",
+        }));
+
+      const priorTopic = recentHistory.length > 0
+        ? recentHistory[recentHistory.length - 1].topic
+        : "";
 
       const { data, error } = await supabase.functions.invoke("deen-search", {
-        body: { query: q, language, prior_topic: priorTopic || undefined },
+        body: {
+          query: q,
+          language,
+          prior_topic: priorTopic || undefined,
+          conversation_history: recentHistory.length > 0 ? recentHistory : undefined,
+          user_name: userName || undefined,
+        },
       });
       if (error) throw error;
 

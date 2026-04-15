@@ -74,39 +74,45 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
 
   const [isSaving, setIsSaving] = useState(false);
 
+  // Load settings from DB — extracted so it can be called from both mount and auth change
+  const loadFromDB = React.useCallback(async (cancelled: { value: boolean }) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (user && !cancelled.value) {
+        const { data, error } = await supabase
+          .from('user_personal_touch')
+          .select('nickname, ai_nickname, tone, style, instruction, engine_tier, pt_version, updated_at')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (!error && data && !cancelled.value) {
+          const dbData: PersonalTouchData = {
+            nickname: data.nickname || '',
+            aiNickname: data.ai_nickname || '',
+            tone: data.tone || 'neutral',
+            style: data.style || 'short answers',
+            instruction: data.instruction || '',
+            engineTier: (data.engine_tier as 'speed' | 'intelligence') || 'speed',
+            pt_version: data.pt_version,
+            pt_updated_at: data.updated_at
+          };
+          setFormData(dbData);
+          // Sync localStorage from DB
+          try { localStorage.setItem(PERSONAL_TOUCH_KEY, JSON.stringify(dbData)); } catch {}
+          return true; // loaded from DB
+        }
+      }
+    } catch {}
+    return false; // DB load failed or no user
+  }, []);
+
   // Load from DB first (source of truth), fallback to localStorage
   useEffect(() => {
-    let cancelled = false;
+    const cancelled = { value: false };
     (async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user;
-        if (user && !cancelled) {
-          const { data, error } = await supabase
-            .from('user_personal_touch')
-            .select('nickname, ai_nickname, tone, style, instruction, engine_tier, pt_version, updated_at')
-            .eq('user_id', user.id)
-            .maybeSingle();
-          if (!error && data && !cancelled) {
-            const dbData: PersonalTouchData = {
-              nickname: data.nickname || '',
-              aiNickname: data.ai_nickname || '',
-              tone: data.tone || 'neutral',
-              style: data.style || 'short answers',
-              instruction: data.instruction || '',
-              engineTier: (data.engine_tier as 'speed' | 'intelligence') || 'speed',
-              pt_version: data.pt_version,
-              pt_updated_at: data.updated_at
-            };
-            setFormData(dbData);
-            // Sync localStorage from DB
-            try { localStorage.setItem(PERSONAL_TOUCH_KEY, JSON.stringify(dbData)); } catch {}
-            return;
-          }
-        }
-      } catch {}
+      const loaded = await loadFromDB(cancelled);
       // Fallback to localStorage if DB load failed or no user yet
-      if (!cancelled) {
+      if (!loaded && !cancelled.value) {
         const saved = loadWaktiPersonalTouch();
         if (saved) {
           setFormData({
@@ -117,8 +123,22 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
         }
       }
     })();
-    return () => { cancelled = true; };
-  }, []);
+    return () => { cancelled.value = true; };
+  }, [loadFromDB]);
+
+  // Re-fetch from DB when auth becomes ready (fixes: settings appear empty when auth was slow on mount)
+  useEffect(() => {
+    const cancelled = { value: false };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN') {
+        loadFromDB(cancelled).catch(() => {});
+      }
+    });
+    return () => {
+      cancelled.value = true;
+      subscription.unsubscribe();
+    };
+  }, [loadFromDB]);
 
   const handleSave = async () => {
     setIsSaving(true);

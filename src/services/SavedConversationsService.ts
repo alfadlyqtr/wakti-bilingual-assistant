@@ -47,7 +47,7 @@ function generateTitle(messages: any[]): string {
 }
 
 export const SavedConversationsService = {
-  // Upsert the active conversation — creates or updates based on conversation_id
+  // Upsert the active conversation — atomic INSERT ON CONFLICT DO UPDATE (no race condition)
   async upsertActiveConversation(messages: any[], conversationId: string): Promise<string> {
     const { data: { session }, error: userErr } = await supabase.auth.getSession();
     const user = session?.user;
@@ -62,43 +62,26 @@ export const SavedConversationsService = {
 
     const db = supabase as any;
 
-    // Find existing row for this conversation_id
-    const { data: existing } = await db
+    // Atomic upsert — relies on UNIQUE INDEX (user_id, conversation_id WHERE conversation_id IS NOT NULL)
+    // This eliminates the SELECT→INSERT race condition that caused duplicates
+    const { data, error } = await db
       .from('ai_saved_conversations')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('conversation_id', conversationId)
-      .maybeSingle();
-
-    if (existing?.id) {
-      // Update existing
-      await db
-        .from('ai_saved_conversations')
-        .update({
+      .upsert(
+        {
+          user_id: user.id,
+          conversation_id: conversationId,
           title,
           messages: normalized,
           message_count: normalized.length,
           last_message_at: lastMessageAt,
           updated_at: now,
           is_active: true,
-        })
-        .eq('id', existing.id);
-      return existing.id;
-    }
-
-    // Insert new — then prune if over limit
-    const { data, error } = await db
-      .from('ai_saved_conversations')
-      .insert({
-        user_id: user.id,
-        conversation_id: conversationId,
-        title,
-        messages: normalized,
-        message_count: normalized.length,
-        last_message_at: lastMessageAt,
-        updated_at: now,
-        is_active: true,
-      })
+        },
+        {
+          onConflict: 'user_id,conversation_id',
+          ignoreDuplicates: false,
+        }
+      )
       .select('id')
       .single();
 
