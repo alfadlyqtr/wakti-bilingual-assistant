@@ -82,7 +82,8 @@ serve(async (req) => {
     const title = (body?.title || "").toString().trim();
     const customMode = Boolean(body?.customMode ?? true);
     const instrumental = Boolean(body?.instrumental ?? false);
-    const model = (body?.model || "V5").toString();
+    const rawModel = (body?.model || "").toString().trim();
+    const model = (rawModel === "V5_5") ? "V5_5" : "V5_5"; // strict: always force V5_5
     const negativeTags = (body?.negativeTags || "").toString().trim();
     const vocalGender = body?.vocalGender as "m" | "f" | undefined;
     const styleWeight = typeof body?.styleWeight === "number" ? body.styleWeight : undefined;
@@ -112,25 +113,37 @@ serve(async (req) => {
     // Validation per API rules
     if (customMode) {
       if (instrumental && (!style || !title)) {
-        throw new Error("Custom instrumental mode requires style and title");
+        console.error("[music-generate] Validation failed: instrumental missing style or title", { style, title });
+        return new Response(JSON.stringify({ error: "Custom instrumental mode requires style and title" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       if (!instrumental && (!style || !title || !prompt)) {
-        throw new Error("Custom lyrical mode requires style, title, and prompt (lyrics)");
+        console.error("[music-generate] Validation failed: lyrical missing fields", { style: !!style, title: !!title, prompt: !!prompt });
+        return new Response(JSON.stringify({ error: "Custom lyrical mode requires style, title, and prompt (lyrics)" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
     } else {
       if (!prompt) {
-        throw new Error("Non-custom mode requires prompt");
+        return new Response(JSON.stringify({ error: "Non-custom mode requires prompt" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
     }
 
     // Build KIE.ai request payload
+    // NOTE: instrumental mode must NOT send a prompt field — KIE.ai rejects empty prompt strings
     const kiePayload: Record<string, unknown> = {
       customMode,
       instrumental,
       model,
       callBackUrl: CALLBACK_URL,
-      prompt,
     };
+
+    if (!instrumental && prompt) {
+      kiePayload.prompt = prompt;
+    }
 
     if (customMode) {
       kiePayload.style = style;
@@ -145,8 +158,8 @@ serve(async (req) => {
       if (personaModel) kiePayload.personaModel = personaModel;
     }
 
-    console.log("[music-generate] Calling KIE.ai generate", { model, customMode, instrumental, styleLen: style.length, negLen: negativeTags.length, promptLen: prompt.length });
-    console.log("[music-generate] KIE payload", JSON.stringify(kiePayload));
+    console.log("[music-generate] Calling KIE.ai generate", { model, customMode, instrumental, styleLen: style.length, promptLen: prompt.length });
+    console.log("[music-generate] KIE payload keys:", Object.keys(kiePayload));
 
     const kieResp = await fetch("https://api.kie.ai/api/v1/generate", {
       method: "POST",
@@ -159,60 +172,84 @@ serve(async (req) => {
 
     if (!kieResp.ok) {
       const errText = await kieResp.text();
-      console.error("[music-generate] KIE.ai non-2xx:", kieResp.status, errText);
+      console.error("[music-generate] KIE.ai HTTP error:", kieResp.status, errText);
+      if (kieResp.status === 422) {
+        return new Response(JSON.stringify({
+          error: "Style or negative tags are too long — please shorten your style description or remove some tags.",
+          detail: errText,
+        }), {
+          status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       throw new Error(`KIE.ai error: ${kieResp.status} ${errText}`);
     }
 
     const kieData = await kieResp.json();
 
     if (kieData.code !== 200 || !kieData.data?.taskId) {
+      console.error("[music-generate] KIE.ai rejected:", JSON.stringify(kieData));
       throw new Error(`KIE.ai rejected request: ${kieData.msg || "Unknown error"}`);
     }
 
     const taskId = kieData.data.taskId as string;
-
     console.log("[music-generate] KIE.ai taskId received", taskId);
 
-    const { data: placeholderData, error: placeholderError } = await supabaseService
-      .from("user_music_tracks")
-      .insert({
-        user_id: user.id,
-        task_id: taskId,
-        title: title || null,
-        prompt: prompt || null,
-        include_styles: style ? [style] : null,
-        requested_duration_seconds: durationHint ? Math.round(durationHint) : null,
-        provider: "kie",
-        model: model,
-        storage_path: null,
-        signed_url: null,
-        mime: "audio/mpeg",
-        meta: {
-          status: "generating",
-          saved: false,
-          is_generation_root: true,
-          customMode,
-          instrumental,
-          style: style || null,
-          negativeTags: negativeTags || null,
-          vocalGender: vocalGender || null,
-        },
-      })
-      .select("id")
-      .single();
+    // Audit payload stored inside meta JSONB (no separate column needed)
+    const requestPayload: Record<string, unknown> = {
+      customMode, instrumental, model,
+      prompt: prompt || null,
+      style: style || null,
+      title: title || null,
+      negativeTags: negativeTags || null,
+      vocalGender: vocalGender || null,
+      styleWeight: styleWeight ?? null,
+      weirdnessConstraint: weirdnessConstraint ?? null,
+      audioWeight: audioWeight ?? null,
+      duration_seconds: durationHint,
+    };
 
-    if (placeholderError) {
-      console.error("[music-generate] Failed to insert placeholder:", placeholderError);
-      throw placeholderError;
+    // DB insert is non-fatal: if it fails we log and still return success to the user
+    let recordId: string | null = null;
+    try {
+      const { data: placeholderData, error: placeholderError } = await supabaseService
+        .from("user_music_tracks")
+        .insert({
+          user_id: user.id,
+          task_id: taskId,
+          title: title || null,
+          prompt: prompt || null,
+          include_styles: style ? [style] : null,
+          requested_duration_seconds: durationHint ? Math.round(durationHint) : null,
+          provider: "kie",
+          model: model,
+          storage_path: null,
+          signed_url: null,
+          mime: "audio/mpeg",
+          meta: {
+            status: "generating",
+            saved: false,
+            is_generation_root: true,
+            customMode,
+            instrumental,
+            style: style || null,
+            negativeTags: negativeTags || null,
+            vocalGender: vocalGender || null,
+            request_payload: requestPayload,
+          },
+        })
+        .select("id")
+        .single();
+
+      if (placeholderError) {
+        console.error("[music-generate] DB insert failed (non-fatal):", JSON.stringify(placeholderError));
+      } else {
+        recordId = placeholderData?.id as string;
+        console.log("[music-generate] Placeholder row created", recordId);
+      }
+    } catch (dbErr) {
+      console.error("[music-generate] DB insert exception (non-fatal):", (dbErr as Error).message);
     }
 
-    const recordId = placeholderData?.id as string;
-
-    console.log("[music-generate] Placeholder row created", recordId);
-
-    // Return immediately — do NOT poll here.
-    // The KIE callback (music-callback) will update the DB when the song is ready.
-    // The frontend polls music-status to check progress.
     return new Response(JSON.stringify({
       taskId,
       recordId,
@@ -222,7 +259,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("[music-generate] Error:", (error as Error).message);
+    console.error("[music-generate] Unhandled error:", (error as Error).message, (error as Error).stack);
     return new Response(JSON.stringify({
       error: (error as Error).message || "Music generation failed",
     }), {

@@ -891,19 +891,43 @@ export default function DeenQuran() {
     }
   };
 
+  const isBismillahAyah = (ayah: Ayah) =>
+    ayah.numberInSurah === 1 && ayah.text.includes("بِسْم") && ayah.text.includes("رَّحْمَٰن");
+
   const cleanExplanation = (value: string) => {
     const cleaned = value.replace(/\*\*/g, "").trim();
-    // Take only the first 2 sentences — tafsir can be very long
+    // Take only the first 5 sentences — tafsir can be very long
     const sentences = cleaned.match(/[^.!?]+[.!?]+/g) ?? [];
-    if (sentences.length >= 2) return (sentences[0] + sentences[1]).trim();
+    if (sentences.length >= 5) return (sentences[0] + sentences[1] + sentences[2] + sentences[3] + sentences[4]).trim();
+    if (sentences.length === 4) return (sentences[0] + sentences[1] + sentences[2] + sentences[3]).trim();
+    if (sentences.length === 2) return (sentences[0] + sentences[1]).trim();
     if (sentences.length === 1) return sentences[0].trim();
-    // Fallback: hard-cap at 200 chars
-    return cleaned.length > 200 ? cleaned.slice(0, 200).trimEnd() + "…" : cleaned;
+    // Fallback: hard-cap at 320 chars
+    return cleaned.length > 320 ? cleaned.slice(0, 320).trimEnd() + "…" : cleaned;
   };
 
   const handleExplain = () => {
     if (!selectedAyah) return;
     explainAyah(selectedAyah);
+  };
+
+  const openAyahExplanationPopup = (ayah: Ayah, trans: Ayah | null = null) => {
+    setSelectedAyah(ayah);
+    setSelectedAyahTrans(trans);
+    setShowExplanation(true);
+    setExplanation("");
+    handleExplainForAyah(ayah);
+    if (activeSurah) saveProgress(activeSurah.number, ayah.numberInSurah);
+  };
+
+  const openAyahSheet = (ayah: Ayah, trans: Ayah | null = null) => {
+    setSelectedAyah(ayah);
+    setSelectedAyahTrans(trans);
+    setShowActionSheet(true);
+    setShowExplanation(false);
+    setExplanation("");
+    handleExplainForAyah(ayah);
+    if (activeSurah) saveProgress(activeSurah.number, ayah.numberInSurah);
   };
 
   const handleExplainForAyah = (ayah: Ayah) => {
@@ -1595,28 +1619,68 @@ export default function DeenQuran() {
 
             // Helper: Arabic-Indic digits
             const toAI = (n: number) => String(n).replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[+d]);
-            // ۝ Unicode end-of-ayah mark + Arabic-Indic number
-            const ayahMark = (n: number) => `\u06DD${isAr ? toAI(n) : n}`;
+            const renderAyahMarker = (n: number) => (
+              <span className="relative inline-flex items-center justify-center" style={{ width: 46, height: 46 }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    color: markerTxt,
+                    fontFamily: "'Noto Sans Arabic', serif",
+                    fontSize: 35,
+                    lineHeight: 1,
+                  }}
+                >
+                  {"\u06DD"}
+                </span>
+                <span
+                  className="absolute inset-0 flex items-center justify-center"
+                  style={{
+                    color: markerTxt,
+                    fontFamily: "'Noto Sans Arabic', serif",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    lineHeight: 1,
+                    paddingTop: 1,
+                  }}
+                >
+                  {isAr ? toAI(n) : n}
+                </span>
+              </span>
+            );
+            const shouldShiftDisplayedAyahNumbers = activeSurah.number !== 1 && activeSurah.number !== 9;
+            const displayAyahNumber = (ayah: Ayah) =>
+              shouldShiftDisplayedAyahNumbers ? ayah.numberInSurah - 1 : ayah.numberInSurah;
 
             return (
-              <div
-                className="relative"
-                style={{
-                  background: pageBg,
-                  borderRadius: "20px",
-                  boxShadow: isDark
-                    ? `0 0 0 1px ${goldGlow}, 0 0 0 3px ${goldFaint}, 0 0 0 5px ${goldGlow}, 0 12px 40px rgba(0,0,0,0.6)`
-                    : `0 0 0 1px ${goldGlow}, 0 0 0 3px ${goldFaint}, 0 0 0 5px ${goldGlow}, 0 8px 24px rgba(80,50,10,0.18)`,
-                }}
-              >
-                {/* 3 nested border lines */}
-                {([5, 10, 15] as const).map((ins, i) => (
-                  <div key={i} className="absolute pointer-events-none" style={{
-                    inset: ins, borderRadius: `${18 - ins}px`,
-                    border: `${i === 1 ? "1.5px" : "1px"} solid ${i === 1 ? goldGlow : goldFaint}`,
-                  }} />
-                ))}
-
+              <>
+                <div className="px-3 mb-3">
+                  <button
+                    onClick={handleBackNavigation}
+                    className="rounded-xl flex items-center gap-2 px-3 py-2 active:scale-95 transition-all flex-shrink-0"
+                    style={{
+                      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.06)",
+                      border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(6,5,65,0.14)",
+                      boxShadow: isDark ? "0 8px 24px rgba(0,0,0,0.28)" : "0 8px 20px rgba(6,5,65,0.08)",
+                      backdropFilter: "blur(10px)",
+                    }}
+                    title={isAr ? "العودة إلى القرآن" : "Back to Quran"}
+                  >
+                    <ArrowLeft className="w-4 h-4" style={{ color: isDark ? "#f2f2f2" : "#060541" }} />
+                    <span className="text-[12px] font-medium" style={{ color: isDark ? "#f2f2f2" : "#060541" }}>
+                      {isAr ? "العودة إلى القرآن" : "Back to Quran"}
+                    </span>
+                  </button>
+                </div>
+                <div
+                  className="relative"
+                  style={{
+                    background: pageBg,
+                    borderRadius: "20px",
+                    boxShadow: isDark
+                      ? `0 0 0 1px ${goldGlow}, 0 0 0 3px ${goldFaint}, 0 0 0 5px ${goldGlow}, 0 12px 40px rgba(0,0,0,0.6)`
+                      : `0 0 0 1px ${goldGlow}, 0 0 0 3px ${goldFaint}, 0 0 0 5px ${goldGlow}, 0 8px 24px rgba(80,50,10,0.18)`,
+                  }}
+                >
                 {/* Corner ornament rosettes */}
                 {([
                   { top: 3, left: 3 }, { top: 3, right: 3 },
@@ -1642,23 +1706,24 @@ export default function DeenQuran() {
                     <div className="flex-1 h-px" style={{ background: goldGlow }} />
                   </div>
                   <div className="flex items-center justify-center gap-3 mb-1">
-                    <button
-                      onClick={handleBackNavigation}
-                      className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 transition-all flex-shrink-0"
-                      style={{ background: goldFaint, border: `1px solid ${goldGlow}` }}
-                      title={isAr ? "رجوع" : "Back"}
-                    >
-                      <ArrowLeft className="w-4 h-4" style={{ color: gold }} />
-                    </button>
                     <div className="inline-block px-7 py-1.5 rounded-full" style={{ background: goldFaint, border: `1px solid ${goldGlow}`, boxShadow: isDark ? `0 0 16px ${goldFaint}` : "none" }}>
-                      <p className="text-[22px] font-bold" dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', serif", color: gold, lineHeight: 1.5 }}>
-                        {activeSurah.name}
+                      <p
+                        className="text-[22px] font-bold"
+                        dir={isAr ? "rtl" : "ltr"}
+                        style={{
+                          fontFamily: isAr ? "'Noto Sans Arabic', serif" : "inherit",
+                          color: gold,
+                          lineHeight: 1.5,
+                          textAlign: "center",
+                        }}
+                      >
+                        {isAr ? activeSurah.name : activeSurah.englishName}
                       </p>
                     </div>
                   </div>
                   <div className="text-center">
                     <p className="text-[9px] tracking-[0.2em] uppercase mt-1" style={{ color: isDark ? "hsla(45,50%,60%,0.55)" : "hsla(35,40%,35%,0.6)" }}>
-                      {activeSurah.englishName} · {activeSurah.ayahs.length} {isAr ? "آية" : "ayahs"}
+                      {activeSurah.ayahs.length} {isAr ? "آية" : "AYAHS"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 mt-4 mb-5">
@@ -1669,13 +1734,13 @@ export default function DeenQuran() {
 
                   {/* ── Bismillah ── */}
                   {activeSurah.number !== 9 && activeSurah.number !== 1 && readerPage === 0 && (
-                    <p className="text-center mb-5" dir="rtl" style={{
-                      fontFamily: "'Noto Sans Arabic', serif",
+                    <p className="text-center mb-5" dir={isAr ? "rtl" : "ltr"} style={{
+                      fontFamily: isAr ? "'Noto Sans Arabic', serif" : "inherit",
                       fontSize: "19px", lineHeight: "2",
                       color: gold,
                       textShadow: isDark ? `0 0 18px ${goldFaint}` : "none",
                     }}>
-                      بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
+                      {isAr ? "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ" : "In the name of Allah, the Most Compassionate, the Most Merciful."}
                     </p>
                   )}
 
@@ -1684,26 +1749,84 @@ export default function DeenQuran() {
                     <div className="flex flex-col" dir="rtl">
                       {activeSurah.ayahs.slice(pageBreaks[readerPage], pageBreaks[readerPage + 1]).map((ayah, idx) => {
                         const globalIdx = pageBreaks[readerPage] + idx;
+                        if (isBismillahAyah(ayah)) return null;
                         const isPlaying = playing && currentPlaybackAyahIndex === globalIdx;
                         const isBookmarked = bookmarkedAyahs.has(ayah.numberInSurah);
+                        const trans = activeTrans[globalIdx] ?? null;
                         return (
-                          <button
+                          <div
                             key={ayah.numberInSurah}
-                            onClick={() => { const trans = activeTrans[globalIdx] ?? null; setSelectedAyah(ayah); setSelectedAyahTrans(trans); setShowActionSheet(true); setShowExplanation(true); setExplanation(""); handleExplainForAyah(ayah); if (activeSurah) saveProgress(activeSurah.number, ayah.numberInSurah); }}
-                            className="w-full text-right py-3 active:scale-[0.99] transition-all duration-150"
+                            className="w-full flex items-start gap-3 py-3"
                             style={{ borderBottom: `1px solid ${goldFaint}` }}
                           >
-                            <p style={{
-                              fontFamily: "'Noto Sans Arabic', 'Amiri', serif",
-                              fontSize: "21px", lineHeight: "2.2",
-                              color: isPlaying ? gold : pageTxt,
-                              textShadow: isPlaying && isDark ? `0 0 12px ${goldGlow}` : "none",
-                              textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
-                            }}>
-                              <span style={{ color: markerTxt, fontFamily: "'Noto Sans Arabic', serif", marginLeft: "0.4em" }}>{ayahMark(ayah.numberInSurah)}</span>
-                              {" "}{ayah.text}
-                            </p>
-                          </button>
+                            <div className="w-12 flex flex-col items-center gap-1 pt-1 shrink-0">
+                              <div
+                                className="flex items-center justify-center"
+                                style={{
+                                  width: 40,
+                                  height: 40,
+                                }}
+                              >
+                                {renderAyahMarker(displayAyahNumber(ayah))}
+                              </div>
+                              <button
+                                onClick={() => openAyahExplanationPopup(ayah, trans)}
+                                className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
+                                style={{
+                                  border: `1px solid ${goldGlow}`,
+                                  background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)",
+                                  color: gold,
+                                  boxShadow: isDark ? `0 0 10px ${goldFaint}` : `0 2px 8px ${goldFaint}`,
+                                }}
+                                title={isAr ? "المعنى" : "Meaning"}
+                              >
+                                <BookOpen className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => bookmarkAyah(ayah)}
+                                className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
+                                style={{
+                                  border: `1px solid ${goldGlow}`,
+                                  background: isBookmarked ? goldFaint : (isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)"),
+                                  color: gold,
+                                  boxShadow: isBookmarked ? `0 0 14px ${goldGlow}` : (isDark ? `0 0 10px ${goldFaint}` : `0 2px 8px ${goldFaint}`),
+                                }}
+                                title={isAr ? "حفظ" : "Bookmark"}
+                              >
+                                {isBookmarked ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  const started = await playAyahAudio(ayah);
+                                  if (started && activeSurah) saveProgress(activeSurah.number, ayah.numberInSurah);
+                                }}
+                                className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
+                                style={{
+                                  border: `1px solid ${goldGlow}`,
+                                  background: isPlaying ? goldFaint : (isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)"),
+                                  color: gold,
+                                  boxShadow: isPlaying ? `0 0 14px ${goldGlow}` : (isDark ? `0 0 10px ${goldFaint}` : `0 2px 8px ${goldFaint}`),
+                                }}
+                                title={isAr ? "استمع" : "Play"}
+                              >
+                                <Play className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <button
+                              onClick={() => openAyahSheet(ayah, trans)}
+                              className="flex-1 text-right active:scale-[0.99] transition-all duration-150"
+                            >
+                              <p style={{
+                                fontFamily: "'Noto Sans Arabic', 'Amiri', serif",
+                                fontSize: "21px", lineHeight: "2.2",
+                                color: isPlaying ? gold : pageTxt,
+                                textShadow: isPlaying && isDark ? `0 0 12px ${goldGlow}` : "none",
+                                textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
+                              }}>
+                                {ayah.text}
+                              </p>
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -1712,52 +1835,88 @@ export default function DeenQuran() {
                     <div className="flex flex-col" dir="ltr">
                       {activeSurah.ayahs.slice(pageBreaks[readerPage], pageBreaks[readerPage + 1]).map((ayah, idx) => {
                         const globalIdx = pageBreaks[readerPage] + idx;
+                        if (isBismillahAyah(ayah)) return null;
                         const trans = activeTrans[globalIdx];
                         if (!trans) return null;
                         const isPlaying = playing && currentPlaybackAyahIndex === globalIdx;
                         const isBookmarked = bookmarkedAyahs.has(ayah.numberInSurah);
                         return (
-                          <button
+                          <div
                             key={ayah.numberInSurah}
-                            onClick={() => { setSelectedAyah(ayah); setSelectedAyahTrans(trans ?? null); setShowActionSheet(true); setShowExplanation(true); setExplanation(""); handleExplainForAyah(ayah); if (activeSurah) saveProgress(activeSurah.number, ayah.numberInSurah); }}
-                            className="w-full text-left py-3 active:scale-[0.99] transition-all duration-150"
+                            className="w-full flex items-start gap-3 py-3"
                             style={{ borderBottom: `1px solid ${goldFaint}` }}
                           >
-                            <p style={{
-                              fontSize: "17px", lineHeight: "1.85",
-                              color: isPlaying ? gold : pageTxt,
-                              textShadow: isPlaying && isDark ? `0 0 10px ${goldFaint}` : "none",
-                              textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
-                            }}>
-                              <span
-                                className="inline-flex items-center justify-center align-middle"
+                            <div className="w-12 flex flex-col items-center gap-1 pt-1 shrink-0">
+                              <div
+                                className="flex items-center justify-center"
                                 style={{
-                                  width: "1.45em",
-                                  height: "1.45em",
-                                  marginRight: "0.4em",
-                                  borderRadius: "9999px",
-                                  border: `1px solid ${goldGlow}`,
-                                  boxShadow: isDark ? `inset 0 0 0 1px ${goldFaint}, 0 0 8px ${goldFaint}` : `inset 0 0 0 1px ${goldFaint}`,
-                                  color: markerTxt,
-                                  fontSize: "12px",
-                                  fontWeight: 700,
-                                  lineHeight: 1,
-                                  verticalAlign: "middle",
+                                  width: 40,
+                                  height: 40,
                                 }}
                               >
-                                {ayah.numberInSurah}
-                              </span>
-                              {trans.text}
-                            </p>
-                          </button>
+                                {renderAyahMarker(displayAyahNumber(ayah))}
+                              </div>
+                              <button
+                                onClick={() => openAyahExplanationPopup(ayah, trans ?? null)}
+                                className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
+                                style={{
+                                  border: `1px solid ${goldGlow}`,
+                                  background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)",
+                                  color: gold,
+                                  boxShadow: isDark ? `0 0 10px ${goldFaint}` : `0 2px 8px ${goldFaint}`,
+                                }}
+                                title={isAr ? "المعنى" : "Meaning"}
+                              >
+                                <BookOpen className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => bookmarkAyah(ayah)}
+                                className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
+                                style={{
+                                  border: `1px solid ${goldGlow}`,
+                                  background: isBookmarked ? goldFaint : (isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)"),
+                                  color: gold,
+                                  boxShadow: isBookmarked ? `0 0 14px ${goldGlow}` : (isDark ? `0 0 10px ${goldFaint}` : `0 2px 8px ${goldFaint}`),
+                                }}
+                                title={isAr ? "حفظ" : "Bookmark"}
+                              >
+                                {isBookmarked ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  const started = await playAyahAudio(ayah);
+                                  if (started && activeSurah) saveProgress(activeSurah.number, ayah.numberInSurah);
+                                }}
+                                className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
+                                style={{
+                                  border: `1px solid ${goldGlow}`,
+                                  background: isPlaying ? goldFaint : (isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)"),
+                                  color: gold,
+                                  boxShadow: isPlaying ? `0 0 14px ${goldGlow}` : (isDark ? `0 0 10px ${goldFaint}` : `0 2px 8px ${goldFaint}`),
+                                }}
+                                title={isAr ? "استمع" : "Play"}
+                              >
+                                <Play className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <button
+                              onClick={() => openAyahSheet(ayah, trans ?? null)}
+                              className="flex-1 text-left active:scale-[0.99] transition-all duration-150"
+                            >
+                              <p style={{
+                                fontSize: "17px", lineHeight: "1.85",
+                                color: isPlaying ? gold : pageTxt,
+                                textShadow: isPlaying && isDark ? `0 0 10px ${goldFaint}` : "none",
+                                textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
+                              }}>
+                                {trans.text}
+                              </p>
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
                   )}
-
-                  <p className="text-center text-[10px] mt-6" style={{ color: isDark ? "hsla(45,35%,50%,0.35)" : "hsla(35,30%,35%,0.35)" }}>
-                    {isAr ? "اضغط على الآية للخيارات" : "Tap any ayah · Play, Explain or Bookmark"}
-                  </p>
 
                   {/* ── Pagination controls ── */}
                   {pageBreaks.length > 1 && (() => {
@@ -1786,165 +1945,230 @@ export default function DeenQuran() {
                           className="flex-1 py-3 rounded-2xl text-sm font-semibold active:scale-95 transition-all disabled:opacity-30"
                           style={{ background: goldFaint, border: `1px solid ${goldGlow}`, color: gold }}
                         >
-                          {isAr ? "← التالي" : "Next →"}
+                          {isAr ? "التالي ←" : "Next →"}
                         </button>
                       </div>
                     );
                   })()}
                 </div>
               </div>
-            );
-          })() : null}
-        </div>
-      )}
+            </>
+          );
+        })() : (
+          <div className="flex items-center justify-center py-20">
+            <div className="w-6 h-6 border-2 border-amber-500/40 border-t-amber-500 rounded-full animate-spin" />
+          </div>
+        )}
 
-      {/* Ayah Meaning Sheet */}
-      {showActionSheet && selectedAyah && (() => {
-        const sheetGold = isDark ? "#c9a84c" : "#8a6a1a";
-        const sheetGoldGlow = isDark ? "hsla(45,65%,55%,0.45)" : "hsla(35,65%,42%,0.35)";
-        const sheetGoldFaint = isDark ? "hsla(45,65%,50%,0.12)" : "hsla(35,55%,42%,0.10)";
-        const sheetBg = isDark
-          ? "linear-gradient(180deg, hsl(232 22% 9%) 0%, hsl(228 20% 7%) 100%)"
-          : "linear-gradient(180deg, hsl(42 55% 97%) 0%, hsl(38 45% 95%) 100%)";
-        const sheetTxt = isDark ? "#e8dfc8" : "#1a120a";
-        const sheetSub = isDark ? "hsla(44,30%,70%,0.55)" : "hsla(30,30%,30%,0.5)";
-        const selectedTrans = activeTrans.find(t => t.numberInSurah === selectedAyah.numberInSurah);
+        {showExplanation && selectedAyah && (() => {
+          const popupGold = isDark ? "#c9a84c" : "#8a6a1a";
+          const popupBorder = isDark ? "hsla(45,65%,55%,0.35)" : "hsla(35,65%,42%,0.28)";
+          const popupBg = isDark ? "linear-gradient(180deg, hsl(232 22% 10%) 0%, hsl(228 20% 8%) 100%)" : "linear-gradient(180deg, hsl(42 55% 98%) 0%, hsl(38 45% 96%) 100%)";
+          const popupText = isDark ? "#e8dfc8" : "#1a120a";
+          const popupSub = isDark ? "hsla(44,30%,70%,0.6)" : "hsla(30,30%,30%,0.55)";
+          const popupTrans = activeTrans.find((t) => t.numberInSurah === selectedAyah.numberInSurah) ?? selectedAyahTrans;
 
-        return (
-          <div
-            className="fixed inset-0 z-40 flex items-end"
-            onClick={() => setShowActionSheet(false)}
-          >
-            <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(6px)" }} />
-            <div
-              className="relative w-full z-50 overflow-hidden"
-              style={{
-                borderRadius: "28px 28px 0 0",
-                background: sheetBg,
-                boxShadow: `0 -1px 0 ${sheetGoldGlow}, 0 -3px 0 ${sheetGoldFaint}, 0 -32px 80px rgba(0,0,0,0.5)`,
-                maxHeight: "88vh",
-                overflowY: "auto",
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Gold top border line */}
-              <div className="absolute top-0 inset-x-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${sheetGoldGlow}, transparent)` }} />
-
-              {/* Drag pill */}
-              <div className="flex justify-center pt-3 pb-1">
-                <div className="w-9 h-[3px] rounded-full" style={{ background: sheetGoldGlow }} />
-              </div>
-
-              {/* Surah · Ayah reference + close */}
-              <div className="flex items-center justify-between px-5 pt-2 pb-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-semibold tracking-wide" style={{ color: sheetGold }}>
-                    {isAr ? activeSurah?.name : activeSurah?.englishName}
-                  </span>
-                  <span style={{ color: sheetGoldGlow, fontSize: 10 }}>·</span>
-                  <span className="text-[11px]" style={{ color: sheetSub }}>
-                    {isAr ? `آية ${selectedAyah.numberInSurah}` : `Verse ${selectedAyah.numberInSurah}`}
-                  </span>
-                </div>
-                <button
-                  onClick={() => setShowActionSheet(false)}
-                  title={isAr ? "إغلاق" : "Close"}
-                  aria-label={isAr ? "إغلاق" : "Close"}
-                  className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-all"
-                  style={{ background: sheetGoldFaint, border: `1px solid ${sheetGoldGlow}` }}
-                >
-                  <X className="w-3.5 h-3.5" style={{ color: sheetGold }} />
-                </button>
-              </div>
-
-              {/* Separator */}
-              <div className="mx-5 h-px mb-4" style={{ background: `linear-gradient(90deg, transparent, ${sheetGoldGlow}, transparent)` }} />
-
-              {/* Ayah text */}
-              <div className="px-5 mb-5">
-                {isAr ? (
-                  <p
-                    className="text-[20px] leading-[2] text-right"
-                    dir="rtl"
-                    style={{ fontFamily: "'Noto Sans Arabic', 'Amiri', serif", color: sheetTxt }}
-                  >
-                    {selectedAyah.text}
-                  </p>
-                ) : selectedTrans ? (
-                  <p
-                    className="text-[19px] leading-[1.75] font-medium"
-                    style={{ color: sheetTxt }}
-                  >
-                    {selectedTrans.text}
-                  </p>
-                ) : (
-                  <p
-                    className="text-[17px] leading-[1.75]"
-                    style={{ color: sheetSub }}
-                  >
-                    {activeSurah?.englishName} · Verse {selectedAyah.numberInSurah}
-                  </p>
-                )}
-              </div>
-
-              {/* Meaning / Explanation */}
-              <div className="px-5 pb-4">
-                <p className="text-xs font-semibold mb-2" style={{ color: sheetGold }}>
-                  {isAr ? "المعنى" : "Meaning"}
-                </p>
-                {explLoading ? (
-                  <div className="rounded-2xl px-4 py-3" style={{ background: sheetGoldFaint, border: `1px solid ${sheetGoldGlow}` }}>
-                    <p className="text-xs" style={{ color: sheetSub }}>{isAr ? "يتم تجهيز المعنى..." : "Loading meaning..."}</p>
-                  </div>
-                ) : explanation ? (
-                  <div
-                    className="rounded-2xl px-4 py-4"
-                    style={{
-                      background: sheetGoldFaint,
-                      border: `1px solid ${sheetGoldGlow}`,
-                      maxHeight: "220px",
-                      overflowY: "auto",
-                    }}
-                  >
-                    <p
-                      className="text-[14px] leading-[1.85] whitespace-pre-wrap"
-                      style={{ color: isDark ? "#ddd5bc" : "#2a1e0a" }}
-                    >
-                      {cleanExplanation(explanation)}
+          return (
+            <div className="fixed inset-0 z-40 flex items-center justify-center px-4" onClick={() => setShowExplanation(false)}>
+              <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.52)", backdropFilter: "blur(4px)" }} />
+              <div
+                className="relative w-full max-w-md rounded-3xl px-5 py-5"
+                style={{ background: popupBg, border: `1px solid ${popupBorder}`, boxShadow: "0 24px 80px rgba(0,0,0,0.35)" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <p className="text-xs font-semibold" style={{ color: popupGold }}>
+                      {isAr ? activeSurah?.name : activeSurah?.englishName}
+                    </p>
+                    <p className="text-[11px] mt-1" style={{ color: popupSub }}>
+                      {isAr ? `آية ${selectedAyah.numberInSurah}` : `Verse ${selectedAyah.numberInSurah}`}
                     </p>
                   </div>
-                ) : (
-                  <div className="rounded-2xl px-4 py-3" style={{ background: sheetGoldFaint, border: `1px solid ${sheetGoldGlow}` }}>
-                    <p className="text-xs" style={{ color: sheetSub }}>{isAr ? "المعنى غير متاح حالياً" : "Meaning unavailable right now"}</p>
-                  </div>
-                )}
-              </div>
+                  <button
+                    onClick={() => setShowExplanation(false)}
+                    title={isAr ? "إغلاق" : "Close"}
+                    aria-label={isAr ? "إغلاق" : "Close"}
+                    className="w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-all"
+                    style={{ border: `1px solid ${popupBorder}`, color: popupGold, background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)" }}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
 
-              {/* Bottom action — Play */}
-              <div
-                className="flex items-center px-5 pb-8 pt-2"
-                style={{ borderTop: `1px solid ${sheetGoldFaint}` }}
-              >
-                <button
-                  onClick={async () => {
-                    const started = await playAyahAudio(selectedAyah);
-                    if (started) setShowActionSheet(false);
-                  }}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl active:scale-95 transition-all font-semibold text-sm"
-                  style={{
-                    background: `linear-gradient(135deg, ${sheetGoldGlow} 0%, hsla(45,70%,50%,0.25) 100%)`,
-                    border: `1px solid ${sheetGoldGlow}`,
-                    color: sheetGold,
-                  }}
-                >
-                  <Play className="w-4 h-4" />
-                  {isAr ? "استمع" : "Play"}
-                </button>
+                <div className="mb-4">
+                  {isAr ? (
+                    <p className="text-[18px] leading-[1.95] text-right" dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', 'Amiri', serif", color: popupText }}>
+                      {selectedAyah.text}
+                    </p>
+                  ) : popupTrans ? (
+                    <p className="text-[16px] leading-[1.75]" style={{ color: popupText }}>
+                      {popupTrans.text}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="rounded-2xl px-4 py-4" style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.72)", border: `1px solid ${popupBorder}` }}>
+                  <p className="text-xs font-semibold mb-2" style={{ color: popupGold }}>
+                    {isAr ? "المعنى" : "Meaning"}
+                  </p>
+                  {explLoading ? (
+                    <p className="text-sm" style={{ color: popupSub }}>{isAr ? "يتم تجهيز المعنى..." : "Loading meaning..."}</p>
+                  ) : (
+                    <p className="text-[14px] leading-[1.8] whitespace-pre-wrap" style={{ color: popupText }}>
+                      {cleanExplanation(explanation || (isAr ? "التفسير غير متاح لهذه الآية." : "Tafsir not available for this verse."))}
+                    </p>
+                  )}
+                  <p className="text-[11px] mt-3" style={{ color: popupSub }}>
+                    {isAr ? "المصدر: تفسير ابن كثير" : "Source: tafsir-ibn-kathir"}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
+
+        {showActionSheet && selectedAyah && (() => {
+          const sheetGold = isDark ? "#c9a84c" : "#8a6a1a";
+          const sheetGoldGlow = isDark ? "hsla(45,65%,55%,0.45)" : "hsla(35,65%,42%,0.35)";
+          const sheetGoldFaint = isDark ? "hsla(45,65%,50%,0.12)" : "hsla(35,55%,42%,0.10)";
+          const sheetBg = isDark
+            ? "linear-gradient(180deg, hsl(232 22% 9%) 0%, hsl(228 20% 7%) 100%)"
+            : "linear-gradient(180deg, hsl(42 55% 97%) 0%, hsl(38 45% 95%) 100%)";
+          const sheetTxt = isDark ? "#e8dfc8" : "#1a120a";
+          const sheetSub = isDark ? "hsla(44,30%,70%,0.55)" : "hsla(30,30%,30%,0.5)";
+          const selectedTrans = activeTrans.find((t) => t.numberInSurah === selectedAyah.numberInSurah);
+
+          return (
+            <div
+              className="fixed inset-0 z-40 flex items-end"
+              onClick={() => setShowActionSheet(false)}
+            >
+              <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(6px)" }} />
+              <div
+                className="relative w-full z-50 overflow-hidden"
+                style={{
+                  borderRadius: "28px 28px 0 0",
+                  background: sheetBg,
+                  boxShadow: `0 -1px 0 ${sheetGoldGlow}, 0 -3px 0 ${sheetGoldFaint}, 0 -32px 80px rgba(0,0,0,0.5)`,
+                  maxHeight: "88vh",
+                  overflowY: "auto",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="absolute top-0 inset-x-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${sheetGoldGlow}, transparent)` }} />
+
+                <div className="flex justify-center pt-3 pb-1">
+                  <div className="w-9 h-[3px] rounded-full" style={{ background: sheetGoldGlow }} />
+                </div>
+
+                <div className="flex items-center justify-between px-5 pt-2 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold tracking-wide" style={{ color: sheetGold }}>
+                      {isAr ? activeSurah?.name : activeSurah?.englishName}
+                    </span>
+                    <span style={{ color: sheetGoldGlow, fontSize: 10 }}>·</span>
+                    <span className="text-[11px]" style={{ color: sheetSub }}>
+                      {isAr ? `آية ${selectedAyah.numberInSurah}` : `Verse ${selectedAyah.numberInSurah}`}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setShowActionSheet(false)}
+                    title={isAr ? "إغلاق" : "Close"}
+                    aria-label={isAr ? "إغلاق" : "Close"}
+                    className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-all"
+                    style={{ background: sheetGoldFaint, border: `1px solid ${sheetGoldGlow}` }}
+                  >
+                    <X className="w-3.5 h-3.5" style={{ color: sheetGold }} />
+                  </button>
+                </div>
+
+                <div className="mx-5 h-px mb-4" style={{ background: `linear-gradient(90deg, transparent, ${sheetGoldGlow}, transparent)` }} />
+
+                <div className="px-5 mb-5">
+                  {isAr ? (
+                    <p
+                      className="text-[20px] leading-[2] text-right"
+                      dir="rtl"
+                      style={{ fontFamily: "'Noto Sans Arabic', 'Amiri', serif", color: sheetTxt }}
+                    >
+                      {selectedAyah.text}
+                    </p>
+                  ) : selectedTrans ? (
+                    <p
+                      className="text-[19px] leading-[1.75] font-medium"
+                      style={{ color: sheetTxt }}
+                    >
+                      {selectedTrans.text}
+                    </p>
+                  ) : (
+                    <p
+                      className="text-[17px] leading-[1.75]"
+                      style={{ color: sheetSub }}
+                    >
+                      {activeSurah?.englishName} · Verse {selectedAyah.numberInSurah}
+                    </p>
+                  )}
+                </div>
+
+                <div className="px-5 pb-4">
+                  <p className="text-xs font-semibold mb-2" style={{ color: sheetGold }}>
+                    {isAr ? "المعنى" : "Meaning"}
+                  </p>
+                  {explLoading ? (
+                    <div className="rounded-2xl px-4 py-3" style={{ background: sheetGoldFaint, border: `1px solid ${sheetGoldGlow}` }}>
+                      <p className="text-xs" style={{ color: sheetSub }}>{isAr ? "يتم تجهيز المعنى..." : "Loading meaning..."}</p>
+                    </div>
+                  ) : explanation ? (
+                    <div
+                      className="rounded-2xl px-4 py-4"
+                      style={{
+                        background: sheetGoldFaint,
+                        border: `1px solid ${sheetGoldGlow}`,
+                        maxHeight: "220px",
+                        overflowY: "auto",
+                      }}
+                    >
+                      <p
+                        className="text-[14px] leading-[1.85] whitespace-pre-wrap"
+                        style={{ color: isDark ? "#ddd5bc" : "#2a1e0a" }}
+                      >
+                        {cleanExplanation(explanation)}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl px-4 py-3" style={{ background: sheetGoldFaint, border: `1px solid ${sheetGoldGlow}` }}>
+                      <p className="text-xs" style={{ color: sheetSub }}>{isAr ? "المعنى غير متاح حالياً" : "Meaning unavailable right now"}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div
+                  className="flex items-center px-5 pb-8 pt-2"
+                  style={{ borderTop: `1px solid ${sheetGoldFaint}` }}
+                >
+                  <button
+                    onClick={async () => {
+                      const started = await playAyahAudio(selectedAyah);
+                      if (started) setShowActionSheet(false);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl active:scale-95 transition-all font-semibold text-sm"
+                    style={{
+                      background: `linear-gradient(135deg, ${sheetGoldGlow} 0%, hsla(45,70%,50%,0.25) 100%)`,
+                      border: `1px solid ${sheetGoldGlow}`,
+                      color: sheetGold,
+                    }}
+                  >
+                    <Play className="w-4 h-4" />
+                    {isAr ? "استمع" : "Play"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+        </div>
+      )}
     </div>
   );
 }

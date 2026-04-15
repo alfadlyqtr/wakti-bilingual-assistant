@@ -46,15 +46,23 @@ export default function DeenHadith() {
     setLoading(true);
     setPage(1);
     try {
-      const res = await fetch(`${HADITH_API_BASE}/eng-${col.id}/1-50.json`);
+      const editionPrefix = isAr ? "ara" : "eng";
+      const res = await fetch(`${HADITH_API_BASE}/${editionPrefix}-${col.id}.json`);
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
-      const items: HadithItem[] = Object.entries(data?.hadiths ?? {}).map(([num, val]: any) => ({
-        hadithnumber: Number(num),
-        text: val?.text ?? "",
-        grades: val?.grades ?? [],
-      }));
-      setHadiths(items);
+      const rawHadiths = data?.hadiths;
+      const items: HadithItem[] = Array.isArray(rawHadiths)
+        ? rawHadiths.map((item: any) => ({
+            hadithnumber: Number(item?.hadithnumber ?? 0),
+            text: item?.text ?? "",
+            grades: item?.grades ?? [],
+          }))
+        : Object.entries(rawHadiths ?? {}).map(([num, val]: any) => ({
+            hadithnumber: Number(val?.hadithnumber ?? num),
+            text: val?.text ?? "",
+            grades: val?.grades ?? [],
+          }));
+      setHadiths(items.filter((item) => item.hadithnumber > 0 && item.text.trim().length > 0));
     } catch {
       toast.error(isAr ? "تعذر تحميل الأحاديث" : "Failed to load hadiths");
       setHadiths([]);

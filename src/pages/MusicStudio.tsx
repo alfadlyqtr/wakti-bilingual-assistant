@@ -744,7 +744,7 @@ function VideoThumbnail({ fallbackDuration }: {
                         fileUrl={v.signedUrl}
                         title={v.title || (language === 'ar' ? 'فيديو من وقتي' : 'Video from Wakti')}
                         description=""
-                        isShort={true}
+                        isShort={false}
                         language={language}
                         initialYoutubeUrl={v.youtube_video_url || null}
                         onPublished={async (result) => {
@@ -2828,24 +2828,15 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   function handleSelectRecommendedInstruments() {
     if (recommendedInstruments.length === 0) return;
-    setInstrumentTags((prev) => {
-      const merged = [...new Set([...prev, ...recommendedInstruments])];
-      const limited = merged.slice(0, 13);
-
-      if (merged.length > 13) {
-        toast.error(isAr ? 'يمكنك اختيار 13 آلة كحد أقصى' : 'You can select up to 13 instruments');
-      }
-
-      if (limited.length === 13) {
-        setTimeout(() => {
-          setInstrumentsOpen(false);
-          setVocalsOpen(true);
-          setStylesOpen(false);
-        }, 0);
-      }
-
-      return limited;
-    });
+    const limited = [...recommendedInstruments].slice(0, 6);
+    setInstrumentTags(limited);
+    if (limited.length >= 6) {
+      setTimeout(() => {
+        setInstrumentsOpen(false);
+        setVocalsOpen(true);
+        setStylesOpen(false);
+      }, 150);
+    }
   }
 
   function handleInstrumentToggle(inst: string) {
@@ -2854,14 +2845,14 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         return prev.filter((tag) => tag !== inst);
       }
 
-      if (prev.length >= 13) {
-        toast.error(isAr ? 'يمكنك اختيار 13 آلة كحد أقصى' : 'You can select up to 13 instruments');
+      if (prev.length >= 6) {
+        toast.error(isAr ? 'يمكنك اختيار 6 آلات كحد أقصى' : 'You can select up to 6 instruments');
         return prev;
       }
 
       const next = [...prev, inst];
 
-      if (next.length === 13) {
+      if (next.length === 6) {
         setTimeout(() => {
           setInstrumentsOpen(false);
           setStylesOpen(false);
@@ -2967,8 +2958,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   // Build style string from chips + styleText
   // Narrow pronunciation-only negatives — blocks Arabic dialect drift, English stays allowed
-  const GCC_DIALECT_BLOCK = 'egyptian arabic pronunciation, levantine arabic pronunciation, iraqi arabic pronunciation, moroccan arabic pronunciation, fusha pronunciation';
-  const GCC_DIALECT_BLOCK_AR = 'نطق مصري، نطق شامي، نطق عراقي، نطق مغربي، نطق فصيح';
+  const GCC_DIALECT_BLOCK = 'egyptian, levantine, maghrebi, fusha, msa, north african, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, low quality, distorted, vocal hiss';
+  const GCC_DIALECT_BLOCK_AR = 'مصري، شامي، مغربي، فصحى، شمال أفريقي، سوداني، غير خليجي، جودة منخفضة';
 
   const GCC_PRONUNCIATION_NEGATIVES: Record<string, string> = {
     'English GCC Pop': '', 'إنجليزي بطابع خليجي': '',
@@ -3071,178 +3062,198 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const neg = GCC_PRONUNCIATION_NEGATIVES[tag];
       if (neg) neg.split(',').map((n) => n.trim()).forEach((n) => negSet.add(n));
     }
-    return [...negSet].join(', ');
+    return [...negSet].join(', ').slice(0, 200);
   }
 
   function buildKieStyleString(): string {
-    const expandStyleTag = (part: string): string => {
-      const value = part.trim();
-      if (!value) return '';
+    // ── Mandatory vocal string appended to every GCC Layer 1 anchor ──
+    const V = ', gulf khaleeji pronunciations and dialog vocal';
 
-      const mappings: Record<string, string> = {
-        // ── GCC Core (compressed tag format) ──
-        'GCC Pop': 'khaleeji pop, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, mirwas percussion, polished production',
-        'GCC Rap': 'khaleeji rap, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, 808 bass, trap hi-hats, confident rap flow',
-        'Khaleeji Pop': 'khaleeji pop, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, mirwas percussion, modern production',
-        'GCC Romantic': 'khaleeji romantic ballad, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, oud lead, warm strings',
-        'GCC Elegant': 'khaleeji elegant pop, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, oud texture, refined production',
-        'GCC Party': 'khaleeji party anthem, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, mirwas percussion, energetic',
-        'GCC Wedding': 'khaleeji wedding, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, frame drums, festive traditional',
-        // ── GCC Radio & Crossover ──
-        'GCC Radio Pop': 'khaleeji radio pop, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, synth lead, commercial production',
-        'GCC Dance Pop': 'khaleeji dance pop, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, club beat, uptempo',
-        'GCC Electro Pop': 'khaleeji electro pop, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, synth pad, electronic production',
-        'GCC Synth Pop': 'khaleeji synth pop, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, synth lead, glossy production',
-        'Modern Khaleeji Fusion': 'modern khaleeji fusion, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, western-gulf hybrid',
-        'English GCC Pop': 'gulf pop, english vocals, khaleeji instrumental identity, khaleeji musical sound, gulf flavor',
-        // ── GCC Rich & Event ──
-        'GCC R&B Pop': 'khaleeji r&b, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, smooth urban production',
-        'Luxury GCC Pop': 'luxury khaleeji pop, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, orchestral strings, confident',
-        'Cinematic GCC': 'cinematic khaleeji, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, orchestral, dramatic',
-        'GCC Anthem': 'khaleeji anthem, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, powerful chorus, proud bold',
-        'National Event GCC': 'gulf national anthem, ceremonial khaleeji, gulf arabic vocal, khaleeji pronunciation, majestic patriotic',
-        // ── GCC Heritage ──
-        'GCC Traditional': 'khaleeji traditional, gulf arabic folk vocal, khaleeji pronunciation, gulf dialect delivery, acoustic oud',
-        'Sheilat': 'khaleeji sheilat, najdi gulf male vocal, khaleeji pronunciation, frame drum, group call-and-response',
-        'Samri': 'samri, najdi gulf folk, khaleeji pronunciation, gulf dialect delivery, frame drums, ceremonial martial',
-        'Jalsa': 'khaleeji jalsa, intimate gulf session, gulf arabic vocal, khaleeji pronunciation, acoustic oud, delicate',
-        'Liwa': 'liwa, afro-gulf coastal, gulf arabic vocal, khaleeji pronunciation, polyrhythmic frame drums',
-        'GCC Shaabi': 'khaleeji shaabi, gulf folk vocal, khaleeji pronunciation, gulf dialect delivery, intimate melodic',
-        'Zar': 'zar, gulf african trance, gulf arabic vocal, khaleeji pronunciation, hypnotic ritual percussion',
-        'Ardah': 'ardah, saudi martial ceremony, gulf arabic vocal, khaleeji pronunciation, stately dignified',
-        'Khaleeji Trap': 'khaleeji trap, gulf arabic vocal, khaleeji pronunciation, gulf dialect delivery, 808 bass, urban street',
-        // ── Other Arabic ──
-        'Egyptian': 'egyptian pop, egyptian arabic, warm melodic, egyptian dialect',
-        'Egyptian Shaabi': 'egyptian shaabi, cairo street, fast compressed, egyptian street dialect',
-        'Arabic Pop': 'arabic pop, pan-arabic, western-influenced, modern standard arabic',
-        'Levant Pop': 'levantine pop, syrian-lebanese, smooth emotional, levantine dialect',
-        'Anasheed': 'islamic nasheed, a cappella only, no instruments, multi-layer vocal harmony, spiritual, elevated arabic',
-        // ── Global Genres (compressed) ──
-        'funk': 'funk, syncopated groovy, rhythmic danceable',
-        'disco': 'disco, 70s dance, four-on-the-floor, upbeat polished',
-        'Salsa': 'salsa, caribbean latin, energetic syncopated',
-        'Bossa Nova': 'bossa nova, brazilian jazz, relaxed sophisticated',
-        'punk rock': 'punk rock, fast raw rebellious, stripped-down',
-        'alternative rock': 'alternative rock, expressive non-commercial, emotional',
-        'indie rock': 'indie rock, independent guitar-driven, introspective',
-        'thrash metal': 'thrash metal, fast aggressive extreme, relentless',
-        'grunge': 'grunge, raw distorted rock, melancholic heavy',
-        'bluegrass': 'bluegrass, acoustic roots, tight vocal harmonies',
-        'folk': 'folk, acoustic storytelling, authentic roots',
-        'blues': 'blues, soulful expressive, blues scale, deep feeling',
-        'delta blues': 'delta blues, raw southern acoustic, sparse arrangement',
-        'smooth jazz': 'smooth jazz, mellow easy listening, laid-back groove',
-        'swing': 'swing, big band jazz, dance hall energy, 1940s feel',
-        'classical': 'classical, orchestral, rich harmonic, formal structure',
-        'gospel': 'gospel, spiritual uplifting, powerful vocal, devotional',
-        'reggae': 'reggae, jamaican offbeat, relaxed tempo, conscious',
-        'ska': 'ska, upbeat offbeat jamaican, lively danceable',
-        'dub': 'dub, bass-heavy soundscape, echo-drenched, reggae remix',
-        'ambient': 'ambient, atmospheric minimalistic, immersive soundscape',
-        'synthwave': 'synthwave, retro 80s electronic, cinematic nostalgic',
-        'chillwave': 'chillwave, dreamy lo-fi, reverb-drenched, relaxed',
-        // ── Rhythm chips (compressed) ──
-        'Gulf Groove': 'khaleeji groove, syncopated gulf beat',
-        'Khaleeji Shuffle': 'khaleeji shuffle, swing feel gulf rhythm',
-        'Adani': 'adani rhythm, swaying romantic gulf groove',
-        'Samri Rhythm': 'samri rhythm, martial gulf beat, frame drums',
-        'Wedding Beat': 'wedding festive beat, celebratory gulf rhythm',
-        'Clap-Driven Groove': 'clap-driven groove, crowd rhythm',
-        '6/8 Fusion': '6/8 fusion rhythm, dramatic crossover',
-        'Afro-Gulf Groove': 'afro-gulf groove, coastal polyrhythmic',
-        'Pop 4/4': 'pop 4/4 beat, mainstream rhythm',
-        'Ballad Slow Groove': 'slow ballad groove, emotional spacious',
-        'Marching Anthem': 'marching anthem beat, ceremonial proud',
-        'Club Beat': 'club beat, high energy electronic',
-        'Leiwah Rhythm': 'leiwah rhythm, afro-gulf 6/8, coastal gulf, frame drums',
-        'Maqsoum': 'maqsoum rhythm, arabic 4/4, tabla driven',
-        'Waltz 3/4': 'waltz 3/4, flowing romantic rhythm',
-        'Trap Beat': 'trap beat, 808 bass, hi-hat rolls, punchy snare',
-        'Drill Beat': 'drill beat, sliding 808, fast hi-hats, street energy',
-        // ── Arabic rhythm chips ──
-        'إيقاع خليجي': 'إيقاع خليجي أصيل',
-        'خليجي متمايل': 'إيقاع خليجي متمايل هادئ',
-        'عدني': 'إيقاع عدني، تمايل رومانسي',
-        'إيقاع أعراس': 'إيقاع أفراح خليجية',
-        'إيقاع تصفيق': 'تصفيق يدوي، حماس جماعي',
-        '٦/٨ فيوجن': 'إيقاع ٦/٨ فيوجن، درامي',
-        'أفرو خليجي': 'إيقاع أفرو خليجي ساحلي',
-        'بوب ٤/٤': 'بيت بوب ٤/٤',
-        'بالاد هادئ': 'بالاد هادئ عاطفي',
-        'إيقاع الليوان': 'إيقاع ليوان أفرو خليجي ٦/٨',
-        'مقسوم': 'إيقاع مقسوم ٤/٤، طبلة',
-        'والتز ٣/٤': 'والتز ٣/٤ رومانسي',
-        'تراب بيت': 'تراب بيت، 808 باص، هاي هات',
-        'دريل بيت': 'دريل بيت، 808 متحرك، شارع',
-        'إيقاع جماهيري': 'إيقاع مسيرة جماهيرية',
-        'إيقاع نادي': 'بيت نادي راقص',
-        // ── Arabic style chips (compressed) ──
-        'بوب خليجي': 'بوب خليجي عصري، لهجة خليجية صارمة',
-        'خليجي راب': 'راب خليجي، إيقاع حضري، لهجة خليجية صارمة',
-        'خليجي عصري': 'خليجي عصري، لهجة خليجية',
-        'خليجي رومانسي': 'خليجي رومانسي، بالاد دافئ، لهجة خليجية صارمة',
-        'خليجي أنيق': 'خليجي أنيق، راقٍ مصقول، لهجة خليجية صارمة',
-        'خليجي حفلات': 'خليجي حفلات، طاقة احتفالية، لهجة خليجية',
-        'خليجي أعراس': 'أعراس خليجية، فرح تقليدي، لهجة خليجية',
-        'خليجي إذاعي': 'خليجي إذاعي تجاري، لهجة خليجية',
-        'خليجي دانس': 'خليجي دانس، راقص سريع، لهجة خليجية',
-        'خليجي إلكتروني': 'خليجي إلكتروني، هوية خليجية، لهجة خليجية',
-        'خليجي سينث بوب': 'خليجي سينث بوب، راديوي، لهجة خليجية',
-        'فيوجن خليجي': 'فيوجن خليجي عصري، شباب، لهجة خليجية',
-        'إنجليزي بطابع خليجي': 'بوب إنجليزي، نكهة خليجية، هوية خليجية',
-        'خليجي آر أند بي': 'خليجي آر أند بي، صوتي حضري، لهجة خليجية',
-        'خليجي فاخر': 'خليجي فاخر راقٍ، لهجة خليجية',
-        'خليجي سينمائي': 'خليجي سينمائي، أوركسترالي، لهجة خليجية',
-        'خليجي جماهيري': 'أنشودة خليجية، كورس قوي، لهجة خليجية',
-        'مناسبات وطنية خليجية': 'نشيد وطني خليجي، مهيب، لهجة خليجية',
-        'خليجي تراثي': 'خليجي تراثي أصيل، لهجة خليجية',
-        'شيلات': 'شيلات خليجية، جماعي ذكوري، لهجة خليجية',
-        'سامري': 'سامري نجدي، حربي احتفالي، لهجة خليجية',
-        'جلسة': 'جلسة خليجية حميمة، أكوستيك، لهجة خليجية',
-        'ليوان': 'ليوان خليجي أفريقي، إيقاع متعدد، لهجة خليجية',
-        'مصري': 'بوب مصري، لهجة مصرية',
-        'أناشيد': 'أناشيد إسلامية، صوت بشري فقط، لا آلات، روحاني، عربية فصيحة',
-        'مهرجانات': 'مهرجانات مصرية، شعبي إلكتروني، لهجة مصرية',
-        'شامي': 'بوب شامي، لهجة شامية',
-        'بوب عربي': 'بوب عربي حديث، لهجة عربية',
-      };
-
-      return mappings[value] ?? value;
+    // ── Layer 1: Ferrari-grade GCC anchor map (THE LAW — never remove or shorten) ──
+    const GCC_LAYER1: Record<string, string> = {
+      'GCC Pop':               `khaleeji pop${V}, gulf khaleeji vocal, authentic khaleeji delivery`,
+      'Khaleeji Pop':          `khaleeji pop${V}, gulf khaleeji vocal, authentic khaleeji delivery`,
+      'GCC Rap':               `khaleeji rap${V}, gulf khaleeji vocal, rhythmic urban delivery`,
+      'GCC Romantic':          `khaleeji romantic ballad${V}, gulf khaleeji vocal, warm khaleeji phrasing`,
+      'GCC Elegant':           `khaleeji elegant pop${V}, gulf khaleeji vocal, refined classy delivery`,
+      'GCC Party':             `khaleeji party pop${V}, gulf khaleeji vocal, energetic festive delivery`,
+      'GCC Wedding':           `khaleeji wedding song${V}, gulf khaleeji vocal, celebratory tradition`,
+      'GCC Radio Pop':         `khaleeji radio pop${V}, gulf khaleeji vocal, commercial modern delivery`,
+      'GCC Dance Pop':         `khaleeji dance pop${V}, gulf khaleeji vocal, uptempo electronic delivery`,
+      'GCC Electro Pop':       `khaleeji electro pop${V}, gulf khaleeji vocal, futuristic digital delivery`,
+      'GCC Synth Pop':         `khaleeji synth pop${V}, gulf khaleeji vocal, glossy synthesizer delivery`,
+      'Modern Khaleeji Fusion':`modern khaleeji fusion${V}, gulf khaleeji vocal, western-oriental hybrid`,
+      'English GCC Pop':       `gulf pop english lyrics${V}, gulf khaleeji vocal, khaleeji musical identity`,
+      'GCC R&B Pop':           `khaleeji r&b pop${V}, gulf khaleeji vocal, smooth urban delivery`,
+      'Luxury GCC Pop':        `luxury khaleeji pop${V}, gulf khaleeji vocal, premium orchestral delivery`,
+      'Cinematic GCC':         `cinematic khaleeji${V}, gulf khaleeji vocal, dramatic wide atmosphere`,
+      'GCC Anthem':            `khaleeji anthem${V}, gulf khaleeji vocal, proud majestic delivery`,
+      'National Event GCC':    `national gulf anthem${V}, ceremonial khaleeji vocal, patriotic delivery`,
+      'GCC Traditional':       `khaleeji traditional${V}, gulf khaleeji vocal, authentic folk delivery`,
+      'Sheilat':               `khaleeji sheilat${V}, najdi khaleeji vocal, strong male group delivery`,
+      'Samri':                 `samri folk${V}, gulf khaleeji vocal, authentic heritage delivery`,
+      'Ardah':                 `ardah tradition${V}, saudi khaleeji vocal, stately dignified delivery`,
+      'Jalsa':                 `khaleeji jalsa${V}, intimate gulf khaleeji vocal, soft acoustic session`,
+      'Liwa':                  `liwa coastal${V}, afro-gulf khaleeji vocal, polyrhythmic delivery`,
+      'GCC Shaabi':            `khaleeji shaabi${V}, gulf khaleeji vocal, popular heritage delivery`,
+      'Zar':                   `zar ritual${V}, gulf khaleeji vocal, traditional spirit delivery`,
+      'Khaleeji Trap':         `khaleeji trap${V}, gulf khaleeji vocal, urban street energy`,
+      // Arabic UI labels
+      'بوب خليجي':             `khaleeji pop${V}, gulf khaleeji vocal, authentic khaleeji delivery`,
+      'خليجي راب':             `khaleeji rap${V}, gulf khaleeji vocal, rhythmic urban delivery`,
+      'خليجي عصري':            `modern khaleeji fusion${V}, gulf khaleeji vocal, western-oriental hybrid`,
+      'خليجي رومانسي':         `khaleeji romantic ballad${V}, gulf khaleeji vocal, warm khaleeji phrasing`,
+      'خليجي أنيق':            `khaleeji elegant pop${V}, gulf khaleeji vocal, refined classy delivery`,
+      'خليجي حفلات':           `khaleeji party pop${V}, gulf khaleeji vocal, energetic festive delivery`,
+      'خليجي أعراس':           `khaleeji wedding song${V}, gulf khaleeji vocal, celebratory tradition`,
+      'خليجي إذاعي':           `khaleeji radio pop${V}, gulf khaleeji vocal, commercial modern delivery`,
+      'خليجي دانس':            `khaleeji dance pop${V}, gulf khaleeji vocal, uptempo electronic delivery`,
+      'خليجي إلكتروني':        `khaleeji electro pop${V}, gulf khaleeji vocal, futuristic digital delivery`,
+      'خليجي سينث بوب':        `khaleeji synth pop${V}, gulf khaleeji vocal, glossy synthesizer delivery`,
+      'فيوجن خليجي':           `modern khaleeji fusion${V}, gulf khaleeji vocal, western-oriental hybrid`,
+      'إنجليزي بطابع خليجي':  `gulf pop english lyrics${V}, gulf khaleeji vocal, khaleeji musical identity`,
+      'خليجي آر أند بي':       `khaleeji r&b pop${V}, gulf khaleeji vocal, smooth urban delivery`,
+      'خليجي فاخر':            `luxury khaleeji pop${V}, gulf khaleeji vocal, premium orchestral delivery`,
+      'خليجي سينمائي':         `cinematic khaleeji${V}, gulf khaleeji vocal, dramatic wide atmosphere`,
+      'خليجي جماهيري':         `khaleeji anthem${V}, gulf khaleeji vocal, proud majestic delivery`,
+      'مناسبات وطنية خليجية':  `national gulf anthem${V}, ceremonial khaleeji vocal, patriotic delivery`,
+      'خليجي تراثي':           `khaleeji traditional${V}, gulf khaleeji vocal, authentic folk delivery`,
+      'شيلات':                 `khaleeji sheilat${V}, najdi khaleeji vocal, strong male group delivery`,
+      'سامري':                 `samri folk${V}, gulf khaleeji vocal, authentic heritage delivery`,
+      'جلسة':                  `khaleeji jalsa${V}, intimate gulf khaleeji vocal, soft acoustic session`,
+      'ليوان':                 `liwa coastal${V}, afro-gulf khaleeji vocal, polyrhythmic delivery`,
+      // Non-GCC styles (no vocal lock)
+      'Egyptian':              'egyptian pop, egyptian arabic vocal',
+      'Egyptian Shaabi':       'egyptian shaabi, cairo street vocal',
+      'Arabic Pop':            'arabic pop, pan-arabic vocal',
+      'Levant Pop':            'levantine pop, syrian-lebanese vocal',
+      'Anasheed':              'islamic nasheed, a cappella vocal',
+      'مصري':                  'بوب مصري، صوت مصري',
+      'أناشيد':                'أناشيد إسلامية، صوت بشري فقط',
+      'بوب عربي':              'بوب عربي، صوت عربي',
     };
 
-    // ── Anchored Compiler ──
-    // 1. Detect active GCC style (first includeTags entry that has an anchor)
-    const activeGccStyle = includeTags.find((t) => GCC_STYLE_ANCHORS[t]) ?? null;
-    const anchor = activeGccStyle ? GCC_STYLE_ANCHORS[activeGccStyle] : null;
+    // ── Rhythm chip → compact label ──
+    const RHYTHM_LABELS: Record<string, string> = {
+      'Gulf Groove': 'khaleeji groove',
+      'Khaleeji Shuffle': 'khaleeji shuffle',
+      'Adani': 'adani rhythm',
+      'Samri Rhythm': 'samri rhythm',
+      'Wedding Beat': 'wedding beat',
+      'Clap-Driven Groove': 'clap groove',
+      '6/8 Fusion': '6/8 fusion',
+      'Afro-Gulf Groove': 'afro-gulf groove',
+      'Pop 4/4': 'pop 4/4',
+      'Ballad Slow Groove': 'slow ballad',
+      'Marching Anthem': 'marching anthem',
+      'Club Beat': 'club beat',
+      'Leiwah Rhythm': 'leiwah rhythm',
+      'Maqsoum': 'maqsoum',
+      'Waltz 3/4': 'waltz 3/4',
+      'Trap Beat': 'trap beat',
+      'Drill Beat': 'drill beat',
+      'إيقاع خليجي': 'إيقاع خليجي',
+      'خليجي متمايل': 'خليجي متمايل',
+      'عدني': 'إيقاع عدني',
+      'إيقاع أعراس': 'إيقاع أفراح',
+      'إيقاع تصفيق': 'إيقاع تصفيق',
+      '٦/٨ فيوجن': '٦/٨ فيوجن',
+      'أفرو خليجي': 'أفرو خليجي',
+      'بوب ٤/٤': 'بوب ٤/٤',
+      'بالاد هادئ': 'بالاد هادئ',
+      'إيقاع الليوان': 'إيقاع الليوان',
+      'مقسوم': 'مقسوم',
+      'والتز ٣/٤': 'والتز ٣/٤',
+      'تراب بيت': 'تراب بيت',
+      'دريل بيت': 'دريل بيت',
+      'إيقاع جماهيري': 'إيقاع جماهيري',
+      'إيقاع نادي': 'إيقاع نادي',
+      'سامري': 'إيقاع سامري',
+    };
 
-    // 2. User has selected rhythms / instruments — respect those, only auto-fill if empty
-    const userHasRhythm = rhythmTags.length > 0;
-    const userHasInstrument = instrumentTags.length > 0;
+    // ── Layer 1 (THE LAW): resolve anchor from GCC_LAYER1 map ──
+    const primaryStyle = includeTags[0] ?? null;
+    const genreAnchor = primaryStyle
+      ? (GCC_LAYER1[primaryStyle] ?? primaryStyle)
+      : null;
 
-    // 3. Build base style parts (expand style + mood tags)
-    const styleParts = [...includeTags, ...moodTags]
-      .map((part) => expandStyleTag(part))
-      .filter(Boolean);
+    // ── Layer 2: Core instruments (user-selected, capped at 6; fallback to GCC anchor defaults) ──
+    const gccAnchor = primaryStyle ? GCC_STYLE_ANCHORS[primaryStyle] : null;
+    let instrumentLayer: string[];
+    if (instrumentTags.length > 0) {
+      instrumentLayer = instrumentTags.slice(0, 6);
+    } else if (gccAnchor) {
+      instrumentLayer = [gccAnchor.instrument, ...(gccAnchor.production ? [gccAnchor.production] : [])].slice(0, 3);
+    } else {
+      instrumentLayer = [];
+    }
 
-    // 4. Rhythm: use user selection, else inject anchor fallback
-    const rhythmParts = userHasRhythm
-      ? rhythmTags.map((part) => expandStyleTag(part)).filter(Boolean)
-      : anchor
-      ? [anchor.rhythm]
-      : [];
+    // ── Layer 3: ONE rhythm + ONE mood (strictly capped) ──
+    const rhythmSource = rhythmTags[0] ?? (gccAnchor ? gccAnchor.rhythm : null);
+    const rhythmLabel = rhythmSource
+      ? (RHYTHM_LABELS[rhythmSource] ?? rhythmSource)
+      : null;
+    const moodLabel = moodTags[0] ?? null;
 
-    // 5. Instrument: use user selection, else inject anchor fallback + production hint
-    const instrumentParts = userHasInstrument
-      ? instrumentTags.map((part) => expandStyleTag(part)).filter(Boolean)
-      : anchor
-      ? [anchor.instrument, ...(anchor.production ? [anchor.production] : [])]
-      : [];
+    // ── Layer 5: User freeform text ──
+    const freeText = styleText.trim() || null;
 
-    // 6. Compile: style → rhythm → instrument → free text
-    const parts = [...styleParts, ...rhythmParts, ...instrumentParts].filter(Boolean);
-    if (styleText.trim()) parts.push(styleText.trim());
+    // ── Assemble all 5 layers ──
+    const parts: string[] = [];
+    if (genreAnchor) parts.push(genreAnchor);
+    if (instrumentLayer.length > 0) parts.push(instrumentLayer.join(', '));
+    if (rhythmLabel) parts.push(rhythmLabel);
+    if (moodLabel) parts.push(moodLabel);
+    if (freeText) parts.push(freeText);
 
-    return parts.join(', ').replace(/,\s*,/g, ',').trim();
+    return parts.filter(Boolean).join(', ').trim();
+  }
+
+  // ── Metatag Injector: wraps raw lyrics in Suno V5 structural brackets ──
+  function formatLyricsWithStructure(rawLyrics: string, isInstrumental: boolean, selectedInstruments: string[]): string {
+    if (isInstrumental) {
+      return '(Intro)\n(Instrumental Build)\n(Drop)\n(Outro)';
+    }
+
+    const text = rawLyrics.trim();
+    if (!text) return text;
+
+    // If the user already wrote structural tags, respect their work
+    if (/[\[(]\s*\w/.test(text)) return text;
+
+    // Split on double line breaks to detect natural stanzas
+    const stanzas = text.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
+
+    // Determine if there is a solo instrument to inject
+    const SOLO_CANDIDATES: Record<string, string> = {
+      'oud': '(Oud Solo)', 'عود': '(Oud Solo)',
+      'qanun': '(Qanun Solo)', 'قانون': '(Qanun Solo)',
+      'ney': '(Ney Solo)', 'ناي': '(Ney Solo)',
+      'violin': '(Violin Solo)', 'كمان': '(Violin Solo)',
+      'piano': '(Piano Solo)', 'بيانو': '(Piano Solo)',
+      'saxophone': '(Saxophone Solo)',
+      'guitar': '(Guitar Solo)', 'جيتار': '(Guitar Solo)',
+      'flute': '(Flute Solo)', 'فلوت': '(Flute Solo)',
+    };
+    let soloTag: string | null = null;
+    for (const inst of selectedInstruments) {
+      const key = inst.toLowerCase();
+      const found = Object.keys(SOLO_CANDIDATES).find((k) => key.includes(k));
+      if (found) { soloTag = SOLO_CANDIDATES[found]; break; }
+    }
+
+    const labels = ['(Verse 1)', '(Chorus)', '(Verse 2)', '(Bridge)', '(Chorus)', '(Outro)'];
+    const structured: string[] = ['(Intro)'];
+
+    stanzas.forEach((stanza, i) => {
+      const label = labels[i] ?? `(Verse ${i + 1})`;
+      structured.push(`${label}\n${stanza}`);
+    });
+
+    if (soloTag) structured.push(soloTag);
+    if (!structured.some((s) => s.startsWith('(Outro)'))) structured.push('(Outro)');
+
+    return structured.join('\n\n');
   }
 
   const handleGenerate = async () => {
@@ -3289,25 +3300,26 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const instrumental = vocalType === 'none';
       const vocalGender: 'm' | 'f' | undefined =
         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
-      const kieStyle = buildKieStyleString().slice(0, 1000);
-      const kieNegativeTags = buildKieNegativeTags().slice(0, 200);
+      const kieStyle = buildKieStyleString();
+      const kieNegativeTags = buildKieNegativeTags();
       const durationTarget = Math.min(150, duration);
 
-      const finalLyrics = lyricsText.trim() || styleText.trim();
+      const rawLyrics = lyricsText.trim() || styleText.trim();
+      const structuredPrompt = formatLyricsWithStructure(rawLyrics, instrumental, instrumentTags);
 
       const invokeBody: Record<string, unknown> = {
         title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
         style: kieStyle || (language === 'ar' ? 'بوب عربي' : 'pop'),
         customMode: true,
         instrumental,
-        model: 'V5',
+        model: 'V5_5',
         duration_seconds: durationTarget,
-        styleWeight: isGccStyleSelected ? 0.85 : 0.8,
-        weirdnessConstraint: isGccStyleSelected ? 0.28 : 0.35,
-        audioWeight: 0.7,
+        styleWeight: 0.85,
+        weirdnessConstraint: 0.35,
+        audioWeight: 0.70,
       };
 
-      if (!instrumental) invokeBody.prompt = finalLyrics;
+      if (!instrumental) invokeBody.prompt = structuredPrompt;
       if (vocalGender) invokeBody.vocalGender = vocalGender;
       if (kieNegativeTags) invokeBody.negativeTags = kieNegativeTags;
 
@@ -4026,8 +4038,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-[10px] sm:text-xs text-muted-foreground/70 dark:text-muted-foreground/60">
                       {isAr
-                        ? `${instrumentTags.length}/13 آلات مختارة`
-                        : `${instrumentTags.length}/13 instruments selected`}
+                        ? `${instrumentTags.length}/6 آلات مختارة`
+                        : `${instrumentTags.length}/6 instruments selected`}
                     </span>
                     <div className="flex items-center gap-2">
                     {recommendedInstruments.length > 0 && (
@@ -4069,7 +4081,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                                 isSelected
                                   ? 'bg-purple-50 dark:bg-purple-500/25 border-purple-300 dark:border-purple-400/40 text-purple-700 dark:text-purple-200 shadow-[0_4px_12px_rgba(147,51,234,0.12)] dark:shadow-[0_0_12px_rgba(147,51,234,0.2)]'
                                   : isRecommended
-                                    ? 'bg-emerald-50 dark:bg-emerald-500/20 border-emerald-300 dark:border-emerald-400/35 text-emerald-700 dark:text-emerald-200 shadow-[0_4px_12px_rgba(16,185,129,0.10)] dark:shadow-none'
+                                    ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-400 dark:border-amber-400/50 border-dashed text-amber-700 dark:text-amber-300 shadow-[0_0_10px_rgba(251,191,36,0.25)] dark:shadow-[0_0_14px_rgba(251,191,36,0.20)] animate-pulse'
                                     : 'bg-white dark:bg-white/[0.09] border-[#d9dde7] dark:border-white/20 text-[#374151] dark:text-white/90 hover:border-purple-300 dark:hover:border-purple-400/40 hover:text-purple-600 dark:hover:text-purple-200 dark:hover:bg-purple-500/15'
                               }`}
                             >
@@ -6465,7 +6477,7 @@ function EditorTab() {
                             fileUrl={poster.video_url!}
                             title={linkedTrack?.title || (isAr ? 'مقطع موسيقي من وقتي' : 'Music track from Wakti')}
                             description={linkedTrack?.prompt || ''}
-                            isShort={true}
+                            isShort={false}
                             language={language}
                             initialYoutubeUrl={poster.youtube_video_url || null}
                             onPublished={async (result) => {
