@@ -721,7 +721,7 @@ export default function DeenQuran() {
     const surahAvailable = reciterOption.surahList.has(targetSurah.number);
 
     if (!surahAvailable) {
-      void playSurahSequentially(0, targetSurah, currentMeta ?? undefined);
+      void playSurahSequentially(0, targetSurah, currentMeta ?? undefined, reciterOption.id);
       return;
     }
 
@@ -794,12 +794,12 @@ export default function DeenQuran() {
       audio.onerror = () => {
         cleanup2();
         if (playbackSessionRef.current !== sessionId) return;
-        void playSurahSequentially(0, targetSurah, currentMeta ?? undefined);
+        void playSurahSequentially(0, targetSurah, currentMeta ?? undefined, reciterOption.id);
       };
 
       audio.play().then(() => setPlaying(true)).catch(() => {
         cleanup2();
-        void playSurahSequentially(0, targetSurah, currentMeta ?? undefined);
+        void playSurahSequentially(0, targetSurah, currentMeta ?? undefined, reciterOption.id);
       });
 
     };
@@ -807,7 +807,7 @@ export default function DeenQuran() {
     startPlayback();
   };
 
-  const playSurahSequentially = async (startIndex = 0, surahOverride?: SurahFull, surahMetaOverride?: Surah) => {
+  const playSurahSequentially = async (startIndex = 0, surahOverride?: SurahFull, surahMetaOverride?: Surah, listenReciterId?: string) => {
     const targetSurah = surahOverride ?? activeSurah;
     if (!targetSurah || !audioRef.current) return;
     const sessionId = playbackSessionRef.current + 1;
@@ -816,6 +816,17 @@ export default function DeenQuran() {
     setIsSurahPlayingSync(true);
     setPlaying(true);
     setCurrentPlaybackAyahIndexSync(startIndex);
+
+    // If called from listen-player fallback, pre-fetch all ayah URLs for the selected reciter
+    // so we don't fall back to the hardcoded ar.alafasy edition
+    let listenAudioQueue: string[] | null = null;
+    if (listenReciterId) {
+      try {
+        listenAudioQueue = await getSurahAudioQueue(targetSurah, listenReciterId);
+      } catch {
+        listenAudioQueue = null;
+      }
+    }
 
     try {
       for (let index = startIndex; index < targetSurah.ayahs.length; index += 1) {
@@ -837,10 +848,17 @@ export default function DeenQuran() {
         setCurrentPlaybackAyahIndexSync(index);
         saveProgress(targetSurah.number, ayah.numberInSurah);
 
-        const audioEdition = isAr ? "ar.alafasy" : "en.walk";
-        const audioData = await fetchFromProxy(`ayah/${ayah.number}`, audioEdition);
-        if (surahPlaybackCancelledRef.current || playbackSessionRef.current !== sessionId) break;
-        const audioUrl: string = audioData?.data?.audio ?? "";
+        let audioUrl: string;
+        if (listenAudioQueue) {
+          // Listen-player path: use selected reciter's audio URLs
+          audioUrl = listenAudioQueue[index] ?? "";
+        } else {
+          // Reader Play-All path: keep original per-ayah alquran.cloud endpoint
+          const audioEdition = isAr ? "ar.alafasy" : "en.walk";
+          const audioData = await fetchFromProxy(`ayah/${ayah.number}`, audioEdition);
+          if (surahPlaybackCancelledRef.current || playbackSessionRef.current !== sessionId) break;
+          audioUrl = audioData?.data?.audio ?? "";
+        }
         if (!audioUrl) continue;
 
         await playAudioUrl(audioUrl);
@@ -850,7 +868,7 @@ export default function DeenQuran() {
       if (completedNaturally && screen === "listen-player") {
         const currentMeta = surahMetaOverride || listenSurahMeta || surahs.find((s) => s.number === targetSurah.number);
         if (loopSurah) {
-          void playSurahSequentially(0, targetSurah, currentMeta ?? undefined);
+          void playSurahSequentially(0, targetSurah, currentMeta ?? undefined, listenReciterId);
           return;
         }
         if (autoNextSurah && currentMeta) {
