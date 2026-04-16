@@ -2659,12 +2659,12 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const modeHint = ampMode === 'idea'
         ? 'MODE: The user is giving you an IDEA or concept — generate completely fresh lyrics from scratch based on this idea.\n\n'
         : ampMode === 'gcc_enhance'
-          ? 'MODE: The user is giving you existing ARABIC lyrics. Do not rewrite, reorder, add, or remove words. Only prepare the Arabic portions for authentic Gulf singing with minimal surgical pronunciation help where truly needed.\n\n'
+          ? 'MODE: GCC ENHANCE — Apply Khaleeji vocal stress markers to the lyrics below. Use the style/rhythm/instruments context above to place phonetic anchors where the rhythmic stress falls. Do NOT rewrite the user\'s poetry.\n\n'
           : 'MODE: The user is giving you existing LYRICS — preserve their exact words and expand around them into a full song structure.\n\n';
       const fullInput = context + modeHint + `User input:\n${userInput}`;
       const { data, error } = await supabase.functions.invoke('music-amp', {
         body: {
-          text: ampMode === 'gcc_enhance' ? lyricsText : fullInput,
+          text: fullInput,
           mode: ampMode === 'gcc_enhance' ? 'gcc-enhance' : 'lyrics',
           duration: duration
         }
@@ -3196,63 +3196,65 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }
 
   function buildKieStyleString(): string {
-    // ── Mandatory vocal string appended to every GCC Layer 1 anchor ──
-    const V = ', gulf khaleeji pronunciations and dialog vocal';
+    // ── Mandatory vocal anchor — the single most important token for Khaleeji identity ──
+    const V = ', authentic gulf vocal, strict khaleeji dialect';
 
-    // ── Layer 1: Ferrari-grade GCC anchor map (THE LAW — never remove or shorten) ──
+    // ── Layer 1: Clean GCC anchor map — style genre + vocal string, nothing else ──
     const GCC_LAYER1: Record<string, string> = {
-      'GCC Pop':               `khaleeji pop${V}, gulf khaleeji vocal, authentic khaleeji delivery`,
-      'Khaleeji Pop':          `khaleeji pop${V}, gulf khaleeji vocal, authentic khaleeji delivery`,
-      'GCC Rap':               `khaleeji rap${V}, gulf khaleeji vocal, rhythmic urban delivery`,
-      'GCC Romantic':          `khaleeji romantic ballad${V}, gulf khaleeji vocal, warm khaleeji phrasing`,
-      'GCC Elegant':           `khaleeji elegant pop${V}, gulf khaleeji vocal, refined classy delivery`,
-      'GCC Party':             `khaleeji party pop${V}, gulf khaleeji vocal, energetic festive delivery`,
-      'GCC Wedding':           `khaleeji wedding song${V}, gulf khaleeji vocal, celebratory tradition`,
-      'GCC Radio Pop':         `khaleeji radio pop${V}, gulf khaleeji vocal, commercial modern delivery`,
-      'GCC Dance Pop':         `khaleeji dance pop${V}, gulf khaleeji vocal, uptempo electronic delivery`,
-      'GCC Electro Pop':       `khaleeji electro pop${V}, gulf khaleeji vocal, futuristic digital delivery`,
-      'GCC Synth Pop':         `khaleeji synth pop${V}, gulf khaleeji vocal, glossy synthesizer delivery`,
-      'Modern Khaleeji Fusion':`modern khaleeji fusion${V}, gulf khaleeji vocal, western-oriental hybrid`,
-      'English GCC Pop':       `gulf pop english lyrics${V}, gulf khaleeji vocal, khaleeji musical identity`,
-      'GCC R&B Pop':           `khaleeji r&b pop${V}, gulf khaleeji vocal, smooth urban delivery`,
-      'Luxury GCC Pop':        `luxury khaleeji pop${V}, gulf khaleeji vocal, premium orchestral delivery`,
-      'Cinematic GCC':         `cinematic khaleeji${V}, gulf khaleeji vocal, dramatic wide atmosphere`,
-      'GCC Anthem':            `khaleeji anthem${V}, gulf khaleeji vocal, proud majestic delivery`,
-      'National Event GCC':    `national gulf anthem${V}, ceremonial khaleeji vocal, patriotic delivery`,
-      'GCC Traditional':       `khaleeji traditional${V}, gulf khaleeji vocal, authentic folk delivery`,
-      'Sheilat':               `khaleeji sheilat${V}, najdi khaleeji vocal, strong male group delivery`,
-      'Samri':                 `samri folk${V}, gulf khaleeji vocal, authentic heritage delivery`,
-      'Ardah':                 `ardah tradition${V}, saudi khaleeji vocal, stately dignified delivery`,
-      'Jalsa':                 `khaleeji jalsa${V}, intimate gulf khaleeji vocal, soft acoustic session`,
-      'Liwa':                  `liwa coastal${V}, afro-gulf khaleeji vocal, polyrhythmic delivery`,
-      'GCC Shaabi':            `khaleeji shaabi${V}, gulf khaleeji vocal, popular heritage delivery`,
-      'Zar':                   `zar ritual${V}, gulf khaleeji vocal, traditional spirit delivery`,
-      'Khaleeji Trap':         `khaleeji trap${V}, gulf khaleeji vocal, urban street energy`,
-      // Arabic UI labels
-      'بوب خليجي':             `khaleeji pop${V}, gulf khaleeji vocal, authentic khaleeji delivery`,
-      'خليجي راب':             `khaleeji rap${V}, gulf khaleeji vocal, rhythmic urban delivery`,
-      'خليجي عصري':            `modern khaleeji fusion${V}, gulf khaleeji vocal, western-oriental hybrid`,
-      'خليجي رومانسي':         `khaleeji romantic ballad${V}, gulf khaleeji vocal, warm khaleeji phrasing`,
-      'خليجي أنيق':            `khaleeji elegant pop${V}, gulf khaleeji vocal, refined classy delivery`,
-      'خليجي حفلات':           `khaleeji party pop${V}, gulf khaleeji vocal, energetic festive delivery`,
-      'خليجي أعراس':           `khaleeji wedding song${V}, gulf khaleeji vocal, celebratory tradition`,
-      'خليجي إذاعي':           `khaleeji radio pop${V}, gulf khaleeji vocal, commercial modern delivery`,
-      'خليجي دانس':            `khaleeji dance pop${V}, gulf khaleeji vocal, uptempo electronic delivery`,
-      'خليجي إلكتروني':        `khaleeji electro pop${V}, gulf khaleeji vocal, futuristic digital delivery`,
-      'خليجي سينث بوب':        `khaleeji synth pop${V}, gulf khaleeji vocal, glossy synthesizer delivery`,
-      'فيوجن خليجي':           `modern khaleeji fusion${V}, gulf khaleeji vocal, western-oriental hybrid`,
-      'إنجليزي بطابع خليجي':  `gulf pop english lyrics${V}, gulf khaleeji vocal, khaleeji musical identity`,
-      'خليجي آر أند بي':       `khaleeji r&b pop${V}, gulf khaleeji vocal, smooth urban delivery`,
-      'خليجي فاخر':            `luxury khaleeji pop${V}, gulf khaleeji vocal, premium orchestral delivery`,
-      'خليجي سينمائي':         `cinematic khaleeji${V}, gulf khaleeji vocal, dramatic wide atmosphere`,
-      'خليجي جماهيري':         `khaleeji anthem${V}, gulf khaleeji vocal, proud majestic delivery`,
-      'مناسبات وطنية خليجية':  `national gulf anthem${V}, ceremonial khaleeji vocal, patriotic delivery`,
-      'خليجي تراثي':           `khaleeji traditional${V}, gulf khaleeji vocal, authentic folk delivery`,
-      'شيلات':                 `khaleeji sheilat${V}, najdi khaleeji vocal, strong male group delivery`,
-      'سامري':                 `samri folk${V}, gulf khaleeji vocal, authentic heritage delivery`,
-      'جلسة':                  `khaleeji jalsa${V}, intimate gulf khaleeji vocal, soft acoustic session`,
-      'ليوان':                 `liwa coastal${V}, afro-gulf khaleeji vocal, polyrhythmic delivery`,
-      // Non-GCC styles (no vocal lock)
+      // ── Modern / Pop ──
+      'GCC Pop':               `khaleeji pop${V}`,
+      'Khaleeji Pop':          `khaleeji pop${V}`,
+      'GCC Rap':               `khaleeji rap${V}`,
+      'GCC Romantic':          `khaleeji romantic ballad${V}`,
+      'GCC Elegant':           `khaleeji elegant pop, refined classy delivery${V}`,
+      'GCC Party':             `khaleeji party pop, festive energy${V}`,
+      'GCC Wedding':           `khaleeji wedding song, celebratory${V}`,
+      'GCC Radio Pop':         `khaleeji radio pop, commercial modern${V}`,
+      'GCC Dance Pop':         `khaleeji dance pop, uptempo${V}`,
+      'GCC Electro Pop':       `khaleeji electro pop${V}`,
+      'GCC Synth Pop':         `khaleeji synth pop${V}`,
+      'Modern Khaleeji Fusion':`modern khaleeji fusion, western-oriental${V}`,
+      'English GCC Pop':       `gulf pop english lyrics, khaleeji musical identity${V}`,
+      'GCC R&B Pop':           `khaleeji r&b pop, smooth urban${V}`,
+      'Luxury GCC Pop':        `luxury khaleeji pop, premium orchestral${V}`,
+      'Cinematic GCC':         `cinematic khaleeji, dramatic atmosphere${V}`,
+      'GCC Anthem':            `khaleeji anthem, proud majestic${V}`,
+      'National Event GCC':    `national gulf anthem, patriotic ceremonial${V}`,
+      // ── Heritage / Folk ──
+      'GCC Traditional':       `khaleeji traditional, authentic folk${V}`,
+      'Sheilat':               `khaleeji sheilat, strong male group${V}`,
+      'Samri':                 `samri folk, heritage${V}`,
+      'Ardah':                 `ardah tradition, stately dignified${V}`,
+      'Jalsa':                 `khaleeji jalsa, soft acoustic session${V}`,
+      'Liwa':                  `liwa coastal, afro-gulf polyrhythmic${V}`,
+      'GCC Shaabi':            `khaleeji shaabi, popular folk${V}`,
+      'Zar':                   `zar ritual, traditional${V}`,
+      'Khaleeji Trap':         `khaleeji trap, urban street${V}`,
+      // ── Arabic UI labels ──
+      'بوب خليجي':             `khaleeji pop${V}`,
+      'خليجي راب':             `khaleeji rap${V}`,
+      'خليجي عصري':            `modern khaleeji fusion, western-oriental${V}`,
+      'خليجي رومانسي':         `khaleeji romantic ballad${V}`,
+      'خليجي أنيق':            `khaleeji elegant pop, refined classy delivery${V}`,
+      'خليجي حفلات':           `khaleeji party pop, festive energy${V}`,
+      'خليجي أعراس':           `khaleeji wedding song, celebratory${V}`,
+      'خليجي إذاعي':           `khaleeji radio pop, commercial modern${V}`,
+      'خليجي دانس':            `khaleeji dance pop, uptempo${V}`,
+      'خليجي إلكتروني':        `khaleeji electro pop${V}`,
+      'خليجي سينث بوب':        `khaleeji synth pop${V}`,
+      'فيوجن خليجي':           `modern khaleeji fusion, western-oriental${V}`,
+      'إنجليزي بطابع خليجي':  `gulf pop english lyrics, khaleeji musical identity${V}`,
+      'خليجي آر أند بي':       `khaleeji r&b pop, smooth urban${V}`,
+      'خليجي فاخر':            `luxury khaleeji pop, premium orchestral${V}`,
+      'خليجي سينمائي':         `cinematic khaleeji, dramatic atmosphere${V}`,
+      'خليجي جماهيري':         `khaleeji anthem, proud majestic${V}`,
+      'مناسبات وطنية خليجية':  `national gulf anthem, patriotic ceremonial${V}`,
+      'خليجي تراثي':           `khaleeji traditional, authentic folk${V}`,
+      'شيلات':                 `khaleeji sheilat, strong male group${V}`,
+      'سامري':                 `samri folk, heritage${V}`,
+      'جلسة':                  `khaleeji jalsa, soft acoustic session${V}`,
+      'ليوان':                 `liwa coastal, afro-gulf polyrhythmic${V}`,
+      // ── Non-GCC styles (no vocal lock) ──
       'Egyptian':              'egyptian pop, egyptian arabic vocal',
       'Egyptian Shaabi':       'egyptian shaabi, cairo street vocal',
       'Arabic Pop':            'arabic pop, pan-arabic vocal',
@@ -3301,48 +3303,13 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'سامري': 'إيقاع سامري',
     };
 
-    // ── Micro-performance descriptor — appended to every GCC Layer 1 ──
-    // Targets: dialogue mouthfeel, vocal attack, Khaleeji phrasing, Gulf sentence flow
-    const GCC_MICRO_PERF: Record<string, string> = {
-      // Pop / crossover — warm conversational attack, ornamented phrasing
-      'GCC Pop':               'khaleeji conversational mouthfeel, soft vocal attack, ornamented gulf phrasing',
-      'Khaleeji Pop':          'khaleeji conversational mouthfeel, soft vocal attack, ornamented gulf phrasing',
-      'GCC Romantic':          'intimate khaleeji mouthfeel, breathy vocal attack, melismatic gulf line endings',
-      'GCC Elegant':           'refined khaleeji mouthfeel, controlled vocal attack, graceful gulf sentence flow',
-      'GCC Radio Pop':         'polished khaleeji mouthfeel, clean vocal attack, commercial gulf phrasing',
-      'GCC Dance Pop':         'punchy khaleeji mouthfeel, rhythmic vocal attack, uptempo gulf sentence flow',
-      'GCC Electro Pop':       'crisp khaleeji mouthfeel, sharp vocal attack, modern gulf delivery',
-      'GCC Synth Pop':         'glossy khaleeji mouthfeel, layered vocal attack, electronic gulf phrasing',
-      'Modern Khaleeji Fusion':'balanced khaleeji mouthfeel, hybrid vocal attack, western-gulf sentence blend',
-      'English GCC Pop':       'khaleeji-flavored mouthfeel, clear vocal attack, gulf-accented delivery',
-      'GCC R&B Pop':           'smooth khaleeji mouthfeel, sultry vocal attack, urban gulf phrasing',
-      'Luxury GCC Pop':        'lush khaleeji mouthfeel, warm vocal attack, premium gulf sentence flow',
-      'Cinematic GCC':         'dramatic khaleeji mouthfeel, wide vocal attack, sweeping gulf phrasing',
-      'GCC Anthem':            'proud khaleeji mouthfeel, powerful vocal attack, majestic gulf sentence flow',
-      'National Event GCC':    'ceremonial khaleeji mouthfeel, strong vocal attack, patriotic gulf delivery',
-      'GCC Party':             'festive khaleeji mouthfeel, energetic vocal attack, celebratory gulf flow',
-      'GCC Wedding':           'joyful khaleeji mouthfeel, bright vocal attack, traditional gulf phrasing',
-      'GCC Rap':               'rhythmic khaleeji mouthfeel, punchy vocal attack, street gulf sentence flow',
-      'Khaleeji Trap':         'urban khaleeji mouthfeel, aggressive vocal attack, trap gulf phrasing',
-      // Heritage / folk — deeper dialect texture
-      'GCC Traditional':       'heritage khaleeji mouthfeel, natural vocal attack, folk gulf sentence flow',
-      'Sheilat':               'masculine khaleeji mouthfeel, group vocal attack, proud najdi sentence flow',
-      'Samri':                 'percussive khaleeji mouthfeel, strong vocal attack, samri rhythmic phrasing',
-      'Ardah':                 'martial khaleeji mouthfeel, stately vocal attack, dignified gulf delivery',
-      'Jalsa':                 'intimate khaleeji mouthfeel, soft vocal attack, acoustic gulf sentence flow',
-      'Liwa':                  'polyrhythmic khaleeji mouthfeel, afro-gulf vocal attack, coastal phrasing',
-      'GCC Shaabi':            'folk khaleeji mouthfeel, popular vocal attack, direct gulf sentence flow',
-      'Zar':                   'hypnotic khaleeji mouthfeel, ritualistic vocal attack, spirit gulf phrasing',
-    };
-
-    // ── Layer 1 (THE LAW): resolve anchor from GCC_LAYER1 map ──
+    // ── Layer 1: resolve anchor ──
     const primaryStyle = includeTags[0] ?? null;
     const genreAnchor = primaryStyle
       ? (GCC_LAYER1[primaryStyle] ?? primaryStyle)
       : null;
-    const microPerf = primaryStyle ? (GCC_MICRO_PERF[primaryStyle] ?? null) : null;
 
-    // ── Layer 2: Core instruments (user-selected, capped at 6; fallback to GCC anchor defaults) ──
+    // ── Layer 2: User instruments (capped at 6; fallback to GCC anchor defaults) ──
     const gccAnchor = primaryStyle ? GCC_STYLE_ANCHORS[primaryStyle] : null;
     let instrumentLayer: string[];
     if (instrumentTags.length > 0) {
@@ -3353,20 +3320,21 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       instrumentLayer = [];
     }
 
-    // ── Layer 3: ONE rhythm + ONE mood (strictly capped) ──
+    // ── Layer 3: ONE rhythm ──
     const rhythmSource = rhythmTags[0] ?? (gccAnchor ? gccAnchor.rhythm : null);
     const rhythmLabel = rhythmSource
       ? (RHYTHM_LABELS[rhythmSource] ?? rhythmSource)
       : null;
+
+    // ── Layer 4: ONE mood ──
     const moodLabel = moodTags[0] ?? null;
 
     // ── Layer 5: User freeform text ──
     const freeText = styleText.trim() || null;
 
-    // ── Assemble all layers: 1 → 1.5 (micro-perf) → 2 → 3 → 4 → 5 ──
+    // ── Assemble: Layer 1 → 2 → 3 → 4 → 5 ──
     const parts: string[] = [];
     if (genreAnchor) parts.push(genreAnchor);
-    if (microPerf) parts.push(microPerf);
     if (instrumentLayer.length > 0) parts.push(instrumentLayer.join(', '));
     if (rhythmLabel) parts.push(rhythmLabel);
     if (moodLabel) parts.push(moodLabel);
@@ -3467,27 +3435,29 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const vocalGender: 'm' | 'f' | undefined =
         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
       const kieStyle = buildKieStyleString();
-      const kieNegativeTags = buildKieNegativeTags();
       const durationTarget = Math.min(150, duration);
 
       const rawLyrics = lyricsText.trim() || styleText.trim();
       const structuredPrompt = formatLyricsWithStructure(rawLyrics, instrumental, instrumentTags);
 
+      // ── Fixed negative shield — 146 chars, always used as-is, never prepended ──
+      const finalNegativeTags = 'egyptian, levantine, maghrebi, fusha, msa, north african, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, low quality, distorted, vocal hiss';
+
       const invokeBody: Record<string, unknown> = {
         title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
-        style: kieStyle || (language === 'ar' ? 'بوب عربي' : 'pop'),
+        style: (kieStyle || 'khaleeji pop, authentic gulf vocal, strict khaleeji dialect').slice(0, 120),
         customMode: true,
         instrumental,
         model: 'V5_5',
         duration_seconds: durationTarget,
-        styleWeight: 0.85,
-        weirdnessConstraint: 0.35,
-        audioWeight: 0.70,
+        styleWeight: 0.95,
+        weirdnessConstraint: 0.25,
+        audioWeight: 0.8,
+        negativeTags: finalNegativeTags.slice(0, 200),
       };
 
       if (!instrumental) invokeBody.prompt = structuredPrompt;
       if (vocalGender) invokeBody.vocalGender = vocalGender;
-      if (kieNegativeTags) invokeBody.negativeTags = kieNegativeTags;
 
       const { data: genData, error: genError } = await supabase.functions.invoke('music-generate', {
         body: invokeBody,
@@ -5562,6 +5532,10 @@ function EditorTab() {
   const [deleteTrackTarget, setDeleteTrackTarget] = useState<{ id: string; storagePath: string | null } | null>(null);
   const [trackYouTubeTarget, setTrackYouTubeTarget] = useState<SavedTrack | null>(null);
 
+  // ── Bulk delete tracks
+  const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+
   // ── Poster & Captions
   type MusicPoster = {
     id: string;
@@ -5949,6 +5923,37 @@ function EditorTab() {
     }
   };
 
+  const handleBulkDeleteConfirm = async () => {
+    if (selectedTrackIds.size === 0) return;
+    const idsToDelete = Array.from(selectedTrackIds);
+    setBulkDeleteDialogOpen(false);
+
+    // Get storage paths for cleanup
+    const tracksToDelete = tracks.filter(t => selectedTrackIds.has(t.id));
+    const storagePaths = tracksToDelete.map(t => t.storage_path).filter(Boolean) as string[];
+
+    try {
+      // Delete from DB
+      const { error: dbError } = await (supabase as any)
+        .from('user_music_tracks')
+        .delete()
+        .in('id', idsToDelete);
+      if (dbError) throw dbError;
+
+      // Delete from storage
+      if (storagePaths.length > 0) {
+        await supabase.storage.from('music').remove(storagePaths).catch(() => {});
+      }
+
+      // Update local state
+      setTracks(prev => prev.filter(t => !selectedTrackIds.has(t.id)));
+      setSelectedTrackIds(new Set());
+      toast.success(isAr ? `تم حذف ${idsToDelete.length} مقاطع` : `Deleted ${idsToDelete.length} tracks`);
+    } catch (e: any) {
+      toast.error((isAr ? 'فشل الحذف: ' : 'Delete failed: ') + (e?.message || String(e)));
+    }
+  };
+
   const handleToggleFavorite = async (track: SavedTrack) => {
     const currentMeta = ((track.meta as Record<string, unknown> | null) ?? {});
     const nextFavorite = !Boolean((currentMeta as any).favorite);
@@ -6160,14 +6165,25 @@ function EditorTab() {
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
-                <Input
-                  value={trackSearch}
-                  onChange={(e) => setTrackSearch(e.target.value)}
-                  placeholder={isAr ? 'ابحث في المقاطع...' : 'Search songs...'}
-                  className="h-10 pl-9 rounded-xl border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-[0_6px_18px_rgba(6,5,65,0.06)] dark:shadow-none"
-                />
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
+                  <Input
+                    value={trackSearch}
+                    onChange={(e) => setTrackSearch(e.target.value)}
+                    placeholder={isAr ? 'ابحث في المقاطع...' : 'Search songs...'}
+                    className="h-10 pl-9 rounded-xl border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-[0_6px_18px_rgba(6,5,65,0.06)] dark:shadow-none"
+                  />
+                </div>
+                {selectedTrackIds.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setBulkDeleteDialogOpen(true)}
+                    className="flex-shrink-0 h-10 px-3 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 active:scale-95 transition-all text-xs font-semibold border border-red-500/20"
+                  >
+                    {isAr ? `حذف ${selectedTrackIds.size}` : `Delete ${selectedTrackIds.size}`}
+                  </button>
+                )}
               </div>
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50/60 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-400/20">
                 <Download className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
@@ -6205,7 +6221,7 @@ function EditorTab() {
                 return (
                   <div
                     key={t.id}
-                    className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br transition-all duration-300 ${isActivePlaying
+                    className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br transition-all duration-300 ${selectedTrackIds.has(t.id) ? 'border-red-400/40 dark:border-red-400/50 ring-1 ring-red-400/30' : ''} ${isActivePlaying
                       ? 'border-fuchsia-300 dark:border-fuchsia-400/40 from-[#fff5fd] via-[#f6eeff] to-[#eef6ff] dark:from-fuchsia-500/10 dark:via-purple-500/10 dark:to-sky-500/10 shadow-[0_16px_40px_rgba(168,85,247,0.18)] dark:shadow-[0_0_32px_rgba(217,70,239,0.22)]'
                       : 'border-[#d9dde7] dark:border-white/10 from-[#ffffff] via-[#f8f9fc] to-[#f3f5fb] dark:from-white/[0.04] dark:to-white/[0.02] shadow-[0_12px_32px_rgba(6,5,65,0.10)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]'
                     }`}
@@ -6213,7 +6229,21 @@ function EditorTab() {
                     {isActivePlaying && (
                       <div className="music-playing-top-line pointer-events-none absolute inset-x-0 top-0 h-1.5" />
                     )}
-                    <div className="p-4 flex gap-4 items-start">
+                    <div className="p-4 flex gap-3 items-start">
+                      <label className="flex-shrink-0 flex items-center pt-1 cursor-pointer" aria-label={isAr ? 'اختر للحذف' : 'Select for delete'}>
+                        <input
+                          type="checkbox"
+                          aria-label={isAr ? 'اختر للحذف' : 'Select for delete'}
+                          checked={selectedTrackIds.has(t.id)}
+                          onChange={(e) => {
+                            const next = new Set(selectedTrackIds);
+                            if (e.target.checked) next.add(t.id);
+                            else next.delete(t.id);
+                            setSelectedTrackIds(next);
+                          }}
+                          className="w-4 h-4 rounded border-[#d9dde7] dark:border-white/20 text-red-500 focus:ring-red-500/20"
+                        />
+                      </label>
                       <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-gradient-to-br from-sky-100 to-purple-100 dark:from-sky-900/40 dark:to-purple-900/40 border border-[#d9dde7] dark:border-white/10 shadow-md">
                         {t.cover_url
                           ? <img src={t.cover_url} alt={trackTitle} className="w-full h-full object-cover" />
@@ -6909,6 +6939,26 @@ function EditorTab() {
             <AlertDialogCancel>{isAr ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
             <AlertDialogAction onClick={() => deletePlaylistTarget && handleDeletePlaylist(deletePlaylistTarget)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {isAr ? 'حذف' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Bulk delete tracks dialog ── */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={(open) => !open && setBulkDeleteDialogOpen(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{isAr ? 'حذف مقاطع متعددة' : 'Delete Multiple Tracks'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {isAr
+                ? `هل أنت متأكد من حذف ${selectedTrackIds.size} مقاطع؟ لا يمكن التراجع.`
+                : `Are you sure you want to delete ${selectedTrackIds.size} tracks? This cannot be undone.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setBulkDeleteDialogOpen(false)}>{isAr ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isAr ? 'حذف الكل' : 'Delete All'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
