@@ -25,6 +25,7 @@ type Mode = 'compose' | 'reply';
 type Tab = 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate';
 type Language = 'en' | 'ar';
 type ModelPreference = 'gpt-4o' | 'gpt-4o-mini' | 'auto';
+type RegenerateIntentKey = 'shorter' | 'longer' | 'more_human' | 'more_professional' | 'more_polite' | 'stronger' | 'simpler' | 'fix_grammar' | 'better_flow' | 'better_ending' | 'keep_meaning';
 
 // Stable keys for option values; labels are localized at render time
 type ContentTypeKey =
@@ -326,6 +327,80 @@ const emojisLabel = (k: EmojisKey, lang: 'en' | 'ar') => {
   return lang === 'ar' ? ar[k] : en[k];
 };
 
+const REGENERATE_INTENT_KEYS: RegenerateIntentKey[] = [
+  'shorter',
+  'longer',
+  'more_human',
+  'more_professional',
+  'more_polite',
+  'stronger',
+  'simpler',
+  'fix_grammar',
+  'better_flow',
+  'better_ending',
+  'keep_meaning'
+];
+
+const regenerateIntentLabel = (k: RegenerateIntentKey, lang: 'en' | 'ar') => {
+  const en: Record<RegenerateIntentKey, string> = {
+    shorter: 'Shorter',
+    longer: 'Longer',
+    more_human: 'More human',
+    more_professional: 'More professional',
+    more_polite: 'More polite',
+    stronger: 'Stronger',
+    simpler: 'Simpler',
+    fix_grammar: 'Fix grammar',
+    better_flow: 'Better flow',
+    better_ending: 'Better ending',
+    keep_meaning: 'Keep same meaning'
+  };
+  const ar: Record<RegenerateIntentKey, string> = {
+    shorter: 'أقصر',
+    longer: 'أطول',
+    more_human: 'أكثر بشرية',
+    more_professional: 'أكثر مهنية',
+    more_polite: 'أكثر تهذيبًا',
+    stronger: 'أقوى',
+    simpler: 'أبسط',
+    fix_grammar: 'تصحيح القواعد',
+    better_flow: 'تدفق أفضل',
+    better_ending: 'خاتمة أفضل',
+    keep_meaning: 'حافظ على نفس المعنى'
+  };
+  return lang === 'ar' ? ar[k] : en[k];
+};
+
+const regenerateIntentInstruction = (k: RegenerateIntentKey, lang: 'en' | 'ar') => {
+  const en: Record<RegenerateIntentKey, string> = {
+    shorter: 'Make it shorter while keeping the important points.',
+    longer: 'Make it a bit fuller and more complete without rambling.',
+    more_human: 'Make it sound more natural, personal, and genuinely human.',
+    more_professional: 'Make it more polished and professional.',
+    more_polite: 'Make it more polite, calm, and respectful.',
+    stronger: 'Make it stronger, clearer, and more confident.',
+    simpler: 'Use simpler wording and make it easier to read.',
+    fix_grammar: 'Fix grammar, punctuation, and awkward phrasing.',
+    better_flow: 'Improve flow, structure, and sentence transitions.',
+    better_ending: 'Give it a stronger and more effective ending.',
+    keep_meaning: 'Preserve the same meaning, facts, names, and intent.'
+  };
+  const ar: Record<RegenerateIntentKey, string> = {
+    shorter: 'اجعله أقصر مع الحفاظ على النقاط المهمة.',
+    longer: 'اجعله أكمل قليلًا بدون إطالة مزعجة.',
+    more_human: 'اجعله طبيعيًا وشخصيًا وأكثر بشرية.',
+    more_professional: 'اجعله أكثر احترافية وصياغةً.',
+    more_polite: 'اجعله أكثر تهذيبًا وهدوءًا واحترامًا.',
+    stronger: 'اجعله أقوى وأوضح وأكثر ثقة.',
+    simpler: 'استخدم كلمات أبسط واجعله أسهل في القراءة.',
+    fix_grammar: 'صحح القواعد وعلامات الترقيم والصياغة المربكة.',
+    better_flow: 'حسّن التدفق والبنية والانتقال بين الجمل.',
+    better_ending: 'أعطه خاتمة أقوى وأكثر تأثيرًا.',
+    keep_meaning: 'حافظ على نفس المعنى والحقائق والأسماء والهدف.'
+  };
+  return lang === 'ar' ? ar[k] : en[k];
+};
+
 const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   isOpen = true,
   onClose,
@@ -376,6 +451,12 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const [copyMenuOpen, setCopyMenuOpen] = useState(false);
   const [typingFrameIndex, setTypingFrameIndex] = useState(0);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
+  const [showRegeneratePrompt, setShowRegeneratePrompt] = useState(false);
+  const [selectedRegenerateIntents, setSelectedRegenerateIntents] = useState<RegenerateIntentKey[]>([]);
+  const [regenerateFeedback, setRegenerateFeedback] = useState('');
+  const [regenerateKeep, setRegenerateKeep] = useState('');
+  const [regenerateChange, setRegenerateChange] = useState('');
+  const [regenerateRemove, setRegenerateRemove] = useState('');
 
   // Screenshot upload refs
   const composeFileInputRef = useRef<HTMLInputElement>(null);
@@ -705,6 +786,82 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     return { hasFillFormat, subject, message };
   }, [parsedText.mainText]);
 
+  const regeneratePromptSummary = useMemo(() => {
+    const summary: string[] = [];
+    if (selectedRegenerateIntents.length > 0) {
+      summary.push(selectedRegenerateIntents.map((intent) => regenerateIntentLabel(intent, language)).join(language === 'ar' ? ' • ' : ' • '));
+    }
+    if (regenerateFeedback.trim()) {
+      summary.push(regenerateFeedback.trim());
+    }
+    if (regenerateKeep.trim()) {
+      summary.push(`${language === 'ar' ? 'احتفظ بـ' : 'Keep'}: ${regenerateKeep.trim()}`);
+    }
+    if (regenerateChange.trim()) {
+      summary.push(`${language === 'ar' ? 'غيّر' : 'Change'}: ${regenerateChange.trim()}`);
+    }
+    if (regenerateRemove.trim()) {
+      summary.push(`${language === 'ar' ? 'أزل' : 'Remove'}: ${regenerateRemove.trim()}`);
+    }
+    return summary;
+  }, [language, regenerateChange, regenerateFeedback, regenerateKeep, regenerateRemove, selectedRegenerateIntents]);
+
+  const buildGuidedRegeneratePrompt = useCallback(() => {
+    const currentDraft = parsedText.mainText.trim();
+    if (!currentDraft) return '';
+    const requestedChanges: string[] = [];
+    if (selectedRegenerateIntents.length > 0) {
+      requestedChanges.push(...selectedRegenerateIntents.map((intent) => regenerateIntentInstruction(intent, language)));
+    }
+    if (regenerateFeedback.trim()) {
+      requestedChanges.push(`${language === 'ar' ? 'ملاحظاتي على المسودة' : 'My feedback on this draft'}: ${regenerateFeedback.trim()}`);
+    }
+    if (regenerateKeep.trim()) {
+      requestedChanges.push(`${language === 'ar' ? 'احتفظ بهذه العناصر كما هي' : 'Keep these parts unchanged'}: ${regenerateKeep.trim()}`);
+    }
+    if (regenerateChange.trim()) {
+      requestedChanges.push(`${language === 'ar' ? 'غيّر هذا بالتحديد' : 'Change this specifically'}: ${regenerateChange.trim()}`);
+    }
+    if (regenerateRemove.trim()) {
+      requestedChanges.push(`${language === 'ar' ? 'أزل هذا من المسودة' : 'Remove this from the draft'}: ${regenerateRemove.trim()}`);
+    }
+
+    return [
+      language === 'ar'
+        ? 'أعد كتابة المسودة التالية بناءً على ملاحظاتي.'
+        : 'Rewrite the following draft based on my feedback.',
+      language === 'ar'
+        ? 'مهم جدًا: لا تبدأ من الصفر ولا تغيّر الحقائق أو النية الأساسية إلا إذا طلبت ذلك صراحة.'
+        : 'Very important: do not start from scratch and do not change the core facts or intent unless I explicitly ask for that.',
+      language === 'ar'
+        ? 'طبّق فقط التعديلات المطلوبة، واحتفظ بكل ما هو جيد في النص.'
+        : 'Apply only the requested changes and keep what is already working well.',
+      requestedChanges.length > 0
+        ? `${language === 'ar' ? 'التغييرات المطلوبة:' : 'Requested changes:'}\n- ${requestedChanges.join('\n- ')}`
+        : `${language === 'ar' ? 'حسّن الصياغة فقط بدون تغيير المعنى.' : 'Just improve the draft without changing the meaning.'}`,
+      '',
+      language === 'ar' ? 'المسودة الحالية:' : 'Current draft:',
+      currentDraft
+    ].join('\n');
+  }, [language, parsedText.mainText, regenerateChange, regenerateFeedback, regenerateKeep, regenerateRemove, selectedRegenerateIntents]);
+
+  const resetRegeneratePrompt = useCallback(() => {
+    setSelectedRegenerateIntents([]);
+    setRegenerateFeedback('');
+    setRegenerateKeep('');
+    setRegenerateChange('');
+    setRegenerateRemove('');
+  }, []);
+
+  const toggleRegenerateIntent = useCallback((intent: RegenerateIntentKey) => {
+    setSelectedRegenerateIntents((prev) => prev.includes(intent) ? prev.filter((item) => item !== intent) : [...prev, intent]);
+  }, []);
+
+  const openRegeneratePrompt = useCallback(() => {
+    if (!parsedText.mainText.trim() || isLoading) return;
+    setShowRegeneratePrompt(true);
+  }, [isLoading, parsedText.mainText]);
+
   const handleSaveText = useCallback(() => {
     const text = parsedText.mainText.trim();
     if (!text) return;
@@ -774,14 +931,14 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     }
   }, [parsedGenerated.hasFillFormat, parsedGenerated.message, parsedGenerated.subject, parsedText.mainText]);
 
-  const handleGenerate = useCallback(async () => {
-    if (!canGenerate) return;
+  const handleGenerate = useCallback(async (promptOverride?: string) => {
+    if (!promptOverride && !canGenerate) return;
     setIsLoading(true);
     setError('');
     setCopied(false);
     try {
       const sourceTab = activeTab;
-      const prompt = buildPromptForTab(sourceTab);
+      const prompt = (promptOverride ?? buildPromptForTab(sourceTab)).trim();
       if (!prompt || !prompt.trim()) {
         setError('Nothing to regenerate');
         return;
@@ -942,6 +1099,17 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       setIsLoading(false);
     }
   }, [canGenerate, activeTab, buildPromptForTab, mode, language, modelPreference, temperature, contentType, length, replyLength, tone, register, languageVariant, emojis, captionPlatform, useWebSearch, webSearchUrl, isWebSearchAllowed, fetchUrlOnly, normalizedWordCount, normalizedReplyWordCount, onTextGenerated]);
+
+  const submitGuidedRegenerate = useCallback(async () => {
+    const guidedPrompt = buildGuidedRegeneratePrompt();
+    if (!guidedPrompt.trim()) return;
+    setShowRegeneratePrompt(false);
+    await handleGenerate(guidedPrompt);
+  }, [buildGuidedRegeneratePrompt, handleGenerate]);
+
+  const handleStandardGenerateClick = useCallback(() => {
+    void handleGenerate();
+  }, [handleGenerate]);
 
   const [isFetchingUrl, setIsFetchingUrl] = useState(false);
 
@@ -1748,6 +1916,97 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
           {activeTab === 'generated' && (
             <div className="space-y-4">
+              {showRegeneratePrompt && (
+                <div className="rounded-2xl border border-purple-500/25 bg-[linear-gradient(135deg,#0c0f14_0%,hsl(235_25%_8%)_30%,hsl(250_20%_10%)_70%,#0c0f14_100%)] p-4 shadow-[0_4px_32px_hsla(0,0%,0%,0.7),0_2px_16px_hsla(210,100%,65%,0.22)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-white">
+                        {language === 'ar' ? 'اختر نوع إعادة التوليد' : 'Choose rewrite type'}
+                      </p>
+                      <p className="text-xs text-white/65">
+                        {language === 'ar'
+                          ? 'أو اكتب ملاحظة قصيرة لو أردت.'
+                          : 'Or type one quick note if you want.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowRegeneratePrompt(false)}
+                      className="rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-white/70 hover:bg-white/5 hover:text-white transition-colors"
+                    >
+                      {language === 'ar' ? 'إغلاق' : 'Close'}
+                    </button>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {REGENERATE_INTENT_KEYS.map((intent) => {
+                      const active = selectedRegenerateIntents.includes(intent);
+                      return (
+                        <button
+                          key={intent}
+                          type="button"
+                          onClick={() => toggleRegenerateIntent(intent)}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${active
+                            ? 'border-purple-400 bg-purple-500/20 text-white shadow-[0_0_14px_rgba(168,85,247,0.24)]'
+                            : 'border-white/10 bg-white/5 text-white/75 hover:border-purple-400/40 hover:text-white'}`}
+                        >
+                          {regenerateIntentLabel(intent, language)}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-3">
+                    <textarea
+                      id="regenerateFeedback"
+                      value={regenerateFeedback}
+                      onChange={(e) => setRegenerateFeedback(e.target.value)}
+                      className="min-h-[78px] w-full rounded-xl border border-blue-400/20 bg-blue-500/5 px-3 py-2.5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-blue-400/25"
+                      placeholder={language === 'ar'
+                        ? 'ملاحظة سريعة اختيارية...'
+                        : 'Optional quick note...'}
+                    />
+                  </div>
+
+                  {regeneratePromptSummary.length > 0 && (
+                    <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-white/40 mb-1">
+                        {language === 'ar' ? 'ملخص' : 'Summary'}
+                      </p>
+                      <div className="space-y-1 text-xs text-white/75">
+                        {regeneratePromptSummary.map((line, index) => (
+                          <p key={index}>{line}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={submitGuidedRegenerate}
+                      className="rounded-xl bg-[linear-gradient(135deg,hsl(210_100%_60%)_0%,hsl(280_70%_65%)_50%,hsl(25_95%_60%)_100%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_0_24px_hsla(210,100%,65%,0.28)]"
+                    >
+                      {language === 'ar' ? 'إعادة توليد' : 'Regenerate'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetRegeneratePrompt}
+                      className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-white/75 hover:bg-white/5 hover:text-white transition-colors"
+                    >
+                      {language === 'ar' ? 'مسح' : 'Clear'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowRegeneratePrompt(false)}
+                      className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-white/75 hover:bg-white/5 hover:text-white transition-colors"
+                    >
+                      {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Sub-tabs for Generated: Current vs Saved */}
               <div className="flex bg-muted/50 p-1 rounded-lg w-fit mb-4">
                 <button
@@ -1919,9 +2178,18 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                     </div>
                     <button
                       className="px-4 py-2 rounded-lg border-2 border-indigo-500/60 text-indigo-700 dark:text-indigo-200 bg-indigo-500/10 hover:bg-indigo-500/20 text-sm font-medium shadow-[0_0_18px_rgba(99,102,241,0.45)] transition-colors"
-                      onClick={handleGenerate}
+                      onClick={handleStandardGenerateClick}
+                      disabled={!generatedText.trim() || isLoading}
                     >
                       {language === 'ar' ? 'إعادة توليد' : 'Regenerate'}
+                    </button>
+                    <button
+                      type="button"
+                      className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
+                      onClick={openRegeneratePrompt}
+                      disabled={!generatedText.trim() || isLoading}
+                    >
+                      {language === 'ar' ? 'تخصيص' : 'Type'}
                     </button>
                     <button
                       className="px-4 py-2 rounded-lg border border-emerald-500/50 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 text-sm font-medium transition-colors"
@@ -1977,7 +2245,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           <div className="mt-6 flex justify-end">
               <button
                 className={`px-5 py-2.5 rounded-full text-sm font-medium shadow-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 hover:shadow-xl transition-all ${canGenerate ? '' : 'opacity-60 cursor-not-allowed'}`}
-                onClick={handleGenerate}
+                onClick={handleStandardGenerateClick}
                 disabled={!canGenerate}
               >
                 {generateButtonLabel}

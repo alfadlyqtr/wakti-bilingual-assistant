@@ -144,6 +144,42 @@ function buildMp3QuranUrl(server: string, surahNumber: number): string {
   return `${server}${String(surahNumber).padStart(3, "0")}.mp3`;
 }
 
+function normalizeSearchValue(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/ؤ/g, "و")
+    .replace(/ئ/g, "ي")
+    .replace(/['’`]/g, "")
+    .replace(/\b(al|ash|ad|ar|as|at|az|an)\b/g, " ")
+    .replace(/[\s\-_]+/g, " ")
+    .trim();
+}
+
+function getSurahSearchTerms(surah: Surah): string[] {
+  const english = surah.englishName;
+  return [
+    surah.name,
+    english,
+    english.replace(/^al[-\s]+/i, ""),
+    english.replace(/^surah[-\s]+/i, ""),
+    english.replace(/^surat[-\s]+/i, ""),
+    `${surah.number}`,
+  ];
+}
+
+function getRevelationLabel(revelationType: string, isAr: boolean): string {
+  if (!isAr) return revelationType;
+  const normalized = revelationType.toLowerCase();
+  if (normalized.includes("meccan") || normalized.includes("makki") || normalized.includes("maccan")) return "مكية";
+  if (normalized.includes("medinan") || normalized.includes("madani")) return "مدنية";
+  return revelationType;
+}
+
 export default function DeenQuran() {
   const navigate = useNavigate();
   const { language, theme } = useTheme();
@@ -182,11 +218,13 @@ export default function DeenQuran() {
   const [explLoading, setExplLoading] = useState(false);
   const [bookmarkedAyahs, setBookmarkedAyahs] = useState<Set<number>>(new Set());
   const [lastProgress, setLastProgress] = useState<LastProgress | null>(null);
+  const [pendingBookmarkAyah, setPendingBookmarkAyah] = useState<Ayah | null>(null);
   const [readerPage, setReaderPage] = useState(0);
   const AYAHS_PER_PAGE = 4;
   const [pageBreaks, setPageBreaks] = useState<number[]>([0]);
   const [isSurahPlaying, setIsSurahPlaying] = useState(false);
-  const [currentPlaybackAyahIndex, setCurrentPlaybackAyahIndex] = useState(0);
+  const [currentPlaybackAyahIndex, setCurrentPlaybackAyahIndex] = useState(-1);
+  const [readerPlayAllEnabled, setReaderPlayAllEnabled] = useState(false);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
   const [loopSurah, setLoopSurah] = useState(false);
@@ -209,11 +247,23 @@ export default function DeenQuran() {
   const surahPlaybackCancelledRef = useRef(false);
   const surahAudioCacheRef = useRef<Record<string, string[]>>({});
   const playbackSessionRef = useRef(0);
+  const readerTopRef = useRef<HTMLDivElement | null>(null);
+  const ayahItemRefs = useRef<Record<number, HTMLDivElement | null>>({});
   useEffect(() => {
     try {
       localStorage.setItem(RECITER_STORAGE_KEY, selectedReciter);
     } catch {}
   }, [selectedReciter]);
+
+  useEffect(() => {
+    if (screen !== "reader" || currentPlaybackAyahIndex < 0) return;
+    const activeAyahEl = ayahItemRefs.current[currentPlaybackAyahIndex];
+    if (!activeAyahEl) return;
+    const timer = window.setTimeout(() => {
+      activeAyahEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [screen, currentPlaybackAyahIndex, readerPage]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -365,9 +415,13 @@ export default function DeenQuran() {
     }
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const uid = sessionData.session?.user?.id;
+      if (!uid) return;
       const { data } = await (supabase as any)
         .from("deen_quran_bookmarks")
         .select("ayah_number")
+        .eq("user_id", uid)
         .eq("surah_number", surahNumber);
 
       if (data) {
@@ -419,14 +473,36 @@ export default function DeenQuran() {
       const breaks = Array.from({ length: Math.ceil(sourceLength / AYAHS_PER_PAGE) }, (_, i) => i * AYAHS_PER_PAGE);
       setPageBreaks(breaks);
       await loadBookmarks(surah.number);
-      // Save progress at surah open
-      saveProgress(surah.number, resumeAyah ?? 1);
+      if (typeof resumeAyah === "number" && resumeAyah > 0) {
+        saveProgress(surah.number, resumeAyah);
+      }
     } catch {
       toast.error(isAr ? "تعذر تحميل السورة" : "Failed to load surah");
     } finally {
       setLoadingReader(false);
     }
   };
+
+  const currentSurahBookmarkedAyah = bookmarkedAyahs.size > 0
+    ? Array.from(bookmarkedAyahs).sort((a, b) => a - b)[0]
+    : null;
+  const currentSurahSavedAyah = activeSurah && lastProgress?.surah_number === activeSurah.number ? lastProgress.ayah_number : null;
+  const currentSurahJumpTargetAyah = currentSurahBookmarkedAyah ?? currentSurahSavedAyah;
+
+  const jumpToSavedAyah = useCallback(() => {
+    if (!activeSurah || !currentSurahJumpTargetAyah) return;
+    const targetIndex = activeSurah.ayahs.findIndex((ayah) => ayah.numberInSurah === currentSurahJumpTargetAyah);
+    if (targetIndex < 0) return;
+    const targetPage = pageBreaks.findIndex((start, pageIndex) => {
+      const end = pageBreaks[pageIndex + 1] ?? activeSurah.ayahs.length;
+      return targetIndex >= start && targetIndex < end;
+    });
+    if (targetPage >= 0) setReaderPage(targetPage);
+    setCurrentPlaybackAyahIndex(targetIndex);
+    window.setTimeout(() => {
+      ayahItemRefs.current[targetIndex]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 220);
+  }, [activeSurah, currentSurahJumpTargetAyah, pageBreaks]);
 
   const openListeningSurah = async (surah: Surah, autoPlay = false) => {
     const bgIsOwned = backgroundPlaybackEnabled && bgAudio.audio === audioRef.current;
@@ -527,6 +603,7 @@ export default function DeenQuran() {
         if (ayahIndex >= 0) setCurrentPlaybackAyahIndex(ayahIndex);
         audioRef.current.onended = () => {
           setPlaying(false);
+          setCurrentPlaybackAyahIndex(-1);
         };
         return true;
       }
@@ -537,7 +614,9 @@ export default function DeenQuran() {
     }
   };
 
-  const stopPlayback = () => {
+  const stopPlayback = (triggeredByUser = false) => {
+    const stoppedAtIndex = currentPlaybackAyahIndex;
+    const wasPlayAll = readerPlayAllEnabled && isSurahPlaying;
     surahPlaybackCancelledRef.current = true;
     playbackSessionRef.current += 1;
     if (audioRef.current) {
@@ -553,6 +632,11 @@ export default function DeenQuran() {
     setAudioDuration(0);
     setPlaying(false);
     setIsSurahPlaying(false);
+    setCurrentPlaybackAyahIndex(-1);
+    if (triggeredByUser && wasPlayAll && stoppedAtIndex >= 0 && activeSurah) {
+      const stoppedAyah = activeSurah.ayahs[stoppedAtIndex] ?? null;
+      if (stoppedAyah) setPendingBookmarkAyah(stoppedAyah);
+    }
   };
 
   const getSurahAudioQueue = useCallback(async (surah: SurahFull, reciterId: string) => {
@@ -597,14 +681,14 @@ export default function DeenQuran() {
 
       audio.onerror = () => {
         cleanup();
-        reject(new Error("audio-error"));
+        resolve(); // skip broken URL, advance to next ayah
       };
 
       audio.play().then(() => {
         setPlaying(true);
-      }).catch((error) => {
+      }).catch(() => {
         cleanup();
-        reject(error);
+        resolve(); // skip if autoplay blocked; already unlocked at gesture time
       });
     });
   }, []);
@@ -726,16 +810,29 @@ export default function DeenQuran() {
     setCurrentPlaybackAyahIndex(startIndex);
 
     try {
-      const audioUrls = await getSurahAudioQueue(targetSurah, selectedReciter);
-
       for (let index = startIndex; index < targetSurah.ayahs.length; index += 1) {
         const ayah = targetSurah.ayahs[index];
         if (surahPlaybackCancelledRef.current || playbackSessionRef.current !== sessionId) break;
 
+        const nextReaderPage = pageBreaks.findIndex((start, pageIndex) => {
+          const end = pageBreaks[pageIndex + 1] ?? targetSurah.ayahs.length;
+          return index >= start && index < end;
+        });
+        if (nextReaderPage >= 0) {
+          setReaderPage((prev) => {
+            if (prev === nextReaderPage) return prev;
+            setTimeout(() => readerTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+            return nextReaderPage;
+          });
+        }
+
         setCurrentPlaybackAyahIndex(index);
         saveProgress(targetSurah.number, ayah.numberInSurah);
 
-        const audioUrl = audioUrls[index];
+        const audioEdition = isAr ? "ar.alafasy" : "en.walk";
+        const audioData = await fetchFromProxy(`ayah/${ayah.number}`, audioEdition);
+        if (surahPlaybackCancelledRef.current || playbackSessionRef.current !== sessionId) break;
+        const audioUrl: string = audioData?.data?.audio ?? "";
         if (!audioUrl) continue;
 
         await playAudioUrl(audioUrl);
@@ -805,6 +902,32 @@ export default function DeenQuran() {
       return;
     }
     void playSurahSequentially();
+  };
+
+  const toggleReaderPlayAllMode = () => {
+    setReaderPlayAllEnabled((prev) => {
+      const next = !prev;
+      if (!next && isSurahPlaying) {
+        stopPlayback(true);
+      }
+      return next;
+    });
+  };
+
+  const toggleReaderAyahPlayback = async (ayah: Ayah, globalIdx: number) => {
+    if (playing && currentPlaybackAyahIndex === globalIdx) {
+      stopPlayback(true);
+      return;
+    }
+
+    if (readerPlayAllEnabled && activeSurah) {
+      surahPlaybackCancelledRef.current = false;
+      void playSurahSequentially(globalIdx, activeSurah, surahs.find((s) => s.number === activeSurah.number));
+      return;
+    }
+
+    const started = await playAyahAudio(ayah);
+    if (started && activeSurah) saveProgress(activeSurah.number, ayah.numberInSurah);
   };
 
   const handleBackNavigation = () => {
@@ -949,9 +1072,13 @@ export default function DeenQuran() {
       });
 
       try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const uid = sessionData.session?.user?.id;
+        if (!uid) throw new Error("no-user");
         await (supabase as any)
           .from("deen_quran_bookmarks")
           .delete()
+          .eq("user_id", uid)
           .eq("surah_number", activeSurah.number)
           .eq("ayah_number", ayah.numberInSurah);
       } catch {}
@@ -965,7 +1092,11 @@ export default function DeenQuran() {
       });
 
       try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const uid = sessionData.session?.user?.id;
+        if (!uid) throw new Error("no-user");
         await (supabase as any).from("deen_quran_bookmarks").upsert({
+          user_id: uid,
           surah_number: activeSurah.number,
           ayah_number: ayah.numberInSurah,
         });
@@ -976,15 +1107,16 @@ export default function DeenQuran() {
     if (fromSheet) setShowActionSheet(false);
   };
 
-  const filtered = surahs.filter((s) =>
-    s.englishName.toLowerCase().includes(search.toLowerCase()) ||
-    s.name.includes(search) ||
-    String(s.number).includes(search)
-  );
+  const normalizedSearch = normalizeSearchValue(search);
+  const filtered = surahs.filter((s) => {
+    if (!normalizedSearch) return true;
+    return getSurahSearchTerms(s).some((term) => normalizeSearchValue(term).includes(normalizedSearch));
+  });
   const filteredReciters = reciters.filter((reciter) => {
-    const query = reciterSearch.trim().toLowerCase();
+    const query = normalizeSearchValue(reciterSearch);
     if (!query) return true;
-    return reciter.labelEn.toLowerCase().includes(query) || reciter.labelAr.toLowerCase().includes(query);
+    return [reciter.labelEn, reciter.labelAr]
+      .some((value) => normalizeSearchValue(value).includes(query));
   });
 
   // Find last-read surah name for the continue banner
@@ -1006,7 +1138,6 @@ export default function DeenQuran() {
     : screen === "listen-player"
       ? (isAr ? "استمع للسورة كاملة بدون انقطاع" : "Listen to the full surah without interruptions")
       : undefined;
-
   return (
     <div
       className="min-h-screen pb-24"
@@ -1040,7 +1171,7 @@ export default function DeenQuran() {
             </div>
             {playing && (
               <button
-                onClick={stopPlayback}
+                onClick={() => stopPlayback(true)}
                 className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 transition-all"
                 style={{ background: "hsla(210,100%,65%,0.15)", border: "1px solid hsla(210,100%,65%,0.3)" }}
                 title={isAr ? "إيقاف" : "Pause"}
@@ -1284,7 +1415,7 @@ export default function DeenQuran() {
                       {isAr ? s.name : s.englishName}
                     </p>
                     <p className="text-[10px]" style={{ color: textMuted }}>
-                      {s.numberOfAyahs} {isAr ? "آية" : "verses"} · {s.revelationType}
+                      {s.numberOfAyahs} {isAr ? "آية" : "verses"} · {getRevelationLabel(s.revelationType, isAr)}
                     </p>
                   </div>
                   {screen === "read-list" && lastProgress?.surah_number === s.number && (
@@ -1604,7 +1735,7 @@ export default function DeenQuran() {
 
       {/* Reader View — Mushaf style */}
       {screen === "reader" && (
-        <div className="pt-2 pb-12 px-3">
+        <div className="pt-2 pb-12 px-3" ref={readerTopRef}>
           {loadingReader ? (
             <div className="flex items-center justify-center py-20">
               <div className="w-6 h-6 border-2 border-amber-500/40 border-t-amber-500 rounded-full animate-spin" />
@@ -1653,24 +1784,106 @@ export default function DeenQuran() {
 
             return (
               <>
-                <div className="px-3 mb-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4" dir={isAr ? "rtl" : "ltr"}>
                   <button
                     onClick={handleBackNavigation}
                     className="rounded-xl flex items-center gap-2 px-3 py-2 active:scale-95 transition-all flex-shrink-0"
                     style={{
-                      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.06)",
-                      border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(6,5,65,0.14)",
-                      boxShadow: isDark ? "0 8px 24px rgba(0,0,0,0.28)" : "0 8px 20px rgba(6,5,65,0.08)",
+                      background: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.78)",
+                      border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(6,5,65,0.10)",
+                      boxShadow: isDark ? "0 8px 24px rgba(0,0,0,0.22)" : "0 8px 20px rgba(6,5,65,0.06)",
                       backdropFilter: "blur(10px)",
                     }}
                     title={isAr ? "العودة إلى القرآن" : "Back to Quran"}
                   >
-                    <ArrowLeft className="w-4 h-4" style={{ color: isDark ? "#f2f2f2" : "#060541" }} />
+                    <ArrowLeft className="w-4 h-4" style={{ color: isDark ? "#f2f2f2" : "#060541", transform: isAr ? "rotate(180deg)" : undefined }} />
                     <span className="text-[12px] font-medium" style={{ color: isDark ? "#f2f2f2" : "#060541" }}>
                       {isAr ? "العودة إلى القرآن" : "Back to Quran"}
                     </span>
                   </button>
+                  <button
+                    onClick={toggleReaderPlayAllMode}
+                    className="rounded-xl flex items-center gap-2 px-3 py-2 active:scale-95 transition-all flex-shrink-0"
+                    style={{
+                      background: readerPlayAllEnabled
+                        ? (isDark ? "hsla(142,76%,55%,0.16)" : "hsla(142,76%,45%,0.14)")
+                        : (isDark ? "hsla(210,100%,65%,0.12)" : "hsla(210,100%,65%,0.10)"),
+                      border: readerPlayAllEnabled
+                        ? (isDark ? "1px solid hsla(142,76%,55%,0.32)" : "1px solid hsla(142,76%,45%,0.28)")
+                        : (isDark ? "1px solid hsla(210,100%,65%,0.26)" : "1px solid hsla(210,100%,65%,0.24)"),
+                      boxShadow: readerPlayAllEnabled
+                        ? (isDark ? "0 8px 24px rgba(34,197,94,0.18)" : "0 8px 20px rgba(34,197,94,0.16)")
+                        : (isDark ? "0 8px 24px rgba(0,0,0,0.22)" : "0 8px 20px rgba(59,130,246,0.10)"),
+                      backdropFilter: "blur(10px)",
+                    }}
+                    title={isAr ? (readerPlayAllEnabled ? "تشغيل الكل مفعل" : "تشغيل الكل") : (readerPlayAllEnabled ? "Play all enabled" : "Play all")}
+                  >
+                    {readerPlayAllEnabled
+                      ? <Check className="w-4 h-4" style={{ color: "#22c55e" }} />
+                      : <Volume2 className="w-4 h-4" style={{ color: "hsl(210,100%,65%)" }} />}
+                    <span className="text-[12px] font-medium" style={{ color: readerPlayAllEnabled ? "#22c55e" : (isDark ? "#dbeafe" : "#1d4ed8") }}>
+                      {isAr ? (readerPlayAllEnabled ? "تشغيل الكل مفعل" : "تشغيل الكل") : (readerPlayAllEnabled ? "Play all on" : "Play all")}
+                    </span>
+                  </button>
+                  <button
+                    onClick={jumpToSavedAyah}
+                    disabled={!currentSurahJumpTargetAyah}
+                    className="rounded-xl flex items-center gap-1.5 px-2.5 py-2 active:scale-95 transition-all flex-shrink-0 disabled:opacity-40 max-w-full"
+                    style={{
+                      background: isDark ? "hsla(45,65%,55%,0.10)" : "hsla(35,65%,42%,0.10)",
+                      border: isDark ? "1px solid hsla(45,65%,55%,0.24)" : "1px solid hsla(35,65%,42%,0.22)",
+                      boxShadow: isDark ? "0 8px 24px rgba(0,0,0,0.18)" : "0 8px 20px rgba(138,106,26,0.10)",
+                      backdropFilter: "blur(10px)",
+                    }}
+                    title={isAr ? "اذهب إلى موضعك المحفوظ" : "Go to saved place"}
+                  >
+                    <RotateCcw className="w-4 h-4" style={{ color: gold }} />
+                    <span className="text-[11px] font-medium truncate" style={{ color: gold }}>
+                      {isAr ? (currentSurahJumpTargetAyah ? "اذهب إلى موضعك المحفوظ" : "لا يوجد موضع محفوظ") : (currentSurahJumpTargetAyah ? "Go to saved place" : "No saved place")}
+                    </span>
+                  </button>
                 </div>
+
+                {/* ── Pending bookmark prompt ── */}
+                {pendingBookmarkAyah && (
+                  <div
+                    className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 mb-3"
+                    style={{
+                      background: isDark ? "hsla(45,65%,55%,0.13)" : "hsla(35,65%,42%,0.11)",
+                      border: isDark ? "1px solid hsla(45,65%,55%,0.30)" : "1px solid hsla(35,65%,42%,0.28)",
+                    }}
+                    dir={isAr ? "rtl" : "ltr"}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Bookmark className="w-4 h-4 flex-shrink-0" style={{ color: gold }} />
+                      <span className="text-[12px] font-medium truncate" style={{ color: isDark ? "#f2f2f2" : "#060541" }}>
+                        {isAr
+                          ? `هل تريد حفظ موضعك عند الآية ${pendingBookmarkAyah.numberInSurah}؟`
+                          : `Save your place at ayah ${pendingBookmarkAyah.numberInSurah}?`}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        className="rounded-lg px-2.5 py-1 text-[11px] font-semibold active:scale-95 transition-all"
+                        style={{ background: gold, color: isDark ? "#0c0f14" : "#ffffff" }}
+                        onClick={() => {
+                          bookmarkAyah(pendingBookmarkAyah);
+                          setPendingBookmarkAyah(null);
+                        }}
+                      >
+                        {isAr ? "نعم" : "Save"}
+                      </button>
+                      <button
+                        className="rounded-lg px-2.5 py-1 text-[11px] font-medium active:scale-95 transition-all"
+                        style={{ background: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)", color: isDark ? "#858384" : "#606062" }}
+                        onClick={() => setPendingBookmarkAyah(null)}
+                      >
+                        {isAr ? "لا" : "Dismiss"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div
                   className="relative"
                   style={{
@@ -1756,8 +1969,9 @@ export default function DeenQuran() {
                         return (
                           <div
                             key={ayah.numberInSurah}
-                            className="w-full flex items-start gap-3 py-3"
-                            style={{ borderBottom: `1px solid ${goldFaint}` }}
+                            ref={(el) => { ayahItemRefs.current[globalIdx] = el; }}
+                            className="w-full flex items-start gap-3 py-3 rounded-xl transition-all"
+                            style={{ borderBottom: `1px solid ${goldFaint}`, background: isPlaying ? (isDark ? "hsla(45,65%,50%,0.10)" : "hsla(38,85%,85%,0.55)") : "transparent", boxShadow: isPlaying ? (isDark ? `0 0 18px hsla(45,65%,50%,0.22)` : `0 0 14px hsla(38,75%,60%,0.22)`) : "none" }}
                           >
                             <div className="w-12 flex flex-col items-center gap-1 pt-1 shrink-0">
                               <div
@@ -1796,10 +2010,7 @@ export default function DeenQuran() {
                                 {isBookmarked ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
                               </button>
                               <button
-                                onClick={async () => {
-                                  const started = await playAyahAudio(ayah);
-                                  if (started && activeSurah) saveProgress(activeSurah.number, ayah.numberInSurah);
-                                }}
+                                onClick={() => void toggleReaderAyahPlayback(ayah, globalIdx)}
                                 className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
                                 style={{
                                   border: `1px solid ${goldGlow}`,
@@ -1807,9 +2018,9 @@ export default function DeenQuran() {
                                   color: gold,
                                   boxShadow: isPlaying ? `0 0 14px ${goldGlow}` : (isDark ? `0 0 10px ${goldFaint}` : `0 2px 8px ${goldFaint}`),
                                 }}
-                                title={isAr ? "استمع" : "Play"}
+                                title={isAr ? (isPlaying ? "إيقاف مؤقت" : "استمع") : (isPlaying ? "Pause" : "Play")}
                               >
-                                <Play className="w-3.5 h-3.5" />
+                                {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
                               </button>
                             </div>
                             <button
@@ -1843,8 +2054,9 @@ export default function DeenQuran() {
                         return (
                           <div
                             key={ayah.numberInSurah}
-                            className="w-full flex items-start gap-3 py-3"
-                            style={{ borderBottom: `1px solid ${goldFaint}` }}
+                            ref={(el) => { ayahItemRefs.current[globalIdx] = el; }}
+                            className="w-full flex items-start gap-3 py-3 rounded-xl transition-all"
+                            style={{ borderBottom: `1px solid ${goldFaint}`, background: isPlaying ? (isDark ? "hsla(45,65%,50%,0.10)" : "hsla(38,85%,85%,0.55)") : "transparent", boxShadow: isPlaying ? (isDark ? `0 0 18px hsla(45,65%,50%,0.22)` : `0 0 14px hsla(38,75%,60%,0.22)`) : "none" }}
                           >
                             <div className="w-12 flex flex-col items-center gap-1 pt-1 shrink-0">
                               <div
@@ -1883,10 +2095,7 @@ export default function DeenQuran() {
                                 {isBookmarked ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
                               </button>
                               <button
-                                onClick={async () => {
-                                  const started = await playAyahAudio(ayah);
-                                  if (started && activeSurah) saveProgress(activeSurah.number, ayah.numberInSurah);
-                                }}
+                                onClick={() => void toggleReaderAyahPlayback(ayah, globalIdx)}
                                 className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
                                 style={{
                                   border: `1px solid ${goldGlow}`,
@@ -1894,9 +2103,9 @@ export default function DeenQuran() {
                                   color: gold,
                                   boxShadow: isPlaying ? `0 0 14px ${goldGlow}` : (isDark ? `0 0 10px ${goldFaint}` : `0 2px 8px ${goldFaint}`),
                                 }}
-                                title={isAr ? "استمع" : "Play"}
+                                title={isAr ? (isPlaying ? "إيقاف مؤقت" : "استمع") : (isPlaying ? "Pause" : "Play")}
                               >
-                                <Play className="w-3.5 h-3.5" />
+                                {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
                               </button>
                             </div>
                             <button
@@ -1926,7 +2135,7 @@ export default function DeenQuran() {
                     return (
                       <div className="flex items-center justify-between mt-6 mb-2 gap-3">
                         <button
-                          onClick={() => { setReaderPage(p => p - 1); window.scrollTo(0, 0); }}
+                          onClick={() => { setReaderPage(p => p - 1); setTimeout(() => readerTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}
                           disabled={readerPage === 0}
                           className="flex-1 py-3 rounded-2xl text-sm font-semibold active:scale-95 transition-all disabled:opacity-30"
                           style={{ background: goldFaint, border: `1px solid ${goldGlow}`, color: gold }}
@@ -1940,7 +2149,7 @@ export default function DeenQuran() {
                           </p>
                         </div>
                         <button
-                          onClick={() => { setReaderPage(p => p + 1); window.scrollTo(0, 0); }}
+                          onClick={() => { setReaderPage(p => p + 1); setTimeout(() => readerTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}
                           disabled={readerPage >= totalPages - 1}
                           className="flex-1 py-3 rounded-2xl text-sm font-semibold active:scale-95 transition-all disabled:opacity-30"
                           style={{ background: goldFaint, border: `1px solid ${goldGlow}`, color: gold }}

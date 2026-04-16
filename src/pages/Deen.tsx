@@ -4,16 +4,41 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { useState, useEffect } from "react";
 import { usePrayerTimes, formatCountdown } from "@/hooks/usePrayerTimes";
 
-// Simple Hijri date approximation
+// Accurate Hijri date using browser Intl with islamic-civil calendar
 function getHijriDate(date: Date, isAr: boolean): string {
-  const jd = Math.floor((date.getTime() - Date.UTC(2023, 6, 19)) / (1000 * 60 * 60 * 24));
-  const hijriDay = ((jd % 30) + 30) % 30 || 30;
-  const hijriMonthIndex = Math.floor(jd / 29.5) % 12;
-  const hijriYear = 1445 + Math.floor(jd / 354);
-  const monthsAr = ["محرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى", "جمادى الآخرة", "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة"];
-  const monthsEn = ["Muharram", "Safar", "Rabi' al-Awwal", "Rabi' al-Thani", "Jumada al-Awwal", "Jumada al-Thani", "Rajab", "Sha'ban", "Ramadan", "Shawwal", "Dhu al-Qi'dah", "Dhu al-Hijjah"];
-  if (isAr) return `${hijriDay} ${monthsAr[hijriMonthIndex]} ${hijriYear}هـ`;
-  return `${hijriDay} ${monthsEn[hijriMonthIndex]} ${hijriYear} AH`;
+  try {
+    const parts = new Intl.DateTimeFormat("en-u-ca-islamic-civil", {
+      day: "numeric", month: "numeric", year: "numeric",
+    }).formatToParts(date);
+    const get = (t: string) => parseInt(parts.find(p => p.type === t)?.value ?? "0", 10);
+    const year = get("year");
+    const month = get("month") - 1; // 0-indexed
+    const day = get("day");
+    const monthsAr = ["محرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى", "جمادى الآخرة", "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة"];
+    const monthsEn = ["Muharram", "Safar", "Rabi' al-Awwal", "Rabi' al-Thani", "Jumada al-Awwal", "Jumada al-Thani", "Rajab", "Sha'ban", "Ramadan", "Shawwal", "Dhu al-Qi'dah", "Dhu al-Hijjah"];
+    if (isAr) return `${day} ${monthsAr[month] ?? ""} ${year}هـ`;
+    return `${day} ${monthsEn[month] ?? ""} ${year} AH`;
+  } catch {
+    // Fallback: epoch anchor 1 Muharram 1447 = 27 Jun 2025
+    const MS_PER_DAY = 86400000;
+    const epoch = Date.UTC(2025, 5, 27); // 27 Jun 2025 = 1 Muharram 1447
+    const days = Math.floor((date.getTime() - epoch) / MS_PER_DAY);
+    // Tabular Islamic calendar: 30-year cycle, months alternate 30/29 days
+    let remaining = days;
+    let year = 1447;
+    while (remaining >= 354) { remaining -= 354; year++; }
+    while (remaining < 0) { remaining += 354; year--; }
+    const monthLengths = [30,29,30,29,30,29,30,29,30,29,30,29];
+    let month = 0;
+    while (month < 12 && remaining >= monthLengths[month]) {
+      remaining -= monthLengths[month]; month++;
+    }
+    const day = remaining + 1;
+    const monthsAr = ["محرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى", "جمادى الآخرة", "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة"];
+    const monthsEn = ["Muharram", "Safar", "Rabi' al-Awwal", "Rabi' al-Thani", "Jumada al-Awwal", "Jumada al-Thani", "Rajab", "Sha'ban", "Ramadan", "Shawwal", "Dhu al-Qi'dah", "Dhu al-Hijjah"];
+    if (isAr) return `${day} ${monthsAr[month] ?? ""} ${year}هـ`;
+    return `${day} ${monthsEn[month] ?? ""} ${year} AH`;
+  }
 }
 
 const tabs = [
@@ -63,16 +88,18 @@ export default function Deen() {
               {isAr ? "الدين" : "Deen"}
             </h1>
           </div>
-          <div
-            className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium"
-            style={{
-              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.06)",
-              color: isDark ? "#858384" : "#606062",
-            }}
-          >
-            <Calendar className="w-3 h-3" />
-            <span>{hijriDate}</span>
-          </div>
+          {isAr && (
+            <div
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium"
+              style={{
+                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.06)",
+                color: isDark ? "#858384" : "#606062",
+              }}
+            >
+              <Calendar className="w-3 h-3" />
+              <span>{hijriDate}</span>
+            </div>
+          )}
         </div>
 
         {/* Next prayer row */}

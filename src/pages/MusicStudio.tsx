@@ -3277,52 +3277,51 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'Khaleeji Pop':          LOCK('khaleeji pop'),
       'GCC Rap':               LOCK('khaleeji rap'),
       'GCC Party':             LOCK('khaleeji pop, festive party energy'),
-      'GCC Wedding':           LOCK('khaleeji wedding song, celebratory'),
-      'GCC Radio Pop':         LOCK('khaleeji pop, commercial radio'),
-      'GCC Dance Pop':         LOCK('khaleeji dance pop, uptempo'),
-      'GCC Electro Pop':       LOCK('khaleeji electro pop'),
-      'GCC Synth Pop':         LOCK('khaleeji synth pop'),
-      'Modern Khaleeji Fusion':LOCK('modern khaleeji fusion, western-oriental'),
-      'English GCC Pop':       LOCK('gulf pop, english lyrics, khaleeji musical identity'),
-      'GCC Anthem':            LOCK('khaleeji anthem, proud majestic'),
-      'National Event GCC':    LOCK('national gulf anthem, patriotic ceremonial'),
-      'Khaleeji Trap':         LOCK('khaleeji trap, urban street'),
+      'GCC Wedding':           LOCK('khaleeji wedding chant, celebratory folk-pop'),
       'GCC Romantic':          LOCK('khaleeji romantic ballad'),
       'GCC Elegant':           LOCK('elegant khaleeji, refined classy delivery'),
-      'GCC R&B Pop':           LOCK('khaleeji r&b, smooth urban'),
+      'GCC Radio Pop':         LOCK('radio-ready khaleeji pop'),
+      'GCC Dance Pop':         LOCK('dance khaleeji pop'),
+      'GCC Electro Pop':       LOCK('electro khaleeji pop'),
+      'GCC Synth Pop':         LOCK('synth-driven khaleeji pop'),
+      'Modern Khaleeji Fusion': LOCK('modern khaleeji fusion'),
+      'English GCC Pop':       LOCK('english lyrics, khaleeji pop crossover'),
+      'GCC R&B Pop':           LOCK('khaleeji r&b pop'),
       'Luxury GCC Pop':        LOCK('luxury khaleeji pop, premium orchestral'),
       'Cinematic GCC':         LOCK('cinematic khaleeji, dramatic atmosphere'),
-      'Jalsa':                 LOCK('khaleeji jalsa, soft acoustic session'),
+      'GCC Anthem':            LOCK('khaleeji anthem, proud crowd energy'),
+      'National Event GCC':    LOCK('khaleeji national event anthem, ceremonial crowd energy'),
       'GCC Traditional':       LOCK('khaleeji traditional, authentic folk'),
       'Sheilat':               LOCK('khaleeji sheilat, strong male group vocal'),
       'Samri':                 LOCK('samri folk, heritage'),
-      'Ardah':                 LOCK('ardah tradition, stately dignified'),
+      'Jalsa':                 LOCK('khaleeji jalsa, soft acoustic session'),
       'Liwa':                  LOCK('liwa coastal, afro-gulf polyrhythmic'),
-      'GCC Shaabi':            LOCK('khaleeji shaabi, popular folk'),
-      'Zar':                   LOCK('zar ritual, traditional'),
-      // ── Arabic UI labels ──
+      'GCC Shaabi':            LOCK('khaleeji shaabi, colloquial festive delivery'),
+      'Zar':                   LOCK('zar ritual folk, trancey khaleeji-adjacent chant'),
+      'Ardah':                 LOCK('ardah chant, ceremonial warrior chorus'),
+      'Khaleeji Trap':         LOCK('khaleeji trap, modern urban gulf delivery'),
       'بوب خليجي':             LOCK('khaleeji pop'),
       'خليجي راب':             LOCK('khaleeji rap'),
-      'خليجي عصري':            LOCK('modern khaleeji fusion, western-oriental'),
+      'خليجي عصري':            LOCK('modern khaleeji pop'),
       'خليجي حفلات':           LOCK('khaleeji pop, festive party energy'),
-      'خليجي أعراس':           LOCK('khaleeji wedding song, celebratory'),
-      'خليجي إذاعي':           LOCK('khaleeji pop, commercial radio'),
-      'خليجي دانس':            LOCK('khaleeji dance pop, uptempo'),
-      'خليجي إلكتروني':        LOCK('khaleeji electro pop'),
-      'خليجي سينث بوب':        LOCK('khaleeji synth pop'),
-      'فيوجن خليجي':           LOCK('modern khaleeji fusion, western-oriental'),
-      'إنجليزي بطابع خليجي':  LOCK('gulf pop, english lyrics, khaleeji musical identity'),
-      'خليجي جماهيري':         LOCK('khaleeji anthem, proud majestic'),
-      'مناسبات وطنية خليجية':  LOCK('national gulf anthem, patriotic ceremonial'),
+      'خليجي أعراس':           LOCK('khaleeji wedding chant, celebratory folk-pop'),
       'خليجي رومانسي':         LOCK('khaleeji romantic ballad'),
       'خليجي أنيق':            LOCK('elegant khaleeji, refined classy delivery'),
-      'خليجي آر أند بي':       LOCK('khaleeji r&b, smooth urban'),
+      'خليجي إذاعي':           LOCK('radio-ready khaleeji pop'),
+      'خليجي دانس':            LOCK('dance khaleeji pop'),
+      'خليجي إلكتروني':        LOCK('electro khaleeji pop'),
+      'خليجي سينث بوب':        LOCK('synth-driven khaleeji pop'),
+      'فيوجن خليجي':           LOCK('modern khaleeji fusion'),
+      'إنجليزي بطابع خليجي':   LOCK('english lyrics, khaleeji pop crossover'),
+      'خليجي آر أند بي':       LOCK('khaleeji r&b pop'),
       'خليجي فاخر':            LOCK('luxury khaleeji pop, premium orchestral'),
       'خليجي سينمائي':         LOCK('cinematic khaleeji, dramatic atmosphere'),
-      'جلسة':                  LOCK('khaleeji jalsa, soft acoustic session'),
+      'خليجي جماهيري':         LOCK('khaleeji anthem, proud crowd energy'),
+      'مناسبات وطنية خليجية':  LOCK('khaleeji national event anthem, ceremonial crowd energy'),
       'خليجي تراثي':           LOCK('khaleeji traditional, authentic folk'),
       'شيلات':                 LOCK('khaleeji sheilat, strong male group vocal'),
       'سامري':                 LOCK('samri folk, heritage'),
+      'جلسة':                  LOCK('khaleeji jalsa, soft acoustic session'),
       'ليوان':                 LOCK('liwa coastal, afro-gulf polyrhythmic'),
       // ── Other Arabic — regional Ferrari anchors (parallel branch, GCC untouched) ──
       'Egyptian':              'egyptian pop, cairo studio sound, authentic egyptian dialect, melodic cairo vocal delivery, modern al-jeel production',
@@ -3332,7 +3331,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'Moroccan Style':        'maghrebi chaabi, authentic darija dialect, north african vocal resonance, gnawa fusion, maghrebi percussion, bendir, raï vocals',
       'Arabic Pop':            'modern pan-arabic pop, mainstream arab vocal, contemporary arabic fusion, polished production, studio mastered',
       'Levant Pop':            'levantine pop, shami folk fusion, shami dialect phrasing, syrian lebanese jordanian vocal identity, modern dabke pop',
-      'Anasheed':              'islamic nasheed, a cappella vocal',
+      'Anasheed':              'islamic nasheed, a cappella vocal harmony, spiritual islamic chant, pure human voice only, reverberant acoustic space, soul-stirring vocal layers, emotional arabic delivery, zero instruments',
       // ── Arabic UI labels ──
       'مصري':                  'بوب مصري، صوت قاهري أصيل، إنتاج الجيل الحديث، أداء وجداني قاهري',
       'شعبي مصري':             'مهرجانات مصرية، موسيقى إلكترو شعبي، بيت سريع، صوت ذكوري قاهري بالتون، أجواء شارعية',
@@ -3341,7 +3340,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'مغربي':                 'شعبي مغربي، لهجة دارجة أصيلة، رنين صوتي شمال أفريقي، دمج الكناوة، إيقاع بنديري',
       'بوب عربي':              'بوب عربي حديث، صوت عربي سائد، دمج عربي معاصر، إنتاج راقٍ',
       'شامي':                  'بوب شامي، فيوجن شعبي شامي، نطق لهجة شامية، هوية صوتية سورية لبنانية أردنية، دبكة حديثة',
-      'أناشيد':                'أناشيد إسلامية، صوت بشري فقط',
+      'أناشيد':                'islamic nasheed, a cappella vocal harmony, spiritual islamic chant, pure human voice only, reverberant acoustic space, soul-stirring vocal layers, emotional arabic delivery, zero instruments',
     };
     const GCC_KEYS = new Set(Object.keys(STYLE_ANCHORS).filter(
       (k) => ![
@@ -3350,7 +3349,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         'مصري','شعبي مصري','عراقي','لبناني','مغربي','بوب عربي','شامي','أناشيد',
       ].includes(k)
     ));
-
     // ── Rhythm chip → compact label ──
     const RHYTHM_LABELS: Record<string, string> = {
       'Gulf Groove': 'khaleeji groove',
@@ -3523,6 +3521,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         'Egyptian Shaabi': 'khaleeji, gulf, moroccan, maghrebi, darija, levantine, shami, iraqi, fusha, msa, noise, hiss, low quality, distorted',
         'مصري':            'خليجي, خليج, مغربي, دارجة, شامي, عراقي, فصحى, noise, hiss, low quality, distorted',
         'شعبي مصري':       'خليجي, خليج, مغربي, دارجة, شامي, عراقي, فصحى, noise, hiss, low quality, distorted',
+        'Anasheed':        'instruments, music, drums, synth, bass, guitar, piano, electronic, percussion, strings, beat, khaleeji, egyptian, levantine, noise, hiss, low quality, distorted',
+        'أناشيد':          'instruments, music, drums, synth, bass, guitar, piano, electronic, percussion, strings, beat, khaleeji, egyptian, levantine, noise, hiss, low quality, distorted',
         // ── Iraqi ──
         'Iraqi Style':     'egyptian, levantine, shami, moroccan, maghrebi, darija, khaleeji, gulf, fusha, msa, noise, hiss, low quality, distorted',
         'عراقي':           'مصري, شامي, مغربي, دارجة, خليجي, فصحى, noise, hiss, low quality, distorted',
@@ -3536,6 +3536,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         'مغربي':           'خليجي, خليج, مصري, شامي, عراقي, فصحى, noise, hiss, low quality, distorted',
       };
       const regionalShield = includeTags.length > 0 ? REGIONAL_NEGATIVE[includeTags[0]] : undefined;
+      const isAnasheedStyle = includeTags.some((tag) => tag === 'Anasheed' || tag === 'أناشيد');
       // ── GCC Morocco-Killer default (sacred — untouched) ──
       const finalNegativeTags = regionalShield
         ?? 'moroccan, darija, gnawa, chaabi, maghrebi rhythm, egyptian, levantine, fusha, msa, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, noise, hiss, distorted, low quality';
@@ -3547,8 +3548,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         instrumental,
         model: 'V5_5',
         duration_seconds: durationTarget,
-        styleWeight: 0.85,
-        weirdnessConstraint: 0.30,
+        styleWeight: isAnasheedStyle ? 0.95 : 0.85,
+        weirdnessConstraint: isAnasheedStyle ? 0.20 : 0.30,
         audioWeight: 0.8,
         negativeTags: finalNegativeTags.slice(0, 200),
       };

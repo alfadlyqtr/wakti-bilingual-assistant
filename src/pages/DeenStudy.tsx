@@ -1,20 +1,27 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Brain, Bookmark, CheckCircle, RotateCcw, BookOpen, Play, Pause, Eye, EyeOff, ChevronRight, X, Target, Search } from "lucide-react";
+import { ArrowLeft, Brain, Bookmark, CheckCircle, RotateCcw, BookOpen, Play, Pause, Eye, EyeOff, ChevronRight, X, Target, Search, Trash2 } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 type StudyTab = "today" | "review" | "plans";
 type PlanType = "beginner" | "juzamma" | "custom";
+type ReviewFilter = "needs_revision" | "learning" | "memorized";
 
 interface StudyPlan {
+  id: string;
   type: PlanType;
   dailyGoal: number;
   currentSurah: number;
   currentAyah: number;
   startSurah?: number;
   startAyah?: number;
+}
+
+interface StudyPlanStore {
+  activePlanId: string | null;
+  plans: StudyPlan[];
 }
 
 interface AyahData {
@@ -94,16 +101,31 @@ function stripBasmala(text: string): string {
   return words.slice(4).join(" ");
 }
 
-function readPlan(): StudyPlan | null {
+function readPlanStore(): StudyPlanStore {
   try {
     const raw = localStorage.getItem(STUDY_PLAN_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as StudyPlan;
-  } catch { return null; }
+    if (!raw) return { activePlanId: null, plans: [] };
+    const parsed = JSON.parse(raw) as StudyPlanStore | StudyPlan;
+
+    if (parsed && typeof parsed === "object" && "plans" in parsed) {
+      const store = parsed as StudyPlanStore;
+      return {
+        activePlanId: store.activePlanId ?? store.plans?.[0]?.id ?? null,
+        plans: Array.isArray(store.plans) ? store.plans : [],
+      };
+    }
+
+    const legacy = parsed as StudyPlan;
+    const migrated: StudyPlan = {
+      ...legacy,
+      id: `plan_${legacy.type}_${legacy.startSurah ?? legacy.currentSurah}_${legacy.startAyah ?? legacy.currentAyah}`,
+    };
+    return { activePlanId: migrated.id, plans: [migrated] };
+  } catch { return { activePlanId: null, plans: [] }; }
 }
 
-function savePlan(plan: StudyPlan) {
-  try { localStorage.setItem(STUDY_PLAN_KEY, JSON.stringify(plan)); } catch {}
+function savePlanStore(store: StudyPlanStore) {
+  try { localStorage.setItem(STUDY_PLAN_KEY, JSON.stringify(store)); } catch {}
 }
 
 async function fetchAyah(surahNumber: number, ayahNumber: number): Promise<AyahData | null> {
@@ -140,16 +162,28 @@ async function fetchAyah(surahNumber: number, ayahNumber: number): Promise<AyahD
 
 export default function DeenStudy() {
   const navigate = useNavigate();
-  const { language } = useTheme();
+  const { language, theme } = useTheme();
   const isAr = language === "ar";
+  const dark = theme === "dark";
+  const bg      = dark ? "#0c0f14" : "#fcfefd";
+  const hdrBg   = dark ? "rgba(12,15,20,0.95)" : "rgba(252,254,253,0.97)";
+  const surface = dark ? "rgba(255,255,255,0.04)" : "rgba(6,5,65,0.04)";
+  const bdr     = dark ? "rgba(255,255,255,0.07)" : "rgba(6,5,65,0.09)";
+  const textPri = dark ? "#f2f2f2" : "#060541";
+  const textSec = dark ? "#858384" : "#606062";
+  const accentText = dark ? "hsl(25,95%,60%)" : "#c2410c";
+  const accentBg = dark ? "hsla(25,95%,60%,0.12)" : "hsla(25,85%,45%,0.14)";
+  const accentBorder = dark ? "hsla(25,95%,60%,0.24)" : "hsla(25,85%,45%,0.28)";
 
   const [activeTab, setActiveTab] = useState<StudyTab>("today");
-  const [plan, setPlan] = useState<StudyPlan | null>(() => readPlan());
+  const [planStore, setPlanStore] = useState<StudyPlanStore>(() => readPlanStore());
   const [memorization, setMemorization] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [sessionAyah, setSessionAyah] = useState<AyahData | null>(null);
   const [playerMode, setPlayerMode] = useState<"learn" | "review">("learn");
   const [fetchingAyah, setFetchingAyah] = useState(false);
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("needs_revision");
+  const plan = planStore.plans.find((p) => p.id === planStore.activePlanId) ?? planStore.plans[0] ?? null;
 
   const reloadMemorization = useCallback(() => {
     setLoading(true);
@@ -202,8 +236,14 @@ export default function DeenStudy() {
     await upsertMemorization(sessionAyah.surah_number, sessionAyah.ayah_number, result);
     if (result !== "needs_revision" && plan && playerMode === "learn") {
       const updated: StudyPlan = { ...plan, currentSurah: sessionAyah.surah_number, currentAyah: sessionAyah.ayah_number + 1 };
-      savePlan(updated);
-      setPlan(updated);
+      setPlanStore((prev) => {
+        const next: StudyPlanStore = {
+          ...prev,
+          plans: prev.plans.map((p) => p.id === updated.id ? updated : p),
+        };
+        savePlanStore(next);
+        return next;
+      });
     }
     setSessionAyah(null);
     reloadMemorization();
@@ -211,11 +251,46 @@ export default function DeenStudy() {
   }, [sessionAyah, plan, playerMode, upsertMemorization, reloadMemorization, isAr]);
 
   const activatePlan = (type: PlanType, dailyGoal: number, startSurah: number, startAyah: number) => {
-    const newPlan: StudyPlan = { type, dailyGoal, currentSurah: startSurah, currentAyah: startAyah, startSurah, startAyah };
-    savePlan(newPlan);
-    setPlan(newPlan);
+    const newPlan: StudyPlan = {
+      id: `plan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      type,
+      dailyGoal,
+      currentSurah: startSurah,
+      currentAyah: startAyah,
+      startSurah,
+      startAyah,
+    };
+    setPlanStore((prev) => {
+      const next: StudyPlanStore = {
+        activePlanId: newPlan.id,
+        plans: [newPlan, ...prev.plans],
+      };
+      savePlanStore(next);
+      return next;
+    });
     setActiveTab("today");
-    toast.success(isAr ? "تم اختيار الخطة ✓" : "Plan set ✓");
+    toast.success(isAr ? "تم حفظ الخطة ✓" : "Plan saved ✓");
+  };
+
+  const setActivePlan = (planId: string) => {
+    setPlanStore((prev) => {
+      const next = { ...prev, activePlanId: planId };
+      savePlanStore(next);
+      return next;
+    });
+  };
+
+  const deletePlan = (planId: string) => {
+    setPlanStore((prev) => {
+      const remaining = prev.plans.filter((p) => p.id !== planId);
+      const next: StudyPlanStore = {
+        activePlanId: prev.activePlanId === planId ? (remaining[0]?.id ?? null) : prev.activePlanId,
+        plans: remaining,
+      };
+      savePlanStore(next);
+      return next;
+    });
+    toast.success(isAr ? "تم حذف الخطة" : "Plan deleted");
   };
 
   const reviewItems = memorization.filter((m) => m.status === "needs_revision");
@@ -231,7 +306,7 @@ export default function DeenStudy() {
   return (
     <div
       className="min-h-screen pb-24"
-      style={{ background: "linear-gradient(135deg, #0c0f14 0%, hsl(235 25% 7%) 50%, #0c0f14 100%)" }}
+      style={{ background: bg }}
       dir={isAr ? "rtl" : "ltr"}
     >
       {/* Session Player overlay */}
@@ -246,31 +321,31 @@ export default function DeenStudy() {
       )}
 
       {/* Header */}
-      <div className="sticky top-0 z-20 px-4 pt-4 pb-3" style={{ background: "rgba(12,15,20,0.95)", backdropFilter: "blur(16px)" }}>
+      <div className="sticky top-0 z-20 px-4 pt-4 pb-3" style={{ background: hdrBg, backdropFilter: "blur(16px)", borderBottom: `1px solid ${bdr}` }}>
         <div className="flex items-center gap-3 mb-3">
           <button
             onClick={() => navigate("/deen")}
             className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 transition-all"
-            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}
+            style={{ background: surface, border: `1px solid ${bdr}` }}
             aria-label="Back"
           >
-            <ArrowLeft className="w-4 h-4 text-[#f2f2f2]" style={{ transform: isAr ? "rotate(180deg)" : undefined }} />
+            <ArrowLeft className="w-4 h-4" style={{ color: textPri, transform: isAr ? "rotate(180deg)" : undefined }} />
           </button>
-          <h1 className="text-base font-bold text-[#f2f2f2]">{isAr ? "الدراسة" : "Study"}</h1>
+          <h1 className="text-base font-bold" style={{ color: textPri }}>{isAr ? "الدراسة" : "Study"}</h1>
           {plan && (
             <div className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0"
-              style={{ background: "hsla(45,100%,60%,0.12)", color: "#fbbf24", border: "1px solid hsla(45,100%,60%,0.22)" }}>
+              style={{ background: accentBg, color: accentText, border: `1px solid ${accentBorder}` }}>
               {plan.type === "juzamma" ? (isAr ? "جزء عمّ" : "Juz Amma") : plan.type === "beginner" ? (isAr ? "مبتدئ" : "Beginner") : (isAr ? "مخصص" : "Custom")}
             </div>
           )}
         </div>
-        <div className="flex rounded-xl p-1 gap-1" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+        <div className="flex rounded-xl p-1 gap-1" style={{ background: surface, border: `1px solid ${bdr}` }}>
           {tabs.map((tab) => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95"
               style={activeTab === tab.id
-                ? { background: "hsla(45,100%,60%,0.15)", color: "#fbbf24", border: "1px solid hsla(45,100%,60%,0.25)" }
-                : { color: "#858384" }}>
+                ? { background: accentBg, color: accentText, border: `1px solid ${accentBorder}` }
+                : { color: textSec }}>
               {isAr ? tab.labelAr : tab.labelEn}
             </button>
           ))}
@@ -282,52 +357,52 @@ export default function DeenStudy() {
         {activeTab === "today" && (
           <div className="flex flex-col gap-3">
             {!plan ? (
-              <NoPlanState isAr={isAr} onSetupPlan={() => setActiveTab("plans")} />
+              <NoPlanState isAr={isAr} dark={dark} onSetupPlan={() => setActiveTab("plans")} />
             ) : (
               <>
                 <div className="grid grid-cols-3 gap-2">
-                  <StatCard value={learningItems.length} label={isAr ? "تتعلمه" : "Learning"} color="#60a5fa" bg="hsla(210,100%,65%,0.08)" />
-                  <StatCard value={reviewItems.length} label={isAr ? "للمراجعة" : "Review due"} color="#fbbf24" bg="hsla(45,100%,60%,0.08)" />
-                  <StatCard value={memorizedCount} label={isAr ? "ثابت" : "Strong"} color="#4ade80" bg="hsla(142,76%,55%,0.08)" />
+                  <StatCard value={learningItems.length} label={isAr ? "تتعلمه" : "Learning"} color="#60a5fa" bg="hsla(210,100%,65%,0.08)" dark={dark} onClick={() => { setReviewFilter("learning"); setActiveTab("review"); }} />
+                  <StatCard value={reviewItems.length} label={isAr ? "للمراجعة" : "Review due"} color="#f97316" bg="hsla(25,95%,60%,0.08)" dark={dark} onClick={() => { setReviewFilter("needs_revision"); setActiveTab("review"); }} />
+                  <StatCard value={memorizedCount} label={isAr ? "ثابت" : "Strong"} color="#4ade80" bg="hsla(142,76%,55%,0.08)" dark={dark} onClick={() => { setReviewFilter("memorized"); setActiveTab("review"); }} />
                 </div>
 
                 <button
                   onClick={() => openLearnSession(plan.currentSurah, plan.currentAyah)}
                   disabled={fetchingAyah}
                   className="w-full rounded-2xl p-4 text-left active:scale-[0.99] transition-all disabled:opacity-60"
-                  style={{ background: "hsla(45,100%,60%,0.08)", border: "1px solid hsla(45,100%,60%,0.22)" }}
+                  style={{ background: dark ? "hsla(25,95%,60%,0.10)" : "hsla(25,85%,45%,0.14)", border: "1px solid hsla(25,95%,60%,0.28)" }}
                   dir={isAr ? "rtl" : "ltr"}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-                        style={{ background: "hsla(45,100%,60%,0.15)", border: "1px solid hsla(45,100%,60%,0.28)" }}>
+                        style={{ background: dark ? "hsla(25,95%,60%,0.15)" : "hsla(25,85%,45%,0.18)", border: "1px solid hsla(25,95%,60%,0.30)" }}>
                         {fetchingAyah
-                          ? <div className="w-5 h-5 border-2 border-amber-400/40 border-t-amber-400 rounded-full animate-spin" />
-                          : <Play className="w-5 h-5 text-amber-400" />}
+                          ? <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: dark ? "rgba(249,115,22,0.35)" : "rgba(194,65,12,0.35)", borderTopColor: accentText }} />
+                          : <Play className="w-5 h-5" style={{ color: accentText }} />}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-[#f2f2f2]">{isAr ? "ابدأ جلسة اليوم" : "Start today's session"}</p>
-                        <p className="text-xs text-amber-400 mt-0.5">
+                        <p className="text-sm font-bold" style={{ color: textPri }}>{isAr ? "ابدأ جلسة اليوم" : "Start today's session"}</p>
+                        <p className="text-xs mt-0.5" style={{ color: accentText }}>
                           {isAr ? "سورة" : "Surah"} {plan.currentSurah} — {isAr ? "آية" : "Ayah"} {plan.currentAyah}
                         </p>
                       </div>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-amber-400 flex-shrink-0" style={{ transform: isAr ? "rotate(180deg)" : undefined }} />
+                    <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: accentText, transform: isAr ? "rotate(180deg)" : undefined }} />
                   </div>
                 </button>
 
                 {reviewItems.length > 0 && (
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-bold text-[#f2f2f2]">{isAr ? "تحتاج مراجعة" : "Due for review"}</p>
-                      <button onClick={() => setActiveTab("review")} className="text-[11px] text-amber-400 font-semibold">
+                      <p className="text-xs font-bold" style={{ color: textPri }}>{isAr ? "تحتاج مراجعة" : "Due for review"}</p>
+                      <button onClick={() => setActiveTab("review")} className="text-[11px] font-semibold" style={{ color: accentText }}>
                         {isAr ? "عرض الكل" : "See all"}
                       </button>
                     </div>
                     <div className="flex flex-col gap-2">
                       {reviewItems.slice(0, 2).map((m) => (
-                        <MemorizationRow key={m.id} item={m} isAr={isAr}
+                        <MemorizationRow key={m.id} item={m} isAr={isAr} dark={dark}
                           onUpdate={updateMemorizationStatus}
                           onTap={() => openReviewSession(m)}
                           emphasizeReview />
@@ -338,10 +413,23 @@ export default function DeenStudy() {
 
                 {learningItems.length > 0 && (
                   <div>
-                    <p className="text-xs font-bold text-[#f2f2f2] mb-2">{isAr ? "تتعلمه الآن" : "Learning now"}</p>
+                    <p className="text-xs font-bold mb-2" style={{ color: textPri }}>{isAr ? "تتعلمه الآن" : "Learning now"}</p>
                     <div className="flex flex-col gap-2">
                       {learningItems.slice(0, 3).map((m) => (
-                        <MemorizationRow key={m.id} item={m} isAr={isAr}
+                        <MemorizationRow key={m.id} item={m} isAr={isAr} dark={dark}
+                          onUpdate={updateMemorizationStatus}
+                          onTap={() => openReviewSession(m)} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {memorizedCount > 0 && (
+                  <div>
+                    <p className="text-xs font-bold mb-2" style={{ color: textPri }}>{isAr ? "المحفوظ بقوة" : "Strong now"}</p>
+                    <div className="flex flex-col gap-2">
+                      {memorization.filter((m) => m.status === "memorized").slice(0, 3).map((m) => (
+                        <MemorizationRow key={m.id} item={m} isAr={isAr} dark={dark}
                           onUpdate={updateMemorizationStatus}
                           onTap={() => openReviewSession(m)} />
                       ))}
@@ -358,22 +446,50 @@ export default function DeenStudy() {
         {/* ── REVIEW TAB ── */}
         {activeTab === "review" && (
           <div className="flex flex-col gap-2">
-            {loading ? <Loader /> : reviewItems.length === 0 ? (
+            <div className="flex rounded-xl p-1 gap-1 mb-2" style={{ background: surface, border: `1px solid ${bdr}` }}>
+              {([
+                { id: "needs_revision", ar: "للمراجعة", en: "Review due" },
+                { id: "learning", ar: "تتعلمه", en: "Learning" },
+                { id: "memorized", ar: "ثابت", en: "Strong" },
+              ] as { id: ReviewFilter; ar: string; en: string }[]).map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setReviewFilter(item.id)}
+                  className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95"
+                  style={reviewFilter === item.id
+                    ? { background: accentBg, color: accentText, border: `1px solid ${accentBorder}` }
+                    : { color: textSec }}
+                >
+                  {isAr ? item.ar : item.en}
+                </button>
+              ))}
+            </div>
+            {loading ? <Loader /> : (reviewFilter === "needs_revision" ? reviewItems : reviewFilter === "learning" ? learningItems : memorization.filter((m) => m.status === "memorized")).length === 0 ? (
               <div className="flex flex-col items-center py-16 gap-3 text-center">
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                  <RotateCcw className="w-7 h-7 text-[#606062]" />
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: surface, border: `1px solid ${bdr}` }}>
+                  <RotateCcw className="w-7 h-7" style={{ color: textSec }} />
                 </div>
-                <p className="text-sm font-semibold text-[#f2f2f2]">{isAr ? "لا شيء للمراجعة" : "Nothing to review"}</p>
-                <p className="text-xs text-[#858384] max-w-[220px] leading-relaxed">
-                  {isAr ? "حين تحفظ آيات ستظهر هنا للمراجعة الدورية." : "Once you memorize ayahs they will appear here for periodic revision."}
+                <p className="text-sm font-semibold" style={{ color: textPri }}>
+                  {reviewFilter === "needs_revision"
+                    ? (isAr ? "لا شيء للمراجعة" : "Nothing to review")
+                    : reviewFilter === "learning"
+                      ? (isAr ? "لا يوجد قيد التعلّم" : "Nothing in learning")
+                      : (isAr ? "لا يوجد محفوظ حتى الآن" : "Nothing strong yet")}
+                </p>
+                <p className="text-xs max-w-[220px] leading-relaxed" style={{ color: textSec }}>
+                  {reviewFilter === "needs_revision"
+                    ? (isAr ? "حين تحفظ آيات ستظهر هنا للمراجعة الدورية." : "Once you memorize ayahs they will appear here for periodic revision.")
+                    : reviewFilter === "learning"
+                      ? (isAr ? "الآيات التي ما زلت تتعلمها ستظهر هنا." : "Ayahs you are still learning will appear here.")
+                      : (isAr ? "الآيات التي أتقنتها ستظهر هنا." : "Ayahs you have mastered will appear here.")}
                 </p>
               </div>
             ) : (
-              reviewItems.map((m) => (
-                <MemorizationRow key={m.id} item={m} isAr={isAr}
+              (reviewFilter === "needs_revision" ? reviewItems : reviewFilter === "learning" ? learningItems : memorization.filter((m) => m.status === "memorized")).map((m) => (
+                <MemorizationRow key={m.id} item={m} isAr={isAr} dark={dark}
                   onUpdate={updateMemorizationStatus}
                   onTap={() => openReviewSession(m)}
-                  emphasizeReview />
+                  emphasizeReview={reviewFilter === "needs_revision"} />
               ))
             )}
           </div>
@@ -381,77 +497,85 @@ export default function DeenStudy() {
 
         {/* ── PLANS TAB ── */}
         {activeTab === "plans" && (
-          <PlansSetup isAr={isAr} activePlan={plan} onActivate={activatePlan} />
+          <PlansSetup isAr={isAr} dark={dark} activePlan={plan} savedPlans={planStore.plans} onActivate={activatePlan} onSetActive={setActivePlan} onDeletePlan={deletePlan} />
         )}
       </div>
     </div>
   );
 }
 
-function StatCard({ value, label, color, bg }: { value: number; label: string; color: string; bg: string }) {
+function StatCard({ value, label, color, bg, dark, onClick }: { value: number; label: string; color: string; bg: string; dark: boolean; onClick?: () => void }) {
+  const textSec = dark ? "#858384" : "#606062";
   return (
-    <div className="rounded-xl p-3 text-center" style={{ background: bg, border: `1px solid ${color}22` }}>
+    <button className="rounded-xl p-3 text-center active:scale-95 transition-all" style={{ background: bg, border: `1px solid ${color}33` }} onClick={onClick}>
       <p className="text-xl font-black" style={{ color }}>{value}</p>
-      <p className="text-[9px] text-[#858384] font-semibold mt-0.5">{label}</p>
-    </div>
+      <p className="text-[9px] font-semibold mt-0.5" style={{ color: textSec }}>{label}</p>
+    </button>
   );
 }
 
 function Loader() {
   return (
     <div className="flex items-center justify-center py-20">
-      <div className="w-6 h-6 border-2 border-amber-500/40 border-t-amber-500 rounded-full animate-spin" />
+      <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "rgba(249,115,22,0.35)", borderTopColor: "#f97316" }} />
     </div>
   );
 }
 
-function MemorizationRow({ item: m, isAr, onUpdate, onTap, emphasizeReview = false }: {
-  item: any; isAr: boolean;
+function MemorizationRow({ item: m, isAr, dark, onUpdate, onTap, emphasizeReview = false }: {
+  item: any; isAr: boolean; dark: boolean;
   onUpdate: (id: string, status: string) => Promise<void>;
   onTap?: () => void;
   emphasizeReview?: boolean;
 }) {
   const isMemorized = m.status === "memorized";
   const isReview = m.status === "needs_revision";
+  const textPri = dark ? "#f2f2f2" : "#060541";
+  const textSec = dark ? "#858384" : "#606062";
+  const rowBg  = emphasizeReview
+    ? (dark ? "hsla(25,95%,60%,0.10)" : "hsla(25,85%,45%,0.12)")
+    : dark ? "rgba(255,255,255,0.03)" : "rgba(6,5,65,0.03)";
+  const rowBdr = emphasizeReview
+    ? (dark ? "hsla(25,95%,60%,0.25)" : "hsla(25,85%,45%,0.24)")
+    : dark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.08)";
   return (
     <div
       className="rounded-xl p-3.5 flex items-center gap-3 active:scale-[0.99] transition-all cursor-pointer"
-      style={{
-        background: emphasizeReview ? "hsla(45,100%,60%,0.06)" : "rgba(255,255,255,0.03)",
-        border: `1px solid ${emphasizeReview ? "hsla(45,100%,60%,0.16)" : "rgba(255,255,255,0.06)"}`,
-      }}
+      style={{ background: rowBg, border: `1px solid ${rowBdr}` }}
       onClick={onTap}
     >
       <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xs font-bold"
         style={{
-          background: isMemorized ? "hsla(142,76%,55%,0.12)" : isReview ? "hsla(45,100%,60%,0.12)" : "hsla(210,100%,65%,0.12)",
-          color: isMemorized ? "#4ade80" : isReview ? "#fbbf24" : "#60a5fa",
-          border: `1px solid ${isMemorized ? "hsla(142,76%,55%,0.25)" : isReview ? "hsla(45,100%,60%,0.22)" : "hsla(210,100%,65%,0.25)"}`,
+          background: isMemorized ? "hsla(142,76%,55%,0.12)" : isReview ? "hsla(25,95%,60%,0.12)" : "hsla(210,100%,65%,0.12)",
+          color: isMemorized ? "#4ade80" : isReview ? (dark ? "#f97316" : "#c2410c") : "#60a5fa",
+          border: `1px solid ${isMemorized ? "hsla(142,76%,55%,0.25)" : isReview ? "hsla(25,95%,60%,0.22)" : "hsla(210,100%,65%,0.25)"}`,
         }}>
         {m.surah_number}:{m.ayah_number}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-[#f2f2f2]">
+        <p className="text-xs font-semibold" style={{ color: textPri }}>
           {isAr ? "سورة" : "Surah"} {m.surah_number} — {isAr ? "آية" : "Ayah"} {m.ayah_number}
         </p>
-        <p className="text-[10px] text-[#858384] mt-0.5">
+        <p className="text-[10px] mt-0.5" style={{ color: textSec }}>
           {isMemorized ? (isAr ? "✅ ثابت" : "✅ Strong") : isReview ? (isAr ? "🔄 راجع اليوم" : "🔄 Review today") : (isAr ? "📖 تتعلمها" : "📖 Learning")}
         </p>
       </div>
-      <ChevronRight className="w-4 h-4 text-[#606062] flex-shrink-0" style={{ transform: isAr ? "rotate(180deg)" : undefined }} />
+      <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: textSec, transform: isAr ? "rotate(180deg)" : undefined }} />
     </div>
   );
 }
 
-function NoPlanState({ isAr, onSetupPlan }: { isAr: boolean; onSetupPlan: () => void }) {
+function NoPlanState({ isAr, dark, onSetupPlan }: { isAr: boolean; dark: boolean; onSetupPlan: () => void }) {
+  const textPri = dark ? "#f2f2f2" : "#060541";
+  const textSec = dark ? "#858384" : "#606062";
   return (
     <div className="flex flex-col items-center py-14 gap-4 text-center">
-      <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: "hsla(45,100%,60%,0.08)", border: "1px solid hsla(45,100%,60%,0.18)" }}>
-        <Target className="w-8 h-8 text-amber-400" />
+      <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: dark ? "hsla(25,95%,60%,0.08)" : "hsla(25,85%,45%,0.12)", border: "1px solid hsla(25,95%,60%,0.22)" }}>
+        <Target className="w-8 h-8" style={{ color: dark ? "#f97316" : "#c2410c" }} />
       </div>
       <div>
-        <p className="text-sm font-bold text-[#f2f2f2]">{isAr ? "اختر خطة للبداية" : "Choose a plan to begin"}</p>
-        <p className="text-xs text-[#858384] mt-1.5 max-w-[230px] mx-auto leading-relaxed">
+        <p className="text-sm font-bold" style={{ color: textPri }}>{isAr ? "اختر خطة للبداية" : "Choose a plan to begin"}</p>
+        <p className="text-xs mt-1.5 max-w-[230px] mx-auto leading-relaxed" style={{ color: textSec }}>
           {isAr
             ? "اختر مساراً مناسباً وسنوجهك آية بآية حتى تحفظ بثبات."
             : "Pick a path and we will guide you ayah by ayah to build a consistent memorization habit."}
@@ -460,7 +584,7 @@ function NoPlanState({ isAr, onSetupPlan }: { isAr: boolean; onSetupPlan: () => 
       <button
         onClick={onSetupPlan}
         className="px-6 py-2.5 rounded-xl text-sm font-bold active:scale-95 transition-all"
-        style={{ background: "hsla(45,100%,60%,0.15)", color: "#fbbf24", border: "1px solid hsla(45,100%,60%,0.28)" }}
+        style={{ background: dark ? "hsla(25,95%,60%,0.15)" : "hsla(25,85%,45%,0.14)", color: dark ? "#f97316" : "#c2410c", border: "1px solid hsla(25,95%,60%,0.30)" }}
       >
         {isAr ? "اختر خطتك" : "Choose your plan"}
       </button>
@@ -468,11 +592,22 @@ function NoPlanState({ isAr, onSetupPlan }: { isAr: boolean; onSetupPlan: () => 
   );
 }
 
-function PlansSetup({ isAr, activePlan, onActivate }: {
+function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActive, onDeletePlan }: {
   isAr: boolean;
+  dark: boolean;
   activePlan: StudyPlan | null;
+  savedPlans: StudyPlan[];
   onActivate: (type: PlanType, dailyGoal: number, startSurah: number, startAyah: number) => void;
+  onSetActive: (planId: string) => void;
+  onDeletePlan: (planId: string) => void;
 }) {
+  const accentText = dark ? "hsl(25,95%,60%)" : "#c2410c";
+  const textPri   = dark ? "#f2f2f2" : "#060541";
+  const textSec   = dark ? "#858384" : "#606062";
+  const surfBg    = dark ? "rgba(255,255,255,0.04)" : "rgba(6,5,65,0.04)";
+  const surfBdr   = dark ? "rgba(255,255,255,0.08)" : "rgba(6,5,65,0.10)";
+  const inputBg   = dark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.05)";
+  const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [selectedType, setSelectedType] = useState<PlanType | null>(activePlan?.type ?? null);
   const [dailyGoal, setDailyGoal] = useState(activePlan?.dailyGoal ?? 1);
   const [surahSearch, setSurahSearch] = useState("");
@@ -493,11 +628,20 @@ function PlansSetup({ isAr, activePlan, onActivate }: {
   const plans: { type: PlanType; icon: React.ElementType; titleEn: string; titleAr: string; descEn: string; descAr: string; glow: string }[] = [
     { type: "beginner", icon: BookOpen, titleEn: "Beginner Essentials", titleAr: "أساسيات المبتدئ", descEn: "Start from Al-Fatiha (Surah 1, Ayah 1)", descAr: "ابدأ من سورة الفاتحة", glow: "hsla(210,100%,65%" },
     { type: "juzamma", icon: Brain, titleEn: "Juz Amma Journey", titleAr: "رحلة جزء عمّ", descEn: "Start from An-Naba (Surah 78, Ayah 1)", descAr: "ابدأ من سورة النبأ (78)", glow: "hsla(142,76%,55%" },
-    { type: "custom", icon: Bookmark, titleEn: "Custom Plan", titleAr: "خطة مخصصة", descEn: "Pick any surah and ayah to start from", descAr: "اختر أي سورة وآية تبدأ منها", glow: "hsla(45,100%,60%" },
+    { type: "custom", icon: Bookmark, titleEn: "Custom Plan", titleAr: "خطة مخصصة", descEn: "Pick any surah and ayah to start from", descAr: "اختر أي سورة وآية تبدأ منها", glow: "hsla(25,95%,60%" },
   ];
 
   const resolvedAyah = ayahMode === "beginning" ? 1 : customAyah;
   const canStart = selectedType === "custom" ? !!pickedSurah : !!selectedType;
+
+  useEffect(() => {
+    setSelectedType(activePlan?.type ?? null);
+    setDailyGoal(activePlan?.dailyGoal ?? 1);
+    setPickedSurah(activePlan?.startSurah ? (SURAH_LIST.find((s) => s.n === activePlan.startSurah) ?? null) : null);
+    setCustomAyah(activePlan?.startAyah ?? 1);
+    setAyahMode((activePlan?.startAyah ?? 1) > 1 ? "custom" : "beginning");
+    setShowCustomEditor(false);
+  }, [activePlan]);
 
   const handleStart = () => {
     if (!selectedType) return;
@@ -516,12 +660,61 @@ function PlansSetup({ isAr, activePlan, onActivate }: {
 
   return (
     <div className="flex flex-col gap-4" dir={isAr ? "rtl" : "ltr"}>
-      <p className="text-xs text-[#858384] font-semibold">{isAr ? "اختر مسار الحفظ" : "Choose your memorization path"}</p>
+      {savedPlans.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-semibold" style={{ color: textSec }}>{isAr ? "خططك المحفوظة" : "Your saved plans"}</p>
+          {savedPlans.map((p) => {
+            const isActive = activePlan?.id === p.id;
+            return (
+              <div
+                key={p.id}
+                className="w-full flex items-center justify-between gap-3 rounded-xl p-3 text-left active:scale-[0.99] transition-all"
+                style={{
+                  background: isActive ? (dark ? "hsla(25,95%,60%,0.10)" : "hsla(25,85%,45%,0.12)") : surfBg,
+                  border: `1px solid ${isActive ? (dark ? "hsla(25,95%,60%,0.28)" : "hsla(25,85%,45%,0.24)") : surfBdr}`,
+                }}
+                dir={isAr ? "rtl" : "ltr"}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold" style={{ color: textPri }}>
+                    {p.type === "juzamma" ? (isAr ? "جزء عمّ" : "Juz Amma") : p.type === "beginner" ? (isAr ? "مبتدئ" : "Beginner") : (isAr ? "مخصص" : "Custom")}
+                  </p>
+                  <p className="text-[11px] mt-0.5" style={{ color: textSec }}>
+                    {isAr ? `سورة ${p.currentSurah} — آية ${p.currentAyah}` : `Surah ${p.currentSurah} — Ayah ${p.currentAyah}`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => onDeletePlan(p.id)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center active:scale-95 transition-all"
+                    style={{ background: dark ? "hsla(0,80%,60%,0.10)" : "hsla(0,80%,60%,0.08)", color: "#ef4444", border: "1px solid hsla(0,80%,60%,0.18)" }}
+                    aria-label={isAr ? "حذف الخطة" : "Delete plan"}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => onSetActive(p.id)}
+                    className="px-2 py-1 rounded-full text-[10px] font-bold active:scale-95 transition-all"
+                    style={{ background: isActive ? (dark ? "hsla(142,76%,55%,0.14)" : "hsla(142,76%,45%,0.12)") : surfBg, color: isActive ? "#22c55e" : textSec, border: `1px solid ${isActive ? "hsla(142,76%,55%,0.28)" : surfBdr}` }}
+                  >
+                    {isActive ? (isAr ? "نشطة" : "Active") : (isAr ? "استخدمها" : "Use")}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <p className="text-xs font-semibold" style={{ color: textSec }}>{isAr ? "اختر مسار الحفظ" : "Choose your memorization path"}</p>
       <div className="flex flex-col gap-3">
         {plans.map(({ type, icon: Icon, titleEn, titleAr, descEn, descAr, glow }) => {
           const active = selectedType === type;
           return (
-            <button key={type} onClick={() => setSelectedType(type)}
+            <button key={type} onClick={() => {
+              setSelectedType(type);
+              setShowCustomEditor(type === "custom" ? !showCustomEditor || selectedType !== "custom" : false);
+            }}
               className="w-full flex items-center gap-3 rounded-xl p-4 text-left active:scale-[0.99] transition-all"
               style={{
                 background: active ? `${glow},0.10)` : `${glow},0.03)`,
@@ -530,12 +723,12 @@ function PlansSetup({ isAr, activePlan, onActivate }: {
               dir={isAr ? "rtl" : "ltr"}
             >
               <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: `${glow},${active ? "0.18)" : "0.08)"}` }}>
-                <Icon className="w-5 h-5" style={{ color: active ? "#f2f2f2" : "#858384" }} strokeWidth={1.8} />
+                style={{ background: type === "custom" ? (active ? (dark ? "hsla(25,95%,60%,0.18)" : "hsla(25,85%,45%,0.14)") : surfBg) : `${glow},${active ? "0.18)" : "0.08)"}` }}>
+                <Icon className="w-5 h-5" style={{ color: type === "custom" ? accentText : active ? "#f2f2f2" : "#858384" }} strokeWidth={1.8} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold" style={{ color: active ? "#f2f2f2" : "#858384" }}>{isAr ? titleAr : titleEn}</p>
-                <p className="text-[11px] mt-0.5" style={{ color: active ? "#a3a3a3" : "#606062" }}>{isAr ? descAr : descEn}</p>
+                <p className="text-sm font-bold" style={{ color: active ? textPri : textSec }}>{isAr ? titleAr : titleEn}</p>
+                <p className="text-[11px] mt-0.5" style={{ color: textSec }}>{isAr ? descAr : descEn}</p>
               </div>
               {active && <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
             </button>
@@ -544,24 +737,25 @@ function PlansSetup({ isAr, activePlan, onActivate }: {
       </div>
 
       {/* ── Custom Plan: surah picker + ayah choice ── */}
-      {selectedType === "custom" && (
-        <div className="rounded-xl flex flex-col gap-3" style={{ background: "hsla(45,100%,60%,0.04)", border: "1px solid hsla(45,100%,60%,0.14)" }}>
+      {selectedType === "custom" && showCustomEditor && (
+        <div className="rounded-xl flex flex-col gap-3" style={{ background: dark ? "hsla(25,95%,60%,0.06)" : "hsla(25,85%,45%,0.08)", border: "1px solid hsla(25,95%,60%,0.22)" }}>
           {/* Step 1: pick surah */}
           <div className="p-3.5 pb-0">
-            <p className="text-xs text-[#858384] font-semibold mb-2">
+            <p className="text-xs font-semibold mb-2" style={{ color: textSec }}>
               {isAr ? "1. اختر السورة" : "1. Choose a surah"}
             </p>
             {/* Search box */}
             <div className="flex items-center gap-2 rounded-xl px-3 py-2 mb-2"
-              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }}>
-              <Search className="w-3.5 h-3.5 text-[#606062] flex-shrink-0" />
+              style={{ background: inputBg, border: `1px solid ${surfBdr}` }}>
+              <Search className="w-3.5 h-3.5 flex-shrink-0" style={{ color: textSec }} />
               <input
                 type="text"
                 value={surahSearch}
                 onChange={(e) => setSurahSearch(e.target.value)}
                 placeholder={isAr ? "ابحث عن سورة…" : "Search surah…"}
                 aria-label={isAr ? "بحث السورة" : "Search surah"}
-                className="flex-1 bg-transparent text-xs text-[#f2f2f2] outline-none placeholder:text-[#606062]"
+                className="flex-1 bg-transparent text-xs outline-none"
+                style={{ color: textPri }}
               />
               {surahSearch && (
                 <button onClick={() => setSurahSearch("")} aria-label="Clear search" className="flex-shrink-0 text-[#606062] hover:text-[#858384]">
@@ -576,47 +770,47 @@ function PlansSetup({ isAr, activePlan, onActivate }: {
                 return (
                   <button key={s.n} onClick={() => { setPickedSurah(s); setCustomAyah(1); setAyahMode("beginning"); setSurahSearch(""); }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-left active:scale-[0.99] transition-all"
-                    style={{ background: picked ? "hsla(45,100%,60%,0.12)" : "transparent" }}
+                    style={{ background: picked ? (dark ? "hsla(25,95%,60%,0.12)" : "hsla(25,85%,45%,0.12)") : "transparent" }}
                     dir={isAr ? "rtl" : "ltr"}
                   >
                     <span className="text-[10px] font-bold w-6 text-center flex-shrink-0"
-                      style={{ color: picked ? "#fbbf24" : "#606062" }}>{s.n}</span>
+                      style={{ color: picked ? accentText : textSec }}>{s.n}</span>
                     <span className="flex-1 text-xs font-semibold truncate"
-                      style={{ color: picked ? "#f2f2f2" : "#858384" }}>
+                      style={{ color: picked ? textPri : textSec }}>
                       {isAr ? s.ar : s.en}
                     </span>
-                    <span className="text-[10px] flex-shrink-0" style={{ color: picked ? "#fbbf24" : "#606062" }}>
+                    <span className="text-[10px] flex-shrink-0" style={{ color: picked ? accentText : textSec }}>
                       {s.ayahs} {isAr ? "آية" : "ayahs"}
                     </span>
-                    {picked && <CheckCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
+                    {picked && <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accentText }} />}
                   </button>
                 );
               })}
               {filteredSurahs.length === 0 && (
-                <p className="text-center text-xs text-[#606062] py-4">{isAr ? "لا نتائج" : "No results"}</p>
+                <p className="text-center text-xs py-4" style={{ color: textSec }}>{isAr ? "لا نتائج" : "No results"}</p>
               )}
             </div>
           </div>
 
           {/* Step 2: ayah choice — only visible after surah picked */}
           {pickedSurah && (
-            <div className="px-3.5 pb-3.5 flex flex-col gap-2 border-t" style={{ borderColor: "hsla(45,100%,60%,0.12)" }}>
-              <p className="text-xs text-[#858384] font-semibold pt-3">
+            <div className="px-3.5 pb-3.5 flex flex-col gap-2 border-t" style={{ borderColor: dark ? "hsla(25,95%,60%,0.15)" : "hsla(25,85%,45%,0.18)" }}>
+              <p className="text-xs font-semibold pt-3" style={{ color: textSec }}>
                 {isAr ? "2. ابدأ من" : "2. Start from"}
               </p>
               <div className="flex gap-2">
                 <button onClick={() => setAyahMode("beginning")}
                   className="flex-1 py-2 rounded-xl text-xs font-bold active:scale-95 transition-all"
                   style={ayahMode === "beginning"
-                    ? { background: "hsla(45,100%,60%,0.15)", color: "#fbbf24", border: "1px solid hsla(45,100%,60%,0.28)" }
-                    : { background: "rgba(255,255,255,0.04)", color: "#858384", border: "1px solid rgba(255,255,255,0.08)" }}>
+                    ? { background: dark ? "hsla(25,95%,60%,0.15)" : "hsla(25,85%,45%,0.14)", color: accentText, border: "1px solid hsla(25,95%,60%,0.28)" }
+                    : { background: surfBg, color: textSec, border: `1px solid ${surfBdr}` }}>
                   {isAr ? "البداية (آية 1)" : "Beginning (Ayah 1)"}
                 </button>
                 <button onClick={() => setAyahMode("custom")}
                   className="flex-1 py-2 rounded-xl text-xs font-bold active:scale-95 transition-all"
                   style={ayahMode === "custom"
-                    ? { background: "hsla(45,100%,60%,0.15)", color: "#fbbf24", border: "1px solid hsla(45,100%,60%,0.28)" }
-                    : { background: "rgba(255,255,255,0.04)", color: "#858384", border: "1px solid rgba(255,255,255,0.08)" }}>
+                    ? { background: dark ? "hsla(25,95%,60%,0.15)" : "hsla(25,85%,45%,0.14)", color: accentText, border: "1px solid hsla(25,95%,60%,0.28)" }
+                    : { background: surfBg, color: textSec, border: `1px solid ${surfBdr}` }}>
                   {isAr ? "آية محددة" : "Custom ayah"}
                 </button>
               </div>
@@ -631,11 +825,11 @@ function PlansSetup({ isAr, activePlan, onActivate }: {
                     if (!isNaN(v) && v >= 1 && v <= pickedSurah.ayahs) setCustomAyah(v);
                   }}
                   className="w-full py-2.5 px-3 rounded-xl text-sm font-bold text-center outline-none"
-                  style={{ background: "rgba(255,255,255,0.06)", color: "#fbbf24", border: "1px solid hsla(45,100%,60%,0.28)" }}
+                  style={{ background: inputBg, color: accentText, border: "1px solid hsla(25,95%,60%,0.28)" }}
                   placeholder={`1 – ${pickedSurah.ayahs}`}
                 />
               )}
-              <p className="text-[10px] text-amber-400">
+              <p className="text-[10px]" style={{ color: accentText }}>
                 {isAr
                   ? `ستبدأ من ${pickedSurah.ar} — آية ${resolvedAyah}`
                   : `Starting from ${pickedSurah.en}, Ayah ${resolvedAyah}`}
@@ -647,14 +841,14 @@ function PlansSetup({ isAr, activePlan, onActivate }: {
 
       {/* Daily goal */}
       <div>
-        <p className="text-xs text-[#858384] font-semibold mb-2">{isAr ? "كم آية يومياً؟" : "How many ayahs per day?"}</p>
+        <p className="text-xs font-semibold mb-2" style={{ color: textSec }}>{isAr ? "كم آية يومياً؟" : "How many ayahs per day?"}</p>
         <div className="flex gap-2">
           {[1, 3, 5].map((n) => (
             <button key={n} onClick={() => setDailyGoal(n)}
               className="flex-1 py-2.5 rounded-xl text-sm font-bold active:scale-95 transition-all"
               style={dailyGoal === n
-                ? { background: "hsla(45,100%,60%,0.15)", color: "#fbbf24", border: "1px solid hsla(45,100%,60%,0.28)" }
-                : { background: "rgba(255,255,255,0.04)", color: "#858384", border: "1px solid rgba(255,255,255,0.08)" }}>
+                ? { background: dark ? "hsla(25,95%,60%,0.15)" : "hsla(25,85%,45%,0.14)", color: accentText, border: "1px solid hsla(25,95%,60%,0.28)" }
+                : { background: surfBg, color: textSec, border: `1px solid ${surfBdr}` }}>
               {n}
             </button>
           ))}
@@ -670,12 +864,12 @@ function PlansSetup({ isAr, activePlan, onActivate }: {
             className="flex-1 py-2.5 rounded-xl text-sm font-bold text-center transition-all outline-none"
             style={
               ![1, 3, 5].includes(dailyGoal)
-                ? { background: "hsla(45,100%,60%,0.15)", color: "#fbbf24", border: "1px solid hsla(45,100%,60%,0.28)" }
-                : { background: "rgba(255,255,255,0.04)", color: "#858384", border: "1px solid rgba(255,255,255,0.08)" }
+                ? { background: dark ? "hsla(25,95%,60%,0.15)" : "hsla(25,85%,45%,0.14)", color: accentText, border: "1px solid hsla(25,95%,60%,0.28)" }
+                : { background: surfBg, color: textSec, border: `1px solid ${surfBdr}` }
             }
           />
         </div>
-        <p className="text-[10px] text-[#606062] mt-1.5">
+        <p className="text-[10px] mt-1.5" style={{ color: textSec }}>
           {isAr ? `الهدف: ${dailyGoal} آية يومياً` : `Goal: ${dailyGoal} ayah${dailyGoal !== 1 ? "s" : ""} / day`}
         </p>
       </div>
@@ -684,9 +878,9 @@ function PlansSetup({ isAr, activePlan, onActivate }: {
         onClick={handleStart}
         disabled={!canStart}
         className="w-full py-3 rounded-xl text-sm font-bold active:scale-95 transition-all disabled:opacity-40"
-        style={{ background: "hsla(45,100%,60%,0.15)", color: "#fbbf24", border: "1px solid hsla(45,100%,60%,0.28)" }}
+        style={{ background: dark ? "hsla(25,95%,60%,0.15)" : "hsla(25,85%,45%,0.14)", color: accentText, border: "1px solid hsla(25,95%,60%,0.28)" }}
       >
-        {isAr ? "ابدأ الخطة" : "Start this plan"}
+        {isAr ? "احفظ هذه الخطة" : "Save this plan"}
       </button>
     </div>
   );
@@ -699,6 +893,8 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
   onComplete: (result: "memorized" | "learning" | "needs_revision") => Promise<void>;
   onClose: () => void;
 }) {
+  const { theme } = useTheme();
+  const dark = theme === "dark";
   const [phase, setPhase] = useState<"listen" | "recall">("listen");
   const [hidden, setHidden] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -795,67 +991,105 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
     return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
   };
 
+  const isListen = phase === "listen";
+
+  // ── Wakti brand tokens (no purple) ──
+  const bg        = dark ? "#0c0f14" : "#fcfefd";
+  const surface   = dark ? "rgba(255,255,255,0.05)" : "rgba(6,5,65,0.04)";
+  const border    = dark ? "rgba(255,255,255,0.08)" : "rgba(6,5,65,0.10)";
+  const textPri   = dark ? "#f2f2f2" : "#060541";
+  const textSec   = dark ? "#858384" : "#606062";
+  const blue      = "hsl(210,100%,65%)";
+  const blueAlpha = (a: number) => `hsla(210,100%,65%,${a})`;
+  const green     = "hsl(142,76%,55%)";
+  const greenAlpha = (a: number) => `hsla(142,76%,55%,${a})`;
+  const amber     = "hsl(45,100%,60%)";
+  const amberAlpha = (a: number) => `hsla(45,100%,60%,${a})`;
+  const amberText = dark ? "#fbbf24" : "#b45309";
+  const red       = "hsl(0,80%,60%)";
+  const redAlpha  = (a: number) => `hsla(0,80%,60%,${a})`;
+
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col"
-      style={{ background: "linear-gradient(180deg, #0c0f14 0%, hsl(235 30% 6%) 100%)" }}
       dir={isAr ? "rtl" : "ltr"}
+      style={{ background: bg }}
     >
       {/* ── HEADER ── */}
       <div
         className="flex-shrink-0 flex items-center gap-3 px-4 pb-3"
         style={{
           paddingTop: "max(env(safe-area-inset-top, 0px) + 56px, 72px)",
-          background: "rgba(12,15,20,0.95)",
-          backdropFilter: "blur(16px)",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          background: dark ? "rgba(12,15,20,0.96)" : "rgba(252,254,253,0.96)",
+          backdropFilter: "blur(20px)",
+          borderBottom: `1px solid ${border}`,
         }}
       >
-        {/* Back / close */}
+        {/* Back */}
         <button
           onClick={onClose}
-          className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 transition-all flex-shrink-0"
-          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }}
+          className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all flex-shrink-0"
+          style={{ background: surface, border: `1px solid ${border}` }}
           aria-label={isAr ? "رجوع" : "Back"}
         >
-          <ArrowLeft className="w-4 h-4 text-[#f2f2f2]" style={{ transform: isAr ? "rotate(180deg)" : undefined }} />
+          <ArrowLeft className="w-4 h-4" style={{ color: textPri, transform: isAr ? "rotate(180deg)" : undefined }} />
         </button>
 
-        {/* Surah name + ayah */}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-[#f2f2f2] truncate">
+        {/* Title */}
+        <div className="flex-1 min-w-0 text-center">
+          <p className="text-sm font-bold truncate" style={{ color: textPri }}>
             {isAr ? (surahInfo?.ar ?? `سورة ${ayah.surah_number}`) : (surahInfo?.en ?? `Surah ${ayah.surah_number}`)}
           </p>
-          <p className="text-[11px] text-[#858384] mt-0.5">
+          <p className="text-[11px] mt-0.5" style={{ color: textSec }}>
             {isAr ? `آية ${ayah.ayah_number}` : `Ayah ${ayah.ayah_number}`}
             {surahInfo && ` · ${surahInfo.ayahs} ${isAr ? "آية" : "ayahs"}`}
           </p>
         </div>
 
+        {/* Phase tag */}
+        <div className="flex-shrink-0 px-3 py-1 rounded-full text-[10px] font-bold"
+          style={isListen
+            ? { background: blueAlpha(0.14), color: blue, border: `1px solid ${blueAlpha(0.30)}` }
+            : { background: greenAlpha(0.14), color: green, border: `1px solid ${greenAlpha(0.30)}` }}>
+          {isListen ? (isAr ? "استماع" : "Listen") : (isAr ? "اختبار" : "Recall")}
+        </div>
       </div>
 
-      {/* ── MAIN CONTENT: vertically centered ayah ── */}
-      <div className="flex-1 flex flex-col justify-center px-5 py-4 overflow-y-auto">
+      {/* ── AYAH ZONE ── */}
+      <div className="flex-1 flex flex-col justify-center px-5 py-5 overflow-y-auto gap-4">
 
-        {/* Basmala header — always shown for ayah 1 of any surah (except surah 9) */}
-        {ayah.ayah_number === 1 && ayah.surah_number !== 9 && (
-          <div className="text-center mb-4">
-            <p className="text-lg text-[#858384] font-serif leading-loose tracking-wide" dir="rtl">
-              بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
-            </p>
-            <div className="mx-auto mt-2 h-px w-20" style={{ background: "rgba(255,255,255,0.10)" }} />
-          </div>
+        {/* Basmala */}
+        {ayah.ayah_number === 1 && ayah.surah_number !== 9 && !hidden && (
+          <p className="text-center font-serif text-base leading-loose" dir="rtl"
+            style={{ color: amberText }}>
+            بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
+          </p>
         )}
 
-        {/* Arabic ayah card — Basmala stripped from the text */}
-        <div className="w-full rounded-2xl px-5 py-6 text-center"
-          style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+        {/* Ayah card */}
+        <div
+          className="w-full rounded-2xl px-5 py-7 text-center"
+          style={{
+            background: surface,
+            border: `1px solid ${isListen ? blueAlpha(0.18) : greenAlpha(0.18)}`,
+            boxShadow: hidden ? "none"
+              : isListen
+                ? `0 4px 32px ${blueAlpha(0.10)}`
+                : `0 4px 32px ${greenAlpha(0.10)}`,
+          }}
+        >
           {hidden ? (
-            <p className="text-[#606062] text-sm font-semibold py-4">
-              {isAr ? "النص مخفي — حاول أن تتذكر" : "Text hidden — try to recall from memory"}
-            </p>
+            <div className="py-5 flex flex-col items-center gap-3">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                style={{ background: greenAlpha(0.10), border: `1px solid ${greenAlpha(0.22)}` }}>
+                <EyeOff className="w-6 h-6" style={{ color: green }} />
+              </div>
+              <p className="text-sm font-semibold" style={{ color: textSec }}>
+                {isAr ? "حاول أن تتذكرها من ذاكرتك" : "Try to recall it from memory"}
+              </p>
+            </div>
           ) : (
-            <p className="text-[1.55rem] text-[#f2f2f2] leading-[2.2] font-serif" dir="rtl">
+            <p className="text-[1.6rem] leading-[2.2] font-serif" style={{ color: textPri }} dir="rtl">
               {ayah.ayah_number === 1 && ayah.surah_number !== 9
                 ? stripBasmala(ayah.arabic)
                 : ayah.arabic}
@@ -864,55 +1098,59 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
         </div>
 
         {/* Translation */}
-        {!hidden && ayah.translation && (
-          <p className="text-xs text-[#858384] text-center leading-relaxed mt-4 px-2">{ayah.translation}</p>
+        {!hidden && !isAr && ayah.translation && (
+          <p className="text-[13px] text-center leading-relaxed px-2" style={{ color: textSec }}>
+            {ayah.translation}
+          </p>
         )}
       </div>
 
-      {/* ── BOTTOM PANEL: phase pill + controls always pinned here ── */}
+      {/* ── BOTTOM PANEL ── */}
       <div
-        className="flex-shrink-0 flex flex-col items-center gap-4 px-5 pt-4"
+        className="flex-shrink-0 flex flex-col gap-3 px-5 pt-4"
         style={{
           paddingBottom: "max(env(safe-area-inset-bottom, 0px) + 16px, 28px)",
-          borderTop: "1px solid rgba(255,255,255,0.06)",
-          background: "rgba(12,15,20,0.85)",
-          backdropFilter: "blur(12px)",
+          background: dark ? "rgba(12,15,20,0.96)" : "rgba(252,254,253,0.96)",
+          backdropFilter: "blur(20px)",
+          borderTop: `1px solid ${border}`,
         }}
       >
-        {/* Phase pill */}
-        <div className="px-3 py-1.5 rounded-full text-xs font-bold"
-          style={phase === "listen"
-            ? { background: "hsla(210,100%,65%,0.12)", color: "#7dd3fc", border: "1px solid hsla(210,100%,65%,0.22)" }
-            : { background: "hsla(280,70%,65%,0.12)", color: "#c084fc", border: "1px solid hsla(280,70%,65%,0.22)" }}>
-          {phase === "listen"
-            ? (isAr ? `🔊 استمع وردد — ${Math.max(0, targetLoops - loopCount)} متبقية` : `🔊 Listen & repeat — ${Math.max(0, targetLoops - loopCount)} left`)
-            : (isAr ? "🙈 هل تتذكرها؟" : "🙈 Can you recall it?")}
-        </div>
+        {/* Guidance */}
+        <p className="text-center text-xs leading-snug" style={{ color: textSec }}>
+          {isListen
+            ? (loopCount === 0
+              ? (isAr ? "اضغط تشغيل واستمع بتركيز — حاول حفظها" : "Tap play · listen carefully · try to memorize it")
+              : loopCount < targetLoops
+                ? (isAr ? "ردد الآية بصوت عالٍ مع كل تكرار" : "Repeat it aloud with every loop")
+                : (isAr ? "أحسنت! انتقل الآن إلى الاختبار" : "Well done! Now move on to recall"))
+            : (isAr ? "أخفِ الآية وحاول تذكرها، ثم قيّم نفسك" : "Hide the ayah · try to recall · then rate yourself")}
+        </p>
 
         {/* ── LISTEN controls ── */}
-        {phase === "listen" && (
+        {isListen && (
           <div className="w-full flex flex-col items-center gap-3">
-            {/* Repeat + Replay row */}
-            <div className="flex items-center gap-3">
+            {/* Repeat row */}
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => { const v = Math.max(1, targetLoops - 1); setTargetLoops(v); targetLoopsRef.current = v; }}
                 aria-label="Fewer repeats"
-                className="w-8 h-8 rounded-xl text-base font-bold flex items-center justify-center active:scale-95 transition-all"
-                style={{ background: "rgba(255,255,255,0.07)", color: "#858384", border: "1px solid rgba(255,255,255,0.10)" }}
+                className="w-9 h-9 rounded-xl text-lg font-bold flex items-center justify-center active:scale-90 transition-all"
+                style={{ background: surface, color: textSec, border: `1px solid ${border}` }}
               >−</button>
-              <span className="text-xs font-bold px-2" style={{ color: "#fbbf24" }}>
+              <div className="px-4 py-1.5 rounded-xl text-xs font-bold"
+                style={{ background: dark ? "hsla(45,100%,60%,0.12)" : "hsla(45,90%,45%,0.18)", color: amberText, border: `1px solid ${dark ? "hsla(45,100%,60%,0.28)" : "hsla(45,90%,45%,0.35)"}`, minWidth: "88px", textAlign: "center" }}>
                 {loopCount}/{targetLoops}× {isAr ? "تكرار" : "repeats"}
-              </span>
+              </div>
               <button
                 onClick={() => { const v = Math.min(10, targetLoops + 1); setTargetLoops(v); targetLoopsRef.current = v; }}
                 aria-label="More repeats"
-                className="w-8 h-8 rounded-xl text-base font-bold flex items-center justify-center active:scale-95 transition-all"
-                style={{ background: "rgba(255,255,255,0.07)", color: "#858384", border: "1px solid rgba(255,255,255,0.10)" }}
+                className="w-9 h-9 rounded-xl text-lg font-bold flex items-center justify-center active:scale-90 transition-all"
+                style={{ background: surface, color: textSec, border: `1px solid ${border}` }}
               >+</button>
               <button
                 onClick={replay}
-                className="w-8 h-8 rounded-xl flex items-center justify-center active:scale-95 transition-all"
-                style={{ background: "rgba(255,255,255,0.07)", color: "#858384", border: "1px solid rgba(255,255,255,0.10)" }}
+                className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all"
+                style={{ background: surface, color: textSec, border: `1px solid ${border}` }}
                 aria-label={isAr ? "إعادة" : "Replay"}
               >
                 <RotateCcw className="w-4 h-4" />
@@ -922,80 +1160,92 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
             {/* Play/Pause */}
             <button
               onClick={togglePlay}
-              className="rounded-full flex items-center justify-center active:scale-95 transition-all"
+              className="rounded-full flex items-center justify-center active:scale-90 transition-all"
               style={{
-                width: "68px", height: "68px",
-                background: playing ? "hsla(210,100%,65%,0.22)" : "hsla(210,100%,65%,0.12)",
-                border: "1px solid hsla(210,100%,65%,0.35)",
-                boxShadow: playing ? "0 0 24px hsla(210,100%,65%,0.35)" : "none",
+                width: "72px", height: "72px",
+                background: playing
+                  ? `linear-gradient(135deg, hsl(210,100%,58%) 0%, hsl(210,100%,48%) 100%)`
+                  : blueAlpha(0.14),
+                border: `2px solid ${blueAlpha(playing ? 0.8 : 0.35)}`,
+                boxShadow: playing
+                  ? `0 0 28px ${blueAlpha(0.45)}, 0 4px 16px ${blueAlpha(0.25)}`
+                  : `0 0 12px ${blueAlpha(0.12)}`,
               }}
               aria-label={playing ? (isAr ? "إيقاف" : "Pause") : (isAr ? "تشغيل" : "Play")}
             >
               {playing
-                ? <Pause className="w-7 h-7 text-sky-400" />
-                : <Play className="w-7 h-7 text-sky-400" style={{ marginLeft: "3px" }} />}
+                ? <Pause className="w-7 h-7 text-white" />
+                : <Play className="w-7 h-7" style={{ color: blue, marginLeft: "4px" }} />}
             </button>
 
+            {/* Progress */}
             {duration > 0 && (
               <div className="w-full flex items-center gap-2">
-                <span className="text-[10px] text-[#606062] w-8 text-center flex-shrink-0">{fmt(progress)}</span>
+                <span className="text-[10px] w-8 text-center flex-shrink-0" style={{ color: textSec }}>{fmt(progress)}</span>
                 <input
                   type="range" min={0} max={100} value={progressPct}
                   onChange={seek}
                   aria-label={isAr ? "شريط التقدم" : "Progress"}
                   className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
-                  style={{ accentColor: "#60a5fa" }}
+                  style={{ accentColor: blue }}
                 />
-                <span className="text-[10px] text-[#606062] w-8 text-center flex-shrink-0">{fmt(duration)}</span>
+                <span className="text-[10px] w-8 text-center flex-shrink-0" style={{ color: textSec }}>{fmt(duration)}</span>
               </div>
             )}
 
             <button
               onClick={skipToRecall}
-              className="text-[11px] text-[#606062] font-semibold active:text-[#858384] transition-all"
+              className="w-full py-3 rounded-xl text-sm font-bold active:scale-95 transition-all"
+              style={{ background: greenAlpha(0.12), color: green, border: `1px solid ${greenAlpha(0.28)}` }}
             >
-              {isAr ? "تخطى إلى الاختبار ←" : "Skip to recall →"}
+              {isAr ? "ابدأ الاختبار الآن" : "Start test now"}
             </button>
           </div>
         )}
 
         {/* ── RECALL controls ── */}
-        {phase === "recall" && (
+        {!isListen && (
           <div className="w-full flex flex-col gap-3">
+            {/* Hide / Reveal */}
             <button
               onClick={() => setHidden((h) => !h)}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl active:scale-95 transition-all text-sm font-semibold"
-              style={{ background: "rgba(255,255,255,0.07)", color: "#858384", border: "1px solid rgba(255,255,255,0.12)" }}>
-              {hidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-              {hidden ? (isAr ? "أظهر الآية" : "Reveal ayah") : (isAr ? "أخفِ الآية" : "Hide ayah")}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl active:scale-95 transition-all text-sm font-bold"
+              style={hidden
+                ? { background: amberAlpha(0.14), color: amber, border: `1px solid ${amberAlpha(0.38)}` }
+                : { background: blueAlpha(0.12), color: blue, border: `1px solid ${blueAlpha(0.30)}` }}>
+              {hidden ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+              {hidden
+                ? (isAr ? "أظهر الآية" : "Reveal ayah")
+                : (isAr ? "أخفِ الآية واختبر نفسك" : "Hide ayah & test yourself")}
             </button>
 
-            <p className="text-center text-xs text-[#606062] font-semibold">
+            <p className="text-center text-sm font-bold" style={{ color: textPri }}>
               {isAr ? "كيف كانت؟" : "How did it go?"}
             </p>
-            <div className="flex gap-2.5">
+
+            <div className="flex gap-2">
               <button
                 onClick={() => handleComplete("needs_revision")}
                 disabled={completing}
-                className="flex-1 py-3.5 rounded-xl text-sm font-bold active:scale-95 transition-all disabled:opacity-50 flex flex-col items-center gap-0.5"
-                style={{ background: "hsla(0,80%,55%,0.10)", color: "#f87171", border: "1px solid hsla(0,80%,55%,0.22)" }}>
-                <span className="text-base">😓</span>
+                className="flex-1 py-4 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-50 flex flex-col items-center gap-1"
+                style={{ background: redAlpha(0.12), color: red, border: `1px solid ${redAlpha(0.28)}` }}>
+                <span className="text-xl">😓</span>
                 {isAr ? "لم أتذكر" : "Not yet"}
               </button>
               <button
                 onClick={() => handleComplete("learning")}
                 disabled={completing}
-                className="flex-1 py-3.5 rounded-xl text-sm font-bold active:scale-95 transition-all disabled:opacity-50 flex flex-col items-center gap-0.5"
-                style={{ background: "hsla(210,100%,65%,0.10)", color: "#7dd3fc", border: "1px solid hsla(210,100%,65%,0.22)" }}>
-                <span className="text-base">🤔</span>
+                className="flex-1 py-4 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-50 flex flex-col items-center gap-1"
+                style={{ background: amberAlpha(0.12), color: amber, border: `1px solid ${amberAlpha(0.28)}` }}>
+                <span className="text-xl">🤔</span>
                 {isAr ? "تقريباً" : "Almost"}
               </button>
               <button
                 onClick={() => handleComplete("memorized")}
                 disabled={completing}
-                className="flex-1 py-3.5 rounded-xl text-sm font-bold active:scale-95 transition-all disabled:opacity-50 flex flex-col items-center gap-0.5"
-                style={{ background: "hsla(142,76%,55%,0.10)", color: "#4ade80", border: "1px solid hsla(142,76%,55%,0.22)" }}>
-                <span className="text-base">✅</span>
+                className="flex-1 py-4 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-50 flex flex-col items-center gap-1"
+                style={{ background: greenAlpha(0.12), color: green, border: `1px solid ${greenAlpha(0.28)}` }}>
+                <span className="text-xl">✅</span>
                 {isAr ? "حفظت!" : "Got it!"}
               </button>
             </div>
