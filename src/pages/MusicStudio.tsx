@@ -3196,10 +3196,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }
 
   function buildKieStyleString(): string {
-    // ── Surgical Identity Anchor — geography + genre + vocal lock, no fluff ──
-    // Blueprint: "saudi kuwaiti qatari khaleeji [STYLE], authentic gulf vocal, strict khaleeji dialect"
+    // ── Elite Grade A+ Identity Anchor — geography + acoustic + linguistic lock ──
+    // Blueprint: "saudi kuwaiti qatari, native peninsular accent, [STYLE], colloquial gulf phrasing, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, authentic gulf vocal, strict khaleeji dialect"
     const ANCHOR = (style: string) =>
-      `saudi kuwaiti qatari ${style}, authentic gulf vocal, strict khaleeji dialect`;
+      `saudi kuwaiti qatari, native peninsular accent, ${style}, colloquial gulf phrasing, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, authentic gulf vocal, strict khaleeji dialect`;
 
     // ── Single map: GCC identity anchors + non-GCC pass-through ──
     const STYLE_ANCHORS: Record<string, string> = {
@@ -3436,8 +3436,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const structuredPrompt = formatLyricsWithStructure(rawLyrics, instrumental, instrumentTags);
 
       // ── Morocco-Killer negative shield — primary drift triggers blocked first ──
-      // NOTE: string is exactly ≤200 chars so .slice(0,200) never truncates 'distorted'
-      const finalNegativeTags = 'moroccan, maghrebi, darija, gnawa, maghrebi chaabi, north african rhythm, egyptian, levantine, fusha, msa, north african, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, distorted';
+      const finalNegativeTags = 'moroccan, maghrebi, darija, gnawa, maghrebi chaabi, north african rhythm, egyptian, levantine, fusha, msa, north african, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, low quality, distorted, vocal hiss';
 
       const invokeBody: Record<string, unknown> = {
         title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
