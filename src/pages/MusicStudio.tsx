@@ -1433,7 +1433,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       },
       {
         title: 'Other Arabic',
-        items: ['Egyptian','Egyptian Shaabi','Iraqi Style','Lebanese Style','Moroccan Style','Levant Pop']
+        items: ['Egyptian','Egyptian Shaabi','Iraqi Style','Lebanese Style','Moroccan Style']
       },
       {
         title: 'Islamic',
