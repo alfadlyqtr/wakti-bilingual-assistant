@@ -3196,66 +3196,77 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }
 
   function buildKieStyleString(): string {
-    // ── Elite Grade A+ Identity Anchor — geography + acoustic + linguistic lock ──
-    // Blueprint: "saudi kuwaiti qatari, native peninsular accent, [STYLE], colloquial gulf phrasing, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, authentic gulf vocal, strict khaleeji dialect"
-    const ANCHOR = (style: string) =>
-      `saudi kuwaiti qatari, native peninsular accent, ${style}, colloquial gulf phrasing, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, authentic gulf vocal, strict khaleeji dialect`;
+    // ── Elite Soul Anchor — Maqam-based melodic DNA + human performance tags ──
+    // Blueprint: "kuwaiti qatari, native peninsular accent, [MAQAM], seasoned gulf vocalist timbre, [STYLE],
+    //             colloquial gulf phrasing, vocal-forward, close-mic intimacy, crystal-clear vocal articulation,
+    //             expressive melismatic mawwal, audible breath support, authentic gulf vocal, strict khaleeji dialect"
+    const SOUL = (maqam: string, style: string) =>
+      `kuwaiti qatari, native peninsular accent, ${maqam}, seasoned gulf vocalist timbre, ${style}, colloquial gulf phrasing, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal, audible breath support, authentic gulf vocal, strict khaleeji dialect`;
+
+    // Maqam assignments:
+    //   BAYATI  → most emotional/soulful  → Romantic, Elegant, Jalsa, R&B, Luxury, Cinematic
+    //   RAST    → majestic/stable         → Pop, Anthem, Party, Wedding, Dance, Electro, Synth, Fusion, Radio, Rap, Trap
+    //   HIJAZ   → traditional/desert      → Heritage, Sheilat, Samri, Ardah, Liwa, Shaabi, Zar
+    const BAYATI = (style: string) => SOUL('Maqam Bayati', style);
+    const RAST   = (style: string) => SOUL('Maqam Rast',   style);
+    const HIJAZ  = (style: string) => SOUL('Maqam Hijaz',  style);
 
     // ── Single map: GCC identity anchors + non-GCC pass-through ──
     const STYLE_ANCHORS: Record<string, string> = {
-      // ── Modern / Pop ──
-      'GCC Pop':               ANCHOR('khaleeji pop'),
-      'Khaleeji Pop':          ANCHOR('khaleeji pop'),
-      'GCC Rap':               ANCHOR('khaleeji rap'),
-      'GCC Romantic':          ANCHOR('khaleeji romantic ballad'),
-      'GCC Elegant':           ANCHOR('elegant khaleeji, refined classy delivery'),
-      'GCC Party':             ANCHOR('khaleeji pop, festive party energy'),
-      'GCC Wedding':           ANCHOR('khaleeji wedding song, celebratory'),
-      'GCC Radio Pop':         ANCHOR('khaleeji pop, commercial radio'),
-      'GCC Dance Pop':         ANCHOR('khaleeji dance pop, uptempo'),
-      'GCC Electro Pop':       ANCHOR('khaleeji electro pop'),
-      'GCC Synth Pop':         ANCHOR('khaleeji synth pop'),
-      'Modern Khaleeji Fusion':ANCHOR('modern khaleeji fusion, western-oriental'),
-      'English GCC Pop':       ANCHOR('gulf pop, english lyrics, khaleeji musical identity'),
-      'GCC R&B Pop':           ANCHOR('khaleeji r&b, smooth urban'),
-      'Luxury GCC Pop':        ANCHOR('luxury khaleeji pop, premium orchestral'),
-      'Cinematic GCC':         ANCHOR('cinematic khaleeji, dramatic atmosphere'),
-      'GCC Anthem':            ANCHOR('khaleeji anthem, proud majestic'),
-      'National Event GCC':    ANCHOR('national gulf anthem, patriotic ceremonial'),
-      // ── Heritage / Folk ──
-      'GCC Traditional':       ANCHOR('khaleeji traditional, authentic folk'),
-      'Sheilat':               ANCHOR('khaleeji sheilat, strong male group vocal'),
-      'Samri':                 ANCHOR('samri folk, heritage'),
-      'Ardah':                 ANCHOR('ardah tradition, stately dignified'),
-      'Jalsa':                 ANCHOR('khaleeji jalsa, soft acoustic session'),
-      'Liwa':                  ANCHOR('liwa coastal, afro-gulf polyrhythmic'),
-      'GCC Shaabi':            ANCHOR('khaleeji shaabi, popular folk'),
-      'Zar':                   ANCHOR('zar ritual, traditional'),
-      'Khaleeji Trap':         ANCHOR('khaleeji trap, urban street'),
+      // ── Modern / Pop → Maqam Rast ──
+      'GCC Pop':               RAST('khaleeji pop'),
+      'Khaleeji Pop':          RAST('khaleeji pop'),
+      'GCC Rap':               RAST('khaleeji rap'),
+      'GCC Party':             RAST('khaleeji pop, festive party energy'),
+      'GCC Wedding':           RAST('khaleeji wedding song, celebratory'),
+      'GCC Radio Pop':         RAST('khaleeji pop, commercial radio'),
+      'GCC Dance Pop':         RAST('khaleeji dance pop, uptempo'),
+      'GCC Electro Pop':       RAST('khaleeji electro pop'),
+      'GCC Synth Pop':         RAST('khaleeji synth pop'),
+      'Modern Khaleeji Fusion':RAST('modern khaleeji fusion, western-oriental'),
+      'English GCC Pop':       RAST('gulf pop, english lyrics, khaleeji musical identity'),
+      'GCC Anthem':            RAST('khaleeji anthem, proud majestic'),
+      'National Event GCC':    RAST('national gulf anthem, patriotic ceremonial'),
+      'Khaleeji Trap':         RAST('khaleeji trap, urban street'),
+      // ── Emotional / Soulful → Maqam Bayati ──
+      'GCC Romantic':          BAYATI('khaleeji romantic ballad'),
+      'GCC Elegant':           BAYATI('elegant khaleeji, refined classy delivery'),
+      'GCC R&B Pop':           BAYATI('khaleeji r&b, smooth urban'),
+      'Luxury GCC Pop':        BAYATI('luxury khaleeji pop, premium orchestral'),
+      'Cinematic GCC':         BAYATI('cinematic khaleeji, dramatic atmosphere'),
+      'Jalsa':                 BAYATI('khaleeji jalsa, soft acoustic session'),
+      // ── Heritage / Traditional → Maqam Hijaz ──
+      'GCC Traditional':       HIJAZ('khaleeji traditional, authentic folk'),
+      'Sheilat':               HIJAZ('khaleeji sheilat, strong male group vocal'),
+      'Samri':                 HIJAZ('samri folk, heritage'),
+      'Ardah':                 HIJAZ('ardah tradition, stately dignified'),
+      'Liwa':                  HIJAZ('liwa coastal, afro-gulf polyrhythmic'),
+      'GCC Shaabi':            HIJAZ('khaleeji shaabi, popular folk'),
+      'Zar':                   HIJAZ('zar ritual, traditional'),
       // ── Arabic UI labels ──
-      'بوب خليجي':             ANCHOR('khaleeji pop'),
-      'خليجي راب':             ANCHOR('khaleeji rap'),
-      'خليجي عصري':            ANCHOR('modern khaleeji fusion, western-oriental'),
-      'خليجي رومانسي':         ANCHOR('khaleeji romantic ballad'),
-      'خليجي أنيق':            ANCHOR('elegant khaleeji, refined classy delivery'),
-      'خليجي حفلات':           ANCHOR('khaleeji pop, festive party energy'),
-      'خليجي أعراس':           ANCHOR('khaleeji wedding song, celebratory'),
-      'خليجي إذاعي':           ANCHOR('khaleeji pop, commercial radio'),
-      'خليجي دانس':            ANCHOR('khaleeji dance pop, uptempo'),
-      'خليجي إلكتروني':        ANCHOR('khaleeji electro pop'),
-      'خليجي سينث بوب':        ANCHOR('khaleeji synth pop'),
-      'فيوجن خليجي':           ANCHOR('modern khaleeji fusion, western-oriental'),
-      'إنجليزي بطابع خليجي':  ANCHOR('gulf pop, english lyrics, khaleeji musical identity'),
-      'خليجي آر أند بي':       ANCHOR('khaleeji r&b, smooth urban'),
-      'خليجي فاخر':            ANCHOR('luxury khaleeji pop, premium orchestral'),
-      'خليجي سينمائي':         ANCHOR('cinematic khaleeji, dramatic atmosphere'),
-      'خليجي جماهيري':         ANCHOR('khaleeji anthem, proud majestic'),
-      'مناسبات وطنية خليجية':  ANCHOR('national gulf anthem, patriotic ceremonial'),
-      'خليجي تراثي':           ANCHOR('khaleeji traditional, authentic folk'),
-      'شيلات':                 ANCHOR('khaleeji sheilat, strong male group vocal'),
-      'سامري':                 ANCHOR('samri folk, heritage'),
-      'جلسة':                  ANCHOR('khaleeji jalsa, soft acoustic session'),
-      'ليوان':                 ANCHOR('liwa coastal, afro-gulf polyrhythmic'),
+      'بوب خليجي':             RAST('khaleeji pop'),
+      'خليجي راب':             RAST('khaleeji rap'),
+      'خليجي عصري':            RAST('modern khaleeji fusion, western-oriental'),
+      'خليجي حفلات':           RAST('khaleeji pop, festive party energy'),
+      'خليجي أعراس':           RAST('khaleeji wedding song, celebratory'),
+      'خليجي إذاعي':           RAST('khaleeji pop, commercial radio'),
+      'خليجي دانس':            RAST('khaleeji dance pop, uptempo'),
+      'خليجي إلكتروني':        RAST('khaleeji electro pop'),
+      'خليجي سينث بوب':        RAST('khaleeji synth pop'),
+      'فيوجن خليجي':           RAST('modern khaleeji fusion, western-oriental'),
+      'إنجليزي بطابع خليجي':  RAST('gulf pop, english lyrics, khaleeji musical identity'),
+      'خليجي جماهيري':         RAST('khaleeji anthem, proud majestic'),
+      'مناسبات وطنية خليجية':  RAST('national gulf anthem, patriotic ceremonial'),
+      'خليجي رومانسي':         BAYATI('khaleeji romantic ballad'),
+      'خليجي أنيق':            BAYATI('elegant khaleeji, refined classy delivery'),
+      'خليجي آر أند بي':       BAYATI('khaleeji r&b, smooth urban'),
+      'خليجي فاخر':            BAYATI('luxury khaleeji pop, premium orchestral'),
+      'خليجي سينمائي':         BAYATI('cinematic khaleeji, dramatic atmosphere'),
+      'جلسة':                  BAYATI('khaleeji jalsa, soft acoustic session'),
+      'خليجي تراثي':           HIJAZ('khaleeji traditional, authentic folk'),
+      'شيلات':                 HIJAZ('khaleeji sheilat, strong male group vocal'),
+      'سامري':                 HIJAZ('samri folk, heritage'),
+      'ليوان':                 HIJAZ('liwa coastal, afro-gulf polyrhythmic'),
       // ── Non-GCC styles (no identity lock) ──
       'Egyptian':              'egyptian pop, egyptian arabic vocal',
       'Egyptian Shaabi':       'egyptian shaabi, cairo street vocal',
