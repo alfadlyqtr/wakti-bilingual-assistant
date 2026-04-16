@@ -3196,9 +3196,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }
 
   function buildKieStyleString(): string {
-    // ── Geographic GPS anchor — city + vocal timbre lock, genre injected in middle ──
-    const GPS = (genre: string) =>
-      `kuwaiti qatari saudi, riyadh dubai doha studio session, ${genre}, warm soulful vocal timbre, melismatic gulf phrasing, authentic gulf vocal, strict khaleeji dialect`;
+    // ── Geographic GPS anchor — geography prefix only; instruments + genre + timbre assembled below ──
+    const GPS_PREFIX = 'kuwaiti qatari saudi, riyadh dubai doha studio session';
+    const GPS_TIMBRE = 'warm soulful vocal timbre, melismatic gulf phrasing, authentic gulf vocal, strict khaleeji dialect';
+    const GPS = (genre: string) => `${GPS_PREFIX}, ${genre}, ${GPS_TIMBRE}`;
 
     // ── Layer 1: Geographic GPS anchor map — geography first, genre middle, timbre last ──
     const GCC_LAYER1: Record<string, string> = {
@@ -3304,17 +3305,58 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'سامري': 'إيقاع سامري',
     };
 
-    // ── Layer 1: resolve anchor ──
+    // ── Layer 1: resolve genre label only (no timbre yet) ──
     const primaryStyle = includeTags[0] ?? null;
-    const genreAnchor = primaryStyle
-      ? (GCC_LAYER1[primaryStyle] ?? primaryStyle)
-      : null;
+    // Extract just the genre portion from GCC_LAYER1 (strip the GPS wrapper for re-ordering)
+    const GCC_GENRE_ONLY: Record<string, string> = {
+      'GCC Pop': 'khaleeji pop', 'Khaleeji Pop': 'khaleeji pop', 'GCC Rap': 'khaleeji rap',
+      'GCC Romantic': 'khaleeji romantic ballad', 'GCC Elegant': 'khaleeji elegant pop, refined classy delivery',
+      'GCC Party': 'khaleeji party pop, festive energy', 'GCC Wedding': 'khaleeji wedding song, celebratory',
+      'GCC Radio Pop': 'khaleeji radio pop, commercial modern', 'GCC Dance Pop': 'khaleeji dance pop, uptempo',
+      'GCC Electro Pop': 'khaleeji electro pop', 'GCC Synth Pop': 'khaleeji synth pop',
+      'Modern Khaleeji Fusion': 'modern khaleeji fusion, western-oriental',
+      'English GCC Pop': 'gulf pop english lyrics, khaleeji musical identity',
+      'GCC R&B Pop': 'khaleeji r&b pop, smooth urban', 'Luxury GCC Pop': 'luxury khaleeji pop, premium orchestral',
+      'Cinematic GCC': 'cinematic khaleeji, dramatic atmosphere', 'GCC Anthem': 'khaleeji anthem, proud majestic',
+      'National Event GCC': 'national gulf anthem, patriotic ceremonial',
+      'GCC Traditional': 'khaleeji traditional, authentic folk', 'Sheilat': 'khaleeji sheilat, strong male group',
+      'Samri': 'samri folk, heritage', 'Ardah': 'ardah tradition, stately dignified',
+      'Jalsa': 'khaleeji jalsa, soft acoustic session', 'Liwa': 'liwa coastal, afro-gulf polyrhythmic',
+      'GCC Shaabi': 'khaleeji shaabi, popular folk', 'Zar': 'zar ritual, traditional',
+      'Khaleeji Trap': 'khaleeji trap, urban street',
+      'بوب خليجي': 'khaleeji pop', 'خليجي راب': 'khaleeji rap',
+      'خليجي عصري': 'modern khaleeji fusion, western-oriental',
+      'خليجي رومانسي': 'khaleeji romantic ballad',
+      'خليجي أنيق': 'khaleeji elegant pop, refined classy delivery',
+      'خليجي حفلات': 'khaleeji party pop, festive energy',
+      'خليجي أعراس': 'khaleeji wedding song, celebratory',
+      'خليجي إذاعي': 'khaleeji radio pop, commercial modern',
+      'خليجي دانس': 'khaleeji dance pop, uptempo',
+      'خليجي إلكتروني': 'khaleeji electro pop',
+      'خليجي سينث بوب': 'khaleeji synth pop',
+      'فيوجن خليجي': 'modern khaleeji fusion, western-oriental',
+      'إنجليزي بطابع خليجي': 'gulf pop english lyrics, khaleeji musical identity',
+      'خليجي آر أند بي': 'khaleeji r&b pop, smooth urban',
+      'خليجي فاخر': 'luxury khaleeji pop, premium orchestral',
+      'خليجي سينمائي': 'cinematic khaleeji, dramatic atmosphere',
+      'خليجي جماهيري': 'khaleeji anthem, proud majestic',
+      'مناسبات وطنية خليجية': 'national gulf anthem, patriotic ceremonial',
+      'خليجي تراثي': 'khaleeji traditional, authentic folk',
+      'شيلات': 'khaleeji sheilat, strong male group',
+      'سامري': 'samri folk, heritage',
+      'جلسة': 'khaleeji jalsa, soft acoustic session',
+      'ليوان': 'liwa coastal, afro-gulf polyrhythmic',
+    };
+    const isGccStyle = primaryStyle ? (primaryStyle in GCC_GENRE_ONLY) : false;
+    const genreLabel = primaryStyle ? (GCC_GENRE_ONLY[primaryStyle] ?? null) : null;
+    // For non-GCC styles, fall back to the full GCC_LAYER1 entry as-is
+    const nonGccAnchor = (primaryStyle && !isGccStyle) ? (GCC_LAYER1[primaryStyle] ?? primaryStyle) : null;
 
-    // ── Layer 2: User instruments (capped at 6; fallback to GCC anchor defaults) ──
+    // ── Layer 2: User instruments (no cap — all selected instruments are front-loaded) ──
     const gccAnchor = primaryStyle ? GCC_STYLE_ANCHORS[primaryStyle] : null;
     let instrumentLayer: string[];
     if (instrumentTags.length > 0) {
-      instrumentLayer = instrumentTags.slice(0, 6);
+      instrumentLayer = instrumentTags;
     } else if (gccAnchor) {
       instrumentLayer = [gccAnchor.instrument, ...(gccAnchor.production ? [gccAnchor.production] : [])].slice(0, 3);
     } else {
@@ -3333,15 +3375,26 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     // ── Layer 5: User freeform text ──
     const freeText = styleText.trim() || null;
 
-    // ── Assemble: Layer 1 → 2 → 3 → 4 → 5 ──
+    // ── Ferrari Order: Geography → Instruments → Genre → Vocal Timbre → Rhythm → Mood → FreeText ──
     const parts: string[] = [];
-    if (genreAnchor) parts.push(genreAnchor);
-    if (instrumentLayer.length > 0) parts.push(instrumentLayer.join(', '));
-    if (rhythmLabel) parts.push(rhythmLabel);
-    if (moodLabel) parts.push(moodLabel);
-    if (freeText) parts.push(freeText);
+    if (isGccStyle) {
+      parts.push(GPS_PREFIX);                                    // 1. Geography
+      if (instrumentLayer.length > 0) parts.push(instrumentLayer.join(', ')); // 2. Instruments (front-loaded)
+      if (genreLabel) parts.push(genreLabel);                   // 3. Core genre
+      parts.push(GPS_TIMBRE);                                   // 4. Vocal timbre
+      if (rhythmLabel) parts.push(rhythmLabel);                 // 5. Rhythm
+      if (moodLabel) parts.push(moodLabel);                     // 6. Mood
+      if (freeText) parts.push(freeText);                       // 7. User text
+    } else {
+      // Non-GCC: use original order (no geographic GPS injection)
+      if (nonGccAnchor) parts.push(nonGccAnchor);
+      if (instrumentLayer.length > 0) parts.push(instrumentLayer.join(', '));
+      if (rhythmLabel) parts.push(rhythmLabel);
+      if (moodLabel) parts.push(moodLabel);
+      if (freeText) parts.push(freeText);
+    }
 
-    // ── Clean-up pass: trim each fragment, drop empties, collapse duplicate commas ──
+    // ── Clean-up pass: trim each fragment, drop single-char empties, collapse duplicate commas ──
     const raw = parts
       .flatMap((p) => p.split(','))
       .map((s) => s.trim())
@@ -3365,23 +3418,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     // Split on double line breaks to detect natural stanzas
     const stanzas = text.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
 
-    // Determine if there is a solo instrument to inject
-    const SOLO_CANDIDATES: Record<string, string> = {
-      'oud': '(Oud Solo)', 'عود': '(Oud Solo)',
-      'qanun': '(Qanun Solo)', 'قانون': '(Qanun Solo)',
-      'ney': '(Ney Solo)', 'ناي': '(Ney Solo)',
-      'violin': '(Violin Solo)', 'كمان': '(Violin Solo)',
-      'piano': '(Piano Solo)', 'بيانو': '(Piano Solo)',
-      'saxophone': '(Saxophone Solo)',
-      'guitar': '(Guitar Solo)', 'جيتار': '(Guitar Solo)',
-      'flute': '(Flute Solo)', 'فلوت': '(Flute Solo)',
-    };
-    let soloTag: string | null = null;
-    for (const inst of selectedInstruments) {
-      const key = inst.toLowerCase();
-      const found = Object.keys(SOLO_CANDIDATES).find((k) => key.includes(k));
-      if (found) { soloTag = SOLO_CANDIDATES[found]; break; }
-    }
+    // ── Dynamic solo: let Suno pick the lead instrument from the style field context ──
+    const soloTag: string | null = selectedInstruments.length > 0 ? '(Instrumental Solo)' : null;
 
     const labels = ['(Verse 1)', '(Chorus)', '(Verse 2)', '(Bridge)', '(Chorus)', '(Outro)'];
     const structured: string[] = ['(Intro)'];
@@ -3452,7 +3490,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
       const invokeBody: Record<string, unknown> = {
         title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
-        style: (kieStyle || 'kuwaiti qatari saudi, riyadh dubai doha studio session, khaleeji pop, warm soulful vocal timbre, melismatic gulf phrasing, authentic gulf vocal, strict khaleeji dialect').slice(0, 200),
+        style: (kieStyle || 'kuwaiti qatari saudi, riyadh dubai doha studio session, khaleeji pop, warm soulful vocal timbre, melismatic gulf phrasing, authentic gulf vocal, strict khaleeji dialect').slice(0, 1000),
         customMode: true,
         instrumental,
         model: 'V5_5',
