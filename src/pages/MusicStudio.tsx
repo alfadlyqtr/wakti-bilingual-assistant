@@ -2718,7 +2718,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     
     setAmping(true);
     try {
-      // Build the input for Amp - include style/mood/instruments context
+      const kieStyle = buildKieStyleString();
       const { data, error } = await supabase.functions.invoke('music-amp', {
         body: {
           text: userInput,
