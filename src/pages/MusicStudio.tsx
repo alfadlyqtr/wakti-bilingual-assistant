@@ -3438,7 +3438,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const structuredPrompt = formatLyricsWithStructure(rawLyrics, instrumental, instrumentTags);
 
       // ── Morocco-Killer negative shield — primary drift triggers blocked first ──
-      const finalNegativeTags = 'moroccan, maghrebi, darija, gnawa, maghrebi chaabi, north african rhythm, egyptian, levantine, fusha, msa, north african, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, low quality, distorted, vocal hiss';
+      const finalNegativeTags = 'moroccan, darija, gnawa, chaabi, maghrebi rhythm, egyptian, levantine, fusha, msa, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, noise, hiss, distorted, low quality';
 
       const invokeBody: Record<string, unknown> = {
         title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
