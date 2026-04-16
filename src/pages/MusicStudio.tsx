@@ -3196,12 +3196,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }
 
   function buildKieStyleString(): string {
-    // ── Consolidated Identity Anchor — geography + genre + throat lock fused into ONE token block ──
-    // Blueprint: "saudi kuwaiti qatari khaleeji [STYLE], authentic gulf vocal, strict khaleeji dialect, warm soulful vocal timbre"
-    const ANCHOR = (style: string, extra?: string) =>
-      `saudi kuwaiti qatari ${style}, authentic gulf vocal, strict khaleeji dialect, warm soulful vocal timbre${
-        extra ? `, ${extra}` : ''
-      }`;
+    // ── Surgical Identity Anchor — geography + genre + vocal lock, no fluff ──
+    // Blueprint: "saudi kuwaiti qatari khaleeji [STYLE], authentic gulf vocal, strict khaleeji dialect"
+    const ANCHOR = (style: string) =>
+      `saudi kuwaiti qatari ${style}, authentic gulf vocal, strict khaleeji dialect`;
 
     // ── Single map: GCC identity anchors + non-GCC pass-through ──
     const STYLE_ANCHORS: Record<string, string> = {
@@ -3209,7 +3207,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'GCC Pop':               ANCHOR('khaleeji pop'),
       'Khaleeji Pop':          ANCHOR('khaleeji pop'),
       'GCC Rap':               ANCHOR('khaleeji rap'),
-      'GCC Romantic':          ANCHOR('khaleeji romantic ballad', 'melismatic gulf phrasing'),
+      'GCC Romantic':          ANCHOR('khaleeji romantic ballad'),
       'GCC Elegant':           ANCHOR('elegant khaleeji, refined classy delivery'),
       'GCC Party':             ANCHOR('khaleeji pop, festive party energy'),
       'GCC Wedding':           ANCHOR('khaleeji wedding song, celebratory'),
@@ -3238,7 +3236,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'بوب خليجي':             ANCHOR('khaleeji pop'),
       'خليجي راب':             ANCHOR('khaleeji rap'),
       'خليجي عصري':            ANCHOR('modern khaleeji fusion, western-oriental'),
-      'خليجي رومانسي':         ANCHOR('khaleeji romantic ballad', 'melismatic gulf phrasing'),
+      'خليجي رومانسي':         ANCHOR('khaleeji romantic ballad'),
       'خليجي أنيق':            ANCHOR('elegant khaleeji, refined classy delivery'),
       'خليجي حفلات':           ANCHOR('khaleeji pop, festive party energy'),
       'خليجي أعراس':           ANCHOR('khaleeji wedding song, celebratory'),
@@ -3438,11 +3436,12 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const structuredPrompt = formatLyricsWithStructure(rawLyrics, instrumental, instrumentTags);
 
       // ── Morocco-Killer negative shield — primary drift triggers blocked first ──
-      const finalNegativeTags = 'moroccan, maghrebi, darija, gnawa, maghrebi chaabi, north african rhythm, egyptian, levantine, fusha, msa, north african, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, low quality, distorted, vocal hiss';
+      // NOTE: string is exactly ≤200 chars so .slice(0,200) never truncates 'distorted'
+      const finalNegativeTags = 'moroccan, maghrebi, darija, gnawa, maghrebi chaabi, north african rhythm, egyptian, levantine, fusha, msa, north african, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, distorted';
 
       const invokeBody: Record<string, unknown> = {
         title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
-        style: (kieStyle || 'kuwaiti qatari saudi, riyadh dubai doha studio session, khaleeji pop, warm soulful vocal timbre, melismatic gulf phrasing, authentic gulf vocal, strict khaleeji dialect').slice(0, 1000),
+        style: (kieStyle || 'saudi kuwaiti qatari khaleeji pop, authentic gulf vocal, strict khaleeji dialect').slice(0, 1000),
         customMode: true,
         instrumental,
         model: 'V5_5',
