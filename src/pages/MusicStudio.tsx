@@ -3196,67 +3196,69 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }
 
   function buildKieStyleString(): string {
-    // ── Geographic GPS anchor — geography prefix only; instruments + genre + timbre assembled below ──
-    const GPS_PREFIX = 'kuwaiti qatari saudi, riyadh dubai doha studio session';
-    const GPS_TIMBRE = 'warm soulful vocal timbre, melismatic gulf phrasing, authentic gulf vocal, strict khaleeji dialect';
-    const GPS = (genre: string) => `${GPS_PREFIX}, ${genre}, ${GPS_TIMBRE}`;
+    // ── Consolidated Identity Anchor — geography + genre + throat lock fused into ONE token block ──
+    // Blueprint: "saudi kuwaiti qatari khaleeji [STYLE], authentic gulf vocal, strict khaleeji dialect, warm soulful vocal timbre"
+    const ANCHOR = (style: string, extra?: string) =>
+      `saudi kuwaiti qatari ${style}, authentic gulf vocal, strict khaleeji dialect, warm soulful vocal timbre${
+        extra ? `, ${extra}` : ''
+      }`;
 
-    // ── Layer 1: Geographic GPS anchor map — geography first, genre middle, timbre last ──
-    const GCC_LAYER1: Record<string, string> = {
+    // ── Single map: GCC identity anchors + non-GCC pass-through ──
+    const STYLE_ANCHORS: Record<string, string> = {
       // ── Modern / Pop ──
-      'GCC Pop':               GPS('khaleeji pop'),
-      'Khaleeji Pop':          GPS('khaleeji pop'),
-      'GCC Rap':               GPS('khaleeji rap'),
-      'GCC Romantic':          GPS('khaleeji romantic ballad'),
-      'GCC Elegant':           GPS('khaleeji elegant pop, refined classy delivery'),
-      'GCC Party':             GPS('khaleeji party pop, festive energy'),
-      'GCC Wedding':           GPS('khaleeji wedding song, celebratory'),
-      'GCC Radio Pop':         GPS('khaleeji radio pop, commercial modern'),
-      'GCC Dance Pop':         GPS('khaleeji dance pop, uptempo'),
-      'GCC Electro Pop':       GPS('khaleeji electro pop'),
-      'GCC Synth Pop':         GPS('khaleeji synth pop'),
-      'Modern Khaleeji Fusion':GPS('modern khaleeji fusion, western-oriental'),
-      'English GCC Pop':       GPS('gulf pop english lyrics, khaleeji musical identity'),
-      'GCC R&B Pop':           GPS('khaleeji r&b pop, smooth urban'),
-      'Luxury GCC Pop':        GPS('luxury khaleeji pop, premium orchestral'),
-      'Cinematic GCC':         GPS('cinematic khaleeji, dramatic atmosphere'),
-      'GCC Anthem':            GPS('khaleeji anthem, proud majestic'),
-      'National Event GCC':    GPS('national gulf anthem, patriotic ceremonial'),
+      'GCC Pop':               ANCHOR('khaleeji pop'),
+      'Khaleeji Pop':          ANCHOR('khaleeji pop'),
+      'GCC Rap':               ANCHOR('khaleeji rap'),
+      'GCC Romantic':          ANCHOR('khaleeji romantic ballad', 'melismatic gulf phrasing'),
+      'GCC Elegant':           ANCHOR('elegant khaleeji, refined classy delivery'),
+      'GCC Party':             ANCHOR('khaleeji pop, festive party energy'),
+      'GCC Wedding':           ANCHOR('khaleeji wedding song, celebratory'),
+      'GCC Radio Pop':         ANCHOR('khaleeji pop, commercial radio'),
+      'GCC Dance Pop':         ANCHOR('khaleeji dance pop, uptempo'),
+      'GCC Electro Pop':       ANCHOR('khaleeji electro pop'),
+      'GCC Synth Pop':         ANCHOR('khaleeji synth pop'),
+      'Modern Khaleeji Fusion':ANCHOR('modern khaleeji fusion, western-oriental'),
+      'English GCC Pop':       ANCHOR('gulf pop, english lyrics, khaleeji musical identity'),
+      'GCC R&B Pop':           ANCHOR('khaleeji r&b, smooth urban'),
+      'Luxury GCC Pop':        ANCHOR('luxury khaleeji pop, premium orchestral'),
+      'Cinematic GCC':         ANCHOR('cinematic khaleeji, dramatic atmosphere'),
+      'GCC Anthem':            ANCHOR('khaleeji anthem, proud majestic'),
+      'National Event GCC':    ANCHOR('national gulf anthem, patriotic ceremonial'),
       // ── Heritage / Folk ──
-      'GCC Traditional':       GPS('khaleeji traditional, authentic folk'),
-      'Sheilat':               GPS('khaleeji sheilat, strong male group'),
-      'Samri':                 GPS('samri folk, heritage'),
-      'Ardah':                 GPS('ardah tradition, stately dignified'),
-      'Jalsa':                 GPS('khaleeji jalsa, soft acoustic session'),
-      'Liwa':                  GPS('liwa coastal, afro-gulf polyrhythmic'),
-      'GCC Shaabi':            GPS('khaleeji shaabi, popular folk'),
-      'Zar':                   GPS('zar ritual, traditional'),
-      'Khaleeji Trap':         GPS('khaleeji trap, urban street'),
+      'GCC Traditional':       ANCHOR('khaleeji traditional, authentic folk'),
+      'Sheilat':               ANCHOR('khaleeji sheilat, strong male group vocal'),
+      'Samri':                 ANCHOR('samri folk, heritage'),
+      'Ardah':                 ANCHOR('ardah tradition, stately dignified'),
+      'Jalsa':                 ANCHOR('khaleeji jalsa, soft acoustic session'),
+      'Liwa':                  ANCHOR('liwa coastal, afro-gulf polyrhythmic'),
+      'GCC Shaabi':            ANCHOR('khaleeji shaabi, popular folk'),
+      'Zar':                   ANCHOR('zar ritual, traditional'),
+      'Khaleeji Trap':         ANCHOR('khaleeji trap, urban street'),
       // ── Arabic UI labels ──
-      'بوب خليجي':             GPS('khaleeji pop'),
-      'خليجي راب':             GPS('khaleeji rap'),
-      'خليجي عصري':            GPS('modern khaleeji fusion, western-oriental'),
-      'خليجي رومانسي':         GPS('khaleeji romantic ballad'),
-      'خليجي أنيق':            GPS('khaleeji elegant pop, refined classy delivery'),
-      'خليجي حفلات':           GPS('khaleeji party pop, festive energy'),
-      'خليجي أعراس':           GPS('khaleeji wedding song, celebratory'),
-      'خليجي إذاعي':           GPS('khaleeji radio pop, commercial modern'),
-      'خليجي دانس':            GPS('khaleeji dance pop, uptempo'),
-      'خليجي إلكتروني':        GPS('khaleeji electro pop'),
-      'خليجي سينث بوب':        GPS('khaleeji synth pop'),
-      'فيوجن خليجي':           GPS('modern khaleeji fusion, western-oriental'),
-      'إنجليزي بطابع خليجي':  GPS('gulf pop english lyrics, khaleeji musical identity'),
-      'خليجي آر أند بي':       GPS('khaleeji r&b pop, smooth urban'),
-      'خليجي فاخر':            GPS('luxury khaleeji pop, premium orchestral'),
-      'خليجي سينمائي':         GPS('cinematic khaleeji, dramatic atmosphere'),
-      'خليجي جماهيري':         GPS('khaleeji anthem, proud majestic'),
-      'مناسبات وطنية خليجية':  GPS('national gulf anthem, patriotic ceremonial'),
-      'خليجي تراثي':           GPS('khaleeji traditional, authentic folk'),
-      'شيلات':                 GPS('khaleeji sheilat, strong male group'),
-      'سامري':                 GPS('samri folk, heritage'),
-      'جلسة':                  GPS('khaleeji jalsa, soft acoustic session'),
-      'ليوان':                 GPS('liwa coastal, afro-gulf polyrhythmic'),
-      // ── Non-GCC styles (no vocal lock) ──
+      'بوب خليجي':             ANCHOR('khaleeji pop'),
+      'خليجي راب':             ANCHOR('khaleeji rap'),
+      'خليجي عصري':            ANCHOR('modern khaleeji fusion, western-oriental'),
+      'خليجي رومانسي':         ANCHOR('khaleeji romantic ballad', 'melismatic gulf phrasing'),
+      'خليجي أنيق':            ANCHOR('elegant khaleeji, refined classy delivery'),
+      'خليجي حفلات':           ANCHOR('khaleeji pop, festive party energy'),
+      'خليجي أعراس':           ANCHOR('khaleeji wedding song, celebratory'),
+      'خليجي إذاعي':           ANCHOR('khaleeji pop, commercial radio'),
+      'خليجي دانس':            ANCHOR('khaleeji dance pop, uptempo'),
+      'خليجي إلكتروني':        ANCHOR('khaleeji electro pop'),
+      'خليجي سينث بوب':        ANCHOR('khaleeji synth pop'),
+      'فيوجن خليجي':           ANCHOR('modern khaleeji fusion, western-oriental'),
+      'إنجليزي بطابع خليجي':  ANCHOR('gulf pop, english lyrics, khaleeji musical identity'),
+      'خليجي آر أند بي':       ANCHOR('khaleeji r&b, smooth urban'),
+      'خليجي فاخر':            ANCHOR('luxury khaleeji pop, premium orchestral'),
+      'خليجي سينمائي':         ANCHOR('cinematic khaleeji, dramatic atmosphere'),
+      'خليجي جماهيري':         ANCHOR('khaleeji anthem, proud majestic'),
+      'مناسبات وطنية خليجية':  ANCHOR('national gulf anthem, patriotic ceremonial'),
+      'خليجي تراثي':           ANCHOR('khaleeji traditional, authentic folk'),
+      'شيلات':                 ANCHOR('khaleeji sheilat, strong male group vocal'),
+      'سامري':                 ANCHOR('samri folk, heritage'),
+      'جلسة':                  ANCHOR('khaleeji jalsa, soft acoustic session'),
+      'ليوان':                 ANCHOR('liwa coastal, afro-gulf polyrhythmic'),
+      // ── Non-GCC styles (no identity lock) ──
       'Egyptian':              'egyptian pop, egyptian arabic vocal',
       'Egyptian Shaabi':       'egyptian shaabi, cairo street vocal',
       'Arabic Pop':            'arabic pop, pan-arabic vocal',
@@ -3266,6 +3268,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'أناشيد':                'أناشيد إسلامية، صوت بشري فقط',
       'بوب عربي':              'بوب عربي، صوت عربي',
     };
+    const GCC_KEYS = new Set(Object.keys(STYLE_ANCHORS).filter(
+      (k) => !['Egyptian','Egyptian Shaabi','Arabic Pop','Levant Pop','Anasheed','مصري','أناشيد','بوب عربي'].includes(k)
+    ));
 
     // ── Rhythm chip → compact label ──
     const RHYTHM_LABELS: Record<string, string> = {
@@ -3305,59 +3310,17 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'سامري': 'إيقاع سامري',
     };
 
-    // ── Layer 1: resolve genre label only (no timbre yet) ──
+    // ── Resolve Layer 1 anchor ──
     const primaryStyle = includeTags[0] ?? null;
-    // Extract just the genre portion from GCC_LAYER1 (strip the GPS wrapper for re-ordering)
-    const GCC_GENRE_ONLY: Record<string, string> = {
-      'GCC Pop': 'khaleeji pop', 'Khaleeji Pop': 'khaleeji pop', 'GCC Rap': 'khaleeji rap',
-      'GCC Romantic': 'khaleeji romantic ballad', 'GCC Elegant': 'khaleeji elegant pop, refined classy delivery',
-      'GCC Party': 'khaleeji party pop, festive energy', 'GCC Wedding': 'khaleeji wedding song, celebratory',
-      'GCC Radio Pop': 'khaleeji radio pop, commercial modern', 'GCC Dance Pop': 'khaleeji dance pop, uptempo',
-      'GCC Electro Pop': 'khaleeji electro pop', 'GCC Synth Pop': 'khaleeji synth pop',
-      'Modern Khaleeji Fusion': 'modern khaleeji fusion, western-oriental',
-      'English GCC Pop': 'gulf pop english lyrics, khaleeji musical identity',
-      'GCC R&B Pop': 'khaleeji r&b pop, smooth urban', 'Luxury GCC Pop': 'luxury khaleeji pop, premium orchestral',
-      'Cinematic GCC': 'cinematic khaleeji, dramatic atmosphere', 'GCC Anthem': 'khaleeji anthem, proud majestic',
-      'National Event GCC': 'national gulf anthem, patriotic ceremonial',
-      'GCC Traditional': 'khaleeji traditional, authentic folk', 'Sheilat': 'khaleeji sheilat, strong male group',
-      'Samri': 'samri folk, heritage', 'Ardah': 'ardah tradition, stately dignified',
-      'Jalsa': 'khaleeji jalsa, soft acoustic session', 'Liwa': 'liwa coastal, afro-gulf polyrhythmic',
-      'GCC Shaabi': 'khaleeji shaabi, popular folk', 'Zar': 'zar ritual, traditional',
-      'Khaleeji Trap': 'khaleeji trap, urban street',
-      'بوب خليجي': 'khaleeji pop', 'خليجي راب': 'khaleeji rap',
-      'خليجي عصري': 'modern khaleeji fusion, western-oriental',
-      'خليجي رومانسي': 'khaleeji romantic ballad',
-      'خليجي أنيق': 'khaleeji elegant pop, refined classy delivery',
-      'خليجي حفلات': 'khaleeji party pop, festive energy',
-      'خليجي أعراس': 'khaleeji wedding song, celebratory',
-      'خليجي إذاعي': 'khaleeji radio pop, commercial modern',
-      'خليجي دانس': 'khaleeji dance pop, uptempo',
-      'خليجي إلكتروني': 'khaleeji electro pop',
-      'خليجي سينث بوب': 'khaleeji synth pop',
-      'فيوجن خليجي': 'modern khaleeji fusion, western-oriental',
-      'إنجليزي بطابع خليجي': 'gulf pop english lyrics, khaleeji musical identity',
-      'خليجي آر أند بي': 'khaleeji r&b pop, smooth urban',
-      'خليجي فاخر': 'luxury khaleeji pop, premium orchestral',
-      'خليجي سينمائي': 'cinematic khaleeji, dramatic atmosphere',
-      'خليجي جماهيري': 'khaleeji anthem, proud majestic',
-      'مناسبات وطنية خليجية': 'national gulf anthem, patriotic ceremonial',
-      'خليجي تراثي': 'khaleeji traditional, authentic folk',
-      'شيلات': 'khaleeji sheilat, strong male group',
-      'سامري': 'samri folk, heritage',
-      'جلسة': 'khaleeji jalsa, soft acoustic session',
-      'ليوان': 'liwa coastal, afro-gulf polyrhythmic',
-    };
-    const isGccStyle = primaryStyle ? (primaryStyle in GCC_GENRE_ONLY) : false;
-    const genreLabel = primaryStyle ? (GCC_GENRE_ONLY[primaryStyle] ?? null) : null;
-    // For non-GCC styles, fall back to the full GCC_LAYER1 entry as-is
-    const nonGccAnchor = (primaryStyle && !isGccStyle) ? (GCC_LAYER1[primaryStyle] ?? primaryStyle) : null;
+    const styleAnchor = primaryStyle ? (STYLE_ANCHORS[primaryStyle] ?? primaryStyle) : null;
+    const isGccStyle = primaryStyle ? GCC_KEYS.has(primaryStyle) : false;
 
-    // ── Layer 2: User instruments (no cap — all selected instruments are front-loaded) ──
+    // ── Layer 2: User instruments (all selected — no cap) ──
     const gccAnchor = primaryStyle ? GCC_STYLE_ANCHORS[primaryStyle] : null;
     let instrumentLayer: string[];
     if (instrumentTags.length > 0) {
       instrumentLayer = instrumentTags;
-    } else if (gccAnchor) {
+    } else if (isGccStyle && gccAnchor) {
       instrumentLayer = [gccAnchor.instrument, ...(gccAnchor.production ? [gccAnchor.production] : [])].slice(0, 3);
     } else {
       instrumentLayer = [];
@@ -3375,24 +3338,13 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     // ── Layer 5: User freeform text ──
     const freeText = styleText.trim() || null;
 
-    // ── Ferrari Order: Geography → Instruments → Genre → Vocal Timbre → Rhythm → Mood → FreeText ──
+    // ── Identity Sandwich: Anchor → Instruments → Rhythm → Mood → FreeText ──
     const parts: string[] = [];
-    if (isGccStyle) {
-      parts.push(GPS_PREFIX);                                    // 1. Geography
-      if (instrumentLayer.length > 0) parts.push(instrumentLayer.join(', ')); // 2. Instruments (front-loaded)
-      if (genreLabel) parts.push(genreLabel);                   // 3. Core genre
-      parts.push(GPS_TIMBRE);                                   // 4. Vocal timbre
-      if (rhythmLabel) parts.push(rhythmLabel);                 // 5. Rhythm
-      if (moodLabel) parts.push(moodLabel);                     // 6. Mood
-      if (freeText) parts.push(freeText);                       // 7. User text
-    } else {
-      // Non-GCC: use original order (no geographic GPS injection)
-      if (nonGccAnchor) parts.push(nonGccAnchor);
-      if (instrumentLayer.length > 0) parts.push(instrumentLayer.join(', '));
-      if (rhythmLabel) parts.push(rhythmLabel);
-      if (moodLabel) parts.push(moodLabel);
-      if (freeText) parts.push(freeText);
-    }
+    if (styleAnchor) parts.push(styleAnchor);                          // 1. Consolidated identity anchor
+    if (instrumentLayer.length > 0) parts.push(instrumentLayer.join(', ')); // 2. User instruments
+    if (rhythmLabel) parts.push(rhythmLabel);                          // 3. Rhythm
+    if (moodLabel) parts.push(moodLabel);                              // 4. Mood
+    if (freeText) parts.push(freeText);                                // 5. User text
 
     // ── Clean-up pass: trim each fragment, drop single-char empties, collapse duplicate commas ──
     const raw = parts
