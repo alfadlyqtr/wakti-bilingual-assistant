@@ -2053,9 +2053,16 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'Khaleeji Trap': ['Trap Beat', 'Gulf Groove'],
     'Egyptian': ['Maqsoum', 'Ballad Slow Groove'],
     'Egyptian Shaabi': ['Maqsoum', 'Club Beat'],
+    'Iraqi Style': ['Maqsoum', 'Ballad Slow Groove'],
+    'Lebanese Style': ['Maqsoum', 'Ballad Slow Groove'],
+    'Moroccan Style': ['Maqsoum', '6/8 Fusion'],
     'Arabic Pop': ['Maqsoum', 'Pop 4/4'],
     'Levant Pop': ['Maqsoum', 'Ballad Slow Groove'],
     'Anasheed': ['Clap-Driven Groove', 'Ballad Slow Groove'],
+    // ── Arabic equivalents for new regional styles ──
+    'عراقي': ['مقسوم', 'بالاد هادئ'],
+    'لبناني': ['مقسوم', 'بالاد هادئ'],
+    'مغربي': ['مقسوم', '٦/٨ فيوجن'],
     // ── Pop ──
     'pop': ['Pop 4/4', 'Ballad Slow Groove'],
     'Dance Pop': ['Club Beat', 'Pop 4/4'],
@@ -2326,9 +2333,16 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'Khaleeji Trap': ['confident', 'energetic', 'bold'],
     'Egyptian': ['romantic', 'emotional', 'nostalgic'],
     'Egyptian Shaabi': ['energetic', 'party', 'exciting'],
+    'Iraqi Style': ['emotional', 'nostalgic', 'soulful'],
+    'Lebanese Style': ['romantic', 'tender', 'celebratory'],
+    'Moroccan Style': ['energetic', 'spiritual', 'festive'],
     'Arabic Pop': ['romantic', 'emotional', 'happy'],
     'Levant Pop': ['romantic', 'emotional', 'tender'],
     'Anasheed': ['spiritual', 'calm', 'proud'],
+    // ── Arabic equivalents for new regional styles ──
+    'عراقي': ['عاطفي', 'نوستالجي', 'روحاني'],
+    'لبناني': ['رومانسي', 'حنون', 'احتفالي'],
+    'مغربي': ['مفعم بالطاقة', 'روحاني', 'احتفالي'],
     // ── Pop ──
     'pop': ['happy', 'energetic', 'uplifting'],
     'Dance Pop': ['energetic', 'party', 'happy'],
@@ -2534,13 +2548,65 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     return [];
   }, [includeTags, isGccStyleSelected, GCC_UNSAFE_RECOMMENDED_RHYTHMS, GCC_SAFE_RECOMMENDED_RHYTHMS]);
 
+  // Rhythm → mood nudge: when a rhythm is selected, these moods get priority-boosted
+  const RHYTHM_MOOD_BOOST: Record<string, string[]> = {
+    'Gulf Groove':         ['groovy', 'energetic', 'confident'],
+    'Khaleeji Shuffle':   ['groovy', 'playful', 'energetic'],
+    'Adani':              ['nostalgic', 'emotional', 'intimate'],
+    'Samri Rhythm':       ['proud', 'bold', 'energetic'],
+    'Wedding Beat':       ['celebratory', 'happy', 'wedding'],
+    'Clap-Driven Groove': ['energetic', 'proud', 'bold'],
+    '6/8 Fusion':         ['energetic', 'festive', 'celebratory'],
+    'Afro-Gulf Groove':   ['energetic', 'groovy', 'bold'],
+    'Pop 4/4':            ['happy', 'energetic', 'uplifting'],
+    'Ballad Slow Groove': ['romantic', 'emotional', 'nostalgic'],
+    'Marching Anthem':    ['proud', 'epic', 'powerful'],
+    'Club Beat':          ['energetic', 'party', 'exciting'],
+    'Leiwah Rhythm':      ['energetic', 'celebratory', 'bold'],
+    'Maqsoum':            ['emotional', 'romantic', 'nostalgic'],
+    'Waltz 3/4':          ['romantic', 'dreamy', 'elegant'],
+    'Trap Beat':          ['confident', 'intense', 'bold'],
+    'Drill Beat':         ['intense', 'dark', 'bold'],
+    // Arabic rhythm keys
+    'إيقاع خليجي':        ['متمايل', 'مفعم بالطاقة', 'واثق'],
+    'خليجي متمايل':       ['متمايل', 'مرح', 'مفعم بالطاقة'],
+    'عدني':               ['نوستالجي', 'عاطفي', 'حميمي'],
+    'إيقاع سامري':        ['فخور', 'جريء', 'مفعم بالطاقة'],
+    'إيقاع أفراح':        ['احتفالي', 'سعيد', 'أعراس'],
+    'إيقاع تصفيق':        ['مفعم بالطاقة', 'فخور', 'جريء'],
+    '٦/٨ فيوجن':          ['مفعم بالطاقة', 'احتفالي', 'مهرجاني'],
+    'أفرو خليجي':         ['مفعم بالطاقة', 'متمايل', 'جريء'],
+    'بوب ٤/٤':            ['سعيد', 'مفعم بالطاقة', 'محفز'],
+    'بالاد هادئ':         ['رومانسي', 'عاطفي', 'نوستالجي'],
+    'إيقاع جماهيري':      ['فخور', 'ملحمي', 'قوي'],
+    'إيقاع نادي':         ['مفعم بالطاقة', 'حفلة', 'مثير'],
+    'إيقاع الليوان':      ['مفعم بالطاقة', 'احتفالي', 'جريء'],
+    'مقسوم':              ['عاطفي', 'رومانسي', 'نوستالجي'],
+    'والتز ٣/٤':          ['رومانسي', 'حالم', 'أنيق'],
+    'تراب بيت':           ['واثق', 'مكثف', 'جريء'],
+    'دريل بيت':           ['مكثف', 'مظلم', 'جريء'],
+  };
+
   const recommendedMoods = useMemo(() => {
+    // Get base moods from style
+    let baseMoods: string[] = [];
     for (const style of includeTags) {
       const mapped = STYLE_MOOD_MAPPING[style];
-      if (mapped) return mapped.slice(0, 3);
+      if (mapped) { baseMoods = mapped; break; }
     }
-    return [];
-  }, [includeTags]);
+    if (baseMoods.length === 0) return [];
+    // If rhythm is selected, merge rhythm-boosted moods first then fill from base
+    if (rhythmTags.length > 0) {
+      const boosted: string[] = [];
+      for (const rhythm of rhythmTags) {
+        const boost = RHYTHM_MOOD_BOOST[rhythm];
+        if (boost) boosted.push(...boost);
+      }
+      const merged = [...new Set([...boosted, ...baseMoods])];
+      return merged.slice(0, 3);
+    }
+    return baseMoods.slice(0, 3);
+  }, [includeTags, rhythmTags, RHYTHM_MOOD_BOOST]);
  
   // Mode/Mood presets
   const MODE_GROUPS = useMemo<Array<{ title: string; items: string[] }>>(() => {
