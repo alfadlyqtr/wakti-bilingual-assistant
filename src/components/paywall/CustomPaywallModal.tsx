@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
-import { purchasePackage, restorePurchases, showPaywall } from "@/integrations/natively/purchasesBridge";
+import { purchasePackage, restorePurchases, showPaywall, getOfferings } from "@/integrations/natively/purchasesBridge";
 import {
   Dialog,
   DialogContent,
@@ -200,6 +200,54 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
       setPurchaseInProgress(false);
       setLoading(false);
     }, 10000);
+  };
+
+  const handleDiagnose = () => {
+    addDebug('--- DIAGNOSTIC START ---');
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /Android/.test(navigator.userAgent);
+    addDebug(`Platform: iOS=${isIOS} Android=${isAndroid}`);
+    addDebug(`NativelyPurchases on window: ${!!(window as any).NativelyPurchases}`);
+    addDebug(`natively.isIOSApp: ${(window as any).natively?.isIOSApp}`);
+    addDebug(`natively.isAndroidApp: ${(window as any).natively?.isAndroidApp}`);
+    try {
+      getOfferings((resp: any) => {
+        addDebug(`getOfferings callback fired`);
+        addDebug(`status: ${resp?.status || 'n/a'}`);
+        if (resp?.error) addDebug(`error: ${JSON.stringify(resp.error).slice(0, 200)}`);
+        try {
+          const raw = JSON.stringify(resp);
+          // Chunk long output into readable pieces
+          const chunkSize = 140;
+          for (let i = 0; i < raw.length && i < 1400; i += chunkSize) {
+            addDebug(`raw[${i}]: ${raw.slice(i, i + chunkSize)}`);
+          }
+          addDebug(`raw length: ${raw.length}`);
+        } catch (e: any) {
+          addDebug(`stringify failed: ${e?.message || String(e)}`);
+        }
+        // Try to find qu_discount
+        try {
+          const offerings = resp?.offerings || resp?.all || resp;
+          const keys = offerings && typeof offerings === 'object' ? Object.keys(offerings).slice(0, 20) : [];
+          addDebug(`top-level keys: ${keys.join(',')}`);
+          const quOff = (offerings as any)?.qu_discount || (offerings as any)?.all?.qu_discount;
+          addDebug(`qu_discount offering found: ${!!quOff}`);
+          if (quOff) {
+            const pkgs = quOff?.availablePackages || quOff?.packages || [];
+            addDebug(`qu packages count: ${Array.isArray(pkgs) ? pkgs.length : 'n/a'}`);
+            if (Array.isArray(pkgs) && pkgs[0]) {
+              addDebug(`first pkg id: ${pkgs[0]?.identifier || pkgs[0]?.id || 'none'}`);
+              addDebug(`first pkg product: ${pkgs[0]?.product?.identifier || pkgs[0]?.storeProduct?.identifier || 'none'}`);
+            }
+          }
+        } catch (e: any) {
+          addDebug(`parse offerings failed: ${e?.message || String(e)}`);
+        }
+      });
+    } catch (e: any) {
+      addDebug(`getOfferings threw: ${e?.message || String(e)}`);
+    }
   };
 
   const handleRestore = () => {
@@ -796,6 +844,14 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                     <Sparkles className="w-5 h-5 mr-2" />
                   )}
                   {language === 'ar' ? 'اشترك الآن' : 'Subscribe Now'}
+                </Button>
+
+                <Button
+                  onClick={handleDiagnose}
+                  variant="outline"
+                  className="w-full border-yellow-500/50 hover:border-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 font-mono text-xs"
+                >
+                  🔍 Diagnose SDK (iOS QU debug)
                 </Button>
 
                 {showRestorePurchases && (
