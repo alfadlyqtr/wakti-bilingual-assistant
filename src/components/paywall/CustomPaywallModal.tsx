@@ -486,10 +486,16 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
           </div>
         </div>
 
-        {/* Global Debug Box - renders regardless of step */}
+        {/* Global Debug Box - renders regardless of step, no height cap so all entries visible */}
         {debugLog.length > 0 && (
-          <div className="w-full text-left p-2 rounded bg-black/90 border-2 border-yellow-500 max-h-64 overflow-y-auto my-2">
-            <p className="text-yellow-400 text-xs font-bold mb-1">🔍 SDK DIAGNOSTIC LOG ({debugLog.length} entries)</p>
+          <div className="w-full text-left p-2 rounded bg-black/90 border-2 border-yellow-500 my-2">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-yellow-400 text-xs font-bold">🔍 SDK DIAGNOSTIC LOG ({debugLog.length} entries)</p>
+              <button
+                onClick={() => setDebugLog([])}
+                className="text-[10px] text-yellow-400 border border-yellow-500/50 rounded px-2 py-0.5 hover:bg-yellow-500/10"
+              >Clear</button>
+            </div>
             {debugLog.map((log, i) => (
               <div key={i} className="text-[10px] font-mono text-green-400 border-b border-white/10 pb-1 mb-1 break-all">{log}</div>
             ))}
