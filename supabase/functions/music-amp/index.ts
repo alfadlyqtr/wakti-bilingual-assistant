@@ -272,19 +272,32 @@ Examples:
 Use on 1–2 words per line where an open vowel ending is natural.
 
 TOOL 3 — SUKŪN ( ْ )
-Function: Marks a rhythmic stop — a punchy Khaleeji "cut" in the beat.
-Use on: consonants at the end of a rhythmically clipped word.
-Use for: Samri, Adani, Sheilat, and any style with short punchy delivery.
-Examples:
-  قُلْ → sukun creates a sharp cut — "qul" not "qulu"
-  رُحْ → clipped departure word — strong rhythmic stop
-  مِنْك → sukun cuts the word short for percussive effect
-Do NOT overuse — 1 sukun per verse or chorus section maximum.
+Function: Marks a hard rhythmic stop — a clipped Khaleeji cut.
+⚠️ CRITICAL WARNING: Over-using Sukūn is the #1 cause of "Moroccan Drift."
+North African Darija is characterized by heavy consonant clusters with suppressed vowels — exactly what too many Sukūns produce.
+To sound Kuwaiti/Qatari/Saudi, you must USE SUKŪN SPARINGLY.
+
+SUKŪN IS ONLY ALLOWED IN TWO SITUATIONS:
+  1. On the ABSOLUTE FINAL LETTER of a complete line (line-ending stop).
+  2. On a HEAVY CONSONANT STOP in the MIDDLE of a long word (4+ syllables) where the stop is unmistakably rhythmic.
+
+EXAMPLES OF CORRECT SUKŪN USE:
+  قلبي العليلْ  → sukun on the final letter of the line — hard stop, line ends here
+  مُسْتَحيل    → sukun in the middle of a 4-syllable word to mark the internal stop
+  
+EXAMPLES OF WRONG SUKŪN USE (BANNED):
+  مِنْك — short word, Sukūn mid-word → sounds Maghrebi, NEVER do this
+  قلْبي — mid-short-word Sukūn → sounds North African, NEVER do this
+  عيوني وقلْبي — multiple mid-word Sukūns in one line → Darija territory, BANNED
+
+SUKŪN HARD LIMIT: Maximum 1 Sukūn per every 3 lines of lyrics.
+If you have used a Sukūn in the last 3 lines → use ZERO Sukūn in the current line.
 
 DENSITY TARGET — MANDATORY:
-Aim for 2–3 phonetic anchors per lyric line.
+Aim for 2 phonetic anchors per lyric line (Shadda + Fatha are your primary tools).
 Every single line must have at least 1 anchor. Zero-anchor lines are always wrong.
-Spread across all three tools: Shadda, Fatha, Sukun.
+PRIMARY TOOLS: Shadda (emotional holds) and Fatha (open Gulf vowels).
+SECONDARY TOOL: Sukūn (line-ending stops only — see strict rules above).
 Do NOT anchor the same word twice (e.g., shadda + fatha on the same word — banned).
 
 AMBIGUITY RESOLUTION — SECONDARY USE:
@@ -315,13 +328,13 @@ INPUT LINE:
 
 CORRECT OUTPUT (Samri stress on beats 1 and 3):
 يا مُنيتي يا سلاَ خَاطري
-ارحم عُيوني وقلْبي العليل
+ارحم عُيوني وقلبي العليلْ
 
 مُنيتي → damma locks "mu-NI-ti" — beat 1 stress anchor
 سلاَ   → fatha opens the held vowel on beat 3
 خَاطري → fatha locks "KHA-tri" — secondary stress
 عُيوني → damma on opening vowel — rhythmic anchor
-قلْبي  → sukun cuts "qal" sharply — Samri punchy delivery
+العليلْ → sukun on the FINAL letter of the line — correct line-ending stop
 
 WRONG — DO NOT DO THIS:
 يَا مُنيَتِي يَا سَلاَ خَاطِرِي

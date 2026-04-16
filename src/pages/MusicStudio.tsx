@@ -3196,8 +3196,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }
 
   function buildKieStyleString(): string {
-    // ── Mandatory vocal anchor — the single most important token for Khaleeji identity ──
-    const V = ', authentic gulf vocal, strict khaleeji dialect';
+    // ── Mandatory vocal anchor — tri-country geographic lock, highest-priority tokens first ──
+    const V = ', kuwaiti qatari saudi singing style, authentic gulf vocal, strict khaleeji dialect';
 
     // ── Layer 1: Clean GCC anchor map — style genre + vocal string, nothing else ──
     const GCC_LAYER1: Record<string, string> = {
@@ -3440,8 +3440,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const rawLyrics = lyricsText.trim() || styleText.trim();
       const structuredPrompt = formatLyricsWithStructure(rawLyrics, instrumental, instrumentTags);
 
-      // ── Fixed negative shield — 146 chars, always used as-is, never prepended ──
-      const finalNegativeTags = 'egyptian, levantine, maghrebi, fusha, msa, north african, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, low quality, distorted, vocal hiss';
+      // ── Fixed negative shield — moroccan/maghrebi/darija first to maximize drift prevention ──
+      const finalNegativeTags = 'moroccan, maghrebi, darija, egyptian, levantine, fusha, msa, north african, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, low quality, distorted, vocal hiss';
 
       const invokeBody: Record<string, unknown> = {
         title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
@@ -3450,8 +3450,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         instrumental,
         model: 'V5_5',
         duration_seconds: durationTarget,
-        styleWeight: 0.95,
-        weirdnessConstraint: 0.25,
+        styleWeight: 0.85,
+        weirdnessConstraint: 0.30,
         audioWeight: 0.8,
         negativeTags: finalNegativeTags.slice(0, 200),
       };
