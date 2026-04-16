@@ -11,6 +11,15 @@ import { emitEvent } from "@/utils/eventBus";
 const EDITIONS = { arabic: "quran-uthmani", english: "en.sahih", tafsirEn: "en.ibn-kathir", tafsirAr: "ar.muyassar" };
 const APP_DEFAULT_RECITER_ID = "maher_al_mueaqly";
 const RECITER_STORAGE_KEY = "deen_selected_reciter_mp3q";
+const READER_RECITER_STORAGE_KEY = "deen_selected_reader_reciter";
+const READER_AUDIO_RECITERS = [
+  { id: "ar.abdurrahmaansudais", label: "Sudais", labelAr: "السديس" },
+  { id: "ar.ahmedajamy", label: "Ahmed Ajamy", labelAr: "أحمد العجمي" },
+  { id: "ar.alafasy", label: "Alafasy", labelAr: "العفاسي" },
+  { id: "ar.mahermuaiqly", label: "Maher Muaiqly", labelAr: "ماهر المعيقلي" },
+  { id: "ar.saoodshuraym", label: "Saood Shuraym", labelAr: "سعود الشريم" },
+];
+const DEFAULT_READER_AUDIO_RECITER = "ar.mahermuaiqly";
 const QURAN_PROGRESS_STORAGE_KEY = "deen_quran_last_progress";
 const QURAN_BOOKMARKS_STORAGE_KEY = "deen_quran_bookmarks";
 const MP3QURAN_API_EN = "https://www.mp3quran.net/api/v3/reciters?language=eng";
@@ -226,6 +235,15 @@ export default function DeenQuran() {
   const [isSurahPlaying, setIsSurahPlaying] = useState(false);
   const [currentPlaybackAyahIndex, setCurrentPlaybackAyahIndex] = useState(-1);
   const [readerPlayAllEnabled, setReaderPlayAllEnabled] = useState(false);
+  const [readerReciterOpen, setReaderReciterOpen] = useState(false);
+  const [pagePickerOpen, setPagePickerOpen] = useState(false);
+  const [readerAudioReciter, setReaderAudioReciter] = useState<string>(() => {
+    try {
+      return localStorage.getItem(READER_RECITER_STORAGE_KEY) || DEFAULT_READER_AUDIO_RECITER;
+    } catch {
+      return DEFAULT_READER_AUDIO_RECITER;
+    }
+  });
 
   const setIsSurahPlayingSync = (v: boolean) => { isSurahPlayingRef.current = v; setIsSurahPlaying(v); };
   const setCurrentPlaybackAyahIndexSync = (v: number) => { currentPlaybackAyahIndexRef.current = v; setCurrentPlaybackAyahIndex(v); };
@@ -262,6 +280,12 @@ export default function DeenQuran() {
       localStorage.setItem(RECITER_STORAGE_KEY, selectedReciter);
     } catch {}
   }, [selectedReciter]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(READER_RECITER_STORAGE_KEY, readerAudioReciter);
+    } catch {}
+  }, [readerAudioReciter]);
 
   useEffect(() => {
     if (screen !== "reader" || currentPlaybackAyahIndex < 0) return;
@@ -468,6 +492,7 @@ export default function DeenQuran() {
     setScreen("reader");
     setBookmarkedAyahs(new Set());
     setReaderPage(0);
+    setPagePickerOpen(false);
     try {
       const [arabicRes, transRes] = await Promise.all([
         fetchFromProxy(`surah/${surah.number}`, EDITIONS.arabic),
@@ -594,8 +619,8 @@ export default function DeenQuran() {
       const ayahIndex = activeSurah?.ayahs.findIndex((item) => item.numberInSurah === ayah.numberInSurah) ?? -1;
 
       // Fetch per-ayah audio URL from alquran.cloud via proxy
-      // English mode → en.walk (Ibrahim Walk English recitation), Arabic → ar.alafasy
-      const audioEdition = isAr ? "ar.alafasy" : "en.walk";
+      // English mode → en.walk (Ibrahim Walk English recitation), Arabic → selected reader reciter
+      const audioEdition = isAr ? readerAudioReciter : "en.walk";
       const audioData = await fetchFromProxy(`ayah/${ayah.number}`, audioEdition);
       const audioUrl: string = audioData?.data?.audio ?? "";
       if (!audioUrl) {
@@ -817,15 +842,15 @@ export default function DeenQuran() {
     setPlaying(true);
     setCurrentPlaybackAyahIndexSync(startIndex);
 
-    // If called from listen-player fallback, pre-fetch all ayah URLs for the selected reciter
-    // so we don't fall back to the hardcoded ar.alafasy edition
-    let listenAudioQueue: string[] | null = null;
-    if (listenReciterId) {
-      try {
-        listenAudioQueue = await getSurahAudioQueue(targetSurah, listenReciterId);
-      } catch {
-        listenAudioQueue = null;
-      }
+    // Pre-fetch ALL ayah audio URLs in a single API call before the loop.
+    // This eliminates N sequential proxy round-trips (one per ayah) and replaces
+    // them with 1 upfront call — same pattern used by the listen-player path.
+    let audioQueue: string[] | null = null;
+    try {
+      const edition = listenReciterId ?? (isAr ? readerAudioReciter : "en.walk");
+      audioQueue = await getSurahAudioQueue(targetSurah, edition);
+    } catch {
+      audioQueue = null;
     }
 
     try {
@@ -849,12 +874,12 @@ export default function DeenQuran() {
         saveProgress(targetSurah.number, ayah.numberInSurah);
 
         let audioUrl: string;
-        if (listenAudioQueue) {
-          // Listen-player path: use selected reciter's audio URLs
-          audioUrl = listenAudioQueue[index] ?? "";
+        if (audioQueue) {
+          // Use pre-fetched queue (1 API call for the whole surah)
+          audioUrl = audioQueue[index] ?? "";
         } else {
-          // Reader Play-All path: keep original per-ayah alquran.cloud endpoint
-          const audioEdition = isAr ? "ar.alafasy" : "en.walk";
+          // Fallback: per-ayah fetch if pre-fetch failed
+          const audioEdition = isAr ? readerAudioReciter : "en.walk";
           const audioData = await fetchFromProxy(`ayah/${ayah.number}`, audioEdition);
           if (surahPlaybackCancelledRef.current || playbackSessionRef.current !== sessionId) break;
           audioUrl = audioData?.data?.audio ?? "";
@@ -1900,6 +1925,23 @@ export default function DeenQuran() {
                       {isAr ? (readerPlayAllEnabled ? "تشغيل الكل مفعل" : "تشغيل الكل") : (readerPlayAllEnabled ? "Play all on" : "Play all")}
                     </span>
                   </button>
+                  {isAr && (
+                    <button
+                      onClick={() => setReaderReciterOpen((v) => !v)}
+                      className="rounded-xl flex items-center gap-1.5 px-3 py-2 active:scale-95 transition-all flex-shrink-0"
+                      style={{
+                        background: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.78)",
+                        border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(6,5,65,0.10)",
+                        boxShadow: isDark ? "0 8px 24px rgba(0,0,0,0.22)" : "0 8px 20px rgba(6,5,65,0.06)",
+                        backdropFilter: "blur(10px)",
+                      }}
+                    >
+                      <ChevronDown className="w-3 h-3 flex-shrink-0" style={{ color: isDark ? "#858384" : "#606062", transform: readerReciterOpen ? "rotate(180deg)" : undefined, transition: "transform 0.2s" }} />
+                      <span className="text-[11px] font-medium" style={{ color: isDark ? "#f2f2f2" : "#060541", fontFamily: "'Noto Sans Arabic', sans-serif" }}>
+                        {(READER_AUDIO_RECITERS.find((r) => r.id === readerAudioReciter) ?? READER_AUDIO_RECITERS[3]).labelAr}
+                      </span>
+                    </button>
+                  )}
                   <button
                     onClick={jumpToSavedAyah}
                     disabled={!currentSurahJumpTargetAyah}
@@ -1918,6 +1960,48 @@ export default function DeenQuran() {
                     </span>
                   </button>
                 </div>
+
+                {/* ── Arabic reader reciter dropdown list ── */}
+                {isAr && readerReciterOpen && (
+                  <div
+                    className="mb-3 rounded-2xl overflow-hidden"
+                    dir="rtl"
+                    style={{
+                      background: isDark ? "#1a1d24" : "#ffffff",
+                      border: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(6,5,65,0.12)",
+                      boxShadow: isDark ? "0 16px 40px rgba(0,0,0,0.6)" : "0 8px 32px rgba(6,5,65,0.14)",
+                    }}
+                  >
+                    {READER_AUDIO_RECITERS.map((r) => (
+                      <button
+                        key={r.id}
+                        onClick={() => { setReaderAudioReciter(r.id); setReaderReciterOpen(false); }}
+                        className="w-full flex items-center justify-between px-4 py-3 text-right transition-all active:scale-[0.98]"
+                        style={{
+                          background: r.id === readerAudioReciter
+                            ? (isDark ? "hsla(45,65%,50%,0.15)" : "hsla(35,55%,42%,0.10)")
+                            : "transparent",
+                          borderBottom: isDark ? "1px solid rgba(255,255,255,0.05)" : "1px solid rgba(6,5,65,0.06)",
+                        }}
+                      >
+                        <span
+                          className="text-[13px] font-medium"
+                          style={{
+                            fontFamily: "'Noto Sans Arabic', sans-serif",
+                            color: r.id === readerAudioReciter
+                              ? (isDark ? "#c9a84c" : "#8a6a1a")
+                              : (isDark ? "#e8dfc8" : "#1a120a"),
+                          }}
+                        >
+                          {r.labelAr}
+                        </span>
+                        {r.id === readerAudioReciter && (
+                          <Check className="w-4 h-4 flex-shrink-0" style={{ color: isDark ? "#c9a84c" : "#8a6a1a" }} />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 <div
                   className="relative"
@@ -2165,30 +2249,77 @@ export default function DeenQuran() {
                     const totalPages = pageBreaks.length;
                     const from = pageBreaks[readerPage] + 1;
                     const to = pageBreaks[readerPage + 1] ?? activeSurah.ayahs.length;
+                    const isLastPage = readerPage >= totalPages - 1;
+                    const nextSurahMeta = activeSurah && surahs.find((s) => s.number === activeSurah.number + 1);
+                    const goToPage = (p: number) => { setReaderPage(p); setPagePickerOpen(false); setTimeout(() => readerTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); };
                     return (
-                      <div className="flex items-center justify-between mt-6 mb-2 gap-3">
-                        <button
-                          onClick={() => { setReaderPage(p => p - 1); setTimeout(() => readerTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}
-                          disabled={readerPage === 0}
-                          className="flex-1 py-3 rounded-2xl text-sm font-semibold active:scale-95 transition-all disabled:opacity-30"
-                          style={{ background: goldFaint, border: `1px solid ${goldGlow}`, color: gold }}
-                        >
-                          {isAr ? "→ السابق" : "← Prev"}
-                        </button>
-                        <div className="text-center">
-                          <p className="text-xs font-semibold" style={{ color: gold }}>{from}–{to}</p>
-                          <p className="text-[10px]" style={{ color: isDark ? "hsla(45,35%,50%,0.5)" : "hsla(35,30%,35%,0.45)" }}>
-                            {isAr ? `صفحة ${readerPage + 1} من ${totalPages}` : `Page ${readerPage + 1} of ${totalPages}`}
-                          </p>
+                      <div className="mt-6 mb-2 space-y-2">
+                        {/* Page picker row — shown when counter is tapped */}
+                        {pagePickerOpen && (
+                          <div className="flex flex-wrap gap-1.5 justify-center py-2 px-1 rounded-2xl" style={{ background: goldFaint, border: `1px solid ${goldGlow}` }}>
+                            {Array.from({ length: totalPages }, (_, i) => (
+                              <button
+                                key={i}
+                                onClick={() => goToPage(i)}
+                                className="w-8 h-8 rounded-xl text-[11px] font-bold active:scale-95 transition-all"
+                                style={{
+                                  background: i === readerPage ? gold : "transparent",
+                                  color: i === readerPage ? (isDark ? "#0c0f14" : "#fff") : gold,
+                                  border: `1px solid ${i === readerPage ? gold : goldGlow}`,
+                                }}
+                              >
+                                {i + 1}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {/* Prev / counter / Next row */}
+                        <div className="flex items-center justify-between gap-3">
+                          <button
+                            onClick={() => { setReaderPage(p => p - 1); setTimeout(() => readerTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}
+                            disabled={readerPage === 0}
+                            className="flex-1 py-3 rounded-2xl text-sm font-semibold active:scale-95 transition-all disabled:opacity-30"
+                            style={{ background: goldFaint, border: `1px solid ${goldGlow}`, color: gold }}
+                          >
+                            {isAr ? "→ السابق" : "← Prev"}
+                          </button>
+                          {/* Tappable page counter → opens page picker */}
+                          <button
+                            onClick={() => setPagePickerOpen(v => !v)}
+                            className="text-center px-3 active:scale-95 transition-all rounded-xl py-1"
+                            style={{ background: pagePickerOpen ? goldFaint : "transparent", border: `1px solid ${pagePickerOpen ? gold : "transparent"}` }}
+                          >
+                            <p className="text-xs font-semibold" style={{ color: gold }}>{from}–{to}</p>
+                            <p className="text-[10px]" style={{ color: isDark ? "hsla(45,35%,50%,0.5)" : "hsla(35,30%,35%,0.45)" }}>
+                              {isAr ? `صفحة ${readerPage + 1} من ${totalPages}` : `Page ${readerPage + 1} of ${totalPages}`}
+                            </p>
+                          </button>
+                          <button
+                            onClick={() => { setReaderPage(p => p + 1); setTimeout(() => readerTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}
+                            disabled={isLastPage}
+                            className="flex-1 py-3 rounded-2xl text-sm font-semibold active:scale-95 transition-all disabled:opacity-30"
+                            style={{ background: goldFaint, border: `1px solid ${goldGlow}`, color: gold }}
+                          >
+                            {isAr ? "التالي ←" : "Next →"}
+                          </button>
                         </div>
-                        <button
-                          onClick={() => { setReaderPage(p => p + 1); setTimeout(() => readerTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}
-                          disabled={readerPage >= totalPages - 1}
-                          className="flex-1 py-3 rounded-2xl text-sm font-semibold active:scale-95 transition-all disabled:opacity-30"
-                          style={{ background: goldFaint, border: `1px solid ${goldGlow}`, color: gold }}
-                        >
-                          {isAr ? "التالي ←" : "Next →"}
-                        </button>
+                        {/* Next Surah button — only on last page */}
+                        {isLastPage && nextSurahMeta && (
+                          <button
+                            onClick={() => { setPagePickerOpen(false); void openSurah(nextSurahMeta); }}
+                            className="w-full py-3 rounded-2xl text-sm font-semibold active:scale-95 transition-all flex items-center justify-center gap-2"
+                            style={{
+                              background: isDark ? "hsla(45,65%,50%,0.12)" : "hsla(35,55%,42%,0.10)",
+                              border: `1px solid ${gold}`,
+                              color: gold,
+                              boxShadow: isDark ? `0 0 20px hsla(45,65%,50%,0.15)` : "none",
+                            }}
+                          >
+                            <BookOpen className="w-4 h-4" />
+                            <span>{isAr ? `التالي: ${nextSurahMeta.name}` : `Next: ${nextSurahMeta.englishName}`}</span>
+                            <ChevronDown className="w-4 h-4" style={{ transform: isAr ? "rotate(90deg)" : "rotate(-90deg)" }} />
+                          </button>
+                        )}
                       </div>
                     );
                   })()}

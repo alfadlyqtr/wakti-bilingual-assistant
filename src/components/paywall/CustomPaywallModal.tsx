@@ -180,8 +180,11 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     };
 
     try {
-      if (isQUUser) {
-        addDebug('QU → purchasePackage(qu_discount)');
+      if (isQUUser && isIOS) {
+        addDebug('QU iOS → showPaywall(qu_discount)');
+        showPaywall(true, 'qu_discount', purchaseCallback);
+      } else if (isQUUser) {
+        addDebug('QU Android → purchasePackage(qu_discount)');
         purchasePackage('qu_discount', purchaseCallback);
       } else {
         addDebug('Standard → purchasePackage($rc_monthly)');

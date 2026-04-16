@@ -331,8 +331,11 @@ export default function Account() {
     };
 
     try {
-      if (isQUUser) {
-        addBillingDebug('QU → purchasePackage(qu_discount)');
+      if (isQUUser && isIOS) {
+        addBillingDebug('QU iOS → showPaywall(qu_discount)');
+        showPaywall(true, 'qu_discount', billingCallback);
+      } else if (isQUUser) {
+        addBillingDebug('QU Android → purchasePackage(qu_discount)');
         purchasePackage('qu_discount', billingCallback);
       } else {
         addBillingDebug('Standard → purchasePackage($rc_monthly)');
