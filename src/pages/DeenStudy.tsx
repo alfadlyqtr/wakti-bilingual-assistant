@@ -88,8 +88,10 @@ const SURAH_LIST: { n: number; en: string; ar: string; ayahs: number }[] = [
 ];
 
 function stripBasmala(text: string): string {
-  // Match بسم الله الرحمن الرحيم with any diacritics/Unicode variants at the start
-  return text.replace(/^[\u0628][\u064e\u0650\u064f\u0652]?[\u0633][\u064e\u0650\u064f\u0652]?[\u0645][\u064e\u0650\u064f\u0652]?\s+[\u0671\u0627][\u0644][\u0644][\u064e\u0651]?[\u0647][\u064e\u0650\u064f\u0652]?\s+[\u0671\u0627][\u0644][\u0631][\u064e\u0651]?[\u062d][\u064e\u0650\u064f\u0652\u0670]?[\u0646][\u064e\u0650\u064f\u0652]?\s+[\u0671\u0627][\u0644][\u0631][\u064e\u0651]?[\u062d][\u064e\u0650\u064f\u0652]?[\u064a][\u064e\u0650\u064f\u0652]?[\u0645][\u064e\u0650\u064f\u0652]?\s*/u, "").trim();
+  // quran-uthmani always prepends Basmala (4 words) to ayah 1 of every surah.
+  // Drop the first 4 whitespace-separated tokens unconditionally.
+  const words = text.trim().split(/\s+/);
+  return words.slice(4).join(" ");
 }
 
 function readPlan(): StudyPlan | null {
@@ -830,38 +832,10 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
           </p>
         </div>
 
-        {/* Repeat counter: −  2/3×  + */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <button
-            onClick={() => { const v = Math.max(1, targetLoops - 1); setTargetLoops(v); targetLoopsRef.current = v; }}
-            aria-label="Fewer repeats"
-            className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center active:scale-95 transition-all"
-            style={{ background: "rgba(255,255,255,0.07)", color: "#858384", border: "1px solid rgba(255,255,255,0.10)" }}
-          >−</button>
-          <span className="text-[11px] font-bold w-10 text-center" style={{ color: "#fbbf24" }}>
-            {loopCount}/{targetLoops}×
-          </span>
-          <button
-            onClick={() => { const v = Math.min(10, targetLoops + 1); setTargetLoops(v); targetLoopsRef.current = v; }}
-            aria-label="More repeats"
-            className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center active:scale-95 transition-all"
-            style={{ background: "rgba(255,255,255,0.07)", color: "#858384", border: "1px solid rgba(255,255,255,0.10)" }}
-          >+</button>
-        </div>
-
-        {/* Replay */}
-        <button
-          onClick={replay}
-          className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 transition-all flex-shrink-0"
-          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }}
-          aria-label={isAr ? "إعادة" : "Replay"}
-        >
-          <RotateCcw className="w-4 h-4 text-[#858384]" />
-        </button>
       </div>
 
-      {/* ── MAIN CONTENT: ayah card fills the upper space ── */}
-      <div className="flex-1 flex flex-col px-5 pt-6 pb-2 overflow-y-auto">
+      {/* ── MAIN CONTENT: vertically centered ayah ── */}
+      <div className="flex-1 flex flex-col justify-center px-5 py-4 overflow-y-auto">
 
         {/* Basmala header — always shown for ayah 1 of any surah (except surah 9) */}
         {ayah.ayah_number === 1 && ayah.surah_number !== 9 && (
@@ -882,7 +856,9 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
             </p>
           ) : (
             <p className="text-[1.55rem] text-[#f2f2f2] leading-[2.2] font-serif" dir="rtl">
-              {stripBasmala(ayah.arabic)}
+              {ayah.ayah_number === 1 && ayah.surah_number !== 9
+                ? stripBasmala(ayah.arabic)
+                : ayah.arabic}
             </p>
           )}
         </div>
@@ -916,6 +892,34 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
         {/* ── LISTEN controls ── */}
         {phase === "listen" && (
           <div className="w-full flex flex-col items-center gap-3">
+            {/* Repeat + Replay row */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => { const v = Math.max(1, targetLoops - 1); setTargetLoops(v); targetLoopsRef.current = v; }}
+                aria-label="Fewer repeats"
+                className="w-8 h-8 rounded-xl text-base font-bold flex items-center justify-center active:scale-95 transition-all"
+                style={{ background: "rgba(255,255,255,0.07)", color: "#858384", border: "1px solid rgba(255,255,255,0.10)" }}
+              >−</button>
+              <span className="text-xs font-bold px-2" style={{ color: "#fbbf24" }}>
+                {loopCount}/{targetLoops}× {isAr ? "تكرار" : "repeats"}
+              </span>
+              <button
+                onClick={() => { const v = Math.min(10, targetLoops + 1); setTargetLoops(v); targetLoopsRef.current = v; }}
+                aria-label="More repeats"
+                className="w-8 h-8 rounded-xl text-base font-bold flex items-center justify-center active:scale-95 transition-all"
+                style={{ background: "rgba(255,255,255,0.07)", color: "#858384", border: "1px solid rgba(255,255,255,0.10)" }}
+              >+</button>
+              <button
+                onClick={replay}
+                className="w-8 h-8 rounded-xl flex items-center justify-center active:scale-95 transition-all"
+                style={{ background: "rgba(255,255,255,0.07)", color: "#858384", border: "1px solid rgba(255,255,255,0.10)" }}
+                aria-label={isAr ? "إعادة" : "Replay"}
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Play/Pause */}
             <button
               onClick={togglePlay}
               className="rounded-full flex items-center justify-center active:scale-95 transition-all"
