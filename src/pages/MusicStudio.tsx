@@ -3346,12 +3346,30 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'بوب عربي':              'بوب عربي حديث، صوت عربي سائد، دمج عربي معاصر، إنتاج راقٍ',
       'شامي':                  'بوب شامي، فيوجن شعبي شامي، نطق لهجة شامية، هوية صوتية سورية لبنانية أردنية، دبكة حديثة',
       'أناشيد':                'pure a cappella human vocals, multi-layered vocal harmony, islamic nasheed, spiritual reverberant atmosphere, zero instruments, vocal-only production, [Audio Engine: Ultra-HD 96kHz], [Frequency Response: 20Hz-22kHz]',
+      // ── Global Pop — Ferrari Billboard anchors ──
+      'pop':         'modern commercial pop, chart-topping production, high-fidelity studio master, vocal-forward, radio-ready, wide stereo image, [Audio Engine: Ultra-HD 96kHz]',
+      'Dance Pop':   'high-energy dance pop, club-ready production, heavy sidechain compression, driving rhythmic pulse, vocal-forward, [Audio Engine: Ultra-HD 96kHz]',
+      'Teen Pop':    'youthful teen pop, catchy infectious hooks, bright glossy production, polished commercial vocal, high-energy arrangement',
+      'Power Pop':   'driving power pop, melodic hooks, crunchy rhythmic guitars, high-energy drums, soaring vocal production, stadium sound',
+      'Pop Rock':    'modern pop-rock fusion, stadium energy, electric guitars and acoustic textures, radio-ready vocal, polished studio master',
+      'Indie Pop':   'shimmering indie pop, clean aesthetic, boutique production, soulful expressive vocal, layered guitars, wide soundstage',
+      'Bubblegum Pop': 'ultra-bright bubblegum pop, sugary hooks, high-pitched energy, glossy digital production, infectious commercial vibe',
+      'K-Pop':       'high-octane k-pop, intricate multi-layered vocals, experimental glossy production, futuristic sound, high-fidelity master',
+      'J-Pop':       'vibrant j-pop, anime-inspired energy, complex melodic chord progressions, high-speed rhythmic drive, bright vocal mix',
+      'Latin Pop':   'vibrant latin pop, rhythmic infectious energy, modern production, soulful crossover vocal, polished percussive layers',
+      '80s pop':     'retro 80s pop, analog synthesizers, gated reverb drums, neon atmosphere, period-authentic commercial production',
+      '90s pop':     'classic 90s pop, retro drum machines, smooth soulful textures, nostalgic commercial vocal, polished 90s studio master',
+      'Synthpop':    'neon synthpop, lush analog pads, cinematic electronic production, retro-future vocal textures, atmospheric depth',
+      'Electropop':  'glossy electropop, digital precision, pulsing synths, modern vocal processing, high energy, crisp electronic production',
     };
     const GCC_KEYS = new Set(Object.keys(STYLE_ANCHORS).filter(
       (k) => ![
         'Egyptian','Egyptian Shaabi','Arabic Pop','Levant Pop','Anasheed',
         'Iraqi Style','Lebanese Style','Moroccan Style',
         'مصري','شعبي مصري','عراقي','لبناني','مغربي','بوب عربي','شامي','أناشيد',
+        // ── Global Pop (excluded from GCC pipeline) ──
+        'pop','Dance Pop','Teen Pop','Power Pop','Pop Rock','Indie Pop',
+        'Bubblegum Pop','K-Pop','J-Pop','Latin Pop','80s pop','90s pop','Synthpop','Electropop',
       ].includes(k)
     ));
     // ── Rhythm chip → compact label ──
@@ -3541,9 +3559,26 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         // ── Moroccan ──
         'Moroccan Style':  'khaleeji, gulf, egyptian, levantine, shami, iraqi, fusha, msa, noise, hiss, low quality, distorted',
         'مغربي':           'خليجي, خليج, مصري, شامي, عراقي, فصحى, noise, hiss, low quality, distorted',
+        // ── Global Pop shield ──
+        'pop':           'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
+        'Dance Pop':     'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
+        'Teen Pop':      'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
+        'Power Pop':     'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
+        'Pop Rock':      'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
+        'Indie Pop':     'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
+        'Bubblegum Pop': 'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
+        'K-Pop':         'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
+        'J-Pop':         'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
+        'Latin Pop':     'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
+        '80s pop':       'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
+        '90s pop':       'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
+        'Synthpop':      'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
+        'Electropop':    'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
       };
       const regionalShield = includeTags.length > 0 ? REGIONAL_NEGATIVE[includeTags[0]] : undefined;
       const isAnasheedStyle = includeTags.some((tag) => tag === 'Anasheed' || tag === 'أناشيد');
+      const POP_KEYS = new Set(['pop','Dance Pop','Teen Pop','Power Pop','Pop Rock','Indie Pop','Bubblegum Pop','K-Pop','J-Pop','Latin Pop','80s pop','90s pop','Synthpop','Electropop']);
+      const isPopStyle = includeTags.some((tag) => POP_KEYS.has(tag));
       // ── GCC Morocco-Killer default (sacred — untouched) ──
       const finalNegativeTags = regionalShield
         ?? 'moroccan, darija, gnawa, chaabi, maghrebi rhythm, egyptian, levantine, fusha, msa, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, noise, hiss, distorted, low quality';
@@ -3555,8 +3590,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         instrumental,
         model: 'V5_5',
         duration_seconds: durationTarget,
-        styleWeight: isAnasheedStyle ? 0.95 : 0.85,
-        weirdnessConstraint: isAnasheedStyle ? 0.15 : 0.30,
+        styleWeight: isAnasheedStyle ? 0.95 : isPopStyle ? 0.75 : 0.85,
+        weirdnessConstraint: isAnasheedStyle ? 0.15 : isPopStyle ? 0.45 : 0.30,
         audioWeight: 0.8,
         negativeTags: finalNegativeTags.slice(0, 200),
       };
@@ -6458,7 +6493,7 @@ function EditorTab() {
                               </button>
                             </div>
                             <p className="mt-1 text-[11px] text-muted-foreground truncate">
-                              {new Date(t.created_at).toLocaleDateString(isAr ? 'ar-SA' : 'en-US', {
+                              {new Date(t.created_at).toLocaleDateString('en-US', {
                                 month: 'short',
                                 day: 'numeric',
                                 year: 'numeric',

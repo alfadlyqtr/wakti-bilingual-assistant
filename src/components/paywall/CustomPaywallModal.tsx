@@ -181,8 +181,8 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
 
     try {
       if (isQUUser) {
-        addDebug('QU → purchasePackage(qatar_university)');
-        purchasePackage('qatar_university', purchaseCallback);
+        addDebug('QU → purchasePackage(qu_discount)');
+        purchasePackage('qu_discount', purchaseCallback);
       } else {
         addDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', purchaseCallback);

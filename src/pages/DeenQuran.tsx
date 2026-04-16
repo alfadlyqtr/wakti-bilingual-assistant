@@ -1039,7 +1039,19 @@ export default function DeenQuran() {
   };
 
   const isBismillahAyah = (ayah: Ayah) =>
-    ayah.numberInSurah === 1 && ayah.text.includes("بِسْم") && ayah.text.includes("رَّحْمَٰن");
+    ayah.numberInSurah === 1 && ayah.text.includes("بِسْم") && ayah.text.includes("رَّح");
+
+  const stripBismillahPrefix = (ayah: Ayah, surahNum?: number): string => {
+    // For surahs other than Al-Fatiha (1) and At-Tawbah (9), the quran-uthmani API
+    // always prepends the Bismillah (4 words) to the text of ayah 1.
+    // Strip unconditionally based on surah number and ayah position.
+    const num = surahNum ?? activeSurah?.number;
+    if (num && num !== 1 && num !== 9 && ayah.numberInSurah === 1) {
+      const words = ayah.text.split(/\s+/);
+      if (words.length > 4) return words.slice(4).join(" ");
+    }
+    return ayah.text;
+  };
 
   const cleanExplanation = (value: string) => {
     const cleaned = value.replace(/\*\*/g, "").trim();
@@ -1843,9 +1855,7 @@ export default function DeenQuran() {
                 </span>
               </span>
             );
-            const shouldShiftDisplayedAyahNumbers = activeSurah.number !== 1 && activeSurah.number !== 9;
-            const displayAyahNumber = (ayah: Ayah) =>
-              shouldShiftDisplayedAyahNumbers ? ayah.numberInSurah - 1 : ayah.numberInSurah;
+            const displayAyahNumber = (ayah: Ayah) => ayah.numberInSurah;
 
             return (
               <>
@@ -1987,7 +1997,6 @@ export default function DeenQuran() {
                     <div className="flex flex-col" dir="rtl">
                       {activeSurah.ayahs.slice(pageBreaks[readerPage], pageBreaks[readerPage + 1]).map((ayah, idx) => {
                         const globalIdx = pageBreaks[readerPage] + idx;
-                        if (isBismillahAyah(ayah)) return null;
                         const isPlaying = playing && currentPlaybackAyahIndex === globalIdx;
                         const isBookmarked = bookmarkedAyahs.has(ayah.numberInSurah);
                         const trans = activeTrans[globalIdx] ?? null;
@@ -2059,7 +2068,7 @@ export default function DeenQuran() {
                                 textShadow: isPlaying && isDark ? `0 0 12px ${goldGlow}` : "none",
                                 textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
                               }}>
-                                {ayah.text}
+                                {stripBismillahPrefix(ayah)}
                               </p>
                             </button>
                           </div>
@@ -2071,7 +2080,6 @@ export default function DeenQuran() {
                     <div className="flex flex-col" dir="ltr">
                       {activeSurah.ayahs.slice(pageBreaks[readerPage], pageBreaks[readerPage + 1]).map((ayah, idx) => {
                         const globalIdx = pageBreaks[readerPage] + idx;
-                        if (isBismillahAyah(ayah)) return null;
                         const trans = activeTrans[globalIdx];
                         if (!trans) return null;
                         const isPlaying = playing && currentPlaybackAyahIndex === globalIdx;
@@ -2233,7 +2241,7 @@ export default function DeenQuran() {
                 <div className="mb-4">
                   {isAr ? (
                     <p className="text-[18px] leading-[1.95] text-right" dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', 'Amiri', serif", color: popupText }}>
-                      {selectedAyah.text}
+                      {stripBismillahPrefix(selectedAyah, activeSurah?.number)}
                     </p>
                   ) : popupTrans ? (
                     <p className="text-[16px] leading-[1.75]" style={{ color: popupText }}>
@@ -2326,7 +2334,7 @@ export default function DeenQuran() {
                       dir="rtl"
                       style={{ fontFamily: "'Noto Sans Arabic', 'Amiri', serif", color: sheetTxt }}
                     >
-                      {selectedAyah.text}
+                      {stripBismillahPrefix(selectedAyah, activeSurah?.number)}
                     </p>
                   ) : selectedTrans ? (
                     <p
