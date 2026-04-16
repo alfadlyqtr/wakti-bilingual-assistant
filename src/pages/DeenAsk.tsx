@@ -1,6 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, Copy, Check, ScrollText, Send, Sparkles, BookText } from "lucide-react";
+import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, Copy, Check, ScrollText, Send, Sparkles, BookText, X, Heart, SparklesIcon, Info } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/integrations/supabase/client";
 
@@ -137,10 +144,11 @@ function SourceCard({
     ? (item.arabic_text || item.text || "")
     : (item.english_text || item.text || "");
 
-  const needsTruncation = mainText.length > TRUNCATE_CHARS;
-  const displayText = needsTruncation && !expanded
-    ? mainText.slice(0, TRUNCATE_CHARS).trimEnd() + "…"
+  const previewText = mainText.length > 90
+    ? mainText.slice(0, 90).trimEnd() + "…"
     : mainText;
+  const needsTruncation = mainText.length > 90;
+  const displayText = expanded ? mainText : previewText;
 
   const isBlue = accent === "blue";
   const isQuran = item.source_type === "quran";
@@ -189,11 +197,23 @@ function SourceCard({
 
   return (
     <div className="rounded-2xl p-4" style={{ background: bg, border }}>
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <p className={`text-[11px] font-bold uppercase tracking-wider leading-tight ${refColor}`}>{item.reference}</p>
-        {item.grade && <span className={`text-[10px] font-medium shrink-0 ${gradeColor}`}>{item.grade}</span>}
-      </div>
-      <p className={`text-sm leading-relaxed ${textColor}`}>{displayText}</p>
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full text-left"
+      >
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <p className={`text-[11px] font-bold uppercase tracking-wider leading-tight ${refColor}`}>{item.reference}</p>
+          <div className="flex items-center gap-2 shrink-0">
+            {item.grade && <span className={`text-[10px] font-medium ${gradeColor}`}>{item.grade}</span>}
+            {expanded
+              ? <ChevronUp className={`w-3.5 h-3.5 ${refColor}`} />
+              : <ChevronDown className={`w-3.5 h-3.5 ${refColor}`} />}
+          </div>
+        </div>
+        <p className={`${expanded ? "text-sm" : "text-[13px]"} leading-relaxed ${textColor}`}>
+          {displayText}
+        </p>
+      </button>
       <div className="flex items-center gap-3 mt-2 flex-wrap">
         {needsTruncation && (
           <button
@@ -201,8 +221,8 @@ function SourceCard({
             className={`flex items-center gap-1 text-[11px] font-semibold ${refColor} active:opacity-70 transition-opacity`}
           >
             {expanded
-              ? <><ChevronUp className="w-3 h-3" />{isAr ? "أقل" : "Show less"}</>
-              : <><ChevronDown className="w-3 h-3" />{isAr ? "اقرأ المزيد" : "Read more"}</>}
+              ? <><ChevronUp className="w-3 h-3" />{isAr ? "إخفاء" : "Collapse"}</>
+              : <><ChevronDown className="w-3 h-3" />{isAr ? "فتح" : "Expand"}</>}
           </button>
         )}
         <CopyButton text={`${item.reference}\n${mainText}`} isDark={isDark} isAr={isAr} />
@@ -236,6 +256,54 @@ function SourceCard({
   );
 }
 
+function SourceGroup({
+  title,
+  icon,
+  colorClass,
+  isDark,
+  children,
+}: {
+  title: string;
+  icon: ReactNode;
+  colorClass: string;
+  isDark: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full rounded-2xl px-3 py-3 text-left"
+        style={{
+          background: isDark ? "rgba(255,255,255,0.035)" : "rgba(0,0,0,0.03)",
+          border: isDark ? "1px solid rgba(255,255,255,0.07)" : "1px solid rgba(0,0,0,0.08)",
+        }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            {icon}
+            <p className={`text-[11px] font-semibold uppercase tracking-wider ${colorClass}`}>
+              {title}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`text-[11px] ${isDark ? "text-[#858384]" : "text-[#606062]"}`}>
+              {open ? "Hide" : "Show"}
+            </span>
+            {open
+              ? <ChevronUp className={`w-4 h-4 ${colorClass}`} />
+              : <ChevronDown className={`w-4 h-4 ${colorClass}`} />}
+          </div>
+        </div>
+      </button>
+
+      {open && children}
+    </div>
+  );
+}
+
 export default function DeenAsk() {
   const navigate = useNavigate();
   const { language, theme } = useTheme();
@@ -249,6 +317,7 @@ export default function DeenAsk() {
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const turnCounter = useRef(0);
   const [userName, setUserName] = useState("");
+  const [showPopup, setShowPopup] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -259,6 +328,8 @@ export default function DeenAsk() {
           setUserName(profile?.display_name || profile?.username || "");
         });
     });
+    // Always show friendly popup on entry
+    setShowPopup(true);
   }, []);
 
   useEffect(() => {
@@ -420,6 +491,11 @@ export default function DeenAsk() {
   const composerBg = isDark ? "rgba(12,15,20,0.96)" : "rgba(244,246,249,0.96)";
   const composerInner = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)";
   const composerBorder = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)";
+  const composerShellBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.9)";
+  const composerShellBorder = isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(6,5,65,0.08)";
+  const composerShellShadow = isDark
+    ? "0 -8px 30px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.03)"
+    : "0 -8px 30px rgba(6,5,65,0.08), 0 0 0 1px rgba(6,5,65,0.03)";
   const titleColor = isDark ? "text-[#f2f2f2]" : "text-[#060541]";
   const subtitleColor = isDark ? "text-[#858384]" : "text-[#606062]";
   const textColor = isDark ? "text-[#e8eaf0]" : "text-[#1a1f2e]";
@@ -436,11 +512,13 @@ export default function DeenAsk() {
     ? { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }
     : { background: "rgba(0,0,0,0.03)", border: "1px solid rgba(0,0,0,0.08)" };
 
+  const shellMaxWidth = "1080px";
+
 
   return (
     <div
-      className="flex flex-col"
-      style={{ background: bg, height: "calc(100dvh - var(--app-header-h, 64px))", overflow: "hidden" }}
+      className="flex flex-col h-full min-h-0"
+      style={{ background: bg, height: "100%", minHeight: 0, overflow: "hidden" }}
       dir={isAr ? "rtl" : "ltr"}
     >
       {/* Header — sticks to top inside the flex column */}
@@ -453,19 +531,76 @@ export default function DeenAsk() {
           borderBottom: isDark ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(0,0,0,0.06)",
         }}
       >
-        <div className={isAr ? "text-right" : "text-left"}>
-          <h1 className={`text-base font-bold ${titleColor}`}>{isAr ? "اسأل" : "Ask"}</h1>
-          <p className={`text-[11px] ${subtitleColor}`}>{isAr ? "مصادر القرآن والحديث فقط" : "Quran & Hadith sources only"}</p>
+        <div className="w-full mx-auto flex items-center justify-between gap-3 md:px-2 lg:px-4" style={{ maxWidth: shellMaxWidth }}>
+          <div className={isAr ? "text-right" : "text-left"}>
+            <h1 className={`text-base md:text-lg font-bold ${titleColor}`}>{isAr ? "اسأل" : "Ask"}</h1>
+            <p className={`text-[11px] md:text-xs ${subtitleColor}`}>{isAr ? "مصادر القرآن والحديث فقط" : "Quran & Hadith sources only"}</p>
+          </div>
+          <button
+            onClick={() => navigate("/deen")}
+            className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 transition-all shrink-0"
+            style={{ background: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)", border: isDark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.1)" }}
+            title={isAr ? "رجوع" : "Back"}
+          >
+            <ArrowLeft className={`w-4 h-4 ${titleColor}`} />
+          </button>
         </div>
-        <button
-          onClick={() => navigate("/deen")}
-          className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 transition-all shrink-0"
-          style={{ background: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)", border: isDark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.1)" }}
-          title={isAr ? "رجوع" : "Back"}
-        >
-          <ArrowLeft className={`w-4 h-4 ${titleColor}`} />
-        </button>
       </div>
+
+      {/* Simple AI Disclaimer Popup */}
+      <Dialog open={showPopup} onOpenChange={setShowPopup}>
+        <DialogContent
+          className="p-0 border-0 overflow-hidden"
+          style={{
+            maxWidth: "300px",
+            borderRadius: "20px",
+            background: isDark ? "#16181d" : "#ffffff",
+            boxShadow: isDark
+              ? "0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.08)"
+              : "0 20px 60px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.06)",
+          }}
+        >
+          {/* Title */}
+          <div className="pt-5 pb-3 px-5 text-center">
+            <DialogTitle
+              className="font-bold"
+              style={{
+                fontSize: "17px",
+                color: isDark ? "#f2f2f2" : "#1a1a1a",
+              }}
+            >
+              {isAr ? "ملاحظة سريعة" : "A Quick Note"}
+            </DialogTitle>
+          </div>
+
+          {/* Message */}
+          <div className="px-5 pb-4" dir={isAr ? "rtl" : "ltr"}>
+            <p
+              className="text-[13px] leading-relaxed text-center"
+              style={{ color: isDark ? "rgba(242,242,242,0.65)" : "rgba(0,0,0,0.65)" }}
+            >
+              {isAr
+                ? "الذكاء الاصطناعي قد يخطئ. للفتاوى الشرعية، راجع الأوقاف المحلية."
+                : "AI can make mistakes. For religious rulings, consult your local Awqaf."}
+            </p>
+          </div>
+
+          {/* Button */}
+          <div className="px-5 pb-5">
+            <button
+              onClick={() => setShowPopup(false)}
+              className="w-full py-2.5 px-4 rounded-xl text-sm font-medium transition-all active:scale-[0.96]"
+              style={{
+                background: isDark ? "#2a2d35" : "#f3f4f6",
+                color: isDark ? "#ffffff" : "#1a1a1a",
+                border: isDark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.08)",
+              }}
+            >
+              {isAr ? "فهمت" : "Got it"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Chat area — fills all remaining space, scrolls */}
       <div
@@ -473,18 +608,19 @@ export default function DeenAsk() {
         className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4"
         style={{ minHeight: 0 }}
       >
+        <div className="w-full mx-auto flex flex-col gap-4 md:px-2 lg:px-4" style={{ maxWidth: shellMaxWidth }}>
 
         {/* Empty / intro */}
         {!searching && turns.length === 0 && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-3 py-12 text-center px-4">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-1" style={{ background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" }}>
-              <BookOpen className={`w-7 h-7 ${isDark ? "text-sky-300" : "text-sky-600"}`} />
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 md:gap-4 py-12 md:py-16 lg:py-20 text-center px-4 md:px-8">
+            <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center mb-1" style={{ background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" }}>
+              <BookOpen className={`w-7 h-7 md:w-8 md:h-8 ${isDark ? "text-sky-300" : "text-sky-600"}`} />
             </div>
-            <p className={`text-sm font-semibold ${titleColor}`}>{isAr ? "اسأل عن القرآن والحديث" : "Ask about Quran & Hadith"}</p>
-            <p className={`text-xs leading-relaxed ${subtitleColor}`}>
+            <p className={`text-sm md:text-base font-semibold ${titleColor}`}>{isAr ? "اسأل عن القرآن والحديث" : "Ask about Quran & Hadith"}</p>
+            <p className={`text-xs md:text-sm leading-relaxed max-w-2xl ${subtitleColor}`}>
               {isAr ? "اكتب سؤالك أو مرجعاً مباشراً في الأسفل. النتائج من المصادر الأصلية فقط." : "Type your question or a direct reference below. Results come only from authentic sources."}
             </p>
-            <div className="flex flex-wrap gap-2 justify-center mt-1">
+            <div className="flex flex-wrap gap-2 justify-center mt-2 max-w-4xl">
               {(isAr
                 ? ["آية الكرسي","صلاة السفر","بر الوالدين","الصبر","الصدقة","كيف أعامل والديّ؟","حقوق الزوجة","آداب الطعام","الدعاء عند الكرب","فضل قراءة القرآن","التوبة والاستغفار"]
                 : ["Ayatul Kursi","Travel prayer","Parents in Islam","Patience in Islam","Virtues of charity","How to treat parents","Rights of a wife","Etiquette of eating","Dua in times of distress","Virtues of reading Quran","Repentance and forgiveness"]
@@ -492,7 +628,7 @@ export default function DeenAsk() {
                 <button
                   key={ex}
                   onClick={() => { setQuestion(ex); setTimeout(() => textareaRef.current?.focus(), 50); }}
-                  className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all active:scale-95 ${isDark ? "bg-white/8 text-[#c4c8d4] border border-white/10" : "bg-black/5 text-[#3a3f5c] border border-black/10"}`}
+                  className={`text-xs md:text-[13px] px-3 py-1.5 md:px-3.5 md:py-2 rounded-full font-medium transition-all active:scale-95 ${isDark ? "bg-white/8 text-[#c4c8d4] border border-white/10" : "bg-black/5 text-[#3a3f5c] border border-black/10"}`}
                 >
                   {ex}
                 </button>
@@ -506,11 +642,11 @@ export default function DeenAsk() {
           const turnHasResults = !!turn.results && ((turn.results.quran_results?.length ?? 0) > 0 || (turn.results.hadith_results?.length ?? 0) > 0);
           const isLastTurn = turn.id === turns[turns.length - 1]?.id;
           return (
-            <div key={turn.id} className="flex flex-col gap-3">
+            <div key={turn.id} className="flex flex-col gap-3 md:gap-4 max-w-4xl w-full mx-auto">
               {/* User bubble */}
               <div className={`flex ${isAr ? "justify-start" : "justify-end"}`}>
-                <div className="max-w-[80%] rounded-2xl px-4 py-3" style={userBubbleBg}>
-                  <p className="text-sm font-medium text-white leading-relaxed">{turn.query}</p>
+                <div className="max-w-[88%] md:max-w-[75%] rounded-2xl px-4 py-3 md:px-5 md:py-3.5" style={userBubbleBg}>
+                  <p className="text-sm md:text-[15px] font-medium text-white leading-relaxed">{turn.query}</p>
                 </div>
               </div>
 
@@ -528,30 +664,32 @@ export default function DeenAsk() {
               {turnHasResults && (
                 <div className="flex flex-col gap-2">
                   {!!turn.results!.quran_results.length && (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center gap-1.5 px-1">
-                        <BookOpen className={`w-3.5 h-3.5 ${isDark ? "text-sky-300" : "text-sky-600"}`} />
-                        <p className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? "text-sky-300" : "text-sky-700"}`}>
-                          {isAr ? "من القرآن الكريم" : "From the Quran"}
-                        </p>
+                    <SourceGroup
+                      title={isAr ? "من القرآن الكريم" : "From the Quran"}
+                      icon={<BookOpen className={`w-3.5 h-3.5 ${isDark ? "text-sky-300" : "text-sky-600"}`} />}
+                      colorClass={isDark ? "text-sky-300" : "text-sky-700"}
+                      isDark={isDark}
+                    >
+                      <div className="flex flex-col gap-2">
+                        {turn.results!.quran_results.map((item, index) => (
+                          <SourceCard key={`q-${turn.id}-${item.reference}-${index}`} item={item} isAr={isAr} accent="blue" isDark={isDark} />
+                        ))}
                       </div>
-                      {turn.results!.quran_results.map((item, index) => (
-                        <SourceCard key={`q-${turn.id}-${item.reference}-${index}`} item={item} isAr={isAr} accent="blue" isDark={isDark} />
-                      ))}
-                    </div>
+                    </SourceGroup>
                   )}
                   {!!turn.results!.hadith_results.length && (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center gap-1.5 px-1">
-                        <ScrollText className={`w-3.5 h-3.5 ${isDark ? "text-emerald-400" : "text-emerald-700"}`} />
-                        <p className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? "text-emerald-400" : "text-emerald-700"}`}>
-                          {isAr ? "من الحديث الشريف" : "From the Hadith"}
-                        </p>
+                    <SourceGroup
+                      title={isAr ? "من الحديث الشريف" : "From the Hadith"}
+                      icon={<ScrollText className={`w-3.5 h-3.5 ${isDark ? "text-emerald-400" : "text-emerald-700"}`} />}
+                      colorClass={isDark ? "text-emerald-400" : "text-emerald-700"}
+                      isDark={isDark}
+                    >
+                      <div className="flex flex-col gap-2">
+                        {turn.results!.hadith_results.map((item, index) => (
+                          <SourceCard key={`h-${turn.id}-${item.reference}-${index}`} item={item} isAr={isAr} accent="green" isDark={isDark} />
+                        ))}
                       </div>
-                      {turn.results!.hadith_results.map((item, index) => (
-                        <SourceCard key={`h-${turn.id}-${item.reference}-${index}`} item={item} isAr={isAr} accent="green" isDark={isDark} />
-                      ))}
-                    </div>
+                    </SourceGroup>
                   )}
                 </div>
               )}
@@ -569,7 +707,7 @@ export default function DeenAsk() {
                   )}
                   {turn.explanation && (
                     <div
-                      className="rounded-2xl px-4 py-3"
+                      className="rounded-2xl px-4 py-3 md:px-5 md:py-4"
                       style={{
                         background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
                         border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
@@ -583,7 +721,7 @@ export default function DeenAsk() {
                         <div className="flex-1" />
                         <CopyButton text={turn.explanation.summary} isDark={isDark} isAr={isAr} />
                       </div>
-                      <p className={`text-sm leading-relaxed whitespace-pre-wrap ${textColor}`}>{turn.explanation.summary}</p>
+                      <p className={`text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap ${textColor}`}>{turn.explanation.summary}</p>
                     </div>
                   )}
                 </>
@@ -600,6 +738,7 @@ export default function DeenAsk() {
             <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "300ms" }} />
           </div>
         )}
+        </div>
       </div>
 
       {/* Composer — sticks to bottom inside the flex column */}
@@ -609,46 +748,52 @@ export default function DeenAsk() {
           background: composerBg,
           backdropFilter: "blur(20px)",
           borderTop: isDark ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(0,0,0,0.06)",
-          padding: "10px 16px calc(10px + env(safe-area-inset-bottom, 0px)) 16px",
+          padding: "12px 16px calc(12px + env(safe-area-inset-bottom, 0px)) 16px",
         }}
       >
         <div
-          className="flex items-end gap-3 rounded-2xl"
-          style={{
-            background: composerInner,
-            border: `1px solid ${composerBorder}`,
-            padding: "10px 12px",
-            minHeight: "48px",
-          }}
+          className="w-full mx-auto flex items-end gap-3 rounded-2xl md:px-2 lg:px-4"
+          style={{ maxWidth: shellMaxWidth }}
         >
-          <textarea
-            ref={textareaRef}
-            value={question}
-            rows={1}
-            onChange={(e) => {
-              setQuestion(e.target.value);
-              requestAnimationFrame(resizeTextarea);
+          <div
+            className="flex items-end gap-3 rounded-2xl w-full"
+            style={{
+              background: composerShellBg,
+              border: composerShellBorder,
+              boxShadow: composerShellShadow,
+              padding: "12px 14px",
+              minHeight: "60px",
             }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder={isAr ? "اسأل عن القرآن والحديث..." : "Ask about Quran or Hadith…"}
-            className={`flex-1 resize-none bg-transparent text-sm leading-[1.6] outline-none ${textColor} ${placeholderColor}`}
-            style={{ minHeight: "24px", maxHeight: "120px", overflowY: "auto", paddingTop: "2px" }}
-            dir={isAr ? "rtl" : "ltr"}
-          />
-          <button
-            onClick={handleSend}
-            disabled={searching || !question.trim()}
-            className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all disabled:opacity-40 shrink-0"
-            style={{ background: sendBtnBg, boxShadow: "0 0 10px hsla(280,70%,65%,0.35)", marginBottom: "0px" }}
-            title={isAr ? "إرسال" : "Send"}
           >
-            <Send className="w-4 h-4 text-white" style={{ transform: isAr ? "rotate(180deg)" : undefined }} />
-          </button>
+            <textarea
+              ref={textareaRef}
+              value={question}
+              rows={1}
+              onChange={(e) => {
+                setQuestion(e.target.value);
+                requestAnimationFrame(resizeTextarea);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder={isAr ? "اسأل عن القرآن والحديث..." : "Ask about Quran or Hadith…"}
+              className={`flex-1 resize-none bg-transparent text-sm leading-[1.6] outline-none ${textColor} ${placeholderColor}`}
+              style={{ minHeight: "32px", maxHeight: "120px", overflowY: "auto", paddingTop: "6px" }}
+              dir={isAr ? "rtl" : "ltr"}
+            />
+            <button
+              onClick={handleSend}
+              disabled={searching || !question.trim()}
+              className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all disabled:opacity-40 shrink-0"
+              style={{ background: sendBtnBg, boxShadow: "0 0 10px hsla(280,70%,65%,0.35)", marginBottom: "0px" }}
+              title={isAr ? "إرسال" : "Send"}
+            >
+              <Send className="w-4 h-4 text-white" style={{ transform: isAr ? "rotate(180deg)" : undefined }} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

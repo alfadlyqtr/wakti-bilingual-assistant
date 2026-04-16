@@ -56,6 +56,7 @@
     "@vercel/speed-insights": "^1.2.0",
     "@walletpass/pass-js": "^6.9.1",
     "@xyflow/react": "^12.10.1",
+    "adhan": "^4.4.3",
     "arabic-reshaper": "^1.1.0",
     "canvas-confetti": "^1.9.4",
     "chart.js": "^4.5.0",

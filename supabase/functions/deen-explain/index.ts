@@ -29,6 +29,55 @@ type IntentMeta = {
   sufficient?: boolean;
 };
 
+function hasFollowupCue(text: string): boolean {
+  return /\?(?:\s|$)|؟(?:\s|$)/.test(text);
+}
+
+function looksEmotional(text: string): boolean {
+  return /(sad|depressed|anxious|anxiety|worried|grief|grieving|stress|stressed|distress|afraid|fear|lonely|overwhelmed|tired|hopeless|cry|crying|depress|upset|pain|hurting|heartbroken|repent|tawbah|forgive me|forgiveness|lazy|laziness|don.t feel like|dont feel like|no motivation|lost|spiritually|low iman|weak iman|missing prayer|missed prayer|overslept|can.t pray|cant pray|struggling|numb|disconnected|far from allah|far from god)/i.test(text)
+    || /(حزين|مكتئب|مهموم|قلق|خوف|خائف|أبكي|ضيق|كرب|متعب|مرهق|توبة|استغفار|أشعر بالسوء|منكسر|كسل|لا أشعر|فقدت|ضعيف الإيمان|بعيد عن الله)/.test(text);
+}
+
+function looksLikeSpiritual(text: string): boolean {
+  return /(lazy|laziness|don.t feel like praying|dont feel like praying|no motivation to pray|low iman|weak iman|spiritually (dead|numb|lost|weak|empty)|disconnected from allah|far from allah|can.t bring myself to pray|struggling with (prayer|salah|worship)|lost my connection)/i.test(text)
+    || /(كسل|لا أشعر بالرغبة في الصلاة|ضعيف الإيمان|بعيد عن الله|لا أجد دافعاً للصلاة)/.test(text);
+}
+
+function buildFollowup(language: "ar" | "en", question: string, intent: IntentMeta): string {
+  const qType = intent.question_type ?? "general_islamic";
+  const topic = (intent.normalized_topic ?? question).toLowerCase();
+  const emotional = looksEmotional(question) || looksEmotional(topic);
+
+  if (language === "ar") {
+    const spiritual = looksLikeSpiritual(question) || looksLikeSpiritual(topic);
+    if (spiritual) return "هل تريد دعاءً قصيراً يساعدك على تليين القلب والرجوع إلى الصلاة؟";
+    if (emotional) return "هل تريد أن أجهز لك دعاءً قصيراً يقال في مثل هذا الحال؟";
+    if (qType === "reference_lookup") return "هل تريد أن أعرض لك المعنى باختصار أيضاً؟";
+    if (qType === "followup") return "هل تريد أن أكمل معك على نفس الموضوع باختصار؟";
+    if (qType === "fiqh_question" || qType === "sensitive") return "هل تريد أن ألخص لك الأدلة باختصار شديد؟";
+    if (/dua|دعاء|supplication/.test(topic)) return "هل تريد دعاءً قصيراً من القرآن أو السنة في هذا المعنى؟";
+    if (/patience|sabr|الصبر/.test(topic)) return "هل تريد آيتين قصيرتين عن الصبر؟";
+    return "هل تريد آية أو حديثاً إضافياً عن هذا الموضوع؟";
+  }
+
+  const spiritual = looksLikeSpiritual(question) || looksLikeSpiritual(topic);
+  if (spiritual) return "Do you want a short dua to help soften the heart and come back to prayer?";
+  if (emotional) return "Do you want a short dua for this situation?";
+  if (qType === "reference_lookup") return "Do you want me to also give you the meaning in a simple way?";
+  if (qType === "followup") return "Do you want me to continue with the same topic briefly?";
+  if (qType === "fiqh_question" || qType === "sensitive") return "Do you want me to summarise the evidence briefly as well?";
+  if (/dua|supplication|دعاء/.test(topic)) return "Do you want a short dua from the Quran or Sunnah about this?";
+  if (/patience|sabr|الصبر/.test(topic)) return "Do you want two short Quran verses about patience?";
+  return "Do you want one more verse or hadith about this topic?";
+}
+
+function ensureFollowup(summary: string, language: "ar" | "en", question: string, intent: IntentMeta): string {
+  const clean = summary.trim();
+  if (!clean) return buildFollowup(language, question, intent);
+  if (hasFollowupCue(clean)) return clean;
+  return `${clean}\n\n${buildFollowup(language, question, intent)}`;
+}
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -48,6 +97,10 @@ function needsGrounding(intent: IntentMeta, noLocalSources: boolean): boolean {
   );
 }
 
+function isDuaRequest(question: string): boolean {
+  return /(give me a dua|prepare a dua|dua please|short dua|more duas|few duas|yes please|a dua|another dua|can i have a dua|أعطني دعاء|هات دعاء|دعاء قصير|أريد دعاء|نعم من فضلك|أعطني أدعية|المزيد من الأدعية)/i.test(question);
+}
+
 function buildPrompt(
   language: "ar" | "en",
   intent: IntentMeta,
@@ -63,6 +116,7 @@ function buildPrompt(
   const topic = intent.normalized_topic ?? question;
   const noSources = evidenceBlock.length === 0 && !priorContext;
   const noNewSources = evidenceBlock.length === 0;
+  const duaMode = isDuaRequest(question);
 
   const groundingInstruction = useGrounding
     ? (language === "ar"
@@ -70,38 +124,46 @@ function buildPrompt(
         : `Use Google Search to find authoritative rulings from: islamqa.info, islamweb.net, sunnah.com, dorar.net, alifta.gov.sa. `)
     : "";
 
-  let policy = "";
+  const sourcesSection = evidenceBlock
+    ? (language === "ar" ? `\n\nالمصادر المسترجعة من قاعدة البيانات:\n${evidenceBlock}` : `\n\nSources from local database:\n${evidenceBlock}`)
+    : "";
+  const priorSection = priorContext
+    ? (language === "ar" ? `\n\nسياق المحادثة السابقة:\n${priorContext}` : `\n\nPrior conversation context:\n${priorContext}`)
+    : "";
 
   if (language === "ar") {
-    if (noSources && !noNewSources) {
-      policy = `${groundingInstruction}لم تُعثر على مصادر في قاعدة البيانات المحلية. ${useGrounding ? "ابحث في الإنترنت عن أحاديث وفتاوى موثوقة لهذه المسألة." : "رُدّ بأسلوب محادثاتي دافئ، ولا تقدّم حكماً شرعياً دون دليل."}`;
-    } else if (noNewSources) {
-      policy = `${groundingInstruction}استخدم سياق المحادثة السابقة للرد بشكل طبيعي ومتصل.`;
-    } else if ((qType === "fiqh_question" || qType === "sensitive") && !sufficient) {
-      policy = `${groundingInstruction}هذا سؤال فقهي عن "${topic}". المصادر المحلية غير كافية. ${useGrounding ? "ابحث عن أحاديث وفتاوى علمية موثوقة لهذه المسألة تحديداً، واذكر مصادرها." : "وضّح ذلك بصراحة ودفء — لا تخترع حكماً — واذكر الخلاف العلمي."}`;
+    let policy = "";
+    if (duaMode) {
+      policy = `المستخدم يطلب دعاءً بشكل مباشر. قدّم 2 إلى 3 أدعية قصيرة ذات صلة بالموضوع من سياق المحادثة السابقة. لكل دعاء: النص العربي، ثم المعنى بالعربية، ثم المصدر (قرآن أو حديث صحيح). أضف كلمة تشجيعية قصيرة في البداية. لا تعطِ محاضرة.`;
+    } else if (noNewSources && priorContext) {
+      policy = `${groundingInstruction}سؤال متابعة. ابقَ على نفس الموضوع من المحادثة السابقة. أجِب بأسلوب محادثاتي دافئ ومتصل. لا تبدأ موضوعاً جديداً.`;
     } else if ((qType === "fiqh_question" || qType === "sensitive") && isDisputed) {
-      policy = `${groundingInstruction}هذه مسألة "${topic}" خلافية. اعرض آراء المذاهب الأربعة إن أمكن، وأشر إلى الخلاف بوضوح، ولا تُجزم برأي واحد.`;
+      policy = `${groundingInstruction}مسألة "${topic}" خلافية. اعرض آراء العلماء من المصادر المُقدَّمة، وأشر إلى الخلاف بوضوح، ولا تُجزم برأي واحد.`;
+    } else if ((qType === "fiqh_question" || qType === "sensitive") && !sufficient) {
+      policy = `${groundingInstruction}سؤال فقهي عن "${topic}". ${useGrounding ? "ابحث عن فتاوى موثوقة لهذه المسألة." : "أجب بصدق مع ذكر الخلاف العلمي إن وجد."}`;
     } else if (qType === "fiqh_question" || qType === "sensitive") {
       policy = `${groundingInstruction}سؤال فقهي عن "${topic}". اشرح من المصادر المُقدَّمة${useGrounding ? " وادعمها بما تجده من مصادر موثوقة" : ""}. إذا كانت المسألة دقيقة، نوّه بذلك.`;
     } else if (qType === "followup") {
-      policy = `${groundingInstruction}سؤال متابعة. حافظ على الموضوع وأجِب بأسلوب محادثاتي متصل.`;
+      policy = `${groundingInstruction}سؤال متابعة. حافظ على الموضوع تماماً من سياق المحادثة السابقة. لا تغيّر الموضوع.`;
     } else {
       policy = noSources
-        ? `${groundingInstruction}${useGrounding ? "ابحث عن مصادر إسلامية موثوقة لهذا السؤال." : "رُدّ بأسلوب دافئ وبيّن غياب المصادر المباشرة."}`
-        : `${groundingInstruction}اشرح من المصادر المُقدَّمة.`;
+        ? `${groundingInstruction}${useGrounding ? "ابحث عن مصادر إسلامية موثوقة لهذا السؤال." : "رُدّ بأسلوب دافئ مع ذكر آيات أو أحاديث ذات صلة."}`
+        : `${groundingInstruction}اشرح من المصادر المُقدَّمة مع ذكر النصوص مباشرة.`;
     }
-    if (needsCaution) policy += " تنبّه: مسألة حساسة — لا تُصدر أحكاماً قاطعة.";
+    if (needsCaution && !duaMode) policy += " تنبّه: مسألة حساسة — لا تُصدر أحكاماً قاطعة.";
 
-    const sourcesSection = evidenceBlock
-      ? `\n\nالمصادر المسترجعة من قاعدة البيانات:\n${evidenceBlock}`
-      : "";
-    const priorSection = priorContext
-      ? `\n\nسياق المحادثة السابقة:\n${priorContext}`
-      : "";
+    return `أنت مساعد إسلامي في تطبيق Wakti — رفيق ذكي ودافئ يجمع بين العلم الشرعي والتعاطف الإنساني. ${policy}
 
-    return `أنت مساعد إسلامي محادثاتي في تطبيق Wakti. تحدّث بأسلوب طبيعي ودافئ كصديق عالم. ${policy}
+اتبع هذا الترتيب في إجابتك:
+1. إذا كان السؤال شخصياً أو عاطفياً: ابدأ بجملة تعاطف قصيرة وصادقة.
+2. قدّم نصيحة عملية مختصرة مرتبطة بالموضوع (مثل: كيف تحافظ على الصلاة، ماذا تفعل بعد نسيانها، إلخ).
+3. ادعم كلامك بآية أو حديث نبوي صحيح مع ذكر المصدر.
+4. اختتم بسؤال متابعة واحد لطيف (مثل: هل تريد دعاءً مناسباً لهذا الحال؟).
 
-قدّم إجابة شاملة ومفيدة، واذكر الأحاديث والآيات ذات الصلة. إذا كانت المسألة فيها خلاف بين الفقهاء، اشرح آراء المذاهب المختلفة.
+قواعد أخرى:
+- إذا طُلب منك دعاء: قدّمه مباشرة مع النص العربي والمعنى والمصدر.
+- إذا وعدت بشيء في المحادثة السابقة، نفّذه مباشرة ولا تسأل مجدداً.
+- لا تكرّر ما قيل من قبل — تابع من حيث توقفت.
 
 مهم جداً: اكتب النص العادي فقط. لا تستخدم أي رموز markdown مثل ## أو ** أو * أو - في بداية السطر. اكتب بأسلوب محادثة طبيعية مع فقرات منفصلة بسطر فارغ.
 
@@ -112,37 +174,43 @@ function buildPrompt(
   }
 
   // English
-  if (noSources && !noNewSources) {
-    policy = `${groundingInstruction}No sources in local DB. ${useGrounding ? "Search the web for authentic hadiths and scholarly rulings on this topic." : "Respond warmly without inventing rulings."}`;
-  } else if (noNewSources) {
-    policy = `${groundingInstruction}Use prior conversation context to respond naturally.`;
-  } else if ((qType === "fiqh_question" || qType === "sensitive") && !sufficient) {
-    policy = `${groundingInstruction}Fiqh question about "${topic}". Local sources insufficient. ${useGrounding ? "Search for authentic hadiths and scholarly fatwas on this specific issue from trusted sites." : "Be honest about insufficient evidence, mention scholarly disagreement, recommend consulting a scholar."}`;
+  let policy = "";
+  if (duaMode) {
+    policy = `The user explicitly asked for duas. Deliver 2 to 3 short relevant duas based on the topic from prior conversation context. For each dua: transliteration, then meaning in English, then the source (Quran or authentic Hadith). Mention the Arabic text only if it is short and well-known. Add one short warm encouraging line at the start. Do NOT lecture.`;
+  } else if (noNewSources && priorContext) {
+    policy = `${groundingInstruction}Follow-up question. Stay on exactly the same topic from the prior conversation. Do NOT change topic. Respond naturally and conversationally.`;
   } else if ((qType === "fiqh_question" || qType === "sensitive") && isDisputed) {
-    policy = `${groundingInstruction}Disputed fiqh question about "${topic}". Present views of the four madhabs if possible. Acknowledge scholarly disagreement clearly — do NOT present one view as the only answer.`;
+    policy = `${groundingInstruction}Disputed fiqh question about "${topic}". Present scholarly views from provided sources. Acknowledge disagreement clearly — do NOT present one view as the only answer.`;
+  } else if ((qType === "fiqh_question" || qType === "sensitive") && !sufficient) {
+    policy = `${groundingInstruction}Fiqh question about "${topic}". ${useGrounding ? "Search for authentic hadiths and scholarly fatwas on this specific issue." : "Be honest about insufficient evidence, mention scholarly disagreement."}`;
   } else if (qType === "fiqh_question" || qType === "sensitive") {
-    policy = `${groundingInstruction}Fiqh question about "${topic}". Explain from provided sources${useGrounding ? " and supplement with trusted scholarly sources found via search" : ""}. Note any nuances.`;
+    policy = `${groundingInstruction}Fiqh question about "${topic}". Explain from provided sources${useGrounding ? " and supplement with trusted scholarly sources" : ""}. Note nuances.`;
   } else if (qType === "followup") {
-    policy = `${groundingInstruction}Follow-up question. Stay on topic and respond conversationally.`;
+    policy = `${groundingInstruction}Follow-up question. Stay on the exact same topic from prior conversation context. Do NOT change topic.`;
   } else {
     policy = noSources
-      ? `${groundingInstruction}${useGrounding ? "Search for authoritative Islamic sources for this question." : "Respond conversationally, honest about lack of direct sources."}`
-      : `${groundingInstruction}Explain from provided sources.`;
+      ? `${groundingInstruction}${useGrounding ? "Search for authoritative Islamic sources for this question." : "Answer from your knowledge of authentic Quran and Hadith, cite the source for every claim."}`
+      : `${groundingInstruction}Explain from provided sources, quote the texts directly.`;
   }
-  if (needsCaution) policy += " Sensitive topic — avoid definitive rulings.";
+  if (needsCaution && !duaMode) policy += " Sensitive topic — avoid definitive rulings.";
 
-  const sourcesSection = evidenceBlock
-    ? `\n\nSources from local database:\n${evidenceBlock}`
-    : "";
-  const priorSection = priorContext
-    ? `\n\nPrior conversation context:\n${priorContext}`
-    : "";
+  return `You are Wakti's Islamic companion — warm, intelligent, and grounded in Quran and Hadith. ${policy}
 
-  return `You are Wakti's Islamic conversational assistant. Speak naturally and warmly, like a knowledgeable friend. ${policy}
+Follow this response structure:
+1. If the question is personal, emotional, or spiritual (sadness, guilt, missing prayer, feeling lazy about worship, low iman, disconnected from Allah, fear, anxiety): open with ONE short genuine empathy sentence. Make it feel human, not like a reminder card. Do NOT skip this.
+2. Give a real companion response: reframe the struggle without piling on guilt. For spiritual-laziness or low-iman patterns specifically: say something that helps them push through — e.g. obedience often comes before feeling, just start with wudu, pray the next salah without overthinking it, don't wait to feel ready. 2-3 practical moves max, written warmly.
+3. Anchor with ONE relevant Quran verse or Hadith. Quote the actual text with its source. The evidence should support the companion advice, not replace it.
+4. Close with ONE gentle follow-up question that fits the actual situation (e.g. "Do you want a short dua to help with this?" NOT a generic question like "Do you want to know more about prayer?").
 
-Give a thorough, helpful answer. Cite Hadiths and Quran verses. If this is a fiqh matter with scholarly disagreement, explain the different scholarly positions.
+Other rules:
+- If the user asks for a dua: deliver it directly with transliteration, meaning in English, and source. Do NOT include raw Arabic text in English-mode responses unless the dua is very short and well-known. Do NOT give a lecture.
+- If you promised something in the prior turn (e.g. "Would you like duas?"), DELIVER it now — do not ask again.
+- Do NOT repeat what was already said in prior context — continue from where you left off.
+- Never give multiple follow-up questions. One only.
+- Practical life advice (make wudu, pray the next salah, sleep earlier, set an alarm) is appropriate and encouraged when the context calls for it — a good companion gives real help.
+- NEVER sound like a reminder card or a motivational poster. Sound like a knowledgeable friend who genuinely cares.
 
-IMPORTANT: Write in plain conversational prose only. Do NOT use any markdown symbols such as ##, **, *, or - at the start of lines. Use natural paragraphs separated by blank lines instead of bullet points or headers.
+IMPORTANT: Write in plain conversational prose only. Do NOT use any markdown symbols such as ##, **, *, or - at the start of lines. Use natural paragraphs separated by blank lines.
 
 Output ONLY valid JSON with no text outside it:
 {"summary":"your full helpful answer here...","quran_summary":"","hadith_summary":""}
@@ -250,6 +318,7 @@ serve(async (req) => {
       .replace(/\*(.+?)\*/g, "$1")
       .replace(/^[\*\-]\s+/gm, "")
       .trim();
+    const finalSummary = ensureFollowup(summary, language, question, intentMeta);
     const quranSummary = parsed?.quran_summary ?? "";
     const hadithSummary = parsed?.hadith_summary ?? "";
 
@@ -258,7 +327,7 @@ serve(async (req) => {
       provider: "google",
       model: "gemini-2.0-flash",
       inputText: question,
-      outputText: summary,
+      outputText: finalSummary,
       status: "success",
       metadata: {
         source_count: allSources.length,
@@ -269,7 +338,7 @@ serve(async (req) => {
       },
     });
 
-    return json({ summary, quran_summary: quranSummary, hadith_summary: hadithSummary });
+    return json({ summary: finalSummary, quran_summary: quranSummary, hadith_summary: hadithSummary });
 
   } catch (error) {
     await logAIFromRequest(req, {

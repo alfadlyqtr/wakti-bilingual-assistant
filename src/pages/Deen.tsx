@@ -1,52 +1,26 @@
 import { useNavigate } from "react-router-dom";
-import { BookOpen, MessageCircle, Brain, ChevronRight, Star } from "lucide-react";
+import { BookOpen, MessageCircle, Brain, ChevronRight, Star, Calendar, Moon } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
+import { useState, useEffect } from "react";
+import { usePrayerTimes, formatCountdown } from "@/hooks/usePrayerTimes";
+
+// Simple Hijri date approximation
+function getHijriDate(date: Date, isAr: boolean): string {
+  const jd = Math.floor((date.getTime() - Date.UTC(2023, 6, 19)) / (1000 * 60 * 60 * 24));
+  const hijriDay = ((jd % 30) + 30) % 30 || 30;
+  const hijriMonthIndex = Math.floor(jd / 29.5) % 12;
+  const hijriYear = 1445 + Math.floor(jd / 354);
+  const monthsAr = ["محرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى", "جمادى الآخرة", "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة"];
+  const monthsEn = ["Muharram", "Safar", "Rabi' al-Awwal", "Rabi' al-Thani", "Jumada al-Awwal", "Jumada al-Thani", "Rajab", "Sha'ban", "Ramadan", "Shawwal", "Dhu al-Qi'dah", "Dhu al-Hijjah"];
+  if (isAr) return `${hijriDay} ${monthsAr[hijriMonthIndex]} ${hijriYear}هـ`;
+  return `${hijriDay} ${monthsEn[hijriMonthIndex]} ${hijriYear} AH`;
+}
 
 const tabs = [
-  {
-    id: "quran",
-    labelEn: "Quran",
-    labelAr: "القرآن",
-    path: "/deen/quran",
-    gradient: "from-sky-500 to-blue-700",
-    glow: "hsla(210,100%,65%,0.5)",
-    icon: BookOpen,
-    descEn: "Read, listen & understand",
-    descAr: "اقرأ، استمع وافهم",
-  },
-  {
-    id: "hadith",
-    labelEn: "Hadith",
-    labelAr: "الحديث",
-    path: "/deen/hadith",
-    gradient: "from-emerald-500 to-green-700",
-    glow: "hsla(142,76%,55%,0.5)",
-    icon: Star,
-    descEn: "Browse & understand Hadith",
-    descAr: "تصفح وافهم الحديث",
-  },
-  {
-    id: "ask",
-    labelEn: "Ask",
-    labelAr: "اسأل",
-    path: "/deen/ask",
-    gradient: "from-purple-500 to-violet-700",
-    glow: "hsla(280,70%,65%,0.5)",
-    icon: MessageCircle,
-    descEn: "Ask with source-grounded answers",
-    descAr: "اسأل بإجابات مستندة للمصدر",
-  },
-  {
-    id: "study",
-    labelEn: "Study",
-    labelAr: "الدراسة",
-    path: "/deen/study",
-    gradient: "from-amber-500 to-orange-600",
-    glow: "hsla(45,100%,60%,0.5)",
-    icon: Brain,
-    descEn: "Memorize, track & plan",
-    descAr: "احفظ، تتبع وخطط",
-  },
+  { id: "quran", labelEn: "Quran", labelAr: "القرآن", path: "/deen/quran", gradient: "from-sky-500 to-blue-600", glow: "hsla(210,100%,65%,0.5)", icon: BookOpen, descEn: "Read & Listen", descAr: "اقرأ واستمع" },
+  { id: "hadith", labelEn: "Hadith", labelAr: "الحديث", path: "/deen/hadith", gradient: "from-emerald-500 to-green-600", glow: "hsla(142,76%,55%,0.5)", icon: Star, descEn: "Browse & Learn", descAr: "تصفّح وتعلّم" },
+  { id: "ask", labelEn: "Ask", labelAr: "اسأل", path: "/deen/ask", gradient: "from-purple-500 to-violet-600", glow: "hsla(280,70%,65%,0.5)", icon: MessageCircle, descEn: "Ask Anything", descAr: "اسأل عن أي شيء" },
+  { id: "study", labelEn: "Study", labelAr: "حفظ", path: "/deen/study", gradient: "from-amber-500 to-orange-600", glow: "hsla(45,100%,60%,0.5)", icon: Brain, descEn: "Memorize", descAr: "احفظ وخطّط" },
 ];
 
 export default function Deen() {
@@ -54,85 +28,150 @@ export default function Deen() {
   const { language, theme } = useTheme();
   const isAr = language === "ar";
   const isDark = theme === "dark";
+  const [hijriDate, setHijriDate] = useState("");
+  const { nextPrayer } = usePrayerTimes();
 
-  const pageBg = isDark
-    ? "linear-gradient(135deg, #0c0f14 0%, hsl(235 25% 7%) 25%, hsl(250 20% 8%) 50%, hsl(260 15% 9%) 75%, #0c0f14 100%)"
-    : "linear-gradient(135deg, #fcfefd 0%, hsl(200 25% 95%) 50%, #fcfefd 100%)";
-  const textPrimary = isDark ? "#f2f2f2" : "#060541";
-  const textSecondary = isDark ? "#858384" : "#606062";
-  const cardBg = isDark
-    ? "linear-gradient(135deg, #0c0f14 0%, hsl(235 25% 8%) 100%)"
-    : "linear-gradient(135deg, #fcfefd 0%, hsl(200 15% 96%) 100%)";
-  const cardBorder = isDark ? "rgba(255,255,255,0.07)" : "rgba(6,5,65,0.09)";
+  useEffect(() => {
+    setHijriDate(getHijriDate(new Date(), isAr));
+  }, [isAr]);
+
+  // Calculate safe area for mobile (bottom nav is ~64px + padding)
+  const bottomSafe = "calc(env(safe-area-inset-bottom) + 80px)";
 
   return (
     <div
-      className="min-h-screen pb-24"
-      style={{ background: pageBg }}
+      className="h-screen flex flex-col overflow-hidden"
+      style={{
+        background: isDark ? "#0c0f14" : "#fcfefd",
+        paddingBottom: bottomSafe,
+      }}
       dir={isAr ? "rtl" : "ltr"}
     >
-      {/* Header */}
-      <div className="px-5 pt-8 pb-6">
-        <div className="flex items-center gap-3 mb-1">
+      {/* Compact Header */}
+      <div className="px-5 pt-4 pb-3 shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{
+                background: "linear-gradient(135deg, hsl(210 100% 65%) 0%, hsl(280 70% 65%) 100%)",
+              }}
+            >
+              <BookOpen className="w-4 h-4 text-white" strokeWidth={2} />
+            </div>
+            <h1 className="text-lg font-bold" style={{ color: isDark ? "#f2f2f2" : "#060541" }}>
+              {isAr ? "الدين" : "Deen"}
+            </h1>
+          </div>
           <div
-            className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
+            className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium"
             style={{
-              background: "linear-gradient(135deg, hsl(210 100% 65%) 0%, hsl(280 70% 65%) 100%)",
-              boxShadow: "0 0 20px hsla(210,100%,65%,0.4), 0 0 40px hsla(280,70%,65%,0.2)",
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.06)",
+              color: isDark ? "#858384" : "#606062",
             }}
           >
-            <BookOpen className="w-5 h-5 text-white" strokeWidth={2} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-wide" style={{ color: textPrimary }}>Deen</h1>
-            <p className="text-xs" style={{ color: textSecondary }}>
-              {isAr ? "القرآن والحديث والفهم والحفظ" : "Quran, Hadith, understanding & memorization"}
-            </p>
+            <Calendar className="w-3 h-3" />
+            <span>{hijriDate}</span>
           </div>
         </div>
+
+        {/* Next prayer row */}
+        {nextPrayer && (
+          <div className="mt-2 flex items-center">
+            <div
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+              style={{
+                background: isDark ? "rgba(255,255,255,0.05)" : "rgba(6,5,65,0.05)",
+                border: `1px solid ${isDark ? "rgba(255,255,255,0.09)" : "rgba(6,5,65,0.09)"}`,
+              }}
+            >
+              <Moon
+                className="w-3 h-3 shrink-0"
+                style={{ color: isDark ? "hsl(210,100%,65%)" : "hsl(243,84%,30%)" }}
+              />
+              <span
+                className="text-[11px]"
+                style={{ color: isDark ? "#858384" : "#606062" }}
+              >
+                {isAr ? "التالية" : "Next"}
+              </span>
+              <span
+                className="text-[11px]"
+                style={{ color: isDark ? "rgba(255,255,255,0.2)" : "rgba(6,5,65,0.2)" }}
+              >
+                ·
+              </span>
+              <span
+                className="text-[11px] font-semibold"
+                style={{ color: isDark ? "#f2f2f2" : "#060541" }}
+              >
+                {isAr ? nextPrayer.nameAr : nextPrayer.name}
+              </span>
+              <span
+                className="text-[11px]"
+                style={{ color: isDark ? "rgba(255,255,255,0.2)" : "rgba(6,5,65,0.2)" }}
+              >
+                ·
+              </span>
+              <span
+                className="text-[11px] font-medium"
+                style={{ color: isDark ? "hsl(210,100%,65%)" : "hsl(243,84%,30%)" }}
+              >
+                {formatCountdown(nextPrayer.minutesLeft, isAr)}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Main tabs */}
-      <div className="px-5 mt-4">
-        <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: textSecondary }}>
-          {isAr ? "ابدأ" : "Explore"}
-        </p>
-        <div className="grid grid-cols-2 gap-3">
+      {/* Cards Grid - fills remaining space */}
+      <div className="px-5 flex-1 min-h-0">
+        <div className="grid grid-cols-2 gap-3 h-full">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => navigate(tab.path)}
-                className="relative overflow-hidden rounded-2xl p-4 text-left active:scale-95 transition-all duration-150 flex flex-col gap-2"
+                className="group relative overflow-hidden rounded-2xl p-4 text-left active:scale-[0.98] transition-all duration-200 flex flex-col justify-between"
                 style={{
-                  background: cardBg,
-                  border: `1px solid ${cardBorder}`,
-                  boxShadow: `0 4px 24px ${tab.glow.replace("0.5", "0.15")}`,
+                  background: isDark
+                    ? "linear-gradient(145deg, rgba(20,25,35,0.9) 0%, rgba(12,15,20,0.95) 100%)"
+                    : "linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(6,5,65,0.08)"}`,
+                  boxShadow: isDark
+                    ? `0 4px 20px ${tab.glow.replace("0.5", "0.2")}, inset 0 1px 0 rgba(255,255,255,0.05)`
+                    : `0 4px 20px ${tab.glow.replace("0.5", "0.15")}`,
                 }}
               >
-                {/* glow background */}
+                {/* Gradient glow on hover */}
                 <div
-                  className="absolute inset-0 opacity-10 pointer-events-none"
-                  style={{ background: `radial-gradient(circle at 30% 30%, ${tab.glow}, transparent 70%)` }}
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                  style={{
+                    background: `radial-gradient(circle at 30% 20%, ${tab.glow.replace("0.5", "0.25")}, transparent 70%)`,
+                  }}
                 />
-                <div
-                  className={`w-10 h-10 rounded-xl bg-gradient-to-br ${tab.gradient} flex items-center justify-center`}
-                  style={{ boxShadow: `0 0 16px ${tab.glow}` }}
-                >
-                  <Icon className="w-5 h-5 text-white" strokeWidth={2} />
-                </div>
+
+                {/* Top section: Icon + Title */}
                 <div>
-                  <p className="text-sm font-bold" style={{ color: textPrimary }}>
+                  <div
+                    className={`w-11 h-11 rounded-xl bg-gradient-to-br ${tab.gradient} flex items-center justify-center mb-3`}
+                    style={{ boxShadow: `0 4px 16px ${tab.glow}` }}
+                  >
+                    <Icon className="w-5 h-5 text-white" strokeWidth={2} />
+                  </div>
+                  <p className="text-lg font-bold mb-1" style={{ color: isDark ? "#f2f2f2" : "#060541" }}>
                     {isAr ? tab.labelAr : tab.labelEn}
                   </p>
-                  <p className="text-[10px] mt-0.5 leading-tight" style={{ color: textSecondary }}>
+                  <p className="text-xs" style={{ color: isDark ? "#858384" : "#606062" }}>
                     {isAr ? tab.descAr : tab.descEn}
                   </p>
                 </div>
+
+                {/* Arrow at bottom */}
                 <ChevronRight
-                  className="absolute bottom-3 right-3 w-4 h-4"
-                  style={{ color: textSecondary, transform: isAr ? "rotate(180deg)" : undefined }}
+                  className="self-end w-5 h-5 opacity-30 group-hover:opacity-60 transition-opacity"
+                  style={{ color: isDark ? "#858384" : "#606062", transform: isAr ? "rotate(180deg)" : undefined }}
                 />
               </button>
             );
@@ -140,19 +179,20 @@ export default function Deen() {
         </div>
       </div>
 
-      {/* Disclaimer */}
-      <div className="px-5 mt-8">
+      {/* Footer Disclaimer */}
+      <div className="px-5 py-3 shrink-0">
         <div
-          className="rounded-xl p-4"
+          className="rounded-xl px-3 py-2.5 flex items-start gap-2"
           style={{
-            background: "rgba(245,158,11,0.06)",
-            border: "1px solid rgba(245,158,11,0.2)",
+            background: isDark ? "rgba(245,158,11,0.2)" : "rgba(254,243,199,0.9)",
+            border: `1px solid ${isDark ? "rgba(251,191,36,0.4)" : "rgba(217,119,6,0.4)"}`,
           }}
         >
-          <p className="text-[11px] text-amber-400/80 leading-relaxed text-center">
+          <span className="text-amber-400 text-base">⚠️</span>
+          <p className="text-[11px] leading-relaxed font-medium" style={{ color: isDark ? "#fbbf24" : "#92400e" }}>
             {isAr
-              ? "⚠️ هذه الأداة للتعلم والفهم فقط. للفتاوى الشرعية، يُرجى الرجوع إلى الأوقاف أو عالم موثوق."
-              : "⚠️ This tool is for learning and understanding only. For religious rulings, please consult your local Awqaf or a trusted scholar."}
+              ? "هذه الأداة للتعلم والفهم فقط. للفتاوى الشرعية، راجع الأوقاف أو عالم موثوق."
+              : "This tool is for learning only. For religious rulings, consult your local Awqaf or scholar."}
           </p>
         </div>
       </div>
