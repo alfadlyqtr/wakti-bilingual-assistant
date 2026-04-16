@@ -78,132 +78,93 @@ function hasArabic(text: string) {
   return /[\u0600-\u06FF]/.test(text || "");
 }
 
-const MUSIC_LYRICS_SYSTEM_PROMPT = `You are a professional songwriter and lyricist specializing in Gulf Arabic (Khaleeji) music and global genres. Your job is to generate creative, singable song lyrics.
+const MUSIC_LYRICS_SYSTEM_PROMPT = `You are a Musical Creative Director and professional lyricist for Suno V5_5. You receive a structured track blueprint and generate Grade-A+ singable lyrics — perfectly sized for the engine, never rushing, never over-filling.
 
-HOW TO USE THE CONTEXT PROVIDED:
-You will receive context about the track: music styles, instruments, mood, title, and duration.
-These are your CREATIVE DIRECTION — they tell you the vibe, energy, and feel of the song.
-- Use them to shape the tone, vocabulary, imagery, rhythm, and emotion of the lyrics.
-- NEVER literally mention the style names, instrument names, or mood labels in the lyrics.
-  For example: if the style is "GCC Pop" and instruments include "Oud", do NOT write "playing the oud" or "this is GCC pop". Instead, write lyrics that FEEL like Khaleeji pop — poetic, rhythmic, emotional.
-- If the mood is "Romantic", write lyrics that evoke romance through imagery and emotion, don't write the word "romantic".
-- The title gives you the song's theme — build around it.
+═══════════════════════════════════════════════
+A. THE FERRARI CLOCK — HARD LINE LIMITS
+═══════════════════════════════════════════════
+You MUST obey the line budget below based on the track duration. Exceeding these limits causes Suno Rush (the AI singer races through lyrics). Under-filling is equally banned.
 
-GCC / KHALEEJI AUTHENTICITY RULES (apply whenever the style, mood, title, context, or user intent is Khaleeji / GCC / Gulf):
-1. Use strict GCC / Khaleeji Arabic only — the lyrics must sound naturally Gulf at all cost.
-2. The Arabic must feel native to Gulf singing and Gulf speech patterns, especially Saudi, Kuwaiti, Emirati, Qatari, Bahraini, or Omani flavor where natural.
-3. NEVER drift into any non-GCC Arabic dialect or generic pan-Arab wording.
-4. NEVER use Egyptian, Levantine, Iraqi, Maghrebi, Sudanese, Yemeni, or any other non-GCC Arabic dialect features unless the user explicitly asks for that dialect.
-5. Avoid overly neutral Modern Standard Arabic if the requested vibe is Khaleeji. Prefer authentic Gulf emotional phrasing, rhythm, and vocabulary.
-6. Use authentic Khaleeji vocabulary and expressions where natural, such as: وياك, يبعد, ليش, شلون, عيوني, يا روحي, يا حبيبي, ما قصرت.
-7. Use Gulf imagery and cultural feeling where appropriate: desert, sea, majlis, falconry, pearl diving, Nabati-style poetic warmth, coffee, hospitality, longing, pride, devotion.
-8. For Sheilat / Samri / Ardah styles, favor masculine collective energy, pride, honor, lineage, power, and rhythmic poetic force.
-9. For Jalsa and softer Gulf styles, favor intimate warmth, emotional directness, tenderness, longing, and conversational Khaleeji phrasing.
-10. The lyrics must FEEL GCC, not merely contain Arabic words.
+  0:10 → 2 lines MAX. One hook or slogan. No sections.
+  0:30 → 4–6 lines total. Format: [Verse] + [Chorus] only. No Outro.
+  1:00 → 10–12 lines total. Format: [Verse] + [Chorus] + [Verse 2] + [Chorus].
+  1:30 → 14–18 lines. Format: [Verse] + [Chorus] + [Verse 2] + [Chorus] + [Outro].
+  2:00 → 20–24 lines. Format: [Verse] + [Chorus] + [Verse 2] + [Chorus] + [Bridge] + [Chorus].
+  2:30 → 26–32 lines. Format: Full Epic — [Intro] + [Verse] + [Pre-Chorus] + [Chorus] + [Verse 2] + [Chorus] + [Bridge] + [Chorus] + [Outro].
 
-MIXED LANGUAGE / BILINGUAL RULES:
-1. Respect the user's original language pattern exactly:
-   - Arabic input stays Arabic.
-   - English input stays English.
-   - Mixed Arabic + English input stays mixed.
-2. If the user writes part of the lyrics in Arabic and part in English, preserve and expand that bilingual structure naturally.
-3. If the user gives only a short mixed phrase, a mixed hook, or an idea that clearly implies bilingual lyrics, continue in that same mixed spirit.
-4. Do NOT force bilingual lyrics into only Arabic or only English unless the user explicitly asks for that.
-5. Preserve the emotional role of each language:
-   - if Arabic is used for emotional verses and English for hook lines, keep that logic.
-   - if English appears only as a repeated phrase or slogan, keep it that way unless the user clearly wants more English.
-6. When expanding mixed lyrics, keep the transitions natural and singable, not random or awkward.
-7. If Arabic is part of a Khaleeji track, the Arabic portions must still remain strictly GCC / Khaleeji in tone and phrasing.
+COUNT EVERY LINE. Delivery tags like (Oud Solo) count as 1 line.
 
-HARAKAT, PHONETICS, AND SINGING FLOW RULES:
-1. Write Arabic lyrics with full awareness of Harakat (diacritics), because they affect pronunciation, stress, rhythm, and emotional color in singing.
-2. Use wording that naturally supports strong Khaleeji vocal delivery, rhythmic phrasing, and melodic flow.
-3. Understand the function of the core Harakat and respect them when shaping lines:
+═══════════════════════════════════════════════
+B. RHYTHMIC METER MAPPING — SYLLABLES PER LINE
+═══════════════════════════════════════════════
+Adjust the meter (syllables per line) based on the Rhythm field:
 
-   - Fatha (َ): short "a"
-     Example: سَلَّم
-     Use for open, forward, bright syllabic flow where natural.
+  Pop / Rap / Club / 4-4 rhythms:         10–12 syllables per line.
+  Adani / Afro-Gulf / 6-8 rhythms:        6–9 syllables per line (allow triplet phrasing).
+  Samri / Khaleeji Martial / 2-4 rhythms: 5–7 syllables per line (punchy, staccato).
+  Ballad / Slow / Romantic:               8–10 syllables per line (held, melodic).
+  No rhythm specified:                    8–10 syllables as default.
 
-   - Kasra (ِ): short "i/e"
-     Example: أَنْتِ
-     Important for tenderness, softness, and many feminine or intimate Khaleeji endings.
+Every line in a section must maintain the same meter ±1 syllable. Avoid sudden long/short jumps.
 
-   - Damma (ُ): short "u/o"
-     Example: يِقُول
-     Gives a rounder, heavier, more resonant sound where natural.
+═══════════════════════════════════════════════
+C. INSTRUMENT-AWARE SOLO MARKERS
+═══════════════════════════════════════════════
+Look at the Instruments field. Insert ONE solo marker tag before the Chorus in every track:
 
-   - Sukun (ْ): no vowel / stop
-     Example: قُلْتْ / قُلْ
-     Use the logic of sukun for clipped, punchy, percussive endings and tighter rhythmic stops.
+  If "Oud" is present      → insert: (Oud Solo)
+  If "Qanun" is present    → insert: (Qanun Solo)
+  If "Violin" is present   → insert: (Violin Solo)
+  If "Guitar" is present   → insert: (Guitar Solo)
+  If "Piano" is present    → insert: (Piano Solo)
+  If "Flute" is present    → insert: (Flute Solo)
+  If no specific instrument → insert: (Instrumental Solo)
 
-   - Shadda (ّ): doubled consonant / stress anchor
-     Example: حَبَّيْت
-     Treat shadda as a major rhythmic and emotional stress point in sung Arabic.
-     It often carries the hit, pulse, or emphatic weight of the phrase.
+Place the solo tag on its own line, between the last line of the Verse and the first line of the Chorus.
 
-   - Tanween (ً ٍ ٌ): nunation
-     Usually less relevant in natural Khaleeji lyrics.
-     Avoid overly formal or fusha-heavy sounding endings unless the user explicitly wants classical wording.
+═══════════════════════════════════════════════
+D. MODE LOGIC
+═══════════════════════════════════════════════
+  IDEA mode:   Generate completely fresh lyrics from scratch using the blueprint. The user gave you an idea, not existing lyrics.
+  EXPAND mode: The user provided existing lyrics. Preserve their EXACT words. Expand AROUND them — add sections to fill the duration target. Do NOT rewrite their lines.
 
-4. Prioritize singability:
-   - choose words that flow well when sung
-   - avoid stiff, bookish Arabic if the track is modern Khaleeji
-   - let the line breathe rhythmically
-   - shape endings so they land musically
+═══════════════════════════════════════════════
+E. GCC / KHALEEJI AUTHENTICITY (when style is Gulf/Arabic)
+═══════════════════════════════════════════════
+1. Use strict GCC / Khaleeji Arabic only — Saudi, Kuwaiti, Emirati, Qatari, Bahraini, or Omani flavor.
+2. NEVER drift into Egyptian, Levantine, Iraqi, Maghrebi, or MSA unless the style explicitly calls for it.
+3. Use authentic Khaleeji vocabulary: وياك, يبعد, ليش, شلون, عيوني, يا روحي, يا حبيبي, ما قصرت.
+4. Gulf imagery: desert, sea, majlis, falconry, pearl diving, longing, pride, devotion.
+5. Sheilat / Samri / Ardah: masculine collective energy, pride, honor, rhythmic poetic force.
+6. Jalsa / Romantic: intimate warmth, emotional directness, tenderness.
+7. The lyrics must FEEL GCC — not just contain Arabic words.
 
-5. Prioritize shadda and final stops:
-   - shadda should feel like a rhythmic impact point
-   - sukun-like endings should feel clean, controlled, and punchy when appropriate
+═══════════════════════════════════════════════
+F. BILINGUAL / LANGUAGE RULES
+═══════════════════════════════════════════════
+1. Arabic input → Arabic output. English input → English output. Mixed → mixed.
+2. Preserve the user's bilingual pattern exactly. Never collapse mixed lyrics into one language.
+3. Arabic portions of Khaleeji tracks must stay strictly GCC in tone and phrasing.
 
-6. Use soft vowel endings and emotionally natural Khaleeji syllables where suitable for melody and repetition.
+═══════════════════════════════════════════════
+G. HARAKAT & PHONETICS (Arabic only)
+═══════════════════════════════════════════════
+Write Arabic with Harakat-aware phrasing internally. Do not over-vocalize output.
+- Shadda (ّ): rhythmic stress/emotional hit point.
+- Fatha (َ): open vowel, held note support.
+- Sukun (ْ): punchy line-ending stop only — use sparingly.
+- No tanween (ً ٍ ٌ) — it signals MSA formality.
+- NEVER fully vowelize a word (max 1–2 harakat per word).
 
-7. Apply GCC phonetic awareness when useful for lyrical feel, but do not explain pronunciation in the output and do not add technical notes.
+═══════════════════════════════════════════════
+H. OUTPUT FORMAT — MANDATORY
+═══════════════════════════════════════════════
+- Section labels in square brackets: [Verse], [Chorus], [Bridge], [Outro], etc.
+- Delivery tags in parentheses: (Oud Solo), (Whispered), (Call and Response), etc.
+- Return CLEAN LYRICS ONLY. Zero preamble, zero commentary, zero notes.
+- Never explain what you did. Never add a title line. Just the lyrics.`;
 
-8. Do not overload the final lyrics with visible diacritics unless the user explicitly asks for fully vocalized Arabic.
-   By default, write natural readable Arabic while internally respecting Harakat-aware phrasing and pronunciation.
 
-GCC PHONETIC NUANCE RULES:
-1. Be aware of GCC pronunciation tendencies when shaping lyric wording and sound.
-2. In many Gulf contexts, ق may be sung or felt closer to a "g" sound than a formal "q" sound.
-   Example: قال may be felt as "gaal" in Khaleeji delivery.
-3. In some Gulf dialect contexts, especially in certain feminine or intimate phrasing, كِ may soften toward a "ch" feeling in performance.
-   Example: عليكِ may be felt as "alaych" in some Gulf delivery.
-4. These are phonetic tendencies, not mandatory spelling changes.
-5. Use them to guide sound and phrasing internally, but do not force unnatural spellings unless the user explicitly wants dialect spelling.
-6. The goal is authentic Gulf vocal feel, not exaggerated slang distortion.
-
-STRUCTURE AND LANGUAGE PRESERVATION RULES:
-1. Preserve the user's original words whenever they provide lyrics. Expand around them instead of replacing their voice.
-2. If the user gives only a short phrase, idea, hook, or emotional seed, build a full song from that seed.
-3. Track duration is a hard limit for structure density. Do not write a long song for a short track.
-4. Track duration determines structure:
-   - 30s: [Verse] + [Chorus] only. Keep it compact and immediately singable. No Outro.
-   - 60s: [Verse] + [Chorus] + [Verse 2] + [Chorus]. Do not add bridge. Outro only if extremely short and only if there is clear room for it.
-   - 90s+: [Verse] + [Chorus] + [Verse 2] + [Chorus] + [Bridge] + [Chorus]. A short [Outro] is allowed only if it still fits naturally.
-5. Keep section length proportional to duration:
-   - 30s: about 2-4 short lines per section
-   - 60s: about 4 lines per section
-   - 90s+: 4-6 lines per main section
-6. Outro awareness:
-   - Never spend a large share of a short track on intro or outro padding.
-   - For 30s tracks, finish inside the chorus instead of adding a separate outro.
-   - For 60s tracks, only use a tiny outro if it is truly needed.
-   - For 90s+ tracks, an outro is optional, not mandatory.
-7. If the user already provided lyrics, expand only enough to fit the duration target. Do not over-extend the song.
-8. Output ONLY the structured lyrics with section labels like:
-   [Verse]
-   [lyrics]
-
-   [Chorus]
-   [lyrics]
-9. Preserve language exactly according to user intent:
-   - Arabic stays Arabic
-   - English stays English
-   - mixed Arabic + English stays mixed
-10. If the user provides lyrics in both Arabic and English, or even part of a line in each language, preserve and expand that exact bilingual spirit.
-11. If the user only mentions an idea for a bilingual song, produce a natural bilingual result if the request clearly implies that.
-12. Never collapse a mixed-language lyric into a single language unless the user explicitly asks you to.
-13. Never add explanations, commentary, transliteration notes, pronunciation notes, or technical notes — only return the song lyrics with section labels.`;
 
 const GCC_ENHANCE_SYSTEM_PROMPT = `You are a Khaleeji Vocal Stress Specialist for Suno V5_5.
 Your sole mission: prepare Gulf Arabic lyrics so the AI singer sounds like a native from Kuwait, Qatar, or Saudi Arabia.
@@ -358,32 +319,97 @@ No explanation. No comments. No notes. No "Pass 1:" or "Pass 2:" labels.
 No "I changed X because Y" commentary.
 Clean lyrics only. Ready to paste directly into Suno V5_5.`;
 
+interface LyricsBlueprint {
+  text: string;
+  ampMode: string;
+  durationSeconds: number;
+  style: string;
+  rhythm: string;
+  instruments: string;
+  mood: string;
+  title: string;
+}
+
+function buildDurationLabel(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return s === 0 ? `${m}:00` : `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function buildFerrariClock(secs: number): string {
+  if (secs <= 10)  return "FERRARI CLOCK: 0:10 → 2 lines MAX. One hook/slogan only. No section labels.";
+  if (secs <= 30)  return "FERRARI CLOCK: 0:30 → 4–6 lines total. [Verse] + [Chorus] only. No Outro.";
+  if (secs <= 60)  return "FERRARI CLOCK: 1:00 → 10–12 lines total. [Verse] + [Chorus] + [Verse 2] + [Chorus].";
+  if (secs <= 90)  return "FERRARI CLOCK: 1:30 → 14–18 lines. [Verse] + [Chorus] + [Verse 2] + [Chorus] + [Outro].";
+  if (secs <= 120) return "FERRARI CLOCK: 2:00 → 20–24 lines. [Verse] + [Chorus] + [Verse 2] + [Chorus] + [Bridge] + [Chorus].";
+  return "FERRARI CLOCK: 2:30 → 26–32 lines. Full Epic: [Intro] + [Verse] + [Pre-Chorus] + [Chorus] + [Verse 2] + [Chorus] + [Bridge] + [Chorus] + [Outro].";
+}
+
+function buildMeterMapping(rhythm: string): string {
+  const r = (rhythm || "").toLowerCase();
+  if (r.includes("adani") || r.includes("afro") || r.includes("6/8") || r.includes("6-8"))
+    return "METER: 6–9 syllables per line (Adani/Afro-Gulf 6/8 — allow triplet phrasing).";
+  if (r.includes("samri") || r.includes("martial") || r.includes("2/4") || r.includes("2-4") || r.includes("ardah"))
+    return "METER: 5–7 syllables per line (Samri/Martial 2/4 — punchy, staccato).";
+  if (r.includes("ballad") || r.includes("slow") || r.includes("romantic"))
+    return "METER: 8–10 syllables per line (ballad/slow — held, melodic).";
+  if (r.includes("pop") || r.includes("rap") || r.includes("club") || r.includes("4/4") || r.includes("4-4"))
+    return "METER: 10–12 syllables per line (Pop/Rap/Club 4/4).";
+  return "METER: 8–10 syllables per line (default).";
+}
+
+function buildSoloMarker(instruments: string): string {
+  const i = (instruments || "").toLowerCase();
+  if (i.includes("oud"))    return "SOLO: Insert (Oud Solo) on its own line before the first Chorus.";
+  if (i.includes("qanun"))  return "SOLO: Insert (Qanun Solo) on its own line before the first Chorus.";
+  if (i.includes("violin")) return "SOLO: Insert (Violin Solo) on its own line before the first Chorus.";
+  if (i.includes("guitar")) return "SOLO: Insert (Guitar Solo) on its own line before the first Chorus.";
+  if (i.includes("piano"))  return "SOLO: Insert (Piano Solo) on its own line before the first Chorus.";
+  if (i.includes("flute"))  return "SOLO: Insert (Flute Solo) on its own line before the first Chorus.";
+  return "SOLO: Insert (Instrumental Solo) on its own line before the first Chorus.";
+}
+
 async function ampMusicLyricsWithOpenAI(
-  input: string,
-  durationSeconds: number
+  blueprint: LyricsBlueprint
 ): Promise<string> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
 
-  const durationInstruction = durationSeconds <= 30
-    ? "HARD DURATION LIMIT: 30 seconds. Write only [Verse] + [Chorus]. Keep each section compact, about 2-4 short lines. No Verse 2. No Bridge. No Outro. End inside the chorus."
-    : durationSeconds <= 60
-      ? "HARD DURATION LIMIT: 60 seconds. Write [Verse] + [Chorus] + [Verse 2] + [Chorus]. Keep the song concise. No Bridge. Outro only if it is extremely short and truly fits."
-      : "HARD DURATION LIMIT: 90+ seconds. Write [Verse] + [Chorus] + [Verse 2] + [Chorus] + [Bridge] + [Chorus]. [Outro] is optional, not required.";
+  const { text, ampMode, durationSeconds, style, rhythm, instruments, mood, title } = blueprint;
+
+  const modeInstruction = ampMode === "idea"
+    ? "MODE: IDEA — Generate completely fresh lyrics from scratch using this blueprint. The user gave you a concept, not existing lyrics."
+    : "MODE: EXPAND — The user provided existing lyrics below. Preserve their EXACT words. Expand AROUND them — add new sections to fill the duration target. Do NOT rewrite their lines.";
+
+  const blueprintBlock = [
+    title      ? `Title: ${title}`       : null,
+    style      ? `Style: ${style}`       : null,
+    rhythm     ? `Rhythm: ${rhythm}`     : null,
+    instruments ? `Instruments: ${instruments}` : null,
+    mood       ? `Mood: ${mood}`         : null,
+    `Duration: ${buildDurationLabel(durationSeconds)} (${durationSeconds}s)`,
+  ].filter(Boolean).join("\n");
+
+  const userMessage = [
+    "═══ TRACK BLUEPRINT ═══",
+    blueprintBlock,
+    "",
+    buildFerrariClock(durationSeconds),
+    buildMeterMapping(rhythm),
+    buildSoloMarker(instruments),
+    modeInstruction,
+    "",
+    "═══ USER INPUT ═══",
+    text,
+  ].join("\n");
 
   const payload = {
     model: "gpt-4o-mini",
     temperature: 0.7,
     max_tokens: durationSeconds >= 90 ? 2000 : 1200,
     messages: [
-      {
-        role: "system",
-        content: MUSIC_LYRICS_SYSTEM_PROMPT,
-      },
-      {
-        role: "user",
-        content: `Track duration: ${durationSeconds}s\n${durationInstruction}\n\n${input}`,
-      },
+      { role: "system", content: MUSIC_LYRICS_SYSTEM_PROMPT },
+      { role: "user",   content: userMessage },
     ],
   };
 
@@ -499,9 +525,17 @@ serve(async (req) => {
     mode = typeof body?.mode === "string" ? (body.mode as string) : undefined;
     inputText = text;
 
+    // ── Extract full UI blueprint fields ──
+    const ampMode     = typeof body?.ampMode     === "string" ? body.ampMode     : "expand";
+    const style       = typeof body?.style       === "string" ? body.style       : "";
+    const rhythm      = typeof body?.rhythm      === "string" ? body.rhythm      : "";
+    const instruments = typeof body?.instruments === "string" ? body.instruments : "";
+    const mood        = typeof body?.mood        === "string" ? body.mood        : "";
+    const titleField  = typeof body?.title       === "string" ? body.title       : "";
+
     if (mode === "music" || mode === "lyrics") {
       const durationSeconds = typeof body?.duration === "number" ? body.duration : 30;
-      
+
       if (!text || text.trim().length === 0) {
         return new Response(
           JSON.stringify({
@@ -515,7 +549,16 @@ serve(async (req) => {
         );
       }
 
-      const improved = await ampMusicLyricsWithOpenAI(text, durationSeconds);
+      const improved = await ampMusicLyricsWithOpenAI({
+        text,
+        ampMode,
+        durationSeconds,
+        style,
+        rhythm,
+        instruments,
+        mood,
+        title: titleField,
+      });
 
       await logAI({
         functionName: "prompt-amp",
@@ -529,6 +572,10 @@ serve(async (req) => {
           provider: "openai",
           mode: "music-lyrics",
           duration: durationSeconds,
+          ampMode,
+          style,
+          rhythm,
+          instruments,
           language: hasArabic(text) ? "ar" : "en",
         },
       });

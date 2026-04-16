@@ -2719,25 +2719,17 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     setAmping(true);
     try {
       // Build the input for Amp - include style/mood/instruments context
-      const contextParts: string[] = [];
-      if (includeTags.length > 0) contextParts.push(`Styles: ${includeTags.join(', ')}`);
-      if (rhythmTags.length > 0) contextParts.push(`Rhythm: ${rhythmTags.join(', ')}`);
-      if (instrumentTags.length > 0) contextParts.push(`Instruments: ${instrumentTags.join(', ')}`);
-      if (moodTags.length > 0) contextParts.push(`Mood: ${moodTags.join(', ')}`);
-      if (title.trim()) contextParts.push(`Title: ${title.trim()}`);
-      
-      const context = contextParts.length > 0 ? contextParts.join('\n') + '\n\n' : '';
-      const modeHint = ampMode === 'idea'
-        ? 'MODE: The user is giving you an IDEA or concept — generate completely fresh lyrics from scratch based on this idea.\n\n'
-        : ampMode === 'gcc_enhance'
-          ? 'MODE: GCC ENHANCE — Apply Khaleeji vocal stress markers to the lyrics below. Use the style/rhythm/instruments context above to place phonetic anchors where the rhythmic stress falls. Do NOT rewrite the user\'s poetry.\n\n'
-          : 'MODE: The user is giving you existing LYRICS — preserve their exact words and expand around them into a full song structure.\n\n';
-      const fullInput = context + modeHint + `User input:\n${userInput}`;
       const { data, error } = await supabase.functions.invoke('music-amp', {
         body: {
-          text: fullInput,
+          text: userInput,
           mode: ampMode === 'gcc_enhance' ? 'gcc-enhance' : 'lyrics',
-          duration: duration
+          ampMode: ampMode,
+          duration: duration,
+          style: kieStyle || includeTags.join(', '),
+          rhythm: rhythmTags[0] || '',
+          instruments: instrumentTags.join(', '),
+          mood: moodTags[0] || '',
+          title: title.trim(),
         }
       });
       if (error) throw error;
