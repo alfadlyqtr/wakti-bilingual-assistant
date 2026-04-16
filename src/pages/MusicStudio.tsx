@@ -3258,18 +3258,31 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'شيلات':                 LOCK('khaleeji sheilat, strong male group vocal'),
       'سامري':                 LOCK('samri folk, heritage'),
       'ليوان':                 LOCK('liwa coastal, afro-gulf polyrhythmic'),
-      // ── Non-GCC styles (no identity lock) ──
-      'Egyptian':              'egyptian pop, egyptian arabic vocal',
-      'Egyptian Shaabi':       'egyptian shaabi, cairo street vocal',
-      'Arabic Pop':            'arabic pop, pan-arabic vocal',
-      'Levant Pop':            'levantine pop, syrian-lebanese vocal',
+      // ── Other Arabic — regional Ferrari anchors (parallel branch, GCC untouched) ──
+      'Egyptian':              'egyptian pop, cairo studio sound, authentic egyptian dialect, melodic cairo vocal delivery, modern al-jeel production',
+      'Egyptian Shaabi':       'egyptian mahraganat street music, electro-shaabi rhythm, fast electronic beats 140 BPM, autotuned cairo male vocals, street vibes, baladi beats',
+      'Iraqi Style':           'iraqi pop, baghdadi maqam soul, authentic baghdadi dialect, iraqi choubi rhythm, emotional iraqi phrasing, soulful iraqi resonance',
+      'Lebanese Style':        'lebanese pop, beirut studio sound, authentic lebanese dialect, lebanese dabke energy, refined levantine phrasing, beirut street vibe',
+      'Moroccan Style':        'maghrebi chaabi, authentic darija dialect, north african vocal resonance, gnawa fusion, maghrebi percussion, bendir, raï vocals',
+      'Arabic Pop':            'modern pan-arabic pop, mainstream arab vocal, contemporary arabic fusion, polished production, studio mastered',
+      'Levant Pop':            'levantine pop, shami folk fusion, shami dialect phrasing, syrian lebanese jordanian vocal identity, modern dabke pop',
       'Anasheed':              'islamic nasheed, a cappella vocal',
-      'مصري':                  'بوب مصري، صوت مصري',
+      // ── Arabic UI labels ──
+      'مصري':                  'بوب مصري، صوت قاهري أصيل، إنتاج الجيل الحديث، أداء وجداني قاهري',
+      'شعبي مصري':             'مهرجانات مصرية، موسيقى إلكترو شعبي، بيت سريع، صوت ذكوري قاهري بالتون، أجواء شارعية',
+      'عراقي':                 'بوب عراقي، روح مقام بغدادي، لهجة بغدادية أصيلة، إيقاع الجوبي، تعبيرية عراقية',
+      'لبناني':                'بوب لبناني، صوت بيروت، لهجة لبنانية أصيلة، روح الدبكة اللبنانية، صياغة شامية راقية',
+      'مغربي':                 'شعبي مغربي، لهجة دارجة أصيلة، رنين صوتي شمال أفريقي، دمج الكناوة، إيقاع بنديري',
+      'بوب عربي':              'بوب عربي حديث، صوت عربي سائد، دمج عربي معاصر، إنتاج راقٍ',
+      'شامي':                  'بوب شامي، فيوجن شعبي شامي، نطق لهجة شامية، هوية صوتية سورية لبنانية أردنية، دبكة حديثة',
       'أناشيد':                'أناشيد إسلامية، صوت بشري فقط',
-      'بوب عربي':              'بوب عربي، صوت عربي',
     };
     const GCC_KEYS = new Set(Object.keys(STYLE_ANCHORS).filter(
-      (k) => !['Egyptian','Egyptian Shaabi','Arabic Pop','Levant Pop','Anasheed','مصري','أناشيد','بوب عربي'].includes(k)
+      (k) => ![
+        'Egyptian','Egyptian Shaabi','Arabic Pop','Levant Pop','Anasheed',
+        'Iraqi Style','Lebanese Style','Moroccan Style',
+        'مصري','شعبي مصري','عراقي','لبناني','مغربي','بوب عربي','شامي','أناشيد',
+      ].includes(k)
     ));
 
     // ── Rhythm chip → compact label ──
@@ -3437,8 +3450,29 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const rawLyrics = lyricsText.trim() || styleText.trim();
       const structuredPrompt = formatLyricsWithStructure(rawLyrics, instrumental, instrumentTags);
 
-      // ── Morocco-Killer negative shield — primary drift triggers blocked first ──
-      const finalNegativeTags = 'moroccan, darija, gnawa, chaabi, maghrebi rhythm, egyptian, levantine, fusha, msa, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, noise, hiss, distorted, low quality';
+      // ── Negative shield: regional conditional first, GCC Morocco-Killer default (untouched) ──
+      const REGIONAL_NEGATIVE: Record<string, string> = {
+        // ── Egyptian (Shaabi & Pop) ──
+        'Egyptian':        'khaleeji, gulf, moroccan, maghrebi, darija, levantine, shami, iraqi, fusha, msa, noise, hiss, low quality, distorted',
+        'Egyptian Shaabi': 'khaleeji, gulf, moroccan, maghrebi, darija, levantine, shami, iraqi, fusha, msa, noise, hiss, low quality, distorted',
+        'مصري':            'خليجي, خليج, مغربي, دارجة, شامي, عراقي, فصحى, noise, hiss, low quality, distorted',
+        'شعبي مصري':       'خليجي, خليج, مغربي, دارجة, شامي, عراقي, فصحى, noise, hiss, low quality, distorted',
+        // ── Iraqi ──
+        'Iraqi Style':     'egyptian, levantine, shami, moroccan, maghrebi, darija, khaleeji, gulf, fusha, msa, noise, hiss, low quality, distorted',
+        'عراقي':           'مصري, شامي, مغربي, دارجة, خليجي, فصحى, noise, hiss, low quality, distorted',
+        // ── Lebanese / Levant ──
+        'Lebanese Style':  'khaleeji, gulf, egyptian, moroccan, maghrebi, darija, iraqi, fusha, msa, noise, hiss, low quality, distorted',
+        'Levant Pop':      'khaleeji, gulf, egyptian, moroccan, maghrebi, darija, iraqi, fusha, msa, noise, hiss, low quality, distorted',
+        'لبناني':          'خليجي, خليج, مصري, مغربي, دارجة, عراقي, فصحى, noise, hiss, low quality, distorted',
+        'شامي':            'خليجي, خليج, مصري, مغربي, دارجة, عراقي, فصحى, noise, hiss, low quality, distorted',
+        // ── Moroccan ──
+        'Moroccan Style':  'khaleeji, gulf, egyptian, levantine, shami, iraqi, fusha, msa, noise, hiss, low quality, distorted',
+        'مغربي':           'خليجي, خليج, مصري, شامي, عراقي, فصحى, noise, hiss, low quality, distorted',
+      };
+      const regionalShield = includeTags.length > 0 ? REGIONAL_NEGATIVE[includeTags[0]] : undefined;
+      // ── GCC Morocco-Killer default (sacred — untouched) ──
+      const finalNegativeTags = regionalShield
+        ?? 'moroccan, darija, gnawa, chaabi, maghrebi rhythm, egyptian, levantine, fusha, msa, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, noise, hiss, distorted, low quality';
 
       const invokeBody: Record<string, unknown> = {
         title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
