@@ -132,6 +132,14 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
       addDebug(`Callback fired! Status: ${resp?.status}`);
       addDebug(`Callback message: ${resp?.message}`);
       if (resp?.error) addDebug(`Callback error: ${JSON.stringify(resp.error)}`);
+      // Dump the entire raw response in chunks so we see every field Apple/RC returns
+      try {
+        const raw = JSON.stringify(resp);
+        const chunkSize = 140;
+        for (let i = 0; i < raw.length && i < 2000; i += chunkSize) {
+          addDebug(`resp[${i}]: ${raw.slice(i, i + chunkSize)}`);
+        }
+      } catch {}
       console.log('[Purchase] Response:', resp);
 
       const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
@@ -180,11 +188,8 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     };
 
     try {
-      if (isQUUser && isIOS) {
-        addDebug('QU iOS → showPaywall(qu_discount)');
-        showPaywall(true, 'qu_discount', purchaseCallback);
-      } else if (isQUUser) {
-        addDebug('QU Android → purchasePackage(qu_discount)');
+      if (isQUUser) {
+        addDebug('QU → purchasePackage(qu_discount) [Default offering]');
         purchasePackage('qu_discount', purchaseCallback);
       } else {
         addDebug('Standard → purchasePackage($rc_monthly)');
