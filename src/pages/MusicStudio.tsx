@@ -1346,7 +1346,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         },
         {
           title: 'عربي آخر',
-          items: ['مصري','شعبي مصري','مهرجانات','شامي','بوب عربي']
+          items: ['مصري','شعبي مصري','عراقي','لبناني','مغربي','مهرجانات','شامي','بوب عربي']
         },
         {
           title: 'إسلامي',
@@ -1433,7 +1433,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       },
       {
         title: 'Other Arabic',
-        items: ['Egyptian','Egyptian Shaabi','Levant Pop','Arabic Pop']
+        items: ['Egyptian','Egyptian Shaabi','Iraqi Style','Lebanese Style','Moroccan Style','Levant Pop','Arabic Pop']
       },
       {
         title: 'Islamic',
