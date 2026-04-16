@@ -1337,8 +1337,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
           items: ['خليجي إذاعي','خليجي دانس','خليجي إلكتروني','خليجي سينث بوب','فيوجن خليجي','إنجليزي بطابع خليجي']
         },
         {
-          title: 'خليجي — ريتش وإيفنت',
-          items: ['خليجي آر أند بي','خليجي فاخر','خليجي سينمائي','خليجي جماهيري','مناسبات وطنية خليجية']
+          title: 'خليجي — ريتش',
+          items: ['خليجي آر أند بي','خليجي فاخر','خليجي سينمائي','خليجي جماهيري']
         },
         {
           title: 'خليجي — تراثي',
@@ -1346,7 +1346,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         },
         {
           title: 'عربي آخر',
-          items: ['مصري','شعبي مصري','عراقي','لبناني','مغربي','مهرجانات','شامي','بوب عربي']
+          items: ['مصري','شعبي مصري','عراقي','لبناني','مغربي','مهرجانات','شامي']
         },
         {
           title: 'إسلامي',
@@ -1424,8 +1424,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         items: ['GCC Radio Pop','GCC Dance Pop','GCC Electro Pop','GCC Synth Pop','Modern Khaleeji Fusion','English GCC Pop']
       },
       {
-        title: 'GCC — Rich & Event',
-        items: ['GCC R&B Pop','Luxury GCC Pop','Cinematic GCC','GCC Anthem','National Event GCC']
+        title: 'GCC — Rich',
+        items: ['GCC R&B Pop','Luxury GCC Pop','Cinematic GCC','GCC Anthem']
       },
       {
         title: 'GCC — Heritage',
@@ -1433,7 +1433,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       },
       {
         title: 'Other Arabic',
-        items: ['Egyptian','Egyptian Shaabi','Iraqi Style','Lebanese Style','Moroccan Style','Levant Pop','Arabic Pop']
+        items: ['Egyptian','Egyptian Shaabi','Iraqi Style','Lebanese Style','Moroccan Style','Levant Pop']
       },
       {
         title: 'Islamic',
