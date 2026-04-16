@@ -539,7 +539,10 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   }
 
   // CRITICAL: Block while profile is loading - never let children render during load
-  if (isProfileLoading && !recentLoginGrace) {
+  // EXCEPTION: If the trial was just started (Begin pressed on welcome wall),
+  // the profile is mid-refetch but we already know the user is allowed in.
+  // Skipping this block prevents the blank screen right after pressing Begin.
+  if (isProfileLoading && !recentLoginGrace && !trialJustStartedRef.current) {
     if (DEV) console.log("ProtectedRoute: Profile loading - BLOCKING access");
     return (
       <div className="w-screen h-[100dvh] bg-background flex items-center justify-center overflow-hidden">
@@ -593,7 +596,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
           <CustomPaywallModal open={showPaywall} onOpenChange={setShowPaywall} variant={paywallVariant} />
         </Suspense>
       )}
-      {(hasConfirmedAccess || (recentLoginGrace && !isLoading && user)) ? (
+      {(hasConfirmedAccess || (recentLoginGrace && !isLoading && user) || (trialJustStartedRef.current && user)) ? (
         children
       ) : (
         <div className="w-screen h-[100dvh] bg-[#0c0f14] flex items-center justify-center overflow-hidden">
