@@ -293,8 +293,25 @@ serve(async (req) => {
         })
         .eq("task_id", taskId);
 
+    } else if (type === "first") {
+      // "first" callback: low-bitrate preview is ready — save URL but keep status=generating
+      // The Realtime listener on the frontend only triggers on status='completed'
+      // so users will never see the low-quality preview, only the final high-bitrate render
+      const previewTracks: SunoTrack[] = payload.data ?? payload.response?.sunoData ?? [];
+      const firstPreview = previewTracks[0];
+      if (firstPreview?.audioUrl || firstPreview?.audio_url) {
+        const previewUrl = firstPreview.audioUrl || firstPreview.audio_url || "";
+        console.log(`[music-callback] "first" preview ready for taskId=${taskId}, saving URL but keeping status=generating`);
+        await supabaseService
+          .from("user_music_tracks")
+          .update({ source_audio_url: previewUrl })
+          .eq("task_id", taskId)
+          .eq("meta->>status", "generating");
+      } else {
+        console.log(`[music-callback] "first" callback received, no preview URL, taskId=${taskId}`);
+      }
     } else {
-      // Intermediate stages: text, first — just log
+      // Other intermediate stages: text, etc. — just log
       console.log(`[music-callback] Intermediate stage status=${status} type=${type} for taskId=${taskId}`);
     }
 

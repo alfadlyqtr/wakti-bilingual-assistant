@@ -101,21 +101,38 @@ serve(async (req) => {
     if (!taskId) throw new Error("Missing taskId");
 
     // First check DB — if callback already fired, return completed state
-    const { data: dbRows } = await supabaseService
+    const { data: dbRows, error: dbError } = await supabaseService
       .from("user_music_tracks")
       .select("id, user_id, signed_url, cover_url, duration, title, prompt, meta, variant_index, storage_path, include_styles, requested_duration_seconds, model")
       .eq("task_id", taskId)
       .order("variant_index", { ascending: true });
 
+    if (dbError) {
+      console.error("[music-status] DB query error:", dbError);
+    }
+
+    // Safe meta accessor — meta is JSONB, may be null or any shape
+    const getMetaStatus = (r: any): string => {
+      try {
+        const m = r?.meta;
+        if (!m || typeof m !== "object") return "generating";
+        return (m.status ?? "generating").toString();
+      } catch { return "generating"; }
+    };
+    const getMetaError = (r: any): string => {
+      try {
+        const m = r?.meta;
+        if (!m || typeof m !== "object") return "Generation failed";
+        return (m.error ?? "Generation failed").toString();
+      } catch { return "Generation failed"; }
+    };
+
     const completedRows = (dbRows ?? []).filter(
-      (r: any) => r.meta?.status === "completed" && r.signed_url
+      (r: any) => getMetaStatus(r) === "completed" && r.signed_url
     );
     const totalRows = (dbRows ?? []).length;
 
-    // Return completed from DB if we have 2+ variants done, OR if we have been
-    // waiting (totalRows >= 2) and at least 1 is done — avoids race where
-    // second insert hasn't landed yet on a very early poll.
-    // We prefer waiting for both, but if totalRows >= 2 and completedRows >= 2 return all.
+    // Return completed from DB if we have 2+ variants done
     if (completedRows.length >= 2 && totalRows >= 2) {
       return new Response(JSON.stringify({
         status: "completed",
@@ -130,15 +147,12 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // If only 1 variant completed in DB but we know there should be 2,
-    // keep polling KIE — don't return early with partial results.
-
     // Check if marked as failed
-    const failedRow = (dbRows ?? []).find((r: any) => r.meta?.status === "failed");
+    const failedRow = (dbRows ?? []).find((r: any) => getMetaStatus(r) === "failed");
     if (failedRow) {
       return new Response(JSON.stringify({
         status: "failed",
-        error: failedRow.meta?.error || "Generation failed",
+        error: getMetaError(failedRow),
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

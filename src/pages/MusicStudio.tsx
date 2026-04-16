@@ -3510,71 +3510,133 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     }
   };
 
-  // Poll music-status when a generation task is active
+  // Realtime listener — replaces polling. Fires when music-callback writes completed rows.
   useEffect(() => {
     if (!generatingTask) return;
 
     const { taskId, recordId } = generatingTask;
-    let cancelled = false;
+    let settled = false;
 
-    const poll = async () => {
-      if (cancelled) return;
+    const handleCompleted = (tracks: Array<{ id: string; audioUrl: string; coverUrl: string | null; duration: number | null; title: string | null; variantIndex: number }>) => {
+      if (settled) return;
+      settled = true;
+      setGeneratingTask(null);
+      setSubmitting(false);
+      setGeneratedTracks(tracks);
+      setSavedTrackIds([]);
+      setTitleOpen(false);
+      setMusicStyleOpen(false);
+      setVocalsOpen(false);
+      setLyricsOpen(false);
+      setSongsUsed((v) => v + 1);
+      setSongsRemaining((v) => Math.max(0, v - 1));
+      setLastError(null);
+      setLastNotice(null);
+      toast.success(language === 'ar' ? 'تم إنشاء الموسيقى بنجاح!' : 'Music generated successfully!');
+    };
+
+    const handleFailed = (msg: string) => {
+      if (settled) return;
+      settled = true;
+      setGeneratingTask(null);
+      setSubmitting(false);
+      setLastError(msg);
+      setLastNotice(null);
+      toast.error(msg);
+    };
+
+    // Build track list from completed DB rows
+    const buildTracks = (rows: Array<{ id: string; signed_url: string | null; cover_url: string | null; duration: number | null; title: string | null; variant_index: number | null }>) =>
+      rows
+        .filter((r) => r.signed_url)
+        .map((r) => ({
+          id: r.id,
+          audioUrl: r.signed_url as string,
+          coverUrl: r.cover_url,
+          duration: r.duration,
+          title: r.title,
+          variantIndex: r.variant_index ?? 0,
+        }));
+
+    // Fetch completed rows directly from DB (used by both realtime and fallback)
+    const fetchCompletedRows = async () => {
+      const { data } = await (supabase as any)
+        .from('user_music_tracks')
+        .select('id, signed_url, cover_url, duration, title, variant_index, meta')
+        .eq('task_id', taskId)
+        .order('variant_index', { ascending: true });
+      return (data ?? []).filter((r: any) => {
+        try { return r?.meta?.status === 'completed' && r.signed_url; } catch { return false; }
+      });
+    };
+
+    // Subscribe to Realtime changes on this task's rows
+    const channel = supabase
+      .channel(`music-task-${taskId}`)
+      .on(
+        'postgres_changes' as any,
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_music_tracks',
+          filter: `task_id=eq.${taskId}`,
+        },
+        async (payload: any) => {
+          if (settled) return;
+          const row = payload?.new ?? payload?.record;
+          if (!row) return;
+
+          // Check for failure
+          try {
+            if (row?.meta?.status === 'failed') {
+              handleFailed(row.meta?.error || (language === 'ar' ? 'فشل الإنشاء' : 'Generation failed'));
+              return;
+            }
+          } catch { /* ignore */ }
+
+          // On any change, query all completed rows for this task
+          // (we need all variants, not just the one that just changed)
+          const completedRows = await fetchCompletedRows();
+          if (completedRows.length >= 2) {
+            handleCompleted(buildTracks(completedRows));
+          } else if (completedRows.length === 1) {
+            // One variant done — keep waiting briefly for second, then show what we have
+            setTimeout(async () => {
+              if (settled) return;
+              const rows = await fetchCompletedRows();
+              if (rows.length >= 1) handleCompleted(buildTracks(rows));
+            }, 8000);
+          }
+        }
+      )
+      .subscribe();
+
+    // Fallback safety net: after 90s, do a single music-status poll in case
+    // Realtime missed the event (e.g., connectivity gap)
+    const fallbackTimeout = setTimeout(async () => {
+      if (settled) return;
       try {
         const { data, error } = await supabase.functions.invoke('music-status', {
           body: { taskId, recordId },
         });
-
-        if (cancelled) return;
-
         if (error) {
-          console.warn('[MusicStudio] music-status poll error:', error);
+          console.warn('[MusicStudio] fallback music-status error:', error);
           return;
         }
-
         if (data?.status === 'completed' && data?.tracks?.length) {
-          setGeneratingTask(null);
-          setSubmitting(false);
-          setGeneratedTracks(data.tracks);
-          setSavedTrackIds([]);
-          setTitleOpen(false);
-          setMusicStyleOpen(false);
-          setVocalsOpen(false);
-          setLyricsOpen(false);
-          setSongsUsed((v) => v + 1);
-          setSongsRemaining((v) => Math.max(0, v - 1));
-          setLastError(null);
-          setLastNotice(null);
-          toast.success(language === 'ar' ? 'تم إنشاء الموسيقى بنجاح!' : 'Music generated successfully!');
-          return;
+          handleCompleted(data.tracks);
+        } else if (data?.status === 'failed') {
+          handleFailed(data?.error || (language === 'ar' ? 'فشل الإنشاء' : 'Generation failed'));
         }
-
-        if (data?.status === 'failed') {
-          setGeneratingTask(null);
-          setSubmitting(false);
-          const failMsg = data?.error || (language === 'ar' ? 'فشل الإنشاء' : 'Generation failed');
-          setLastError(failMsg);
-          setLastNotice(null);
-          toast.error(failMsg);
-          return;
-        }
-
-        // Still generating — keep polling until Kie callback-backed status resolves
-        setLastError(null);
-        setLastNotice(null);
       } catch (e) {
-        console.warn('[MusicStudio] music-status poll exception:', e);
+        console.warn('[MusicStudio] fallback poll exception:', e);
       }
-    };
-
-    // First poll after 5 seconds
-    const interval = setInterval(poll, 5000);
-    // Also do an immediate first poll after 3s (KIE sometimes finishes fast)
-    const initialTimeout = setTimeout(poll, 3000);
+    }, 90_000);
 
     return () => {
-      cancelled = true;
-      clearInterval(interval);
-      clearTimeout(initialTimeout);
+      settled = true;
+      clearTimeout(fallbackTimeout);
+      supabase.removeChannel(channel);
     };
   }, [generatingTask, language]);
 
