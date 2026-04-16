@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Search, Play, Pause, Bookmark, BookmarkCheck, BookOpen, MessageCircle, RotateCcw, ChevronRight, ChevronDown, X, Volume2, Clock, Check, ListMusic, Settings2, ListVideo, SkipBack, SkipForward, RotateCw } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { bgAudio } from "@/utils/bgAudio";
 import { emitEvent } from "@/utils/eventBus";
@@ -225,6 +226,10 @@ export default function DeenQuran() {
   const [isSurahPlaying, setIsSurahPlaying] = useState(false);
   const [currentPlaybackAyahIndex, setCurrentPlaybackAyahIndex] = useState(-1);
   const [readerPlayAllEnabled, setReaderPlayAllEnabled] = useState(false);
+
+  const setIsSurahPlayingSync = (v: boolean) => { isSurahPlayingRef.current = v; setIsSurahPlaying(v); };
+  const setCurrentPlaybackAyahIndexSync = (v: number) => { currentPlaybackAyahIndexRef.current = v; setCurrentPlaybackAyahIndex(v); };
+  const setReaderPlayAllEnabledSync = (v: boolean) => { readerPlayAllEnabledRef.current = v; setReaderPlayAllEnabled(v); };
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
   const [loopSurah, setLoopSurah] = useState(false);
@@ -249,6 +254,9 @@ export default function DeenQuran() {
   const playbackSessionRef = useRef(0);
   const readerTopRef = useRef<HTMLDivElement | null>(null);
   const ayahItemRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const readerPlayAllEnabledRef = useRef(false);
+  const isSurahPlayingRef = useRef(false);
+  const currentPlaybackAyahIndexRef = useRef(-1);
   useEffect(() => {
     try {
       localStorage.setItem(RECITER_STORAGE_KEY, selectedReciter);
@@ -362,7 +370,7 @@ export default function DeenQuran() {
       setAudioCurrentTime(bgEl.currentTime);
       setAudioDuration(bgEl.duration || 0);
       setPlaying(!bgEl.paused);
-      setIsSurahPlaying(!bgEl.paused);
+      setIsSurahPlayingSync(!bgEl.paused);
     };
     sync();
     bgEl.addEventListener("timeupdate", sync);
@@ -498,7 +506,7 @@ export default function DeenQuran() {
       return targetIndex >= start && targetIndex < end;
     });
     if (targetPage >= 0) setReaderPage(targetPage);
-    setCurrentPlaybackAyahIndex(targetIndex);
+    setCurrentPlaybackAyahIndexSync(targetIndex);
     window.setTimeout(() => {
       ayahItemRefs.current[targetIndex]?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 220);
@@ -509,8 +517,8 @@ export default function DeenQuran() {
     surahPlaybackCancelledRef.current = true;
     playbackSessionRef.current += 1;
     setPlaying(false);
-    setIsSurahPlaying(false);
-    setCurrentPlaybackAyahIndex(0);
+    setIsSurahPlayingSync(false);
+    setCurrentPlaybackAyahIndexSync(0);
     setAudioCurrentTime(0);
     setAudioDuration(0);
     if (audioRef.current && !bgIsOwned) {
@@ -581,7 +589,7 @@ export default function DeenQuran() {
   const playAyahAudio = async (ayah: Ayah) => {
     try {
       surahPlaybackCancelledRef.current = true;
-      setIsSurahPlaying(false);
+      setIsSurahPlayingSync(false);
       saveProgress(activeSurah?.number ?? ayah.number, ayah.numberInSurah);
       const ayahIndex = activeSurah?.ayahs.findIndex((item) => item.numberInSurah === ayah.numberInSurah) ?? -1;
 
@@ -600,10 +608,10 @@ export default function DeenQuran() {
         audioRef.current.src = audioUrl;
         await audioRef.current.play();
         setPlaying(true);
-        if (ayahIndex >= 0) setCurrentPlaybackAyahIndex(ayahIndex);
+        if (ayahIndex >= 0) setCurrentPlaybackAyahIndexSync(ayahIndex);
         audioRef.current.onended = () => {
           setPlaying(false);
-          setCurrentPlaybackAyahIndex(-1);
+          setCurrentPlaybackAyahIndexSync(-1);
         };
         return true;
       }
@@ -615,8 +623,8 @@ export default function DeenQuran() {
   };
 
   const stopPlayback = (triggeredByUser = false) => {
-    const stoppedAtIndex = currentPlaybackAyahIndex;
-    const wasPlayAll = readerPlayAllEnabled && isSurahPlaying;
+    const stoppedAtIndex = currentPlaybackAyahIndexRef.current;
+    const wasPlayAll = readerPlayAllEnabledRef.current && isSurahPlayingRef.current;
     surahPlaybackCancelledRef.current = true;
     playbackSessionRef.current += 1;
     if (audioRef.current) {
@@ -631,8 +639,8 @@ export default function DeenQuran() {
     setAudioCurrentTime(0);
     setAudioDuration(0);
     setPlaying(false);
-    setIsSurahPlaying(false);
-    setCurrentPlaybackAyahIndex(-1);
+    setIsSurahPlayingSync(false);
+    setCurrentPlaybackAyahIndexSync(-1);
     if (triggeredByUser && wasPlayAll && stoppedAtIndex >= 0 && activeSurah) {
       const stoppedAyah = activeSurah.ayahs[stoppedAtIndex] ?? null;
       if (stoppedAyah) setPendingBookmarkAyah(stoppedAyah);
@@ -702,9 +710,9 @@ export default function DeenQuran() {
     const sessionId = playbackSessionRef.current + 1;
     playbackSessionRef.current = sessionId;
     surahPlaybackCancelledRef.current = false;
-    setIsSurahPlaying(true);
+    setIsSurahPlayingSync(true);
     setPlaying(true);
-    setCurrentPlaybackAyahIndex(0);
+    setCurrentPlaybackAyahIndexSync(0);
     setAudioCurrentTime(0);
     setAudioDuration(0);
     saveProgress(targetSurah.number, 1);
@@ -737,7 +745,7 @@ export default function DeenQuran() {
         bgEl.removeEventListener("timeupdate", syncBg);
         bgEl.removeEventListener("loadedmetadata", syncBg);
         setPlaying(false);
-        setIsSurahPlaying(false);
+        setIsSurahPlayingSync(false);
         if (loopSurah) { playFullSurahAudio(targetSurah, currentMeta ?? undefined); return; }
         if (autoNextSurah && currentMeta) {
           const idx = surahs.findIndex((s) => s.number === currentMeta.number);
@@ -770,7 +778,7 @@ export default function DeenQuran() {
         cleanup2();
         if (playbackSessionRef.current !== sessionId) return;
         setPlaying(false);
-        setIsSurahPlaying(false);
+        setIsSurahPlayingSync(false);
         setAudioCurrentTime(audio.duration || 0);
         if (loopSurah) {
           playFullSurahAudio(targetSurah, currentMeta ?? undefined);
@@ -805,9 +813,9 @@ export default function DeenQuran() {
     const sessionId = playbackSessionRef.current + 1;
     playbackSessionRef.current = sessionId;
     surahPlaybackCancelledRef.current = false;
-    setIsSurahPlaying(true);
+    setIsSurahPlayingSync(true);
     setPlaying(true);
-    setCurrentPlaybackAyahIndex(startIndex);
+    setCurrentPlaybackAyahIndexSync(startIndex);
 
     try {
       for (let index = startIndex; index < targetSurah.ayahs.length; index += 1) {
@@ -826,7 +834,7 @@ export default function DeenQuran() {
           });
         }
 
-        setCurrentPlaybackAyahIndex(index);
+        setCurrentPlaybackAyahIndexSync(index);
         saveProgress(targetSurah.number, ayah.numberInSurah);
 
         const audioEdition = isAr ? "ar.alafasy" : "en.walk";
@@ -859,7 +867,7 @@ export default function DeenQuran() {
     } finally {
       if (playbackSessionRef.current === sessionId) {
         setPlaying(false);
-        setIsSurahPlaying(false);
+        setIsSurahPlayingSync(false);
         surahPlaybackCancelledRef.current = false;
       }
     }
@@ -905,13 +913,11 @@ export default function DeenQuran() {
   };
 
   const toggleReaderPlayAllMode = () => {
-    setReaderPlayAllEnabled((prev) => {
-      const next = !prev;
-      if (!next && isSurahPlaying) {
-        stopPlayback(true);
-      }
-      return next;
-    });
+    const next = !readerPlayAllEnabledRef.current;
+    setReaderPlayAllEnabledSync(next);
+    if (!next && isSurahPlayingRef.current) {
+      stopPlayback(true);
+    }
   };
 
   const toggleReaderAyahPlayback = async (ayah: Ayah, globalIdx: number) => {
@@ -1105,6 +1111,35 @@ export default function DeenQuran() {
       toast.success(isAr ? "تم الحفظ ✓" : "Bookmarked ✓");
     }
     if (fromSheet) setShowActionSheet(false);
+  };
+
+  const setPrimaryBookmarkAyah = async (ayah: Ayah) => {
+    if (!activeSurah) return;
+    const surahKey = String(activeSurah.number);
+    const storedBookmarks = readStoredBookmarks();
+    setBookmarkedAyahs(new Set([ayah.numberInSurah]));
+    writeStoredBookmarks({
+      ...storedBookmarks,
+      [surahKey]: [ayah.numberInSurah],
+    });
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const uid = sessionData.session?.user?.id;
+      if (!uid) throw new Error("no-user");
+      await (supabase as any)
+        .from("deen_quran_bookmarks")
+        .delete()
+        .eq("user_id", uid)
+        .eq("surah_number", activeSurah.number);
+      await (supabase as any).from("deen_quran_bookmarks").upsert({
+        user_id: uid,
+        surah_number: activeSurah.number,
+        ayah_number: ayah.numberInSurah,
+      });
+    } catch {}
+
+    toast.success(isAr ? `تم حفظ الآية ${ayah.numberInSurah} كموضعك الجديد ✓` : `Saved ayah ${ayah.numberInSurah} as your new bookmark ✓`);
   };
 
   const normalizedSearch = normalizeSearchValue(search);
@@ -1693,38 +1728,50 @@ export default function DeenQuran() {
                   />
                 </div>
 
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 gap-2" dir={isAr ? "rtl" : "ltr"}>
                   <button
-                    onClick={playPreviousListeningSurah}
-                    className="flex items-center justify-center py-3 rounded-xl active:scale-95 transition-all"
-                    style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${cardBorder}` }}
-                    title={isAr ? "السورة السابقة" : "Previous surah"}
+                    onClick={playNextListeningSurah}
+                    className="flex items-center justify-center gap-2 py-3 px-3 rounded-2xl active:scale-95 transition-all"
+                    style={{ background: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.78)", border: `1px solid ${cardBorder}`, boxShadow: cardShadow }}
+                    title={isAr ? "السورة التالية" : "Next surah"}
                   >
-                    <SkipBack className="w-4 h-4" style={{ color: textPrimary }} />
+                    <SkipForward className="w-4 h-4 flex-shrink-0" style={{ color: textPrimary }} />
+                    <span className="text-xs font-semibold" style={{ color: textPrimary }}>
+                      {isAr ? "التالي" : "Next surah"}
+                    </span>
                   </button>
                   <button
-                    onClick={() => skipAudioBy(-10)}
-                    className="flex items-center justify-center py-3 rounded-xl active:scale-95 transition-all"
-                    style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${cardBorder}` }}
-                    title={isAr ? "إرجاع 10 ثوانٍ" : "Back 10 seconds"}
+                    onClick={playPreviousListeningSurah}
+                    className="flex items-center justify-center gap-2 py-3 px-3 rounded-2xl active:scale-95 transition-all"
+                    style={{ background: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.78)", border: `1px solid ${cardBorder}`, boxShadow: cardShadow }}
+                    title={isAr ? "السورة السابقة" : "Previous surah"}
                   >
-                    <RotateCcw className="w-4 h-4" style={{ color: textPrimary }} />
+                    <SkipBack className="w-4 h-4 flex-shrink-0" style={{ color: textPrimary }} />
+                    <span className="text-xs font-semibold" style={{ color: textPrimary }}>
+                      {isAr ? "السابق" : "Previous surah"}
+                    </span>
                   </button>
                   <button
                     onClick={() => skipAudioBy(10)}
-                    className="flex items-center justify-center py-3 rounded-xl active:scale-95 transition-all"
-                    style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${cardBorder}` }}
+                    className="flex items-center justify-center gap-2 py-3 px-3 rounded-2xl active:scale-95 transition-all"
+                    style={{ background: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.78)", border: `1px solid ${cardBorder}`, boxShadow: cardShadow }}
                     title={isAr ? "تقديم 10 ثوانٍ" : "Forward 10 seconds"}
                   >
-                    <RotateCw className="w-4 h-4" style={{ color: textPrimary }} />
+                    <RotateCw className="w-4 h-4 flex-shrink-0" style={{ color: textPrimary }} />
+                    <span className="text-xs font-semibold" style={{ color: textPrimary }}>
+                      {isAr ? "+10 ثوانٍ" : "+10 sec"}
+                    </span>
                   </button>
                   <button
-                    onClick={playNextListeningSurah}
-                    className="flex items-center justify-center py-3 rounded-xl active:scale-95 transition-all"
-                    style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${cardBorder}` }}
-                    title={isAr ? "السورة التالية" : "Next surah"}
+                    onClick={() => skipAudioBy(-10)}
+                    className="flex items-center justify-center gap-2 py-3 px-3 rounded-2xl active:scale-95 transition-all"
+                    style={{ background: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.78)", border: `1px solid ${cardBorder}`, boxShadow: cardShadow }}
+                    title={isAr ? "إرجاع 10 ثوانٍ" : "Back 10 seconds"}
                   >
-                    <SkipForward className="w-4 h-4" style={{ color: textPrimary }} />
+                    <RotateCcw className="w-4 h-4 flex-shrink-0" style={{ color: textPrimary }} />
+                    <span className="text-xs font-semibold" style={{ color: textPrimary }}>
+                      {isAr ? "-10 ثوانٍ" : "-10 sec"}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -1843,46 +1890,6 @@ export default function DeenQuran() {
                     </span>
                   </button>
                 </div>
-
-                {/* ── Pending bookmark prompt ── */}
-                {pendingBookmarkAyah && (
-                  <div
-                    className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 mb-3"
-                    style={{
-                      background: isDark ? "hsla(45,65%,55%,0.13)" : "hsla(35,65%,42%,0.11)",
-                      border: isDark ? "1px solid hsla(45,65%,55%,0.30)" : "1px solid hsla(35,65%,42%,0.28)",
-                    }}
-                    dir={isAr ? "rtl" : "ltr"}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Bookmark className="w-4 h-4 flex-shrink-0" style={{ color: gold }} />
-                      <span className="text-[12px] font-medium truncate" style={{ color: isDark ? "#f2f2f2" : "#060541" }}>
-                        {isAr
-                          ? `هل تريد حفظ موضعك عند الآية ${pendingBookmarkAyah.numberInSurah}؟`
-                          : `Save your place at ayah ${pendingBookmarkAyah.numberInSurah}?`}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <button
-                        className="rounded-lg px-2.5 py-1 text-[11px] font-semibold active:scale-95 transition-all"
-                        style={{ background: gold, color: isDark ? "#0c0f14" : "#ffffff" }}
-                        onClick={() => {
-                          bookmarkAyah(pendingBookmarkAyah);
-                          setPendingBookmarkAyah(null);
-                        }}
-                      >
-                        {isAr ? "نعم" : "Save"}
-                      </button>
-                      <button
-                        className="rounded-lg px-2.5 py-1 text-[11px] font-medium active:scale-95 transition-all"
-                        style={{ background: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)", color: isDark ? "#858384" : "#606062" }}
-                        onClick={() => setPendingBookmarkAyah(null)}
-                      >
-                        {isAr ? "لا" : "Dismiss"}
-                      </button>
-                    </div>
-                  </div>
-                )}
 
                 <div
                   className="relative"
@@ -2238,8 +2245,8 @@ export default function DeenQuran() {
         })()}
 
         {showActionSheet && selectedAyah && (() => {
-          const sheetGold = isDark ? "#c9a84c" : "#8a6a1a";
-          const sheetGoldGlow = isDark ? "hsla(45,65%,55%,0.45)" : "hsla(35,65%,42%,0.35)";
+          const sheetGold = isDark ? "#e5c07b" : "#a67c2e";
+          const sheetGoldGlow = isDark ? "rgba(229,192,123,0.32)" : "rgba(166,124,46,0.28)";
           const sheetGoldFaint = isDark ? "hsla(45,65%,50%,0.12)" : "hsla(35,55%,42%,0.10)";
           const sheetBg = isDark
             ? "linear-gradient(180deg, hsl(232 22% 9%) 0%, hsl(228 20% 7%) 100%)"
@@ -2376,6 +2383,35 @@ export default function DeenQuran() {
             </div>
           );
         })()}
+
+        <AlertDialog open={!!pendingBookmarkAyah} onOpenChange={(open) => { if (!open) setPendingBookmarkAyah(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {isAr ? "حفظ الموضع الجديد؟" : "Save new bookmark?"}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {isAr
+                  ? `هل تريد حفظ الآية ${pendingBookmarkAyah?.numberInSurah ?? ""} كموضعك الجديد في هذه السورة؟`
+                  : `Save ayah ${pendingBookmarkAyah?.numberInSurah ?? ""} as your new bookmark in this surah?`}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setPendingBookmarkAyah(null)}>
+                {isAr ? "ليس الآن" : "Not now"}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (pendingBookmarkAyah) void setPrimaryBookmarkAyah(pendingBookmarkAyah);
+                  setPendingBookmarkAyah(null);
+                }}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {isAr ? "نعم، احفظها" : "Yes, save it"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         </div>
       )}
     </div>

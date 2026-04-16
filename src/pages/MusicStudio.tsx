@@ -1646,8 +1646,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'Egyptian Shaabi':      ['drum machine', 'synth lead', 'bass guitar', 'darbuka'],
       'شعبي مصري':            ['drum kit', 'synth lead', 'bass guitar', 'electric guitar', 'darbuka'],
       'مهرجانات':             ['drum kit', 'synth lead', 'bass guitar', 'percussion'],
-      'Anasheed':             ['daff'],
-      'أناشيد':               ['daff'],
+      'Anasheed':             ['Vocal Harmony'],
+      'أناشيد':               ['Vocal Harmony'],
       'Arabic Pop':           ['piano', 'violin', 'tabla', 'electric guitar'],
       'بوب عربي':             ['piano', 'violin', 'tabla', 'electric guitar'],
       'Levant Pop':           ['piano', 'violin', 'acoustic guitar', 'drum kit'],
@@ -1676,7 +1676,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'brass section': 'قسم النحاس', 'harmonica': 'هارمونيكا', 'whistle': 'صفارة',
     'synth lead': 'سينث ليد', 'synth pad': 'سينث باد', 'warm pad': 'باد دافئ',
     'analog pad': 'باد تناظري', 'string pad': 'باد أوتار', 'pluck': 'بلاك', 'arpeggiator': 'أربجياتور',
-    'choir': 'كورس', 'group chant': 'هتاف جماعي', 'sub bass': 'ساب باص', 'atmospheric fx': 'مؤثرات جوية',
+    'choir': 'كورس', 'group chant': 'هتاف جماعي', 'Vocal Harmony': 'هارموني صوتي', 'sub bass': 'ساب باص', 'atmospheric fx': 'مؤثرات جوية',
     'trap hi-hats': 'هاي-هات تراب',
   };
 
@@ -1896,6 +1896,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'عدني': ['riq', 'tabla', 'ney'],
     'Samri Rhythm': ['frame drum', 'mirwas', 'rebab'],
     'سامري': ['frame drum', 'mirwas', 'rebab'],
+    'None': ['Vocal Harmony'],
+    'بدون إيقاع': ['Vocal Harmony'],
     'Wedding Beat': ['mirwas', 'daff', 'hand claps'],
     'إيقاع أعراس': ['mirwas', 'daff', 'hand claps'],
     'Trap Beat': ['808 bass', 'hi-hat', 'snare'],
@@ -1953,6 +1955,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   // Get recommended instruments for current style + rhythm + mood
   const recommendedInstruments = useMemo(() => {
+    const isAnasheedSelected = includeTags.some((tag) => tag === 'Anasheed' || tag === 'أناشيد');
+    if (isAnasheedSelected) return ['Vocal Harmony'];
+
     const recommended: string[] = [];
     for (const style of includeTags) {
       const mapped = STYLE_INSTRUMENT_MAPPING[style];
@@ -2008,7 +2013,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'مهرجانات': ['إيقاع نادي', 'تراب بيت'],
     'شامي': ['مقسوم', 'بالاد هادئ'],
     'بوب عربي': ['مقسوم', 'بوب ٤/٤'],
-    'أناشيد': ['إيقاع تصفيق', 'بالاد هادئ'],
+    'أناشيد': ['بدون إيقاع'],
     'بوب': ['بوب ٤/٤', 'بالاد هادئ'],
     'دانس بوب': ['إيقاع نادي', 'بوب ٤/٤'],
     'هيب هوب': ['تراب بيت', 'بوب ٤/٤'],
@@ -2058,7 +2063,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'Moroccan Style': ['Maqsoum', '6/8 Fusion'],
     'Arabic Pop': ['Maqsoum', 'Pop 4/4'],
     'Levant Pop': ['Maqsoum', 'Ballad Slow Groove'],
-    'Anasheed': ['Clap-Driven Groove', 'Ballad Slow Groove'],
+    'Anasheed': ['None'],
     // ── Arabic equivalents for new regional styles ──
     'عراقي': ['مقسوم', 'بالاد هادئ'],
     'لبناني': ['مقسوم', 'بالاد هادئ'],
@@ -3331,7 +3336,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'Moroccan Style':        'maghrebi chaabi, authentic darija dialect, north african vocal resonance, gnawa fusion, maghrebi percussion, bendir, raï vocals',
       'Arabic Pop':            'modern pan-arabic pop, mainstream arab vocal, contemporary arabic fusion, polished production, studio mastered',
       'Levant Pop':            'levantine pop, shami folk fusion, shami dialect phrasing, syrian lebanese jordanian vocal identity, modern dabke pop',
-      'Anasheed':              'islamic nasheed, a cappella vocal harmony, spiritual islamic chant, pure human voice only, reverberant acoustic space, soul-stirring vocal layers, emotional arabic delivery, zero instruments',
+      'Anasheed':              'pure a cappella human vocals, multi-layered vocal harmony, islamic nasheed, spiritual reverberant atmosphere, zero instruments, vocal-only production, [Audio Engine: Ultra-HD 96kHz], [Frequency Response: 20Hz-22kHz]',
       // ── Arabic UI labels ──
       'مصري':                  'بوب مصري، صوت قاهري أصيل، إنتاج الجيل الحديث، أداء وجداني قاهري',
       'شعبي مصري':             'مهرجانات مصرية، موسيقى إلكترو شعبي، بيت سريع، صوت ذكوري قاهري بالتون، أجواء شارعية',
@@ -3340,7 +3345,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'مغربي':                 'شعبي مغربي، لهجة دارجة أصيلة، رنين صوتي شمال أفريقي، دمج الكناوة، إيقاع بنديري',
       'بوب عربي':              'بوب عربي حديث، صوت عربي سائد، دمج عربي معاصر، إنتاج راقٍ',
       'شامي':                  'بوب شامي، فيوجن شعبي شامي، نطق لهجة شامية، هوية صوتية سورية لبنانية أردنية، دبكة حديثة',
-      'أناشيد':                'islamic nasheed, a cappella vocal harmony, spiritual islamic chant, pure human voice only, reverberant acoustic space, soul-stirring vocal layers, emotional arabic delivery, zero instruments',
+      'أناشيد':                'pure a cappella human vocals, multi-layered vocal harmony, islamic nasheed, spiritual reverberant atmosphere, zero instruments, vocal-only production, [Audio Engine: Ultra-HD 96kHz], [Frequency Response: 20Hz-22kHz]',
     };
     const GCC_KEYS = new Set(Object.keys(STYLE_ANCHORS).filter(
       (k) => ![
@@ -3377,6 +3382,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'أفرو خليجي': 'أفرو خليجي',
       'بوب ٤/٤': 'بوب ٤/٤',
       'بالاد هادئ': 'بالاد هادئ',
+      'بدون إيقاع': 'بدون إيقاع',
       'إيقاع الليوان': 'إيقاع الليوان',
       'مقسوم': 'مقسوم',
       'والتز ٣/٤': 'والتز ٣/٤',
@@ -3385,6 +3391,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'إيقاع جماهيري': 'إيقاع جماهيري',
       'إيقاع نادي': 'إيقاع نادي',
       'سامري': 'إيقاع سامري',
+      'None': 'no beat, free-tempo vocal flow',
     };
 
     // ── Resolve Layer 1 anchor ──
@@ -3448,7 +3455,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const stanzas = text.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
 
     // ── Dynamic solo: let Suno pick the lead instrument from the style field context ──
-    const soloTag: string | null = selectedInstruments.length > 0 ? '(Instrumental Solo)' : null;
+    const soloTag: string | null = selectedInstruments.length > 0 && !selectedInstruments.every((inst) => inst === 'Vocal Harmony' || inst === 'group chant') ? '(Instrumental Solo)' : null;
 
     const labels = ['(Verse 1)', '(Chorus)', '(Verse 2)', '(Bridge)', '(Chorus)', '(Outro)'];
     const structured: string[] = ['(Intro)'];
@@ -3521,8 +3528,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         'Egyptian Shaabi': 'khaleeji, gulf, moroccan, maghrebi, darija, levantine, shami, iraqi, fusha, msa, noise, hiss, low quality, distorted',
         'مصري':            'خليجي, خليج, مغربي, دارجة, شامي, عراقي, فصحى, noise, hiss, low quality, distorted',
         'شعبي مصري':       'خليجي, خليج, مغربي, دارجة, شامي, عراقي, فصحى, noise, hiss, low quality, distorted',
-        'Anasheed':        'instruments, music, drums, synth, bass, guitar, piano, electronic, percussion, strings, beat, khaleeji, egyptian, levantine, noise, hiss, low quality, distorted',
-        'أناشيد':          'instruments, music, drums, synth, bass, guitar, piano, electronic, percussion, strings, beat, khaleeji, egyptian, levantine, noise, hiss, low quality, distorted',
+        'Anasheed':        'instruments, music, drums, synth, bass, guitar, piano, electronic, percussion, strings, beat, [Exclude: 300Hz-500Hz mud, boxiness, frequency masking], noise, hiss, low quality, distorted',
+        'أناشيد':          'instruments, music, drums, synth, bass, guitar, piano, electronic, percussion, strings, beat, [Exclude: 300Hz-500Hz mud, boxiness, frequency masking], noise, hiss, low quality, distorted',
         // ── Iraqi ──
         'Iraqi Style':     'egyptian, levantine, shami, moroccan, maghrebi, darija, khaleeji, gulf, fusha, msa, noise, hiss, low quality, distorted',
         'عراقي':           'مصري, شامي, مغربي, دارجة, خليجي, فصحى, noise, hiss, low quality, distorted',
@@ -3549,7 +3556,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         model: 'V5_5',
         duration_seconds: durationTarget,
         styleWeight: isAnasheedStyle ? 0.95 : 0.85,
-        weirdnessConstraint: isAnasheedStyle ? 0.20 : 0.30,
+        weirdnessConstraint: isAnasheedStyle ? 0.15 : 0.30,
         audioWeight: 0.8,
         negativeTags: finalNegativeTags.slice(0, 200),
       };
@@ -5692,6 +5699,32 @@ function EditorTab() {
   const [deleteTrackTarget, setDeleteTrackTarget] = useState<{ id: string; storagePath: string | null } | null>(null);
   const [trackYouTubeTarget, setTrackYouTubeTarget] = useState<SavedTrack | null>(null);
 
+  // ── Rename track
+  const [renamingTrackId, setRenamingTrackId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renameSaving, setRenameSaving] = useState(false);
+
+  const handleRenameTrack = async (trackId: string) => {
+    const newTitle = renameValue.trim();
+    if (!newTitle || !user) { setRenamingTrackId(null); return; }
+    setRenameSaving(true);
+    try {
+      const { error } = await (supabase as any)
+        .from('user_music_tracks')
+        .update({ title: newTitle })
+        .eq('id', trackId)
+        .eq('user_id', user.id);
+      if (error) throw error;
+      setTracks(prev => prev.map(t => t.id === trackId ? { ...t, title: newTitle } : t));
+      toast.success(isAr ? 'تم تغيير الاسم' : 'Name updated');
+    } catch (e: any) {
+      toast.error(isAr ? 'فشل الحفظ' : 'Failed to save');
+    } finally {
+      setRenameSaving(false);
+      setRenamingTrackId(null);
+    }
+  };
+
   // ── Bulk delete tracks
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set());
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
@@ -6413,8 +6446,16 @@ function EditorTab() {
                       <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex items-center gap-1.5 min-w-0">
                               <p className="font-bold text-sm text-foreground truncate leading-tight">{trackTitle}</p>
+                              <button
+                                type="button"
+                                aria-label={isAr ? 'تعديل الاسم' : 'Rename'}
+                                onClick={() => { setRenamingTrackId(t.id); setRenameValue(t.title || ''); }}
+                                className="flex-shrink-0 p-0.5 rounded text-muted-foreground/40 hover:text-sky-400 hover:bg-sky-400/10 transition-colors"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </button>
                             </div>
                             <p className="mt-1 text-[11px] text-muted-foreground truncate">
                               {new Date(t.created_at).toLocaleDateString(isAr ? 'ar-SA' : 'en-US', {
@@ -6457,6 +6498,44 @@ function EditorTab() {
                         </div>
                       </div>
                     </div>
+
+                    {/* ── Rename bar — full width, appears below the card header ── */}
+                    {renamingTrackId === t.id && (
+                      <div className="px-4 pb-3 space-y-2">
+                        <input
+                          autoFocus
+                          aria-label={isAr ? 'تعديل اسم الأغنية' : 'Song name'}
+                          placeholder={isAr ? 'اسم الأغنية…' : 'Song name…'}
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleRenameTrack(t.id);
+                            if (e.key === 'Escape') setRenamingTrackId(null);
+                          }}
+                          dir="auto"
+                          maxLength={80}
+                          className="w-full text-base font-semibold bg-white dark:bg-white/[0.07] border border-sky-400/50 rounded-xl px-4 py-2.5 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-sky-400/50"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={renameSaving}
+                            onClick={() => handleRenameTrack(t.id)}
+                            className="flex-1 py-2 text-sm font-semibold rounded-xl bg-sky-500/20 text-sky-300 border border-sky-400/30 hover:bg-sky-500/30 active:scale-95 transition-all disabled:opacity-50"
+                          >
+                            {renameSaving ? '...' : (isAr ? 'حفظ' : 'Save')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRenamingTrackId(null)}
+                            className="flex-1 py-2 text-sm font-semibold rounded-xl bg-white/5 text-muted-foreground border border-white/10 hover:bg-white/10 active:scale-95 transition-all"
+                          >
+                            {isAr ? 'إلغاء' : 'Cancel'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {t.play_url && (
                       <div className="px-4 pb-4 space-y-3">
                         <AudioPlayer
