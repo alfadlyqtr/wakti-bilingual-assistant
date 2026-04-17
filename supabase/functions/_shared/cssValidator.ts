@@ -169,6 +169,137 @@ export function formatCSSWarnings(warnings: CSSWarning[]): string {
   return lines.join('\n');
 }
 
+// ============================================================================
+// THEME CONSISTENCY LINTER (Item 8)
+// ----------------------------------------------------------------------------
+// Detects hardcoded colors (hex / hsl / rgb literals) in component and CSS
+// files OUTSIDE the `:root` declaration. Such colors break the "change the
+// theme by editing :root variables" promise — when the user says "make it
+// pink", hardcoded colors don't follow.
+// ============================================================================
+
+export interface ThemeWarning {
+  file: string;
+  line?: number;
+  color: string;
+  severity: 'warning' | 'error';
+  context?: string;
+  suggestion: string;
+}
+
+// Matches #rgb, #rrggbb, #rrggbbaa
+const HEX_COLOR_RE = /#(?:[0-9a-fA-F]{3}){1,2}(?:[0-9a-fA-F]{2})?\b/g;
+// Matches rgb()/rgba()/hsl()/hsla() with literal numbers (not var(--x))
+const FUNCTIONAL_COLOR_RE = /\b(?:rgba?|hsla?)\s*\(\s*[\d.%,\s/]+\s*\)/g;
+
+/** True if this string reference looks like a binary/hash token, not a color. */
+function isLikelyNonColor(ctx: string): boolean {
+  // Skip things like version hashes, asset URLs, or hex literals unrelated to color.
+  if (/\.(png|jpe?g|webp|svg|gif|ico|mp3|mp4|wav|woff2?)/i.test(ctx)) return true;
+  if (/sha\d+|md5|hash=|uuid|data:image\//i.test(ctx)) return true;
+  return false;
+}
+
+/** Extract :root CSS variable names defined in any CSS file. */
+function collectRootVariables(files: Record<string, string>): Set<string> {
+  const vars = new Set<string>();
+  for (const [path, content] of Object.entries(files)) {
+    if (!path.endsWith('.css') || typeof content !== 'string') continue;
+    const rootMatch = content.match(/:root\s*{([\s\S]*?)}/);
+    if (!rootMatch) continue;
+    const body = rootMatch[1];
+    const varRe = /(--[a-zA-Z0-9-]+)\s*:/g;
+    let m: RegExpExecArray | null;
+    while ((m = varRe.exec(body)) !== null) vars.add(m[1]);
+  }
+  return vars;
+}
+
+/**
+ * Scan a single file for hardcoded color values outside of a `:root` block.
+ * For .css files, anything inside `:root { ... }` is skipped (that's where
+ * theme vars belong). For .jsx/.tsx files, ALL hardcoded colors are flagged.
+ */
+export function validateThemeInFile(
+  filePath: string,
+  content: string,
+  _rootVars: Set<string>,
+): ThemeWarning[] {
+  const warnings: ThemeWarning[] = [];
+  if (!content || typeof content !== 'string') return warnings;
+
+  const isCss = /\.css$/i.test(filePath);
+  const isReact = /\.(jsx?|tsx?)$/i.test(filePath);
+  if (!isCss && !isReact) return warnings;
+
+  // For CSS: strip the :root block so we only scan the rest.
+  let searchable = content;
+  if (isCss) {
+    searchable = content.replace(/:root\s*{[\s\S]*?}/g, '');
+  }
+
+  const lines = searchable.split('\n');
+  const seen = new Set<string>(); // dedupe "same color on same line"
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const matches = [
+      ...Array.from(line.matchAll(HEX_COLOR_RE)).map((m) => m[0]),
+      ...Array.from(line.matchAll(FUNCTIONAL_COLOR_RE)).map((m) => m[0]),
+    ];
+    if (matches.length === 0) continue;
+
+    for (const color of matches) {
+      if (isLikelyNonColor(line)) continue;
+      const key = `${i}:${color}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      warnings.push({
+        file: filePath,
+        line: i + 1,
+        color,
+        severity: 'warning',
+        context: line.trim().slice(0, 160),
+        suggestion:
+          isCss && _rootVars.size > 0
+            ? `Replace with var(--primary|--secondary|--accent|--bg|--text|--bg-card|--text-muted) referencing :root.`
+            : 'Replace with var(--*) referencing a value defined in :root { } of styles.css.',
+      });
+    }
+  }
+
+  return warnings;
+}
+
+/** Scan all project files for theme consistency violations. */
+export function validateThemeConsistency(
+  files: Record<string, string>,
+): ThemeWarning[] {
+  const rootVars = collectRootVariables(files);
+  const out: ThemeWarning[] = [];
+  for (const [path, content] of Object.entries(files)) {
+    out.push(...validateThemeInFile(path, content, rootVars));
+  }
+  return out;
+}
+
+/** Human-readable summary suitable for console logging. */
+export function formatThemeWarnings(warnings: ThemeWarning[]): string {
+  if (warnings.length === 0) return '';
+  const grouped: Record<string, ThemeWarning[]> = {};
+  for (const w of warnings) (grouped[w.file] ||= []).push(w);
+
+  const lines: string[] = [`🎨 THEME CONSISTENCY WARNINGS (${warnings.length}):`];
+  for (const [file, ws] of Object.entries(grouped)) {
+    lines.push(`  [${file}] ${ws.length} hardcoded color${ws.length === 1 ? '' : 's'}`);
+    for (const w of ws.slice(0, 5)) {
+      lines.push(`    L${w.line}: ${w.color}  — ${w.context}`);
+    }
+    if (ws.length > 5) lines.push(`    … (+${ws.length - 5} more)`);
+  }
+  return lines.join('\n');
+}
+
 /**
  * Returns a prompt addition for the AI to avoid these issues
  */

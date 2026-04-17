@@ -4,8 +4,25 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Declare EdgeRuntime for background task support
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void } | undefined;
-import { validateProjectCSS, formatCSSWarnings, getCSSInheritanceGuidelines, type CSSWarning } from "../_shared/cssValidator.ts";
+import {
+  validateProjectCSS,
+  formatCSSWarnings,
+  getCSSInheritanceGuidelines as _getCSSInheritanceGuidelines,
+  validateThemeConsistency,
+  formatThemeWarnings,
+  type CSSWarning as _CSSWarning,
+} from "../_shared/cssValidator.ts";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
+import { formatPackagesForPrompt } from "../_shared/sandpackPackages.ts";
+// Split modules (Item 5 — safe, pure-data extractions)
+import { THEME_PRESETS } from "./prompts/themes.ts";
+import { FIXER_SYSTEM_PROMPT } from "./prompts/fixer.ts";
+import {
+  MODEL_PRICING,
+  MODEL_FALLBACK,
+  selectOptimalModel,
+  type ModelSelection,
+} from "./models/selection.ts";
 import { 
   AGENT_TOOLS, 
   AGENT_SYSTEM_PROMPT, 
@@ -78,124 +95,10 @@ import {
 // ============================================================================
 
 // ============================================================================
-// SMART MODEL SELECTION - Reduce AI costs by 60-80%
+// SMART MODEL SELECTION  — moved to ./models/selection.ts
+//   Imports: MODEL_PRICING, GEMINI_MODEL_* constants, MODEL_FALLBACK,
+//            selectOptimalModel, type ModelSelection
 // ============================================================================
-interface ModelSelection {
-  model: string;
-  reason: string;
-  tier: 'lite' | 'flash' | 'pro';
-}
-
-// Pricing per 1M tokens (input/output) - for cost estimation
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  'gemini-2.5-flash-lite': { input: 0.075, output: 0.30 },
-  'gemini-2.5-flash': { input: 0.15, output: 0.60 },
-  'gemini-2.0-flash': { input: 0.10, output: 0.40 },
-  'gemini-2.5-pro': { input: 1.25, output: 5.00 },
-  // Gemini 3.x preview models
-  'gemini-3-flash-preview': { input: 0.15, output: 0.60 },
-  'gemini-3.1-pro-preview': { input: 1.25, output: 5.00 },
-};
-
-// ============================================================================
-// GEMINI 3.x MODEL SELECTION (env-driven, auto-fallback to 2.5)
-// ============================================================================
-const GEMINI_MODEL_CREATE  = Deno.env.get('GEMINI_MODEL_CREATE')  || 'gemini-3.1-pro-preview';
-const GEMINI_MODEL_AGENT   = Deno.env.get('GEMINI_MODEL_AGENT')   || 'gemini-3.1-pro-preview';
-const GEMINI_MODEL_PLAN    = Deno.env.get('GEMINI_MODEL_PLAN')    || 'gemini-3-flash-preview';
-const GEMINI_MODEL_SIMPLE  = Deno.env.get('GEMINI_MODEL_SIMPLE')  || 'gemini-3-flash-preview';
-const GEMINI_MODEL_VISION  = Deno.env.get('GEMINI_MODEL_VISION')  || 'gemini-3-flash-preview';
-
-// Fallback map: if a 3.x model fails, retry with this 2.5 equivalent
-const MODEL_FALLBACK: Record<string, string> = {
-  'gemini-3.1-pro-preview': 'gemini-2.5-pro',
-  'gemini-3-flash-preview': 'gemini-2.5-flash',
-};
-
-function selectOptimalModel(
-  prompt: string, 
-  hasImages: boolean, 
-  mode: string,
-  _fileCount: number = 0
-): ModelSelection {
-  // PRO tier: Creation always uses the best Pro model
-  if (mode === 'create') {
-    return { model: GEMINI_MODEL_CREATE, reason: 'Project creation requires Pro (3.1)', tier: 'pro' };
-  }
-  
-  if (hasImages) {
-    return { model: GEMINI_MODEL_VISION, reason: 'Vision/screenshot analysis (3 Flash)', tier: 'flash' };
-  }
-
-  // Agent/edit mode always uses Pro for superior tool-use reasoning
-  if (mode === 'agent') {
-    // Analyze prompt complexity
-    const promptLower = prompt.toLowerCase();
-
-    // SIMPLE patterns → Flash (still a big upgrade from Flash-Lite)
-    const simplePatterns = [
-      /\b(change|update|set|fix)\s+(the\s+)?(color|colour|text|font|size|background|bg)/i,
-      /\b(typo|spelling|text)\s*(fix|error|mistake|change)/i,
-      /\b(remove|delete|hide)\s+(the\s+)?(button|text|element|section)/i,
-      /\b(show|display|unhide)\s+(the\s+)?(button|text|element|section)/i,
-      /\b(change|update)\s+(the\s+)?(title|heading|label|placeholder)/i,
-      /\bmake\s+(it\s+)?(bigger|smaller|larger|wider|taller|shorter)/i,
-      /\b(add|change)\s+(the\s+)?(padding|margin|spacing|border)/i,
-      /\brename\s/i,
-      /\bchange\s.*\s(to|into)\s/i,
-    ];
-
-    for (const pattern of simplePatterns) {
-      if (pattern.test(promptLower)) {
-        return { model: GEMINI_MODEL_SIMPLE, reason: 'Simple agent edit (3 Flash)', tier: 'flash' };
-      }
-    }
-
-    // Everything else in agent mode → Pro
-    return { model: GEMINI_MODEL_AGENT, reason: 'Agent/edit mode requires Pro (3.1)', tier: 'pro' };
-  }
-  
-  // Analyze prompt complexity for plan/execute/chat modes
-  const promptLower = prompt.toLowerCase();
-  
-  // SIMPLE patterns → Flash
-  const simplePatterns = [
-    /\b(change|update|set|fix)\s+(the\s+)?(color|colour|text|font|size|background|bg)/i,
-    /\b(typo|spelling|text)\s*(fix|error|mistake|change)/i,
-    /\b(remove|delete|hide)\s+(the\s+)?(button|text|element|section)/i,
-    /\b(show|display|unhide)\s+(the\s+)?(button|text|element|section)/i,
-    /\b(change|update)\s+(the\s+)?(title|heading|label|placeholder)/i,
-    /\bmake\s+(it\s+)?(bigger|smaller|larger|wider|taller|shorter)/i,
-    /\b(add|change)\s+(the\s+)?(padding|margin|spacing|border)/i,
-    /\brename\s/i,
-    /\bchange\s.*\s(to|into)\s/i,
-  ];
-  
-  // COMPLEX patterns → Pro
-  const complexPatterns = [
-    /\b(refactor|restructure|redesign|rebuild|rewrite|architect)/i,
-    /\b(create|build|implement|add)\s+(a\s+)?(new\s+)?(page|feature|system|module|component)/i,
-    /\b(integrate|connect|setup|configure)\s+(the\s+)?(api|backend|database|auth)/i,
-    /\b(multi-?step|workflow|wizard|form\s+validation)/i,
-    /\b(complex|advanced|sophisticated)/i,
-    /\b(debug|fix\s+crash|runtime\s+error|broken)/i,
-  ];
-  
-  for (const pattern of simplePatterns) {
-    if (pattern.test(promptLower)) {
-      return { model: GEMINI_MODEL_SIMPLE, reason: 'Simple edit (3 Flash)', tier: 'flash' };
-    }
-  }
-  
-  for (const pattern of complexPatterns) {
-    if (pattern.test(promptLower)) {
-      return { model: GEMINI_MODEL_AGENT, reason: 'Complex operation (3.1 Pro)', tier: 'pro' };
-    }
-  }
-  
-  // Default: Flash for planning/aux (fast + smart)
-  return { model: GEMINI_MODEL_PLAN, reason: 'Standard planning (3 Flash)', tier: 'flash' };
-}
 
 // ============================================================================
 // CREDIT USAGE TRACKING
@@ -701,12 +604,16 @@ interface RequestBody {
   uploadedAssets?: UploadedAsset[];
   backendContext?: BackendContext;
   debugContext?: DebugContext;  // NEW: Debug context for error-aware editing
-  fixerMode?: boolean;  // NEW: Use Claude Opus 4 as "The Fixer" for final auto-fix attempt
+  fixerMode?: boolean;  // NEW: Use "The Fixer" (premium model, internal impl) for final auto-fix attempt
   fixerContext?: {  // NEW: Extra context for The Fixer
     errorMessage: string;
     previousAttempts: number;
     recentEdits?: string[];  // Files that were recently edited
     chatHistory?: string;  // Recent chat context
+    // Structured hints (Item 9) — parsed client-side so The Fixer doesn't
+    // have to re-derive them from the stack trace.
+    missingPackage?: string | null;
+    errorType?: 'missing-dependency' | 'runtime' | string;
   };
   lang?: 'ar' | 'en';  // Language for generated content
 }
@@ -1267,7 +1174,7 @@ ${relevantContext}`;
   // Smart model selection for execute mode
   const modelSelection = selectOptimalModel(planToExecute, false, 'execute', fileCount);
 
-  const systemPrompt = GEMINI_EXECUTE_SYSTEM_PROMPT;
+  const systemPrompt = GEMINI_EXECUTE_SYSTEM_PROMPT.replace("{{ALLOWED_PACKAGES_LIST}}", formatPackagesForPrompt());
 
   const userMessage = `CURRENT CODEBASE:
 ${fileContext}
@@ -1320,7 +1227,7 @@ async function callGeminiFullRewriteEdit(
     .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
     .join("\n\n");
 
-  const systemPrompt = GEMINI_EXECUTE_SYSTEM_PROMPT;
+  const systemPrompt = GEMINI_EXECUTE_SYSTEM_PROMPT.replace("{{ALLOWED_PACKAGES_LIST}}", formatPackagesForPrompt());
 
   // Build image context if provided
   let imageContext = '';
@@ -2563,47 +2470,7 @@ function extractThemeFromPrompt(prompt: string): string {
 - NEVER use white/light backgrounds`;
 }
 
-const THEME_PRESETS: Record<string, string> = {
-  'user_prompt': 'DYNAMIC - Will be extracted from user prompt',
-  'wakti-dark': `DARK THEME - MANDATORY COLORS:
-- Background: bg-[#0c0f14] or bg-slate-950 (MUST BE DARK)
-- Cards: bg-slate-900/50 or bg-white/5 with backdrop-blur
-- Text: text-white, text-gray-100, text-amber-400 for accents
-- Borders: border-white/10 or border-amber-500/30
-- Accents: amber-400, amber-500 for highlights and icons
-- NEVER use white/light backgrounds. ALL backgrounds must be dark.`,
-  'midnight': `MIDNIGHT DARK THEME - MANDATORY COLORS:
-- Background: bg-indigo-950 or bg-[#1e1b4b] (MUST BE DARK)
-- Cards: bg-indigo-900/50 with backdrop-blur
-- Text: text-white, text-indigo-200
-- Accents: indigo-400, purple-400
-- NEVER use white/light backgrounds.`,
-  'obsidian': `OBSIDIAN DARK THEME - MANDATORY COLORS:
-- Background: bg-slate-900 or bg-[#1e293b] (MUST BE DARK)
-- Cards: bg-slate-800/50
-- Text: text-white, text-slate-300
-- NEVER use white/light backgrounds.`,
-  'brutalist': 'Brutalist theme: Indigo (#6366f1), Purple (#a855f7), Pink (#ec4899), Red (#f43f5e). Bold font, Neon shadows, No radius, Bento layout. Mood: Bold.',
-  'wakti-light': 'Wakti Light theme: Off-White (#fcfefd), Deep Purple (#060541), Warm Beige (#e9ceb0). Classic font, Soft shadows, Rounded corners. Mood: Elegant.',
-  'glacier': 'Glacier theme: Soft Blue (#60a5fa), Lavender (#a5b4fc), Light Purple (#c4b5fd), Ice (#e0e7ff). Minimal font, Soft shadows, Rounded corners. Mood: Calm.',
-  'lavender': 'Lavender theme: Soft Purple (#a78bfa), Lilac (#c4b5fd), Pale Violet (#ddd6fe). Classic font, Soft shadows, Rounded corners. Mood: Elegant.',
-  'vibrant': 'Vibrant theme: Blue (#3b82f6), Purple (#8b5cf6), Orange (#f97316), Pink (#ec4899). Bold font, Glow shadows, Rounded corners, Bento layout. Mood: Playful.',
-  'neon': 'Neon theme: Cyan (#22d3ee), Lime (#a3e635), Yellow (#facc15), Pink (#f472b6). Bold font, Neon shadows, Pill radius, Bento layout. Mood: Bold/Electric.',
-  'sunset': 'Sunset theme: Orange (#f97316), Peach (#fb923c), Soft Coral (#fdba74). Modern font, Glow shadows, Rounded corners. Mood: Playful/Warm.',
-  'orchid': 'Orchid theme: Pink (#ec4899), Rose (#f472b6), Blush (#f9a8d4). Playful font, Soft shadows, Pill radius. Mood: Feminine/Playful.',
-  'coral': 'Coral theme: Rose Red (#f43f5e), Salmon (#fb7185), Pink (#fda4af). Bold font, Hard shadows, Rounded corners, Bento layout. Mood: Bold.',
-  'emerald': 'Emerald theme: Green (#10b981), Mint (#34d399), Seafoam (#6ee7b7). Modern font, Soft shadows, Rounded corners. Mood: Calm.',
-  'forest': 'Forest theme: Bright Green (#22c55e), Lime (#4ade80), Pale Green (#86efac). Classic font, Soft shadows, Subtle radius. Mood: Organic.',
-  'solar': 'Solar theme: Gold (#eab308), Yellow (#facc15), Lemon (#fde047). Bold font, Glow shadows, Rounded corners, Bento layout. Mood: Optimistic.',
-  'ocean': 'Ocean theme: Sky Blue (#0ea5e9), Cyan (#38bdf8), Aqua (#7dd3fc). Modern font, Soft shadows, Rounded corners. Mood: Professional.',
-  'harvest': 'Harvest theme: Amber (#f59e0b), Gold (#fbbf24), Warm Cream (#fde68a). Bold font, Hard shadows, Subtle radius, Magazine layout. Mood: Warm.',
-  'none': `DEFAULT DARK THEME - MANDATORY:
-- Background: bg-slate-950 or bg-[#0c0f14] (MUST BE DARK)
-- Cards: bg-slate-900/50 or bg-white/5 with backdrop-blur-xl
-- Text: text-white, text-gray-300
-- Borders: border-white/10
-- NEVER use white/light backgrounds. This is a DARK theme app.`
-};
+// THEME_PRESETS moved to ./prompts/themes.ts (imported at top of file).
 
 const BASE_SYSTEM_PROMPT = `
 🚨🚨🚨 ABSOLUTE CRITICAL: YOU ARE A REACT CODE GENERATOR - NOT AN HTML GENERATOR 🚨🚨🚨
@@ -2897,17 +2764,17 @@ If you MUST use react-router-dom (Link, Route, Routes, useNavigate, useLocation,
 4. **AVOID**: Putting BrowserRouter in index.js and useLocation in App.js top-level - this can cause race conditions in Sandpack.
 
 ### PART 3: ALLOWED PACKAGES (CRITICAL)
-You may ONLY import from these packages (they are pre-installed):
-- react, react-dom
-- framer-motion
-- lucide-react (for ALL icons)
-- date-fns
-- recharts
-- @tanstack/react-query
-- clsx, tailwind-merge
-- i18next, react-i18next (for internationalization)
+You may ONLY import from packages in this list. These are the EXACT packages pre-installed in the Sandpack preview. Everything else WILL crash with "DependencyNotFoundError".
 
-DO NOT use react-icons, heroicons, or any other icon library. ONLY use lucide-react.
+{{ALLOWED_PACKAGES_LIST}}
+
+⛔ IF A PACKAGE YOU WANT IS NOT IN THIS LIST:
+1. Do NOT import it — the Sandpack preview cannot fetch unlisted packages.
+2. Use an allowed alternative from the same category above.
+3. If no alternative exists, fall back to vanilla React + Tailwind CSS / plain CSS animations.
+4. NEVER invent a package name.
+
+DO NOT use heroicons or any other icon library beyond the icons category above. ONLY use lucide-react (react-icons is allowed as fallback but prefer lucide-react).
 Example: import { Mail, Phone, Linkedin, Instagram, ChevronDown, Menu, X } from 'lucide-react';
 
 ⚠️ CRITICAL - LUCIDE ICON NAMES (ONLY USE ICONS FROM THIS LIST - NEVER INVENT ICON NAMES):
@@ -3377,13 +3244,10 @@ When users ask for visual improvements, ACTUALLY ADD THEM:
 - **Glow effects**: Use box-shadow with colored shadows (style={{ boxShadow: '0 0 30px rgba(168,85,247,0.5)' }})
 - **Colors**: Use the theme colors provided, not black/white
 
-### AVAILABLE PACKAGES
-- react, react-dom
-- framer-motion (USE THIS for all animations)
-- lucide-react (for icons - NEVER use react-icons)
-- date-fns, recharts, @tanstack/react-query
-- clsx, tailwind-merge
-- i18next, react-i18next
+### AVAILABLE PACKAGES (authoritative list — everything else WILL crash)
+{{ALLOWED_PACKAGES_LIST}}
+
+⛔ If the package you need is NOT listed: use an alternative from the same category, or fall back to vanilla React + Tailwind/CSS. NEVER invent a package name.
 
 ### ANIMATION EXAMPLES (USE THESE)
 \`\`\`jsx
@@ -3566,48 +3430,8 @@ export default function Products() {
 Only use the backend API when users explicitly ask for backend functionality like forms, data storage, or authentication.
 Do NOT add backend calls unless the user requests it.`;
 
-const _GEMINI_EDIT_FULL_REWRITE_PROMPT = `You are a Senior React Architect and Maintenance Engineer.
-Your job is to implement user changes into an existing React codebase running in a Sandpack environment.
-
-### THE CONTEXT
-You have received the COMPLETE source code of the project.
-You must analyze the architecture, imports, and styling (Tailwind CSS) before making changes.
-
-### YOUR INSTRUCTIONS
-1. Analyze: Read the user's request and the current file structure.
-2. Execute: Rewrite the ENTIRE content of any file that needs modification.
-3. MINIMAL INTERVENTION POLICY (CRITICAL):
-   - Only change exactly what the user asked for.
-   - Do NOT refactor unrelated code.
-   - Do NOT clean up or optimize unless explicitly asked.
-
-### SAFETY RULES
-- DO NOT break existing imports.
-- DO NOT delete export default function App or main entry points.
-- Maintain the existing visual style (Tailwind classes) unless asked to change them.
-- Keep the mockData.js pattern for data.
-
-### JSON OUTPUT RULES (CRITICAL - READ CAREFULLY)
-1. Return ONLY a valid JSON object. No markdown, no explanation, no HTML.
-2. Keys are file paths (e.g., "/App.js", "/components/Header.jsx").
-3. Values are the FULL code for that file AS A SINGLE JSON STRING.
-4. **ESCAPE ALL SPECIAL CHARACTERS INSIDE STRING VALUES:**
-   - Newlines must be \\n (backslash-n)
-   - Quotes inside strings must be \\"
-   - Backslashes must be \\\\
-   - Tabs must be \\t
-5. Do NOT return files that did not change.
-6. Do NOT return diffs or patches - only full file contents.
-
-### RESPONSE FORMAT (EXACT)
-{
-  "files": {
-    "/App.js": "import React from 'react';\\n\\nexport default function App() {\\n  return <div>Hello</div>;\\n}"
-  },
-  "summary": "Brief description of changes"
-}
-
-ONLY use lucide-react for icons. Never use react-icons or heroicons.`;
+// Dead prompt `_GEMINI_EDIT_FULL_REWRITE_PROMPT` deleted (Item 5). It was
+// unused (prefix `_`) and not referenced anywhere. Git history preserves it.
 
 function getUserIdFromRequest(req: Request): string | null {
   try {
@@ -3818,44 +3642,14 @@ async function callGPT4oMini(systemPrompt: string, userPrompt: string): Promise<
 // The new system uses FULL FILE REWRITES only via callGeminiFullRewriteEdit
 
 // ============================================================================
-// THE FIXER - Claude Opus 4 for final auto-fix attempt
+// THE FIXER - final auto-fix attempt
 // ============================================================================
-// When Gemini fails 3 times, The Fixer gets one shot with full context
-// Uses Claude claude-sonnet-4-5-20250929 (best coding model) with streaming
+// When the primary coder fails 3 times, The Fixer gets one shot with full context.
+// Backed by a premium coding model via streaming. Model choice is an internal
+// implementation detail and MUST NOT be surfaced to users.
 // ============================================================================
 
-const FIXER_SYSTEM_PROMPT = `You are THE FIXER - an elite debugging AI called in when other attempts have failed.
-
-## YOUR MISSION
-Previous auto-fix attempts (using a weaker model) have FAILED. You are the last resort before the user sees a recovery screen. You MUST fix this error.
-
-## YOUR APPROACH
-1. **UNDERSTAND** - Read the error carefully. What is the ROOT CAUSE?
-2. **INVESTIGATE** - Use tools to read the broken file(s) and understand the current state
-3. **DIAGNOSE** - Why did previous fixes fail? What did they miss?
-4. **FIX** - Apply a CORRECT fix using search_replace
-5. **VERIFY** - Confirm the fix is syntactically correct
-
-## CRITICAL RULES
-- You have ONE SHOT. Make it count.
-- Read the file BEFORE editing. Copy EXACT code for search_replace.
-- Fix the ROOT CAUSE, not symptoms.
-- For syntax errors: check brackets, braces, JSX tags, imports.
-- For undefined errors: add missing imports or definitions.
-- NEVER guess. ALWAYS read first.
-
-## TOOLS AVAILABLE
-- grep_search: Find code in files
-- read_file: Read file contents
-- list_files: See project structure
-- search_replace: Edit existing code
-- task_complete: Call when done with summary
-
-## OUTPUT
-After fixing, call task_complete with:
-- What was broken
-- What you fixed
-- Why previous attempts failed`;
+// FIXER_SYSTEM_PROMPT moved to ./prompts/fixer.ts (imported at top of file).
 
 async function callClaudeOpus4Fixer(
   systemPrompt: string, 
@@ -3897,12 +3691,12 @@ async function callClaudeOpus4Fixer(
   if (!anthropicResponse.ok) {
     const errText = await anthropicResponse.text();
     console.error(`[THE FIXER] HTTP ${anthropicResponse.status}: ${errText}`);
-    throw new Error(`Claude Fixer API error: ${anthropicResponse.status}`);
+    throw new Error(`Fixer API error: ${anthropicResponse.status}`);
   }
 
   // Read streaming response
   const reader = anthropicResponse.body?.getReader();
-  if (!reader) throw new Error("No response body from Claude Fixer");
+  if (!reader) throw new Error("No response body from Fixer");
 
   const decoder = new TextDecoder();
   let fullContent = "";
@@ -4844,23 +4638,36 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
       await assertProjectOwnership(supabase, projectId, userId);
       
       // ========================================================================
-      // THE FIXER MODE: Claude Opus 4 for final auto-fix attempt (attempt #4)
+      // THE FIXER MODE: final auto-fix attempt (attempt #4)
       // ========================================================================
       if (body.fixerMode && body.fixerContext) {
         // Build Fixer context with all available information
+        const fctx = body.fixerContext;
+        const structuredBlock = (fctx.missingPackage || fctx.errorType)
+          ? `\n## STRUCTURED ERROR DATA (pre-parsed — trust these over the raw stack trace):\n- Error type: ${fctx.errorType || 'unknown'}\n${fctx.missingPackage ? `- Missing package: \`${fctx.missingPackage}\`\n` : ''}`
+          : '';
+
+        const missingPkgGuidance = fctx.missingPackage
+          ? `\n## ⛔ HANDLING THE MISSING PACKAGE:\n` +
+            `The package \`${fctx.missingPackage}\` is NOT available in the Sandpack preview and CANNOT be installed. ` +
+            `You MUST remove every import of \`${fctx.missingPackage}\` and replace it with an allowed alternative ` +
+            `(see the ALLOWED PACKAGES list in the system prompt). If no direct replacement exists, fall back to ` +
+            `vanilla React + Tailwind/CSS. NEVER tell the user to install it.\n`
+          : '';
+
         const fixerUserPrompt = `🔧 THE FIXER - FINAL AUTO-FIX ATTEMPT
 
 ## ERROR TO FIX:
 \`\`\`
-${body.fixerContext.errorMessage}
+${fctx.errorMessage}
 \`\`\`
-
+${structuredBlock}
 ## CONTEXT:
-- Previous auto-fix attempts: ${body.fixerContext.previousAttempts} (all failed)
+- Previous auto-fix attempts: ${fctx.previousAttempts} (all failed)
 - You are the LAST RESORT before showing recovery UI to the user
-${body.fixerContext.recentEdits?.length ? `- Recently edited files: ${body.fixerContext.recentEdits.join(', ')}` : ''}
-${body.fixerContext.chatHistory ? `\n## RECENT CHAT HISTORY:\n${body.fixerContext.chatHistory}` : ''}
-
+${fctx.recentEdits?.length ? `- Recently edited files: ${fctx.recentEdits.join(', ')}` : ''}
+${fctx.chatHistory ? `\n## RECENT CHAT HISTORY:\n${fctx.chatHistory}` : ''}
+${missingPkgGuidance}
 ## YOUR MISSION:
 1. Use read_file to see the CURRENT state of the broken file(s)
 2. Understand WHY previous fixes failed
@@ -4967,7 +4774,7 @@ REMEMBER: You have ONE SHOT. Read first, then fix correctly.`;
               mode: 'agent',
               fixerMode: true,
               fixerFailed: true,
-              error: 'The Fixer (Claude Opus 4) was unable to fix the error. Recovery options should be shown.',
+              error: 'The Fixer was unable to fix the error. Recovery options should be shown.',
               toolCalls: fixerToolCallsLog.map(tc => ({ tool: tc.tool, success: tc.result?.success !== false })),
               duration: fixerDuration
             });
@@ -6778,7 +6585,9 @@ Call task_complete when finished.`;
         ? `\n\n🌍 LANGUAGE REQUIREMENT - ARABIC (العربية):\n- Generate ALL user-facing text content in Arabic\n- Use Arabic script for ALL labels, buttons, headings, descriptions, and placeholder text\n- Add dir="rtl" to the root element for proper RTL layout\n- Keep code comments and variable names in English\n- Example: Instead of "Welcome" use "مرحباً", instead of "Contact Us" use "تواصل معنا"`
         : '';
       
-      const finalSystemPrompt = BASE_SYSTEM_PROMPT.replace("{{THEME_INSTRUCTIONS}}", themeEnforcement) + langInstructions;
+      const finalSystemPrompt = BASE_SYSTEM_PROMPT
+        .replace("{{THEME_INSTRUCTIONS}}", themeEnforcement)
+        .replace("{{ALLOWED_PACKAGES_LIST}}", formatPackagesForPrompt()) + langInstructions;
 
       // CREATE MODE: Generate new project from scratch
       if (safeMode === 'create') {
@@ -6991,6 +6800,14 @@ Return ONLY the JSON object. No explanation.`;
           summary = summary ? `${summary} | CSS Warnings: ${warningsSummary}` : `CSS Warnings: ${warningsSummary}`;
         }
 
+        // Theme Consistency Linter (Item 8) — detect hardcoded colors outside :root
+        const themeWarnings = validateThemeConsistency(files);
+        if (themeWarnings.length > 0) {
+          console.warn(formatThemeWarnings(themeWarnings));
+          const themeSummary = `🎨 ${themeWarnings.length} hardcoded color${themeWarnings.length === 1 ? '' : 's'} outside :root — theme changes may not apply everywhere`;
+          summary = summary ? `${summary} | ${themeSummary}` : themeSummary;
+        }
+
         // Inject project ID into backend API calls (catches multiple placeholder patterns)
         for (const [path, content] of Object.entries(files)) {
           // Replace all known placeholder patterns
@@ -7095,6 +6912,14 @@ Return ONLY the JSON object. No explanation.`;
         if (warningsSummary) {
           result.summary = result.summary ? `${result.summary} | CSS Issues: ${warningsSummary}` : `CSS Issues: ${warningsSummary}`;
         }
+      }
+
+      // Theme Consistency Linter (Item 8) — detect hardcoded colors outside :root
+      const editThemeWarnings = validateThemeConsistency(allFilesToCheck);
+      if (editThemeWarnings.length > 0) {
+        console.warn(formatThemeWarnings(editThemeWarnings));
+        const themeSummary = `🎨 ${editThemeWarnings.length} hardcoded color${editThemeWarnings.length === 1 ? '' : 's'} outside :root`;
+        result.summary = result.summary ? `${result.summary} | ${themeSummary}` : themeSummary;
       }
 
       // Inject project ID into backend API calls (catches multiple placeholder patterns)

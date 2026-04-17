@@ -23,6 +23,7 @@ import {
 import { clsx } from "clsx";
 import { WAKTI_INSPECTOR_COMPONENT } from "@/utils/waktiInspectorComponent";
 import sandpackI18nBundle from "@/assets/sandpack-i18n-bundle.mjs?raw";
+import { SANDPACK_DEPENDENCIES } from "@/config/sandpackPackages";
 
 // --- 2. SELECTED ELEMENT INFO TYPE ---
 interface SelectedElementInfo {
@@ -617,115 +618,11 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
         },
       }}
       customSetup={{
-        dependencies: {
-          // Core React
-          "react": "^18.2.0",
-          "react-dom": "^18.2.0",
-          // UI/Icons
-          "lucide-react": "^0.462.0",
-          // Animation
-          "@emotion/is-prop-valid": "^1.2.1",
-          // Internationalization
-          "i18next": "^23.7.6",
-          "react-i18next": "^13.5.0",
-          "i18next-browser-languagedetector": "^7.2.0",
-          // Date/Time
-          "react-day-picker": "^8.10.1",
-          // Charts & Data Viz
-          "react-circular-progressbar": "^2.2.0",
-          // Carousel/Slider
-          "react-slick": "^0.30.2",
-          "slick-carousel": "^1.8.1",
-          "embla-carousel-react": "^8.0.0",
-          "embla-carousel-autoplay": "^8.0.0",
-          // Drag and Drop
-          "@dnd-kit/core": "^6.1.0",
-          "@dnd-kit/sortable": "^8.0.0",
-          "@dnd-kit/utilities": "^3.2.2",
-          // Forms
-          "react-hook-form": "^7.53.0",
-          "@hookform/resolvers": "^3.9.0",
-          "zod": "^3.23.8",
-          // UI Components (Radix)
-          "@radix-ui/react-dialog": "^1.1.2",
-          "@radix-ui/react-dropdown-menu": "^2.1.15",
-          "@radix-ui/react-popover": "^1.1.1",
-          "@radix-ui/react-select": "^2.1.1",
-          "@radix-ui/react-tabs": "^1.1.0",
-          "@radix-ui/react-tooltip": "^1.1.4",
-          "@radix-ui/react-checkbox": "^1.1.1",
-          "@radix-ui/react-switch": "^1.1.0",
-          "@radix-ui/react-slider": "^1.2.0",
-          "@radix-ui/react-progress": "^1.1.0",
-          "@radix-ui/react-avatar": "^1.1.0",
-          "@radix-ui/react-accordion": "^1.2.0",
-          "@radix-ui/react-slot": "^1.1.0",
-          // Toast/Notifications
-          "sonner": "^1.5.0",
-          // Utilities
-          "canvas-confetti": "^1.9.4",
-          "uuid": "^11.1.0",
-          // Data Fetching
-          "@tanstack/react-query": "^5.56.2",
-          // Gaming/Graphics
-          "chess.js": "^1.0.0-beta.6",
-          "react-chessboard": "^4.7.3",
-          "pixi.js": "^8.10.2",
-          // Routing
-          "react-router-dom": "^6.22.0",
-          // HTTP/Data
-          "axios": "^1.6.7",
-          "swr": "^2.2.5",
-          // Utilities
-          "lodash": "^4.17.21",
-          "dayjs": "^1.11.10",
-          "moment": "^2.30.1",
-          // Additional Icons
-          "react-icons": "^5.0.1",
-          // Animation
-          "@react-spring/web": "^9.7.3",
-          // Toast/Notifications
-          "react-toastify": "^10.0.4",
-          "react-hot-toast": "^2.4.1",
-          // Modals/Dialogs
-          "react-modal": "^3.16.1",
-          // Select/Dropdowns
-          "react-select": "^5.8.0",
-          // Tables
-          "@tanstack/react-table": "^8.13.2",
-          // Virtualization
-          "react-window": "^1.8.10",
-          "react-virtualized": "^9.22.5",
-          // Media
-          "react-player": "^2.14.1",
-          // Markdown
-          "react-markdown": "^9.0.1",
-          "remark-gfm": "^4.0.0",
-          // Code Highlighting
-          "prismjs": "^1.29.0",
-          "react-syntax-highlighter": "^15.5.0",
-          // Supabase
-          "@supabase/supabase-js": "^2.39.7",
-          // Maps
-          "leaflet": "^1.9.4",
-          "react-leaflet": "^4.2.1",
-          // PDF
-          "@react-pdf/renderer": "^3.4.2",
-          // QR Code
-          "qrcode.react": "^3.1.0",
-          // Copy to Clipboard
-          "react-copy-to-clipboard": "^5.1.0",
-          // Masonry Layout
-          "react-masonry-css": "^1.0.16",
-          // Infinite Scroll
-          "react-infinite-scroll-component": "^6.1.0",
-          // Skeleton Loading
-          "react-loading-skeleton": "^3.4.0",
-          // Color Picker
-          "react-colorful": "^5.6.1",
-          // Intersection Observer
-          "react-intersection-observer": "^9.10.2"
-        }
+        // Dependencies are sourced from the Sandpack SSOT so the AI prompt
+        // (via supabase/functions/_shared/sandpackPackages.ts) and the preview
+        // sandbox can NEVER drift. Add/remove packages in
+        // src/config/sandpackPackages.ts and keep the edge-function mirror in sync.
+        dependencies: SANDPACK_DEPENDENCIES,
       }}
       style={{ height: '100%', width: '100%' }}
     >

@@ -648,7 +648,7 @@ export default function ProjectDetail() {
   const autoFixAttemptsRef = useRef<Map<string, number>>(new Map()); // Track fix attempts per error
   const autoFixCooldownRef = useRef<number>(0); // Cooldown timestamp - no auto-fix until this time
   const MAX_GEMINI_ATTEMPTS = 3; // Attempts 1-3 use Gemini
-  const FIXER_ATTEMPT = 4; // Attempt 4 uses Claude Opus 4 (The Fixer)
+  const FIXER_ATTEMPT = 4; // Attempt 4 uses The Fixer (premium model, internal impl)
   
   // ========================================================================
   // 🔍 ERROR CLASSIFICATION SYSTEM (from Open Lovable)
@@ -3262,7 +3262,7 @@ ${convertToGlobalComponent(content, componentName)}
     const errorKey = errorMsg.replace(/:\d+:\d+/g, '').replace(/line \d+/gi, '').trim().substring(0, 200);
     
     // Check if we've already tried to fix this error too many times
-    // Attempts 1-3: Gemini, Attempt 4: The Fixer (Claude), Attempt 5+: Show recovery UI
+    // Attempts 1-3: fast model, Attempt 4: The Fixer, Attempt 5+: Show recovery UI
     const attempts = autoFixAttemptsRef.current.get(errorKey) || 0;
     if (attempts > FIXER_ATTEMPT) {
       console.log('[Auto-Fix] All attempts exhausted (including The Fixer), showing recovery UI');
@@ -3380,7 +3380,7 @@ ${convertToGlobalComponent(content, componentName)}
     setAutoFixCountdown(null);
     
     // ========================================================================
-    // ATTEMPT 4: THE FIXER (Claude Opus 4) - Final attempt before recovery UI
+    // ATTEMPT 4: THE FIXER - Final attempt before recovery UI
     // ========================================================================
     if (attemptNumber === FIXER_ATTEMPT) {
       // 🔒 Switch lock to fixer
@@ -3390,7 +3390,7 @@ ${convertToGlobalComponent(content, componentName)}
         return;
       }
       
-      console.log('[Auto-Fix] 🔧 Calling THE FIXER (Claude Opus 4) - Final attempt');
+      console.log('[Auto-Fix] 🔧 Calling THE FIXER - Final attempt');
       setFixerInProgress(true);
       setCrashReport(null);
       
@@ -3399,14 +3399,25 @@ ${convertToGlobalComponent(content, componentName)}
         id: `fixer-${Date.now()}`,
         role: 'assistant',
         content: isRTL 
-          ? '🔧 **المُصلح (Claude Opus 4)** يعمل على إصلاح الخطأ...\n\nالمحاولات السابقة فشلت. هذه المحاولة الأخيرة قبل عرض خيارات الاستعادة.'
-          : '🔧 **THE FIXER (Claude Opus 4)** is working on the error...\n\nPrevious attempts failed. This is the final attempt before showing recovery options.'
+          ? '🔧 **المُصلح** يعمل على إصلاح الخطأ...\n\nالمحاولات السابقة فشلت. هذه المحاولة الأخيرة قبل عرض خيارات الاستعادة.'
+          : '🔧 **THE FIXER** is working on the error...\n\nPrevious attempts failed. This is the final attempt before showing recovery options.'
       }]);
       
       try {
         // Get recent chat history for context
         const recentHistory = chatMessages.slice(-5).map(m => `${m.role}: ${m.content.substring(0, 200)}`).join('\n');
-        
+
+        // Structured error parse — helps The Fixer avoid re-deriving this
+        // from the stack trace (e.g., "Could not find dependency: 'framer-motion'").
+        const missingPackage =
+          error.match(/Could not find dependency:\s*['"]([^'"]+)['"]/)?.[1] ||
+          error.match(/Cannot find module\s+['"]([^'"]+)['"]/)?.[1] ||
+          error.match(/Module not found:.*?['"]([^'"]+)['"]/)?.[1] ||
+          null;
+        const errorType: 'missing-dependency' | 'runtime' = missingPackage
+          ? 'missing-dependency'
+          : 'runtime';
+
         // Call the backend with fixerMode
         const response = await supabase.functions.invoke('projects-generate', {
           body: {
@@ -3419,7 +3430,10 @@ ${convertToGlobalComponent(content, componentName)}
               errorMessage: error,
               previousAttempts: attemptNumber - 1,
               recentEdits: [...(editedFilesTracking || [])].map(f => f.fileName),
-              chatHistory: recentHistory
+              chatHistory: recentHistory,
+              // Structured hints — NEW (Item 9)
+              missingPackage,
+              errorType,
             }
           }
         });
@@ -8055,7 +8069,7 @@ ${fixInstructions}
                               {isRTL ? '🔧 المُصلح يعمل...' : '🔧 The Fixer Working...'}
                             </h4>
                             <span className="px-2 py-0.5 bg-purple-500/20 border border-purple-500/30 rounded-full text-[10px] font-medium text-purple-300">
-                              Claude Opus 4
+                              {isRTL ? 'المحاولة النهائية' : 'Final Attempt'}
                             </span>
                           </div>
                           <p className="text-xs text-purple-300/80 mt-0.5">

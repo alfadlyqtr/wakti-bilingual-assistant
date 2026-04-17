@@ -271,6 +271,7 @@ export default function Account() {
   // Direct native purchase
   const [isBillingPurchasing, setIsBillingPurchasing] = useState(false);
   const [billingDebugLog, setBillingDebugLog] = useState<string[]>([]);
+  const [billingPackageObj, setBillingPackageObj] = useState<any>(null);
   const addBillingDebug = (msg: string) => {
     console.log('[BillingDebug]', msg);
     setBillingDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
@@ -285,11 +286,44 @@ export default function Account() {
     if (snapshot?.snapshotError) addBillingDebug(`${label} snapshotError: ${snapshot.snapshotError}`);
   };
 
+  useEffect(() => {
+    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (!isQUUser || !isIOS) {
+      setBillingPackageObj(null);
+      return;
+    }
+    try {
+      getOfferings((resp: any) => {
+        if (resp?.status !== 'SUCCESS') return;
+        const allRaw = resp?.offerings?.all ?? resp?.offerings ?? resp?.all ?? resp;
+        const allOfferings = Array.isArray(allRaw)
+          ? allRaw
+          : allRaw && typeof allRaw === 'object'
+            ? Object.values(allRaw)
+            : [];
+        let quPkg: any = null;
+        for (const offering of allOfferings) {
+          const pkg = (offering as any)?.availablePackages?.find((p: any) => p?.identifier === 'qatar_university');
+          if (pkg) {
+            quPkg = pkg;
+            break;
+          }
+        }
+        if (quPkg) {
+          setBillingPackageObj(quPkg);
+          addBillingDebug(`BillingShell package object ready: ${quPkg?.identifier || 'qatar_university'}`);
+        }
+      });
+    } catch {}
+  }, [user?.email]);
+
   const handleBillingSubscribe = () => {
     addBillingDebug('--- BUTTON PRESSED ---');
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+    const isAndroid = /Android/.test(navigator.userAgent);
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     addBillingDebug(`QU:${isQUUser} iOS:${isIOS}`);
     logBillingShellSnapshot('BillingShell');
@@ -349,8 +383,9 @@ export default function Account() {
 
     try {
       if (isQUUser) {
-        addBillingDebug('QU → purchasePackage(qatar_university)');
-        purchasePackage('qatar_university', billingCallback);
+        const packageToUse = !isAndroid && billingPackageObj ? billingPackageObj : 'qatar_university';
+        addBillingDebug(`QU → purchasePackage(${typeof packageToUse === 'string' ? packageToUse : packageToUse?.identifier || 'package-object'})`);
+        purchasePackage(packageToUse, billingCallback);
       } else {
         addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);
