@@ -2,6 +2,39 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
+ const getRecordingTypeGuide = (recordingType: string | undefined, isArabic: boolean): string => {
+   switch (recordingType) {
+     case 'meeting':
+       return isArabic
+         ? 'نوع التسجيل المحدد هو: اجتماع. ركّز على جدول الأعمال، القرارات، المتابعات، والمسؤوليات.'
+         : 'The selected recording type is: meeting. Focus on agenda, decisions, follow-ups, and responsibilities.';
+     case 'business_meeting':
+       return isArabic
+         ? 'نوع التسجيل المحدد هو: اجتماع عمل. ركّز على الأهداف التجارية، القرارات، عناصر العمل، المالكين، والمواعيد النهائية المذكورة صراحة.'
+         : 'The selected recording type is: business meeting. Focus on business goals, decisions, action items, owners, and explicitly stated deadlines.';
+     case 'lecture':
+       return isArabic
+         ? 'نوع التسجيل المحدد هو: محاضرة. ركّز على المفاهيم الرئيسية، الشرح، الأمثلة، والأسئلة أو الواجبات إن وُجدت.'
+         : 'The selected recording type is: lecture. Focus on key concepts, explanations, examples, and any questions or assignments if present.';
+     case 'islamic_lecture':
+       return isArabic
+         ? 'نوع التسجيل المحدد هو: محاضرة إسلامية. ركّز على الموضوعات الشرعية، الآيات أو الأحاديث المذكورة، الفوائد، والدروس العملية. لا تختلق مراجع غير مذكورة.'
+         : 'The selected recording type is: Islamic lecture. Focus on Islamic topics, any verses or hadith explicitly mentioned, lessons, and practical takeaways. Do not invent references.';
+     case 'study_session':
+       return isArabic
+         ? 'نوع التسجيل المحدد هو: جلسة دراسة. ركّز على الموضوعات التي تمت مراجعتها، النقاط الصعبة، ما يحتاج متابعة، والخطوات التالية للمذاكرة.'
+         : 'The selected recording type is: study session. Focus on topics reviewed, difficult points, follow-up items, and next study steps.';
+     case 'classroom':
+       return isArabic
+         ? 'نوع التسجيل المحدد هو: حصة دراسية. ركّز على الدرس، شرح المعلم، الأسئلة، الواجب، وأي تعليمات صفية واضحة.'
+         : 'The selected recording type is: classroom session. Focus on the lesson, teacher explanations, questions, homework, and clear classroom instructions.';
+     default:
+       return isArabic
+         ? 'إذا لم يُحدَّد النوع بدقة، استنتج نوع الجلسة من النص ثم نظّم الملخص وفقاً لذلك.'
+         : 'If the type is not explicitly provided, infer the session type from the transcript and structure the summary accordingly.';
+   }
+ };
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -13,13 +46,14 @@ serve(async (req) => {
   }
 
   try {
-    const { transcript, language, recordId, model } = await req.json();
+    const { transcript, language, recordId, model, recordingType } = await req.json();
     console.log('Request payload:', { 
       hasTranscript: !!transcript, 
       language, 
       transcriptLength: transcript?.length,
       hasRecordId: !!recordId,
-      model
+      model,
+      recordingType
     });
 
     if (!transcript) {
@@ -31,6 +65,7 @@ serve(async (req) => {
 
     // Determine the language for the prompt
     const isArabic = language === 'ar';
+    const recordingTypeGuide = getRecordingTypeGuide(recordingType, isArabic);
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiApiKey) {
       console.error('Error: OPENAI_API_KEY is not set');
@@ -44,7 +79,7 @@ serve(async (req) => {
     const chosenModel = typeof model === 'string' && model.trim() ? model : 'gpt-4o-mini';
 
     const systemPrompt = isArabic
-      ? `أنت مُلخّص محترف للاجتماعات/المحاضرات/جلسات العصف الذهني. حدّد نوع الجلسة (اجتماع، محاضرة، عصف ذهني) وقدّم ملخصاً واضحاً ومنظماً ومختصراً. استخرج دائماً وقدّم:
+      ? `أنت مُلخّص محترف للاجتماعات والمحاضرات وجلسات الدراسة والحصص الدراسية والمحاضرات الإسلامية. ${recordingTypeGuide} قدّم ملخصاً واضحاً ومنظماً ومختصراً. استخرج دائماً وقدّم:
 - نوع الجلسة
 - العنوان
 - النقاط الرئيسية (قائمة نقطية)
@@ -55,8 +90,9 @@ serve(async (req) => {
 - التواريخ والأوقات المذكورة
 - الأسئلة المفتوحة / المواضيع المؤجلة (قائمة نقطية)
 
+إذا كان القسم غير مناسب لنوع التسجيل أو لا توجد له معلومات واضحة، اكتب "غير مذكور" بدلاً من التخمين.
 احفظ اللغة الأصلية للأسماء والمصطلحات المنقولة. إذا اختلط العربي بالإنجليزي، حافظ على وضوح اللغتين (لا تُترجم الأسماء). كن موجزاً وتجنب التكرار.`
-      : `You are a professional summarizer for meetings, lectures, and brainstorms. Detect the session type (meeting, lecture, brainstorm) and produce a clear, concise, well-structured summary. Always extract and present:
+      : `You are a professional summarizer for meetings, lectures, study sessions, classroom sessions, and Islamic lectures. ${recordingTypeGuide} Produce a clear, concise, well-structured summary. Always extract and present:
 - Session Type
 - Title
 - Main Points (bulleted)
@@ -67,6 +103,7 @@ serve(async (req) => {
 - Dates and times mentioned
 - Open Questions / Parking Lot (bulleted)
 
+If a section does not fit the recording type or the information is not clearly present, write "Not mentioned" instead of guessing.
 Preserve original languages for proper names and quoted terms. If content mixes Arabic and English, keep both readable (do not translate names). Be succinct and avoid repetition.`;
 
     const userPrompt = `${transcript}`;

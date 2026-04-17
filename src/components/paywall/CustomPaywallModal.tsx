@@ -189,10 +189,8 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
 
     try {
       if (isQUUser) {
-        // RC dashboard: Default offering → $rc_two_month package → wakti_monthly_qu product.
-        // Same identifier works on both iOS and Android.
-        addDebug('QU → purchasePackage($rc_two_month)');
-        purchasePackage('$rc_two_month', purchaseCallback);
+        addDebug('QU → purchasePackage(qatar_university)');
+        purchasePackage('qatar_university', purchaseCallback);
       } else {
         addDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', purchaseCallback);

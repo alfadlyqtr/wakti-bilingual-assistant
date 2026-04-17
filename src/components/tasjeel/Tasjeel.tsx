@@ -6,6 +6,7 @@ import { toast } from "@/components/ui/toast-helper";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageContainer } from "@/components/PageContainer";
 import { PageTitle } from "@/components/PageTitle";
 import { Separator } from "@/components/ui/separator";
@@ -43,6 +44,8 @@ import TrialGateOverlay from "@/components/TrialGateOverlay";
 const MAX_RECORDING_TIME = 2700; // 45 minutes
 const WARNING_TIME_1 = 300; // 5 minutes left (40 minute mark)
 const WARNING_TIME_2 = 60; // 1 minute left (44 minute mark)
+
+type TasjeelRecordingType = "auto" | "meeting" | "business_meeting" | "lecture" | "islamic_lecture" | "study_session" | "classroom";
 
 // Translations
 const translations = {
@@ -110,6 +113,14 @@ const translations = {
     timeLimit: "Time limit reached. Recording stopped.",
     warningTimeApproaching: "Recording time limit approaching",
     finalMinuteWarning: "Final minute of recording time",
+    recordingType: "Recording type",
+    recordingTypeAuto: "Auto detect",
+    recordingTypeMeeting: "Meeting",
+    recordingTypeBusinessMeeting: "Business meeting",
+    recordingTypeLecture: "Lecture",
+    recordingTypeIslamicLecture: "Islamic lecture",
+    recordingTypeStudySession: "Study session",
+    recordingTypeClassroom: "Classroom",
   },
   ar: {
     pageTitle: "تسجيل",
@@ -175,6 +186,14 @@ const translations = {
     timeLimit: "تم الوصول إلى الحد الأقصى للتسجيل. تم إيقاف التسجيل.",
     warningTimeApproaching: "اقتراب نهاية مدة التسجيل",
     finalMinuteWarning: "الدقيقة الأخيرة من وقت التسجيل",
+    recordingType: "نوع التسجيل",
+    recordingTypeAuto: "تحديد تلقائي",
+    recordingTypeMeeting: "اجتماع",
+    recordingTypeBusinessMeeting: "اجتماع عمل",
+    recordingTypeLecture: "محاضرة",
+    recordingTypeIslamicLecture: "محاضرة إسلامية",
+    recordingTypeStudySession: "جلسة دراسة",
+    recordingTypeClassroom: "حصة دراسية",
   }
 };
 
@@ -225,6 +244,7 @@ const Tasjeel: React.FC = () => {
   const [quickSummaryText, setQuickSummaryText] = useState<string>("");
   const [quickTranscript, setQuickTranscript] = useState<string>("");
   const [quickSummaryStatus, setQuickSummaryStatus] = useState<"idle" | "uploading" | "processing" | "ready">("idle");
+  const [recordingType, setRecordingType] = useState<TasjeelRecordingType>("auto");
   
   // Language preference for transcription (Option A) - default to UI language
   const [transcriptionLanguage, setTranscriptionLanguage] = useState<'auto' | 'ar' | 'en'>(language === 'ar' ? 'ar' : 'en');
@@ -670,7 +690,7 @@ const Tasjeel: React.FC = () => {
       
       const response = await callEdgeFunctionWithRetry<{ summary: string } | { error: string, details?: string }>(
         "summarize-text",
-        { body: { transcript, language } }
+        { body: { transcript, language, recordingType } }
       );
       
       console.log('Summarize response:', response);
@@ -1208,6 +1228,23 @@ const Tasjeel: React.FC = () => {
                         {language === 'en'
                           ? 'Note: Mixed Arabic/English may reduce accuracy. We are working hard to improve this.'
                           : 'ملاحظة: المزج بين العربية والإنجليزية قد يقلل الدقة. نحن نعمل بجد لتحسين ذلك.'}
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        <label className="text-sm font-medium">{translationTexts.recordingType}</label>
+                        <Select value={recordingType} onValueChange={(value) => setRecordingType(value as TasjeelRecordingType)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder={translationTexts.recordingType} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto">{translationTexts.recordingTypeAuto}</SelectItem>
+                            <SelectItem value="meeting">{translationTexts.recordingTypeMeeting}</SelectItem>
+                            <SelectItem value="business_meeting">{translationTexts.recordingTypeBusinessMeeting}</SelectItem>
+                            <SelectItem value="lecture">{translationTexts.recordingTypeLecture}</SelectItem>
+                            <SelectItem value="islamic_lecture">{translationTexts.recordingTypeIslamicLecture}</SelectItem>
+                            <SelectItem value="study_session">{translationTexts.recordingTypeStudySession}</SelectItem>
+                            <SelectItem value="classroom">{translationTexts.recordingTypeClassroom}</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                   </div>

@@ -332,8 +332,8 @@ export default function Account() {
 
     try {
       if (isQUUser) {
-        addBillingDebug('QU → purchasePackage($rc_two_month)');
-        purchasePackage('$rc_two_month', billingCallback);
+        addBillingDebug('QU → purchasePackage(qatar_university)');
+        purchasePackage('qatar_university', billingCallback);
       } else {
         addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);
