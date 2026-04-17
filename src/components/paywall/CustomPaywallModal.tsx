@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
-import { purchasePackage, restorePurchases, showPaywall, getOfferings, getPurchasesShellSnapshot } from "@/integrations/natively/purchasesBridge";
+import { purchasePackage, restorePurchases, getOfferings, getPurchasesShellSnapshot } from "@/integrations/natively/purchasesBridge";
 import {
   Dialog,
   DialogContent,
@@ -199,8 +199,8 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
 
     try {
       if (isQUUser) {
-        addDebug('QU → showPaywall(qatar_university)');
-        showPaywall(true, 'qatar_university', purchaseCallback);
+        addDebug('QU → purchasePackage(qatar_university)');
+        purchasePackage('qatar_university', purchaseCallback);
       } else {
         addDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', purchaseCallback);

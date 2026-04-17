@@ -35,7 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { purchasePackage, restorePurchases, showPaywall, getOfferings, getPurchasesShellSnapshot } from "@/integrations/natively/purchasesBridge";
+import { purchasePackage, restorePurchases, getOfferings, getPurchasesShellSnapshot } from "@/integrations/natively/purchasesBridge";
 import { MyGallery } from "@/components/social/MyGallery";
 import { ContactsEmbedded } from "@/components/account/ContactsEmbedded";
 import { WishlistsEmbedded } from "@/components/account/WishlistsEmbedded";
@@ -383,8 +383,8 @@ export default function Account() {
 
     try {
       if (isQUUser) {
-        addBillingDebug('QU → showPaywall(university_exclusive)');
-        showPaywall(true, 'university_exclusive', billingCallback);
+        addBillingDebug('QU → purchasePackage(qatar_university)');
+        purchasePackage('qatar_university', billingCallback);
       } else {
         addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);

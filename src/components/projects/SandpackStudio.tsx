@@ -23,7 +23,7 @@ import {
 import { clsx } from "clsx";
 import { WAKTI_INSPECTOR_COMPONENT } from "@/utils/waktiInspectorComponent";
 import sandpackI18nBundle from "@/assets/sandpack-i18n-bundle.mjs?raw";
-import { SANDPACK_DEPENDENCIES } from "@/config/sandpackPackages";
+import { SANDPACK_DEPENDENCIES, rootPackageName } from "@/config/sandpackPackages";
 
 // --- 2. SELECTED ELEMENT INFO TYPE ---
 interface SelectedElementInfo {
@@ -286,6 +286,28 @@ export default function SandpackStudio({
     };
   }, [viewMode]);
   
+  // Scan project files for actual import statements and return only used packages.
+  // This prevents Sandpack from resolving all 50+ packages on every project load.
+  const activeDependencies = useMemo<Record<string, string>>(() => {
+    const allCode = Object.values(files).join('\n');
+    // Match: import ... from 'pkg' / require('pkg') / from "pkg"
+    const importRegex = /(?:from\s+['"]|require\s*\(\s*['"]|import\s+['"])(@?[a-z0-9][\w\-./]*)/g;
+    const usedRoots = new Set<string>();
+    let m: RegExpExecArray | null;
+    while ((m = importRegex.exec(allCode)) !== null) {
+      usedRoots.add(rootPackageName(m[1]));
+    }
+    // Always include core React packages
+    const ALWAYS_INCLUDE = new Set(['react', 'react-dom']);
+    const result: Record<string, string> = {};
+    for (const [pkg, ver] of Object.entries(SANDPACK_DEPENDENCIES)) {
+      if (ALWAYS_INCLUDE.has(rootPackageName(pkg)) || usedRoots.has(rootPackageName(pkg))) {
+        result[pkg] = ver;
+      }
+    }
+    return result;
+  }, [files]);
+
   // Check if we have valid files (not just empty or placeholder)
   // Enhanced validation to catch HTML error pages and malformed responses
   const hasValidFiles = useMemo(() => {
@@ -622,7 +644,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
         // (via supabase/functions/_shared/sandpackPackages.ts) and the preview
         // sandbox can NEVER drift. Add/remove packages in
         // src/config/sandpackPackages.ts and keep the edge-function mirror in sync.
-        dependencies: SANDPACK_DEPENDENCIES,
+        dependencies: activeDependencies,
       }}
       style={{ height: '100%', width: '100%' }}
     >

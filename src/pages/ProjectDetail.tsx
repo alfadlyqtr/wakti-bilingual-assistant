@@ -3917,29 +3917,29 @@ ${fixInstructions}
     if (pendingElementImageEdit) {
       const { elementInfo } = pendingElementImageEdit;
       
-      // Show loading toast
-      const loadingToast = toast.loading(isRTL ? 'جاري استيراد الصورة...' : 'Importing image...');
-      
       try {
-        // Import the image to Supabase storage first (skips if already stored)
-        const storedUrl = await importExternalImage(photo.url, photo.title);
+        // Use the photo URL directly — no waiting for storage import (avoids stuck toast)
+        // Storage import runs silently in the background for persistence
+        const imageUrl = photo.url;
+        importExternalImage(photo.url, photo.title).catch(() => {}); // fire-and-forget
         
         // Now replace in code across ALL files
         const { success, updatedFiles, targetFile } = replaceImageInAllFiles(
           generatedFiles,
           elementInfo,
-          storedUrl
+          imageUrl
         );
         
         if (success && targetFile) {
           setGeneratedFiles(updatedFiles);
+          setSandpackKey(prev => prev + 1);
           // Update codeContent if the target file is the current active file
           if (targetFile === '/App.js' || Object.keys(updatedFiles).length === 1) {
             setCodeContent(updatedFiles[targetFile] || updatedFiles['/App.js'] || '');
           }
           toast.success(isRTL ? 'تم تحديث الصورة!' : 'Image updated!');
         } else {
-          // Fallback: Use AI prompt with the stored URL
+          // Fallback: Use AI prompt with the URL
           const contextInfo = elementInfo?.className 
             ? `the ${elementInfo.tagName} element with class "${elementInfo.className.split(' ')[0]}"`
             : elementInfo?.tagName 
@@ -3947,8 +3947,8 @@ ${fixInstructions}
               : 'the selected image';
           
           const promptText = isRTL
-            ? `قم بتحديث صورة ${contextInfo} إلى هذا الرابط: ${storedUrl}`
-            : `Update the image source for ${contextInfo} to this URL: ${storedUrl}`;
+            ? `قم بتحديث صورة ${contextInfo} إلى هذا الرابط: ${imageUrl}`
+            : `Update the image source for ${contextInfo} to this URL: ${imageUrl}`;
           
           setChatInput(promptText);
           toast.info(isRTL ? 'جاري تطبيق التغيير...' : 'Applying change...');
@@ -3960,10 +3960,9 @@ ${fixInstructions}
           }, 100);
         }
       } catch (err) {
-        toast.error(isRTL ? 'فشل في استيراد الصورة' : 'Failed to import image');
-        console.error('Error importing image:', err);
+        toast.error(isRTL ? 'فشل في تحديث الصورة' : 'Failed to update image');
+        console.error('Error updating image:', err);
       } finally {
-        toast.dismiss(loadingToast);
         setPendingElementImageEdit(null);
         setSelectedElementInfo(null);
         setShowStockPhotoSelector(false);
@@ -4195,31 +4194,28 @@ ${fixInstructions}
       console.log('[Carousel] handleStockPhotosSelect called with', photos.length, 'photos');
       setIsChangingCarouselImages(false);
       
-      const loadingToast = toast.loading(
-        language === 'ar' ? 'جاري استيراد الصور...' : 'Importing images...'
-      );
-
       try {
-        // Import all images to storage in parallel (skips if already stored)
-        const storedUrls = await Promise.all(
-          photos.map(p => importExternalImage(p.url, p.title))
-        );
+        // Use original URLs directly — no waiting for storage import (avoids stuck toast)
+        // Storage import runs silently in the background for persistence
+        const imageUrls = photos.map(p => p.url);
+        photos.forEach(p => importExternalImage(p.url, p.title).catch(() => {})); // fire-and-forget
         
         // Try direct code replacement first
-        const { success, updatedFiles } = replaceCarouselImagesInFiles(generatedFiles, storedUrls);
+        const { success, updatedFiles } = replaceCarouselImagesInFiles(generatedFiles, imageUrls);
         
         if (success) {
           setGeneratedFiles(updatedFiles);
+          setSandpackKey(prev => prev + 1);
           toast.success(
             language === 'ar' 
-              ? `تم تحديث ${storedUrls.length} صور في الكاروسيل` 
-              : `Updated ${storedUrls.length} carousel images`
+              ? `تم تحديث ${imageUrls.length} صور في الكاروسيل` 
+              : `Updated ${imageUrls.length} carousel images`
           );
         } else {
-          // Fallback: Use AI prompt (but with stored URLs and safe wording)
+          // Fallback: Use AI prompt with the URLs
           const promptText = language === 'ar'
-            ? `قم بتحديث روابط الصور في الكاروسيل/المعرض إلى هذه الروابط بالضبط:\n${storedUrls.join('\n')}`
-            : `Update the carousel/gallery slide sources to exactly these URLs:\n${storedUrls.join('\n')}`;
+            ? `قم بتحديث روابط الصور في الكاروسيل/المعرض إلى هذه الروابط بالضبط:\n${imageUrls.join('\n')}` 
+            : `Update the carousel/gallery slide sources to exactly these URLs:\n${imageUrls.join('\n')}`;
           
           setChatInput(promptText);
           setTimeout(() => {
@@ -4228,10 +4224,8 @@ ${fixInstructions}
           }, 100);
         }
       } catch (err) {
-        toast.error(language === 'ar' ? 'فشل في استيراد الصور' : 'Failed to import images');
-        console.error('Carousel import error:', err);
-      } finally {
-        toast.dismiss(loadingToast);
+        toast.error(language === 'ar' ? 'فشل في تحديث الصور' : 'Failed to update images');
+        console.error('Carousel update error:', err);
       }
       
       return;
