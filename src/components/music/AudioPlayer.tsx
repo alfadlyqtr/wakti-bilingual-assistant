@@ -107,7 +107,10 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
       setIsPlaying(false);
       onPlaybackChangeRef.current?.(false);
       emitProgress(audio.currentTime, audio.duration, false);
-      setError(languageRef.current === 'ar' ? 'فشل تحميل الملف الصوتي' : 'Failed to load audio');
+      // Reset audio so a retry (next tap) re-initializes cleanly
+      audioRef.current = null;
+      initializedSrcRef.current = null;
+      setError(languageRef.current === 'ar' ? 'فشل تحميل الملف الصوتي — اضغط للمحاولة مرة أخرى' : 'Failed to load — tap to retry');
     };
 
     audio.addEventListener('play', handlePlay);
@@ -163,8 +166,10 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
       setCurrentTime(0);
       setDuration(0);
       setError(null);
-      setIsLoading(true);
-      audio.load();
+      setIsLoading(false);
+      // Do NOT call audio.load() eagerly — lazy-load on first play.
+      // Eager load across a full list on mobile causes the browser to
+      // abort concurrent requests and fire spurious error events.
     } else {
       // Sync UI to current state of external audio
       setCurrentTime(audio.currentTime);
@@ -233,6 +238,10 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
   }, [playerId]);
 
   const togglePlay = () => {
+    // If in error state, clear it and retry from scratch
+    if (error) {
+      setError(null);
+    }
     const audio = ensureAudio();
     if (!audio) return;
 
@@ -245,7 +254,7 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
       audio.play().catch(err => {
         console.error('[AudioPlayer] Play error:', err);
         setIsLoading(false);
-        setError(language === 'ar' ? 'فشل تشغيل الصوت' : 'Failed to play audio');
+        setError(language === 'ar' ? 'فشل تشغيل الصوت — اضغط للمحاولة مرة أخرى' : 'Failed to play — tap to retry');
       });
     }
   };
@@ -292,7 +301,11 @@ export function AudioPlayer({ src, className = '', showLoopToggle = false, onPla
   return (
     <div className={`flex items-center gap-3 ${className}`}>
       {error ? (
-        <div className="flex-1 flex items-center gap-2 text-sm text-red-600 bg-red-50 dark:bg-red-950/20 px-3 py-2 rounded-md">
+        <div
+          className="flex-1 flex items-center gap-2 text-sm text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/20 px-3 py-2 rounded-md cursor-pointer active:opacity-70"
+          onClick={togglePlay}
+          title={language === 'ar' ? 'اضغط للمحاولة مرة أخرى' : 'Tap to retry'}
+        >
           <span>⚠️</span>
           <span>{error}</span>
         </div>

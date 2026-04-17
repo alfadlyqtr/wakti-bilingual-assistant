@@ -332,8 +332,8 @@ export default function Account() {
 
     try {
       if (isQUUser) {
-        addBillingDebug('QU → purchasePackage($rc_monthly) [qu_discount offering]');
-        purchasePackage('$rc_monthly', billingCallback);
+        addBillingDebug('QU → purchasePackage(qu_discount) [Default offering, wakti_monthly_qu product]');
+        purchasePackage('qu_discount', billingCallback);
       } else {
         addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);
