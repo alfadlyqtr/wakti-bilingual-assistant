@@ -381,15 +381,57 @@ export default function Account() {
       setIsBillingPurchasing(false);
     };
 
+    const purchaseResolvedBillingQUPackage = () => {
+      if (billingPackageObj) {
+        addBillingDebug(`QU → purchasePackage(packageObject:${billingPackageObj?.identifier || 'qatar_university'})`);
+        purchasePackage(billingPackageObj, billingCallback);
+        return;
+      }
+      addBillingDebug('QU → package object missing, resolving via getOfferings()');
+      try {
+        getOfferings((resp: any) => {
+          addBillingDebug(`getOfferings status: ${resp?.status || 'n/a'}`);
+          if (resp?.error) addBillingDebug(`getOfferings error: ${JSON.stringify(resp.error)}`);
+          const allRaw = resp?.offerings?.all ?? resp?.offerings ?? resp?.all ?? resp;
+          const allOfferings = Array.isArray(allRaw)
+            ? allRaw
+            : allRaw && typeof allRaw === 'object'
+              ? Object.values(allRaw)
+              : [];
+          let quPkg: any = null;
+          for (const offering of allOfferings) {
+            const pkg = (offering as any)?.availablePackages?.find((p: any) => p?.identifier === 'qatar_university');
+            if (pkg) {
+              quPkg = pkg;
+              break;
+            }
+          }
+          if (quPkg) {
+            setBillingPackageObj(quPkg);
+            addBillingDebug(`QU → purchasePackage(resolvedPackageObject:${quPkg?.identifier || 'qatar_university'})`);
+            purchasePackage(quPkg, billingCallback);
+            return;
+          }
+          const packageSummary = allOfferings.map((offering: any) => {
+            const offeringId = offering?.identifier || offering?.id || 'unknown';
+            const pkgIds = Array.isArray((offering as any)?.availablePackages)
+              ? (offering as any).availablePackages.map((p: any) => p?.identifier || 'unknown').join(',')
+              : 'none';
+            return `${offeringId}[${pkgIds}]`;
+          }).join(' | ') || 'none';
+          addBillingDebug(`getOfferings packages: ${packageSummary}`);
+          addBillingDebug('QU → resolved package missing, fallback purchasePackage(qatar_university)');
+          purchasePackage('qatar_university', billingCallback);
+        });
+      } catch (e: any) {
+        addBillingDebug(`getOfferings TRY/CATCH ERROR: ${e?.message || String(e)}`);
+        purchasePackage('qatar_university', billingCallback);
+      }
+    };
+
     try {
       if (isQUUser) {
-        if (billingPackageObj) {
-          addBillingDebug(`QU → purchasePackage(packageObject:${billingPackageObj?.identifier || 'qatar_university'})`);
-          purchasePackage(billingPackageObj, billingCallback);
-        } else {
-          addBillingDebug('QU → package object missing, fallback purchasePackage(qatar_university)');
-          purchasePackage('qatar_university', billingCallback);
-        }
+        purchaseResolvedBillingQUPackage();
       } else {
         addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);
