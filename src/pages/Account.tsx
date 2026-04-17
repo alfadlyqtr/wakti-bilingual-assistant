@@ -383,9 +383,8 @@ export default function Account() {
 
     try {
       if (isQUUser) {
-        const packageToUse = isIOS ? 'wakti_monthly_qu' : (!isAndroid && billingPackageObj ? billingPackageObj : 'qatar_university');
-        addBillingDebug(`QU → purchasePackage(${typeof packageToUse === 'string' ? packageToUse : packageToUse?.identifier || 'package-object'})`);
-        purchasePackage(packageToUse, billingCallback);
+        addBillingDebug('QU → showPaywall(university_exclusive)');
+        showPaywall(true, 'university_exclusive', billingCallback);
       } else {
         addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);

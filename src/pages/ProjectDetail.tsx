@@ -3931,8 +3931,6 @@ ${fixInstructions}
           storedUrl
         );
         
-        toast.dismiss(loadingToast);
-        
         if (success && targetFile) {
           setGeneratedFiles(updatedFiles);
           // Update codeContent if the target file is the current active file
@@ -3955,23 +3953,21 @@ ${fixInstructions}
           setChatInput(promptText);
           toast.info(isRTL ? 'جاري تطبيق التغيير...' : 'Applying change...');
           
-          // Auto-submit with slight delay
-          requestAnimationFrame(() => {
-            const formEl = document.querySelector('form[class*="chat"]') as HTMLFormElement;
-            if (formEl) {
-              formEl.requestSubmit?.();
-            }
-          });
+          // Auto-submit with slight delay to allow state update
+          setTimeout(() => {
+            const formEl = document.querySelector('form[data-chat-form]') as HTMLFormElement;
+            if (formEl) formEl.requestSubmit?.();
+          }, 100);
         }
       } catch (err) {
-        toast.dismiss(loadingToast);
         toast.error(isRTL ? 'فشل في استيراد الصورة' : 'Failed to import image');
         console.error('Error importing image:', err);
+      } finally {
+        toast.dismiss(loadingToast);
+        setPendingElementImageEdit(null);
+        setSelectedElementInfo(null);
+        setShowStockPhotoSelector(false);
       }
-      
-      setPendingElementImageEdit(null);
-      setSelectedElementInfo(null);
-      setShowStockPhotoSelector(false);
       return;
     }
     
@@ -4226,10 +4222,10 @@ ${fixInstructions}
             : `Update the carousel/gallery slide sources to exactly these URLs:\n${storedUrls.join('\n')}`;
           
           setChatInput(promptText);
-          requestAnimationFrame(() => {
-            const formEl = document.querySelector('form[class*="chat"]') as HTMLFormElement;
+          setTimeout(() => {
+            const formEl = document.querySelector('form[data-chat-form]') as HTMLFormElement;
             if (formEl) formEl.requestSubmit?.();
-          });
+          }, 100);
         }
       } catch (err) {
         toast.error(language === 'ar' ? 'فشل في استيراد الصور' : 'Failed to import images');
