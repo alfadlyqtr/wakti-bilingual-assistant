@@ -64,6 +64,20 @@ export default function DeenAzkar() {
 
   const counterKey = (slug: string, idx: number) => `${slug}-${idx}`;
 
+  const getTargetCount = (notes?: string) => {
+    const match = notes?.match(/(\d+)/);
+    return match ? Math.max(1, Number(match[1])) : 1;
+  };
+
+  const formatTargetLabel = (target: number) => {
+    if (isAr) {
+      if (target === 1) return "مرة واحدة";
+      if (target === 2) return "مرتان";
+      return `${target} مرات`;
+    }
+    return target === 1 ? "1x" : `${target}x`;
+  };
+
   const loadCategory = useCallback(async (cat: Category) => {
     if (cacheRef.current[cat.slug]) {
       setItems(cacheRef.current[cat.slug]);
@@ -96,11 +110,17 @@ export default function DeenAzkar() {
   const tap = (slug: string, idx: number) => {
     const key = counterKey(slug, idx);
     setCounts((prev) => {
+      const item = items[idx];
+      const target = getTargetCount(item?.notes);
       const current = prev[key] ?? 0;
-      const next = current + 1;
+      const next = Math.min(current + 1, target);
       setCompleted((c) => {
         const s = new Set(c);
-        if (next >= 1) s.add(key);
+        if (next >= target) {
+          s.add(key);
+        } else {
+          s.delete(key);
+        }
         return s;
       });
       return { ...prev, [key]: next };
@@ -203,8 +223,9 @@ export default function DeenAzkar() {
           <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
             {items.map((item, idx) => {
               const key = counterKey(cat.slug, idx);
+              const target = getTargetCount(item.notes);
               const current = counts[key] ?? 0;
-              const isDone = completed.has(key);
+              const isDone = completed.has(key) || current >= target;
               const isExpanded = expandedIndex === idx;
 
               return (
@@ -220,14 +241,17 @@ export default function DeenAzkar() {
                   {/* Title row */}
                   <div className="px-4 pt-4 pb-2 flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
+                      {isAr && (
+                        <p className="text-[12px] font-semibold mb-0.5" style={{ color: textMuted }}>
+                          {formatTargetLabel(target)}
+                        </p>
+                      )}
                       {!isAr && (
                         <>
                           <p className="text-[13px] font-bold mb-0.5" style={{ color: isDone ? green : blue }}>
                             {item.title}
                           </p>
-                          {item.notes && (
-                            <p className="text-[11px]" style={{ color: textMuted }}>{item.notes}</p>
-                          )}
+                          <p className="text-[11px]" style={{ color: textMuted }}>{formatTargetLabel(target)}</p>
                         </>
                       )}
                     </div>
@@ -329,13 +353,17 @@ export default function DeenAzkar() {
                       <span className="text-2xl font-bold" style={{ color: isDone ? green : textPrimary }}>
                         {current}
                       </span>
-                      <span className="text-xs ml-1" style={{ color: textMuted }}>
-                        {isAr ? "مرة" : "times"}
+                      <span className="text-xs mx-1" style={{ color: textMuted }}>
+                        /
+                      </span>
+                      <span className="text-base font-semibold" style={{ color: textMuted }}>
+                        {target}
                       </span>
                     </div>
 
                     <button
                       onClick={() => tap(cat.slug, idx)}
+                      disabled={isDone}
                       className="px-5 py-2.5 rounded-xl text-sm font-bold active:scale-95 transition-all"
                       style={{
                         background: isDone ? greenFaint : blueFaint,
