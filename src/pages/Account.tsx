@@ -35,7 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { purchasePackage, restorePurchases, showPaywall } from "@/integrations/natively/purchasesBridge";
+import { purchasePackage, restorePurchases, showPaywall, getOfferings } from "@/integrations/natively/purchasesBridge";
 import { MyGallery } from "@/components/social/MyGallery";
 import { ContactsEmbedded } from "@/components/account/ContactsEmbedded";
 import { WishlistsEmbedded } from "@/components/account/WishlistsEmbedded";
@@ -332,8 +332,41 @@ export default function Account() {
 
     try {
       if (isQUUser) {
-        addBillingDebug('QU → purchasePackage(qu_discount) [Default offering, wakti_monthly_qu product]');
-        purchasePackage('qu_discount', billingCallback);
+        addBillingDebug('QU → resolving qu_discount package object via getOfferings');
+        getOfferings((offResp: any) => {
+          try {
+            const root = offResp?.offerings || offResp?.all || offResp || {};
+            const candidates: any[] = [];
+            const pushPkgs = (off: any) => {
+              if (!off) return;
+              const pkgs = off.availablePackages || off.packages || [];
+              if (Array.isArray(pkgs)) candidates.push(...pkgs);
+            };
+            pushPkgs(root.current);
+            pushPkgs(root.Default);
+            pushPkgs(root.default);
+            pushPkgs(root.qu_discount);
+            if (root.all && typeof root.all === 'object') {
+              Object.values(root.all).forEach((v: any) => pushPkgs(v));
+            }
+            addBillingDebug(`Found ${candidates.length} candidate package(s)`);
+            const quPkg = candidates.find((pkg: any) => {
+              const id = pkg?.identifier || pkg?.id || '';
+              const prodId = pkg?.product?.identifier || pkg?.storeProduct?.identifier || pkg?.productIdentifier || '';
+              return id === 'qu_discount' || prodId === 'wakti_monthly_qu';
+            });
+            if (quPkg) {
+              addBillingDebug(`Found QU package: id=${quPkg?.identifier} product=${quPkg?.product?.identifier || quPkg?.productIdentifier}`);
+              purchasePackage(quPkg, billingCallback);
+            } else {
+              addBillingDebug('QU package NOT found → fallback to string id');
+              purchasePackage('qu_discount', billingCallback);
+            }
+          } catch (err: any) {
+            addBillingDebug(`resolve error: ${err?.message || String(err)}`);
+            purchasePackage('qu_discount', billingCallback);
+          }
+        });
       } else {
         addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);

@@ -1,14 +1,22 @@
-
 import { jsPDF } from 'jspdf';
 import { format } from 'date-fns';
 import { arSA, enUS } from "date-fns/locale";
 import html2canvas from 'html2canvas';
+
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 interface PDFGenerationOptions {
   title: string;
   content: {
     text?: string | null;
   };
+
   metadata: {
     createdAt: string;
     expiresAt: string;
@@ -405,10 +413,14 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       doc.setTextColor(0, 0, 0);
       
       // Title
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text(title, isRtl ? pageWidth - margin : margin, yPosition, { align: isRtl ? 'right' : 'left' });
-      yPosition += 15;
+      if (!isRtl) {
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text(title, margin, yPosition, { align: 'left' });
+        yPosition += 15;
+      } else {
+        yPosition += 6;
+      }
       
       // Decide if this is a Tasjeel PDF (sidebar layout) to optionally skip the top gray metadata box
       const isTasjeelHeader = (metadata.type || '').toLowerCase().includes('tasjeel');
@@ -540,20 +552,22 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
         container.style.fontFamily = isRtl ? 'Arial, "Segoe UI", Tahoma, sans-serif' : 'Inter, Arial, sans-serif';
         container.style.direction = isRtl ? 'rtl' : 'ltr';
         container.style.textAlign = isRtl ? 'right' : 'left';
+        container.style.color = '#0f172a';
+        container.style.opacity = '1';
 
         if (isTasjeel) {
           // Sidebar layout (25% meta, 75% content), compact headings
           const metaRows: string[] = [];
-          metaRows.push(`<div>${isRtl ? 'النوع' : 'Type'}: ${metadata.type}</div>`);
-          if (metadata.host) metaRows.push(`<div>${isRtl ? 'المضيف' : 'Host'}: ${metadata.host}</div>`);
-          if (metadata.attendees) metaRows.push(`<div>${isRtl ? 'الحضور' : 'Attendees'}: ${metadata.attendees}</div>`);
-          if (metadata.location) metaRows.push(`<div>${isRtl ? 'الموقع' : 'Location'}: ${metadata.location}</div>`);
+          metaRows.push(`<div style="color:#0f172a;font-weight:600">${isRtl ? 'النوع' : 'Type'}: ${escapeHtml(metadata.type)}</div>`);
+          if (metadata.host) metaRows.push(`<div style="color:#0f172a;font-weight:600">${isRtl ? 'المضيف' : 'Host'}: ${escapeHtml(metadata.host)}</div>`);
+          if (metadata.attendees) metaRows.push(`<div style="color:#0f172a;font-weight:600">${isRtl ? 'الحضور' : 'Attendees'}: ${escapeHtml(metadata.attendees)}</div>`);
+          if (metadata.location) metaRows.push(`<div style="color:#0f172a;font-weight:600">${isRtl ? 'الموقع' : 'Location'}: ${escapeHtml(metadata.location)}</div>`);
 
           const sectionBlockHtml = (b: { title: string; items: string[] }) => `
             <div style="margin:0 0 10px 0">
-              <div style="font-size:13px;font-weight:800;color:#111827;margin-bottom:6px;border-bottom:2px solid #CBD5E1;padding-bottom:4px">${b.title}</div>
-              <ul style="font-size:12px;line-height:1.45;margin:${isRtl ? '0 16px 0 0' : '0 0 0 16px'}">
-                ${b.items.map(it => `<li>${it}</li>`).join('')}
+              <div style="font-size:15px;font-weight:800;color:#111827;margin-bottom:8px;border-bottom:2px solid #CBD5E1;padding-bottom:5px">${escapeHtml(b.title)}</div>
+              <ul style="font-size:13px;line-height:1.65;margin:${isRtl ? '0 18px 0 0' : '0 0 0 18px'};padding:0;color:#0f172a;opacity:1;font-weight:500;list-style-position:outside">
+                ${b.items.map(it => `<li style="color:#0f172a;opacity:1;margin-bottom:4px">${escapeHtml(it)}</li>`).join('')}
               </ul>
             </div>`;
 
@@ -566,11 +580,12 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
 
           container.innerHTML = `
             <div style="position:relative;border:2px solid #CBD5E1;border-radius:10px;padding:12px">
+              <div style="font-size:18px;font-weight:800;color:#111827;margin-bottom:12px;text-align:${isRtl ? 'right' : 'left'}">${escapeHtml(title)}</div>
               <div style="display:grid;grid-template-columns:25% 1fr;gap:16px;align-items:start">
                 <div style="${sideBorderStyle}">
                   <div style="font-size:12px;color:#6B7280;font-weight:700;margin-bottom:8px">${isRtl ? 'معلومات' : 'Meta'}</div>
                   <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:#374151">${metaRows.join('')}</div>
-                  <div style="font-size:11px;color:#94A3B8;margin-top:10px">${createdChip}</div>
+                  <div style="font-size:11px;color:#475569;margin-top:10px;font-weight:600">${escapeHtml(createdChip)}</div>
                 </div>
                 <div>
                   ${rightHtml}
@@ -594,15 +609,15 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
 
           const titleRow = `
             <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
-              <div style="font-size:18px;font-weight:800;color:#111827">${title}</div>
-              <div style="font-size:12px;color:#6b7280">${format(new Date(metadata.createdAt), 'PPP', { locale })}</div>
+              <div style="font-size:18px;font-weight:800;color:#111827">${escapeHtml(title)}</div>
+              <div style="font-size:12px;color:#475569;font-weight:600">${escapeHtml(format(new Date(metadata.createdAt), 'PPP', { locale }))}</div>
             </div>`;
 
           const metaChips: string[] = [];
-          metaChips.push(`${isRtl ? 'النوع' : 'Type'}: ${metadata.type}`);
-          if (metadata.host) metaChips.push(`${isRtl ? 'المضيف' : 'Host'}: ${metadata.host}`);
-          if (metadata.attendees) metaChips.push(`${isRtl ? 'الحضور' : 'Attendees'}: ${metadata.attendees}`);
-          if (metadata.location) metaChips.push(`${isRtl ? 'الموقع' : 'Location'}: ${metadata.location}`);
+          metaChips.push(`${isRtl ? 'النوع' : 'Type'}: ${escapeHtml(metadata.type)}`);
+          if (metadata.host) metaChips.push(`${isRtl ? 'المضيف' : 'Host'}: ${escapeHtml(metadata.host)}`);
+          if (metadata.attendees) metaChips.push(`${isRtl ? 'الحضور' : 'Attendees'}: ${escapeHtml(metadata.attendees)}`);
+          if (metadata.location) metaChips.push(`${isRtl ? 'الموقع' : 'Location'}: ${escapeHtml(metadata.location)}`);
 
           const chipsHtml = metaChips.map(c => `<span style="display:inline-block;padding:6px 10px;border-radius:9999px;background:#F3F4F6;color:#374151;font-size:12px;margin:${isRtl ? '0 0 6px 6px' : '0 6px 6px 0'}">${c}</span>`).join('');
 
@@ -649,7 +664,7 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       doc.setFontSize(9);
       doc.setTextColor(102, 102, 102);
       const dateStr = format(new Date(), 'PPP', { locale });
-      const footerText = isRtl ? `مشغّل بواسطة WAKTI AI • ${dateStr}` : `Powered by WAKTI AI • ${dateStr}`;
+      const footerText = isRtl ? `Powered by WAKTI AI • ${dateStr}` : `Powered by WAKTI AI • ${dateStr}`;
       doc.text(footerText, pageWidth / 2, footerY, { align: 'center' });
       
       console.log('PDF generation completed');
@@ -661,7 +676,7 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
 
     } catch (error) {
       console.error('Error generating PDF:', error);
-      reject(new Error(`PDF generation failed: ${error.message}`));
+      reject(new Error(`PDF generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
     }
   });
 };

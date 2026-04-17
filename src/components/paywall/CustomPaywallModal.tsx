@@ -189,8 +189,47 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
 
     try {
       if (isQUUser) {
-        addDebug('QU → purchasePackage(qu_discount) [Default offering, wakti_monthly_qu product]');
-        purchasePackage('qu_discount', purchaseCallback);
+        addDebug('QU → resolving qu_discount package object via getOfferings');
+        getOfferings((offResp: any) => {
+          try {
+            // Try many known shapes for where offerings/packages live in the SDK response
+            const root = offResp?.offerings || offResp?.all || offResp || {};
+            const candidates: any[] = [];
+            const pushPkgs = (off: any) => {
+              if (!off) return;
+              const pkgs = off.availablePackages || off.packages || [];
+              if (Array.isArray(pkgs)) candidates.push(...pkgs);
+            };
+            // Default offering
+            pushPkgs(root.current);
+            pushPkgs(root.Default);
+            pushPkgs(root.default);
+            // Custom qu_discount offering
+            pushPkgs(root.qu_discount);
+            // All offerings dict
+            if (root.all && typeof root.all === 'object') {
+              Object.values(root.all).forEach((v: any) => pushPkgs(v));
+            }
+            addDebug(`Found ${candidates.length} candidate package(s)`);
+            // Find the QU package by identifier OR by product id
+            const quPkg = candidates.find((pkg: any) => {
+              const id = pkg?.identifier || pkg?.id || '';
+              const prodId = pkg?.product?.identifier || pkg?.storeProduct?.identifier || pkg?.productIdentifier || '';
+              return id === 'qu_discount' || prodId === 'wakti_monthly_qu';
+            });
+            if (quPkg) {
+              addDebug(`Found QU package: id=${quPkg?.identifier} product=${quPkg?.product?.identifier || quPkg?.productIdentifier}`);
+              addDebug('QU → purchasePackage(<object>)');
+              purchasePackage(quPkg, purchaseCallback);
+            } else {
+              addDebug('QU package NOT found in offerings → fallback to string id');
+              purchasePackage('qu_discount', purchaseCallback);
+            }
+          } catch (err: any) {
+            addDebug(`resolve error: ${err?.message || String(err)}`);
+            purchasePackage('qu_discount', purchaseCallback);
+          }
+        });
       } else {
         addDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', purchaseCallback);
