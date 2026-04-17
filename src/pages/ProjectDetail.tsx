@@ -3882,9 +3882,13 @@ ${fixInstructions}
     }
     
     try {
-      const { data, error } = await supabase.functions.invoke('import-external-image', {
+      const invokePromise = supabase.functions.invoke('import-external-image', {
         body: { projectId: id, sourceUrl, filenameHint },
       });
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('import-external-image timeout')), 15000)
+      );
+      const { data, error } = await Promise.race([invokePromise, timeoutPromise]);
       
       if (error) {
         console.warn('Failed to import image to storage:', error);
@@ -4208,8 +4212,6 @@ ${fixInstructions}
         // Try direct code replacement first
         const { success, updatedFiles } = replaceCarouselImagesInFiles(generatedFiles, storedUrls);
         
-        toast.dismiss(loadingToast);
-        
         if (success) {
           setGeneratedFiles(updatedFiles);
           toast.success(
@@ -4230,9 +4232,10 @@ ${fixInstructions}
           });
         }
       } catch (err) {
-        toast.dismiss(loadingToast);
         toast.error(language === 'ar' ? 'فشل في استيراد الصور' : 'Failed to import images');
         console.error('Carousel import error:', err);
+      } finally {
+        toast.dismiss(loadingToast);
       }
       
       return;

@@ -210,7 +210,7 @@ export function CollapsibleFileTree({ isCollapsed = false, onToggleCollapse }: C
   }
 
   return (
-    <div className="w-52 md:w-64 h-full border-r border-white/10 bg-[#0f172a]/50 flex flex-col shrink-0">
+    <div className="w-36 md:w-44 h-full border-r border-white/10 bg-[#0f172a]/50 flex flex-col shrink-0">
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-white/10">
         <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">

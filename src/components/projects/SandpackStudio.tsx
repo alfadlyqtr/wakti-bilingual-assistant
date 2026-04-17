@@ -238,7 +238,7 @@ export default function SandpackStudio({
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
   const [selectedElement, setSelectedElement] = useState<SelectedElementInfo | null>(null);
   const [consoleOpen, setConsoleOpen] = useState(false);
-  const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false);
+  const [fileTreeCollapsed, setFileTreeCollapsed] = useState(() => window.innerWidth < 768);
   
   // Remove Sandpack resize handle - it causes issues in preview-only mode
   useEffect(() => {

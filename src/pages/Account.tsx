@@ -383,7 +383,7 @@ export default function Account() {
 
     try {
       if (isQUUser) {
-        const packageToUse = !isAndroid && billingPackageObj ? billingPackageObj : 'qatar_university';
+        const packageToUse = isIOS ? 'wakti_monthly_qu' : (!isAndroid && billingPackageObj ? billingPackageObj : 'qatar_university');
         addBillingDebug(`QU → purchasePackage(${typeof packageToUse === 'string' ? packageToUse : packageToUse?.identifier || 'package-object'})`);
         purchasePackage(packageToUse, billingCallback);
       } else {
