@@ -24,11 +24,11 @@ interface Category {
 }
 
 const CATEGORIES: Category[] = [
-  { slug: "morning-dhikr",    nameEn: "Morning Dhikr",    nameAr: "أذكار الصباح",      emoji: "�" },
+  { slug: "morning-dhikr",    nameEn: "Morning Dhikr",    nameAr: "أذكار الصباح",      emoji: "☀️" },
   { slug: "evening-dhikr",    nameEn: "Evening Dhikr",    nameAr: "أذكار المساء",      emoji: "🌙" },
   { slug: "daily-dua",        nameEn: "Daily Du'a",       nameAr: "الأدعية اليومية",   emoji: "🤲" },
   { slug: "selected-dua",     nameEn: "Selected Du'a",    nameAr: "أدعية مختارة",      emoji: "⭐" },
-  { slug: "dhikr-after-salah",nameEn: "Dhikr After Salah",nameAr: "أذكار بعد الصلاة", emoji: "�" },
+  { slug: "dhikr-after-salah",nameEn: "Dhikr After Salah",nameAr: "أذكار بعد الصلاة", emoji: "🤲" },
 ];
 
 export default function DeenAzkar() {
