@@ -4,6 +4,24 @@ declare global {
   }
 }
 
+function listFunctionNames(target: any): string[] {
+  if (!target) return [];
+  const names = new Set<string>();
+  let current = target;
+  let depth = 0;
+  while (current && depth < 3) {
+    for (const name of Object.getOwnPropertyNames(current)) {
+      if (name === 'constructor') continue;
+      try {
+        if (typeof current[name] === 'function') names.add(name);
+      } catch {}
+    }
+    current = Object.getPrototypeOf(current);
+    depth += 1;
+  }
+  return Array.from(names).sort();
+}
+
 function getInstance(): any | null {
   try {
     if (typeof window === 'undefined') return null;
@@ -78,6 +96,61 @@ export function restorePurchases(callback?: (resp: any) => void) {
     if (callback) {
       callback({ status: 'FAILED', error: String(err), customerId: null });
     }
+  }
+}
+
+export function getPurchasesShellSnapshot() {
+  try {
+    if (typeof window === 'undefined') {
+      return {
+        hasWindow: false,
+        hasCtor: false,
+        instanceCreated: false,
+      };
+    }
+
+    const ctor = (window as any).NativelyPurchases;
+    const instance = getInstance();
+    const scripts = typeof document !== 'undefined'
+      ? Array.from(document.scripts || []).map(script => script.src).filter(Boolean)
+      : [];
+    const nativelyScript = scripts.find(src => src.includes('natively')) || null;
+    const instanceMethods = listFunctionNames(instance);
+
+    return {
+      hasWindow: true,
+      hasCtor: !!ctor,
+      ctorName: ctor?.name || null,
+      ctorKeys: ctor ? Object.getOwnPropertyNames(ctor).sort() : [],
+      instanceCreated: !!instance,
+      instanceOwnKeys: instance ? Object.keys(instance).sort() : [],
+      instanceMethods,
+      capabilities: {
+        login: instanceMethods.includes('login'),
+        logout: instanceMethods.includes('logout'),
+        customerId: instanceMethods.includes('customerId'),
+        purchasePackage: instanceMethods.includes('purchasePackage'),
+        restore: instanceMethods.includes('restore'),
+        showPaywall: instanceMethods.includes('showPaywall'),
+        showPaywallIfNeeded: instanceMethods.includes('showPaywallIfNeeded'),
+        getOfferings: instanceMethods.includes('getOfferings'),
+      },
+      nativelyReady: !!(window as any).__nativelyReady,
+      nativelyFlags: {
+        isIOSApp: !!(window as any).natively?.isIOSApp,
+        isAndroidApp: !!(window as any).natively?.isAndroidApp,
+      },
+      scriptCount: scripts.length,
+      nativelyScript,
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+    };
+  } catch (err) {
+    return {
+      hasWindow: typeof window !== 'undefined',
+      hasCtor: !!(window as any)?.NativelyPurchases,
+      instanceCreated: false,
+      snapshotError: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 

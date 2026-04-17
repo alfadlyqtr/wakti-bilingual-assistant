@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
-import { purchasePackage, restorePurchases, showPaywall, getOfferings } from "@/integrations/natively/purchasesBridge";
+import { purchasePackage, restorePurchases, showPaywall, getOfferings, getPurchasesShellSnapshot } from "@/integrations/natively/purchasesBridge";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +42,15 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const addDebug = (msg: string) => {
     console.log('[DEBUG]', msg);
     setDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
+  };
+  const logShellSnapshot = (label: string) => {
+    const snapshot = getPurchasesShellSnapshot() as any;
+    addDebug(`${label} ready:${!!snapshot?.nativelyReady} ctor:${snapshot?.ctorName || 'none'} instance:${!!snapshot?.instanceCreated}`);
+    addDebug(`${label} flags iOSApp:${!!snapshot?.nativelyFlags?.isIOSApp} AndroidApp:${!!snapshot?.nativelyFlags?.isAndroidApp}`);
+    addDebug(`${label} methods: ${(snapshot?.instanceMethods || []).join(',') || 'none'}`);
+    addDebug(`${label} capabilities: ${Object.entries(snapshot?.capabilities || {}).filter(([, value]) => !!value).map(([key]) => key).join(',') || 'none'}`);
+    if (snapshot?.nativelyScript) addDebug(`${label} script: ${snapshot.nativelyScript}`);
+    if (snapshot?.snapshotError) addDebug(`${label} snapshotError: ${snapshot.snapshotError}`);
   };
   const [step, setStep] = useState(variant === 'new_user' ? 1 : 2);
   const [editingName, setEditingName] = useState(false);
@@ -126,6 +135,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     const sdkOnWindow = !!(window as any).NativelyPurchases;
     addDebug(`QU:${isQUUser} iOS:${isIOS} Android:${isAndroid}`);
     addDebug(`NativelyPurchases on window: ${sdkOnWindow}`);
+    logShellSnapshot('Shell');
     console.log('[Purchase] QU:', isQUUser, '| iOS:', isIOS);
 
     const purchaseCallback = async (resp: any) => {
@@ -215,6 +225,17 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     addDebug(`NativelyPurchases on window: ${!!(window as any).NativelyPurchases}`);
     addDebug(`natively.isIOSApp: ${(window as any).natively?.isIOSApp}`);
     addDebug(`natively.isAndroidApp: ${(window as any).natively?.isAndroidApp}`);
+    logShellSnapshot('Diagnose');
+    try {
+      const snapshot = getPurchasesShellSnapshot();
+      const raw = JSON.stringify(snapshot);
+      const chunkSize = 140;
+      for (let i = 0; i < raw.length && i < 2200; i += chunkSize) {
+        addDebug(`shell[${i}]: ${raw.slice(i, i + chunkSize)}`);
+      }
+    } catch (e: any) {
+      addDebug(`snapshot stringify failed: ${e?.message || String(e)}`);
+    }
     try {
       getOfferings((resp: any) => {
         addDebug(`getOfferings callback fired`);

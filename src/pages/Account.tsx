@@ -35,7 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { purchasePackage, restorePurchases, showPaywall, getOfferings } from "@/integrations/natively/purchasesBridge";
+import { purchasePackage, restorePurchases, showPaywall, getOfferings, getPurchasesShellSnapshot } from "@/integrations/natively/purchasesBridge";
 import { MyGallery } from "@/components/social/MyGallery";
 import { ContactsEmbedded } from "@/components/account/ContactsEmbedded";
 import { WishlistsEmbedded } from "@/components/account/WishlistsEmbedded";
@@ -275,6 +275,15 @@ export default function Account() {
     console.log('[BillingDebug]', msg);
     setBillingDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
   };
+  const logBillingShellSnapshot = (label: string) => {
+    const snapshot = getPurchasesShellSnapshot() as any;
+    addBillingDebug(`${label} ready:${!!snapshot?.nativelyReady} ctor:${snapshot?.ctorName || 'none'} instance:${!!snapshot?.instanceCreated}`);
+    addBillingDebug(`${label} flags iOSApp:${!!snapshot?.nativelyFlags?.isIOSApp} AndroidApp:${!!snapshot?.nativelyFlags?.isAndroidApp}`);
+    addBillingDebug(`${label} methods: ${(snapshot?.instanceMethods || []).join(',') || 'none'}`);
+    addBillingDebug(`${label} capabilities: ${Object.entries(snapshot?.capabilities || {}).filter(([, value]) => !!value).map(([key]) => key).join(',') || 'none'}`);
+    if (snapshot?.nativelyScript) addBillingDebug(`${label} script: ${snapshot.nativelyScript}`);
+    if (snapshot?.snapshotError) addBillingDebug(`${label} snapshotError: ${snapshot.snapshotError}`);
+  };
 
   const handleBillingSubscribe = () => {
     addBillingDebug('--- BUTTON PRESSED ---');
@@ -283,6 +292,7 @@ export default function Account() {
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     addBillingDebug(`QU:${isQUUser} iOS:${isIOS}`);
+    logBillingShellSnapshot('BillingShell');
     console.log('[BillingSubscribe] QU:', isQUUser, '| iOS:', isIOS);
 
     // QU users: use showPaywall with university_exclusive offering so the SDK
@@ -292,6 +302,13 @@ export default function Account() {
       addBillingDebug(`Callback fired! Status: ${resp?.status}`);
       addBillingDebug(`Callback message: ${resp?.message}`);
       if (resp?.error) addBillingDebug(`Callback error: ${JSON.stringify(resp.error)}`);
+      try {
+        const raw = JSON.stringify(resp);
+        const chunkSize = 140;
+        for (let i = 0; i < raw.length && i < 2000; i += chunkSize) {
+          addBillingDebug(`resp[${i}]: ${raw.slice(i, i + chunkSize)}`);
+        }
+      } catch {}
 
       const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
         resp.message.toLowerCase().includes('already subscribed');
