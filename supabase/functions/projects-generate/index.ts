@@ -4218,6 +4218,100 @@ The projectId for ALL API calls is: **${projectId}**
 ${fileList}
 
 ⚠️ Note: For detailed code analysis or edits, use Agent mode which can read specific files on-demand.`;
+
+      // ========================================================================
+      // 🎯 FEATURE CONTRACT PRE-PASS (Project-aware + amateur-prompt aware)
+      // Detects common feature requests and injects explicit end-to-end wiring
+      // requirements so the AI cannot return a partial/orphan implementation.
+      // ========================================================================
+      const allPaths = Object.keys(currentFiles);
+      const findFile = (candidates: string[]): string | null => {
+        for (const c of candidates) {
+          const hit = allPaths.find(p => p.toLowerCase() === c.toLowerCase());
+          if (hit) return hit;
+        }
+        // Fuzzy fallback — match by basename
+        for (const c of candidates) {
+          const base = c.split('/').pop()!.toLowerCase();
+          const hit = allPaths.find(p => p.toLowerCase().endsWith('/' + base) || p.toLowerCase() === '/' + base);
+          if (hit) return hit;
+        }
+        return null;
+      };
+      const entryFile =
+        findFile(['/index.js', '/src/index.js', '/index.jsx', '/src/index.jsx', '/src/main.jsx', '/main.jsx']) || '/index.js';
+      const appFile =
+        findFile(['/App.js', '/App.jsx', '/src/App.js', '/src/App.jsx', '/src/App.tsx']) || '/App.js';
+      const headerFile =
+        findFile(['/components/Header.jsx', '/components/Header.js', '/components/Navbar.jsx', '/components/Navigation.jsx', '/src/components/Header.jsx']);
+      const dataFile =
+        findFile(['/utils/mockData.js', '/utils/data.js', '/data/mockData.js', '/src/utils/mockData.js']);
+      const contextDirFiles = allPaths.filter(p => /\/context(s)?\//i.test(p));
+
+      const promptLower = (prompt || '').toLowerCase();
+      const isLanguageToggle =
+        /\b(language|lang|bilingual|i18n|rtl)\s*(toggle|switch|button|selector|picker|dropdown|menu|support)?\b/i.test(promptLower) ||
+        /\b(english|en)\s*(\/|and|or|&)\s*(arabic|ar)\b/i.test(promptLower) ||
+        /\b(arabic|ar)\s*(\/|and|or|&)\s*(english|en)\b/i.test(promptLower) ||
+        /\b(bilingual|multilingual|internationalization|localization)\b/i.test(promptLower) ||
+        /\b(add|enable|support)\s+(arabic|rtl|right[- ]to[- ]left)\b/i.test(promptLower) ||
+        /عربي\s*(و|\/)?\s*انجليزي|زر\s*اللغة|قائمة\s*اللغة/i.test(prompt || '');
+
+      const isDarkModeToggle =
+        /\b(dark|light|night|day)\s*(mode|theme)\s*(toggle|switch|button)?\b/i.test(promptLower) ||
+        /\b(theme)\s*(toggle|switch|button)\b/i.test(promptLower) ||
+        /\b(toggle|switch)\s+(between\s+)?(dark|light|theme|night|day)\b/i.test(promptLower);
+
+      let featureContractStr = '';
+      if (isLanguageToggle) {
+        featureContractStr = `
+
+🎯 FEATURE CONTRACT — LANGUAGE TOGGLE (English / Arabic, with RTL)
+The user wants a WORKING bilingual toggle. A single context file is NOT enough.
+You MUST return a plan that includes ALL of the following files in ONE response:
+
+REQUIRED FILES (touch every one that applies to this project):
+${contextDirFiles.length === 0 ? '1. CREATE  /context/LanguageContext.jsx  — exports LanguageProvider + useLanguage; holds { language, toggleLanguage, t, dir }; sets document.documentElement.dir + lang on change' : `1. UPDATE  ${contextDirFiles[0]}  — must export LanguageProvider + useLanguage; holds { language, toggleLanguage, t, dir }; sets document.documentElement.dir + lang on change`}
+2. UPDATE  ${entryFile}  — wrap <App /> in <LanguageProvider>…</LanguageProvider>
+3. UPDATE  ${appFile}  — import useLanguage; render a VISIBLE toggle control in the top nav/header (e.g. button showing "EN" ↔ "AR"); replace hardcoded nav labels with t.nav.*; honor dir for layout
+${headerFile ? `4. UPDATE  ${headerFile}  — import useLanguage; replace hardcoded strings (e.g. "Download CV") with translated labels from t; use dir-aware classes where needed` : ''}
+${dataFile ? `5. UPDATE  ${dataFile}  — expose an English AND Arabic variant (e.g. portfolioDataEn / portfolioDataAr) OR a single object with .en/.ar keys; keep existing field names` : ''}
+
+HARD RULES:
+- Do NOT return a plan that only creates the context file. That is a FAILED implementation.
+- The toggle button MUST be rendered somewhere visible (header/nav).
+- document.documentElement.dir MUST flip between 'ltr' and 'rtl' on toggle.
+- Every string visible on the page that you can realistically reach via t MUST be swapped. If you can't reach them all, swap at least nav labels + section titles + the most visible hero text.
+- No i18next / react-i18next / any external package — this is a lightweight Context-based implementation.
+- All files above MUST appear in the "codeChanges" array of your JSON plan.
+`;
+      } else if (isDarkModeToggle) {
+        featureContractStr = `
+
+🎯 FEATURE CONTRACT — DARK / LIGHT MODE TOGGLE
+The user wants a WORKING theme toggle.
+
+REQUIRED FILES:
+1. UPDATE  ${appFile}  — add darkMode state (or use an existing ThemeContext); render a VISIBLE toggle button (sun/moon) in the top nav/header; toggle a "dark" class on <html> or root div; persist in localStorage
+2. UPDATE any styles file that uses CSS variables — ensure dark mode flips variables (OR rely on Tailwind 'dark:' classes)
+
+HARD RULES:
+- The toggle MUST be visible in the UI.
+- Clicking it MUST visibly change the theme.
+- Persist the choice (localStorage) so it survives reload.
+- Do NOT return a plan that only adds state without rendering the button.
+`;
+      }
+
+      const projectAwarenessStr = `
+
+📌 PROJECT ENTRY POINTS (use these exact paths when editing):
+- Entry file:  ${entryFile}
+- Root App:    ${appFile}
+${headerFile ? `- Header:      ${headerFile}` : '- Header:      (none detected — nav likely inline in App)'}
+${contextDirFiles.length ? `- Contexts:    ${contextDirFiles.join(', ')}` : ''}
+${dataFile ? `- Data file:   ${dataFile}` : ''}
+`;
       
       // Smart model selection for chat mode
       const hasImages = Array.isArray(images) && images.length > 0;
@@ -4297,7 +4391,7 @@ ${(images as unknown as string[]).filter((img: string) => !img.startsWith('[PDF:
 ` : '';
 
       const chatSystemPrompt = `You are a helpful AI assistant for a React code editor. You help users with their projects.
-${assetPickerPriorityStr}${attachedImagesContext}${hasImages && !attachedImagesContext.includes('ATTACHED') ? '\n🖼️ SCREENSHOT ANALYSIS MODE: The user has attached screenshot(s). Analyze them carefully and implement what you see or what the user asks based on the visual.\n' : ''}
+${assetPickerPriorityStr}${attachedImagesContext}${hasImages && !attachedImagesContext.includes('ATTACHED') ? '\n🖼️ SCREENSHOT ANALYSIS MODE: The user has attached screenshot(s). Analyze them carefully and implement what you see or what the user asks based on the visual.\n' : ''}${projectAwarenessStr}${featureContractStr}
 🚨 PRIORITY 2 - CODE CHANGE DETECTION (Only if asset_picker doesn't apply):
 
 IS IT A CODE CHANGE REQUEST? Check for these keywords:
@@ -4611,6 +4705,64 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
               creditUsage: chatCreditUsage
             });
           } else {
+            // ================================================================
+            // 🎯 COMPLETION CONTRACT VERIFIER
+            // If a feature contract was expected, verify the plan actually
+            // touches the required wiring files. Attach a truthfulness warning
+            // when the plan is partial so the frontend can show honest status.
+            // ================================================================
+            const contractWarnings: string[] = [];
+            try {
+              const planFiles: string[] = [];
+              if (parsed && typeof parsed === 'object') {
+                if (typeof parsed.file === 'string') planFiles.push(parsed.file);
+                if (Array.isArray(parsed.codeChanges)) {
+                  for (const ch of parsed.codeChanges) {
+                    if (ch && typeof ch.file === 'string') planFiles.push(ch.file);
+                  }
+                }
+                if (Array.isArray(parsed.files)) {
+                  for (const f of parsed.files) {
+                    if (typeof f === 'string') planFiles.push(f);
+                    else if (f && typeof f.path === 'string') planFiles.push(f.path);
+                  }
+                }
+              }
+              const normalizedPlanFiles = Array.from(new Set(planFiles.map(p => p.toLowerCase())));
+              const planHits = (needle: string) =>
+                normalizedPlanFiles.some(p => p.includes(needle.toLowerCase()));
+              const planHitsBasename = (basename: string) =>
+                normalizedPlanFiles.some(p => p.endsWith('/' + basename.toLowerCase()) || p === '/' + basename.toLowerCase());
+
+              if (isLanguageToggle) {
+                const hasContext =
+                  normalizedPlanFiles.some(p => /\/context(s)?\/.*language/i.test(p)) ||
+                  planHits('languagecontext');
+                const hasEntry = planHits(entryFile.toLowerCase()) || planHitsBasename(entryFile.split('/').pop() || 'index.js');
+                const hasApp = planHits(appFile.toLowerCase()) || planHitsBasename(appFile.split('/').pop() || 'App.js');
+                if (!hasContext) contractWarnings.push('Missing LanguageContext provider file.');
+                if (!hasEntry) contractWarnings.push(`Provider not mounted in ${entryFile}.`);
+                if (!hasApp) contractWarnings.push(`Toggle UI / translated labels not wired in ${appFile}.`);
+              } else if (isDarkModeToggle) {
+                const hasApp = planHits(appFile.toLowerCase()) || planHitsBasename(appFile.split('/').pop() || 'App.js');
+                if (!hasApp) contractWarnings.push(`Dark-mode toggle not wired in ${appFile}.`);
+              }
+            } catch (verifyErr) {
+              console.error('[Contract Verifier] Error:', verifyErr);
+            }
+
+            if (contractWarnings.length > 0) {
+              console.warn('[Contract Verifier] Partial plan detected:', contractWarnings);
+              return createResponse({
+                ok: true,
+                plan: extractedJson,
+                mode: 'plan',
+                creditUsage: chatCreditUsage,
+                contractWarnings,
+                partial: true
+              });
+            }
+
             return createResponse({ ok: true, plan: extractedJson, mode: 'plan', creditUsage: chatCreditUsage });
           }
         } catch {

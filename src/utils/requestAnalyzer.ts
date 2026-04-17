@@ -41,8 +41,9 @@ const FEATURE_PATTERNS: Record<FeatureType, {
 }> = {
   landing: {
     patterns: [
-      /\b(landing|home|main|hero|front)\s*(page|section)?/i,
-      /\b(website|site)\b/i,
+      // Only match EXPLICIT build intent for a new page/site, not casual mentions of "page" or "website"
+      /\b(build|create|make|generate|design|start|need|want)\s+(a\s+|an\s+|the\s+)?(landing|home|main|hero|front)\s*(page|section)?/i,
+      /\b(build|create|make|generate|design|start|need|want)\s+(a\s+|an\s+|the\s+)?(website|site|webpage)\b/i,
     ],
     priority: 1,
     requiresWizard: false,
@@ -129,9 +130,15 @@ const FEATURE_PATTERNS: Record<FeatureType, {
   },
   bilingual: {
     patterns: [
-      /\b(arabic|english|bilingual|language|rtl)\b/i,
-      /\b(toggle|switch)\s*(language|arabic|english)\b/i,
-      /\bعربي|انجليزي/i,
+      // Only trigger when the user is clearly asking for bilingual/i18n BEHAVIOR, not just mentioning a language word
+      /\b(bilingual|multilingual|i18n|internationalization|localization)\b/i,
+      /\b(toggle|switch|button|menu|selector|dropdown)\s*(for\s*|to\s*)?(language|arabic|english|lang)\b/i,
+      /\b(language|lang)\s*(toggle|switch|selector|picker|dropdown|menu)\b/i,
+      /\b(arabic|english|ar|en)\s*(\/|and|or|&)\s*(arabic|english|ar|en)\b/i,
+      /\b(rtl|right[- ]to[- ]left)\s*(support|layout|mode)?\b/i,
+      /\b(translate|translation)\s+(to|into|the)\s*(arabic|english|site|page|app|website)\b/i,
+      /\bعربي\s*(و|\/)?\s*انجليزي/i,
+      /\b(تبديل|زر|قائمة)\s*(اللغة|العربية|الانجليزية)\b/i,
     ],
     priority: 10,
     requiresWizard: false,

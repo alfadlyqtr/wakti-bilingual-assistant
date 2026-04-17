@@ -33,6 +33,12 @@ export type IntentType =
   | 'customize_style'
   | 'customize_color'
   | 'customize_layout'
+  | 'customize_language_toggle'
+  | 'customize_dark_mode'
+  | 'customize_add_section'
+  | 'customize_remove_section'
+  | 'customize_add_button'
+  | 'customize_remove_button'
   // BUILD intents
   | 'build_booking'
   | 'build_contact'
@@ -85,6 +91,124 @@ interface PatternConfig {
 // ============================================================================
 
 const INTENT_PATTERNS: PatternConfig[] = [
+  // -------------------------------------------------------------------------
+  // PRIORITY 0: COMMON AMATEUR-FRIENDLY FEATURE EDITS
+  // These must win BEFORE VIEW/CUSTOMIZE/BUILD so casual prompts don't trigger wizards.
+  // All route to CALL_AI with explicit feature hints (consumed by the chat-mode enricher).
+  // -------------------------------------------------------------------------
+  {
+    patterns: [
+      // "add a language toggle", "english/arabic toggle", "bilingual", "rtl support"
+      /\b(add|create|make|need|want|put|build)\s+(a\s+|an\s+|the\s+)?(language|lang|bilingual|i18n|rtl)\s*(toggle|switch|button|selector|picker|menu|dropdown|support)?\b/i,
+      /\b(language|lang)\s*(toggle|switch|selector|picker|dropdown|menu|button)\b/i,
+      /\b(english|en)\s*(\/|and|or|&)\s*(arabic|ar)\b/i,
+      /\b(arabic|ar)\s*(\/|and|or|&)\s*(english|en)\b/i,
+      /\b(bilingual|multilingual|i18n|internationalization|localization)\b/i,
+      /\b(add|enable|support)\s+(arabic|rtl|right[- ]to[- ]left)\b/i,
+      /\b(translate|translation)\s+(to|into)\s+(arabic|english)\b/i,
+      /\bزر\s*اللغة|قائمة\s*اللغة|عربي\s*(و|\/)?\s*انجليزي/i,
+    ],
+    category: 'CUSTOMIZE',
+    intent: 'customize_language_toggle',
+    action: 'CALL_AI',
+    priority: 0,
+    payload: {
+      response: {
+        en: "I'll add a working English/Arabic toggle with RTL support, wired end-to-end.",
+        ar: "سأضيف زر تبديل إنجليزي/عربي يعمل بالكامل مع دعم RTL ومرتبط في كل الأماكن."
+      }
+    }
+  },
+  {
+    patterns: [
+      // "add dark mode", "dark/light toggle", "theme toggle"
+      /\b(add|create|make|need|want|enable)\s+(a\s+|an\s+|the\s+)?(dark|light|night|day)\s*(mode|theme)?\s*(toggle|switch|button)?\b/i,
+      /\b(dark|light|theme)\s*(mode|theme)?\s*(toggle|switch|button)\b/i,
+      /\b(toggle|switch)\s+(between\s+)?(dark|light|theme|night|day)\b/i,
+      /\bوضع\s*(ليلي|نهاري|داكن|فاتح)|تبديل\s*(الوضع|السمة)/i,
+    ],
+    category: 'CUSTOMIZE',
+    intent: 'customize_dark_mode',
+    action: 'CALL_AI',
+    priority: 0,
+    payload: {
+      response: {
+        en: "I'll add a working dark/light mode toggle, wired to the whole app.",
+        ar: "سأضيف زر تبديل الوضع الداكن/الفاتح مرتبط بكل التطبيق."
+      }
+    }
+  },
+  {
+    patterns: [
+      // "add a section", "add a testimonials section", "add a hero"
+      /\b(add|insert|include|put|create)\s+(a\s+|an\s+|the\s+|new\s+)?(section|block|area|component|card|hero|banner|cta|footer)\b/i,
+      /\b(add|insert|include|put|create)\s+(a\s+|an\s+|the\s+|new\s+)?(testimonials?|pricing|features?|faq|gallery|about|services?|team|stats?|newsletter)\s*(section|block|area)?\b/i,
+      /\bأضف\s*(قسم|بلوك|منطقة)/i,
+    ],
+    category: 'CUSTOMIZE',
+    intent: 'customize_add_section',
+    action: 'CALL_AI',
+    priority: 0,
+    payload: {
+      response: {
+        en: "I'll add that section and wire it into the page.",
+        ar: "سأضيف هذا القسم وأربطه بالصفحة."
+      }
+    }
+  },
+  {
+    patterns: [
+      // "remove this section", "delete the hero", "take out the pricing"
+      /\b(remove|delete|take\s*out|get\s*rid\s*of|hide)\s+(this\s+|the\s+|that\s+|a\s+|an\s+)?(section|block|area|hero|banner|cta|footer|header|navbar|nav)\b/i,
+      /\b(remove|delete|take\s*out|get\s*rid\s*of|hide)\s+(the\s+|this\s+|that\s+)?(testimonials?|pricing|features?|faq|gallery|about|services?|team|stats?|newsletter|contact)\s*(section|block|area)?\b/i,
+      /\bاحذف\s*(القسم|البلوك|المنطقة)/i,
+    ],
+    category: 'CUSTOMIZE',
+    intent: 'customize_remove_section',
+    action: 'CALL_AI',
+    priority: 0,
+    payload: {
+      response: {
+        en: "I'll remove that section cleanly.",
+        ar: "سأحذف هذا القسم بشكل نظيف."
+      }
+    }
+  },
+  {
+    patterns: [
+      // "add a cta button", "add a download button"
+      /\b(add|insert|include|put|create)\s+(a\s+|an\s+|the\s+|new\s+)?(button|cta|link)\b/i,
+      /\bأضف\s*(زر|زرار)/i,
+    ],
+    category: 'CUSTOMIZE',
+    intent: 'customize_add_button',
+    action: 'CALL_AI',
+    priority: 0,
+    payload: {
+      response: {
+        en: "I'll add that button and wire it up.",
+        ar: "سأضيف الزر وأربطه."
+      }
+    }
+  },
+  {
+    patterns: [
+      // "remove the button", "delete the cta"
+      /\b(remove|delete|take\s*out|get\s*rid\s*of|hide)\s+(this\s+|the\s+|that\s+|a\s+|an\s+)?(button|cta|link)\b/i,
+      /\bاحذف\s*(الزر|الزرار)/i,
+    ],
+    category: 'CUSTOMIZE',
+    intent: 'customize_remove_button',
+    action: 'CALL_AI',
+    priority: 0,
+    payload: {
+      response: {
+        en: "I'll remove that button cleanly.",
+        ar: "سأحذف الزر بشكل نظيف."
+      }
+    }
+  },
+
   // -------------------------------------------------------------------------
   // PRIORITY 1: VIEW INTENTS (Show existing content)
   // -------------------------------------------------------------------------
@@ -416,7 +540,7 @@ export function analyzeIntent(message: string): IntentResult {
           category: config.category,
           intent: config.intent,
           action: config.action,
-          confidence: config.priority === 1 ? 'high' : config.priority === 2 ? 'medium' : 'low',
+          confidence: config.priority <= 1 ? 'high' : config.priority === 2 ? 'medium' : 'low',
           payload: config.payload,
           matchedPattern: pattern.toString(),
         };

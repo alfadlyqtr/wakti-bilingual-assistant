@@ -5257,6 +5257,17 @@ ${fixInstructions}
         } else if (response.data.mode === 'plan' && response.data.plan) {
           // AI detected a code change request - show Plan Card
           assistantMsg = response.data.plan;
+          // 🎯 COMPLETION CONTRACT: Surface partial-completion warnings honestly
+          if (response.data.partial && Array.isArray(response.data.contractWarnings) && response.data.contractWarnings.length > 0) {
+            const warningText = response.data.contractWarnings.join(' ');
+            console.warn('[ContractVerifier] Partial plan:', response.data.contractWarnings);
+            toast.warning(
+              isRTL
+                ? `تم إعداد خطة جزئية فقط. ${warningText} راجع الخطة قبل التطبيق.`
+                : `Partial plan detected. ${warningText} Review the plan before applying.`,
+              { duration: 8000 }
+            );
+          }
         } else {
           // AI answered a question - show regular message
           assistantMsg = response.data.message || (isRTL ? 'لم أتمكن من الإجابة.' : 'Could not generate a response.');
