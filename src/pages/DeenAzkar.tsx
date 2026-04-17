@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ChevronRight, RotateCcw, RefreshCw, Check, BookOpen, Info } from "lucide-react";
+import { ArrowLeft, ChevronRight, RotateCcw, RefreshCw, Check, BookOpen, Info, Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 
 // ── Data source: fitrahive/dua-dhikr (MIT licence) ────────────────────────────
@@ -31,6 +31,11 @@ const CATEGORIES: Category[] = [
   { slug: "dhikr-after-salah",nameEn: "Dhikr After Salah",nameAr: "أذكار بعد الصلاة", emoji: "🤲" },
 ];
 
+const CATEGORY_AUDIO: Record<string, string> = {
+  "morning-dhikr": "/WAKTI AZKAR MORING.mp3",
+  "evening-dhikr": "/WAKTI AZKAR NIGHT.mp3",
+};
+
 export default function DeenAzkar() {
   const navigate = useNavigate();
   const { language, theme } = useTheme();
@@ -44,8 +49,12 @@ export default function DeenAzkar() {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [completed, setCompleted] = useState<Set<string>>(new Set());
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
 
   const cacheRef = useRef<Record<string, DhikrItem[]>>({});
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Colours
   const bg = isDark ? "#0c0f14" : "#fcfefd";
@@ -77,6 +86,78 @@ export default function DeenAzkar() {
     }
     return target === 1 ? "1x" : `${target}x`;
   };
+
+  const formatAudioTime = (time: number) => {
+    if (!Number.isFinite(time) || time < 0) return "0:00";
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
+
+  const audioSrc = selectedCat ? CATEGORY_AUDIO[selectedCat.slug] : undefined;
+
+  const toggleAudioPlayback = useCallback(async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    try {
+      if (audio.paused) {
+        await audio.play();
+      } else {
+        audio.pause();
+      }
+    } catch {
+      setIsPlayingAudio(false);
+    }
+  }, []);
+
+  const seekAudioBy = useCallback((delta: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const nextTime = Math.min(Math.max(audio.currentTime + delta, 0), audio.duration || 0);
+    audio.currentTime = nextTime;
+    setAudioCurrentTime(nextTime);
+  }, []);
+
+  const handleAudioSeek = useCallback((nextValue: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = nextValue;
+    setAudioCurrentTime(nextValue);
+  }, []);
+
+  const syncAudioDuration = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    setAudioDuration(audio.duration || 0);
+    setAudioCurrentTime(audio.currentTime || 0);
+    setIsPlayingAudio(!audio.paused && !audio.ended);
+  }, []);
+
+  const syncAudioTime = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    setAudioCurrentTime(audio.currentTime || 0);
+  }, []);
+
+  const handleAudioPlay = useCallback(() => {
+    setIsPlayingAudio(true);
+  }, []);
+
+  const handleAudioPause = useCallback(() => {
+    const audio = audioRef.current;
+    setIsPlayingAudio(Boolean(audio && !audio.paused && !audio.ended));
+  }, []);
+
+  const handleAudioEnded = useCallback(() => {
+    setIsPlayingAudio(false);
+    setAudioCurrentTime(0);
+  }, [audioSrc]);
+
+  useEffect(() => {
+    setIsPlayingAudio(false);
+    setAudioCurrentTime(0);
+    setAudioDuration(0);
+  }, [audioSrc]);
 
   const loadCategory = useCallback(async (cat: Category) => {
     if (cacheRef.current[cat.slug]) {
@@ -221,6 +302,82 @@ export default function DeenAzkar() {
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
+            {audioSrc && (
+              <div
+                className="rounded-2xl p-4 space-y-3"
+                style={{ background: cardBg, border: `1px solid ${cardBorder}` }}
+              >
+                <audio
+                  key={audioSrc}
+                  ref={audioRef}
+                  src={audioSrc}
+                  preload="metadata"
+                  onLoadedMetadata={syncAudioDuration}
+                  onDurationChange={syncAudioDuration}
+                  onTimeUpdate={syncAudioTime}
+                  onPlay={handleAudioPlay}
+                  onPause={handleAudioPause}
+                  onEnded={handleAudioEnded}
+                />
+
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold" style={{ color: textPrimary }}>
+                      {isAr ? "الاستماع الكامل" : "Full audio"}
+                    </p>
+                  </div>
+                  <span className="text-[11px] tabular-nums shrink-0" style={{ color: textMuted }}>
+                    {audioDuration > 0 ? `${formatAudioTime(audioCurrentTime)} / ${formatAudioTime(audioDuration)}` : "0:00 / 0:00"}
+                  </span>
+                </div>
+
+                <input
+                  type="range"
+                  min={0}
+                  max={audioDuration || 0}
+                  step={1}
+                  value={Math.min(audioCurrentTime, audioDuration || 0)}
+                  onChange={(e) => handleAudioSeek(Number(e.target.value))}
+                  className="w-full h-1.5 cursor-pointer accent-blue-500"
+                  aria-label={isAr ? "شريط التقدّم الصوتي" : "Audio progress slider"}
+                />
+
+                <div className="flex items-center justify-center gap-2" dir="ltr">
+                    <button
+                      onClick={() => seekAudioBy(-10)}
+                      className="w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-all"
+                      style={{ background: isDark ? "rgba(255,255,255,0.05)" : "rgba(6,5,65,0.05)", border: `1px solid ${cardBorder}` }}
+                      aria-label={isAr ? "ترجيع 10 ثوانٍ" : "Rewind 10 seconds"}
+                      title={isAr ? "ترجيع 10 ثوانٍ" : "Rewind 10 seconds"}
+                    >
+                      <SkipBack className="w-4 h-4" style={{ color: textSecondary }} />
+                    </button>
+
+                    <button
+                      onClick={toggleAudioPlayback}
+                      className="w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-all"
+                      style={{ background: blueFaint, border: `1px solid ${blueGlow}` }}
+                      aria-label={isPlayingAudio ? (isAr ? "إيقاف مؤقت" : "Pause") : (isAr ? "تشغيل" : "Play")}
+                      title={isPlayingAudio ? (isAr ? "إيقاف مؤقت" : "Pause") : (isAr ? "تشغيل" : "Play")}
+                    >
+                      {isPlayingAudio
+                        ? <Pause className="w-4 h-4" style={{ color: blue }} />
+                        : <Play className="w-4 h-4 ml-0.5" style={{ color: blue }} />}
+                    </button>
+
+                    <button
+                      onClick={() => seekAudioBy(10)}
+                      className="w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-all"
+                      style={{ background: isDark ? "rgba(255,255,255,0.05)" : "rgba(6,5,65,0.05)", border: `1px solid ${cardBorder}` }}
+                      aria-label={isAr ? "تقديم 10 ثوانٍ" : "Forward 10 seconds"}
+                      title={isAr ? "تقديم 10 ثوانٍ" : "Forward 10 seconds"}
+                    >
+                      <SkipForward className="w-4 h-4" style={{ color: textSecondary }} />
+                    </button>
+                </div>
+              </div>
+            )}
+
             {items.map((item, idx) => {
               const key = counterKey(cat.slug, idx);
               const target = getTargetCount(item.notes);
