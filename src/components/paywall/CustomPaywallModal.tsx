@@ -189,8 +189,8 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
 
     try {
       if (isQUUser) {
-        addDebug('QU → purchasePackage(qu_discount) [Default offering]');
-        purchasePackage('qu_discount', purchaseCallback);
+        addDebug('QU → purchasePackage($rc_monthly) [qu_discount offering]');
+        purchasePackage('$rc_monthly', purchaseCallback);
       } else {
         addDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', purchaseCallback);
