@@ -383,8 +383,13 @@ export default function Account() {
 
     try {
       if (isQUUser) {
-        addBillingDebug('QU → purchasePackage(qatar_university)');
-        purchasePackage('qatar_university', billingCallback);
+        if (billingPackageObj) {
+          addBillingDebug(`QU → purchasePackage(packageObject:${billingPackageObj?.identifier || 'qatar_university'})`);
+          purchasePackage(billingPackageObj, billingCallback);
+        } else {
+          addBillingDebug('QU → package object missing, fallback purchasePackage(qatar_university)');
+          purchasePackage('qatar_university', billingCallback);
+        }
       } else {
         addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);
