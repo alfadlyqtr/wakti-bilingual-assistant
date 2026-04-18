@@ -30,6 +30,8 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// 🧠 Three-layer prompt architecture — on-demand capability doc loader for Agent/Execute mode.
+import { getCapabilityDoc, listCapabilityNames } from "./prompts/capabilities/index.ts";
 
 // ALLOWED TABLES - These are the ONLY tables the agent can access
 const ALLOWED_TABLES = [
@@ -2137,6 +2139,24 @@ export const AGENT_TOOLS = [
       }
     }
   },
+  // 🧠 THREE-LAYER PROMPT — on-demand capability doc loader.
+  // Use this when the user's request involves a backend capability (stock_images, forms,
+  // booking, ecommerce, phaser_game). The capability manifest is always in scope; the full
+  // implementation docs are loaded on demand to keep the base prompt small.
+  {
+    name: "get_capability_doc",
+    description: "Load the full implementation doc for a specific capability. Valid names: stock_images, forms, booking, ecommerce, phaser_game. Call this BEFORE writing code that touches the backend for that capability so you use the correct API contract.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "Capability name. One of: stock_images | forms | booking | ecommerce | phaser_game",
+        },
+      },
+      required: ["name"],
+    },
+  },
   // 🚀 GREP SEARCH - Find code across ALL files (like Cascade does!)
   {
     name: "grep_search",
@@ -3520,6 +3540,27 @@ export async function executeToolCall(
   console.log(`[Agent] Executing tool: ${name} for project: ${projectId}`, args);
   
   switch (name) {
+    // 🧠 Three-layer prompt — on-demand capability doc loader.
+    // The AI calls this to pull the full implementation spec for a backend capability
+    // (stock_images, forms, booking, ecommerce, phaser_game) only when it actually needs it.
+    case "get_capability_doc": {
+      const capName = String(args.name || "").trim();
+      if (!capName) {
+        return { error: "Missing 'name'. Valid: " + listCapabilityNames().join(", ") };
+      }
+      const doc = getCapabilityDoc(capName);
+      if (!doc) {
+        return {
+          error: `Unknown capability '${capName}'. Valid names: ${listCapabilityNames().join(", ")}`,
+        };
+      }
+      return {
+        success: true,
+        name: capName,
+        doc,
+      };
+    }
+
     case "read_file": {
       const path = normalizeFilePath(args.path || "");
       const { data, error } = await supabase

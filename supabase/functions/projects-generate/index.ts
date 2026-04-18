@@ -17,6 +17,12 @@ import { formatPackagesForPrompt } from "../_shared/sandpackPackages.ts";
 // Split modules (Item 5 — safe, pure-data extractions)
 import { THEME_PRESETS } from "./prompts/themes.ts";
 import { FIXER_SYSTEM_PROMPT } from "./prompts/fixer.ts";
+// 🧠 Three-layer prompt architecture — capability registry (slims ~323 lines off the base prompt).
+import {
+  CAPABILITY_MANIFEST,
+  assembleCapabilityDocs,
+  getCapabilityDoc as _getCapabilityDoc,
+} from "./prompts/capabilities/index.ts";
 import {
   MODEL_PRICING,
   MODEL_FALLBACK,
@@ -2472,34 +2478,30 @@ function extractThemeFromPrompt(prompt: string): string {
 
 // THEME_PRESETS moved to ./prompts/themes.ts (imported at top of file).
 
+// 🧠 THREE-LAYER PROMPT ARCHITECTURE (see ./prompts/capabilities/index.ts)
+// Layer 1 (CORE): identity + output format + defensive coding + theme wiring
+// Layer 2 (MANIFEST): short capability menu
+// Layer 3 (DOCS): injected via {{CAPABILITY_DOCS}} — only when detected
 const BASE_SYSTEM_PROMPT = `
-🚨🚨🚨 ABSOLUTE CRITICAL: YOU ARE A REACT CODE GENERATOR - NOT AN HTML GENERATOR 🚨🚨🚨
+🚨 CRITICAL: YOU ARE A REACT CODE GENERATOR — NOT AN HTML GENERATOR
 
-⛔⛔⛔ FORBIDDEN OUTPUT - WILL CAUSE INSTANT FAILURE ⛔⛔⛔
-THE FOLLOWING WILL CAUSE YOUR OUTPUT TO BE REJECTED:
-- <!DOCTYPE html> - FORBIDDEN
-- <html> tags - FORBIDDEN
-- <head> tags - FORBIDDEN
-- <body> tags - FORBIDDEN
-- <script> tags - FORBIDDEN
-- Any standalone HTML document - FORBIDDEN
-- Any response that is NOT a JSON object - FORBIDDEN
+⛔ FORBIDDEN OUTPUT (will cause instant failure):
+- <!DOCTYPE html>, <html>, <head>, <body>, <script> tags
+- Any standalone HTML document
+- Any response that is NOT a JSON object
 
-✅✅✅ REQUIRED OUTPUT FORMAT - MANDATORY ✅✅✅
-You MUST return a valid JSON object like this:
+✅ REQUIRED OUTPUT — a valid JSON object like:
 {
   "/App.js": "import React from 'react';\\n\\nexport default function App() {\\n  return (\\n    <div>...</div>\\n  );\\n}",
   "/components/Example.jsx": "import React from 'react';\\n..."
 }
 
 CRITICAL RULES:
-1. Your /App.js file MUST start with: import React from 'react';
-2. Your /App.js file MUST have: export default function App() { return (...) }
-3. Return ONLY a JSON object - no markdown, no explanation, no HTML
+1. /App.js MUST start with: import React from 'react';
+2. /App.js MUST have: export default function App() { return (...) }
+3. Return ONLY a JSON object — no markdown, no explanation, no HTML
 4. All file paths must start with /
-5. All code must be valid React/JSX - NOT HTML
-
-If you return HTML instead of React, the system will REJECT your output and the user will see an error.
+5. All code must be valid React/JSX, not HTML
 
 ### MANDATORY FILE STRUCTURE
 ALWAYS start with these files based on project complexity:
@@ -2524,167 +2526,9 @@ ALWAYS start with these files based on project complexity:
 **IF USER ASKS FOR LANGUAGES:**
 - /i18n.js (translations setup)
 
-**🎮 GAME (any game type — racing, shooter, puzzle, platformer, RPG, arcade, etc.):**
-- /App.js (EVERYTHING — entire game in one file, no imports of Phaser from other files)
-- /styles.css (full-screen canvas, dark background, HUD styling)
+**🎮 GAME (if the user asks for one):** Full Phaser setup is provided in the loaded game capability doc below. Put EVERYTHING in /App.js. If no phaser_game capability is loaded, the user is NOT asking for a game — do not use Phaser at all.
 
-🎮 GAME DETECTION: If the user prompt contains ANY of these words, you MUST use the GAME structure above:
-game, gaming, play, player, score, level, levels, leaderboard, shoot, shooter, race, racing, puzzle, platformer, arcade, RPG, strategy, adventure, simulation, chess, trivia, battle, fighter, runner, clicker, tower defense, enemies, boss, power-up, lives, health bar, jump, gravity, collision, canvas, sprite
-
-🎮 CRITICAL SANDPACK CONSTRAINT — READ THIS FIRST:
-⛔ NEVER split Phaser scenes into separate files (MenuScene.js, GameScene.js, etc.)
-⛔ NEVER write \`extends window.Phaser.Scene\` at the top level of any module
-⛔ NEVER import Phaser classes from other files
-
-WHY: Sandpack evaluates each module immediately. \`window.Phaser\` is undefined at module load time because the CDN script hasn't loaded yet. This causes: "Cannot read properties of undefined (reading 'Scene')"
-
-✅ THE ONLY CORRECT PATTERN — EVERYTHING IN /App.js:
-
-\`\`\`jsx
-import React, { useEffect, useRef } from 'react';
-
-export default function App() {
-  const containerRef = useRef(null);
-  const gameRef = useRef(null);
-
-  useEffect(() => {
-    // Load Phaser from CDN first
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js';
-    script.async = true;
-    script.onload = () => {
-      const Phaser = window.Phaser; // Only access AFTER script loads
-
-      // Define ALL scenes INSIDE onload — Phaser exists here
-      class MenuScene extends Phaser.Scene {
-        constructor() { super('MenuScene'); }
-        create() {
-          this.add.text(400, 300, 'Press SPACE to Play', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5);
-          this.input.keyboard.once('keydown-SPACE', () => this.scene.start('GameScene'));
-        }
-      }
-
-      class GameScene extends Phaser.Scene {
-        constructor() { super('GameScene'); }
-        create() {
-          this.player = this.add.rectangle(400, 500, 40, 60, 0x00ff88);
-          this.physics.add.existing(this.player);
-          this.cursors = this.input.keyboard.createCursorKeys();
-          this.score = 0;
-          this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '24px', fill: '#fff' });
-          // Add game-specific logic here
-        }
-        update() {
-          const body = this.player.body;
-          body.setVelocity(0);
-          if (this.cursors.left.isDown) body.setVelocityX(-300);
-          if (this.cursors.right.isDown) body.setVelocityX(300);
-          this.score++;
-          this.scoreText.setText('Score: ' + Math.floor(this.score / 10));
-        }
-      }
-
-      class GameOverScene extends Phaser.Scene {
-        constructor() { super('GameOverScene'); }
-        create() {
-          this.add.text(400, 300, 'Game Over!', { fontSize: '48px', fill: '#ff4444' }).setOrigin(0.5);
-          this.input.keyboard.once('keydown-SPACE', () => this.scene.start('MenuScene'));
-        }
-      }
-
-      // Destroy previous game instance if exists
-      if (gameRef.current) { gameRef.current.destroy(true); }
-
-      gameRef.current = new Phaser.Game({
-        type: Phaser.AUTO,
-        width: window.innerWidth,
-        height: window.innerHeight,
-        parent: 'game-container',
-        backgroundColor: '#0a0a1a',
-        physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } },
-        scene: [MenuScene, GameScene, GameOverScene]
-      });
-    };
-    document.head.appendChild(script);
-
-    return () => {
-      if (gameRef.current) { gameRef.current.destroy(true); gameRef.current = null; }
-    };
-  }, []);
-
-  return (
-    <div style={{ width: '100vw', height: '100vh', background: '#0a0a1a', overflow: 'hidden' }}>
-      <div id="game-container" ref={containerRef} style={{ width: '100%', height: '100%' }} />
-    </div>
-  );
-}
-\`\`\`
-
-🎮 GAME BUILDING RULES (MANDATORY — NON-NEGOTIABLE):
-1. ALL scene classes MUST be defined INSIDE the \`script.onload\` callback — never at module top level
-2. ALL Phaser usage MUST happen after \`const Phaser = window.Phaser;\` inside onload
-3. Use \`this.add.graphics()\` to draw colorful shapes — no external image assets needed
-4. Use \`this.add.rectangle()\` for player, enemies, obstacles — colored boxes work great
-5. Use \`tileSprite\` for scrolling backgrounds
-6. Always include: Score HUD, Lives/Health display, Level indicator as \`this.add.text()\`
-7. Input: \`this.cursors = this.input.keyboard.createCursorKeys()\` + touch support
-8. Collisions: \`this.physics.add.overlap(groupA, groupB, callback)\`
-
-🎮 PHASER API — CRITICAL RULES (these mistakes will break the game):
-
-**PLAYER object — ALWAYS use this pattern:**
-\`\`\`js
-// ✅ CORRECT — single rectangle with physics
-this.player = this.add.rectangle(x, y, width, height, 0x00ff88);
-this.physics.add.existing(this.player);
-this.player.body.setCollideWorldBounds(true);
-// Move it: this.player.body.setVelocityX(300)
-
-// ✅ CORRECT — draw complex shape with graphics, then use rectangle for physics
-const gfx = this.add.graphics();
-gfx.fillStyle(0x00ff88);
-gfx.fillRect(-15, -20, 30, 40);  // draw relative to 0,0
-// Use a separate invisible rectangle for physics:
-this.player = this.add.rectangle(x, y, 30, 40, 0x000000, 0); // alpha=0 = invisible
-this.physics.add.existing(this.player);
-// Then move gfx to follow: in update() -> gfx.setPosition(this.player.x, this.player.y)
-\`\`\`
-
-**⛔ NEVER DO THIS:**
-\`\`\`js
-this.player = this.physics.add.group();
-this.player.add(someGraphics);  // ❌ groups don't have .add() for graphics objects
-this.player.add(playerGraphics); // ❌ this.player.add is not a function
-\`\`\`
-
-**Groups are for MULTIPLE objects (enemies, bullets), NOT the player:**
-\`\`\`js
-// ✅ Groups = enemies or bullets
-this.enemies = this.physics.add.group();
-this.enemies.create(x, y, null).setDisplaySize(30, 30).setTint(0xff0000); // no texture needed
-// OR
-const enemy = this.add.rectangle(x, y, 30, 30, 0xff0000);
-this.physics.add.existing(enemy);
-this.enemies.add(enemy);
-\`\`\`
-
-**Containers (if you need grouped visuals):**
-\`\`\`js
-// ✅ Container = group visuals together (no physics)
-const container = this.add.container(x, y);
-const body = this.add.rectangle(0, 0, 30, 40, 0x00ff88);
-const roof = this.add.triangle(0, -25, -15, 0, 15, 0, 0, -20, 0xff0000);
-container.add([body, roof]);
-// For physics on a container, add a separate physics rectangle and sync in update()
-\`\`\`
-
-🎮 GAME TYPE SPECIFICS:
-- **Racing**: Scrolling road stripes (tileSprite), player car at bottom, obstacles from top, speed increases
-- **Shooter**: Player at bottom, spacebar fires bullets (physics group), enemies wave-spawn from top
-- **Platformer**: gravity: { y: 400 }, static platform group, jump on spacebar/up arrow
-- **Puzzle**: Grid-based state in arrays, draw grid with graphics, click/keyboard input
-
-You are an elite React Expert creating premium UI applications AND playable games.
+You are an elite React Expert creating premium UI applications.
 
 ### PART 1: AESTHETICS & DESIGN
 1.  **Theme Compliance**: {{THEME_INSTRUCTIONS}}
@@ -2806,120 +2650,12 @@ NO useTranslation hook unless explicitly requested. Just simple English text.
 Extract a meaningful project name from the user's request and use it in document.title and any header branding.
 Examples: "landing page for wife moza" → "MoziLove", "portfolio for photographer" → "PhotoPortfolio"
 
-### PART 6: STOCK IMAGES (FREEPIK API - MANDATORY - ZERO TOLERANCE)
-**🚨 CRITICAL: THIS IS NON-NEGOTIABLE - FAILURE TO USE FREEPIK = BROKEN PROJECT 🚨**
+### PART 6: STOCK IMAGES (handled via capability doc)
+See the stock_images capability doc (auto-loaded when images are needed). One-line rule: never hardcode external image URLs.
 
-**BANNED IMAGE SOURCES (WILL CAUSE PROJECT FAILURE):**
-- ❌ picsum.photos - BANNED
-- ❌ unsplash.com - BANNED  
-- ❌ via.placeholder.com - BANNED
-- ❌ placeholder.com - BANNED
-- ❌ placehold.it - BANNED
-- ❌ Any hardcoded image URL - BANNED
-- ❌ Empty src="" - BANNED
 
-**MANDATORY: You MUST create /utils/stockImages.js in EVERY project:**
+{{CAPABILITY_DOCS}}
 
-\`\`\`jsx
-// /utils/stockImages.js - REQUIRED FILE - MUST BE CREATED
-import React from 'react';
-
-const BACKEND_URL = "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api";
-
-// Fallback placeholder generator - ALWAYS works
-const getPlaceholder = (query, width = 400, height = 300) => {
-  const text = encodeURIComponent(query.split(' ').slice(0, 3).join(' '));
-  return \`https://placehold.co/\${width}x\${height}/1a1a2e/eaeaea?text=\${text}\`;
-};
-
-export const fetchStockImages = async (query, limit = 5) => {
-  try {
-    const res = await fetch(BACKEND_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        projectId: '{{PROJECT_ID}}',
-        action: 'freepik/images',
-        data: { query, limit }
-      })
-    });
-    const data = await res.json();
-    const images = data.images?.map(img => img.url) || [];
-    // If no images returned, use placeholders
-    if (images.length === 0) {
-      return Array(limit).fill(null).map(() => getPlaceholder(query));
-    }
-    return images;
-  } catch (err) {
-    console.error('Failed to fetch images:', err);
-    // Return placeholders on error
-    return Array(limit).fill(null).map(() => getPlaceholder(query));
-  }
-};
-
-export const useStockImage = (query) => {
-  const [image, setImage] = React.useState(getPlaceholder(query));
-  const [loading, setLoading] = React.useState(true);
-  
-  React.useEffect(() => {
-    fetchStockImages(query, 1).then(imgs => {
-      setImage(imgs[0] || getPlaceholder(query));
-      setLoading(false);
-    });
-  }, [query]);
-  
-  return { image, loading };
-};
-
-// For static images that don't need API call
-export const getStaticPlaceholder = getPlaceholder;
-\`\`\`
-
-**MANDATORY USAGE PATTERN - EVERY COMPONENT WITH IMAGES:**
-\`\`\`jsx
-import { fetchStockImages, useStockImage, getStaticPlaceholder } from '../utils/stockImages';
-
-// Option 1: Hook for single images (with automatic fallback)
-const { image: heroImage, loading } = useStockImage('barber shop interior');
-
-// Option 2: Multiple images (with automatic fallback)
-const [images, setImages] = useState([]);
-useEffect(() => {
-  fetchStockImages('barber services', 6).then(setImages);
-}, []);
-
-// Option 3: Static placeholder (no API call needed)
-<img src={getStaticPlaceholder('haircut', 400, 300)} alt="Haircut" />
-\`\`\`
-
-**🚨 CRITICAL: IMAGE SEARCH QUERIES MUST MATCH USER'S PROMPT EXACTLY 🚨**
-
-The user's prompt contains SPECIFIC details about what they want. Your image search queries MUST reflect those details:
-
-**EXAMPLES OF CORRECT IMAGE QUERIES:**
-- User asks for "Qatar national football team" → Search: "Qatar national team", "Qatar football maroon jersey", "Al-Annabi football"
-- User asks for "barber shop in Dubai" → Search: "Dubai barber shop", "luxury barber interior", "men grooming Dubai"
-- User asks for "Italian restaurant" → Search: "Italian restaurant interior", "pasta dishes", "Italian chef"
-- User asks for "fitness gym for women" → Search: "women fitness class", "female gym workout", "women personal training"
-
-**❌ WRONG - Generic queries that ignore user context:**
-- User asks for "Qatar football team" but you search "football team" or "soccer players" → WRONG
-- User asks for "luxury spa" but you search "business interior" → WRONG
-
-**✅ CORRECT - Specific queries from user's prompt:**
-- Extract KEY ENTITIES from user's prompt (team names, locations, business types, themes)
-- Use those EXACT entities in your image search queries
-- For sports teams: Include team name, colors, country in search
-- For businesses: Include business type, style, location if mentioned
-
-**STRICT RULES:**
-1. ALWAYS create /utils/stockImages.js FIRST before any component - NO EXCEPTIONS
-2. ALWAYS import and use fetchStockImages, useStockImage, or getStaticPlaceholder for ANY image
-3. Query MUST include SPECIFIC terms from user's prompt (team names, locations, themes)
-4. Use different queries for different sections (hero, about, services, etc.)
-5. Images will ALWAYS show something (placeholder if API fails) - no broken images
-6. NEVER use hardcoded URLs like picsum, unsplash, or via.placeholder
-7. NEVER use generic queries like "team", "business", "people" - BE SPECIFIC to user's request
 
 ### OUTPUT FORMAT:
 Return ONLY a valid JSON object. No markdown fences. No explanation.
@@ -2946,225 +2682,12 @@ CRITICAL RULES:
 2. Always give icons explicit color classes when parent uses gradients or text-transparent
 3. Only TEXT should be inside text-transparent bg-clip-text - separate icons from gradient text spans
 
-### PART 7: BACKEND API (CONTACT FORMS, DATA STORAGE)
-When the user asks for forms (contact, quote, newsletter, feedback, waitlist, etc.):
-
-1. BUILD THE FORM UI as normal with React state
-2. ON SUBMIT, send data to the WAKTI Backend API:
-
-\`\`\`jsx
-const BACKEND_URL = "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api";
-
-// Form submission handler
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setError(null);
-  try {
-    const response = await fetch(BACKEND_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        projectId: "{{PROJECT_ID}}", // Auto-injected
-        action: "submit",
-        formName: "contact", // or "quote", "newsletter", "waitlist", etc.
-        data: { name, email, message } // form field values
-      })
-    });
-    if (response.ok) {
-      setSuccess(true);
-      setName(''); setEmail(''); setMessage(''); // Clear form
-    } else {
-      throw new Error('Failed to submit');
-    }
-  } catch (err) {
-    setError("Failed to send message. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
-\`\`\`
-
-IMPORTANT FORM REQUIREMENTS:
-- Include loading state (disabled button, spinner) while submitting
-- Show success message/animation after submission
-- Include error handling with user-friendly feedback
-- Add form validation before submit (required fields, email format)
-- Clear form fields after successful submission
-- formName should describe the form purpose: "contact", "quote", "newsletter", "feedback", "waitlist"
-
-### PART 8: BOOKING/APPOINTMENT SYSTEM
-🚨 **CRITICAL: Services are ALREADY seeded in the backend. You MUST fetch them from the API - NEVER hardcode services!**
-
-When the user asks for booking, appointments, scheduling (barber, salon, spa, clinic, etc.):
-
-\`\`\`jsx
-const BACKEND_URL = "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api";
-
-// MANDATORY: Fetch services from backend - NEVER hardcode!
-const [services, setServices] = useState([]);
-const [servicesLoading, setServicesLoading] = useState(true);
-
-useEffect(() => {
-  const fetchServices = async () => {
-    try {
-      const res = await fetch(BACKEND_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectId: '{{PROJECT_ID}}',
-          action: 'collection/services'
-        })
-      });
-      const data = await res.json();
-      if (data.ok && data.items) {
-        setServices(data.items);
-      }
-    } catch (err) {
-      console.error('Failed to fetch services:', err);
-    } finally {
-      setServicesLoading(false);
-    }
-  };
-  fetchServices();
-}, []);
-
-// Booking form state
-const [booking, setBooking] = useState({ 
-  name: '', email: '', phone: '', 
-  service: '', date: '', time: '', notes: '' 
-});
-const [loading, setLoading] = useState(false);
-const [success, setSuccess] = useState(false);
-
-const handleBooking = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  try {
-    const res = await fetch(BACKEND_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        projectId: '{{PROJECT_ID}}',
-        action: 'booking/create',
-        data: {
-          serviceName: booking.service,
-          date: booking.date,
-          startTime: booking.time,
-          customerInfo: { name: booking.name, email: booking.email, phone: booking.phone },
-          notes: booking.notes
-        }
-      })
-    });
-    if (res.ok) {
-      setSuccess(true);
-      setBooking({ name: '', email: '', phone: '', service: '', date: '', time: '', notes: '' });
-    }
-  } catch (err) {
-    console.error('Booking failed:', err);
-  } finally {
-    setLoading(false);
-  }
-};
-
-// In your JSX - use fetched services, NOT hardcoded:
-{servicesLoading ? (
-  <p>Loading services...</p>
-) : (
-  <select value={booking.service} onChange={(e) => setBooking({...booking, service: e.target.value})}>
-    <option value="">Select a service</option>
-    {services.map((s) => (
-      <option key={s.id} value={s.data?.name}>{s.data?.name} - {s.data?.duration}min - \${s.data?.price}</option>
-    ))}
-  </select>
-)}
-\`\`\`
-
-🚨 **NEVER DO THIS (hardcoded services):**
-\`\`\`jsx
-// ❌ WRONG - hardcoded services
-const services = [
-  { name: "Consultation", duration: 30, price: 50 },
-  { name: "Deep Dive", duration: 60, price: 100 }
-];
-\`\`\`
-
-✅ **ALWAYS fetch from backend using action: 'collection/services'**
-
-BOOKING UI REQUIREMENTS:
-- FIRST: Fetch services from backend with action: 'collection/services'
-- Multi-step form: 1) Select Service (from backend) → 2) Pick Date/Time → 3) Enter Details
-- Show service cards with name, duration, and price FROM THE BACKEND
-- Date picker with available dates highlighted
-- Time slots grid showing available times
-- Summary panel showing selected service, date, time before confirmation
-- Success animation after booking confirmed
 
 ### CRITICAL: NO SUPABASE CLIENT IN USER PROJECTS
 1. NEVER import or use @supabase/supabase-js in generated user projects.
 2. NEVER add supabaseUrl or supabaseAnonKey to frontend code.
 3. ALWAYS use the project-backend-api endpoint for products, items, orders, cart, forms, and data.
 4. If the user asks for a shop/products/items page, fetch via project-backend-api with projectId.
-
-### PART 9: E-COMMERCE / SHOP / PRODUCTS (CRITICAL - FETCH FROM BACKEND)
-🚨 FOR ANY SHOP, STORE, E-COMMERCE, OR PRODUCT CATALOG PROJECT:
-The products are ALREADY seeded in the backend. You MUST fetch them from the API instead of using hardcoded mockData.
-
-**MANDATORY: Fetch products from backend API:**
-\`\`\`jsx
-const BACKEND_URL = "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api";
-
-// In your Shop/Products component:
-const [products, setProducts] = useState([]);
-const [loading, setLoading] = useState(true);
-
-useEffect(() => {
-  const fetchProducts = async () => {
-    try {
-      const res = await fetch(BACKEND_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectId: '{{PROJECT_ID}}',
-          action: 'collection/products',
-          data: { limit: 50 }
-        })
-      });
-      const data = await res.json();
-      if (data.items) {
-        // Map backend format to component format
-        setProducts(data.items.map(item => ({
-          id: item.id,
-          name: item.data?.name || 'Product',
-          price: item.data?.price || 0,
-          description: item.data?.description || '',
-          category: item.data?.category || 'General',
-          image: item.data?.image_url || getPlaceholder(item.data?.name || 'product'),
-          inStock: item.data?.inStock !== false
-        })));
-      }
-    } catch (err) {
-      console.error('Failed to fetch products:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-  fetchProducts();
-}, []);
-
-// Placeholder helper for products without images
-const getPlaceholder = (name, w = 400, h = 400) => {
-  const text = encodeURIComponent(name.split(' ').slice(0, 2).join(' '));
-  return \`https://placehold.co/\${w}x\${h}/1a1a2e/eaeaea?text=\${text}\`;
-};
-\`\`\`
-
-**IMPORTANT FOR E-COMMERCE PROJECTS:**
-1. DO NOT create /utils/mockData.js with hardcoded products
-2. ALWAYS fetch products from the backend API as shown above
-3. Products have image_url in their data - use it for product images
-4. Show loading skeleton while fetching products
-5. Handle empty state if no products returned
 6. The backend already has sample products seeded - they will appear automatically
 `;
 
@@ -4212,18 +3735,46 @@ The projectId for ALL API calls is: **${projectId}**
       const currentFiles = body.currentFiles || {};
       const fileCount = Object.keys(currentFiles).length;
       
-      // 🚀 CONTEXT UNBLINDING: Send file contents so Chat mode can generate accurate site-wide plans (e.g. translation)
-      // Flash has 1M token context, so sending the project files is cheap, fast, and eliminates hallucinations.
+      // 🚀 SMART CONTEXT: Send file contents ONLY for relevant source files.
+      // Saves tokens by skipping bundled assets, node_modules, lockfiles, images, etc.
+      // Keeps accuracy because the AI gets the actual code it needs to edit.
+      const SOURCE_EXTENSIONS = /\.(jsx?|tsx?|css|scss|html|json|md|svg)$/i;
+      const SKIP_PATTERNS = /(node_modules|\.git|dist|build|coverage|\.lock|package-lock|yarn\.lock|\.min\.(js|css)$|\.map$)/i;
+      const MAX_FILE_BYTES = 50_000; // ~12K tokens per file cap
+      const MAX_TOTAL_BYTES = 400_000; // ~100K tokens total cap (well under 1M context)
+
       let filesContentStr = '';
+      let totalBytes = 0;
+      const includedFiles: string[] = [];
+      const skippedFiles: string[] = [];
+
       for (const [path, content] of Object.entries(currentFiles)) {
-        if (typeof content === 'string' && content.length < 100000) { // Skip massive bundled/binary files
+        if (typeof content !== 'string') { skippedFiles.push(path); continue; }
+        if (SKIP_PATTERNS.test(path)) { skippedFiles.push(path); continue; }
+        if (!SOURCE_EXTENSIONS.test(path)) { skippedFiles.push(path); continue; }
+
+        const size = content.length;
+        if (size > MAX_FILE_BYTES) {
+          filesContentStr += `\n--- FILE: ${path} (${size} bytes — truncated) ---\n${content.slice(0, MAX_FILE_BYTES)}\n...[truncated]...\n---------------------------\n`;
+          totalBytes += MAX_FILE_BYTES;
+          includedFiles.push(path);
+        } else if (totalBytes + size < MAX_TOTAL_BYTES) {
           filesContentStr += `\n--- FILE: ${path} ---\n${content}\n---------------------------\n`;
+          totalBytes += size;
+          includedFiles.push(path);
         } else {
-          filesContentStr += `\n--- FILE: ${path} ---\n[Content omitted due to size]\n---------------------------\n`;
+          // Over budget — include name only so AI knows it exists
+          skippedFiles.push(path);
         }
       }
-      
-      const filesStr = `📁 Project Files (${fileCount} files):\n${filesContentStr}`;
+
+      const filesStr = `📁 Project Files (${fileCount} total | ${includedFiles.length} included with content | ${skippedFiles.length} name-only):
+
+INCLUDED (full content above): ${includedFiles.join(', ')}
+
+NAME-ONLY (ask via read_file tool if needed): ${skippedFiles.join(', ')}
+
+${filesContentStr}`;
 
       // ========================================================================
       // 🎯 FEATURE CONTRACT PRE-PASS (Project-aware + amateur-prompt aware)
@@ -6483,7 +6034,38 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         
         const fileList = (existingRows || []).map(r => normalizeFilePath(r.path)).join('\n');
         const fileCount = existingRows?.length || 0;
-        
+
+        // 🚀 ITEM 3 — PRE-LOAD PLAN FILES (skip redundant read_file tool calls)
+        // Extract paths the plan explicitly references and fetch their current content
+        // so the agent has them in its first prompt. Saves ~2 tool calls per file.
+        let preloadedFilesStr = '';
+        try {
+          const planPathMatches = Array.from(
+            String(planToExecute).matchAll(/["'`\s](\/[A-Za-z0-9_./-]+\.(?:jsx?|tsx?|css|scss|html|json|md))\b/g)
+          ).map(m => m[1]);
+          const uniquePaths = [...new Set(planPathMatches)].slice(0, 15); // cap at 15 to stay token-safe
+
+          if (uniquePaths.length > 0) {
+            const { data: planFileRows } = await supabase
+              .from('project_files')
+              .select('path, content')
+              .eq('project_id', projectId)
+              .in('path', uniquePaths);
+
+            if (planFileRows && planFileRows.length > 0) {
+              preloadedFilesStr = '\n\n📂 PRE-LOADED FILES (referenced by the plan — no read_file needed):\n';
+              for (const row of planFileRows as Array<{ path: string; content: string }>) {
+                const content = typeof row.content === 'string' ? row.content : '';
+                if (content.length < 50_000) {
+                  preloadedFilesStr += `\n--- FILE: ${row.path} ---\n${content}\n---------------------------\n`;
+                }
+              }
+            }
+          }
+        } catch (preloadErr) {
+          console.warn('[Execute] Plan preload failed (non-fatal):', preloadErr);
+        }
+
         // Prepare agent-style system prompt for execute mode
         const executeSystemPrompt = AGENT_SYSTEM_PROMPT.replace(/\{\{PROJECT_ID\}\}/g, projectId) + `
 
@@ -6493,8 +6075,8 @@ You are in EXECUTE MODE. A plan has already been created and approved. Your job 
 
 **EXECUTION RULES:**
 1. Read the plan carefully
-2. Use read_file to get file contents BEFORE editing
-3. Use search_replace for targeted edits (preferred)
+2. Use read_file to get file contents BEFORE editing (unless pre-loaded)
+3. You are powered by Morph AST Engine. You MUST use morph_edit for all code changes. Do not use search_replace unless morph_edit explicitly fails or it is a simple 1-line exact string match.
 4. Use write_file ONLY for new files
 5. Execute ALL steps in the plan
 6. Call task_complete when done with a summary of what you changed
@@ -6505,18 +6087,18 @@ You are in EXECUTE MODE. A plan has already been created and approved. Your job 
 - Add features not in the plan
 - Make assumptions - read files first!`;
         
-        // Prepare execute mode user message (FILE LIST ONLY)
+        // Prepare execute mode user message (FILE LIST + pre-loaded plan files)
         const executeUserMessage = `📁 PROJECT FILES (${fileCount} files):
 ${fileList}
+${preloadedFilesStr}
 
-⚠️ IMPORTANT: Use read_file to see file contents before editing.
-Use search_replace for targeted edits (preferred).
+⚠️ IMPORTANT: For files already pre-loaded above, you already have the content — go straight to morph_edit. Use read_file ONLY for files NOT pre-loaded.
 
 📋 PLAN TO EXECUTE:
 ${planToExecute}
 
 ${userInstructions ? `ADDITIONAL INSTRUCTIONS:\n${userInstructions}\n\n` : ''}
-Execute this plan step by step. Read files first, then make changes using search_replace.
+Execute this plan step by step. Read files first (if not pre-loaded), then make changes using morph_edit.
 Call task_complete when finished.`;
         
         // Agent loop for execute mode (max 3 iterations - execute is focused)
@@ -6743,9 +6325,22 @@ Call task_complete when finished.`;
         ? `\n\n🌍 LANGUAGE REQUIREMENT - ARABIC (العربية):\n- Generate ALL user-facing text content in Arabic\n- Use Arabic script for ALL labels, buttons, headings, descriptions, and placeholder text\n- Add dir="rtl" to the root element for proper RTL layout\n- Keep code comments and variable names in English\n- Example: Instead of "Welcome" use "مرحباً", instead of "Contact Us" use "تواصل معنا"`
         : '';
       
+      // 🧠 THREE-LAYER PROMPT: auto-detect which capability docs belong to this prompt.
+      //   Layer 1 (CORE) is the slim BASE_SYSTEM_PROMPT.
+      //   Layer 2 (MANIFEST) is always appended so the AI knows what's available.
+      //   Layer 3 (DOCS) is conditional — only the relevant ones get injected.
+      const { names: detectedCaps, text: capabilityDocsText } = assembleCapabilityDocs(prompt);
+      const capabilityBlock = `${CAPABILITY_MANIFEST}${capabilityDocsText}`;
+      if (detectedCaps.length > 0) {
+        console.log(`[CreateMode] Capabilities detected for prompt: ${detectedCaps.join(', ')}`);
+      } else {
+        console.log(`[CreateMode] No capabilities detected — manifest-only (slim path).`);
+      }
+
       const finalSystemPrompt = BASE_SYSTEM_PROMPT
         .replace("{{THEME_INSTRUCTIONS}}", themeEnforcement)
-        .replace("{{ALLOWED_PACKAGES_LIST}}", formatPackagesForPrompt()) + langInstructions;
+        .replace("{{ALLOWED_PACKAGES_LIST}}", formatPackagesForPrompt())
+        .replace("{{CAPABILITY_DOCS}}", capabilityBlock) + langInstructions;
 
       // CREATE MODE: Generate new project from scratch
       if (safeMode === 'create') {

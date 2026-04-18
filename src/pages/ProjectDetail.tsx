@@ -7236,6 +7236,9 @@ ${fixInstructions}
                                 ]);
                                 
                                 try {
+                                  // 🚀 STEP 2: KILL THE POLLING LOOP.
+                                  // We now await the execution directly. Execute mode returns {ok: true, filesChanged: [...]} synchronously.
+                                  // No more waiting for the 'project_generation_jobs' database table to update!
                                   const response = await supabase.functions.invoke('projects-generate', {
                                     body: {
                                       action: 'start',
@@ -7246,69 +7249,73 @@ ${fixInstructions}
                                     },
                                   });
                                   
-                                  if (response.error) throw new Error(response.error.message);
-                                  
-                                  const jobId = response.data?.jobId;
-                                  if (jobId) {
-                                    setGenerationSteps(prev => prev.map((s, idx) => 
-                                      idx === 0 ? { ...s, status: 'completed' } : 
-                                      idx === 1 ? { ...s, status: 'loading' } : s
-                                    ));
-                                    
-                                    const job = await pollJobUntilDone(jobId);
-                                    const newFiles = await loadFilesFromDb(id!);
-                                    
-                                    setGenerationSteps(prev => prev.map((s, idx) => 
-                                      idx <= 1 ? { ...s, status: 'completed' } : 
-                                      idx === 2 ? { ...s, status: 'loading' } : s
-                                    ));
-                                    
-                                    setGeneratedFiles(newFiles);
-                                    setCodeContent(newFiles["/App.js"] || Object.values(newFiles)[0] || "");
-                                    
-                                    // Build Lovable-style response with plan summary
-                                    const planTitle = parsedPlan.title || 'Changes';
-                                    const changedFiles = parsedPlan.codeChanges?.map((c: any) => c.file).filter(Boolean) || [parsedPlan.file].filter(Boolean);
-                                    const uniqueChangedFiles = [...new Set(changedFiles)];
-                                    const stepsSummary = parsedPlan.steps?.map((s: any) => s.title).join('. ') || '';
-
-                                    // Update edited files tracking + tool usage for the indicator
-                                    const filesForTracking = uniqueChangedFiles.length > 0 ? uniqueChangedFiles : ['/App.js'];
-                                    setEditedFilesTracking(filesForTracking.map((filePath, idx) => ({
-                                      id: `file-${idx}-${Date.now()}`,
-                                      fileName: String(filePath).replace(/^\//, ''),
-                                      status: 'edited' as const,
-                                    })));
-                                    setToolsUsedCount(prev => prev + (filesForTracking.length || 1));
-                                    
-                                    // Create a structured Lovable-style message with conversational response
-                                    // Generate a friendly conversational response based on what was done
-                                    const friendlyResponse = isRTL 
-                                      ? `تم! ${planTitle ? `قمت بـ ${planTitle.toLowerCase()}` : 'تم تطبيق التغييرات المطلوبة'}. ${stepsSummary ? stepsSummary : 'تم تحديث الكود بنجاح.'}`
-                                      : `Done! ${planTitle ? `I've ${planTitle.toLowerCase().replace(/^add\s+/i, 'added ').replace(/^remove\s+/i, 'removed ').replace(/^update\s+/i, 'updated ').replace(/^create\s+/i, 'created ').replace(/^fix\s+/i, 'fixed ')}` : 'I\'ve applied the requested changes'}. ${stepsSummary ? stepsSummary : 'The code has been updated successfully.'}`;
-                                    
-                                    const successMsg = JSON.stringify({
-                                      type: 'execution_result',
-                                      title: planTitle,
-                                      response: friendlyResponse,
-                                      summary: stepsSummary || (isRTL ? 'تم تطبيق التغييرات بنجاح' : 'Successfully applied the requested changes'),
-                                      files: uniqueChangedFiles
-                                    });
-                                    
-                                    const { data: msgData } = await supabase
-                                      .from('project_chat_messages' as any)
-                                      .insert({ 
-                                        project_id: id, 
-                                        role: 'assistant', 
-                                        content: successMsg,
-                                        snapshot: newFiles 
-                                      } as any)
-                                      .select()
-                                      .single();
-                                    
-                                    if (msgData) setChatMessages(prev => [...prev, msgData as any]);
-                                    toast.success(isRTL ? 'تم تنفيذ الخطة بنجاح!' : 'Plan executed successfully!');
+                                  if (response.error || !response.data?.ok) {
+                                    throw new Error(response.data?.error || response.error?.message || 'Failed to execute plan');
                                   }
+                                  
+                                  const agentResult = response.data;
+                                  
+                                  setGenerationSteps(prev => prev.map((s, idx) => 
+                                    idx === 0 ? { ...s, status: 'completed' } : 
+                                    idx === 1 ? { ...s, status: 'loading' } : s
+                                  ));
+                                  
+                                  // We already have the success response. Just load the latest files from the DB directly.
+                                  const newFiles = await loadFilesFromDb(id!);
+                                  
+                                  setGenerationSteps(prev => prev.map((s, idx) => 
+                                    idx <= 1 ? { ...s, status: 'completed' } : 
+                                    idx === 2 ? { ...s, status: 'loading' } : s
+                                  ));
+                                  
+                                  setGeneratedFiles(newFiles);
+                                  setCodeContent(newFiles["/App.js"] || Object.values(newFiles)[0] || "");
+                                  
+                                  // Build Lovable-style response with plan summary
+                                  const planTitle = parsedPlan.title || 'Changes';
+                                  // Use filesChanged from the direct agent result, fallback to parsed plan
+                                  const uniqueChangedFiles = agentResult.filesChanged && agentResult.filesChanged.length > 0 
+                                    ? agentResult.filesChanged 
+                                    : ([...new Set(parsedPlan.codeChanges?.map((c: any) => c.file).filter(Boolean) || [parsedPlan.file].filter(Boolean))] as string[]);
+                                  
+                                  const stepsSummary = agentResult.summary || parsedPlan.steps?.map((s: any) => s.title).join('. ') || '';
+
+                                  // Update edited files tracking + tool usage for the indicator
+                                  const filesForTracking = uniqueChangedFiles.length > 0 ? uniqueChangedFiles : ['/App.js'];
+                                  setEditedFilesTracking(filesForTracking.map((filePath: string, idx: number) => ({
+                                    id: `file-${idx}-${Date.now()}`,
+                                    fileName: filePath.replace(/^\//, ''),
+                                    status: 'edited' as const,
+                                  })));
+                                  setToolsUsedCount(agentResult.toolCalls || filesForTracking.length || 1);
+                                  
+                                  // Create a structured Lovable-style message with conversational response
+                                  // Generate a friendly conversational response based on what was done
+                                  const friendlyResponse = isRTL 
+                                    ? `تم! ${planTitle ? `قمت بـ ${planTitle.toLowerCase()}` : 'تم تطبيق التغييرات المطلوبة'}. ${stepsSummary ? stepsSummary : 'تم تحديث الكود بنجاح.'}`
+                                    : `Done! ${planTitle ? `I've ${planTitle.toLowerCase().replace(/^add\s+/i, 'added ').replace(/^remove\s+/i, 'removed ').replace(/^update\s+/i, 'updated ').replace(/^create\s+/i, 'created ').replace(/^fix\s+/i, 'fixed ')}` : 'I\'ve applied the requested changes'}. ${stepsSummary ? stepsSummary : 'The code has been updated successfully.'}`;
+                                  
+                                  const successMsg = JSON.stringify({
+                                    type: 'execution_result',
+                                    title: planTitle,
+                                    response: friendlyResponse,
+                                    summary: stepsSummary || (isRTL ? 'تم تطبيق التغييرات بنجاح' : 'Successfully applied the requested changes'),
+                                    files: uniqueChangedFiles
+                                  });
+                                  
+                                  const { data: msgData } = await supabase
+                                    .from('project_chat_messages' as any)
+                                    .insert({ 
+                                      project_id: id, 
+                                      role: 'assistant', 
+                                      content: successMsg,
+                                      snapshot: newFiles 
+                                    } as any)
+                                    .select()
+                                    .single();
+                                  
+                                  if (msgData) setChatMessages(prev => [...prev, msgData as any]);
+                                  toast.success(isRTL ? 'تم تنفيذ الخطة بنجاح!' : 'Plan executed successfully!');
                                   
                                   setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
                                 } catch (err: any) {
