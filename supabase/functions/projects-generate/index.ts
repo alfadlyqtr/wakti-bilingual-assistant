@@ -4212,12 +4212,18 @@ The projectId for ALL API calls is: **${projectId}**
       const currentFiles = body.currentFiles || {};
       const fileCount = Object.keys(currentFiles).length;
       
-      // 🚀 CONTEXT OPTIMIZATION: Send only file NAMES, not content (reduces tokens by 90%+)
-      const fileList = Object.keys(currentFiles).join('\n');
-      const filesStr = `📁 Project Structure (${fileCount} files - names only for efficiency):
-${fileList}
-
-⚠️ Note: For detailed code analysis or edits, use Agent mode which can read specific files on-demand.`;
+      // 🚀 CONTEXT UNBLINDING: Send file contents so Chat mode can generate accurate site-wide plans (e.g. translation)
+      // Flash has 1M token context, so sending the project files is cheap, fast, and eliminates hallucinations.
+      let filesContentStr = '';
+      for (const [path, content] of Object.entries(currentFiles)) {
+        if (typeof content === 'string' && content.length < 100000) { // Skip massive bundled/binary files
+          filesContentStr += `\n--- FILE: ${path} ---\n${content}\n---------------------------\n`;
+        } else {
+          filesContentStr += `\n--- FILE: ${path} ---\n[Content omitted due to size]\n---------------------------\n`;
+        }
+      }
+      
+      const filesStr = `📁 Project Files (${fileCount} files):\n${filesContentStr}`;
 
       // ========================================================================
       // 🎯 FEATURE CONTRACT PRE-PASS (Project-aware + amateur-prompt aware)
@@ -4281,7 +4287,7 @@ HARD RULES:
 - Do NOT return a plan that only creates the context file. That is a FAILED implementation.
 - The toggle button MUST be rendered somewhere visible (header/nav).
 - document.documentElement.dir MUST flip between 'ltr' and 'rtl' on toggle.
-- Every string visible on the page that you can realistically reach via t MUST be swapped. If you can't reach them all, swap at least nav labels + section titles + the most visible hero text.
+- TRANSLATE EVERYTHING: You now have the full file contents. You MUST find EVERY hardcoded English string across ALL components and pages in the project and add them to the translation dictionary, then swap them out in the components. Include EVERY translated component in your "codeChanges" array.
 - No i18next / react-i18next / any external package — this is a lightweight Context-based implementation.
 - All files above MUST appear in the "codeChanges" array of your JSON plan.
 `;
@@ -5370,7 +5376,7 @@ Update mockData.js or the relevant data files with this REAL information.`;
       const resultWarnings: string[] = [];
       
       // Increased iterations to allow for proper read-edit-verify workflow
-      const maxIterations = 8; // Increased to allow for mandatory exploration + edits
+      const maxIterations = 12; // Increased to give stamina for site-wide features
       const toolCallsLog: Array<{ tool: string; args: any; result: any }> = [];
       let taskCompleteResult: { summary: string; filesChanged: string[] } | null = null;
       
@@ -6518,7 +6524,7 @@ Call task_complete when finished.`;
           { role: "user", parts: [{ text: executeUserMessage }] }
         ];
         
-        const execMaxIterations = 3;
+        const execMaxIterations = 15; // Increased from 3 to 15 for site-wide execution stamina
         const execToolCallsLog: Array<{ tool: string; args: any; result: any }> = [];
         let execTaskCompleteResult: { summary: string; filesChanged: string[] } | null = null;
         

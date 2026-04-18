@@ -35,7 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { purchasePackage, restorePurchases, getOfferings, getPurchasesShellSnapshot } from "@/integrations/natively/purchasesBridge";
+import { getPurchasesShellSnapshot, purchasePackage, showPaywall, getOfferings, restorePurchases } from "@/integrations/natively/purchasesBridge";
 import { MyGallery } from "@/components/social/MyGallery";
 import { ContactsEmbedded } from "@/components/account/ContactsEmbedded";
 import { WishlistsEmbedded } from "@/components/account/WishlistsEmbedded";
@@ -271,7 +271,6 @@ export default function Account() {
   // Direct native purchase
   const [isBillingPurchasing, setIsBillingPurchasing] = useState(false);
   const [billingDebugLog, setBillingDebugLog] = useState<string[]>([]);
-  const [billingPackageObj, setBillingPackageObj] = useState<any>(null);
   const addBillingDebug = (msg: string) => {
     console.log('[BillingDebug]', msg);
     setBillingDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
@@ -286,38 +285,6 @@ export default function Account() {
     if (snapshot?.snapshotError) addBillingDebug(`${label} snapshotError: ${snapshot.snapshotError}`);
   };
 
-  useEffect(() => {
-    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    if (!isQUUser || !isIOS) {
-      setBillingPackageObj(null);
-      return;
-    }
-    try {
-      getOfferings((resp: any) => {
-        if (resp?.status !== 'SUCCESS') return;
-        const allRaw = resp?.offerings?.all ?? resp?.offerings ?? resp?.all ?? resp;
-        const allOfferings = Array.isArray(allRaw)
-          ? allRaw
-          : allRaw && typeof allRaw === 'object'
-            ? Object.values(allRaw)
-            : [];
-        let quPkg: any = null;
-        for (const offering of allOfferings) {
-          const pkg = (offering as any)?.availablePackages?.find((p: any) => p?.identifier === 'qatar_university');
-          if (pkg) {
-            quPkg = pkg;
-            break;
-          }
-        }
-        if (quPkg) {
-          setBillingPackageObj(quPkg);
-          addBillingDebug(`BillingShell package object ready: ${quPkg?.identifier || 'qatar_university'}`);
-        }
-      });
-    } catch {}
-  }, [user?.email]);
-
   const handleBillingSubscribe = () => {
     addBillingDebug('--- BUTTON PRESSED ---');
     if (isBillingPurchasing) return;
@@ -329,9 +296,6 @@ export default function Account() {
     logBillingShellSnapshot('BillingShell');
     console.log('[BillingSubscribe] QU:', isQUUser, '| iOS:', isIOS);
 
-    // QU users: use showPaywall with university_exclusive offering so the SDK
-    // loads the correct non-default offering and its products on demand.
-    // Standard users: use purchasePackage with $rc_monthly from Default offering.
     const billingCallback = async (resp: any) => {
       addBillingDebug(`Callback fired! Status: ${resp?.status}`);
       addBillingDebug(`Callback message: ${resp?.message}`);
@@ -381,57 +345,15 @@ export default function Account() {
       setIsBillingPurchasing(false);
     };
 
-    const purchaseResolvedBillingQUPackage = () => {
-      if (billingPackageObj) {
-        addBillingDebug(`QU → purchasePackage(packageObject:${billingPackageObj?.identifier || 'qatar_university'})`);
-        purchasePackage(billingPackageObj, billingCallback);
-        return;
-      }
-      addBillingDebug('QU → package object missing, resolving via getOfferings()');
-      try {
-        getOfferings((resp: any) => {
-          addBillingDebug(`getOfferings status: ${resp?.status || 'n/a'}`);
-          if (resp?.error) addBillingDebug(`getOfferings error: ${JSON.stringify(resp.error)}`);
-          const allRaw = resp?.offerings?.all ?? resp?.offerings ?? resp?.all ?? resp;
-          const allOfferings = Array.isArray(allRaw)
-            ? allRaw
-            : allRaw && typeof allRaw === 'object'
-              ? Object.values(allRaw)
-              : [];
-          let quPkg: any = null;
-          for (const offering of allOfferings) {
-            const pkg = (offering as any)?.availablePackages?.find((p: any) => p?.identifier === 'qatar_university');
-            if (pkg) {
-              quPkg = pkg;
-              break;
-            }
-          }
-          if (quPkg) {
-            setBillingPackageObj(quPkg);
-            addBillingDebug(`QU → purchasePackage(resolvedPackageObject:${quPkg?.identifier || 'qatar_university'})`);
-            purchasePackage(quPkg, billingCallback);
-            return;
-          }
-          const packageSummary = allOfferings.map((offering: any) => {
-            const offeringId = offering?.identifier || offering?.id || 'unknown';
-            const pkgIds = Array.isArray((offering as any)?.availablePackages)
-              ? (offering as any).availablePackages.map((p: any) => p?.identifier || 'unknown').join(',')
-              : 'none';
-            return `${offeringId}[${pkgIds}]`;
-          }).join(' | ') || 'none';
-          addBillingDebug(`getOfferings packages: ${packageSummary}`);
-          addBillingDebug('QU → resolved package missing, fallback purchasePackage(qatar_university)');
-          purchasePackage('qatar_university', billingCallback);
-        });
-      } catch (e: any) {
-        addBillingDebug(`getOfferings TRY/CATCH ERROR: ${e?.message || String(e)}`);
-        purchasePackage('qatar_university', billingCallback);
-      }
-    };
-
     try {
       if (isQUUser) {
-        purchaseResolvedBillingQUPackage();
+        if (isIOS) {
+          addBillingDebug('QU iOS → showPaywall(qatar_university)');
+          showPaywall(true, 'qatar_university', billingCallback);
+        } else {
+          addBillingDebug('QU Android → purchasePackage(qatar_university)');
+          purchasePackage('qatar_university', billingCallback);
+        }
       } else {
         addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);
