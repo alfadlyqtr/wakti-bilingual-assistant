@@ -13,8 +13,10 @@ export interface VisualAdsState {
     customType?: string | null;
     customTypeDraft?: string | null;
     personMode?: 'exact' | 'reference' | null;
+    exactPersonStyle?: 'same-pose' | 'adapted-pose' | 'upper-body' | null;
     referenceStyle?: 'realistic' | 'character' | null;
     logoMode?: 'as-is' | 'transparent' | null;
+    screenshotDevice?: 'iphone' | 'samsung' | 'laptop' | 'tablet' | 'monitor-tv' | 'billboard' | null;
   };
   assets: Array<{
     image: string | null;
@@ -22,8 +24,10 @@ export interface VisualAdsState {
     customType?: string | null;
     customTypeDraft?: string | null;
     personMode?: 'exact' | 'reference' | null;
+    exactPersonStyle?: 'same-pose' | 'adapted-pose' | 'upper-body' | null;
     referenceStyle?: 'realistic' | 'character' | null;
     logoMode?: 'as-is' | 'transparent' | null;
+    screenshotDevice?: 'iphone' | 'samsung' | 'laptop' | 'tablet' | 'monitor-tv' | 'billboard' | null;
   }>;
   campaignDNA: {
     platform: '9:16' | '1:1' | '16:9' | null;
@@ -32,10 +36,12 @@ export interface VisualAdsState {
   creativeSoul: {
     mainMessage: string;
     customMainMessage: string;
+    mainMessageVariant: string;
     cta: string;
     customCta: string;
     style: string;
     customStyle: string;
+    styleVariant: string;
     magicEnhance: boolean;
     promptNotes: string;
     prompt: string;
@@ -129,6 +135,49 @@ const adTopicChips = [
   { id: 'sale',          label: '🛍️ Sale / Discount',      prompt: 'sale or discount offer' },
 ];
 
+const mainMessageVariantMap: Record<string, Array<{ id: string; labelEn: string; labelAr: string; prompt: string }>> = {
+  'new-launch': [
+    { id: 'hero-reveal', labelEn: 'Hero Reveal', labelAr: 'كشف البطل', prompt: 'Treat the campaign like a dramatic hero reveal with one big centerpiece moment.' },
+    { id: 'future-wave', labelEn: 'Future Wave', labelAr: 'موجة مستقبلية', prompt: 'Make it feel futuristic, visionary, and ahead of its category.' },
+    { id: 'founder-proud', labelEn: 'Proud Debut', labelAr: 'إطلاق بفخر', prompt: 'Give it a proud premium debut energy, like a launch everyone has been waiting for.' },
+  ],
+  'limited-offer': [
+    { id: 'vip-window', labelEn: 'VIP Window', labelAr: 'فرصة خاصة', prompt: 'Present the offer like a rare VIP window, exclusive and almost gone.' },
+    { id: 'countdown-pressure', labelEn: 'Countdown Pressure', labelAr: 'ضغط العد التنازلي', prompt: 'Use countdown-style urgency and high-stakes timing without looking cheap.' },
+    { id: 'clean-urgency', labelEn: 'Clean Urgency', labelAr: 'استعجال أنيق', prompt: 'Keep the urgency strong but polished, premium, and uncluttered.' },
+  ],
+  'app-download': [
+    { id: 'phone-first', labelEn: 'Phone-First Hero', labelAr: 'الهاتف هو البطل', prompt: 'Make the phone and app experience the central hero of the ad.' },
+    { id: 'smart-lifestyle', labelEn: 'Smart Lifestyle', labelAr: 'أسلوب حياة ذكي', prompt: 'Make the app feel seamlessly embedded into a smart, aspirational lifestyle.' },
+    { id: 'store-ready', labelEn: 'Launch Ready', labelAr: 'جاهز للتحميل', prompt: 'Make it feel app-store-ready, polished, and instantly downloadable.' },
+  ],
+  'save-time': [
+    { id: 'calm-efficiency', labelEn: 'Calm Efficiency', labelAr: 'هدوء وكفاءة', prompt: 'Show peaceful efficiency and mental clarity rather than chaos.' },
+    { id: 'instant-relief', labelEn: 'Instant Relief', labelAr: 'راحة فورية', prompt: 'Make the value feel like immediate relief from stress, friction, or wasted time.' },
+    { id: 'smooth-routine', labelEn: 'Smooth Routine', labelAr: 'روتين سلس', prompt: 'Show the product making daily routine feel smooth, easy, and beautifully organized.' },
+  ],
+  'premium': [
+    { id: 'crafted-luxury', labelEn: 'Crafted Luxury', labelAr: 'فخامة مصنوعة', prompt: 'Lean into craftsmanship, detail, and elite premium execution.' },
+    { id: 'quiet-wealth', labelEn: 'Quiet Wealth', labelAr: 'ثراء هادئ', prompt: 'Make it feel expensive and elevated without shouting.' },
+    { id: 'flagship-energy', labelEn: 'Flagship Energy', labelAr: 'طاقة رائدة', prompt: 'Present it like the flagship offering in its entire category.' },
+  ],
+  'social-proof': [
+    { id: 'testimonial-cards', labelEn: 'Testimonial Cards', labelAr: 'بطاقات شهادات', prompt: 'Feature tasteful mini testimonial cards or quote snippets around the hero composition.' },
+    { id: 'community-love', labelEn: 'Community Love', labelAr: 'حب المجتمع', prompt: 'Make it feel beloved by a real community, with warmth and genuine public excitement.' },
+    { id: 'trust-signals', labelEn: 'Trust Signals', labelAr: 'إشارات ثقة', prompt: 'Emphasize trust badges, subtle rating cues, and premium proof markers.' },
+  ],
+  'features': [
+    { id: 'feature-callouts', labelEn: 'Feature Callouts', labelAr: 'إبراز المزايا', prompt: 'Use clean callouts that spotlight a few key product features with clarity.' },
+    { id: 'hero-plus-benefits', labelEn: 'Hero + Benefits', labelAr: 'بطل + فوائد', prompt: 'Balance a strong central hero visual with concise, premium benefit highlights.' },
+    { id: 'smart-breakdown', labelEn: 'Smart Breakdown', labelAr: 'تفصيل ذكي', prompt: 'Organize the message like an elegant, intelligent breakdown of capabilities.' },
+  ],
+  'sale': [
+    { id: 'price-drop', labelEn: 'Price Drop Hero', labelAr: 'هبوط السعر', prompt: 'Make the discount feel instantly visible and impossible to miss.' },
+    { id: 'vip-deal', labelEn: 'VIP Deal', labelAr: 'عرض خاص', prompt: 'Position the sale like a premium insider deal rather than a bargain-bin promotion.' },
+    { id: 'high-energy-flash', labelEn: 'Flash Energy', labelAr: 'طاقة فلاش', prompt: 'Bring energetic flash-sale excitement with bold momentum and urgency.' },
+  ],
+};
+
 // CTA chips
 const ctaChips = [
   { id: 'download-now',   label: 'Download now' },
@@ -151,6 +200,39 @@ const adStyleChips = [
   { id: 'luxury-minimal',    label: '🤍 Luxury Minimal',      prompt: 'luxury minimalist, spacious, refined, premium' },
   { id: 'ugc',               label: '🎥 Natural / UGC',       prompt: 'organic UGC style, native social feed look' },
 ];
+
+const styleVariantMap: Record<string, Array<{ id: string; labelEn: string; labelAr: string; prompt: string }>> = {
+  'premium-dark': [
+    { id: 'luxury-noir', labelEn: 'Luxury Noir', labelAr: 'فخامة ليلية', prompt: 'Use noir-like premium drama, refined shadows, and luxury contrast.' },
+    { id: 'cinematic-glow', labelEn: 'Cinematic Glow', labelAr: 'توهج سينمائي', prompt: 'Blend darkness with polished glow accents and cinematic mood lighting.' },
+    { id: 'elite-tech', labelEn: 'Elite Tech', labelAr: 'تقني فاخر', prompt: 'Keep it dark, sleek, and premium with a high-end tech brand finish.' },
+  ],
+  'bright-clean': [
+    { id: 'airy-minimal', labelEn: 'Airy Minimal', labelAr: 'بساطة هوائية', prompt: 'Use lots of clean space, softness, and fresh premium simplicity.' },
+    { id: 'sunlit-premium', labelEn: 'Sunlit Premium', labelAr: 'إضاءة راقية', prompt: 'Use soft bright lighting and crisp premium cleanliness.' },
+    { id: 'gallery-clean', labelEn: 'Gallery Clean', labelAr: 'نظافة المعرض', prompt: 'Make it feel polished like a modern design gallery or premium showroom.' },
+  ],
+  'bold-modern': [
+    { id: 'neon-energy', labelEn: 'Neon Energy', labelAr: 'طاقة نيون', prompt: 'Push the boldness through neon accents, motion, and energetic contrast.' },
+    { id: 'editorial-hype', labelEn: 'Editorial Hype', labelAr: 'حماس تحريري', prompt: 'Make it feel like a modern magazine cover with aggressive typography and punch.' },
+    { id: 'tech-pop', labelEn: 'Tech Pop', labelAr: 'بوب تقني', prompt: 'Blend bold modern energy with playful, premium tech graphics.' },
+  ],
+  'lifestyle': [
+    { id: 'warm-documentary', labelEn: 'Warm Documentary', labelAr: 'وثائقي دافئ', prompt: 'Keep it honest, warm, and grounded like premium documentary photography.' },
+    { id: 'golden-hour', labelEn: 'Golden Hour', labelAr: 'ساعة ذهبية', prompt: 'Use warm golden-hour realism and emotional human atmosphere.' },
+    { id: 'everyday-premium', labelEn: 'Everyday Premium', labelAr: 'يومي راقٍ', prompt: 'Keep it relatable and human, but still polished and premium.' },
+  ],
+  'luxury-minimal': [
+    { id: 'silent-wealth', labelEn: 'Silent Wealth', labelAr: 'ثراء صامت', prompt: 'Strip it down to quiet premium confidence and elegant restraint.' },
+    { id: 'museum-piece', labelEn: 'Museum Piece', labelAr: 'قطعة متحفية', prompt: 'Make the hero subject feel displayed like a precious museum piece.' },
+    { id: 'monochrome-premium', labelEn: 'Monochrome Premium', labelAr: 'أحادي فاخر', prompt: 'Use restrained premium tones and minimalist luxury polish.' },
+  ],
+  'ugc': [
+    { id: 'phone-capture', labelEn: 'Phone Capture', labelAr: 'لقطة هاتف', prompt: 'Make it feel like a naturally captured social post with authentic immediacy.' },
+    { id: 'creator-post', labelEn: 'Creator Post', labelAr: 'منشور صانع محتوى', prompt: 'Lean into native creator energy, believable framing, and social familiarity.' },
+    { id: 'real-feed', labelEn: 'Real Feed', labelAr: 'فيد حقيقي', prompt: 'Keep it real, spontaneous, and at home in a social feed.' },
+  ],
+};
 
 const InstagramBrandIcon = () => (
   <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -296,7 +378,7 @@ export default function VisualAdsGenerator({
   const [state, setState] = useState<VisualAdsState>({
     brandAsset: { image: null, type: null },
     campaignDNA: { platform: null, objective: '' },
-    creativeSoul: { mainMessage: '', customMainMessage: '', cta: '', customCta: '', style: '', customStyle: '', magicEnhance: false, promptNotes: '', prompt: '' },
+    creativeSoul: { mainMessage: '', customMainMessage: '', mainMessageVariant: '', cta: '', customCta: '', style: '', customStyle: '', styleVariant: '', magicEnhance: false, promptNotes: '', prompt: '' },
     assets: [],
   });
 
@@ -346,6 +428,16 @@ export default function VisualAdsGenerator({
     }
     return ctaChips.find((chip) => chip.id === state.creativeSoul.cta)?.label || '';
   }, [state.creativeSoul.cta, state.creativeSoul.customCta, normalizeWordLimitedValue]);
+  const getSelectedTopicVariantMeta = useCallback(() => {
+    if (!state.creativeSoul.mainMessage || state.creativeSoul.mainMessage === 'custom') {
+      return { label: '', prompt: '' };
+    }
+    const selectedVariant = (mainMessageVariantMap[state.creativeSoul.mainMessage] || []).find((variant) => variant.id === state.creativeSoul.mainMessageVariant);
+    return {
+      label: language === 'ar' ? (selectedVariant?.labelAr || '') : (selectedVariant?.labelEn || ''),
+      prompt: selectedVariant?.prompt || '',
+    };
+  }, [language, state.creativeSoul.mainMessage, state.creativeSoul.mainMessageVariant]);
   const getSelectedStyleMeta = useCallback(() => {
     if (state.creativeSoul.style === 'custom') {
       const customValue = normalizeWordLimitedValue(state.creativeSoul.customStyle || '');
@@ -360,9 +452,21 @@ export default function VisualAdsGenerator({
       prompt: selectedStyle?.prompt || '',
     };
   }, [state.creativeSoul.style, state.creativeSoul.customStyle, normalizeWordLimitedValue]);
+  const getSelectedStyleVariantMeta = useCallback(() => {
+    if (!state.creativeSoul.style || state.creativeSoul.style === 'custom') {
+      return { label: '', prompt: '' };
+    }
+    const selectedVariant = (styleVariantMap[state.creativeSoul.style] || []).find((variant) => variant.id === state.creativeSoul.styleVariant);
+    return {
+      label: language === 'ar' ? (selectedVariant?.labelAr || '') : (selectedVariant?.labelEn || ''),
+      prompt: selectedVariant?.prompt || '',
+    };
+  }, [language, state.creativeSoul.style, state.creativeSoul.styleVariant]);
   const selectedTopicMeta = getSelectedTopicMeta();
   const selectedCtaLabel = getSelectedCtaLabel();
+  const selectedTopicVariantMeta = getSelectedTopicVariantMeta();
   const selectedStyleMeta = getSelectedStyleMeta();
+  const selectedStyleVariantMeta = getSelectedStyleVariantMeta();
   const getPersonModeLabel = useCallback((asset: NonNullable<VisualAdsState['assets']>[number]) => {
     if (asset.type !== 'person') return '';
     if (asset.personMode === 'reference') {
@@ -370,9 +474,28 @@ export default function VisualAdsGenerator({
         ? (language === 'ar' ? 'استخدمه كمرجع ثم حوّله إلى شخصية مصممة.' : 'Use this person as a reference and turn them into a styled character.')
         : (language === 'ar' ? 'استخدمه كمرجع لشخص واقعي قريب من الصورة.' : 'Use this person as a reference for a realistic human subject.') ;
     }
+    if (asset.exactPersonStyle === 'same-pose') {
+      return language === 'ar'
+        ? 'استخدم هذا الشخص الحقيقي نفسه تماماً، وليس نسخة مشابهة أو محسّنة. حافظ على أقرب وضعية وإطار ممكنين للصورة الأصلية. لا تغيّر الوجه أو تعيد تخيّل الملامح أو تستبدله بشخص أجمل أو مختلف. إذا تعارض أي شيء مع الهوية، فحافظ على الشخص أولاً.'
+        : 'Use the exact same real individual from the upload, not a similar-looking or upgraded version. Keep the closest possible pose and framing to the original image. Do not reinterpret, beautify, or substitute the face. If anything conflicts with identity, keep the person first.';
+    }
+    if (asset.exactPersonStyle === 'upper-body') {
+      return language === 'ar'
+        ? 'استخدم هذا الشخص الحقيقي نفسه تماماً في لقطة واضحة للجزء العلوي من الجسم، بحيث يبقى الوجه كبيراً ومقروءاً وسهل التعرّف عليه. لا تغيّر الملامح ولا تبدّله بشخص آخر. اجعل الإبداع في التكوين والضوء فقط.'
+        : 'Use the exact same real individual in a clear upper-body framing so the face stays large, readable, and unmistakable. Do not change the facial identity or swap them for a better-looking substitute. Put the creativity into the composition and lighting only.';
+    }
     return language === 'ar'
-      ? 'استخدم هذا الشخص كما هو قدر الإمكان وبنفس الهوية.'
-      : 'Use this exact person as the intended subject as closely as possible.';
+      ? 'استخدم هذا الشخص الحقيقي نفسه تماماً. حافظ على الوجه، ولون البشرة، وبنية الجسم، والملابس، والهوية العامة. يمكن تعديل الوضعية بحذر فقط إذا بقي الوجه والهوية كما هما. لا تستبدله بشخص آخر، ولا تحسّنه، ولا تعِد تخيّل ملامحه.'
+      : 'Use the exact same real individual. Preserve the face, skin tone, body shape, clothing, and overall identity. You may adapt the pose carefully only if the face stays the same. Do not replace, beautify, recast, or drift away from the real person.';
+  }, [language]);
+  const getScreenshotDeviceLabel = useCallback((device?: NonNullable<VisualAdsState['assets']>[number]['screenshotDevice']) => {
+    if (device === 'iphone') return language === 'ar' ? 'آيفون' : 'iPhone';
+    if (device === 'samsung') return language === 'ar' ? 'هاتف سامسونج' : 'Samsung phone';
+    if (device === 'laptop') return language === 'ar' ? 'لابتوب' : 'Laptop';
+    if (device === 'tablet') return language === 'ar' ? 'تابلت' : 'Tablet';
+    if (device === 'monitor-tv') return language === 'ar' ? 'شاشة أو تلفاز' : 'Monitor / TV';
+    if (device === 'billboard') return language === 'ar' ? 'لوحة إعلانية' : 'Billboard';
+    return language === 'ar' ? 'آيفون' : 'iPhone';
   }, [language]);
   const getAssetPromptSummary = useCallback((assetType: NonNullable<VisualAdsState['assets']>[number]['type'], index: number) => {
     if (!assetType) return '';
@@ -381,7 +504,7 @@ export default function VisualAdsGenerator({
       if (assetType === 'screenshot') return `الصورة ${index + 1} هي لقطة الشاشة الأساسية وتكون محور البوستر.`;
       if (assetType === 'logo') return `الصورة ${index + 1} هي الشعار ويجب وضعها كعنصر علامة تجارية واضح ونظيف.`;
       if (assetType === 'product') return `الصورة ${index + 1} هي المنتج الرئيسي وتظهر كبطل الإعلان.`;
-      if (assetType === 'person') return `الصورة ${index + 1} هي الشخص المراد إظهاره. حافظ على ملامحه وملابسه ومظهره بأكبر قدر ممكن من الدقة، ولا تستبدله بشخص آخر.`;
+      if (assetType === 'person') return `الصورة ${index + 1} هي الشخص المراد إظهاره. حافظ على هويته وملامحه بدقة، مع تكييف وضعيته لتناسب المشهد.`;
       if (assetType === 'icon') return `الصورة ${index + 1} تُستخدم كأيقونة داعمة داخل التكوين.`;
       if (assetType === 'prop') return `الصورة ${index + 1} تُستخدم كعنصر مساعد داخل المشهد.`;
       if (assetType === 'mascot') return `الصورة ${index + 1} هي التميمة وتظهر كعنصر بصري بارز.`;
@@ -393,7 +516,7 @@ export default function VisualAdsGenerator({
     if (assetType === 'screenshot') return `Image ${index + 1} is the hero screenshot and should be a key focal point.`;
     if (assetType === 'logo') return `Image ${index + 1} is the logo and should appear as a clean brand mark.`;
     if (assetType === 'product') return `Image ${index + 1} is the main product hero.`;
-    if (assetType === 'person') return `Image ${index + 1} is the human subject. Preserve their face, skin tone, clothing, and appearance as closely as possible. Do NOT substitute or generate a different person.`;
+    if (assetType === 'person') return `Image ${index + 1} is the human subject. Preserve their exact face and identity, but adapt their pose naturally to fit the new scene.`;
     if (assetType === 'icon') return `Image ${index + 1} should be used as a supporting icon element.`;
     if (assetType === 'prop') return `Image ${index + 1} should be used as a supporting prop in the scene.`;
     if (assetType === 'mascot') return `Image ${index + 1} is the mascot and should be visually noticeable.`;
@@ -404,15 +527,17 @@ export default function VisualAdsGenerator({
   const promptSelectionBadges = useMemo(() => {
     const badges: string[] = [];
     if (selectedTopicMeta.label) badges.push(selectedTopicMeta.label);
+    if (selectedTopicVariantMeta.label) badges.push(selectedTopicVariantMeta.label);
     if (selectedCtaLabel) badges.push(selectedCtaLabel);
     if (selectedStyleMeta.label) badges.push(selectedStyleMeta.label);
+    if (selectedStyleVariantMeta.label) badges.push(selectedStyleVariantMeta.label);
     (state.assets || []).forEach((asset, index) => {
       if (!asset.type) return;
       const tagLabel = assetTypeOptions.find((option) => option.value === asset.type)?.label || asset.type;
       badges.push(language === 'ar' ? `الصورة ${index + 1}: ${tagLabel}` : `Image ${index + 1}: ${tagLabel}`);
     });
     return badges;
-  }, [selectedTopicMeta.label, selectedCtaLabel, selectedStyleMeta.label, state.assets, assetTypeOptions, language]);
+  }, [selectedTopicMeta.label, selectedTopicVariantMeta.label, selectedCtaLabel, selectedStyleMeta.label, selectedStyleVariantMeta.label, state.assets, assetTypeOptions, language]);
   const autoPromptPreview = useMemo(() => {
     const lines: string[] = [];
     if (language === 'ar') {
@@ -422,6 +547,9 @@ export default function VisualAdsGenerator({
       }
       if (selectedTopicMeta.label || selectedTopicMeta.prompt) {
         lines.push(`الرسالة الرئيسية: ${selectedTopicMeta.label || selectedTopicMeta.prompt}. اجعل التكوين يخدم هذا المعنى بوضوح.`);
+      }
+      if (selectedTopicVariantMeta.label || selectedTopicVariantMeta.prompt) {
+        lines.push(`تفصيل الرسالة: ${selectedTopicVariantMeta.label || selectedTopicVariantMeta.prompt}. اجعل هذا التفصيل يدعم الرسالة الرئيسية بدلاً من منافستها.`);
       }
       const assets = state.assets || [];
       const taggedAssets = assets
@@ -436,6 +564,15 @@ export default function VisualAdsGenerator({
         .forEach((asset, index) => {
           const originalIndex = assets.findIndex((candidate) => candidate === asset) + 1;
           lines.push(`تعامل مع الصورة ${originalIndex} بهذا الأسلوب: ${getPersonModeLabel(asset)}`);
+          if ((asset.personMode || 'exact') === 'exact') {
+            lines.push(`الأولوية للصورة ${originalIndex}: ثبّت هوية الشخص أولاً. إذا تعارض الأسلوب أو التكوين مع ملامحه الحقيقية، فخفّف الإبداع وحافظ على الشخص.`);
+          }
+        });
+      assets
+        .filter((asset) => asset.type === 'screenshot')
+        .forEach((asset) => {
+          const originalIndex = assets.findIndex((candidate) => candidate === asset) + 1;
+          lines.push(`اعرض لقطة الشاشة من الصورة ${originalIndex} داخل ${getScreenshotDeviceLabel(asset.screenshotDevice)} بشكل واضح ومميز.`);
         });
       if (assets.some((asset) => asset.type === 'screenshot')) {
         lines.push('إذا ظهرت أسماء أو أسماء مستخدمين داخل لقطة الشاشة، فلا تعِد استخدامها كنص إعلاني في البوستر إلا إذا كتبها المستخدم بنفسه داخل البرومبت.');
@@ -447,14 +584,25 @@ export default function VisualAdsGenerator({
           if (asset.logoMode === 'as-is') {
             lines.push(`ضع الشعار من الصورة ${originalIndex} كما هو بخلفيته الأصلية، أكبر قليلاً وواضحاً كمرساة بصرية للعلامة قرب أعلى البوستر.`);
           } else {
-            lines.push(`ضع الشعار من الصورة ${originalIndex} كمرساة بصرية للعلامة. لا تضع خلف الشعار أي إطار أو لوح بيضاء — ضعه مباشرةً على تصميم البوستر.`);
+            lines.push(`ضع الشعار من الصورة ${originalIndex} كما هو تماماً، وقم بدمجه في التصميم بدون أي مربع أبيض حوله.`);
           }
         });
       if (selectedStyleMeta.label || selectedStyleMeta.prompt) {
-        lines.push(`الأسلوب البصري: ${selectedStyleMeta.label || selectedStyleMeta.prompt}. اجعل البوستر يعكس هذا الاتجاه بشكل واضح.`);
+        if (state.creativeSoul.style === 'custom') {
+          lines.push(`الأسلوب البصري المطلوب بدقة هو: "${selectedStyleMeta.prompt}". اجعل الإضاءة والألوان والملمس تعكس هذا الاتجاه بشكل مثالي.`);
+        } else {
+          lines.push(`الأسلوب البصري: ${selectedStyleMeta.label || selectedStyleMeta.prompt}. اجعل البوستر يعكس هذا الاتجاه بشكل واضح.`);
+        }
+      }
+      if (selectedStyleVariantMeta.label || selectedStyleVariantMeta.prompt) {
+        lines.push(`تفصيل الأسلوب: ${selectedStyleVariantMeta.label || selectedStyleVariantMeta.prompt}. ليكن هذا التفصيل مكملاً للاتجاه البصري لا بديلاً عنه.`);
       }
       if (selectedCtaLabel) {
-        lines.push(`أضف عبارة "${selectedCtaLabel}" كعنصر دعائي واضح قرب أسفل البوستر، بصيغة تصميم بوستر وليست زر تطبيق فعلي.`);
+        if (state.creativeSoul.cta === 'custom') {
+          lines.push(`أدمج عبارة "${selectedCtaLabel}" بأناقة قرب أسفل البوستر. عاملها كنص إعلاني فاخر وليس كزر تطبيق رخيص.`);
+        } else {
+          lines.push(`أضف عبارة "${selectedCtaLabel}" كعنصر دعائي واضح قرب أسفل البوستر، بصيغة تصميم بوستر وليست زر تطبيق فعلي.`);
+        }
       }
     } else {
       lines.push('Create a world-class advertising poster. Think like one of the best poster art directors in the world and combine everything into one cohesive, visually stunning final composition.');
@@ -462,7 +610,14 @@ export default function VisualAdsGenerator({
         lines.push(`Target format: ${state.campaignDNA.platform}.`);
       }
       if (selectedTopicMeta.label || selectedTopicMeta.prompt) {
-        lines.push(`Main message: ${selectedTopicMeta.label || selectedTopicMeta.prompt}. Let the composition clearly support this campaign angle.`);
+        if (state.creativeSoul.mainMessage === 'custom') {
+          lines.push(`The core narrative and central focus of the poster is: "${selectedTopicMeta.prompt}". Design the entire composition, lighting, and mood to elevate and communicate this specific theme.`);
+        } else {
+          lines.push(`Main message: ${selectedTopicMeta.label || selectedTopicMeta.prompt}. Let the composition clearly support this campaign angle.`);
+        }
+      }
+      if (selectedTopicVariantMeta.label || selectedTopicVariantMeta.prompt) {
+        lines.push(`Main message detail: ${selectedTopicVariantMeta.label || selectedTopicVariantMeta.prompt}. This should support the core campaign angle, not compete with it.`);
       }
       const assets = state.assets || [];
       const taggedAssets = assets
@@ -477,6 +632,15 @@ export default function VisualAdsGenerator({
         .forEach((asset) => {
           const originalIndex = assets.findIndex((candidate) => candidate === asset) + 1;
           lines.push(`Handle Image ${originalIndex} like this: ${getPersonModeLabel(asset)}`);
+          if ((asset.personMode || 'exact') === 'exact') {
+            lines.push(`Priority for Image ${originalIndex}: lock the real identity first. If style, beauty, or composition conflicts with the person, reduce the creative change and keep the person.`);
+          }
+        });
+      assets
+        .filter((asset) => asset.type === 'screenshot')
+        .forEach((asset) => {
+          const originalIndex = assets.findIndex((candidate) => candidate === asset) + 1;
+          lines.push(`Show the screenshot from Image ${originalIndex} inside a clear ${getScreenshotDeviceLabel(asset.screenshotDevice)} mockup.`);
         });
       if (assets.some((asset) => asset.type === 'screenshot')) {
         lines.push('If names or usernames appear inside the screenshot UI, do not reuse them as poster headline, quote, testimonial, or community text unless the user explicitly typed that name in the prompt.');
@@ -488,7 +652,7 @@ export default function VisualAdsGenerator({
           if (asset.logoMode === 'as-is') {
             lines.push(`Place the logo from Image ${originalIndex} exactly as uploaded, slightly bigger, clearly visible, as a top brand anchor with breathing room around it.`);
           } else {
-            lines.push(`Place the logo from Image ${originalIndex} as a top brand anchor. Do not add any white box or panel behind it — let it sit directly on the poster.`);
+            lines.push(`Place the logo from Image ${originalIndex} exactly as designed, integrated cleanly into the layout without any white background box.`);
           }
         });
       // Scene intelligence: detect asset combination and inject creative director composition
@@ -513,12 +677,15 @@ export default function VisualAdsGenerator({
       if (selectedStyleMeta.label || selectedStyleMeta.prompt) {
         lines.push(`Visual style: ${selectedStyleMeta.label || selectedStyleMeta.prompt}. Make the poster clearly follow this art direction.`);
       }
+      if (selectedStyleVariantMeta.label || selectedStyleVariantMeta.prompt) {
+        lines.push(`Visual style detail: ${selectedStyleVariantMeta.label || selectedStyleVariantMeta.prompt}. This should refine the chosen look, not fight it.`);
+      }
       if (selectedCtaLabel) {
         lines.push(`Include the text "${selectedCtaLabel}" as a strong poster CTA callout near the bottom, not as a real interactive UI button.`);
       }
     }
     return lines.join('\n');
-  }, [language, state.campaignDNA.platform, state.assets, selectedTopicMeta.label, selectedTopicMeta.prompt, selectedStyleMeta.label, selectedStyleMeta.prompt, selectedCtaLabel, getAssetPromptSummary, getPersonModeLabel]);
+  }, [language, state.campaignDNA.platform, state.assets, state.creativeSoul.mainMessage, state.creativeSoul.style, state.creativeSoul.cta, selectedTopicMeta.label, selectedTopicMeta.prompt, selectedTopicVariantMeta.label, selectedTopicVariantMeta.prompt, selectedStyleMeta.label, selectedStyleMeta.prompt, selectedStyleVariantMeta.label, selectedStyleVariantMeta.prompt, selectedCtaLabel, getAssetPromptSummary, getPersonModeLabel, getScreenshotDeviceLabel]);
   const composedPromptText = useMemo(() => {
     return [autoPromptPreview.trim(), state.creativeSoul.promptNotes.trim()].filter(Boolean).join('\n\n').trim();
   }, [autoPromptPreview, state.creativeSoul.promptNotes]);
@@ -569,8 +736,10 @@ export default function VisualAdsGenerator({
     customType?: string | null;
     customTypeDraft?: string | null;
     personMode?: 'exact' | 'reference' | null;
+    exactPersonStyle?: 'same-pose' | 'adapted-pose' | 'upper-body' | null;
     referenceStyle?: 'realistic' | 'character' | null;
     logoMode?: 'as-is' | 'transparent' | null;
+    screenshotDevice?: 'iphone' | 'samsung' | 'laptop' | 'tablet' | 'monitor-tv' | 'billboard' | null;
   }>>([]);
   const hasAtLeastOneValidAsset = uploadedImages.some((asset) => Boolean(asset.type));
   const hasIncompleteAssetTags = uploadedImages.some((asset) => !asset.type);
@@ -607,7 +776,7 @@ export default function VisualAdsGenerator({
       return;
     }
 
-    const newImages = [{ image: url, type: null as any, customType: null, customTypeDraft: null, personMode: null, referenceStyle: null, logoMode: null }];
+    const newImages = [{ image: url, type: null as any, customType: null, customTypeDraft: null, personMode: null, exactPersonStyle: null, referenceStyle: null, logoMode: null, screenshotDevice: null }];
     const allImages = [...uploadedImages, ...newImages].slice(0, MAX_ASSET_IMAGES);
     setUploadedImages(allImages);
     setSelectedAssetIndex(uploadedImages.length);
@@ -625,7 +794,10 @@ export default function VisualAdsGenerator({
         customType: allImages[uploadedImages.length]?.customType || null,
         customTypeDraft: allImages[uploadedImages.length]?.customTypeDraft || null,
         personMode: allImages[uploadedImages.length]?.personMode || null,
+        exactPersonStyle: allImages[uploadedImages.length]?.exactPersonStyle || null,
         referenceStyle: allImages[uploadedImages.length]?.referenceStyle || null,
+        logoMode: allImages[uploadedImages.length]?.logoMode || null,
+        screenshotDevice: allImages[uploadedImages.length]?.screenshotDevice || null,
       },
       creativeSoul: {
         ...prev.creativeSoul,
@@ -647,7 +819,7 @@ export default function VisualAdsGenerator({
       return;
     }
 
-    const newImages: Array<{ image: string; type: 'logo' | 'product' | 'screenshot' | 'person' | 'background' | 'icon' | 'prop' | 'mascot' | 'texture' | 'illustration' | null; customType?: string | null; customTypeDraft?: string | null; personMode?: 'exact' | 'reference' | null; referenceStyle?: 'realistic' | 'character' | null; logoMode?: 'as-is' | 'transparent' | null }> = [];
+    const newImages: Array<{ image: string; type: 'logo' | 'product' | 'screenshot' | 'person' | 'background' | 'icon' | 'prop' | 'mascot' | 'texture' | 'illustration' | null; customType?: string | null; customTypeDraft?: string | null; personMode?: 'exact' | 'reference' | null; exactPersonStyle?: 'same-pose' | 'adapted-pose' | 'upper-body' | null; referenceStyle?: 'realistic' | 'character' | null; logoMode?: 'as-is' | 'transparent' | null; screenshotDevice?: 'iphone' | 'samsung' | 'laptop' | 'tablet' | 'monitor-tv' | 'billboard' | null }> = [];
     let processed = 0;
     
     filesToProcess.forEach((file) => {
@@ -655,7 +827,7 @@ export default function VisualAdsGenerator({
       
       const reader = new FileReader();
       reader.onload = () => {
-        newImages.push({ image: reader.result as string, type: null, customType: null, customTypeDraft: null, personMode: null, referenceStyle: null, logoMode: null });
+        newImages.push({ image: reader.result as string, type: null, customType: null, customTypeDraft: null, personMode: null, exactPersonStyle: null, referenceStyle: null, logoMode: null, screenshotDevice: null });
         processed++;
         
         if (processed === filesToProcess.length) {
@@ -676,7 +848,10 @@ export default function VisualAdsGenerator({
               customType: allImages[uploadedImages.length]?.customType || null,
               customTypeDraft: allImages[uploadedImages.length]?.customTypeDraft || null,
               personMode: allImages[uploadedImages.length]?.personMode || null,
+              exactPersonStyle: allImages[uploadedImages.length]?.exactPersonStyle || null,
               referenceStyle: allImages[uploadedImages.length]?.referenceStyle || null,
+              logoMode: allImages[uploadedImages.length]?.logoMode || null,
+              screenshotDevice: allImages[uploadedImages.length]?.screenshotDevice || null,
             },
             creativeSoul: {
               ...prev.creativeSoul,
@@ -702,8 +877,12 @@ export default function VisualAdsGenerator({
               customType: null,
               customTypeDraft: null,
               personMode: type === 'person' ? ((asset.personMode || 'exact') as 'exact' | 'reference') : null,
+              exactPersonStyle: type === 'person'
+                ? (((asset.personMode || 'exact') === 'exact' ? (asset.exactPersonStyle || 'same-pose') : null) as 'same-pose' | 'adapted-pose' | 'upper-body' | null)
+                : null,
               referenceStyle: type === 'person' ? ((asset.referenceStyle || null) as 'realistic' | 'character' | null) : null,
               logoMode: type === 'logo' ? ((asset.logoMode || 'transparent') as 'as-is' | 'transparent') : null,
+              screenshotDevice: type === 'screenshot' ? ((asset.screenshotDevice || 'iphone') as 'iphone' | 'samsung' | 'laptop' | 'tablet' | 'monitor-tv' | 'billboard') : null,
             }
           : asset
       ));
@@ -718,8 +897,10 @@ export default function VisualAdsGenerator({
           customType: currentAsset?.customType || null,
           customTypeDraft: currentAsset?.customTypeDraft || null,
           personMode: currentAsset?.personMode || null,
+          exactPersonStyle: currentAsset?.exactPersonStyle || null,
           referenceStyle: currentAsset?.referenceStyle || null,
           logoMode: currentAsset?.logoMode || null,
+          screenshotDevice: currentAsset?.screenshotDevice || null,
         },
         creativeSoul: {
           ...prevState.creativeSoul,
@@ -745,12 +926,43 @@ export default function VisualAdsGenerator({
     });
   }, []);
 
-  const handlePersonModeChange = useCallback((index: number, mode: 'exact' | 'reference') => {
+  const handleExactPersonStyleChange = useCallback((index: number, exactPersonStyle: 'same-pose' | 'adapted-pose' | 'upper-body') => {
     setUploadedImages(prev => {
       const next: typeof prev = prev.map((asset, idx) => idx === index ? {
         ...asset,
-        personMode: mode,
-        referenceStyle: mode === 'reference' ? ((asset.referenceStyle || 'realistic') as 'realistic' | 'character') : null,
+        personMode: 'exact' as const,
+        exactPersonStyle,
+        referenceStyle: null,
+      } : asset);
+      const currentAsset = next[index] || null;
+      setState(prevState => ({
+        ...prevState,
+        brandAsset: {
+          image: currentAsset?.image || next[0]?.image || null,
+          type: currentAsset?.type || null,
+          customType: currentAsset?.customType || null,
+          customTypeDraft: currentAsset?.customTypeDraft || null,
+          personMode: currentAsset?.personMode || null,
+          exactPersonStyle: currentAsset?.exactPersonStyle || null,
+          referenceStyle: currentAsset?.referenceStyle || null,
+          logoMode: currentAsset?.logoMode || null,
+          screenshotDevice: currentAsset?.screenshotDevice || null,
+        },
+        creativeSoul: {
+          ...prevState.creativeSoul,
+          magicEnhance: false,
+        },
+        assets: next,
+      }));
+      return next;
+    });
+  }, []);
+
+  const handleScreenshotDeviceChange = useCallback((index: number, device: 'iphone' | 'samsung' | 'laptop' | 'tablet' | 'monitor-tv' | 'billboard') => {
+    setUploadedImages(prev => {
+      const next: typeof prev = prev.map((asset, idx) => idx === index ? {
+        ...asset,
+        screenshotDevice: device,
       } : asset);
       const currentAsset = next[index] || null;
       setState(prevState => ({
@@ -763,6 +975,39 @@ export default function VisualAdsGenerator({
           personMode: currentAsset?.personMode || null,
           referenceStyle: currentAsset?.referenceStyle || null,
           logoMode: currentAsset?.logoMode || null,
+          screenshotDevice: device,
+        },
+        creativeSoul: {
+          ...prevState.creativeSoul,
+          magicEnhance: false,
+        },
+        assets: next,
+      }));
+      return next;
+    });
+  }, []);
+
+  const handlePersonModeChange = useCallback((index: number, mode: 'exact' | 'reference') => {
+    setUploadedImages(prev => {
+      const next: typeof prev = prev.map((asset, idx) => idx === index ? {
+        ...asset,
+        personMode: mode,
+        exactPersonStyle: mode === 'exact' ? ((asset.exactPersonStyle || 'same-pose') as 'same-pose' | 'adapted-pose' | 'upper-body') : null,
+        referenceStyle: mode === 'reference' ? ((asset.referenceStyle || 'realistic') as 'realistic' | 'character') : null,
+      } : asset);
+      const currentAsset = next[index] || null;
+      setState(prevState => ({
+        ...prevState,
+        brandAsset: {
+          image: currentAsset?.image || next[0]?.image || null,
+          type: currentAsset?.type || null,
+          customType: currentAsset?.customType || null,
+          customTypeDraft: currentAsset?.customTypeDraft || null,
+          personMode: currentAsset?.personMode || null,
+          exactPersonStyle: currentAsset?.exactPersonStyle || null,
+          referenceStyle: currentAsset?.referenceStyle || null,
+          logoMode: currentAsset?.logoMode || null,
+          screenshotDevice: currentAsset?.screenshotDevice || null,
         },
         creativeSoul: {
           ...prevState.creativeSoul,
@@ -792,6 +1037,7 @@ export default function VisualAdsGenerator({
           personMode: currentAsset?.personMode || null,
           referenceStyle: currentAsset?.referenceStyle || null,
           logoMode: currentAsset?.logoMode || null,
+          screenshotDevice: currentAsset?.screenshotDevice || null,
         },
         creativeSoul: {
           ...prevState.creativeSoul,
@@ -820,6 +1066,7 @@ export default function VisualAdsGenerator({
           personMode: currentAsset?.personMode || null,
           referenceStyle: currentAsset?.referenceStyle || null,
           logoMode: mode,
+          screenshotDevice: currentAsset?.screenshotDevice || null,
         },
         creativeSoul: {
           ...prevState.creativeSoul,
@@ -885,6 +1132,9 @@ export default function VisualAdsGenerator({
         return `Image ${index + 1}: ${tagLabel}`;
       })
       .filter((tag): tag is string => Boolean(tag));
+    const exactPersonImages = uploadedImages
+      .map((asset, index) => asset.type === 'person' && (asset.personMode || 'exact') === 'exact' ? index + 1 : null)
+      .filter((index): index is number => index !== null);
 
     try {
       setIsAmping(true);
@@ -899,6 +1149,11 @@ export default function VisualAdsGenerator({
           cta_text: selectedCtaLabel,
           style_label: selectedStyleMeta.label || '',
           style_prompt: selectedStyleMeta.prompt || '',
+          topic_variant_label: selectedTopicVariantMeta.label || '',
+          topic_variant_prompt: selectedTopicVariantMeta.prompt || '',
+          style_variant_label: selectedStyleVariantMeta.label || '',
+          style_variant_prompt: selectedStyleVariantMeta.prompt || '',
+          exact_person_images: exactPersonImages,
           platform: state.campaignDNA.platform,
         },
       });
@@ -914,10 +1169,18 @@ export default function VisualAdsGenerator({
       const improvedRoleLines = (improvedText.match(/^- Image \d+/gm) || []).length;
       const originalHasTargetFormat = /Target format:/i.test(combinedPromptSource);
       const improvedHasTargetFormat = /Target format:/i.test(improvedText);
+      const originalHasIdentityLock = /exact same person|exact intended human subject|lock the real identity/i.test(combinedPromptSource);
+      const improvedHasIdentityLock = /exact same person|exact intended human subject|lock the real identity|same real individual/i.test(improvedText);
+      const improvedHasDoNotReplace = /do not replace|do not turn them into a different person|keep the person first/i.test(improvedText);
 
       if ((originalRoleLines > 0 && improvedRoleLines < originalRoleLines) || (originalHasTargetFormat && !improvedHasTargetFormat)) {
         console.error('Visual Ads AMP returned a flattened prompt:', { combinedPromptSource, improvedText });
         toast.error(language === 'ar' ? 'تحسين الوصف أزال بنية البرومبت، لذلك أبقينا النسخة الأصلية.' : 'Enhance removed the prompt structure, so I kept your original version.');
+        return;
+      }
+      if (exactPersonImages.length > 0 && originalHasIdentityLock && (!improvedHasIdentityLock || !improvedHasDoNotReplace)) {
+        console.error('Visual Ads AMP weakened exact-person protection:', { combinedPromptSource, improvedText, exactPersonImages });
+        toast.error(language === 'ar' ? 'تحسين الوصف أضعف حماية هوية الشخص، لذلك أبقينا النسخة الأصلية.' : 'Enhance weakened the exact-person identity lock, so I kept your original version.');
         return;
       }
 
@@ -929,7 +1192,7 @@ export default function VisualAdsGenerator({
     } finally {
       setIsAmping(false);
     }
-  }, [promptTextareaValue, uploadedImages, isAmping, language, updateState, assetTypeOptions, selectedTopicMeta.label, selectedTopicMeta.prompt, selectedCtaLabel, selectedStyleMeta.label, selectedStyleMeta.prompt, state.campaignDNA.platform]);
+  }, [promptTextareaValue, uploadedImages, isAmping, language, updateState, assetTypeOptions, selectedTopicMeta.label, selectedTopicMeta.prompt, selectedTopicVariantMeta.label, selectedTopicVariantMeta.prompt, selectedCtaLabel, selectedStyleMeta.label, selectedStyleMeta.prompt, selectedStyleVariantMeta.label, selectedStyleVariantMeta.prompt, state.campaignDNA.platform]);
 
   // Segmented control component
   const SegmentedControl = <T extends string>({
@@ -1003,7 +1266,7 @@ export default function VisualAdsGenerator({
                         <button
                           onClick={() => {
                             setSelectedAssetIndex(idx);
-                            updateState('brandAsset', { image: asset.image, type: asset.type, personMode: asset.personMode || null, referenceStyle: asset.referenceStyle || null });
+                            updateState('brandAsset', { image: asset.image, type: asset.type, personMode: asset.personMode || null, exactPersonStyle: asset.exactPersonStyle || null, referenceStyle: asset.referenceStyle || null, logoMode: asset.logoMode || null, screenshotDevice: asset.screenshotDevice || null });
                           }}
                           className="relative aspect-square w-full rounded-xl overflow-hidden bg-black/5 dark:bg-white/5"
                           aria-label={language === 'ar' ? `اختر صورة ${idx + 1}` : `Select image ${idx + 1}`}
@@ -1028,7 +1291,10 @@ export default function VisualAdsGenerator({
                                   customType: newImages[nextSelectedIndex]?.customType || newImages[0]?.customType || null,
                                   customTypeDraft: newImages[nextSelectedIndex]?.customTypeDraft || newImages[0]?.customTypeDraft || null,
                                   personMode: newImages[nextSelectedIndex]?.personMode || newImages[0]?.personMode || null,
+                                  exactPersonStyle: newImages[nextSelectedIndex]?.exactPersonStyle || newImages[0]?.exactPersonStyle || null,
                                   referenceStyle: newImages[nextSelectedIndex]?.referenceStyle || newImages[0]?.referenceStyle || null,
+                                  logoMode: newImages[nextSelectedIndex]?.logoMode || newImages[0]?.logoMode || null,
+                                  screenshotDevice: newImages[nextSelectedIndex]?.screenshotDevice || newImages[0]?.screenshotDevice || null,
                                 },
                                 assets: newImages,
                               }));
@@ -1081,99 +1347,99 @@ export default function VisualAdsGenerator({
                             ))}
                           </select>
                           {asset.type === 'person' && (
-                            <div className="mt-2 rounded-xl border border-[#606062]/20 bg-white/40 dark:border-[#858384]/20 dark:bg-white/[0.04] overflow-hidden">
-                              <div className="px-3 pt-2.5 pb-1.5">
-                                <p className="text-[11px] font-semibold text-foreground/90">{language === 'ar' ? 'طريقة استخدام الشخص' : 'How to use this person'}</p>
+                            <div className="mt-1.5 space-y-1">
+                              <div className="flex gap-1">
+                                {(['exact', 'reference'] as const).map((mode) => (
+                                  <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => handlePersonModeChange(idx, mode)}
+                                    className={`flex-1 rounded-md border px-2 py-1 text-[10px] font-semibold transition-all active:scale-[0.97] ${
+                                      (asset.personMode || 'exact') === mode
+                                        ? 'bg-orange-400 text-[#060541] border-orange-300'
+                                        : 'bg-white/40 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/25 text-foreground/70'
+                                    }`}
+                                  >
+                                    {mode === 'exact' ? (language === 'ar' ? 'مطابق' : 'Exact') : (language === 'ar' ? 'مرجع' : 'Reference')}
+                                  </button>
+                                ))}
                               </div>
-                              <div className="flex flex-col gap-1 px-2 pb-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handlePersonModeChange(idx, 'exact')}
-                                  className={`w-full flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-xs font-semibold transition-all active:scale-[0.98] ${
-                                    (asset.personMode || 'exact') === 'exact'
-                                      ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_3px_12px_rgba(251,146,60,0.35)]'
-                                      : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground'
-                                  }`}
-                                >
-                                  <span className="text-base leading-none">{(asset.personMode || 'exact') === 'exact' ? '✅' : '⬜'}</span>
-                                  <span>{language === 'ar' ? 'استخدمه كما هو' : 'Use this exact person'}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handlePersonModeChange(idx, 'reference')}
-                                  className={`w-full flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-xs font-semibold transition-all active:scale-[0.98] ${
-                                    asset.personMode === 'reference'
-                                      ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_3px_12px_rgba(251,146,60,0.35)]'
-                                      : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground'
-                                  }`}
-                                >
-                                  <span className="text-base leading-none">{asset.personMode === 'reference' ? '✅' : '⬜'}</span>
-                                  <span>{language === 'ar' ? 'استخدمه كمرجع فقط' : 'Use as reference only'}</span>
-                                </button>
-                              </div>
+                              {(asset.personMode || 'exact') === 'exact' && (
+                                <div className="flex gap-1">
+                                  {([['same-pose', language === 'ar' ? 'أقرب وضعية' : 'Closest'], ['adapted-pose', language === 'ar' ? 'وضعية جديدة' : 'New pose'], ['upper-body', language === 'ar' ? 'علوي' : 'Upper']] as const).map(([style, label]) => (
+                                    <button
+                                      key={style}
+                                      type="button"
+                                      onClick={() => handleExactPersonStyleChange(idx, style as 'same-pose' | 'adapted-pose' | 'upper-body')}
+                                      className={`flex-1 rounded-md border px-1 py-1 text-[9px] font-semibold transition-all active:scale-[0.97] ${
+                                        (asset.exactPersonStyle || 'same-pose') === style
+                                          ? 'bg-amber-400 text-[#060541] border-amber-300'
+                                          : 'bg-white/40 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/25 text-foreground/60'
+                                      }`}
+                                    >
+                                      {label}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                               {asset.personMode === 'reference' && (
-                                <div className="border-t border-[#606062]/15 dark:border-[#858384]/15 px-2 py-2">
-                                  <p className="text-[10px] text-[#858384] px-1 mb-1.5">{language === 'ar' ? 'اختر نوع المرجع:' : 'Choose reference type:'}</p>
-                                  <div className="flex flex-col gap-1">
+                                <div className="flex gap-1">
+                                  {([['realistic', language === 'ar' ? 'واقعي' : 'Realistic'], ['character', language === 'ar' ? 'شخصية' : 'Character']] as const).map(([style, label]) => (
                                     <button
+                                      key={style}
                                       type="button"
-                                      onClick={() => handleReferenceStyleChange(idx, 'realistic')}
-                                      className={`w-full flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-xs font-semibold transition-all active:scale-[0.98] ${
-                                        (asset.referenceStyle || 'realistic') === 'realistic'
-                                          ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_3px_12px_rgba(251,146,60,0.35)]'
-                                          : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground'
+                                      onClick={() => handleReferenceStyleChange(idx, style as 'realistic' | 'character')}
+                                      className={`flex-1 rounded-md border px-2 py-1 text-[10px] font-semibold transition-all active:scale-[0.97] ${
+                                        (asset.referenceStyle || 'realistic') === style
+                                          ? 'bg-amber-400 text-[#060541] border-amber-300'
+                                          : 'bg-white/40 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/25 text-foreground/60'
                                       }`}
                                     >
-                                      <span className="text-base leading-none">{(asset.referenceStyle || 'realistic') === 'realistic' ? '✅' : '⬜'}</span>
-                                      <span>{language === 'ar' ? 'شخص واقعي مشابه' : 'Realistic human'}</span>
+                                      {label}
                                     </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleReferenceStyleChange(idx, 'character')}
-                                      className={`w-full flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-xs font-semibold transition-all active:scale-[0.98] ${
-                                        asset.referenceStyle === 'character'
-                                          ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_3px_12px_rgba(251,146,60,0.35)]'
-                                          : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground'
-                                      }`}
-                                    >
-                                      <span className="text-base leading-none">{asset.referenceStyle === 'character' ? '✅' : '⬜'}</span>
-                                      <span>{language === 'ar' ? 'شخصية مصممة' : 'Styled character'}</span>
-                                    </button>
-                                  </div>
+                                  ))}
                                 </div>
                               )}
                             </div>
                           )}
                           {asset.type === 'logo' && (
+                            <div className="mt-1.5 flex gap-1">
+                              {([['transparent', language === 'ar' ? 'شفاف' : 'Transparent'], ['as-is', language === 'ar' ? 'كما هو' : 'As-is']] as const).map(([mode, label]) => (
+                                <button
+                                  key={mode}
+                                  type="button"
+                                  onClick={() => handleLogoModeChange(idx, mode as 'transparent' | 'as-is')}
+                                  className={`flex-1 rounded-md border px-2 py-1 text-[10px] font-semibold transition-all active:scale-[0.97] ${
+                                    (asset.logoMode || 'transparent') === mode
+                                      ? 'bg-orange-400 text-[#060541] border-orange-300'
+                                      : 'bg-white/40 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/25 text-foreground/70'
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {asset.type === 'screenshot' && (
                             <div className="mt-2 rounded-xl border border-[#606062]/20 bg-white/40 dark:border-[#858384]/20 dark:bg-white/[0.04] overflow-hidden">
                               <div className="px-3 pt-2.5 pb-1.5">
-                                <p className="text-[11px] font-semibold text-foreground/90">{language === 'ar' ? 'طريقة عرض الشعار' : 'Logo background'}</p>
+                                <p className="text-[11px] font-semibold text-foreground/90">{language === 'ar' ? 'نوع الجهاز' : 'Device type'}</p>
                               </div>
-                              <div className="flex flex-col gap-1 px-2 pb-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleLogoModeChange(idx, 'transparent')}
-                                  className={`w-full flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-xs font-semibold transition-all active:scale-[0.98] ${
-                                    (asset.logoMode || 'transparent') === 'transparent'
-                                      ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_3px_12px_rgba(251,146,60,0.35)]'
-                                      : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground'
-                                  }`}
+                              <div className="px-2 pb-2">
+                                <select
+                                  aria-label={language === 'ar' ? `نوع الجهاز للصورة ${idx + 1}` : `Device type for image ${idx + 1}`}
+                                  title={language === 'ar' ? `نوع الجهاز للصورة ${idx + 1}` : `Device type for image ${idx + 1}`}
+                                  value={asset.screenshotDevice || 'iphone'}
+                                  onChange={(e) => handleScreenshotDeviceChange(idx, e.target.value as 'iphone' | 'samsung' | 'laptop' | 'tablet' | 'monitor-tv' | 'billboard')}
+                                  className="w-full min-w-0 rounded-lg border border-[#606062]/20 bg-white/70 px-3 py-2 text-xs text-foreground outline-none transition-all focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 dark:border-[#858384]/30 dark:bg-white/10"
                                 >
-                                  <span className="text-base leading-none">{(asset.logoMode || 'transparent') === 'transparent' ? '✅' : '⬜'}</span>
-                                  <span>{language === 'ar' ? 'بدون خلفية (شفاف)' : 'Transparent — no white box'}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleLogoModeChange(idx, 'as-is')}
-                                  className={`w-full flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-xs font-semibold transition-all active:scale-[0.98] ${
-                                    asset.logoMode === 'as-is'
-                                      ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_3px_12px_rgba(251,146,60,0.35)]'
-                                      : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground'
-                                  }`}
-                                >
-                                  <span className="text-base leading-none">{asset.logoMode === 'as-is' ? '✅' : '⬜'}</span>
-                                  <span>{language === 'ar' ? 'كما هو مع الخلفية' : 'Use as is with background'}</span>
-                                </button>
+                                  <option value="iphone">{language === 'ar' ? 'آيفون' : 'iPhone'}</option>
+                                  <option value="samsung">{language === 'ar' ? 'هاتف سامسونج' : 'Samsung phone'}</option>
+                                  <option value="laptop">{language === 'ar' ? 'لابتوب' : 'Laptop'}</option>
+                                  <option value="tablet">{language === 'ar' ? 'تابلت' : 'Tablet'}</option>
+                                  <option value="monitor-tv">{language === 'ar' ? 'شاشة أو تلفاز' : 'Monitor / TV'}</option>
+                                  <option value="billboard">{language === 'ar' ? 'لوحة إعلانية' : 'Billboard'}</option>
+                                </select>
                               </div>
                             </div>
                           )}
@@ -1389,14 +1655,16 @@ export default function VisualAdsGenerator({
               const selectedTopic = state.creativeSoul.mainMessage === 'custom'
                 ? getCustomSelectionLabel(state.creativeSoul.customMainMessage)
                 : adTopicChips.find(c => c.id === state.creativeSoul.mainMessage)?.label;
+              const selectedTopicVariant = selectedTopicVariantMeta.label;
               const selectedCta = state.creativeSoul.cta === 'custom'
                 ? getCustomSelectionLabel(state.creativeSoul.customCta)
                 : ctaChips.find(c => c.id === state.creativeSoul.cta)?.label;
               const selectedStyle = state.creativeSoul.style === 'custom'
                 ? getCustomSelectionLabel(state.creativeSoul.customStyle)
                 : adStyleChips.find(s => s.id === state.creativeSoul.style)?.label;
+              const selectedStyleVariant = selectedStyleVariantMeta.label;
               const isOpen = openBriefSection === 1;
-              const selectedQuickSettings = [selectedTopic, selectedCta, selectedStyle].filter(Boolean);
+              const selectedQuickSettings = [selectedTopic, selectedTopicVariant, selectedCta, selectedStyle, selectedStyleVariant].filter(Boolean);
               return (
                 <div className="rounded-xl border border-[#606062]/20 dark:border-[#858384]/20 overflow-hidden">
                   <button
@@ -1442,18 +1710,18 @@ export default function VisualAdsGenerator({
                             <p className="text-xs font-semibold text-foreground">{language === 'ar' ? 'الرسالة الرئيسية' : 'Main message'}</p>
                             <p className="text-[11px] text-[#858384]">{language === 'ar' ? 'اختياري - اختر اتجاه الإعلان أو تخطَّ ذلك' : 'Optional - choose the ad direction or skip it'}</p>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-2 gap-1.5">
                             {adTopicChips.map((chip) => (
                               <button
                                 key={chip.id}
                                 onClick={() => {
                                   const newVal = state.creativeSoul.mainMessage === chip.id ? '' : chip.id;
-                                  updateCreativeSoul({ mainMessage: newVal, customMainMessage: newVal ? '' : state.creativeSoul.customMainMessage });
+                                  updateCreativeSoul({ mainMessage: newVal, customMainMessage: newVal ? '' : state.creativeSoul.customMainMessage, mainMessageVariant: newVal ? '' : state.creativeSoul.mainMessageVariant });
                                 }}
                                 type="button"
-                                className={`px-3 py-2 rounded-xl border text-[12px] font-medium transition-all text-left ${
+                                className={`px-2.5 py-2 rounded-lg border text-[11px] font-medium transition-all text-left leading-tight ${
                                   state.creativeSoul.mainMessage === chip.id
-                                    ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)] scale-[1.03]'
+                                    ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)]'
                                     : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
                                 }`}
                               >
@@ -1462,16 +1730,37 @@ export default function VisualAdsGenerator({
                             ))}
                             <button
                               type="button"
-                              onClick={() => updateCreativeSoul({ mainMessage: state.creativeSoul.mainMessage === 'custom' ? '' : 'custom' })}
-                              className={`px-3 py-2 rounded-xl border text-[12px] font-medium transition-all text-left ${
+                              onClick={() => updateCreativeSoul({ mainMessage: state.creativeSoul.mainMessage === 'custom' ? '' : 'custom', mainMessageVariant: '' })}
+                              className={`px-2.5 py-2 rounded-lg border text-[11px] font-medium transition-all text-left leading-tight ${
                                 state.creativeSoul.mainMessage === 'custom'
-                                  ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)] scale-[1.03]'
+                                  ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)]'
                                   : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
                               }`}
                             >
                               {language === 'ar' ? '✍️ مخصص' : '✍️ Custom'}
                             </button>
                           </div>
+                          {!!mainMessageVariantMap[state.creativeSoul.mainMessage]?.length && state.creativeSoul.mainMessage !== 'custom' && (
+                            <div className="space-y-1 rounded-xl border border-[#606062]/15 bg-white/30 p-2 dark:border-[#858384]/20 dark:bg-white/[0.03]">
+                              <p className="text-[11px] font-medium text-foreground/90">{language === 'ar' ? 'تفصيل الرسالة' : 'Main message detail'}</p>
+                              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                                {mainMessageVariantMap[state.creativeSoul.mainMessage].map((variant) => (
+                                  <button
+                                    key={variant.id}
+                                    type="button"
+                                    onClick={() => updateCreativeSoul({ mainMessageVariant: state.creativeSoul.mainMessageVariant === variant.id ? '' : variant.id })}
+                                    className={`px-2.5 py-2 rounded-lg border text-[10px] font-medium text-left leading-tight transition-all ${
+                                      state.creativeSoul.mainMessageVariant === variant.id
+                                        ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.28)]'
+                                        : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
+                                    }`}
+                                  >
+                                    {language === 'ar' ? variant.labelAr : variant.labelEn}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                           {state.creativeSoul.mainMessage === 'custom' && (
                             <div className="space-y-1.5">
                               <input
@@ -1493,7 +1782,7 @@ export default function VisualAdsGenerator({
                             <p className="text-xs font-semibold text-foreground">{language === 'ar' ? 'الدعوة لاتخاذ إجراء' : 'Call to action'}</p>
                             <p className="text-[11px] text-[#858384]">{language === 'ar' ? 'اختياري - ماذا تريد من المشاهد أن يفعل؟' : 'Optional - what should the viewer do?'}</p>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-2 gap-1.5">
                             {ctaChips.map((chip) => (
                               <button
                                 key={chip.id}
@@ -1502,9 +1791,9 @@ export default function VisualAdsGenerator({
                                   updateCreativeSoul({ cta: newVal, customCta: newVal ? '' : state.creativeSoul.customCta });
                                 }}
                                 type="button"
-                                className={`px-3 py-2 rounded-xl border text-[12px] font-medium transition-all text-left ${
+                                className={`px-2.5 py-2 rounded-lg border text-[11px] font-medium transition-all text-left leading-tight ${
                                   state.creativeSoul.cta === chip.id
-                                    ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)] scale-[1.03]'
+                                    ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)]'
                                     : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
                                 }`}
                               >
@@ -1514,9 +1803,9 @@ export default function VisualAdsGenerator({
                             <button
                               type="button"
                               onClick={() => updateCreativeSoul({ cta: state.creativeSoul.cta === 'custom' ? '' : 'custom' })}
-                              className={`px-3 py-2 rounded-xl border text-[12px] font-medium transition-all text-left ${
+                              className={`px-2.5 py-2 rounded-lg border text-[11px] font-medium transition-all text-left leading-tight ${
                                 state.creativeSoul.cta === 'custom'
-                                  ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)] scale-[1.03]'
+                                  ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)]'
                                   : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
                               }`}
                             >
@@ -1544,18 +1833,18 @@ export default function VisualAdsGenerator({
                             <p className="text-xs font-semibold text-foreground">{language === 'ar' ? 'النمط البصري' : 'Visual style'}</p>
                             <p className="text-[11px] text-[#858384]">{language === 'ar' ? 'اختياري - اختر مزاجاً بصرياً أو اترك الذكاء الاصطناعي يقرر' : 'Optional - choose a mood or let AI decide'}</p>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-2 gap-1.5">
                             {adStyleChips.map((style) => (
                               <button
                                 key={style.id}
                                 onClick={() => {
                                   const newVal = state.creativeSoul.style === style.id ? '' : style.id;
-                                  updateCreativeSoul({ style: newVal, customStyle: newVal ? '' : state.creativeSoul.customStyle });
+                                  updateCreativeSoul({ style: newVal, customStyle: newVal ? '' : state.creativeSoul.customStyle, styleVariant: newVal ? '' : state.creativeSoul.styleVariant });
                                 }}
                                 type="button"
-                                className={`px-3 py-2.5 rounded-xl border text-[12px] font-medium text-left transition-all ${
+                                className={`px-2.5 py-2 rounded-lg border text-[11px] font-medium text-left leading-tight transition-all ${
                                   state.creativeSoul.style === style.id
-                                    ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)] scale-[1.02]'
+                                    ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)]'
                                     : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
                                 }`}
                               >
@@ -1564,16 +1853,37 @@ export default function VisualAdsGenerator({
                             ))}
                             <button
                               type="button"
-                              onClick={() => updateCreativeSoul({ style: state.creativeSoul.style === 'custom' ? '' : 'custom' })}
-                              className={`px-3 py-2.5 rounded-xl border text-[12px] font-medium text-left transition-all ${
+                              onClick={() => updateCreativeSoul({ style: state.creativeSoul.style === 'custom' ? '' : 'custom', styleVariant: '' })}
+                              className={`px-2.5 py-2 rounded-lg border text-[11px] font-medium text-left leading-tight transition-all ${
                                 state.creativeSoul.style === 'custom'
-                                  ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)] scale-[1.02]'
+                                  ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)]'
                                   : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
                               }`}
                             >
                               {language === 'ar' ? '✍️ مخصص' : '✍️ Custom'}
                             </button>
                           </div>
+                          {!!styleVariantMap[state.creativeSoul.style]?.length && state.creativeSoul.style !== 'custom' && (
+                            <div className="space-y-1 rounded-xl border border-[#606062]/15 bg-white/30 p-2 dark:border-[#858384]/20 dark:bg-white/[0.03]">
+                              <p className="text-[11px] font-medium text-foreground/90">{language === 'ar' ? 'تفصيل النمط' : 'Visual style detail'}</p>
+                              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                                {styleVariantMap[state.creativeSoul.style].map((variant) => (
+                                  <button
+                                    key={variant.id}
+                                    type="button"
+                                    onClick={() => updateCreativeSoul({ styleVariant: state.creativeSoul.styleVariant === variant.id ? '' : variant.id })}
+                                    className={`px-2.5 py-2 rounded-lg border text-[10px] font-medium text-left leading-tight transition-all ${
+                                      state.creativeSoul.styleVariant === variant.id
+                                        ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.28)]'
+                                        : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
+                                    }`}
+                                  >
+                                    {language === 'ar' ? variant.labelAr : variant.labelEn}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                           {state.creativeSoul.style === 'custom' && (
                             <div className="space-y-1.5">
                               <input

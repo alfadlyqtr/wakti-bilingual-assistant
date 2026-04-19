@@ -394,22 +394,24 @@ async function createVisualAdsTask(
   imageUrls: string[],
   prompt: string,
   aspectRatio?: string,
+  supabaseAdmin?: ReturnType<typeof createClient>,
+  userId?: string,
 ): Promise<{ task_id: string; status: string }> {
   const sanitizedImageUrls = imageUrls.map(url => sanitizeImageUrl(url));
   const validAspectRatio = ["1:1", "16:9", "9:16"].includes(aspectRatio || "") ? aspectRatio! : "9:16";
 
   const input: Record<string, unknown> = {
-    prompt: prompt.slice(0, 2500),
-    image_input: sanitizedImageUrls, // Up to 14 images supported by nano-banana-2
+    prompt: prompt.trim(),
+    image_input: sanitizedImageUrls,
     aspect_ratio: validAspectRatio,
-    resolution: "1K", // Hardcoded per new strategy
-    output_format: "png", // Hardcoded per new strategy
+    resolution: "1K",
+    output_format: "png",
   };
 
   const requestBody = {
     model: "nano-banana-2",
     input,
-    callBackUrl: "https://api.wakti.ai/webhooks/visual-ads", // Configured webhook
+    callBackUrl: `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-visual-ads`,
   };
 
   console.log("[kie-visual-ads] Creating task, model: nano-banana-2");
@@ -436,8 +438,23 @@ async function createVisualAdsTask(
     throw new Error(sanitizeError(result.msg || result.message || "Failed to create task"));
   }
 
-  console.log("[kie-visual-ads] Task created, taskId:", result.data.taskId);
-  return { task_id: result.data.taskId, status: "waiting" };
+  const taskId = result.data.taskId;
+  console.log("[kie-visual-ads] Task created, taskId:", taskId);
+
+  // Persist job row so the webhook can update it and frontend can subscribe via Realtime
+  if (supabaseAdmin && userId) {
+    const { error: insertErr } = await supabaseAdmin
+      .from("visual_ads_jobs")
+      .insert({ user_id: userId, task_id: taskId, status: "waiting" });
+    if (insertErr) {
+      console.error("[kie-visual-ads] Failed to insert job row:", insertErr.message);
+      throw new Error("Failed to register visual ads job");
+    }
+  } else {
+    throw new Error("Missing job persistence context for visual ads generation");
+  }
+
+  return { task_id: taskId, status: "waiting" };
 }
 
 serve(async (req) => {
@@ -629,7 +646,7 @@ serve(async (req) => {
       
       task = await createVideoTask([imageUrl1, imageUrl2], prompt, reqDuration, aspect_ratio, fixed_lens, generate_audio, resolution, video_style_mode);
     } else if (generationType === "visual_ads") {
-      // Visual Ads: requires 1-3 images, uses nano-banana-2
+      // Visual Ads: Nano Banana 2 supports up to 14 images
       const rawImages: string[] = body.images || [];
       if (!rawImages.length) {
         return new Response(JSON.stringify({ error: "Missing images for visual_ads" }), {
@@ -637,9 +654,15 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      if (rawImages.length > 14) {
+        return new Response(JSON.stringify({ error: "visual_ads supports a maximum of 14 images" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
       const imageUrls: string[] = [];
-      for (let i = 0; i < Math.min(rawImages.length, 3); i++) {
+      for (let i = 0; i < rawImages.length; i++) {
         let imgUrl = rawImages[i];
         if (typeof imgUrl === "string" && imgUrl.startsWith("data:image/")) {
           try {
@@ -658,7 +681,11 @@ serve(async (req) => {
       
       // Use the pre-built, sanitized master prompt provided by the client
       const masterPrompt = body.prompt || "";
-      task = await createVisualAdsTask(imageUrls, masterPrompt, aspect_ratio);
+      const supabaseAdminForAds = createClient(
+        Deno.env.get("SUPABASE_URL") || "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""
+      );
+      task = await createVisualAdsTask(imageUrls, masterPrompt, aspect_ratio, supabaseAdminForAds, user.id);
     } else {
       // Image-to-Video: requires single image
       let imageUrl: string = image;

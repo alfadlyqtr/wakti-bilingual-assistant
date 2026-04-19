@@ -20,6 +20,12 @@ interface KieCallbackPayload {
   // KIE includes other fields like model, action, code, but we mainly care about state and result
 }
 
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+};
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -31,10 +37,17 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const body: KieCallbackPayload = await req.json();
+    const body: KieCallbackPayload & Record<string, unknown> = await req.json();
     console.log("[webhook-visual-ads] Received callback:", JSON.stringify(body));
 
-    const { taskId, state, resultJson, failMsg } = body;
+    const nestedData = asRecord(body.data);
+    const taskId = [body.taskId, body.task_id, nestedData?.taskId, nestedData?.task_id, body.id]
+      .find((value) => typeof value === "string" && value.length > 0) as string | undefined;
+    const stateValue = [body.state, body.status, nestedData?.state, nestedData?.status]
+      .find((value) => typeof value === "string" && value.length > 0);
+    const normalizedState = String(stateValue || "").toLowerCase();
+    const rawResult = body.resultJson ?? body.result_json ?? nestedData?.resultJson ?? nestedData?.result_json ?? body.result ?? nestedData?.result ?? null;
+    const failMsg = body.failMsg ?? body.fail_msg ?? body.error ?? body.message ?? nestedData?.failMsg ?? nestedData?.fail_msg ?? nestedData?.error ?? nestedData?.message ?? null;
 
     if (!taskId) {
       return new Response(JSON.stringify({ error: "Missing taskId" }), {
@@ -45,39 +58,51 @@ serve(async (req) => {
 
     let statusToSave = "IN_PROGRESS";
     let resultUrls: string[] = [];
-    let errorMsg = failMsg || null;
+    let errorMsg = typeof failMsg === "string" ? failMsg : null;
 
-    if (state === "success" && resultJson) {
+    if (["success", "completed", "succeeded"].includes(normalizedState)) {
       statusToSave = "COMPLETED";
       try {
-        const parsed = JSON.parse(resultJson);
-        resultUrls = parsed.resultUrls || [];
+        const parsed = typeof rawResult === "string"
+          ? JSON.parse(rawResult)
+          : rawResult;
+        const parsedRecord = asRecord(parsed);
+        const directUrls = parsedRecord?.resultUrls ?? parsedRecord?.result_urls ?? parsedRecord?.urls ?? parsedRecord?.generated;
+        if (Array.isArray(directUrls)) {
+          resultUrls = directUrls.filter((value): value is string => typeof value === "string" && value.length > 0);
+        }
+        const video = asRecord(parsedRecord?.video);
+        if (!resultUrls.length && typeof video?.url === "string") {
+          resultUrls = [video.url];
+        }
       } catch (e) {
-        console.error("[webhook-visual-ads] Failed to parse resultJson:", e);
+        console.error("[webhook-visual-ads] Failed to parse result payload:", e);
         statusToSave = "FAILED";
         errorMsg = "Failed to parse generation result";
       }
-    } else if (state === "fail") {
+    } else if (["fail", "failed", "error"].includes(normalizedState)) {
       statusToSave = "FAILED";
     }
 
-    // Save the status to a database table so the frontend can poll it
-    // We'll use the project_generation_jobs table or similar, assuming it exists
-    // For now, we update project_generation_jobs if that's the intended table for tracking background jobs
-    
-    // NOTE: This assumes a table exists to track these jobs. If not, the frontend will need to use the
-    // existing /jobs/recordInfo polling endpoint instead of relying exclusively on the webhook.
-    // The prompt specified "For production use, we recommend using the callBackUrl parameter... 
-    // Alternatively, use the Get Task Details endpoint to poll task status"
-    
-    // As a fallback/hybrid approach: we acknowledge the webhook but the frontend will poll `freepik-image2video` with mode="status".
-    // KIE's own status endpoint will have the completed state, so frontend polling will work even if this webhook just logs it.
-    
-    console.log(`[webhook-visual-ads] Task ${taskId} finished with state ${state}. URLs:`, resultUrls);
+    console.log(`[webhook-visual-ads] Task ${taskId} finished with state ${normalizedState || "unknown"}. URLs:`, resultUrls);
 
-    // TODO: If you have a specific table for tracking generation jobs (like `project_generation_jobs` or `ai_logs`), update it here.
-    // For example:
-    // await supabase.from('project_generation_jobs').update({ status: statusToSave, result_data: { urls: resultUrls }, error: errorMsg }).eq('task_id', taskId);
+    const updatePayload: Record<string, unknown> = {
+      status: statusToSave,
+      updated_at: new Date().toISOString(),
+    };
+    if (resultUrls.length) updatePayload.result_urls = resultUrls;
+    if (errorMsg) updatePayload.error_msg = errorMsg;
+
+    const { error: updateErr } = await supabase
+      .from("visual_ads_jobs")
+      .update(updatePayload)
+      .eq("task_id", taskId);
+
+    if (updateErr) {
+      console.error("[webhook-visual-ads] Failed to update job row:", updateErr.message);
+    } else {
+      console.log("[webhook-visual-ads] Job row updated for taskId:", taskId);
+    }
 
     return new Response(JSON.stringify({ ok: true, received: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

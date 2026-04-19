@@ -1108,13 +1108,24 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               const assetLabel = getAssetLabel(asset);
 
               if (asset.type === 'screenshot') {
-                return `Use the screenshot from [Image ${imageNumber}] clearly inside the phone screen. Keep the UI readable and premium. If names or usernames appear inside the screenshot UI, do not reuse them as poster headline, quote, testimonial, or community text unless the user explicitly typed that name in the prompt.`;
+                const screenshotDevice = asset.screenshotDevice === 'samsung'
+                  ? 'Samsung phone'
+                  : asset.screenshotDevice === 'laptop'
+                    ? 'laptop'
+                    : asset.screenshotDevice === 'tablet'
+                      ? 'tablet'
+                      : asset.screenshotDevice === 'monitor-tv'
+                        ? 'monitor or TV screen'
+                        : asset.screenshotDevice === 'billboard'
+                          ? 'billboard'
+                          : 'iPhone';
+                return `Use the screenshot from [Image ${imageNumber}] clearly inside a premium ${screenshotDevice} mockup. Keep the UI readable and premium. If names or usernames appear inside the screenshot UI, do not reuse them as poster headline, quote, testimonial, or community text unless the user explicitly typed that name in the prompt.`;
               }
               if (asset.type === 'logo') {
                 if (asset.logoMode === 'as-is') {
-                  return `Place the logo from [Image ${imageNumber}] near the top as a clear brand anchor, exactly as uploaded including its background. Keep it slightly bigger, easy to notice, and surrounded by breathing room. Do not hide it or make it tiny.`;
+                  return `Place the logo from [Image ${imageNumber}] near the top as a clear brand anchor, exactly as uploaded including its original background. Keep it clearly visible and easy to notice. Do not hide it, crop it, or make it tiny.`;
                 }
-                return `Place the logo from [Image ${imageNumber}] near the top as a clear brand anchor. Do not add any white box, panel, or background shape behind the logo — let it sit directly on the poster. Keep it slightly bigger, easy to notice, and surrounded by breathing room.`;
+                return `Extract ONLY the logo mark/symbol from [Image ${imageNumber}] and place it near the top of the poster on a fully transparent or blended background — no white box, no rounded rectangle container, no card, no app-icon frame around it. The logo graphic should sit directly on the poster background. Keep it clearly visible and easy to notice.`;
               }
               if (asset.type === 'product') {
                 return `Make the product [Image ${imageNumber}] the main hero asset with premium commercial lighting.`;
@@ -1125,10 +1136,16 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                     ? `Use the person in [Image ${imageNumber}] as the reference inspiration for a styled character version. Keep the essence, styling cues, and identity direction from the upload while deliberately turning it into a designed character.`
                     : `Use the person in [Image ${imageNumber}] as a reference for a realistic human subject. Keep their identity direction, face structure, skin tone, clothing feel, and overall look close to the upload without turning them into a different random person.`;
                 }
-                return `The person in [Image ${imageNumber}] is the intended human subject. Use this exact person as closely as possible. Preserve their face, skin tone, clothing, and overall appearance. Do NOT swap them for a different person.`;
+                if (asset.exactPersonStyle === 'same-pose') {
+                  return `The person in [Image ${imageNumber}] is the exact intended human subject and must remain the same real individual from the upload. Keep the closest possible pose, framing, and facial identity from the original image. Do not reinterpret, beautify, recast, or substitute them with a similar-looking person. If composition, styling, or poster beauty conflicts with identity, keep the real person first.`;
+                }
+                if (asset.exactPersonStyle === 'upper-body') {
+                  return `The person in [Image ${imageNumber}] is the exact intended human subject. Use a clear upper-body framing so their face stays large, readable, and unmistakably the same real person from the upload. Preserve their exact face, skin tone, facial hair, and overall identity. Do not beautify, redesign, or drift into a different person.`;
+                }
+                return `The person in [Image ${imageNumber}] is the exact intended human subject. Preserve their exact face, skin tone, facial hair, clothing identity, and overall real-world look. You may adapt the pose carefully only if the face clearly stays the same person. Do not replace, beautify, recast, or drift away from the real individual.`;
               }
               if (asset.type === 'background') {
-                return `The background is [Image ${imageNumber}].`;
+                return `Use [Image ${imageNumber}] as the actual background foundation of the poster. Keep this uploaded environment, skyline, lighting direction, and overall scene identity recognizable. Do not replace it with a different city, room, or invented background. You may stylize it cinematically, but the uploaded background must remain the real stage of the composition.`;
               }
               if (asset.type === 'icon') {
                 return `Use the icon [Image ${imageNumber}] cleanly within the composition.`;
@@ -1148,64 +1165,147 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               return `Use [Image ${imageNumber}] as ${assetLabel} in the composition.`;
             };
 
-            // Build prompt from visual ads state
             const topicPrompts: Record<string, string> = {
-              'new-launch':    'The poster announces an exciting new product launch. Make it feel like a big moment — bold hero visual, high anticipation energy, dramatic reveal composition.',
-              'limited-offer': 'The poster communicates urgency and scarcity — a limited-time offer. Use visual tension, countdown feeling, and strong contrast to make viewers feel they must act now.',
-              'app-download':  'The poster promotes an app download. Showcase the app UI or key screen prominently, make it feel modern and tech-forward, with a clear and inviting download hook.',
-              'save-time':     'The poster sells the idea of saving time and being more efficient. Use clean, fast, streamlined visuals — convey speed, relief, and smart productivity.',
-              'premium':       'The poster communicates premium quality and craftsmanship. Everything should feel expensive — refined typography, dark or muted tones, generous whitespace, luxury product placement.',
-              'social-proof':  'The poster builds trust through social proof — happy customers, reviews, or community. Warm, relatable, human-centered visuals. Authentic over polished.',
-              'features':      'The poster highlights the product\'s key features. Use a structured layout with visual callouts, icons, or annotations that draw attention to each benefit.',
-              'sale':          'The poster promotes a sale or discount. High contrast, bold price or percentage highlight, energetic and punchy design — the viewer must feel the deal immediately.',
+              'new-launch': 'The poster captures the gravity of a world-class unveiling. It is the moment the curtain drops — use epic cinematic scale, dramatic spotlighting, and an atmosphere of "The Future is Here". It should feel like a monumental reveal of a luxury flagship.',
+              'limited-offer': 'The poster pulsates with high-stakes tension. It is the feeling of an exclusive window closing. Use visual pressure, sharp focus, and high-energy contrast. It shouldn\'t look cheap; it should look like a rare opportunity that only a few will catch.',
+              'app-download': 'The poster is a window into a high-tech ecosystem. It feels ultra-modern, fluid, and frictionless. The UI should glow with "Intelligence"—use glass textures, neon-light trails, and a digital-first atmosphere that feels both advanced and inviting.',
+              'save-time': 'The poster communicates the "Silence of Efficiency." It is the feeling of absolute relief and mental clarity. Use streamlined visual flow, effortless motion-blur, and a composition so clean it feels like a deep breath of fresh air.',
+              'premium': 'The poster is a tribute to obsession and detail. It feels heavy, timeless, and hand-crafted. Use "Macro-Focus" textures, precious metal accents, and an atmosphere of quiet confidence. It doesn\'t scream; it whispers wealth.',
+              'social-proof': 'The poster should feel like a premium wave of customer love and trust. Use warm human credibility, elegant social proof, and a sense that real people genuinely love the product. Weave in 1 to 3 short testimonial snippets, review-style micro-copy, subtle trust markers, or a small community/avatar presence in a tasteful way. It should feel beloved, community-backed, polished, and emotionally convincing.',
+              'features': 'The poster is a masterclass in smart design. It feels organized, intelligent, and precise. Use architectural balance and "Micro-Engineering" aesthetics. Every feature is a hero, showcased with the clarity of a high-end technical blueprint.',
+              'sale': 'The poster is an explosion of value. It feels bold, immediate, and high-energy. Use aggressive contrast and a "Power-Punch" layout. The viewer must feel the gravity of the deal instantly, like a high-speed flash sale in a luxury mall.',
             };
+
+            const topicVariantPrompts: Record<string, Record<string, string>> = {
+              'new-launch': {
+                'hero-reveal': 'Refine the launch angle like a dramatic hero reveal with one centerpiece moment.',
+                'future-wave': 'Refine the launch angle with a futuristic, visionary energy that feels ahead of the category.',
+                'founder-proud': 'Refine the launch angle with a proud, premium debut feeling.',
+              },
+              'limited-offer': {
+                'vip-window': 'Refine the offer like a rare VIP window that feels exclusive and almost gone.',
+                'countdown-pressure': 'Refine the urgency with countdown pressure and decisive timing.',
+                'clean-urgency': 'Refine the urgency so it stays polished, premium, and uncluttered.',
+              },
+              'app-download': {
+                'phone-first': 'Refine the message so the phone and app experience are the central hero.',
+                'smart-lifestyle': 'Refine the message so the app feels naturally embedded in an aspirational lifestyle.',
+                'store-ready': 'Refine the message so the ad feels app-store-ready, polished, and instantly downloadable.',
+              },
+              'save-time': {
+                'calm-efficiency': 'Refine the message with peaceful efficiency and mental clarity.',
+                'instant-relief': 'Refine the message so the benefit feels like immediate relief from friction or wasted time.',
+                'smooth-routine': 'Refine the message around a smooth, beautifully organized daily routine.',
+              },
+              'premium': {
+                'crafted-luxury': 'Refine the message through craftsmanship, detail, and elite premium execution.',
+                'quiet-wealth': 'Refine the message with expensive, elevated quiet confidence.',
+                'flagship-energy': 'Refine the message so the product feels like the flagship offering in its category.',
+              },
+              'social-proof': {
+                'testimonial-cards': 'Refine the social-proof angle with tasteful mini testimonial cards or quote snippets.',
+                'community-love': 'Refine the social-proof angle so it feels loved by a real community.',
+                'trust-signals': 'Refine the social-proof angle with subtle trust badges, rating cues, and premium proof markers.',
+              },
+              'features': {
+                'feature-callouts': 'Refine the feature angle with clean callouts for key capabilities.',
+                'hero-plus-benefits': 'Refine the feature angle by balancing a strong hero visual with concise premium benefits.',
+                'smart-breakdown': 'Refine the feature angle like an elegant, intelligent breakdown of capabilities.',
+              },
+              'sale': {
+                'price-drop': 'Refine the sale angle so the price drop feels instantly visible.',
+                'vip-deal': 'Refine the sale angle like a premium insider offer rather than a cheap promotion.',
+                'high-energy-flash': 'Refine the sale angle with high-energy flash momentum and urgency.',
+              },
+            };
+
             const stylePrompts: Record<string, string> = {
-              'premium-dark':   'Visual style: deep dark background (near black or charcoal), rich shadows, glowing product highlights, premium serif or modern sans-serif typography, dramatic cinematic lighting, high contrast.',
-              'bright-clean':   'Visual style: bright white or very light background, clean open layout, generous whitespace, fresh pastel or bold accent color, modern minimalist typography, no clutter.',
-              'bold-modern':    'Visual style: bold high-contrast design, strong graphic shapes, vivid saturated colors, thick impactful typography, dynamic diagonal composition, high energy layout.',
-              'lifestyle':      'Visual style: real-world lifestyle photography feel, natural lighting, authentic human presence, warm color grading, organic imperfect texture, relatable and trustworthy tone.',
-              'luxury-minimal': 'Visual style: extreme minimalism, luxury brand aesthetic, one or two muted tones, refined thin typography, massive whitespace, product placed like jewelry, quiet and confident.',
-              'ugc':            'Visual style: organic user-generated content aesthetic, lo-fi phone camera feel, natural imperfect framing, authentic colors, no heavy design chrome — looks like something a real person posted.',
+              'premium-dark': 'Visual style: deep dark background (near black or charcoal), rich shadows, glowing product highlights, premium serif or modern sans-serif typography, dramatic cinematic lighting, high contrast.',
+              'bright-clean': 'Visual style: Ethereal "High-Key" lighting. Everything is bathed in pure, soft light. Use pearlescent whites, "Cloud-shadows," and massive open space. It should feel like a luxury spa or a high-end art gallery at noon.',
+              'bold-modern': 'Visual style: Graphic Maximalism. It is aggressive, sharp, and high-velocity. Use "In-your-face" shapes, heavy ink-trap typography, and neon color-pops. It feels like a high-energy Nike or Red Bull campaign — absolute visual impact.',
+              'lifestyle': 'Visual style: Cinematic Documentary. It feels like a "Captured Moment," not a setup. Use warm "Golden-Hour" natural lighting, real organic textures (skin, fabric, dust), and a soft film-grain. Relatable, honest, and deeply human.',
+              'luxury-minimal': 'Visual style: The Silence of Wealth. It is the "Less but Better" philosophy. Use monochromatic tones, razor-thin typography, and vast empty space. The product is placed like a solitary diamond in a dark room. Confident and untouchable.',
+              'ugc': 'Visual style: The "Phone-in-Hand" aesthetic. It feels raw, fast, and 100% authentic. Lo-fi phone camera lens characteristics, natural imperfect framing, and unedited color grading. It looks like a viral post from a real influencer, not an ad.',
             };
+
+            const styleVariantPrompts: Record<string, Record<string, string>> = {
+              'premium-dark': {
+                'luxury-noir': 'Style refinement: use noir-like premium drama, refined shadows, and luxury contrast.',
+                'cinematic-glow': 'Style refinement: blend darkness with polished glow accents and cinematic mood lighting.',
+                'elite-tech': 'Style refinement: keep it dark, sleek, and premium with a high-end tech finish.',
+              },
+              'bright-clean': {
+                'airy-minimal': 'Style refinement: use lots of clean space, softness, and fresh premium simplicity.',
+                'sunlit-premium': 'Style refinement: use soft bright lighting and crisp premium cleanliness.',
+                'gallery-clean': 'Style refinement: make it feel polished like a modern design gallery or premium showroom.',
+              },
+              'bold-modern': {
+                'neon-energy': 'Style refinement: push the boldness through neon accents, motion, and energetic contrast.',
+                'editorial-hype': 'Style refinement: make it feel like a modern magazine cover with aggressive typography and punch.',
+                'tech-pop': 'Style refinement: blend bold modern energy with playful premium tech graphics.',
+              },
+              'lifestyle': {
+                'warm-documentary': 'Style refinement: keep it honest, warm, and grounded like premium documentary photography.',
+                'golden-hour': 'Style refinement: use warm golden-hour realism and emotional human atmosphere.',
+                'everyday-premium': 'Style refinement: keep it relatable and human, but still polished and premium.',
+              },
+              'luxury-minimal': {
+                'silent-wealth': 'Style refinement: strip it down to quiet premium confidence and elegant restraint.',
+                'museum-piece': 'Style refinement: make the hero subject feel displayed like a precious museum piece.',
+                'monochrome-premium': 'Style refinement: use restrained premium tones and minimalist luxury polish.',
+              },
+              'ugc': {
+                'phone-capture': 'Style refinement: make it feel like a naturally captured social post with authentic immediacy.',
+                'creator-post': 'Style refinement: lean into native creator energy, believable framing, and social familiarity.',
+                'real-feed': 'Style refinement: keep it real, spontaneous, and at home in a social feed.',
+              },
+            };
+
             const ctaInstructions: Record<string, string> = {
               'download-now': 'Include the text "Download now" near the bottom as a bold poster CTA callout. It should feel like designed poster typography, not a real app button.',
-              'get-started':  'Include the text "Get started" near the bottom as a bold poster CTA callout. Inviting and clear, but still poster text, not a tappable UI button.',
-              'shop-now':     'Include the text "Shop now" near the bottom as a bold poster CTA callout. Punchy and high energy, but presented as poster text, not UI.',
-              'learn-more':   'Include the text "Learn more" near the bottom as a clean poster CTA callout. Softer tone, well spaced, not a tappable UI button.',
-              'book-now':     'Include the text "Book now" near the bottom as a bold poster CTA callout. Urgent and clear, but not a real interactive button.',
-              'start-free':   'Include the text "Start free" near the bottom as a bold poster CTA callout. Welcoming and clear, but still poster text, not UI.',
-              'try-today':    'Include the text "Try it today" near the bottom as a bold poster CTA callout. Friendly and easy, but not a real button.',
-              'join-now':     'Include the text "Join now" near the bottom as a bold poster CTA callout. Warm and community-forward, but not a real interactive button.',
-              'subscribe':    'Include the text "Subscribe" near the bottom as a clean poster CTA callout. Reliable and trust-building, not a tappable UI button.',
+              'get-started': 'Include the text "Get started" near the bottom as a bold poster CTA callout. Inviting and clear, but still poster text, not a tappable UI button.',
+              'shop-now': 'Include the text "Shop now" near the bottom as a bold poster CTA callout. Punchy and high energy, but presented as poster text, not UI.',
+              'learn-more': 'Include the text "Learn more" near the bottom as a clean poster CTA callout. Softer tone, well spaced, not a tappable UI button.',
+              'book-now': 'Include the text "Book now" near the bottom as a bold poster CTA callout. Urgent and clear, but not a real interactive button.',
+              'start-free': 'Include the text "Start free" near the bottom as a bold poster CTA callout. Welcoming and clear, but still poster text, not UI.',
+              'try-today': 'Include the text "Try it today" near the bottom as a bold poster CTA callout. Friendly and easy, but not a real button.',
+              'join-now': 'Include the text "Join now" near the bottom as a bold poster CTA callout. Warm and community-forward, but not a real interactive button.',
+              'subscribe': 'Include the text "Subscribe" near the bottom as a clean poster CTA callout. Reliable and trust-building, not a tappable UI button.',
             };
 
             const normalizeShortValue = (value?: string | null) => (value || '').replace(/\s+/g, ' ').trim();
             const customTopic = normalizeShortValue(visualState.creativeSoul.customMainMessage);
             const customCta = normalizeShortValue(visualState.creativeSoul.customCta);
             const customStyle = normalizeShortValue(visualState.creativeSoul.customStyle);
+            const topicVariantStr = topicVariantPrompts[visualState.creativeSoul.mainMessage]?.[visualState.creativeSoul.mainMessageVariant] || '';
+            const styleVariantStr = styleVariantPrompts[visualState.creativeSoul.style]?.[visualState.creativeSoul.styleVariant] || '';
 
             const topicStr = visualState.creativeSoul.mainMessage === 'custom'
-              ? (customTopic ? `The poster is about: ${customTopic}.` : '')
+              ? (customTopic ? `The core narrative and central focus of the poster is: "${customTopic}". Design the entire composition, lighting, and mood to elevate and communicate this specific theme.` : '')
               : (topicPrompts[visualState.creativeSoul.mainMessage] || '');
             const styleStr = visualState.creativeSoul.style === 'custom'
-              ? (customStyle ? `Visual style: ${customStyle}.` : '')
+              ? (customStyle ? `Execute the following elite visual style and art direction: "${customStyle}". Ensure textures, shadows, and color grading perfectly match this aesthetic.` : '')
               : (stylePrompts[visualState.creativeSoul.style] || '');
             const ctaStr = visualState.creativeSoul.cta === 'custom'
-              ? (customCta ? `Include the text "${customCta}" near the bottom as a clear, readable poster CTA callout. Treat it as poster typography, not as a real app button.` : '')
+              ? (customCta ? `Integrate the text "${customCta}" elegantly near the bottom as a clear, readable poster CTA callout. Treat it as high-end poster typography, not a cheap UI button.` : '')
               : (ctaInstructions[visualState.creativeSoul.cta] || '');
-            
-            // Collect up to 6 images from assets array, compress them if they are data URIs
-            const rawImages = (visualState.assets || [])
-              .filter(a => a.image)
-              .map(a => a.image as string)
-              .slice(0, 6);
-              
-            if (!rawImages.length) {
+
+            const MAX_VISUAL_AD_IMAGES = 14;
+            const ASSET_PRIORITY: Record<string, number> = {
+              logo: 0, product: 1, person: 2, screenshot: 3,
+              mascot: 4, icon: 5, prop: 6, illustration: 7, texture: 8, background: 9,
+            };
+            const assetEntries = (visualState.assets || [])
+              .filter((asset) => asset.image)
+              .sort((a, b) => (ASSET_PRIORITY[a.type || ''] ?? 99) - (ASSET_PRIORITY[b.type || ''] ?? 99))
+              .slice(0, 6) as Array<NonNullable<VisualAdsState['assets']>[number]>;
+
+            if (!assetEntries.length) {
               toast.error(language === 'ar' ? 'الرجاء رفع صورة واحدة على الأقل' : 'Please upload at least one image');
               return;
             }
 
-            const compressImage = async (dataUri: string): Promise<string> => {
+            const compressImage = async (dataUri: string, preserveAlpha = false): Promise<string> => {
               if (!dataUri.startsWith('data:image/')) return dataUri;
               return new Promise((resolve) => {
                 const img = new Image();
@@ -1213,8 +1313,6 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                   const canvas = document.createElement('canvas');
                   let width = img.width;
                   let height = img.height;
-                  
-                  // Max dimensions to ensure under 1MB (approx 1200px longest side)
                   const MAX_SIZE = 1200;
                   if (width > height && width > MAX_SIZE) {
                     height *= MAX_SIZE / width;
@@ -1223,76 +1321,124 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                     width *= MAX_SIZE / height;
                     height = MAX_SIZE;
                   }
-                  
+
                   canvas.width = width;
                   canvas.height = height;
                   const ctx = canvas.getContext('2d');
                   if (!ctx) return resolve(dataUri);
-                  
+
                   ctx.drawImage(img, 0, 0, width, height);
-                  resolve(canvas.toDataURL('image/jpeg', 0.8));
+                  resolve(preserveAlpha ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.8));
                 };
                 img.onerror = () => resolve(dataUri);
                 img.src = dataUri;
               });
             };
 
-            // 2. Identify Assets (Map tags to specific visual instructions)
-            const taggedAssets = (visualState.assets || []).filter(a => a.image && a.type);
-            
-            // Re-order instructions so background is always first
-            const backgroundInstruction = taggedAssets.find(a => a.type === 'background') 
-              ? getAssetInstruction(taggedAssets.find(a => a.type === 'background')!, taggedAssets.findIndex(a => a.type === 'background'))
-              : '';
-            
-            const otherInstructions = taggedAssets
-              .filter(a => a.type !== 'background')
-              .map((asset) => getAssetInstruction(asset, taggedAssets.indexOf(asset)))
-              .join(' ');
-              
-            const assetInstructions = [backgroundInstruction, otherInstructions].filter(Boolean).join(' ');
+            const isolateTransparentLogo = async (dataUri: string): Promise<string> => {
+              if (!dataUri.startsWith('data:image/')) return dataUri;
+              return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = img.width;
+                  canvas.height = img.height;
+                  const ctx = canvas.getContext('2d');
+                  if (!ctx) return resolve(dataUri);
 
-            // Scene intelligence: detect asset combination and inject creative director composition
-            const taggedTypes = taggedAssets.map(a => a.type);
-            const hasPerson = taggedTypes.includes('person');
-            const hasScreenshot = taggedTypes.includes('screenshot');
-            const hasBackground = taggedTypes.includes('background');
-            const hasProduct = taggedTypes.includes('product');
-            const hasLogo = taggedTypes.includes('logo');
-            let sceneDirection = '';
-            if (hasPerson && hasScreenshot && hasBackground) {
-              sceneDirection = 'Composition: lifestyle app ad. Place the person slightly off-center — they are the human anchor. Position the phone in front of or beside them at a natural angle, as if they are using it. The person\'s face and upper body must stay clearly visible — do NOT let the phone overlap or block their face. Background wraps atmospherically behind both with a soft cinematic blur. Warm, aspirational, real — not a flat product sheet.';
-            } else if (hasPerson && hasProduct && hasBackground) {
-              sceneDirection = 'Composition: lifestyle product ad. Person is natural in the environment, holding or interacting with the product. Face clearly visible, not blocked. Product prominent. Background wraps the scene. Warm natural lighting.';
-            } else if (hasPerson && hasBackground && !hasScreenshot && !hasProduct) {
-              sceneDirection = 'Composition: brand lifestyle moment. Person is the full hero. Off-center, natural stance in the environment. Cinematic lighting, genuine and aspirational.';
-            } else if (hasPerson && hasScreenshot && !hasBackground) {
-              sceneDirection = 'Composition: app lifestyle ad. Person beside the phone naturally. Face visible and unobstructed. Clean or gradient backdrop, premium feel.';
-            } else if (!hasPerson && hasScreenshot && hasBackground && hasLogo) {
-              sceneDirection = 'Composition: pure app product poster. Phone mockup centered or slightly tilted, screenshot on screen. Logo clean at the top. Background is the atmospheric stage. Professional product photography, no clutter.';
-            } else if (!hasPerson && hasProduct && hasBackground) {
-              sceneDirection = 'Composition: product hero shot. Product is the star, prominent with dramatic commercial lighting. Background wraps behind. Premium and clean.';
-            }
-            const creativeDirectorGuardrails = [
-              'You are one of the best advertising poster creators and art directors in the world.',
-              'Deliver an amazing poster that feels premium, intentional, and visually unified.',
-              'Combine all uploaded assets intelligently instead of treating them like separate stickers.',
-              'Do not reuse names or usernames seen inside screenshot UI as poster copy unless the user explicitly typed them in the prompt.',
-            ].join(' ');
+                  ctx.drawImage(img, 0, 0);
+                  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                  const pixelData = imageData.data;
+                  const { width, height } = imageData;
+                  const visited = new Uint8Array(width * height);
+                  const queue: Array<[number, number]> = [
+                    [0, 0],
+                    [width - 1, 0],
+                    [0, height - 1],
+                    [width - 1, height - 1],
+                  ];
 
-            // 3. Build the Final Clean Keyword Prompt for KIE
-            const promptParts = [
-              'Create a world-class advertising poster.',
-              creativeDirectorGuardrails,
-              topicStr,
-              styleStr,
-              assetInstructions,
-              sceneDirection,
-              ctaStr,
-              visualState.creativeSoul.prompt?.trim() || '',
-            ].filter(Boolean);
-            const finalPromptForKie = promptParts.join(' ').replace(/\s+/g, ' ').trim();
+                  const isRemovableBackgroundPixel = (offset: number) => {
+                    const alpha = pixelData[offset + 3];
+                    if (alpha < 20) return true;
+                    const red = pixelData[offset];
+                    const green = pixelData[offset + 1];
+                    const blue = pixelData[offset + 2];
+                    const max = Math.max(red, green, blue);
+                    const min = Math.min(red, green, blue);
+                    const brightness = (red + green + blue) / 3;
+                    return brightness > 215 && (max - min) < 40;
+                  };
 
+                  while (queue.length) {
+                    const current = queue.pop();
+                    if (!current) continue;
+                    const [x, y] = current;
+                    if (x < 0 || y < 0 || x >= width || y >= height) continue;
+                    const index = y * width + x;
+                    if (visited[index]) continue;
+                    visited[index] = 1;
+
+                    const offset = index * 4;
+                    if (!isRemovableBackgroundPixel(offset)) continue;
+
+                    pixelData[offset + 3] = 0;
+                    queue.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+                  }
+
+                  ctx.putImageData(imageData, 0, 0);
+
+                  let minX = width;
+                  let minY = height;
+                  let maxX = -1;
+                  let maxY = -1;
+                  for (let y = 0; y < height; y += 1) {
+                    for (let x = 0; x < width; x += 1) {
+                      const offset = (y * width + x) * 4;
+                      if (pixelData[offset + 3] > 0) {
+                        if (x < minX) minX = x;
+                        if (y < minY) minY = y;
+                        if (x > maxX) maxX = x;
+                        if (y > maxY) maxY = y;
+                      }
+                    }
+                  }
+
+                  if (maxX < minX || maxY < minY) {
+                    resolve(dataUri);
+                    return;
+                  }
+
+                  const padding = Math.max(12, Math.round(Math.max(maxX - minX, maxY - minY) * 0.08));
+                  const cropX = Math.max(0, minX - padding);
+                  const cropY = Math.max(0, minY - padding);
+                  const cropWidth = Math.min(width - cropX, maxX - minX + 1 + padding * 2);
+                  const cropHeight = Math.min(height - cropY, maxY - minY + 1 + padding * 2);
+                  const cropped = document.createElement('canvas');
+                  cropped.width = cropWidth;
+                  cropped.height = cropHeight;
+                  const croppedCtx = cropped.getContext('2d');
+                  if (!croppedCtx) {
+                    resolve(canvas.toDataURL('image/png'));
+                    return;
+                  }
+
+                  croppedCtx.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+                  resolve(cropped.toDataURL('image/png'));
+                };
+                img.onerror = () => resolve(dataUri);
+                img.src = dataUri;
+              });
+            };
+
+            const prepareAssetImage = async (asset: NonNullable<VisualAdsState['assets']>[number]) => {
+              const originalImage = asset.image as string;
+              if (asset.type === 'logo' && asset.logoMode === 'transparent') {
+                const isolated = await isolateTransparentLogo(originalImage);
+                return compressImage(isolated, true);
+              }
+              return compressImage(originalImage, false);
+            };
 
             setIsGenerating(true);
             setResultError(null);
@@ -1306,8 +1452,98 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             startProgress();
 
             try {
-              // Compress images concurrently
-              const validImages = await Promise.all(rawImages.map(compressImage));
+              type VisualAdsPreparedAsset = {
+                asset: NonNullable<VisualAdsState['assets']>[number];
+                preparedImage: string;
+                types: string[];
+                instructionOverride?: string;
+              };
+
+              const sentAssets: VisualAdsPreparedAsset[] = await Promise.all(
+                assetEntries.slice(0, MAX_VISUAL_AD_IMAGES).map(async (asset) => ({
+                  asset,
+                  preparedImage: await prepareAssetImage(asset),
+                  types: asset.type ? [asset.type] : [],
+                }))
+              );
+
+              if (!sentAssets.length) {
+                throw new Error(language === 'ar' ? 'تعذر تجهيز الصور للإرسال' : 'Failed to prepare images for generation');
+              }
+
+              const taggedAssets = sentAssets.filter((item) => item.types.length > 0);
+              const taggedAssetsWithIndex = taggedAssets.map((item, index) => ({ item, index }));
+              const backgroundInstruction = taggedAssetsWithIndex
+                .filter(({ item }) => item.types.includes('background'))
+                .map(({ item, index }) => item.instructionOverride || getAssetInstruction(item.asset, index))
+                .join(' ');
+
+              const otherInstructions = taggedAssetsWithIndex
+                .filter(({ item }) => !item.types.includes('background'))
+                .map(({ item, index }) => item.instructionOverride || getAssetInstruction(item.asset, index))
+                .join(' ');
+
+              const assetInstructions = [backgroundInstruction, otherInstructions].filter(Boolean).join(' ');
+              const taggedTypes = taggedAssets.flatMap((item) => item.types);
+              const hasPerson = taggedTypes.includes('person');
+              const hasScreenshot = taggedTypes.includes('screenshot');
+              const hasBackground = taggedTypes.includes('background');
+              const hasProduct = taggedTypes.includes('product');
+              const hasLogo = taggedTypes.includes('logo');
+              const exactPersonAssets = taggedAssets.filter((item) => item.types.includes('person') && (item.asset.personMode || 'exact') === 'exact');
+              const hasExactPerson = exactPersonAssets.length > 0;
+              const hasSamePoseExactPerson = exactPersonAssets.some((item) => item.asset.exactPersonStyle === 'same-pose' || !item.asset.exactPersonStyle);
+              let sceneDirection = '';
+
+              if (hasPerson && hasScreenshot && hasBackground) {
+                sceneDirection = 'Composition: lifestyle app ad. Place the person slightly off-center — they are the human anchor. Position the phone in front of or beside them at a natural angle, as if they are using it. The person\'s face and upper body must stay clearly visible — do NOT let the phone overlap or block their face. The uploaded background must remain the real environment behind them, with only tasteful cinematic grading or depth-of-field added. Warm, aspirational, real — not a flat product sheet.';
+              } else if (hasPerson && hasProduct && hasBackground) {
+                sceneDirection = 'Composition: lifestyle product ad. Person is natural in the environment, holding or interacting with the product. Face clearly visible, not blocked. Product prominent. The uploaded background stays as the actual environment. Warm natural lighting.';
+              } else if (hasPerson && hasBackground && !hasScreenshot && !hasProduct) {
+                sceneDirection = 'Composition: brand lifestyle moment. Person is the full hero. Off-center, natural stance in the uploaded environment. Cinematic lighting, genuine and aspirational.';
+              } else if (hasPerson && hasScreenshot && !hasBackground) {
+                sceneDirection = 'Composition: app lifestyle ad. Person beside the phone naturally. Face visible and unobstructed. Clean or gradient backdrop, premium feel.';
+              } else if (!hasPerson && hasScreenshot && hasBackground && hasLogo) {
+                sceneDirection = 'Composition: pure app product poster. Phone mockup centered or slightly tilted, screenshot on screen. Logo clean at the top. The uploaded background is the real atmospheric stage and must stay recognizable. Professional product photography, no clutter.';
+              } else if (!hasPerson && hasProduct && hasBackground) {
+                sceneDirection = 'Composition: product hero shot. Product is the star, prominent with dramatic commercial lighting. The uploaded background wraps behind and remains recognizable. Premium and clean.';
+              }
+
+              const creativeDirectorGuardrails = [
+                'You are one of the best advertising poster creators and art directors in the world.',
+                'Deliver an amazing poster that feels premium, intentional, and visually unified.',
+                'Combine all uploaded assets intelligently instead of treating them like separate stickers.',
+                'Do not reuse names or usernames seen inside screenshot UI as poster copy unless the user explicitly typed them in the prompt.',
+                'Only add poster text or slogans if the user explicitly typed them in the prompt. Do not invent headlines, taglines, or quotes unless instructed.',
+                'Do not add community badges, review quotes, testimonial bubbles, or social-proof copy unless the chosen preset explicitly requires it.',
+                'If an uploaded image is tagged as background, you must keep that specific uploaded environment as the actual background instead of inventing a different one.',
+                ...(hasExactPerson ? [
+                  'CRITICAL IDENTITY RULE: The uploaded person is a real specific individual — NOT a character, NOT an illustration, NOT an anime, NOT a stylized render. Reproduce them as a photorealistic real human.',
+                  'Do NOT turn the person into a cartoon, character, drawing, illustration, or stylized art under any circumstances.',
+                  'Preserve their exact real face, skin tone, facial hair, glasses, clothing, and overall identity from the photo.',
+                  'Do not beautify, recast, or substitute them with a different person.',
+                  'Face identity is the single highest priority. Simplify composition if needed rather than changing the person.',
+                ] : []),
+                ...(hasSamePoseExactPerson ? [
+                  'Keep the person in the closest possible pose and framing to the original photo.',
+                  'Do not change the face or body to match a new pose — adapt the scene around the person instead.',
+                ] : []),
+              ].join(' ');
+
+              const promptParts = [
+                'Create a world-class advertising poster.',
+                creativeDirectorGuardrails,
+                topicStr,
+                topicVariantStr,
+                styleStr,
+                styleVariantStr,
+                assetInstructions,
+                sceneDirection,
+                ctaStr,
+                visualState.creativeSoul.prompt?.trim() || '',
+              ].filter(Boolean);
+              const finalPromptForKie = promptParts.join(' ').replace(/\s+/g, ' ').trim();
+              const validImages = sentAssets.map((item) => item.preparedImage);
 
               const { data: { session } } = await supabase.auth.getSession();
               if (!session?.access_token) throw new Error('Not authenticated');
@@ -1334,56 +1570,69 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
               const taskData = await res.json();
               if (taskData.videoUrl) {
-                // Synchronous fallback
                 stopProgress();
                 setResultImageUrl(taskData.videoUrl);
                 setResultUrls([taskData.videoUrl]);
                 persistGeneratedImage(taskData.videoUrl, { showSuccessToast: false, showAlreadySavedToast: false, triggerSaveSuccess: false }).catch(() => {});
-                // Keep the user in the Visual Ads view
               } else if (taskData.task_id) {
-                // Async polling
                 const taskId = taskData.task_id;
-                let isCompleted = false;
-                let finalUrl = '';
-                
-                while (!isCompleted) {
-                  await new Promise(resolve => setTimeout(resolve, 5000)); // Poll every 5s
-                  
-                  const pollRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/freepik-image2video`, {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${session.access_token}`,
-                    },
-                    body: JSON.stringify({
-                      mode: 'status',
-                      task_id: taskId,
-                      increment_usage: true,
-                    }),
-                  });
-                  
-                  if (!pollRes.ok) continue;
-                  
-                  const pollData = await pollRes.json();
-                  const status = pollData?.data?.status;
-                  
-                  if (status === 'COMPLETED') {
-                    isCompleted = true;
-                    finalUrl = pollData?.data?.video?.url || pollData?.data?.generated?.[0];
-                  } else if (status === 'FAILED') {
-                    throw new Error(pollData?.data?.error || 'Video generation failed');
-                  }
-                }
-                
-                if (finalUrl) {
-                  stopProgress();
-                  setResultImageUrl(finalUrl);
-                  setResultUrls([finalUrl]);
-                  // Auto-save immediately
-                  persistGeneratedImage(finalUrl, { showSuccessToast: true, showAlreadySavedToast: false, triggerSaveSuccess: true }).catch(() => {});
-                } else {
-                  throw new Error('Video completed but no URL returned');
-                }
+
+                // Wait for the webhook to update the DB row via Realtime.
+                // KIE calls back → webhook writes to DB → Realtime pushes to frontend instantly.
+                await new Promise<void>((resolve, reject) => {
+                  const TIMEOUT_MS = 30 * 60 * 1000;
+                  let settled = false;
+
+                  const settle = (fn: () => void) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timeoutId);
+                    supabase.removeChannel(channel);
+                    fn();
+                  };
+
+                  const handleRow = (row: { status: string; result_urls?: string[]; error_msg?: string }) => {
+                    if (row.status === 'COMPLETED') {
+                      const finalUrl = row.result_urls?.[0];
+                      if (finalUrl) {
+                        settle(() => {
+                          stopProgress();
+                          setResultImageUrl(finalUrl);
+                          setResultUrls(row.result_urls || [finalUrl]);
+                          persistGeneratedImage(finalUrl, { showSuccessToast: false, showAlreadySavedToast: false, triggerSaveSuccess: false }).catch(() => {});
+                          resolve();
+                        });
+                      } else {
+                        settle(() => reject(new Error('Generation completed but no image URL returned')));
+                      }
+                    } else if (row.status === 'FAILED') {
+                      settle(() => reject(new Error(row.error_msg || 'Ad generation failed')));
+                    }
+                  };
+
+                  const timeoutId = setTimeout(() => {
+                    settle(() => reject(new Error('Ad generation timed out. Please try again.')));
+                  }, TIMEOUT_MS);
+
+                  const channel = supabase
+                    .channel(`visual-ads-job-${taskId}`)
+                    .on('postgres_changes', {
+                      event: 'UPDATE',
+                      schema: 'public',
+                      table: 'visual_ads_jobs',
+                      filter: `task_id=eq.${taskId}`,
+                    }, (payload: any) => handleRow(payload.new))
+                    .subscribe(async (status) => {
+                      if (status !== 'SUBSCRIBED') return;
+                      const supabaseJobs: any = supabase;
+                      const { data } = await supabaseJobs
+                        .from('visual_ads_jobs')
+                        .select('status, result_urls, error_msg')
+                        .eq('task_id', taskId)
+                        .maybeSingle();
+                      if (data) handleRow(data as any);
+                    });
+                });
               } else {
                 throw new Error('Failed to start task: no task_id returned');
               }
