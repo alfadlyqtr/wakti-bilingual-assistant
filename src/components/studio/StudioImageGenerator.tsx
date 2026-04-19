@@ -21,6 +21,7 @@ import {
   Save,
   Check,
   Sparkles,
+  GalleryHorizontalEnd,
 } from 'lucide-react';
 import { DrawAfterBGCanvas, DrawAfterBGCanvasRef } from '@/components/wakti-ai/DrawAfterBGCanvas';
 import type { UploadedFile } from '@/types/fileUpload';
@@ -91,6 +92,50 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   const [savedBucketUrl, setSavedBucketUrl] = useState<string | null>(null);
   const [savedImageId, setSavedImageId] = useState<string | null>(null);
   const [savedSourceUrl, setSavedSourceUrl] = useState<string | null>(null);
+
+  // Pick from saved state
+  const [showSavedPicker, setShowSavedPicker] = useState(false);
+  const [savedImages, setSavedImages] = useState<{id:string; image_url:string; submode:string; created_at:string}[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(false);
+  const [pickingForSlot, setPickingForSlot] = useState<1 | 2 | 3 | 4>(1);
+
+  const fetchSavedImages = useCallback(async () => {
+    if (!user) return;
+    setLoadingSaved(true);
+    try {
+      const { data, error } = await (supabase as any)
+        .from('user_generated_images')
+        .select('id, image_url, submode, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (error) throw error;
+      setSavedImages((data || []).map((img: any) => ({
+        ...img,
+        image_url: (img.image_url || '').replace(/%20/g, ' ').trim(),
+      })));
+    } catch (e) {
+      console.error('Failed to fetch saved images:', e);
+    } finally {
+      setLoadingSaved(false);
+    }
+  }, [user]);
+
+  const handlePickSaved = (url: string) => {
+    const fileObj: UploadedFile = {
+      id: `saved-${Date.now()}`,
+      name: 'saved-image.jpg',
+      type: 'image/jpeg',
+      size: 0,
+      url: url,
+      preview: url
+    };
+    if (pickingForSlot === 1) setUploadedFile(fileObj);
+    else if (pickingForSlot === 2) setUploadedFile2(fileObj);
+    else if (pickingForSlot === 3) setUploadedFile3(fileObj);
+    else if (pickingForSlot === 4) setUploadedFile4(fileObj);
+    setShowSavedPicker(false);
+  };
 
   const hasArabic = (s: string) => /[\u0600-\u06FF]/.test(s || '');
 
@@ -692,7 +737,76 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     await persistGeneratedImage(resultImageUrl, {
       showSuccessToast: true,
       showAlreadySavedToast: true,
+      triggerSaveSuccess: resultUrls.length <= 1, // Don't navigate if there are multiple images
     });
+  };
+
+  const handleSaveAll = async () => {
+    if (resultUrls.length === 0 || !user?.id) return;
+    setIsSaving(true);
+    let successCount = 0;
+    try {
+      for (const url of resultUrls) {
+        // Fetch and upload each image independently
+        let bucketUrl = '';
+        let storagePath = '';
+        try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+          const blob = await res.blob();
+          const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+          const fileName = `${user.id}/${submode}-${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+          
+          const { error: uploadErr } = await supabase.storage
+            .from('generated-images')
+            .upload(fileName, blob, { contentType: blob.type, upsert: false });
+          if (uploadErr) throw uploadErr;
+
+          const { data: urlData } = supabase.storage
+            .from('generated-images')
+            .getPublicUrl(fileName);
+          bucketUrl = sanitizeImageUrl(urlData?.publicUrl || '');
+          if (!bucketUrl) throw new Error('Failed to get public URL');
+          storagePath = fileName;
+        } catch {
+          const imported = await importExternalImageToStorage(url);
+          bucketUrl = imported.url;
+          storagePath = imported.storagePath;
+        }
+
+        // Insert into DB
+        const { data: row, error: dbErr } = await (supabase as any)
+          .from('user_generated_images')
+          .insert({
+            user_id: user.id,
+            image_url: bucketUrl,
+            prompt: prompt || null,
+            submode,
+            quality: submode === 'text2image' || submode === 'image2image' ? quality : null,
+            meta: { storage_path: storagePath },
+          })
+          .select('id')
+          .single();
+          
+        if (row?.id) {
+          successCount++;
+          // If this is the currently displayed image, update its state so it shows as saved
+          if (url === resultImageUrl) {
+            setIsSaved(true);
+            setSavedBucketUrl(bucketUrl);
+            setSavedImageId(row.id);
+            setSavedSourceUrl(url);
+          }
+        }
+      }
+      toast.success(language === 'ar' ? `تم حفظ ${successCount} صورة` : `Saved ${successCount} images`);
+      onSaveSuccess?.();
+    } catch (err: any) {
+      console.error('Save all failed:', err);
+      toast.error(language === 'ar' ? 'فشل حفظ بعض الصور' : 'Failed to save some images');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // ─── Submode config ───
@@ -795,6 +909,20 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   // ─── Result actions bar ───
   const ResultActions = () => (
     <div className="flex items-center gap-2 flex-wrap">
+      {resultUrls.length > 1 && (
+        <button
+          onClick={handleSaveAll}
+          disabled={isSaving}
+          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 active:scale-95 ${
+            isSaving
+              ? 'bg-white/50 dark:bg-white/5 border border-border/50 text-foreground/50 cursor-not-allowed'
+              : 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white border border-blue-300/40 shadow-[0_0_15px_rgba(59,130,246,0.5)] animate-pulse'
+          }`}
+        >
+          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          <span>{language === 'ar' ? 'حفظ الكل' : 'Save All'}</span>
+        </button>
+      )}
       <button
         onClick={handleSave}
         disabled={isSaving || isSaved}
@@ -962,13 +1090,16 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
           onBack={() => setSubmode('text2image')}
           onGenerate={async (visualState) => {
             const getAssetLabel = (asset: NonNullable<VisualAdsState['assets']>[number]) => {
-              if (asset.type === 'other') {
-                return asset.customType?.trim() || 'custom asset';
-              }
               if (asset.type === 'logo') return 'logo';
               if (asset.type === 'product') return 'product';
               if (asset.type === 'screenshot') return 'screenshot';
               if (asset.type === 'person') return 'person';
+              if (asset.type === 'background') return 'background';
+              if (asset.type === 'icon') return 'icon';
+              if (asset.type === 'prop') return 'prop';
+              if (asset.type === 'mascot') return 'mascot';
+              if (asset.type === 'texture') return 'texture';
+              if (asset.type === 'illustration') return 'illustration';
               return 'asset';
             };
 
@@ -977,49 +1108,75 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               const assetLabel = getAssetLabel(asset);
 
               if (asset.type === 'screenshot') {
-                return `Image ${imageNumber} is a screenshot. Use it as the screen/content reference with sharp readable UI and place it naturally inside the ad composition.`;
+                return `Use the screenshot from [Image ${imageNumber}] clearly inside the phone screen. Keep the UI readable and premium. If names or usernames appear inside the screenshot UI, do not reuse them as poster headline, quote, testimonial, or community text unless the user explicitly typed that name in the prompt.`;
               }
               if (asset.type === 'logo') {
-                return `Image ${imageNumber} is the logo. Treat it as the brand mark and place it clearly but tastefully in the composition.`;
+                if (asset.logoMode === 'as-is') {
+                  return `Place the logo from [Image ${imageNumber}] near the top as a clear brand anchor, exactly as uploaded including its background. Keep it slightly bigger, easy to notice, and surrounded by breathing room. Do not hide it or make it tiny.`;
+                }
+                return `Place the logo from [Image ${imageNumber}] near the top as a clear brand anchor. Do not add any white box, panel, or background shape behind the logo — let it sit directly on the poster. Keep it slightly bigger, easy to notice, and surrounded by breathing room.`;
               }
               if (asset.type === 'product') {
-                return `Image ${imageNumber} is the product. Make it the main hero asset with premium commercial lighting and strong focus.`;
+                return `Make the product [Image ${imageNumber}] the main hero asset with premium commercial lighting.`;
               }
               if (asset.type === 'person') {
-                return `Image ${imageNumber} is a person. Use it as the human/lifestyle element supporting the ad story.`;
+                if (asset.personMode === 'reference') {
+                  return asset.referenceStyle === 'character'
+                    ? `Use the person in [Image ${imageNumber}] as the reference inspiration for a styled character version. Keep the essence, styling cues, and identity direction from the upload while deliberately turning it into a designed character.`
+                    : `Use the person in [Image ${imageNumber}] as a reference for a realistic human subject. Keep their identity direction, face structure, skin tone, clothing feel, and overall look close to the upload without turning them into a different random person.`;
+                }
+                return `The person in [Image ${imageNumber}] is the intended human subject. Use this exact person as closely as possible. Preserve their face, skin tone, clothing, and overall appearance. Do NOT swap them for a different person.`;
               }
-              return `Image ${imageNumber} is ${assetLabel}. Use it exactly as a ${assetLabel} reference in the final composition.`;
+              if (asset.type === 'background') {
+                return `The background is [Image ${imageNumber}].`;
+              }
+              if (asset.type === 'icon') {
+                return `Use the icon [Image ${imageNumber}] cleanly within the composition.`;
+              }
+              if (asset.type === 'prop') {
+                return `Include [Image ${imageNumber}] as a decorative prop in the scene.`;
+              }
+              if (asset.type === 'mascot') {
+                return `Feature the brand mascot [Image ${imageNumber}] prominently.`;
+              }
+              if (asset.type === 'texture') {
+                return `Apply the texture [Image ${imageNumber}] to surfaces or backgrounds in the scene.`;
+              }
+              if (asset.type === 'illustration') {
+                return `Use the illustration [Image ${imageNumber}] as a styled visual element in the layout.`;
+              }
+              return `Use [Image ${imageNumber}] as ${assetLabel} in the composition.`;
             };
 
             // Build prompt from visual ads state
             const topicPrompts: Record<string, string> = {
-              'new-launch':    'exciting new product launch',
-              'limited-offer': 'limited-time offer, urgency',
-              'app-download':  'app download promotion',
-              'save-time':     'time-saving benefit',
-              'premium':       'premium quality and prestige',
-              'social-proof':  'social proof and customer trust',
-              'features':      'product feature showcase',
-              'sale':          'sale or discount offer',
+              'new-launch':    'The poster announces an exciting new product launch. Make it feel like a big moment — bold hero visual, high anticipation energy, dramatic reveal composition.',
+              'limited-offer': 'The poster communicates urgency and scarcity — a limited-time offer. Use visual tension, countdown feeling, and strong contrast to make viewers feel they must act now.',
+              'app-download':  'The poster promotes an app download. Showcase the app UI or key screen prominently, make it feel modern and tech-forward, with a clear and inviting download hook.',
+              'save-time':     'The poster sells the idea of saving time and being more efficient. Use clean, fast, streamlined visuals — convey speed, relief, and smart productivity.',
+              'premium':       'The poster communicates premium quality and craftsmanship. Everything should feel expensive — refined typography, dark or muted tones, generous whitespace, luxury product placement.',
+              'social-proof':  'The poster builds trust through social proof — happy customers, reviews, or community. Warm, relatable, human-centered visuals. Authentic over polished.',
+              'features':      'The poster highlights the product\'s key features. Use a structured layout with visual callouts, icons, or annotations that draw attention to each benefit.',
+              'sale':          'The poster promotes a sale or discount. High contrast, bold price or percentage highlight, energetic and punchy design — the viewer must feel the deal immediately.',
             };
             const stylePrompts: Record<string, string> = {
-              'premium-dark':   'premium dark theme, elegant, high-contrast',
-              'bright-clean':   'bright clean design, light background, fresh',
-              'bold-modern':    'bold modern design, high energy, strong typography',
-              'lifestyle':      'lifestyle photography feel, authentic and relatable',
-              'luxury-minimal': 'luxury minimalist, spacious, refined, premium',
-              'ugc':            'organic UGC style, native social feed look',
+              'premium-dark':   'Visual style: deep dark background (near black or charcoal), rich shadows, glowing product highlights, premium serif or modern sans-serif typography, dramatic cinematic lighting, high contrast.',
+              'bright-clean':   'Visual style: bright white or very light background, clean open layout, generous whitespace, fresh pastel or bold accent color, modern minimalist typography, no clutter.',
+              'bold-modern':    'Visual style: bold high-contrast design, strong graphic shapes, vivid saturated colors, thick impactful typography, dynamic diagonal composition, high energy layout.',
+              'lifestyle':      'Visual style: real-world lifestyle photography feel, natural lighting, authentic human presence, warm color grading, organic imperfect texture, relatable and trustworthy tone.',
+              'luxury-minimal': 'Visual style: extreme minimalism, luxury brand aesthetic, one or two muted tones, refined thin typography, massive whitespace, product placed like jewelry, quiet and confident.',
+              'ugc':            'Visual style: organic user-generated content aesthetic, lo-fi phone camera feel, natural imperfect framing, authentic colors, no heavy design chrome — looks like something a real person posted.',
             };
-            const ctaLabels: Record<string, string> = {
-              'download-now': 'Download now',
-              'get-started':  'Get started',
-              'shop-now':     'Shop now',
-              'learn-more':   'Learn more',
-              'book-now':     'Book now',
-              'start-free':   'Start free',
-              'try-today':    'Try it today',
-              'join-now':     'Join now',
-              'subscribe':    'Subscribe',
+            const ctaInstructions: Record<string, string> = {
+              'download-now': 'Include the text "Download now" near the bottom as a bold poster CTA callout. It should feel like designed poster typography, not a real app button.',
+              'get-started':  'Include the text "Get started" near the bottom as a bold poster CTA callout. Inviting and clear, but still poster text, not a tappable UI button.',
+              'shop-now':     'Include the text "Shop now" near the bottom as a bold poster CTA callout. Punchy and high energy, but presented as poster text, not UI.',
+              'learn-more':   'Include the text "Learn more" near the bottom as a clean poster CTA callout. Softer tone, well spaced, not a tappable UI button.',
+              'book-now':     'Include the text "Book now" near the bottom as a bold poster CTA callout. Urgent and clear, but not a real interactive button.',
+              'start-free':   'Include the text "Start free" near the bottom as a bold poster CTA callout. Welcoming and clear, but still poster text, not UI.',
+              'try-today':    'Include the text "Try it today" near the bottom as a bold poster CTA callout. Friendly and easy, but not a real button.',
+              'join-now':     'Include the text "Join now" near the bottom as a bold poster CTA callout. Warm and community-forward, but not a real interactive button.',
+              'subscribe':    'Include the text "Subscribe" near the bottom as a clean poster CTA callout. Reliable and trust-building, not a tappable UI button.',
             };
 
             const normalizeShortValue = (value?: string | null) => (value || '').replace(/\s+/g, ' ').trim();
@@ -1027,28 +1184,27 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             const customCta = normalizeShortValue(visualState.creativeSoul.customCta);
             const customStyle = normalizeShortValue(visualState.creativeSoul.customStyle);
 
-            const topicStr  = visualState.creativeSoul.mainMessage === 'custom'
-              ? customTopic
+            const topicStr = visualState.creativeSoul.mainMessage === 'custom'
+              ? (customTopic ? `The poster is about: ${customTopic}.` : '')
               : (topicPrompts[visualState.creativeSoul.mainMessage] || '');
-            const styleStr  = visualState.creativeSoul.style === 'custom'
-              ? customStyle
+            const styleStr = visualState.creativeSoul.style === 'custom'
+              ? (customStyle ? `Visual style: ${customStyle}.` : '')
               : (stylePrompts[visualState.creativeSoul.style] || '');
-            const ctaStr    = visualState.creativeSoul.cta === 'custom'
-              ? customCta
-              : (ctaLabels[visualState.creativeSoul.cta] || '');
+            const ctaStr = visualState.creativeSoul.cta === 'custom'
+              ? (customCta ? `Include the text "${customCta}" near the bottom as a clear, readable poster CTA callout. Treat it as poster typography, not as a real app button.` : '')
+              : (ctaInstructions[visualState.creativeSoul.cta] || '');
             
-            // Collect up to 3 images from assets array, compress them if they are data URIs
+            // Collect up to 6 images from assets array, compress them if they are data URIs
             const rawImages = (visualState.assets || [])
               .filter(a => a.image)
               .map(a => a.image as string)
-              .slice(0, 3);
+              .slice(0, 6);
               
             if (!rawImages.length) {
               toast.error(language === 'ar' ? 'الرجاء رفع صورة واحدة على الأقل' : 'Please upload at least one image');
               return;
             }
 
-            // Client-side compression function (max 1MB)
             const compressImage = async (dataUri: string): Promise<string> => {
               if (!dataUri.startsWith('data:image/')) return dataUri;
               return new Promise((resolve) => {
@@ -1074,7 +1230,6 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                   if (!ctx) return resolve(dataUri);
                   
                   ctx.drawImage(img, 0, 0, width, height);
-                  // 0.8 quality usually yields < 500KB for 1200px images
                   resolve(canvas.toDataURL('image/jpeg', 0.8));
                 };
                 img.onerror = () => resolve(dataUri);
@@ -1082,26 +1237,62 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               });
             };
 
-            // 1. Dynamic Environment Logic (for variety)
-            const environments = [
-              "minimalist marble desk with plants", 
-              "futuristic tech laboratory", 
-              "professional high-end photo studio", 
-              "blurred modern office background"
-            ];
-            const randomEnv = environments[Math.floor(Math.random() * environments.length)];
-
             // 2. Identify Assets (Map tags to specific visual instructions)
             const taggedAssets = (visualState.assets || []).filter(a => a.image && a.type);
-            const assetInstructions = taggedAssets
-              .map((asset, index) => getAssetInstruction(asset, index))
+            
+            // Re-order instructions so background is always first
+            const backgroundInstruction = taggedAssets.find(a => a.type === 'background') 
+              ? getAssetInstruction(taggedAssets.find(a => a.type === 'background')!, taggedAssets.findIndex(a => a.type === 'background'))
+              : '';
+            
+            const otherInstructions = taggedAssets
+              .filter(a => a.type !== 'background')
+              .map((asset) => getAssetInstruction(asset, taggedAssets.indexOf(asset)))
               .join(' ');
-            const assetSummary = taggedAssets
-              .map((asset, index) => `Image ${index + 1} = ${getAssetLabel(asset)}`)
-              .join(', ');
+              
+            const assetInstructions = [backgroundInstruction, otherInstructions].filter(Boolean).join(' ');
+
+            // Scene intelligence: detect asset combination and inject creative director composition
+            const taggedTypes = taggedAssets.map(a => a.type);
+            const hasPerson = taggedTypes.includes('person');
+            const hasScreenshot = taggedTypes.includes('screenshot');
+            const hasBackground = taggedTypes.includes('background');
+            const hasProduct = taggedTypes.includes('product');
+            const hasLogo = taggedTypes.includes('logo');
+            let sceneDirection = '';
+            if (hasPerson && hasScreenshot && hasBackground) {
+              sceneDirection = 'Composition: lifestyle app ad. Place the person slightly off-center — they are the human anchor. Position the phone in front of or beside them at a natural angle, as if they are using it. The person\'s face and upper body must stay clearly visible — do NOT let the phone overlap or block their face. Background wraps atmospherically behind both with a soft cinematic blur. Warm, aspirational, real — not a flat product sheet.';
+            } else if (hasPerson && hasProduct && hasBackground) {
+              sceneDirection = 'Composition: lifestyle product ad. Person is natural in the environment, holding or interacting with the product. Face clearly visible, not blocked. Product prominent. Background wraps the scene. Warm natural lighting.';
+            } else if (hasPerson && hasBackground && !hasScreenshot && !hasProduct) {
+              sceneDirection = 'Composition: brand lifestyle moment. Person is the full hero. Off-center, natural stance in the environment. Cinematic lighting, genuine and aspirational.';
+            } else if (hasPerson && hasScreenshot && !hasBackground) {
+              sceneDirection = 'Composition: app lifestyle ad. Person beside the phone naturally. Face visible and unobstructed. Clean or gradient backdrop, premium feel.';
+            } else if (!hasPerson && hasScreenshot && hasBackground && hasLogo) {
+              sceneDirection = 'Composition: pure app product poster. Phone mockup centered or slightly tilted, screenshot on screen. Logo clean at the top. Background is the atmospheric stage. Professional product photography, no clutter.';
+            } else if (!hasPerson && hasProduct && hasBackground) {
+              sceneDirection = 'Composition: product hero shot. Product is the star, prominent with dramatic commercial lighting. Background wraps behind. Premium and clean.';
+            }
+            const creativeDirectorGuardrails = [
+              'You are one of the best advertising poster creators and art directors in the world.',
+              'Deliver an amazing poster that feels premium, intentional, and visually unified.',
+              'Combine all uploaded assets intelligently instead of treating them like separate stickers.',
+              'Do not reuse names or usernames seen inside screenshot UI as poster copy unless the user explicitly typed them in the prompt.',
+            ].join(' ');
 
             // 3. Build the Final Clean Keyword Prompt for KIE
-            const finalPromptForKie = `Professional poster ad. ${topicStr}. ${styleStr}. ${assetSummary}. ${assetInstructions}. Environment: ${randomEnv}. ${visualState.creativeSoul.prompt || ''}. Cinematic lighting, 8k, bokeh, sharp textures, bold text "${ctaStr}" bottom center.`.replace(/\s+/g, ' ').trim();
+            const promptParts = [
+              'Create a world-class advertising poster.',
+              creativeDirectorGuardrails,
+              topicStr,
+              styleStr,
+              assetInstructions,
+              sceneDirection,
+              ctaStr,
+              visualState.creativeSoul.prompt?.trim() || '',
+            ].filter(Boolean);
+            const finalPromptForKie = promptParts.join(' ').replace(/\s+/g, ' ').trim();
+
 
             setIsGenerating(true);
             setResultError(null);
@@ -1386,17 +1577,28 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                   )}
                 </div>
               ) : (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full py-8 border-2 border-dashed border-orange-300/50 dark:border-orange-700/30 rounded-xl flex flex-col items-center gap-2 text-muted-foreground active:scale-[0.98] transition-transform"
-                >
-                  <ImagePlus className="h-7 w-7 text-orange-400" />
-                  <span className="text-sm font-medium">
-                    {submode === 'image2image'
-                      ? (language === 'ar' ? 'صورة ١' : 'Image 1')
-                      : (language === 'ar' ? 'اضغط لرفع صورة' : 'Tap to upload')}
-                  </span>
-                </button>
+                <div className="flex flex-col gap-2 w-full max-w-xs mx-auto">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full py-6 border-2 border-dashed border-orange-300/50 dark:border-orange-700/30 rounded-xl flex flex-col items-center gap-2 text-muted-foreground hover:bg-orange-500/5 active:scale-[0.98] transition-all"
+                  >
+                    <ImagePlus className="h-7 w-7 text-orange-400" />
+                    <span className="text-sm font-medium">
+                      {submode === 'image2image'
+                        ? (language === 'ar' ? 'رفع صورة ١' : 'Upload Image 1')
+                        : (language === 'ar' ? 'اضغط لرفع صورة' : 'Tap to upload')}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => { setPickingForSlot(1); setShowSavedPicker(true); fetchSavedImages(); }}
+                    className="w-full py-3 border-2 border-dashed border-orange-400/40 bg-gradient-to-br from-orange-500/5 via-amber-500/5 to-orange-400/5 rounded-xl flex flex-row items-center justify-center gap-2 text-orange-500 dark:text-orange-400 hover:border-orange-500 hover:shadow-[0_0_15px_hsla(25,95%,60%,0.2)] active:scale-[0.98] transition-all"
+                  >
+                    <GalleryHorizontalEnd className="h-5 w-5" />
+                    <span className="text-sm font-semibold">
+                      {language === 'ar' ? 'اختر من المحفوظات' : 'Pick from Saved'}
+                    </span>
+                  </button>
+                </div>
               )}
               <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" hidden />
             </div>
@@ -1439,13 +1641,22 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                         </span>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => fileInputRef2.current?.click()}
-                        className="w-full aspect-square border-2 border-dashed border-[#858384]/30 dark:border-[#858384]/20 rounded-xl flex flex-col items-center justify-center gap-1.5 text-muted-foreground/70 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:scale-[0.98] transition-all"
-                      >
-                        <ImagePlus className="h-5 w-5 text-[#858384]/60" />
-                        <span className="text-[11px] font-medium text-[#858384]/70">{language === 'ar' ? '٢' : 'Ref 2'}</span>
-                      </button>
+                      <div className="w-full aspect-square flex flex-col gap-1">
+                        <button
+                          onClick={() => fileInputRef2.current?.click()}
+                          className="flex-1 border-2 border-dashed border-[#858384]/30 dark:border-[#858384]/20 rounded-lg flex flex-col items-center justify-center gap-0 text-muted-foreground/70 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:scale-[0.98] transition-all"
+                        >
+                          <ImagePlus className="h-4 w-4 text-[#858384]/60" />
+                          <span className="text-[10px] font-medium text-[#858384]/70">{language === 'ar' ? 'رفع ٢' : 'Upload 2'}</span>
+                        </button>
+                        <button
+                          onClick={() => { setPickingForSlot(2); setShowSavedPicker(true); fetchSavedImages(); }}
+                          className="flex-1 border-2 border-dashed border-orange-400/30 rounded-lg flex flex-col items-center justify-center gap-0 text-orange-500/80 hover:border-orange-500/50 hover:bg-orange-500/5 active:scale-[0.98] transition-all"
+                        >
+                          <GalleryHorizontalEnd className="h-4 w-4" />
+                          <span className="text-[10px] font-medium">{language === 'ar' ? 'محفوظ' : 'Saved'}</span>
+                        </button>
+                      </div>
                     )}
                     <input type="file" ref={fileInputRef2} onChange={handleFileChange2} accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" hidden />
                   </div>
@@ -1471,13 +1682,22 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                         </span>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => fileInputRef3.current?.click()}
-                        className="w-full aspect-square border-2 border-dashed border-[#858384]/30 dark:border-[#858384]/20 rounded-xl flex flex-col items-center justify-center gap-1.5 text-muted-foreground/70 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:scale-[0.98] transition-all"
-                      >
-                        <ImagePlus className="h-5 w-5 text-[#858384]/60" />
-                        <span className="text-[11px] font-medium text-[#858384]/70">{language === 'ar' ? '٣' : 'Ref 3'}</span>
-                      </button>
+                      <div className="w-full aspect-square flex flex-col gap-1">
+                        <button
+                          onClick={() => fileInputRef3.current?.click()}
+                          className="flex-1 border-2 border-dashed border-[#858384]/30 dark:border-[#858384]/20 rounded-lg flex flex-col items-center justify-center gap-0 text-muted-foreground/70 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:scale-[0.98] transition-all"
+                        >
+                          <ImagePlus className="h-4 w-4 text-[#858384]/60" />
+                          <span className="text-[10px] font-medium text-[#858384]/70">{language === 'ar' ? 'رفع ٣' : 'Upload 3'}</span>
+                        </button>
+                        <button
+                          onClick={() => { setPickingForSlot(3); setShowSavedPicker(true); fetchSavedImages(); }}
+                          className="flex-1 border-2 border-dashed border-orange-400/30 rounded-lg flex flex-col items-center justify-center gap-0 text-orange-500/80 hover:border-orange-500/50 hover:bg-orange-500/5 active:scale-[0.98] transition-all"
+                        >
+                          <GalleryHorizontalEnd className="h-4 w-4" />
+                          <span className="text-[10px] font-medium">{language === 'ar' ? 'محفوظ' : 'Saved'}</span>
+                        </button>
+                      </div>
                     )}
                     <input type="file" ref={fileInputRef3} onChange={handleFileChange3} accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" hidden />
                   </div>
@@ -1503,13 +1723,22 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                         </span>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => fileInputRef4.current?.click()}
-                        className="w-full aspect-square border-2 border-dashed border-[#858384]/30 dark:border-[#858384]/20 rounded-xl flex flex-col items-center justify-center gap-1.5 text-muted-foreground/70 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:scale-[0.98] transition-all"
-                      >
-                        <ImagePlus className="h-5 w-5 text-[#858384]/60" />
-                        <span className="text-[11px] font-medium text-[#858384]/70">{language === 'ar' ? '٤' : 'Ref 4'}</span>
-                      </button>
+                      <div className="w-full aspect-square flex flex-col gap-1">
+                        <button
+                          onClick={() => fileInputRef4.current?.click()}
+                          className="flex-1 border-2 border-dashed border-[#858384]/30 dark:border-[#858384]/20 rounded-lg flex flex-col items-center justify-center gap-0 text-muted-foreground/70 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:scale-[0.98] transition-all"
+                        >
+                          <ImagePlus className="h-4 w-4 text-[#858384]/60" />
+                          <span className="text-[10px] font-medium text-[#858384]/70">{language === 'ar' ? 'رفع ٤' : 'Upload 4'}</span>
+                        </button>
+                        <button
+                          onClick={() => { setPickingForSlot(4); setShowSavedPicker(true); fetchSavedImages(); }}
+                          className="flex-1 border-2 border-dashed border-orange-400/30 rounded-lg flex flex-col items-center justify-center gap-0 text-orange-500/80 hover:border-orange-500/50 hover:bg-orange-500/5 active:scale-[0.98] transition-all"
+                        >
+                          <GalleryHorizontalEnd className="h-4 w-4" />
+                          <span className="text-[10px] font-medium">{language === 'ar' ? 'محفوظ' : 'Saved'}</span>
+                        </button>
+                      </div>
                     )}
                     <input type="file" ref={fileInputRef4} onChange={handleFileChange4} accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" hidden />
                   </div>
@@ -1628,6 +1857,70 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       {resultError && !isGenerating && (
         <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200/60 dark:border-red-800/40 text-red-700 dark:text-red-300 text-sm font-medium">
           {resultError}
+        </div>
+      )}
+
+      {/* Saved Images Picker Modal */}
+      {showSavedPicker && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowSavedPicker(false)}
+        >
+          <div
+            className="relative w-full max-w-lg max-h-[80vh] bg-background rounded-t-2xl sm:rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-border/50 bg-muted/30 flex items-center justify-between sticky top-0 z-10 backdrop-blur-xl">
+              <div className="flex items-center gap-2">
+                <GalleryHorizontalEnd className="h-5 w-5 text-orange-500" />
+                <h3 className="font-bold text-sm">
+                  {language === 'ar' ? 'اختر من صورك المحفوظة' : 'Pick from Saved Images'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowSavedPicker(false)}
+                title={language === 'ar' ? 'إغلاق' : 'Close'}
+                aria-label={language === 'ar' ? 'إغلاق' : 'Close'}
+                className="p-1.5 rounded-full hover:bg-muted transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto">
+              {loadingSaved ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
+                  <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+                  <p className="text-sm font-medium">{language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</p>
+                </div>
+              ) : savedImages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
+                  <div className="p-4 rounded-full bg-muted/50">
+                    <GalleryHorizontalEnd className="h-8 w-8 opacity-50" />
+                  </div>
+                  <p className="text-sm font-medium">{language === 'ar' ? 'لا توجد صور محفوظة' : 'No saved images found'}</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  {savedImages.map((img) => (
+                    <button
+                      key={img.id}
+                      onClick={() => handlePickSaved(img.image_url)}
+                      className="relative aspect-square rounded-xl overflow-hidden group focus:outline-none focus:ring-2 focus:ring-orange-500 active:scale-95 transition-all bg-muted"
+                    >
+                      <img
+                        src={img.image_url}
+                        alt="Saved"
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -10,7 +10,9 @@ import { SandpackErrorListener } from "./SandpackErrorListener";
 import { SandpackConsolePanel } from "./SandpackConsolePanel";
 import { CollapsibleFileTree } from "./CollapsibleFileTree";
 import { atomDark } from "@codesandbox/sandpack-themes";
-import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, MousePointer2, Monitor, Tablet, Smartphone, ExternalLink, RefreshCw, Download, Upload, Loader2, Settings, Share2, Save, Terminal, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, MousePointer2, Monitor, Tablet, Smartphone, ExternalLink, RefreshCw, Download, Upload, Loader2, Settings, Share2, Save, Terminal, PanelLeftClose, PanelLeft, Github, X } from "lucide-react";
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { SandpackSkeleton } from '@/pages/ProjectDetail/components/PreviewPanel/SandpackSkeleton';
 import { useIncrementalFileUpdater } from '@/pages/ProjectDetail/hooks/useIncrementalFileUpdater';
 import {
@@ -239,6 +241,57 @@ export default function SandpackStudio({
   const [selectedElement, setSelectedElement] = useState<SelectedElementInfo | null>(null);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [fileTreeCollapsed, setFileTreeCollapsed] = useState(() => window.innerWidth < 768);
+  const [showGithubModal, setShowGithubModal] = useState(false);
+  const [githubPat, setGithubPat] = useState('');
+  const [githubRepoName, setGithubRepoName] = useState('');
+  const [isExportingToGithub, setIsExportingToGithub] = useState(false);
+
+  const handleGitHubExport = async () => {
+    if (!githubPat.trim() || !githubRepoName.trim()) return;
+    try {
+      setIsExportingToGithub(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { toast.error('Session expired'); return; }
+
+      toast.loading('Pushing to GitHub...', { id: 'gh-export' });
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/github-export`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            projectId,
+            repoName: githubRepoName.trim().replace(/[^a-zA-Z0-9_.-]/g, '-'),
+            githubToken: githubPat.trim(),
+            createNew: true,
+          }),
+        }
+      );
+
+      const result = await res.json();
+      toast.dismiss('gh-export');
+
+      if (!res.ok || !result.success) {
+        toast.error(result.error || 'GitHub export failed');
+        return;
+      }
+
+      toast.success(`Pushed ${result.fileCount} files to GitHub ✓`);
+      setShowGithubModal(false);
+      setGithubPat('');
+      // Open the repo in a new tab
+      window.open(result.repoUrl, '_blank', 'noopener,noreferrer');
+    } catch (err: any) {
+      toast.dismiss('gh-export');
+      toast.error(err?.message || 'An error occurred');
+    } finally {
+      setIsExportingToGithub(false);
+    }
+  };
   
   // Remove Sandpack resize handle - it causes issues in preview-only mode
   useEffect(() => {
@@ -590,6 +643,17 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
               
               <DropdownMenuSeparator />
               
+              <DropdownMenuItem 
+                onClick={() => setShowGithubModal(true)}
+                className="flex items-center gap-2 cursor-pointer"
+                disabled={!projectId}
+              >
+                <Github className="h-4 w-4" />
+                <span>Push to GitHub</span>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+              
               <DropdownMenuItem className="flex items-center gap-2 cursor-pointer">
                 <Share2 className="h-4 w-4" />
                 <span>Share</span>
@@ -621,7 +685,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
     );
   };
 
-  return (
+  return (<>
     <SandpackProvider
       template="react"
       theme={atomDark}
@@ -820,5 +884,80 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
         )}
       </div>
     </SandpackProvider>
-  );
+
+    {/* GitHub Export Modal */}
+    {showGithubModal && (
+      <div
+        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        onClick={() => setShowGithubModal(false)}
+      >
+        <div
+          className="bg-[#0c0f14] border border-white/10 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 space-y-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Github className="h-5 w-5 text-white" />
+              <h3 className="text-white font-semibold text-sm">{isRTL ? 'رفع إلى GitHub' : 'Push to GitHub'}</h3>
+            </div>
+            <button
+              onClick={() => setShowGithubModal(false)}
+              className="text-zinc-500 hover:text-white transition-colors"
+              title={isRTL ? 'إغلاق' : 'Close'}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-zinc-400 block mb-1">{isRTL ? 'اسم المستودع' : 'Repository name'}</label>
+              <input
+                type="text"
+                value={githubRepoName}
+                onChange={(e) => setGithubRepoName(e.target.value)}
+                placeholder="my-wakti-app"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-zinc-400 block mb-1">
+                {isRTL ? 'GitHub Personal Access Token (repo scope)' : 'GitHub Personal Access Token (repo scope)'}
+              </label>
+              <input
+                type="password"
+                value={githubPat}
+                onChange={(e) => setGithubPat(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleGitHubExport(); }}
+                placeholder="ghp_..."
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 font-mono"
+              />
+              <a
+                href="https://github.com/settings/tokens/new?scopes=repo&description=Wakti+AI+Coder"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] text-indigo-400 hover:text-indigo-300 mt-1 inline-block transition-colors"
+              >
+                {isRTL ? '← أنشئ token من هنا' : 'Generate a token ↗'}
+              </a>
+            </div>
+          </div>
+
+          <button
+            onClick={handleGitHubExport}
+            disabled={isExportingToGithub || !githubPat.trim() || !githubRepoName.trim()}
+            className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 rounded-xl transition-colors"
+          >
+            {isExportingToGithub ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Github className="h-4 w-4" />
+            )}
+            {isRTL ? 'رفع المشروع' : 'Push project'}
+          </button>
+        </div>
+      </div>
+    )}
+  </>);
 }

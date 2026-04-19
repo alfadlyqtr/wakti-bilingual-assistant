@@ -231,8 +231,23 @@ Deno.serve(async (req) => {
 
     const referencePublicUrls: string[] = [];
     for (const rawImage of inputImages) {
-      const { base64, mimeHint } = stripDataUrlPrefix(rawImage);
-      const referencePublicUrl = await uploadReferenceImage(base64, mimeHint, userId || "anon");
+      let referencePublicUrl = "";
+      if (rawImage.startsWith("http://") || rawImage.startsWith("https://")) {
+        // Fetch the URL directly since it's an existing image link (e.g. Picked from saved)
+        const res = await fetch(rawImage);
+        if (!res.ok) throw new Error(`Failed to fetch saved image: ${res.status}`);
+        const buf = await res.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        const { mime, ext } = detectMimeAndExt(bytes);
+        const path = `grok-i2i-input/${userId || "anon"}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+        const { error } = await supabase.storage.from(STORAGE_BUCKET).upload(path, bytes, { contentType: mime, upsert: true });
+        if (error) throw new Error(`Storage upload error: ${error.message}`);
+        const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+        referencePublicUrl = data.publicUrl;
+      } else {
+        const { base64, mimeHint } = stripDataUrlPrefix(rawImage);
+        referencePublicUrl = await uploadReferenceImage(base64, mimeHint, userId || "anon");
+      }
       referencePublicUrls.push(referencePublicUrl);
     }
     console.log(`[grok-i2i] references uploaded: ${referencePublicUrls.length}`);

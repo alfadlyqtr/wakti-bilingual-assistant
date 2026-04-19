@@ -273,40 +273,38 @@ function buildSystemPrompt(preferArabic: boolean, mode?: string) {
   }
 }
 
-const VISUAL_ADS_SYSTEM_PROMPT = `Enhance a user's ad concept into a high-converting visual prompt for Nano-Banana-2. Balance user intent with platform-best practices.
+const VISUAL_ADS_SYSTEM_PROMPT = `You enhance structured poster prompts for Nano-Banana-2.
 
-INPUT:
-- User Idea: [USER_INPUT]
-- Assets: [COUNT] images ([TAG_LIST]: Logo/Product/Screenshot)
-- Format: [PLATFORM] (9:16 vertical | 1:1 square | 16:9 landscape)
-- Ad Goal: [TOPIC_LABEL]
-- Style: [STYLE_LABEL]
-- CTA: [CTA_TEXT]
+Your job is to make the user's existing visual-ads prompt clearer, stronger, and more production-ready WITHOUT destroying its structure.
 
-RULES:
-1. USER IDEA IS KING — Never override their core concept. Enhance around it.
-2. ADAPT TO STYLE —
-   - "ugc" → authentic, native-social, casual lighting, real-world setting
-   - "bright-clean" → soft pastels, airy, minimal shadows, friendly
-   - "premium-dark" → rich contrast, selective lighting, depth
-   - "lifestyle" → natural environment, candid moment, authentic feel
-   - "luxury-minimal" → negative space, refined details, understated
-   - "bold-modern" → vibrant colors, dynamic angles, high energy
-3. PLATFORM AWARE —
-   - 9:16: Vertical composition, safe zones for UI, portrait framing
-   - 1:1: Centered hero, balanced layout, Instagram-native
-   - 16:9: Cinematic framing, landscape environment, wider context
-4. ASSET INTEGRATION (subtle, don't over-describe) —
-   - Logo: Naturally placed, good contrast against background
-   - Screenshot: Displayed on relevant device mockup only if it fits the style
-   - Product: Clear visibility, context-appropriate lighting
-5. OUTPUT FORMAT — 1-2 sentences max. Keyword-dense. No filler.
+HARD RULES:
+1. PRESERVE THE EXISTING FORMAT.
+   - Keep the prompt as a structured multi-line poster brief.
+   - Do NOT compress it into one paragraph.
+   - Do NOT rewrite it as ad copy.
+   - Do NOT add quotation marks around the whole answer.
+2. PRESERVE ALL ASSET ROLE LINES.
+   - If the input contains lines like "- Image 1 ...", "- Image 2 ...", keep them.
+   - Do NOT remove image-role instructions.
+   - You may strengthen them, but you must preserve which image does what.
+3. PRESERVE THE FORMAT / PLATFORM LINE.
+   - If the input contains "Target format:" keep it.
+4. PRESERVE CTA BEHAVIOR.
+   - If the CTA is described as poster text or a callout, keep that meaning.
+   - Do NOT turn it into app UI copy or a tappable button.
+5. PRESERVE THE USER'S CORE INTENT.
+   - Never replace their concept with a different concept.
+   - Never remove key composition instructions.
+6. ENHANCE ONLY BY IMPROVING CLARITY.
+   - Make wording more specific, visual, and model-friendly.
+   - Add useful poster/composition/detail language only when it supports the existing intent.
+   - Keep the result concise but structured.
 
-OUTPUT STRUCTURE:
-[User core concept] + [style keywords] + [composition notes] + [quality boosters: sharp focus, professional color grading, suitable for [PLATFORM]]
-
-EXAMPLE GOOD OUTPUT:
-"Fresh iced coffee with condensation droplets on bright summer table, vibrant colors, Instagram 1:1 square composition, crisp product photography, energetic summer vibe, 'Shop Now' text space at bottom, sharp focus, commercial quality."`;
+OUTPUT RULES:
+- Output ONLY the improved structured prompt.
+- Keep line breaks.
+- Keep the poster brief readable and easy to edit.
+- English only.`;
 
 async function ampVisualAdsWithOpenAI(
   userIdea: string,
@@ -334,7 +332,14 @@ async function ampVisualAdsWithOpenAI(
       {
         role: "user",
         content: [
-          `User Idea: ${userIdea}`,
+          "Improve this structured visual-ads prompt while preserving its line-by-line poster format.",
+          "Keep all image-role lines, keep the target format line, and keep CTA behavior as poster text.",
+          "Return only the improved structured prompt.",
+          "",
+          "PROMPT TO ENHANCE:",
+          userIdea,
+          "",
+          "SUPPORTING CONTEXT:",
           `Assets Provided: ${assetsCount} images`,
           `Tags: ${tagList.length > 0 ? tagList.join(", ") : "None specified"}`,
           `Format/Platform: ${platform || "9:16"}`,
@@ -878,7 +883,7 @@ serve(async (req) => {
       const styleLabel = (body?.style_label ?? "").toString();
       const stylePrompt = (body?.style_prompt ?? "").toString();
       const platform = (body?.platform ?? "9:16").toString();
-      inputText = `[visual-ads] idea: ${text}; assets: ${assetsCount}; tags: ${tagList.join(",")}; topic: ${topicLabel}; cta: ${ctaText}; style: ${styleLabel}; platform: ${platform}`;
+      inputText = text;
 
       if (!text || text.trim().length === 0) {
         return new Response(

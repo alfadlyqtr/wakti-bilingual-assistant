@@ -261,11 +261,29 @@ serve(async (req: Request) => {
 
     const referenceUrls: string[] = [];
     for (const rawImage of inputImages) {
-      const { base64, mimeHint } = stripDataUrlPrefix(rawImage);
-      const inputBytes = decodeBase64ToUint8Array(base64);
-      const { mime, ext } = detectMimeAndExt(inputBytes, mimeHint);
-      const referenceUrl = await uploadAndSignReferenceImage({ base64, mime, ext, userId: user_id });
-      referenceUrls.push(referenceUrl);
+      if (rawImage.startsWith("http://") || rawImage.startsWith("https://")) {
+        const res = await fetch(rawImage);
+        if (!res.ok) throw new Error(`Failed to fetch saved image: ${res.status}`);
+        const buf = await res.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        const { mime, ext } = detectMimeAndExt(bytes);
+        
+        // Convert to base64 so we can use the existing uploadAndSignReferenceImage
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
+        
+        const referenceUrl = await uploadAndSignReferenceImage({ base64, mime, ext, userId: user_id || "anon" });
+        referenceUrls.push(referenceUrl);
+      } else {
+        const { base64, mimeHint } = stripDataUrlPrefix(rawImage);
+        const inputBytes = decodeBase64ToUint8Array(base64);
+        const { mime, ext } = detectMimeAndExt(inputBytes, mimeHint);
+        const referenceUrl = await uploadAndSignReferenceImage({ base64, mime, ext, userId: user_id || "anon" });
+        referenceUrls.push(referenceUrl);
+      }
     }
 
     const finalPrompt = await translateToEnglishIfArabic(user_prompt);

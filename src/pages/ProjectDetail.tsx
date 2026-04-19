@@ -920,7 +920,65 @@ export default function ProjectDetail() {
       
       fetchProject(); // Always fetch project files
       fetchChatHistory(); // Always fetch chat history
-      
+
+      // Rebuild mode: extract design info from imported files, then fire runGeneration (create mode = fresh build)
+      const rebuild = searchParams.get('rebuild');
+      const rebuildRepo = searchParams.get('prompt'); // prompt param holds the repo name here
+      const rebuildFramework = searchParams.get('framework') || 'React';
+      if (rebuild === 'true' && !generationStartedRef.current) {
+        generationStartedRef.current = true;
+        setSearchParams({}, { replace: true });
+        setLoading(false);
+        setIsGenerating(true);
+        // Fetch the imported files from DB, extract design context, then run create-mode generation
+        const buildFromImport = async () => {
+          try {
+            const { data: importedFiles } = await supabase
+              .from('project_files' as any)
+              .select('path, content')
+              .eq('project_id', id)
+              .limit(60) as any;
+            
+            // Build a rich design-extraction prompt from the imported source files
+            let designContext = '';
+            if (importedFiles && importedFiles.length > 0) {
+              const keyFiles = (importedFiles as Array<{path: string; content: string}>)
+                .filter(f => f.path.match(/\.(tsx|jsx|css|html)$/) && !f.path.includes('node_modules'))
+                .slice(0, 15);
+              designContext = keyFiles.map(f => `--- FILE: ${f.path} ---\n${f.content.substring(0, 800)}`).join('\n\n');
+            }
+
+            const freshPrompt = `Rebuild the website from the imported GitHub project below as a fully working, Sandpack-compatible React app.
+
+Extract and replicate EXACTLY:
+- All pages and routes (navbar links, page names)
+- Visual design: colors, fonts, gradients, dark/light theme
+- Layout structure: hero sections, cards, grids, spacing
+- All content: headings, text, descriptions, CTAs
+- Animations and visual effects (use framer-motion)
+
+SANDPACK RULES (MANDATORY — never break):
+- Use ONLY: react, react-dom, react-router-dom, framer-motion, lucide-react
+- Use Tailwind CDN classes for ALL styling
+- NEVER use: react-markdown, unified, rehype, remark, vfile, @supabase/supabase-js
+- NEVER use: import.meta, process.env, or any Node.js APIs
+- NEVER generate: vite.config.ts, postcss.config.js, tailwind.config.js
+- For any markdown content in the original, render as plain styled HTML divs instead
+- For any Supabase data fetching, replace with hardcoded realistic sample data arrays
+- Output a complete multi-page app with all components
+
+IMPORTED SOURCE FILES FOR REFERENCE:
+${designContext}`;
+
+            runGeneration(freshPrompt, 'wakti-dark', [], '');
+          } catch (err) {
+            console.error('[Rebuild] Failed to extract import context:', err);
+            runGeneration(`Rebuild the imported ${rebuildFramework} project (${rebuildRepo}) as a clean Sandpack-compatible React + TailwindCSS app. Use only react, react-router-dom, framer-motion, lucide-react. No import.meta, no react-markdown, no supabase.`, 'wakti-dark', [], '');
+          }
+        };
+        buildFromImport();
+      }
+
       if (generating === 'true' && prompt && !generationStartedRef.current) {
         generationStartedRef.current = true;
         // Set loading to false immediately so we show the full UI during generation
