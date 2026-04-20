@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { ChevronDown, ChevronUp, BookOpen, Calculator, Lightbulb } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -11,7 +11,7 @@ interface StudyModeMessageProps {
   language: string;
 }
 
-export function StudyModeMessage({
+function StudyModeMessageImpl({
   answer,
   steps = [],
   inputInterpretation,
@@ -120,3 +120,7 @@ export function StudyModeMessage({
     </div>
   );
 }
+
+// Item #8 Batch B1: memoize so parent streaming re-renders don't re-render this subtree
+// when its primitive/stable-ref props (answer, steps, language) haven't changed.
+export const StudyModeMessage = memo(StudyModeMessageImpl);

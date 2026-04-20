@@ -105,7 +105,7 @@ Deno.serve(async (req: Request) => {
       if (action === "status") {
         const { data, error } = await supabase
           .from("user_instagram_accounts")
-          .select("id, instagram_username, instagram_name, profile_picture_url, followers_count, token_expires_at, is_active")
+          .select("id, instagram_username, instagram_name, profile_picture_url, followers_count, token_expires_at, is_active, access_token")
           .eq("user_id", userId)
           .eq("is_active", true)
           .maybeSingle();
@@ -115,7 +115,23 @@ Deno.serve(async (req: Request) => {
           return jsonResponse({ error: "DB error", detail: error.message }, 500);
         }
 
-        return jsonResponse({ connected: !!data, account: data || null });
+        let account = data;
+        if (account?.access_token) {
+          const liveInfo = await fetchIGUserInfo(account.access_token);
+          if (liveInfo?.account_type) {
+            account = {
+              ...account,
+              account_type: liveInfo.account_type,
+            };
+          }
+        }
+
+        if (account) {
+          const { access_token: _accessToken, ...safeAccount } = account;
+          return jsonResponse({ connected: true, account: safeAccount });
+        }
+
+        return jsonResponse({ connected: false, account: null });
       }
 
       return jsonResponse({ error: "Unknown GET action" }, 400);
@@ -172,7 +188,7 @@ Deno.serve(async (req: Request) => {
           }
 
           console.log("[instagram-connect-user] Connected IG account @" + igUser.username + " for user " + userId);
-          return jsonResponse({ success: true, account });
+          return jsonResponse({ success: true, account: { ...account, account_type: igUser.account_type || null } });
 
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);

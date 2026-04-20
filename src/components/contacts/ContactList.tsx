@@ -46,13 +46,22 @@ interface ContactListProps {
   refetchUnreadCounts?: () => void;
   openChatUserId?: string | null;
   clearOpenChat?: () => void;
+  /**
+   * When true, pressing Chat always opens the in-place ChatPopup modal instead
+   * of navigating to `/contacts/:id`. Used when this list is embedded inside
+   * another page (e.g. Account → Social), so the user doesn't get pulled out
+   * of the Account context. Default: false (preserves existing behaviour on
+   * the standalone /contacts route).
+   */
+  embedded?: boolean;
 }
 
 export function ContactList({ 
   perContactUnread = {}, 
   refetchUnreadCounts = () => {},
   openChatUserId = null,
-  clearOpenChat = () => {}
+  clearOpenChat = () => {},
+  embedded = false,
 }: ContactListProps) {
   const { language } = useTheme();
   const { user } = useAuth();
@@ -60,7 +69,8 @@ export function ContactList({
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const isTablet = useIsTablet();
-  const useFullPageChat = isMobile || isTablet; // Full page on mobile/tablet, popup on desktop
+  // Embedded mode forces the popup path so we never navigate the host page away.
+  const useFullPageChat = !embedded && (isMobile || isTablet);
   
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [contactToDelete, setContactToDelete] = useState<{id: string, name: string} | null>(null);
@@ -241,11 +251,25 @@ export function ContactList({
     );
   }
 
-  // Sort: favorites first, then by display name
+  // Sort order (highest priority first):
+  //   1. Contacts with unread messages (more unread = higher)
+  //   2. Favorites
+  //   3. Alphabetical by display name
+  // This ensures a user who messaged you always rises to the top, even if they're
+  // not starred. See user feedback: "Messages should be up top."
   const sortedContacts = contacts
     ? [...contacts].sort((a: any, b: any) => {
+        const aUnread = perContactUnread[a.contact_id] || 0;
+        const bUnread = perContactUnread[b.contact_id] || 0;
+        // 1. Unread-bearing contacts above zero-unread contacts
+        if (aUnread > 0 && bUnread === 0) return -1;
+        if (aUnread === 0 && bUnread > 0) return 1;
+        // If both have unread messages, higher unread count first
+        if (aUnread !== bUnread && aUnread > 0 && bUnread > 0) return bUnread - aUnread;
+        // 2. Favorites next
         if (a.is_favorite && !b.is_favorite) return -1;
         if (!a.is_favorite && b.is_favorite) return 1;
+        // 3. Alphabetical
         const aName = (a.profile?.display_name || a.profile?.username || '').toLowerCase();
         const bName = (b.profile?.display_name || b.profile?.username || '').toLowerCase();
         return aName.localeCompare(bName);

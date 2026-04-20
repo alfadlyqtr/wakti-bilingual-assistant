@@ -270,44 +270,16 @@ export default function Account() {
 
   // Direct native purchase
   const [isBillingPurchasing, setIsBillingPurchasing] = useState(false);
-  const [billingDebugLog, setBillingDebugLog] = useState<string[]>([]);
-  const addBillingDebug = (msg: string) => {
-    console.log('[BillingDebug]', msg);
-    setBillingDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
-  };
-  const logBillingShellSnapshot = (label: string) => {
-    const snapshot = getPurchasesShellSnapshot() as any;
-    addBillingDebug(`${label} ready:${!!snapshot?.nativelyReady} ctor:${snapshot?.ctorName || 'none'} instance:${!!snapshot?.instanceCreated}`);
-    addBillingDebug(`${label} flags iOSApp:${!!snapshot?.nativelyFlags?.isIOSApp} AndroidApp:${!!snapshot?.nativelyFlags?.isAndroidApp}`);
-    addBillingDebug(`${label} methods: ${(snapshot?.instanceMethods || []).join(',') || 'none'}`);
-    addBillingDebug(`${label} capabilities: ${Object.entries(snapshot?.capabilities || {}).filter(([, value]) => !!value).map(([key]) => key).join(',') || 'none'}`);
-    if (snapshot?.nativelyScript) addBillingDebug(`${label} script: ${snapshot.nativelyScript}`);
-    if (snapshot?.snapshotError) addBillingDebug(`${label} snapshotError: ${snapshot.snapshotError}`);
-  };
 
   const handleBillingSubscribe = () => {
-    addBillingDebug('--- BUTTON PRESSED ---');
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     const isAndroid = /Android/.test(navigator.userAgent);
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    addBillingDebug(`QU:${isQUUser} iOS:${isIOS}`);
-    logBillingShellSnapshot('BillingShell');
     console.log('[BillingSubscribe] QU:', isQUUser, '| iOS:', isIOS);
 
     const billingCallback = async (resp: any) => {
-      addBillingDebug(`Callback fired! Status: ${resp?.status}`);
-      addBillingDebug(`Callback message: ${resp?.message}`);
-      if (resp?.error) addBillingDebug(`Callback error: ${JSON.stringify(resp.error)}`);
-      try {
-        const raw = JSON.stringify(resp);
-        const chunkSize = 140;
-        for (let i = 0; i < raw.length && i < 2000; i += chunkSize) {
-          addBillingDebug(`resp[${i}]: ${raw.slice(i, i + chunkSize)}`);
-        }
-      } catch {}
-
       const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
         resp.message.toLowerCase().includes('already subscribed');
       const isPurchased = resp?.status === 'SUCCESS' && resp?.message === 'purchased';
@@ -327,16 +299,15 @@ export default function Account() {
               .eq('id', user.id);
           } catch {}
           try {
-            localStorage.removeItem(`wakti_sub_status_${user.id}`);
+            // Item #7 Stage 7D: wakti_sub_status_ cache was dead (never written).
+            // UserProfileContext listens to wakti-subscription-updated directly.
             window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
-            window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
           } catch {}
           supabase.functions.invoke('check-subscription', { body: { userId: user.id } }).catch(() => {});
         }
         toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
         queryClient.invalidateQueries({ queryKey: ['subscription'] });
       } else if (resp?.status === 'FAILED') {
-        addBillingDebug(`SDK not ready: ${resp?.error}`);
         toast.error(language === 'ar' ? 'التطبيق غير جاهز، حاول مجدداً' : 'App not ready, please try again');
       } else if (resp?.status === 'ERROR') {
         toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
@@ -348,18 +319,14 @@ export default function Account() {
     try {
       if (isQUUser) {
         if (isIOS) {
-          addBillingDebug('QU iOS → showPaywall(qatar_university)');
           showPaywall(true, 'qatar_university', billingCallback);
         } else {
-          addBillingDebug('QU Android → purchasePackage(qatar_university)');
           purchasePackage('qatar_university', billingCallback);
         }
       } else {
-        addBillingDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', billingCallback);
       }
     } catch (e: any) {
-      addBillingDebug(`TRY/CATCH ERROR: ${e?.message || String(e)}`);
       setIsBillingPurchasing(false);
     }
 
@@ -1351,34 +1318,21 @@ export default function Account() {
                                 <Sparkles className="w-4 h-4 mr-2" />
                                 {isBillingPurchasing ? (language === 'en' ? 'Processing...' : 'جاري المعالجة...') : (language === 'en' ? 'Subscribe Now' : 'اشترك الآن')}
                               </Button>
-
-                              {/* DEBUG BOX */}
-                              {billingDebugLog.length > 0 && (
-                                <div className="w-full mt-4 text-left p-2 rounded bg-black/80 border border-red-500 max-h-40 overflow-y-auto">
-                                  <p className="text-red-400 text-xs font-bold mb-1">ACCOUNT BILLING DEBUG LOG:</p>
-                                  {billingDebugLog.map((log, i) => (
-                                    <div key={i} className="text-[10px] font-mono text-green-400 border-b border-white/10 pb-1 mb-1">{log}</div>
-                                  ))}
-                                </div>
+                              {paywallVariant === 'cancelled' && (
+                                <Button
+                                  variant="outline"
+                                  onClick={handleRestorePurchases}
+                                  disabled={isRestoring}
+                                  className="w-full max-w-xs"
+                                >
+                                  {isRestoring ? (
+                                    <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                                  ) : (
+                                    <RefreshCw className="w-4 h-4 mr-2" />
+                                  )}
+                                  {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
+                                </Button>
                               )}
-                            </div>
-                          )}
-                          {/* Expired trial: Restore only for cancelled variant */}
-                          {!isTrialActive && paywallVariant === 'cancelled' && (
-                            <div className="flex flex-col items-center gap-2 pt-2">
-                              <Button
-                                variant="outline"
-                                onClick={handleRestorePurchases}
-                                disabled={isRestoring}
-                                className="w-full max-w-xs"
-                              >
-                                {isRestoring ? (
-                                  <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                                ) : (
-                                  <RefreshCw className="w-4 h-4 mr-2" />
-                                )}
-                                {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
-                              </Button>
                             </div>
                           )}
                         </>

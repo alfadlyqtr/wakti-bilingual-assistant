@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, lazy, Suspense, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { emitEvent } from '@/utils/eventBus';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
@@ -1513,7 +1514,7 @@ export default function ProjectDetail() {
         } else {
           const startData: any = startRes.data;
           if (startData?.error === 'TRIAL_LIMIT_REACHED') {
-            window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: startData?.feature || 'ai_coder' } }));
+            emitEvent('wakti-trial-limit-reached', { feature: startData?.feature || 'ai_coder' });
             setIsGenerating(false);
             return;
           }

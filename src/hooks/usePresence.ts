@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { formatDistanceToNow } from "date-fns";
 
 type PresencePayload = {
@@ -57,19 +58,29 @@ export function usePresence(currentUserId?: string | null) {
     return 'Offline';
   }, [isOnline, lastSeen, formatLastSeen]);
 
+  // Item #8 Medium #9: hold the persistent presence channel in a ref so
+  // setUserTyping can reuse it instead of creating/leaking a new channel on
+  // every keystroke. The old code created a fresh channel + subscribe for
+  // each call and never removed it, leaking one realtime channel per typing
+  // tick on long chat sessions.
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const isSubscribedRef = useRef<boolean>(false);
+
   // Set typing status for current user
   const setUserTyping = useCallback((isTyping: boolean) => {
     if (!currentUserId) return;
-    
-    const channel = supabase.channel(channelName);
-    channel.subscribe(() => {
-      channel.track({
+    const ch = channelRef.current;
+    if (!ch || !isSubscribedRef.current) return; // channel not ready yet — drop the signal rather than leak
+    try {
+      ch.track({
         user_id: currentUserId,
         typing: isTyping,
-        last_seen: new Date().toISOString()
+        last_seen: new Date().toISOString(),
       } as PresencePayload);
-    });
-  }, [channelName, currentUserId]);
+    } catch {
+      // track() can throw if channel is in a closed/errored state — swallow silently
+    }
+  }, [currentUserId]);
 
   useEffect(() => {
     if (!currentUserId) return;
@@ -81,6 +92,8 @@ export function usePresence(currentUserId?: string | null) {
         },
       },
     });
+    channelRef.current = channel;
+    isSubscribedRef.current = false;
 
     const handlePresenceState = () => {
       const state = channel.presenceState<PresencePayload>();
@@ -121,6 +134,7 @@ export function usePresence(currentUserId?: string | null) {
       .on('broadcast', { event: 'typing' }, handleTypingEvent)
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
+          isSubscribedRef.current = true;
           await channel.track({
             user_id: currentUserId,
             typing: false,
@@ -131,6 +145,8 @@ export function usePresence(currentUserId?: string | null) {
 
     // Cleanup
     return () => {
+      isSubscribedRef.current = false;
+      channelRef.current = null;
       try {
         supabase.removeChannel(channel);
       } catch (_) {}

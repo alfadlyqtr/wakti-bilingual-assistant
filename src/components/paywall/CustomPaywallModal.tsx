@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { useStartTrial } from "@/hooks/useStartTrial";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { 
@@ -34,9 +34,9 @@ interface CustomPaywallModalProps {
 function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalProps) {
   const { language, setLanguage } = useTheme();
   const { signOut, user } = useAuth();
-  const { profile } = useUserProfile();
+  const { profile, applyFreshProfile } = useUserProfile();
+  const { startTrial } = useStartTrial();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [purchaseInProgress, setPurchaseInProgress] = useState(false);
@@ -44,20 +44,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const price = isQUUserDisplay
     ? { qar: 'QAR 73/month', usd: '$19.99/month' }
     : { qar: 'QAR 92/month', usd: '$25/month' };
-  const [debugLog, setDebugLog] = useState<string[]>([]);
-  const addDebug = (msg: string) => {
-    console.log('[DEBUG]', msg);
-    setDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
-  };
-  const logShellSnapshot = (label: string) => {
-    const snapshot = getPurchasesShellSnapshot() as any;
-    addDebug(`${label} ready:${!!snapshot?.nativelyReady} ctor:${snapshot?.ctorName || 'none'} instance:${!!snapshot?.instanceCreated}`);
-    addDebug(`${label} flags iOSApp:${!!snapshot?.nativelyFlags?.isIOSApp} AndroidApp:${!!snapshot?.nativelyFlags?.isAndroidApp}`);
-    addDebug(`${label} methods: ${(snapshot?.instanceMethods || []).join(',') || 'none'}`);
-    addDebug(`${label} capabilities: ${Object.entries(snapshot?.capabilities || {}).filter(([, value]) => !!value).map(([key]) => key).join(',') || 'none'}`);
-    if (snapshot?.nativelyScript) addDebug(`${label} script: ${snapshot.nativelyScript}`);
-    if (snapshot?.snapshotError) addDebug(`${label} snapshotError: ${snapshot.snapshotError}`);
-  };
   const [step, setStep] = useState(variant === 'new_user' ? 1 : 2);
   const [editingName, setEditingName] = useState(false);
   const [showFeatures, setShowFeatures] = useState(false);
@@ -110,7 +96,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
             setPurchaseInProgress(false);
             setLoading(false);
             try {
-              localStorage.removeItem(`wakti_sub_status_${user.id}`);
               window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
             } catch {}
             setTimeout(() => onOpenChange(false), 1000);
@@ -131,31 +116,15 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   }, [open, purchaseInProgress, user?.id, language, onOpenChange]);
 
   const handleSubscribe = async () => {
-    addDebug('--- BUTTON PRESSED ---');
     setLoading(true);
     setPurchaseInProgress(true);
 
     const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isAndroid = /Android/.test(navigator.userAgent);
-    const sdkOnWindow = !!(window as any).NativelyPurchases;
-    addDebug(`QU:${isQUUser} iOS:${isIOS} Android:${isAndroid}`);
-    addDebug(`NativelyPurchases on window: ${sdkOnWindow}`);
-    logShellSnapshot('Shell');
     console.log('[Purchase] QU:', isQUUser, '| iOS:', isIOS);
 
     const purchaseCallback = async (resp: any) => {
-      addDebug(`Callback fired! Status: ${resp?.status}`);
-      addDebug(`Callback message: ${resp?.message}`);
-      if (resp?.error) addDebug(`Callback error: ${JSON.stringify(resp.error)}`);
-      // Dump the entire raw response in chunks so we see every field Apple/RC returns
-      try {
-        const raw = JSON.stringify(resp);
-        const chunkSize = 140;
-        for (let i = 0; i < raw.length && i < 2000; i += chunkSize) {
-          addDebug(`resp[${i}]: ${raw.slice(i, i + chunkSize)}`);
-        }
-      } catch {}
       console.log('[Purchase] Response:', resp);
 
       const isAlreadySubscribed = resp?.status === 'ERROR' && typeof resp?.message === 'string' &&
@@ -183,9 +152,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
         toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
         if (user?.id) {
           try {
-            localStorage.removeItem(`wakti_sub_status_${user.id}`);
             window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
-            window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
           } catch {}
           supabase.functions.invoke('check-subscription', { body: { userId: user.id } })
             .then(({ data }) => { console.log('[Purchase] Background RC sync:', data?.isSubscribed); })
@@ -193,7 +160,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
         }
         setTimeout(() => onOpenChange(false), 1000);
       } else if (resp?.status === 'FAILED') {
-        addDebug(`SDK not ready: ${resp?.error}`);
         toast.error(language === 'ar' ? 'التطبيق غير جاهز، حاول مجدداً' : 'App not ready, please try again');
       } else if (resp?.status === 'ERROR') {
         toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
@@ -206,18 +172,14 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     try {
       if (isQUUser) {
         if (isIOS) {
-          addDebug('QU iOS → showPaywall(qatar_university)');
           showPaywall(true, 'qatar_university', purchaseCallback);
         } else {
-          addDebug('QU Android → purchasePackage(qatar_university)');
           purchasePackage('qatar_university', purchaseCallback);
         }
       } else {
-        addDebug('Standard → purchasePackage($rc_monthly)');
         purchasePackage('$rc_monthly', purchaseCallback);
       }
     } catch (e: any) {
-      addDebug(`TRY/CATCH ERROR: ${e?.message || String(e)}`);
       setLoading(false);
       setPurchaseInProgress(false);
     }
@@ -226,65 +188,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
       setPurchaseInProgress(false);
       setLoading(false);
     }, 10000);
-  };
-
-  const handleDiagnose = () => {
-    addDebug('--- DIAGNOSTIC START ---');
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const isAndroid = /Android/.test(navigator.userAgent);
-    addDebug(`Platform: iOS=${isIOS} Android=${isAndroid}`);
-    addDebug(`NativelyPurchases on window: ${!!(window as any).NativelyPurchases}`);
-    addDebug(`natively.isIOSApp: ${(window as any).natively?.isIOSApp}`);
-    addDebug(`natively.isAndroidApp: ${(window as any).natively?.isAndroidApp}`);
-    logShellSnapshot('Diagnose');
-    try {
-      const snapshot = getPurchasesShellSnapshot();
-      const raw = JSON.stringify(snapshot);
-      const chunkSize = 140;
-      for (let i = 0; i < raw.length && i < 2200; i += chunkSize) {
-        addDebug(`shell[${i}]: ${raw.slice(i, i + chunkSize)}`);
-      }
-    } catch (e: any) {
-      addDebug(`snapshot stringify failed: ${e?.message || String(e)}`);
-    }
-    try {
-      getOfferings((resp: any) => {
-        addDebug(`getOfferings callback fired`);
-        addDebug(`status: ${resp?.status || 'n/a'}`);
-        if (resp?.error) addDebug(`error: ${JSON.stringify(resp.error).slice(0, 200)}`);
-        try {
-          const raw = JSON.stringify(resp);
-          // Chunk long output into readable pieces
-          const chunkSize = 140;
-          for (let i = 0; i < raw.length && i < 1400; i += chunkSize) {
-            addDebug(`raw[${i}]: ${raw.slice(i, i + chunkSize)}`);
-          }
-          addDebug(`raw length: ${raw.length}`);
-        } catch (e: any) {
-          addDebug(`stringify failed: ${e?.message || String(e)}`);
-        }
-        // Try to find qu_discount
-        try {
-          const offerings = resp?.offerings || resp?.all || resp;
-          const keys = offerings && typeof offerings === 'object' ? Object.keys(offerings).slice(0, 20) : [];
-          addDebug(`top-level keys: ${keys.join(',')}`);
-          const quOff = (offerings as any)?.qu_discount || (offerings as any)?.all?.qu_discount;
-          addDebug(`qu_discount offering found: ${!!quOff}`);
-          if (quOff) {
-            const pkgs = quOff?.availablePackages || quOff?.packages || [];
-            addDebug(`qu packages count: ${Array.isArray(pkgs) ? pkgs.length : 'n/a'}`);
-            if (Array.isArray(pkgs) && pkgs[0]) {
-              addDebug(`first pkg id: ${pkgs[0]?.identifier || pkgs[0]?.id || 'none'}`);
-              addDebug(`first pkg product: ${pkgs[0]?.product?.identifier || pkgs[0]?.storeProduct?.identifier || 'none'}`);
-            }
-          }
-        } catch (e: any) {
-          addDebug(`parse offerings failed: ${e?.message || String(e)}`);
-        }
-      });
-    } catch (e: any) {
-      addDebug(`getOfferings threw: ${e?.message || String(e)}`);
-    }
   };
 
   const handleRestore = () => {
@@ -307,7 +210,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
               setRestoring(false);
               if (user?.id) {
                 try {
-                  localStorage.removeItem(`wakti_sub_status_${user.id}`);
                   window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
                 } catch {}
               }
@@ -347,64 +249,31 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
 
   const handleSkip = async () => {
     if (!user?.id) return;
-    try {
-      const { error: upsertError } = await supabase
-        .from('profiles')
-        .upsert({
-          id: user.id,
-          email: user.email || '',
-          free_access_start_at: new Date().toISOString(),
-          trial_popup_shown: true
-        }, { onConflict: 'id', ignoreDuplicates: false });
-      if (upsertError) {
-        console.error('[Paywall] Profile upsert failed:', upsertError);
-        await supabase
-          .from('profiles')
-          .update({
-            free_access_start_at: new Date().toISOString(),
-            trial_popup_shown: true
-          })
-          .eq('id', user.id);
-      }
 
-      try {
-        const now = new Date();
-        const pushMessages = [
-          { delayHours: 12, en: '12 hours left of your Wakti trial subscribe now and get 3 more free days', ar: 'باقي 12 ساعة على انتهاء تجربتك في وقتي اشترك الآن واحصل على 3 أيام مجانية إضافية' },
-          { delayHours: 22, en: '2 hours left of your Wakti trial subscribe now and get 3 more free days', ar: 'باقي ساعتين على انتهاء تجربتك في وقتي اشترك الآن واحصل على 3 أيام مجانية إضافية' },
-          { delayHours: 24, en: 'Your Wakti trial has ended. Subscribe to continue guess what you still get 3 more free days', ar: 'انتهت تجربتك في وقتي. اشترك للمتابعة والمفاجأة، لا تزال تحصل على 3 أيام مجانية' },
-        ];
-        for (const msg of pushMessages) {
-          const sendAt = new Date(now.getTime() + msg.delayHours * 60 * 60 * 1000);
-          supabase.functions.invoke('schedule-reminder-push', {
-            body: {
-              userId: user.id,
-              title: 'Wakti AI',
-              message: language === 'ar' ? msg.ar : msg.en,
-              scheduledFor: sendAt.toISOString(),
-              data: { type: 'trial_reminder' }
-            }
-          }).catch(() => {});
-        }
-      } catch {}
-
-      window.dispatchEvent(new CustomEvent('wakti-trial-started'));
-      window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
-      onOpenChange(false);
-      toast.success(language === 'ar' ? 'مرحباً بك في وقتي!' : 'Welcome to Wakti!');
-
-      window.OneSignalDeferred = window.OneSignalDeferred || [];
-      window.OneSignalDeferred.push(async function(OneSignal: any) {
-        try {
-          await OneSignal.Notifications.requestPermission();
-          console.log('[Paywall] OneSignal Web Push permission requested');
-        } catch (err) {
-          console.warn('[Paywall] OneSignal Web Push permission request failed:', err);
-        }
-      });
-    } catch (err) {
-      console.error('[Paywall] Skip/trial start failed:', err);
+    // Item #8 Batch C1: Trial-start logic (Edge Function + legacy fallback +
+    // event dispatches) now lives in useStartTrial. This handler is reduced to
+    // Paywall-specific UI side effects (close modal, success toast, OneSignal
+    // web push permission prompt).
+    const result = await startTrial({ language });
+    if (!result.ok) {
+      console.error('[Paywall] Trial start failed, keeping modal open:', result.error);
+      return;
     }
+
+    onOpenChange(false);
+    toast.success(language === 'ar' ? 'مرحباً بك في وقتي!' : 'Welcome to Wakti!');
+
+    // Request OneSignal Web Push permission AFTER trial starts so the prompt
+    // feels consequent to the user's decision to proceed.
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    window.OneSignalDeferred.push(async function(OneSignal: any) {
+      try {
+        await OneSignal.Notifications.requestPermission();
+        console.log('[Paywall] OneSignal Web Push permission requested');
+      } catch (err) {
+        console.warn('[Paywall] OneSignal Web Push permission request failed:', err);
+      }
+    });
   };
 
   const subtitles = {
@@ -517,22 +386,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
             })()}
           </div>
         </div>
-
-        {/* Global Debug Box - renders regardless of step, no height cap so all entries visible */}
-        {debugLog.length > 0 && (
-          <div className="w-full text-left p-2 rounded bg-black/90 border-2 border-yellow-500 my-2">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-yellow-400 text-xs font-bold">🔍 SDK DIAGNOSTIC LOG ({debugLog.length} entries)</p>
-              <button
-                onClick={() => setDebugLog([])}
-                className="text-[10px] text-yellow-400 border border-yellow-500/50 rounded px-2 py-0.5 hover:bg-yellow-500/10"
-              >Clear</button>
-            </div>
-            {debugLog.map((log, i) => (
-              <div key={i} className="text-[10px] font-mono text-green-400 border-b border-white/10 pb-1 mb-1 break-all">{log}</div>
-            ))}
-          </div>
-        )}
 
         {/* ── STEP 1: Hello Wall (new_user only) ── */}
         {step === 1 && (
@@ -766,15 +619,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                   : '✨ We constantly update and add new features!'}
               </p>
 
-              {/* Debug Box */}
-              {debugLog.length > 0 && (
-                <div className="w-full text-left p-2 rounded bg-black/80 border border-red-500 max-h-32 overflow-y-auto">
-                  <p className="text-red-400 text-xs font-bold mb-1">SDK DEBUG LOG:</p>
-                  {debugLog.map((log, i) => (
-                    <div key={i} className="text-[10px] font-mono text-green-400 border-b border-white/10 pb-1 mb-1">{log}</div>
-                  ))}
-                </div>
-              )}
 
               {/* Continue button */}
               <div className="hello-float hello-float-5 px-1 pb-2">
@@ -897,14 +741,6 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                     <Sparkles className="w-5 h-5 mr-2" />
                   )}
                   {language === 'ar' ? 'اشترك الآن' : 'Subscribe Now'}
-                </Button>
-
-                <Button
-                  onClick={handleDiagnose}
-                  variant="outline"
-                  className="w-full border-yellow-500/50 hover:border-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 font-mono text-xs"
-                >
-                  🔍 Diagnose SDK (iOS QU debug)
                 </Button>
 
                 {showRestorePurchases && (

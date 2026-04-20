@@ -36,6 +36,8 @@ const CATEGORY_AUDIO: Record<string, string> = {
   "evening-dhikr": "/WAKTI AZKAR NIGHT.mp3",
 };
 
+const AUDIO_END_AT = 20 * 60 + 50;
+
 export default function DeenAzkar() {
   const navigate = useNavigate();
   const { language, theme } = useTheme();
@@ -113,7 +115,8 @@ export default function DeenAzkar() {
   const seekAudioBy = useCallback((delta: number) => {
     const audio = audioRef.current;
     if (!audio) return;
-    const nextTime = Math.min(Math.max(audio.currentTime + delta, 0), audio.duration || 0);
+    const maxTime = Math.min(audio.duration || AUDIO_END_AT, AUDIO_END_AT);
+    const nextTime = Math.min(Math.max(audio.currentTime + delta, 0), maxTime);
     audio.currentTime = nextTime;
     setAudioCurrentTime(nextTime);
   }, []);
@@ -121,22 +124,29 @@ export default function DeenAzkar() {
   const handleAudioSeek = useCallback((nextValue: number) => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.currentTime = nextValue;
-    setAudioCurrentTime(nextValue);
+    const clampedValue = Math.min(nextValue, Math.min(audio.duration || AUDIO_END_AT, AUDIO_END_AT));
+    audio.currentTime = clampedValue;
+    setAudioCurrentTime(clampedValue);
   }, []);
 
   const syncAudioDuration = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    setAudioDuration(audio.duration || 0);
-    setAudioCurrentTime(audio.currentTime || 0);
+    setAudioDuration(Math.min(audio.duration || 0, AUDIO_END_AT));
+    setAudioCurrentTime(Math.min(audio.currentTime || 0, AUDIO_END_AT));
     setIsPlayingAudio(!audio.paused && !audio.ended);
   }, []);
 
   const syncAudioTime = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    setAudioCurrentTime(audio.currentTime || 0);
+    const cappedTime = Math.min(audio.currentTime || 0, AUDIO_END_AT);
+    if ((audio.currentTime || 0) >= AUDIO_END_AT) {
+      audio.currentTime = AUDIO_END_AT;
+      audio.pause();
+      setIsPlayingAudio(false);
+    }
+    setAudioCurrentTime(cappedTime);
   }, []);
 
   const handleAudioPlay = useCallback(() => {
@@ -327,16 +337,16 @@ export default function DeenAzkar() {
                     </p>
                   </div>
                   <span className="text-[11px] tabular-nums shrink-0" style={{ color: textMuted }}>
-                    {audioDuration > 0 ? `${formatAudioTime(audioCurrentTime)} / ${formatAudioTime(audioDuration)}` : "0:00 / 0:00"}
+                    {`${formatAudioTime(audioCurrentTime)} / ${formatAudioTime(audioDuration || AUDIO_END_AT)}`}
                   </span>
                 </div>
 
                 <input
                   type="range"
                   min={0}
-                  max={audioDuration || 0}
+                  max={audioDuration || AUDIO_END_AT}
                   step={1}
-                  value={Math.min(audioCurrentTime, audioDuration || 0)}
+                  value={Math.min(audioCurrentTime, audioDuration || AUDIO_END_AT)}
                   onChange={(e) => handleAudioSeek(Number(e.target.value))}
                   className="w-full h-1.5 cursor-pointer accent-blue-500"
                   aria-label={isAr ? "شريط التقدّم الصوتي" : "Audio progress slider"}

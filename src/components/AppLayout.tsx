@@ -14,6 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useTheme } from "@/providers/ThemeProvider";
 import { setupNotificationClickHandler } from "@/integrations/natively/notificationsBridge";
+import { onEvent } from "@/utils/eventBus";
 import { toast } from "sonner";
 
 const CustomPaywallModal = lazy(() => import("@/components/paywall/CustomPaywallModal"));
@@ -54,15 +55,12 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // Trial limit bouncer — during 24h trial, show friendly bilingual toast (NOT the full paywall)
   React.useEffect(() => {
-    const handleTrialLimit = (e: Event) => {
-      const feature = (e as CustomEvent)?.detail?.feature || '';
+    return onEvent('wakti-trial-limit-reached', ({ feature }) => {
       const msg = language === 'ar'
-        ? `Ù„Ù‚Ø¯ ÙˆØµÙ„Øª Ù„Ù„Ø­Ø¯ Ø§Ù„Ù…Ø¬Ø§Ù†ÙŠ Ù„Ù‡Ø°Ù‡ Ø§Ù„Ù…ÙŠØ²Ø©. Ø§Ø´ØªØ±Ùƒ ÙÙŠ ÙˆÙƒØªÙŠ Ù„Ù„Ø§Ø³ØªÙ…ØªØ§Ø¹ Ø¨ÙˆØµÙˆÙ„ ØºÙŠØ± Ù…Ø­Ø¯ÙˆØ¯! ðŸš€`
+        ? `Ù„Ù‚Ø¯ ÙˆØµÙ„Øª Ù„Ù„Ø­Ø¯ Ø§Ù„Ù…Ø¬Ø§Ù†ÙŠ Ù„Ù‡Ø°Ù‡ Ø§Ù„Ù…ÙŠØ²Ø©. Ø§Ø´ØªØ±Ùƒ ÙÙŠ ÙˆÙƒØªÙŠ Ù„Ù„Ø§Ø³ØªÙ…ØªØ§Ø¹ Ø¨ÙˆØµÙˆÙ„ ØºÙŠØ± Ù…Ø­Ø¯ÙˆØ¯! ðŸš€`
         : `You've reached the free limit for this feature. Subscribe to Wakti for unlimited access! ðŸš€`;
-      toast.error(msg, { duration: 6000, id: `trial-limit-${feature}` });
-    };
-    window.addEventListener('wakti-trial-limit-reached', handleTrialLimit);
-    return () => window.removeEventListener('wakti-trial-limit-reached', handleTrialLimit);
+      toast.error(msg, { duration: 6000, id: `trial-limit-${feature || 'unknown'}` });
+    });
   }, [language]);
 
   // Unified notification system - subscribes to notification_history for all notification types

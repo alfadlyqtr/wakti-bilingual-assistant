@@ -3,10 +3,31 @@
  * Exports slides as PDF (card-style) or PPTX (PowerPoint)
  */
 
-import { jsPDF } from 'jspdf';
+// Item #8 Batch A2: lazy-load jsPDF (~400KB) and pdf-lib (~1MB).
+// These only load when the user actually clicks "Export PDF" — the 330KB
+// PresentationTab chunk itself no longer pulls them in on open.
+import type { jsPDF as JsPDFType } from 'jspdf';
+import type { PDFDocument as PDFDocumentType } from 'pdf-lib';
 import html2canvas from 'html2canvas';
 import * as htmlToImage from 'html-to-image';
-import { PDFDocument } from 'pdf-lib';
+
+let _jsPDF: typeof JsPDFType | null = null;
+async function loadJsPDF() {
+  if (!_jsPDF) {
+    const mod = await import('jspdf');
+    _jsPDF = mod.jsPDF;
+  }
+  return _jsPDF;
+}
+
+let _PDFDocument: typeof PDFDocumentType | null = null;
+async function loadPDFDocument() {
+  if (!_PDFDocument) {
+    const mod = await import('pdf-lib');
+    _PDFDocument = mod.PDFDocument;
+  }
+  return _PDFDocument;
+}
 
 // Text style interface
 interface TextStyle {
@@ -276,7 +297,8 @@ export async function exportSlidesToPDF(
   onProgress?: (current: number, total: number) => void
 ): Promise<Blob> {
   // Create PDF in landscape (16:9 aspect ratio)
-  const doc = new jsPDF({
+  const JsPDF = await loadJsPDF();
+  const doc = new JsPDF({
     orientation: 'landscape',
     unit: 'mm',
     format: [297, 167], // 16:9 aspect ratio in mm
@@ -359,6 +381,7 @@ export async function exportSlidesToPDFClean(
     // 1920x1080 at 72 DPI → points: 1920*(72/96)=1440, 1080*(72/96)=810
     const pageWidth = 1440;
     const pageHeight = 810;
+    const PDFDocument = await loadPDFDocument();
     const pdfDoc = await PDFDocument.create();
 
     for (let i = 0; i < slides.length; i++) {
@@ -393,7 +416,8 @@ export async function exportSlidesToPDFClean(
     return new Blob([finalBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
   }
 
-  const doc = new jsPDF({
+  const JsPDF = await loadJsPDF();
+  const doc = new JsPDF({
     orientation: 'landscape',
     unit: 'mm',
     format: [297, 167],

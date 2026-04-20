@@ -2,6 +2,7 @@
 import { supabase, ensurePassport, getCurrentUserId } from '@/integrations/supabase/client';
 import { getNativeLocation, queryNeedsFreshLocation, clearLocationCache } from '@/integrations/natively/locationBridge';
 import { parseReminderFromResponse, createScheduledReminder, cancelRecentPendingReminders } from '@/services/ReminderService';
+import { emitEvent } from '@/utils/eventBus';
 
 // Module-level session cache — avoids a Supabase network round-trip on every message send.
 // Token validity is 1 hour; we refresh 5 minutes early to be safe.
@@ -308,7 +309,7 @@ class WaktiAIV2ServiceClass {
     // If forceFresh, request fresh location with skipCache
     let hasDeviceGPS = false;
     try {
-      const nativeLoc = await getNativeLocation({ skipCache: forceFresh });
+      const nativeLoc = await getNativeLocation({ skipCache: forceFresh, timeoutMs: 1500 });
       if (nativeLoc && typeof nativeLoc.latitude === 'number' && typeof nativeLoc.longitude === 'number') {
         hasDeviceGPS = true;
         resolved = {
@@ -1076,7 +1077,7 @@ class WaktiAIV2ServiceClass {
 
                   // Trial limit reached — dispatch global event and stop cleanly
                   if (errMsg === 'TRIAL_LIMIT_REACHED' || parsed.trialLimitReached) {
-                    window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: parsed.feature || 'ai_chat' } }));
+                    emitEvent('wakti-trial-limit-reached', { feature: parsed.feature || 'ai_chat' });
                     if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
                     return;
                   }

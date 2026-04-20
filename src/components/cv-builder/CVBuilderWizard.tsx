@@ -8,12 +8,19 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
 import ShareButton from '@/components/ui/ShareButton';
 import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
+// Item #8 Batch A2: lazy-load jsPDF (~400KB). CV PDF only generates on download click.
+import type { jsPDF as JsPDFType } from 'jspdf';
 import {
   ArrowLeft, Upload, User, Briefcase, GraduationCap, Award,
   Plus, X, Trash2, Mail, Phone, MapPin, Linkedin, Globe, FileText,
   Loader2, Eye, ChevronDown, ChevronUp, ArrowRight, Star, Check, LayoutGrid, List, Share2, Download, Sparkles,
 } from 'lucide-react';
+
+let _jsPDF: typeof JsPDFType | null = null;
+async function loadJsPDF() {
+  if (!_jsPDF) _jsPDF = (await import('jspdf')).jsPDF;
+  return _jsPDF;
+}
 
 // ============================================================================
 // TYPES
@@ -2159,7 +2166,8 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
     try {
       const color = selectedTemplate.colors[selectedColorIndex];
       const d = cvPreviewData;
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const JsPDF = await loadJsPDF();
+      const pdf = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const W = pdf.internal.pageSize.getWidth();   // 210
       const H = pdf.internal.pageSize.getHeight();  // 297
 

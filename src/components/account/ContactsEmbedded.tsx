@@ -8,6 +8,7 @@ export function ContactsEmbedded({ language }: { language: string }) {
       language={language}
       activeTab={activeTab}
       setActiveTab={setActiveTab}
+      embedded
     />
   );
 }

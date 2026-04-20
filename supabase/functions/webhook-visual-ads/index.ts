@@ -68,13 +68,48 @@ serve(async (req) => {
           : rawResult;
         const parsedRecord = asRecord(parsed);
         const directUrls = parsedRecord?.resultUrls ?? parsedRecord?.result_urls ?? parsedRecord?.urls ?? parsedRecord?.generated;
+        
+        let initialUrls: string[] = [];
         if (Array.isArray(directUrls)) {
-          resultUrls = directUrls.filter((value): value is string => typeof value === "string" && value.length > 0);
+          initialUrls = directUrls.filter((value): value is string => typeof value === "string" && value.length > 0);
         }
         const video = asRecord(parsedRecord?.video);
-        if (!resultUrls.length && typeof video?.url === "string") {
-          resultUrls = [video.url];
+        if (!initialUrls.length && typeof video?.url === "string") {
+          initialUrls = [video.url];
         }
+
+        // Re-host the results to Supabase Storage to bypass CORS blocks on the client
+        const finalUrls: string[] = [];
+        for (const url of initialUrls) {
+          try {
+            if (url.includes('supabase.co')) {
+              finalUrls.push(url);
+              continue;
+            }
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`Failed to fetch from KIE: ${res.status}`);
+            const blob = await res.blob();
+            const ext = blob.type.includes('png') ? 'png' : blob.type.includes('mp4') ? 'mp4' : blob.type.includes('webp') ? 'webp' : 'jpg';
+            const fileName = `kie-results/${taskId}-${crypto.randomUUID()}.${ext}`;
+            
+            const { error: uploadErr } = await supabase.storage
+              .from("generated-images")
+              .upload(fileName, blob, { contentType: blob.type });
+            
+            if (uploadErr) throw uploadErr;
+            
+            const { data: publicUrlData } = supabase.storage
+              .from("generated-images")
+              .getPublicUrl(fileName);
+              
+            finalUrls.push(publicUrlData.publicUrl);
+          } catch (e) {
+            console.error("[webhook-visual-ads] Failed to re-host KIE result:", e);
+            finalUrls.push(url); // fallback to original KIE url
+          }
+        }
+        resultUrls = finalUrls;
+        
       } catch (e) {
         console.error("[webhook-visual-ads] Failed to parse result payload:", e);
         statusToSave = "FAILED";
@@ -93,6 +128,12 @@ serve(async (req) => {
     if (resultUrls.length) updatePayload.result_urls = resultUrls;
     if (errorMsg) updatePayload.error_msg = errorMsg;
 
+    const { data: jobData } = await supabase
+      .from("visual_ads_jobs")
+      .select("user_id")
+      .eq("task_id", taskId)
+      .maybeSingle();
+
     const { error: updateErr } = await supabase
       .from("visual_ads_jobs")
       .update(updatePayload)
@@ -102,6 +143,34 @@ serve(async (req) => {
       console.error("[webhook-visual-ads] Failed to update job row:", updateErr.message);
     } else {
       console.log("[webhook-visual-ads] Job row updated for taskId:", taskId);
+      
+      // Automatically save to the user's Saved gallery
+      if (statusToSave === "COMPLETED" && resultUrls.length > 0 && jobData?.user_id) {
+        for (const url of resultUrls) {
+          try {
+            // Check if already exists to prevent duplicates
+            const { data: existing } = await supabase
+              .from("user_generated_images")
+              .select("id")
+              .eq("image_url", url)
+              .maybeSingle();
+              
+            if (!existing) {
+              const storagePath = url.split('/generated-images/')[1];
+              await supabase.from("user_generated_images").insert({
+                user_id: jobData.user_id,
+                image_url: url,
+                submode: "visual-ads",
+                quality: "nano-banana-2",
+                meta: { storage_path: storagePath ? decodeURIComponent(storagePath) : null }
+              });
+              console.log("[webhook-visual-ads] Inserted image into user_generated_images gallery");
+            }
+          } catch (e) {
+            console.error("[webhook-visual-ads] Failed to insert gallery row:", e);
+          }
+        }
+      }
     }
 
     return new Response(JSON.stringify({ ok: true, received: true }), {

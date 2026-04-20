@@ -11,7 +11,7 @@ interface YouTubePreviewProps {
 }
 
 // Use YouTube Iframe Player API for full control and reliable syncing
-export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, description, thumbnail }) => {
+const YouTubePreviewImpl: React.FC<YouTubePreviewProps> = ({ videoId, title, description, thumbnail }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
   const [duration, setDuration] = useState<number>(0);
@@ -566,4 +566,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   );
 };
 
+// Item #8 Batch B1: memoize — props are all primitives (videoId, title, description, thumbnail),
+// so default shallow equality is safe and skips re-renders during parent streaming.
+export const YouTubePreview = React.memo(YouTubePreviewImpl);
 export default YouTubePreview;

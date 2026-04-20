@@ -349,7 +349,10 @@ export default function AdminMessages() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setProjectInquiries(data || []);
+      // Supabase's generated row type differs slightly from the local
+      // ProjectInquiry interface (column nullability). Cast through unknown
+      // because the UI only reads fields that are always present.
+      setProjectInquiries((data ?? []) as unknown as ProjectInquiry[]);
     } catch (error) {
       console.error('Error loading project inquiries:', error);
       toast.error('Failed to load project inquiries');

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
+import { emitEvent } from '@/utils/eventBus';
 import { useAuth } from '@/contexts/AuthContext';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 import { supabase } from '@/integrations/supabase/client';
@@ -357,7 +358,7 @@ const DiagramsTab: React.FC = () => {
       });
 
       if (response.error === 'TRIAL_LIMIT_REACHED') {
-        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: 'diagrams' } }));
+        emitEvent('wakti-trial-limit-reached', { feature: 'diagrams' });
         setIsLoading(false);
         return;
       }

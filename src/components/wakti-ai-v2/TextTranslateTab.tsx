@@ -3,14 +3,28 @@ import { Copy, Loader2, PenLine, Trash2 } from 'lucide-react';
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker?url';
-import Tesseract from 'tesseract.js';
-import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import ArabicReshaper from 'arabic-reshaper';
+import type { jsPDF as JsPDFType } from 'jspdf';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
+
+// Item #8 Batch A2: lazy-load tesseract.js (~10MB with wasm+worker) and jsPDF (~400KB).
+// Tesseract only runs when the user uploads an image that needs OCR; jsPDF only
+// runs when generating the translated PDF. Neither should live in the base chunk.
+let _Tesseract: any = null;
+async function loadTesseract() {
+  if (!_Tesseract) _Tesseract = (await import('tesseract.js')).default;
+  return _Tesseract;
+}
+
+let _jsPDF: typeof JsPDFType | null = null;
+async function loadJsPDF() {
+  if (!_jsPDF) _jsPDF = (await import('jspdf')).jsPDF;
+  return _jsPDF;
+}
 import {
   AlertDialog,
   AlertDialogAction,
@@ -414,6 +428,7 @@ export default function TextTranslateTab() {
   };
 
   const extractTextFromImage = async (file: File): Promise<string> => {
+    const Tesseract = await loadTesseract();
     const res = await Tesseract.recognize(file, 'eng+ara');
     return (res.data?.text || '').trim();
   };
@@ -535,7 +550,8 @@ export default function TextTranslateTab() {
       const previewObjectUrl = URL.createObjectURL(previewBlob);
       setTtPreviewUrl(previewObjectUrl);
 
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const JsPDF = await loadJsPDF();
+      const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       const margin = 10;

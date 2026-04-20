@@ -5,6 +5,7 @@ import { SavedConversationsService } from '@/services/SavedConversationsService'
 import { EnhancedFrontendMemory, ConversationMetadata } from '@/services/EnhancedFrontendMemory';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useAuth } from '@/contexts/AuthContext';
+import { onEvent } from '@/utils/eventBus';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { supabase } from '@/integrations/supabase/client';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
@@ -117,16 +118,13 @@ const WaktiAIV2 = () => {
     }
   };
 
-  // Lock chat input when ai_chat trial limit is reached
+  // Lock chat input when ai_chat trial limit is reached (typed eventBus)
   useEffect(() => {
-    const handleTrialLimit = (e: Event) => {
-      const feature = (e as CustomEvent)?.detail?.feature;
+    return onEvent('wakti-trial-limit-reached', ({ feature }) => {
       if (!feature || feature === 'ai_chat') {
         setChatTrialLimitReached(true);
       }
-    };
-    window.addEventListener('wakti-trial-limit-reached', handleTrialLimit);
-    return () => window.removeEventListener('wakti-trial-limit-reached', handleTrialLimit);
+    });
   }, []);
 
   // Listen for quick action prompts from EnhancedQuickActions component

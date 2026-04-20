@@ -21,6 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { VoiceRecorder } from "@/components/contacts/VoiceRecorder";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePresence } from "@/hooks/usePresence";
+import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 const MAX_CHARS = 200;
@@ -89,12 +90,18 @@ export default function ChatPage() {
     })();
   }, [contactId, setExternalLastSeen]);
 
+  // Item #8 Batch B2: Realtime subscription replaces the old 5s polling.
+  // The hook invalidates this query cache whenever a matching message
+  // row is inserted/updated/deleted on the server.
+  useRealtimeMessages(contactId, currentUserId);
+
   // Get messages for this contact
   const { data: allMessages, isLoading: isLoadingMessages } = useQuery({
     queryKey: ['directMessages', contactId],
     queryFn: () => getMessages(contactId!),
-    refetchInterval: 5000,
     enabled: !!contactId,
+    // refetchInterval removed — realtime handles incremental updates now.
+    // refetchOnWindowFocus stays default (true) as a safety net if realtime drops.
   });
 
   // Auto scroll when messages change

@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Bell, BellOff, CheckCircle, AlertCircle, MessageCircle, Users, CheckSquare, Calendar, Volume2, Info, Smartphone } from 'lucide-react';
+import { Bell, BellOff, CheckCircle, AlertCircle, MessageCircle, Users, CheckSquare, Calendar, Volume2, Info, Smartphone, MessageSquareText } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,6 +21,8 @@ interface NotificationPreferences {
   event_rsvps: boolean;
   enableSounds: boolean;
   enableToasts: boolean;
+  /** Item #8 post-Batch-B: in-app popup when a new DM arrives. Default on. */
+  message_popups: boolean;
 }
 
 export default function NotificationSettings() {
@@ -34,6 +36,7 @@ export default function NotificationSettings() {
     event_rsvps: true,
     enableSounds: true,
     enableToasts: true,
+    message_popups: true,
   });
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>('default');
   const [isLoading, setIsLoading] = useState(false);
@@ -227,6 +230,20 @@ export default function NotificationSettings() {
                 <Switch checked={preferences.messages} onCheckedChange={(checked) => updatePreference('messages', checked)} />
               </div>
 
+              {/* Message Popups (in-app) */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-sky-500/10 shrink-0">
+                    <MessageSquareText className="h-5 w-5 text-sky-500" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-base">{language === 'ar' ? 'نافذة الرسالة' : 'Message popup'}</div>
+                    <div className="text-xs text-muted-foreground leading-tight mt-0.5">{language === 'ar' ? 'عرض نافذة داخل التطبيق عند وصول رسالة جديدة' : 'Show in-app popup when a new message arrives'}</div>
+                  </div>
+                </div>
+                <Switch checked={preferences.message_popups} onCheckedChange={(checked) => updatePreference('message_popups', checked)} />
+              </div>
+
               {/* Contact Requests */}
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -354,6 +371,18 @@ export default function NotificationSettings() {
                   </div>
                 </div>
                 <Switch checked={preferences.messages} onCheckedChange={(checked) => updatePreference('messages', checked)} />
+              </div>
+
+              {/* Message Popups (in-app) */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <MessageSquareText className="h-5 w-5 text-sky-500" />
+                  <div>
+                    <div className="font-medium">{language === 'ar' ? 'نافذة الرسالة' : 'Message popup'}</div>
+                    <div className="text-sm text-muted-foreground">{language === 'ar' ? 'عرض نافذة داخل التطبيق عند وصول رسالة جديدة' : 'Show in-app popup when a new message arrives'}</div>
+                  </div>
+                </div>
+                <Switch checked={preferences.message_popups} onCheckedChange={(checked) => updatePreference('message_popups', checked)} />
               </div>
 
               {/* Contact Requests */}

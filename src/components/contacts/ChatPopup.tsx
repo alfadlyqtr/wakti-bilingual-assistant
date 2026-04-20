@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { VoiceRecorder } from "./VoiceRecorder";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePresence } from "@/hooks/usePresence";
+import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
 
 interface ChatPopupProps {
   isOpen: boolean;
@@ -128,12 +129,16 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     getUserId();
   }, []);
 
+  // Item #8 Batch B2: Realtime subscription replaces the old 5s polling.
+  // Only subscribes while the popup is open to avoid idle background connections.
+  useRealtimeMessages(isOpen ? contactId : null, currentUserId);
+
   // Get messages for this contact
   const { data: allMessages, isLoading: isLoadingMessages } = useQuery({
     queryKey: ['directMessages', contactId],
     queryFn: () => getMessages(contactId),
-    refetchInterval: 5000,
     enabled: !!contactId && isOpen,
+    // refetchInterval removed — realtime handles incremental updates now.
   });
 
   // Auto scroll when messages change or on open

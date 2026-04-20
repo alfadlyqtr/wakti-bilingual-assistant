@@ -3996,7 +3996,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       });
 
       if (genError?.message?.includes('TRIAL_LIMIT_REACHED') || genData?.error === 'TRIAL_LIMIT_REACHED') {
-        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: 'music' } }));
+        emitEvent('wakti-trial-limit-reached', { feature: 'music' });
         setSubmitting(false);
         return;
       }

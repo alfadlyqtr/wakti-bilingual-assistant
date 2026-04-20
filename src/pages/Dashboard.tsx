@@ -35,7 +35,9 @@ export default function Dashboard() {
 
   // Listen for dashboard look changes from Settings page
   useEffect(() => {
-    const handleDashboardLookChange = (val: string) => {
+    const handleDashboardLookChange = (val: unknown) => {
+      // Narrow eventBus payload to the strict state type before setState.
+      if (val !== 'dashboard' && val !== 'homescreen') return;
       setDashboardLook(val);
       localStorage.setItem('wakti_dashboard_look', val);
       setRefreshKey(prev => prev + 1);

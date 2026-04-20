@@ -1,9 +1,10 @@
 import React, { lazy, Suspense } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import { AppShellSkeleton } from "@/components/ui/AppShellSkeleton";
 import { AppLayout } from "@/components/AppLayout";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
 import { MusicShareNotificationProvider } from "@/components/notifications/MusicShareNotificationProvider";
+import { MessageNotificationProvider } from "@/components/notifications/MessageNotificationProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { DebugContextProvider } from "@/hooks/useDebugContext";
 
@@ -91,34 +92,37 @@ function PageFallback() {
   );
 }
 
-function usePrefetchCriticalPages() {
+// Item #8 Batch A3: minimal prefetch.
+// OLD behaviour: prefetched 6 heavy pages (Dashboard, TasksReminders, Calendar,
+// Contacts, WaktiAIV2, Tasjeel) 3s after app mount — even for users still on /login.
+// On mobile this competed with first paint and burned data for pages the user
+// might never open.
+//
+// NEW behaviour: only prefetch Dashboard (the landing page after login) and only
+// when the user is on an auth/public route where navigation to dashboard is
+// likely. Everything else loads on-demand when the user actually navigates there.
+// Each route component is already wrapped in lazy() so Suspense handles the wait.
+function usePrefetchDashboard() {
+  const location = useLocation();
   React.useEffect(() => {
+    // Only prefetch when user is on a route that typically leads to /dashboard next.
+    // On deep routes (e.g. /wakti-ai-v2) the user is already in the app — no need.
+    const prefetchRoutes = ['/', '/home', '/login', '/signup', '/confirmed', '/auth/confirm'];
+    if (!prefetchRoutes.includes(location.pathname)) return;
+
+    const prefetch = () => { import("@/pages/Dashboard"); };
     const id = window.requestIdleCallback
-      ? window.requestIdleCallback(() => {
-          import("@/pages/Dashboard");
-          import("@/pages/TasksReminders");
-          import("@/pages/Calendar");
-          import("@/pages/Contacts");
-          import("@/pages/WaktiAIV2");
-          import("@/pages/Tasjeel");
-        }, { timeout: 4000 })
-      : window.setTimeout(() => {
-          import("@/pages/Dashboard");
-          import("@/pages/TasksReminders");
-          import("@/pages/Calendar");
-          import("@/pages/Contacts");
-          import("@/pages/WaktiAIV2");
-          import("@/pages/Tasjeel");
-        }, 3000);
+      ? window.requestIdleCallback(prefetch, { timeout: 6000 })
+      : window.setTimeout(prefetch, 4000);
     return () => {
       if (window.cancelIdleCallback) window.cancelIdleCallback(id as number);
       else window.clearTimeout(id as number);
     };
-  }, []);
+  }, [location.pathname]);
 }
 
 export default function ConsumerRouter() {
-  usePrefetchCriticalPages();
+  usePrefetchDashboard();
   return (
     <Suspense fallback={<AppShellSkeleton />}>
       <Routes>
@@ -159,9 +163,11 @@ export default function ConsumerRouter() {
         <Route element={
           <GiftNotificationProvider>
             <MusicShareNotificationProvider>
-              <ErrorBoundary>
-                <AppLayout />
-              </ErrorBoundary>
+              <MessageNotificationProvider>
+                <ErrorBoundary>
+                  <AppLayout />
+                </ErrorBoundary>
+              </MessageNotificationProvider>
             </MusicShareNotificationProvider>
           </GiftNotificationProvider>
         }>

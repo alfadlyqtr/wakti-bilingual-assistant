@@ -2079,8 +2079,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {/* Duration selector - hidden in Cinema mode */}
-              {generationMode !== 'cinema' && (
+              {/* Duration selector — always rendered here because this branch
+                  already excluded Cinema mode at the outer wrapper. The
+                  redundant inner `!== 'cinema'` check was a TS no-op (its
+                  narrowing already proved the comparison always true). */}
               <div className="flex items-center gap-0.5 rounded-full border border-primary/20 overflow-hidden">
                 <Clock className="h-3.5 w-3.5 text-primary ml-2.5" />
                 {generationMode === '2images_to_video' ? (
@@ -2149,7 +2151,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   </>
                 )}
               </div>
-              )}
               <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${limitReached ? 'bg-red-500/20 border-red-500/30' : 'bg-gradient-to-r from-[hsl(142,76%,55%)]/20 to-[hsl(160,80%,55%)]/20 border-green-500/20'}`}>
                 <Sparkles className={`h-3.5 w-3.5 ${limitReached ? 'text-red-500' : 'text-green-500'}`} />
                 {loadingQuota ? (

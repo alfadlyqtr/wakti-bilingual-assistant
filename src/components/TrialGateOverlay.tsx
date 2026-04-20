@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useTheme } from "@/providers/ThemeProvider";
+import { onEvent } from "@/utils/eventBus";
 
 interface TrialGateOverlayProps {
   featureKey: string;
@@ -34,12 +35,9 @@ const TrialGateOverlay: React.FC<TrialGateOverlayProps> = ({ featureKey, limit, 
       }
     }
 
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.feature === featureKey) setBlocked(true);
-    };
-    window.addEventListener('wakti-trial-limit-reached', handler);
-    return () => { window.removeEventListener('wakti-trial-limit-reached', handler); };
+    return onEvent('wakti-trial-limit-reached', ({ feature }) => {
+      if (feature === featureKey) setBlocked(true);
+    });
   }, [featureKey, limit, isSubscribed, isAdminGifted, hasTrialStarted, cachedProfile]);
 
   if (!blocked) return null;

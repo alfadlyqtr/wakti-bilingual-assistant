@@ -1,7 +1,18 @@
-import { jsPDF } from 'jspdf';
+// Item #8 Batch A2: lazy-load jsPDF (≈400KB) — only loaded when a PDF export
+// actually runs. Type-only import keeps TS happy at zero runtime cost.
+import type { jsPDF as JsPDFType } from 'jspdf';
 import { format } from 'date-fns';
 import { arSA, enUS } from "date-fns/locale";
 import html2canvas from 'html2canvas';
+
+let _jsPDF: typeof JsPDFType | null = null;
+async function loadJsPDF() {
+  if (!_jsPDF) {
+    const mod = await import('jspdf');
+    _jsPDF = mod.jsPDF;
+  }
+  return _jsPDF;
+}
 
 const escapeHtml = (value: string): string =>
   value
@@ -30,7 +41,8 @@ interface PDFGenerationOptions {
 
 // DOM-capture exporter: captures existing on-screen sections by IDs in order
 export async function generateInsightsPDFFromDOM(ids: string[], language: 'en'|'ar'): Promise<Blob> {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const JsPDF = await loadJsPDF();
+  const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 8;
@@ -325,8 +337,9 @@ export async function generateInsightsPDF(data: InsightsPDFData): Promise<Blob> 
   try {
     const canvas = await html2canvas(container, { backgroundColor: 'white', scale: 2, useCORS: true, allowTaint: true });
     const imgData = canvas.toDataURL('image/png');
-    
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    const JsPDF = await loadJsPDF();
+    const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 10;
@@ -362,7 +375,8 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       console.log('Content text:', content.text);
       
       // Create new PDF document
-      const doc = new jsPDF({
+      const JsPDF = await loadJsPDF();
+      const doc = new JsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4',

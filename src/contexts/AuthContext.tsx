@@ -54,6 +54,33 @@ export function useAuth() {
   return context ?? defaultAuthContextValue;
 }
 
+/**
+ * Item #8 Batch C3: Strict variant of `useAuth` for auth-required contexts.
+ *
+ * `useAuth()` is intentionally permissive — it returns an inert default when
+ * called outside an `AuthProvider` so admin/public trees and orphaned
+ * components don't crash. That safety net also hides bugs where a component
+ * that MUST have a real authenticated user silently renders with `user: null`.
+ *
+ * Use `useAuthStrict()` in code paths that genuinely require a live session
+ * (e.g. profile mutations, settings writes, upload flows). It throws loudly
+ * when used outside the provider, surfacing the bug immediately instead of
+ * letting it manifest as a downstream null-deref or silent no-op.
+ *
+ * This hook is opt-in — existing callers continue to use `useAuth()` unchanged.
+ */
+export function useAuthStrict() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error(
+      'useAuthStrict() was called outside of an <AuthProvider>. ' +
+      'Either move this component inside the provider tree, or use useAuth() ' +
+      'if the component must gracefully handle the no-provider case.',
+    );
+  }
+  return context;
+}
+
 interface AuthProviderProps {
   children: ReactNode;
 }
@@ -88,7 +115,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         console.log('AuthContext: Finishing loading state after fallback timeout.');
         setLoading(false);
       }
-    }, 15000);
+    }, 4000);
 
     // 1) Try to get initial session with graceful 400/401 error handling
     try {
@@ -306,13 +333,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Also check subscription status via RevenueCat REST API
   useEffect(() => {
     let t1: ReturnType<typeof setTimeout> | undefined;
-    let t2: ReturnType<typeof setTimeout> | undefined;
     try {
       if (user?.id) {
-        // Call immediately, then retry at 2s and 5s to handle SDK async load race
+        // Item #8 Batch C2: Trimmed retry schedule from 3 calls (0/2s/5s) to
+        // 2 calls (0/3s). The second retry at 5s was almost never doing work —
+        // the Natively/RevenueCat SDK is either loaded by ~3s after first user
+        // detection or the call is a no-op on web anyway. Removing the 5s
+        // timer saves one scheduled task and a redundant bridge invocation.
         purchasesLogin(user.id, user.email || '');
-        t1 = setTimeout(() => purchasesLogin(user.id, user.email || ''), 2000);
-        t2 = setTimeout(() => purchasesLogin(user.id, user.email || ''), 5000);
+        t1 = setTimeout(() => purchasesLogin(user.id, user.email || ''), 3000);
         
         // Request push notification permission first (required by Natively/OneSignal)
         // This registers the device with OneSignal, then we set the external ID
@@ -329,28 +358,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setNotificationUser(user.id);
         }, 6000);
         
-        // CRITICAL: Always check subscription status via RevenueCat on app launch
-        // This bypasses stale localStorage cache and ensures accurate subscription state
-        console.log('[AuthContext] Checking subscription status with RevenueCat...');
-        supabase.functions.invoke('check-subscription', {
-          body: { userId: user.id }
-        }).then(({ data, error }) => {
-          if (error) {
-            console.warn('[AuthContext] Subscription check failed:', error);
-          } else {
-            console.log('[AuthContext] Subscription check result:', data);
-            // Clear stale cache after successful check
-            if (data?.isSubscribed) {
-              try {
-                localStorage.removeItem(`wakti_sub_status_${user.id}`);
-                window.dispatchEvent(new CustomEvent('wakti-subscription-updated'));
-                console.log('[AuthContext] Cleared stale cache and dispatched update event');
-              } catch {}
-            }
-          }
-        }).catch(err => {
-          console.warn('[AuthContext] Subscription check error:', err);
-        });
+        // Item #7 Stage 7C: RevenueCat check-subscription call moved to UserProfileContext.
+        // It's a profile-level concern (it writes to profiles.is_subscribed), so it now
+        // lives next to the code that owns the profile.
       } else {
         purchasesLogout();
         // NOTE: Do NOT call removeNotificationUser() here.
@@ -365,7 +375,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
     return () => {
       clearTimeout(t1);
-      clearTimeout(t2);
     };
   }, [user?.id, user?.email]);
 

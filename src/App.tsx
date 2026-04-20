@@ -11,8 +11,8 @@ import { Analytics } from "@vercel/analytics/react";
 import { AppStoreBanner } from "@/components/AppStoreBanner";
 import AdminRouter from "@/routes/AdminRouter";
 import ConsumerRouter from "@/routes/ConsumerRouter";
-import { ColorBlindFilters, applyColorBlindFilter, STORAGE_KEY, type ColorBlindMode } from "@/components/accessibility/ColorBlindFilters";
-import { applyTextSize, TEXT_SIZE_STORAGE_KEY, type TextSize } from "@/hooks/useTextSize";
+import { ColorBlindFilters } from "@/components/accessibility/ColorBlindFilters";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 import "./App.css";
 
@@ -20,24 +20,10 @@ const ProjectPreview = lazy(() => import("@/pages/ProjectPreview"));
 
 const queryClient = new QueryClient();
 
-// Restore color-blind filter on body BEFORE first paint (works on iOS Safari, Android, PC)
-// applyColorBlindFilter targets document.body + sets both filter and -webkit-filter
-try {
-  const saved = localStorage.getItem(STORAGE_KEY) as ColorBlindMode | null;
-  if (saved && saved !== 'none') applyColorBlindFilter(saved);
-} catch {}
-
-// Restore text size BEFORE first paint — sets font-size on <html> so all rem text scales
-try {
-  const savedSize = localStorage.getItem(TEXT_SIZE_STORAGE_KEY) as TextSize | null;
-  if (savedSize && savedSize !== 'normal') applyTextSize(savedSize);
-} catch {}
-
-// Synchronously tag body for admin pages BEFORE first render so CSS works immediately
-const _adminPaths = ['/admindash', '/admin/', '/admin-setup', '/admin-settings', '/mqtr'];
-if (_adminPaths.some(p => window.location.pathname.startsWith(p))) {
-  document.body.classList.add('admin-page');
-}
+// Item #8 Medium #5+#6: Side-effects that used to live at module scope here
+// (color-blind filter, text size, admin body class) are now consolidated with
+// the main.tsx monkey-patches in src/bootstrap/preRender.ts and invoked by
+// main.tsx before React mounts. Leaves this file purely declarative.
 
 // Detect user project subdomains (e.g. mozi.wakti.ai or mozi.wakti.qa)
 function getSubdomain(): string | null {
@@ -57,9 +43,11 @@ function getSubdomain(): string | null {
   return null;
 }
 
-// Detect admin path so we only mount the admin router tree
+// Detect admin path so we only mount the admin router tree.
+// Note: preRender.ts uses the same list for tagging <body class="admin-page">.
 function isAdminPath(): boolean {
-  return _adminPaths.some(p => window.location.pathname.startsWith(p));
+  const adminPaths = ['/admindash', '/admin/', '/admin-setup', '/admin-settings', '/mqtr'];
+  return adminPaths.some(p => window.location.pathname.startsWith(p));
 }
 
 const detectedSubdomain = getSubdomain();
@@ -69,58 +57,64 @@ function App() {
   // Subdomain project preview — completely isolated
   if (detectedSubdomain) {
     return (
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <Suspense fallback={null}>
-            <ProjectPreview subdomain={detectedSubdomain} />
-          </Suspense>
-          <SpeedInsights />
-          <Analytics />
-        </ThemeProvider>
-      </QueryClientProvider>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <ThemeProvider>
+            <Suspense fallback={null}>
+              <ProjectPreview subdomain={detectedSubdomain} />
+            </Suspense>
+            <SpeedInsights />
+            <Analytics />
+          </ThemeProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
     );
   }
 
   // Admin path — only mount admin providers + admin router
   if (adminPath) {
     return (
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <AuthProvider>
-            <BrowserRouter>
-              <AdminRouter />
-            </BrowserRouter>
-          </AuthProvider>
-          <Toaster />
-          <SpeedInsights />
-          <Analytics />
-        </ThemeProvider>
-      </QueryClientProvider>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <ThemeProvider>
+            <AuthProvider>
+              <BrowserRouter>
+                <AdminRouter />
+              </BrowserRouter>
+            </AuthProvider>
+            <Toaster />
+            <SpeedInsights />
+            <Analytics />
+          </ThemeProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
     );
   }
 
   // Consumer app — normal users
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <TooltipProvider>
-          <AuthProvider>
-            <UserProfileProvider>
-              <BrowserRouter>
-                <ColorBlindFilters />
-                <div className="bg-background font-sans antialiased">
-                  <ConsumerRouter />
-                  <AppStoreBanner position="bottom" dismissible={true} />
-                </div>
-              </BrowserRouter>
-            </UserProfileProvider>
-          </AuthProvider>
-          <Toaster />
-          <SpeedInsights />
-          <Analytics />
-        </TooltipProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <TooltipProvider>
+            <AuthProvider>
+              <UserProfileProvider>
+                <BrowserRouter>
+                  <ColorBlindFilters />
+                  <div className="bg-background font-sans antialiased">
+                    <ConsumerRouter />
+                    <AppStoreBanner position="bottom" dismissible={true} />
+                  </div>
+                </BrowserRouter>
+              </UserProfileProvider>
+            </AuthProvider>
+            <Toaster />
+            <SpeedInsights />
+            <Analytics />
+          </TooltipProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

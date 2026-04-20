@@ -296,6 +296,148 @@ function SearchMessageCard({
   );
 }
 
+// ─── Memoized markdown renderer for assistant bubbles ─────────────────────────
+// Item #8 Batch B1b: the biggest hidden cost in the chat render path was each
+// non-streaming assistant bubble re-parsing its markdown (tables, code, links,
+// Google Maps icons, RTL handling) on every streaming-text update in a long
+// thread. Extracting the ReactMarkdown block into a memoized component — with
+// primitive props only — lets React skip those parses when nothing about the
+// bubble changed.
+//
+// Safety: the `components` override reads only `language` (stable per session)
+// and the module-scope pure `normalizeGoogleMapsUrl`. No state, refs, or
+// handlers are captured, so default shallow equality is correct.
+interface MessageMarkdownProps {
+  content: string;
+  isStudyMode: boolean;
+  language: string;
+}
+
+function MessageMarkdownImpl({ content, isStudyMode, language }: MessageMarkdownProps) {
+  // Inlined from the previous call site — pure string transform, no closures.
+  const stripBoxTag = (text: string): string =>
+    text.replace(/\[BOX\][\s\S]*?\[\/BOX\]\n?/i, '').trimStart();
+
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeRaw]}
+      components={{
+        table: ({ node, ...props }) => (
+          <div className="my-3 overflow-x-auto rounded-xl border border-border/60 bg-white/70 shadow-sm dark:bg-black/20">
+            <table className="w-full min-w-[400px] border-separate border-spacing-0 text-sm" {...props} />
+          </div>
+        ),
+        th: ({ node, ...props }) => (
+          <th
+            className="sticky top-0 z-10 border-b border-border/70 bg-muted/80 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-foreground/80 backdrop-blur"
+            {...props}
+          />
+        ),
+        tr: ({ node, ...props }) => (
+          <tr className="odd:bg-transparent even:bg-muted/20 hover:bg-muted/30 transition-colors" {...props} />
+        ),
+        td: ({ node, ...props }) => (
+          <td className="border-b border-border/40 px-3 py-2 align-top" {...props} />
+        ),
+        thead: ({ node, ...props }) => (
+          <thead className="[&>tr>th:not(:last-child)]:border-r [&>tr>th:not(:last-child)]:border-border/40" {...props} />
+        ),
+        tbody: ({ node, ...props }) => (
+          <tbody className="[&>tr>td:not(:last-child)]:border-r [&>tr>td:not(:last-child)]:border-border/30" {...props} />
+        ),
+        code: (rawProps) => {
+          const { className, children, ...props } = (rawProps as any);
+          const isInline = !String(children).includes('\n');
+          if (isInline) {
+            return <code className="px-1 py-[1px] rounded bg-muted/60" {...props}>{children}</code>;
+          }
+          return (
+            <pre className="bg-muted/40 p-3 rounded-md overflow-x-auto text-[13px]">
+              <code className={className} {...props}>{children}</code>
+            </pre>
+          );
+        },
+        img: ({ node, ...props }) => (
+          <img className="max-w-full h-auto rounded-md border" {...props} />
+        ),
+        a: ({ node, href, children, ...props }) => {
+          const normalizedHref = href ? normalizeGoogleMapsUrl(href, language) : href;
+          const isGoogleMaps = normalizedHref && (normalizedHref.includes('google.com/maps') || normalizedHref.includes('maps.google.com') || normalizedHref.includes('goo.gl/maps'));
+          const isPhone = normalizedHref && normalizedHref.startsWith('tel:');
+          const isEmail = normalizedHref && normalizedHref.startsWith('mailto:');
+
+          if (isGoogleMaps) {
+            return (
+              <a
+                href={normalizedHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                dir="auto"
+                className="inline-flex items-center gap-1 text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline"
+                {...props}
+              >
+                <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+                <span>{children || (language === 'ar' ? '🌍 موقع خرائط جوجل' : 'Google Maps Location')}</span>
+              </a>
+            );
+          }
+
+          if (isPhone) {
+            const phoneNumber = (normalizedHref || '').replace('tel:', '');
+            return (
+              <a
+                href={normalizedHref}
+                className="inline-flex items-center gap-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 font-medium hover:underline"
+                {...props}
+              >
+                <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+                </svg>
+                <span>{children || phoneNumber}</span>
+              </a>
+            );
+          }
+
+          if (isEmail) {
+            const emailAddress = (normalizedHref || '').replace('mailto:', '');
+            return (
+              <a
+                href={normalizedHref}
+                className="inline-flex items-center gap-1 text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 font-medium hover:underline"
+                {...props}
+              >
+                <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                </svg>
+                <span>{children || emailAddress}</span>
+              </a>
+            );
+          }
+
+          return (
+            <a
+              href={normalizedHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+              {...props}
+            >
+              {children}
+            </a>
+          );
+        },
+      }}
+    >
+      {isStudyMode ? stripBoxTag(content) : content}
+    </ReactMarkdown>
+  );
+}
+
+const MessageMarkdown = React.memo(MessageMarkdownImpl);
+
 interface ChatMessagesProps {
   sessionMessages: AIMessage[];
   isLoading: boolean;
@@ -1700,9 +1842,7 @@ export function ChatMessages({
         const firstSentence = text.split(/[.!?\n]/)[0];
         return firstSentence?.trim() || text.slice(0, 150);
       };
-      // Strip the [BOX]...[/BOX] block from body so the sentence isn't repeated
-      const stripBoxTag = (text: string): string =>
-        text.replace(/\[BOX\][\s\S]*?\[\/BOX\]\n?/i, '').trimStart();
+      // Note: [BOX]...[/BOX] stripping now happens inside MessageMarkdown component.
 
       return (
         <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-pre:my-3 prose-table:my-3">
@@ -1724,125 +1864,9 @@ export function ChatMessages({
             </div>
           )}
           {renderVisionStructured()}
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeRaw]}
-            components={{
-              table: ({ node, ...props }) => (
-                <div className="my-3 overflow-x-auto rounded-xl border border-border/60 bg-white/70 shadow-sm dark:bg-black/20">
-                  <table className="w-full min-w-[400px] border-separate border-spacing-0 text-sm" {...props} />
-                </div>
-              ),
-              th: ({ node, ...props }) => (
-                <th
-                  className="sticky top-0 z-10 border-b border-border/70 bg-muted/80 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-foreground/80 backdrop-blur"
-                  {...props}
-                />
-              ),
-              tr: ({ node, ...props }) => (
-                <tr className="odd:bg-transparent even:bg-muted/20 hover:bg-muted/30 transition-colors" {...props} />
-              ),
-              td: ({ node, ...props }) => (
-                <td className="border-b border-border/40 px-3 py-2 align-top" {...props} />
-              ),
-              thead: ({ node, ...props }) => (
-                <thead className="[&>tr>th:not(:last-child)]:border-r [&>tr>th:not(:last-child)]:border-border/40" {...props} />
-              ),
-              tbody: ({ node, ...props }) => (
-                <tbody className="[&>tr>td:not(:last-child)]:border-r [&>tr>td:not(:last-child)]:border-border/30" {...props} />
-              ),
-              code: (rawProps) => {
-                const { className, children, ...props } = (rawProps as any);
-                const isInline = !String(children).includes('\n');
-                if (isInline) {
-                  return <code className="px-1 py-[1px] rounded bg-muted/60" {...props}>{children}</code>;
-                }
-                return (
-                  <pre className="bg-muted/40 p-3 rounded-md overflow-x-auto text-[13px]">
-                    <code className={className} {...props}>{children}</code>
-                  </pre>
-                );
-              },
-              img: ({ node, ...props }) => (
-                // Responsive images
-                <img className="max-w-full h-auto rounded-md border" {...props} />
-              ),
-              a: ({ node, href, children, ...props }) => {
-                // Style Google Maps links with icon and color
-                const normalizedHref = href ? normalizeGoogleMapsUrl(href, language) : href;
-                const isGoogleMaps = normalizedHref && (normalizedHref.includes('google.com/maps') || normalizedHref.includes('maps.google.com') || normalizedHref.includes('goo.gl/maps'));
-                // Style phone links
-                const isPhone = normalizedHref && normalizedHref.startsWith('tel:');
-                // Style email links
-                const isEmail = normalizedHref && normalizedHref.startsWith('mailto:');
-                
-                if (isGoogleMaps) {
-                  return (
-                    <a
-                      href={normalizedHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      dir="auto"
-                      className="inline-flex items-center gap-1 text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline"
-                      {...props}
-                    >
-                      <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-                      </svg>
-                      <span>{children || (language === 'ar' ? '🌍 موقع خرائط جوجل' : 'Google Maps Location')}</span>
-                    </a>
-                  );
-                }
-                
-                if (isPhone) {
-                  const phoneNumber = (normalizedHref || '').replace('tel:', '');
-                  return (
-                    <a
-                      href={normalizedHref}
-                      className="inline-flex items-center gap-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 font-medium hover:underline"
-                      {...props}
-                    >
-                      <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
-                      </svg>
-                      <span>{children || phoneNumber}</span>
-                    </a>
-                  );
-                }
-                
-                if (isEmail) {
-                  const emailAddress = (normalizedHref || '').replace('mailto:', '');
-                  return (
-                    <a
-                      href={normalizedHref}
-                      className="inline-flex items-center gap-1 text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 font-medium hover:underline"
-                      {...props}
-                    >
-                      <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-                      </svg>
-                      <span>{children || emailAddress}</span>
-                    </a>
-                  );
-                }
-                
-                // Default link styling
-                return (
-                  <a
-                    href={normalizedHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline"
-                    {...props}
-                  >
-                    {children}
-                  </a>
-                );
-              },
-            }}
-          >
-            {isStudyMode ? stripBoxTag(content) : content}
-          </ReactMarkdown>
+          {/* Item #8 Batch B1b: memoized markdown renderer — skips re-parse
+              on streaming-text updates when bubble content is unchanged. */}
+          <MessageMarkdown content={content} isStudyMode={isStudyMode} language={language} />
           {(() => {
             const chip = (message as any)?.metadata?.helpGuideChip as { label?: string; route?: string } | undefined;
             if (!chip?.label || !chip?.route) return null;

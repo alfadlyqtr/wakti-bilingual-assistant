@@ -446,8 +446,11 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     }
 
     // Listen for live events (when already on calendar page)
-    return onEvent('wakti-voice-add-entry', (detail) => {
-      addVoiceEntry(detail);
+    return onEvent('wakti-voice-add-entry', (detail: unknown) => {
+      // eventBus payloads are typed `unknown`; narrow before forwarding to the
+      // strongly-typed handler. The emitter always sends this shape.
+      const entry = detail as { title: string; date: string; time?: string; description?: string };
+      addVoiceEntry(entry);
     });
   }, [setManualEntries]);
 

@@ -12,6 +12,8 @@ import {
   Download,
   Trash2,
   X,
+  ChevronLeft,
+  ChevronRight,
   Maximize2,
   RefreshCw,
   ImageIcon,
@@ -270,6 +272,20 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
     setLightboxImage(null);
   }, []);
 
+  const lightboxIndex = lightboxImage ? images.findIndex((img) => img.id === lightboxImage.id) : -1;
+  const hasPrevLightboxImage = lightboxIndex > 0;
+  const hasNextLightboxImage = lightboxIndex >= 0 && lightboxIndex < images.length - 1;
+
+  const openPrevLightboxImage = useCallback(() => {
+    if (lightboxIndex <= 0) return;
+    setLightboxImage(images[lightboxIndex - 1]);
+  }, [images, lightboxIndex]);
+
+  const openNextLightboxImage = useCallback(() => {
+    if (lightboxIndex < 0 || lightboxIndex >= images.length - 1) return;
+    setLightboxImage(images[lightboxIndex + 1]);
+  }, [images, lightboxIndex]);
+
   // ─── Loading state ───
   if (loading) {
     return (
@@ -318,33 +334,33 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
         >
           <button
             onClick={closeLightbox}
-            className="absolute top-6 right-6 z-10 h-12 w-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-xl text-white flex items-center justify-center active:scale-90 transition-all border border-white/20 shadow-lg"
+            className="absolute top-6 right-6 z-10 h-11 w-11 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-xl text-white flex items-center justify-center active:scale-90 transition-all border border-white/20 shadow-lg"
             aria-label="Close"
           >
             <X className="h-6 w-6" />
           </button>
 
           <div
-            className="flex flex-col items-center gap-4 px-4 w-full"
+            className="flex flex-col items-center gap-3 px-4 pt-5 pb-44 w-full"
             onClick={(e) => e.stopPropagation()}
           >
             <div
               ref={lightboxContainerRef}
-              className="w-full max-w-5xl max-h-[70vh] overflow-visible rounded-2xl touch-none overscroll-none select-none"
+              className="w-full max-w-5xl max-h-[66vh] overflow-visible rounded-2xl touch-none overscroll-none select-none"
             >
-              <div className="flex items-center justify-center min-h-[40vh] py-2">
+              <div className="flex items-center justify-center min-h-[34vh] pt-3 pb-1">
                 <img
                   ref={lightboxImageRef}
                   src={lightboxImage.image_url.replace(/%20/g, ' ').trim()}
                   alt="Saved"
-                  className="max-w-[95vw] max-h-[65vh] object-contain rounded-2xl shadow-2xl select-none pointer-events-none"
+                  className="max-w-[92vw] max-h-[58vh] object-contain rounded-[28px] shadow-2xl select-none pointer-events-none"
                   style={{ transform: 'scale(1)', transformOrigin: 'center center', willChange: 'transform' }}
                 />
               </div>
             </div>
 
-            <div className="w-full max-w-sm rounded-2xl bg-black/60 backdrop-blur-xl border border-white/10 px-4 py-3">
-              <div className="flex items-center justify-between gap-3 text-white/90 text-sm font-medium">
+            <div className="w-full max-w-sm rounded-2xl bg-black/60 backdrop-blur-xl border border-white/10 px-4 py-2.5">
+              <div className="flex items-center justify-between gap-3 text-white/90 text-[13px] font-medium">
                 <span>{language === 'ar' ? 'التكبير' : 'Zoom'}</span>
                 <span ref={lightboxPctRef}>100%</span>
               </div>
@@ -356,35 +372,59 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
                 step="0.02"
                 defaultValue="1"
                 onInput={(e) => applyLightboxZoom(Number((e.target as HTMLInputElement).value))}
-                className="saved-image-zoom-slider mt-4 block h-14 w-full cursor-pointer touch-manipulation"
+                className="saved-image-zoom-slider mt-2.5 block h-10 w-full cursor-pointer touch-manipulation"
                 aria-label={language === 'ar' ? 'شريط تكبير الصورة' : 'Image zoom slider'}
               />
+            </div>
+
+            <div
+              className="absolute bottom-24 left-1/2 z-10 flex w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 items-center gap-2.5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={openPrevLightboxImage}
+                disabled={!hasPrevLightboxImage}
+                className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-black/60 backdrop-blur-xl border border-white/10 px-4 py-2.5 text-white/90 text-sm font-semibold active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100"
+                aria-label={language === 'ar' ? 'الصورة السابقة' : 'Previous image'}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                <span>{language === 'ar' ? 'السابق' : 'Previous'}</span>
+              </button>
+              <button
+                onClick={openNextLightboxImage}
+                disabled={!hasNextLightboxImage}
+                className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-black/60 backdrop-blur-xl border border-white/10 px-4 py-2.5 text-white/90 text-sm font-semibold active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100"
+                aria-label={language === 'ar' ? 'الصورة التالية' : 'Next image'}
+              >
+                <span>{language === 'ar' ? 'التالي' : 'Next'}</span>
+                <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
           </div>
 
           {/* Bottom action bar */}
           <div
-            className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-black/60 backdrop-blur-xl rounded-2xl px-4 py-2.5 border border-white/10"
+            className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2.5 bg-black/60 backdrop-blur-xl rounded-2xl px-3.5 py-2 border border-white/10"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={() => handleDownload(lightboxImage.image_url)}
-              className="flex items-center gap-1.5 text-white/90 text-sm font-medium active:scale-95 transition-transform"
+              className="flex items-center gap-1.5 text-white/90 text-[13px] font-medium active:scale-95 transition-transform"
             >
               <Download className="h-4 w-4" /> {language === 'ar' ? 'تحميل' : 'Download'}
             </button>
-            <div className="w-px h-5 bg-white/20" />
+            <div className="w-px h-4 bg-white/20" />
             <ShareButton
               shareUrl={`${window.location.origin}/image/${lightboxImage.id}`}
               shareTitle={language === 'ar' ? 'صورة من Wakti AI' : 'Image from Wakti AI'}
               shareDescription={language === 'ar' ? 'تم إنشاؤها بواسطة Wakti AI' : 'Created with Wakti AI'}
               size="sm"
             />
-            <div className="w-px h-5 bg-white/20" />
+            <div className="w-px h-4 bg-white/20" />
             <button
               onClick={() => handleDelete(lightboxImage.id)}
               disabled={deletingId === lightboxImage.id}
-              className="flex items-center gap-1.5 text-red-400 text-sm font-medium active:scale-95 transition-transform"
+              className="flex items-center gap-1.5 text-red-400 text-[13px] font-medium active:scale-95 transition-transform"
             >
               {deletingId === lightboxImage.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
               {language === 'ar' ? 'حذف' : 'Delete'}

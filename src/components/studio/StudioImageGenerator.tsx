@@ -553,21 +553,33 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       }
 
       if (!savedImageId) {
-        const { data: row, error: dbErr } = await (supabase as any)
+        const { data: existingRow, error: existingErr } = await (supabase as any)
           .from('user_generated_images')
-          .insert({
-            user_id: user.id,
-            image_url: bucketUrl,
-            prompt: prompt || null,
-            submode,
-            quality: submode === 'text2image' || submode === 'image2image' ? quality : null,
-            meta: { storage_path: storagePath },
-          })
           .select('id')
-          .single();
-        if (dbErr) throw dbErr;
-        if (!row?.id) throw new Error('Save succeeded but no record ID was returned');
-        setSavedImageId(row.id);
+          .eq('user_id', user.id)
+          .eq('image_url', bucketUrl)
+          .maybeSingle();
+        if (existingErr) throw existingErr;
+
+        if (existingRow?.id) {
+          setSavedImageId(existingRow.id);
+        } else {
+          const { data: row, error: dbErr } = await (supabase as any)
+            .from('user_generated_images')
+            .insert({
+              user_id: user.id,
+              image_url: bucketUrl,
+              prompt: prompt || null,
+              submode,
+              quality: submode === 'text2image' || submode === 'image2image' ? quality : null,
+              meta: { storage_path: storagePath },
+            })
+            .select('id')
+            .single();
+          if (dbErr) throw dbErr;
+          if (!row?.id) throw new Error('Save succeeded but no record ID was returned');
+          setSavedImageId(row.id);
+        }
       }
 
       setIsSaved(true);
@@ -673,7 +685,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       setIsGenerating(false);
     }
     // Auto-save is fire-and-forget — skip for Quick (Grok) since user must choose which image to save
-    if (generatedUrl && quality !== 'quick') {
+    if (generatedUrl && quality !== 'quick' && submode !== 'visual-ads') {
       persistGeneratedImage(generatedUrl, {
         showSuccessToast: false,
         showAlreadySavedToast: false,
@@ -775,18 +787,31 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         }
 
         // Insert into DB
-        const { data: row, error: dbErr } = await (supabase as any)
+        const { data: existingRow, error: existingErr } = await (supabase as any)
           .from('user_generated_images')
-          .insert({
-            user_id: user.id,
-            image_url: bucketUrl,
-            prompt: prompt || null,
-            submode,
-            quality: submode === 'text2image' || submode === 'image2image' ? quality : null,
-            meta: { storage_path: storagePath },
-          })
           .select('id')
-          .single();
+          .eq('user_id', user.id)
+          .eq('image_url', bucketUrl)
+          .maybeSingle();
+        if (existingErr) throw existingErr;
+
+        let row = existingRow;
+        if (!row?.id) {
+          const { data: insertedRow, error: dbErr } = await (supabase as any)
+            .from('user_generated_images')
+            .insert({
+              user_id: user.id,
+              image_url: bucketUrl,
+              prompt: prompt || null,
+              submode,
+              quality: submode === 'text2image' || submode === 'image2image' ? quality : null,
+              meta: { storage_path: storagePath },
+            })
+            .select('id')
+            .single();
+          if (dbErr) throw dbErr;
+          row = insertedRow;
+        }
           
         if (row?.id) {
           successCount++;
@@ -1103,201 +1128,126 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               return 'asset';
             };
 
-            const getAssetInstruction = (asset: NonNullable<VisualAdsState['assets']>[number], index: number) => {
-              const imageNumber = index + 1;
-              const assetLabel = getAssetLabel(asset);
+            const getSourceId = (index: number) => `SOURCE_${index + 1}`;
 
-              if (asset.type === 'screenshot') {
-                const screenshotDevice = asset.screenshotDevice === 'samsung'
-                  ? 'Samsung phone'
-                  : asset.screenshotDevice === 'laptop'
-                    ? 'laptop'
-                    : asset.screenshotDevice === 'tablet'
-                      ? 'tablet'
-                      : asset.screenshotDevice === 'monitor-tv'
-                        ? 'monitor or TV screen'
-                        : asset.screenshotDevice === 'billboard'
-                          ? 'billboard'
-                          : 'iPhone';
-                return `Use the screenshot from [Image ${imageNumber}] clearly inside a premium ${screenshotDevice} mockup. Keep the UI readable and premium. If names or usernames appear inside the screenshot UI, do not reuse them as poster headline, quote, testimonial, or community text unless the user explicitly typed that name in the prompt.`;
-              }
-              if (asset.type === 'logo') {
-                if (asset.logoMode === 'as-is') {
-                  return `Place the logo from [Image ${imageNumber}] near the top as a clear brand anchor, exactly as uploaded including its original background. Keep it clearly visible and easy to notice. Do not hide it, crop it, or make it tiny.`;
-                }
-                return `Extract ONLY the logo mark/symbol from [Image ${imageNumber}] and place it near the top of the poster on a fully transparent or blended background — no white box, no rounded rectangle container, no card, no app-icon frame around it. The logo graphic should sit directly on the poster background. Keep it clearly visible and easy to notice.`;
-              }
-              if (asset.type === 'product') {
-                return `Make the product [Image ${imageNumber}] the main hero asset with premium commercial lighting.`;
-              }
-              if (asset.type === 'person') {
-                if (asset.personMode === 'reference') {
-                  return asset.referenceStyle === 'character'
-                    ? `Use the person in [Image ${imageNumber}] as the reference inspiration for a styled character version. Keep the essence, styling cues, and identity direction from the upload while deliberately turning it into a designed character.`
-                    : `Use the person in [Image ${imageNumber}] as a reference for a realistic human subject. Keep their identity direction, face structure, skin tone, clothing feel, and overall look close to the upload without turning them into a different random person.`;
-                }
-                if (asset.exactPersonStyle === 'same-pose') {
-                  return `The person in [Image ${imageNumber}] is the exact intended human subject and must remain the same real individual from the upload. Keep the closest possible pose, framing, and facial identity from the original image. Do not reinterpret, beautify, recast, or substitute them with a similar-looking person. If composition, styling, or poster beauty conflicts with identity, keep the real person first.`;
-                }
-                if (asset.exactPersonStyle === 'upper-body') {
-                  return `The person in [Image ${imageNumber}] is the exact intended human subject. Use a clear upper-body framing so their face stays large, readable, and unmistakably the same real person from the upload. Preserve their exact face, skin tone, facial hair, and overall identity. Do not beautify, redesign, or drift into a different person.`;
-                }
-                return `The person in [Image ${imageNumber}] is the exact intended human subject. Preserve their exact face, skin tone, facial hair, clothing identity, and overall real-world look. You may adapt the pose carefully only if the face clearly stays the same person. Do not replace, beautify, recast, or drift away from the real individual.`;
-              }
-              if (asset.type === 'background') {
-                return `Use [Image ${imageNumber}] as the actual background foundation of the poster. Keep this uploaded environment, skyline, lighting direction, and overall scene identity recognizable. Do not replace it with a different city, room, or invented background. You may stylize it cinematically, but the uploaded background must remain the real stage of the composition.`;
-              }
-              if (asset.type === 'icon') {
-                return `Use the icon [Image ${imageNumber}] cleanly within the composition.`;
-              }
-              if (asset.type === 'prop') {
-                return `Include [Image ${imageNumber}] as a decorative prop in the scene.`;
-              }
-              if (asset.type === 'mascot') {
-                return `Feature the brand mascot [Image ${imageNumber}] prominently.`;
-              }
-              if (asset.type === 'texture') {
-                return `Apply the texture [Image ${imageNumber}] to surfaces or backgrounds in the scene.`;
-              }
-              if (asset.type === 'illustration') {
-                return `Use the illustration [Image ${imageNumber}] as a styled visual element in the layout.`;
-              }
-              return `Use [Image ${imageNumber}] as ${assetLabel} in the composition.`;
+            const getScreenshotDevice = (asset: NonNullable<VisualAdsState['assets']>[number]) => (
+              asset.screenshotDevice === 'samsung'
+                ? 'samsung'
+                : asset.screenshotDevice === 'laptop'
+                  ? 'laptop'
+                  : asset.screenshotDevice === 'tablet'
+                    ? 'tablet'
+                    : asset.screenshotDevice === 'monitor-tv'
+                      ? 'monitor-tv'
+                      : asset.screenshotDevice === 'billboard'
+                        ? 'billboard'
+                        : 'iphone'
+            );
+
+            const topicLabels: Record<string, string> = {
+              'new-launch': 'new-launch',
+              'limited-offer': 'limited-offer',
+              'app-download': 'app-download',
+              'save-time': 'save-time',
+              'premium': 'premium',
+              'social-proof': 'social-proof',
+              'features': 'features',
+              'sale': 'sale',
             };
 
-            const topicPrompts: Record<string, string> = {
-              'new-launch': 'The poster captures the gravity of a world-class unveiling. It is the moment the curtain drops — use epic cinematic scale, dramatic spotlighting, and an atmosphere of "The Future is Here". It should feel like a monumental reveal of a luxury flagship.',
-              'limited-offer': 'The poster pulsates with high-stakes tension. It is the feeling of an exclusive window closing. Use visual pressure, sharp focus, and high-energy contrast. It shouldn\'t look cheap; it should look like a rare opportunity that only a few will catch.',
-              'app-download': 'The poster is a window into a high-tech ecosystem. It feels ultra-modern, fluid, and frictionless. The UI should glow with "Intelligence"—use glass textures, neon-light trails, and a digital-first atmosphere that feels both advanced and inviting.',
-              'save-time': 'The poster communicates the "Silence of Efficiency." It is the feeling of absolute relief and mental clarity. Use streamlined visual flow, effortless motion-blur, and a composition so clean it feels like a deep breath of fresh air.',
-              'premium': 'The poster is a tribute to obsession and detail. It feels heavy, timeless, and hand-crafted. Use "Macro-Focus" textures, precious metal accents, and an atmosphere of quiet confidence. It doesn\'t scream; it whispers wealth.',
-              'social-proof': 'The poster should feel like a premium wave of customer love and trust. Use warm human credibility, elegant social proof, and a sense that real people genuinely love the product. Weave in 1 to 3 short testimonial snippets, review-style micro-copy, subtle trust markers, or a small community/avatar presence in a tasteful way. It should feel beloved, community-backed, polished, and emotionally convincing.',
-              'features': 'The poster is a masterclass in smart design. It feels organized, intelligent, and precise. Use architectural balance and "Micro-Engineering" aesthetics. Every feature is a hero, showcased with the clarity of a high-end technical blueprint.',
-              'sale': 'The poster is an explosion of value. It feels bold, immediate, and high-energy. Use aggressive contrast and a "Power-Punch" layout. The viewer must feel the gravity of the deal instantly, like a high-speed flash sale in a luxury mall.',
-            };
-
-            const topicVariantPrompts: Record<string, Record<string, string>> = {
+            const topicVariantLabels: Record<string, Record<string, string>> = {
               'new-launch': {
-                'hero-reveal': 'Refine the launch angle like a dramatic hero reveal with one centerpiece moment.',
-                'future-wave': 'Refine the launch angle with a futuristic, visionary energy that feels ahead of the category.',
-                'founder-proud': 'Refine the launch angle with a proud, premium debut feeling.',
+                'hero-reveal': 'hero-reveal',
+                'future-wave': 'future-wave',
+                'founder-proud': 'founder-proud',
               },
               'limited-offer': {
-                'vip-window': 'Refine the offer like a rare VIP window that feels exclusive and almost gone.',
-                'countdown-pressure': 'Refine the urgency with countdown pressure and decisive timing.',
-                'clean-urgency': 'Refine the urgency so it stays polished, premium, and uncluttered.',
+                'vip-window': 'vip-window',
+                'countdown-pressure': 'countdown-pressure',
+                'clean-urgency': 'clean-urgency',
               },
               'app-download': {
-                'phone-first': 'Refine the message so the phone and app experience are the central hero.',
-                'smart-lifestyle': 'Refine the message so the app feels naturally embedded in an aspirational lifestyle.',
-                'store-ready': 'Refine the message so the ad feels app-store-ready, polished, and instantly downloadable.',
+                'phone-first': 'phone-first',
+                'smart-lifestyle': 'smart-lifestyle',
+                'store-ready': 'store-ready',
               },
               'save-time': {
-                'calm-efficiency': 'Refine the message with peaceful efficiency and mental clarity.',
-                'instant-relief': 'Refine the message so the benefit feels like immediate relief from friction or wasted time.',
-                'smooth-routine': 'Refine the message around a smooth, beautifully organized daily routine.',
+                'calm-efficiency': 'calm-efficiency',
+                'instant-relief': 'instant-relief',
+                'smooth-routine': 'smooth-routine',
               },
               'premium': {
-                'crafted-luxury': 'Refine the message through craftsmanship, detail, and elite premium execution.',
-                'quiet-wealth': 'Refine the message with expensive, elevated quiet confidence.',
-                'flagship-energy': 'Refine the message so the product feels like the flagship offering in its category.',
+                'crafted-luxury': 'crafted-luxury',
+                'quiet-wealth': 'quiet-wealth',
+                'flagship-energy': 'flagship-energy',
               },
               'social-proof': {
-                'testimonial-cards': 'Refine the social-proof angle with tasteful mini testimonial cards or quote snippets.',
-                'community-love': 'Refine the social-proof angle so it feels loved by a real community.',
-                'trust-signals': 'Refine the social-proof angle with subtle trust badges, rating cues, and premium proof markers.',
+                'testimonial-cards': 'testimonial-cards',
+                'community-love': 'community-love',
+                'trust-signals': 'trust-signals',
               },
               'features': {
-                'feature-callouts': 'Refine the feature angle with clean callouts for key capabilities.',
-                'hero-plus-benefits': 'Refine the feature angle by balancing a strong hero visual with concise premium benefits.',
-                'smart-breakdown': 'Refine the feature angle like an elegant, intelligent breakdown of capabilities.',
+                'feature-callouts': 'feature-callouts',
+                'hero-plus-benefits': 'hero-plus-benefits',
+                'smart-breakdown': 'smart-breakdown',
               },
               'sale': {
-                'price-drop': 'Refine the sale angle so the price drop feels instantly visible.',
-                'vip-deal': 'Refine the sale angle like a premium insider offer rather than a cheap promotion.',
-                'high-energy-flash': 'Refine the sale angle with high-energy flash momentum and urgency.',
+                'price-drop': 'price-drop',
+                'vip-deal': 'vip-deal',
+                'high-energy-flash': 'high-energy-flash',
               },
             };
 
-            const stylePrompts: Record<string, string> = {
-              'premium-dark': 'Visual style: deep dark background (near black or charcoal), rich shadows, glowing product highlights, premium serif or modern sans-serif typography, dramatic cinematic lighting, high contrast.',
-              'bright-clean': 'Visual style: Ethereal "High-Key" lighting. Everything is bathed in pure, soft light. Use pearlescent whites, "Cloud-shadows," and massive open space. It should feel like a luxury spa or a high-end art gallery at noon.',
-              'bold-modern': 'Visual style: Graphic Maximalism. It is aggressive, sharp, and high-velocity. Use "In-your-face" shapes, heavy ink-trap typography, and neon color-pops. It feels like a high-energy Nike or Red Bull campaign — absolute visual impact.',
-              'lifestyle': 'Visual style: Cinematic Documentary. It feels like a "Captured Moment," not a setup. Use warm "Golden-Hour" natural lighting, real organic textures (skin, fabric, dust), and a soft film-grain. Relatable, honest, and deeply human.',
-              'luxury-minimal': 'Visual style: The Silence of Wealth. It is the "Less but Better" philosophy. Use monochromatic tones, razor-thin typography, and vast empty space. The product is placed like a solitary diamond in a dark room. Confident and untouchable.',
-              'ugc': 'Visual style: The "Phone-in-Hand" aesthetic. It feels raw, fast, and 100% authentic. Lo-fi phone camera lens characteristics, natural imperfect framing, and unedited color grading. It looks like a viral post from a real influencer, not an ad.',
+            const styleLabels: Record<string, string> = {
+              'premium-dark': 'premium-dark',
+              'bright-clean': 'bright-clean',
+              'bold-modern': 'bold-modern',
+              'lifestyle': 'lifestyle',
+              'luxury-minimal': 'luxury-minimal',
+              'ugc': 'ugc',
             };
 
-            const styleVariantPrompts: Record<string, Record<string, string>> = {
+            const styleVariantLabels: Record<string, Record<string, string>> = {
               'premium-dark': {
-                'luxury-noir': 'Style refinement: use noir-like premium drama, refined shadows, and luxury contrast.',
-                'cinematic-glow': 'Style refinement: blend darkness with polished glow accents and cinematic mood lighting.',
-                'elite-tech': 'Style refinement: keep it dark, sleek, and premium with a high-end tech finish.',
+                'luxury-noir': 'luxury-noir',
+                'cinematic-glow': 'cinematic-glow',
+                'elite-tech': 'elite-tech',
               },
               'bright-clean': {
-                'airy-minimal': 'Style refinement: use lots of clean space, softness, and fresh premium simplicity.',
-                'sunlit-premium': 'Style refinement: use soft bright lighting and crisp premium cleanliness.',
-                'gallery-clean': 'Style refinement: make it feel polished like a modern design gallery or premium showroom.',
+                'airy-minimal': 'airy-minimal',
+                'sunlit-premium': 'sunlit-premium',
+                'gallery-clean': 'gallery-clean',
               },
               'bold-modern': {
-                'neon-energy': 'Style refinement: push the boldness through neon accents, motion, and energetic contrast.',
-                'editorial-hype': 'Style refinement: make it feel like a modern magazine cover with aggressive typography and punch.',
-                'tech-pop': 'Style refinement: blend bold modern energy with playful premium tech graphics.',
+                'neon-energy': 'neon-energy',
+                'editorial-hype': 'editorial-hype',
+                'tech-pop': 'tech-pop',
               },
               'lifestyle': {
-                'warm-documentary': 'Style refinement: keep it honest, warm, and grounded like premium documentary photography.',
-                'golden-hour': 'Style refinement: use warm golden-hour realism and emotional human atmosphere.',
-                'everyday-premium': 'Style refinement: keep it relatable and human, but still polished and premium.',
+                'warm-documentary': 'warm-documentary',
+                'golden-hour': 'golden-hour',
+                'everyday-premium': 'everyday-premium',
               },
               'luxury-minimal': {
-                'silent-wealth': 'Style refinement: strip it down to quiet premium confidence and elegant restraint.',
-                'museum-piece': 'Style refinement: make the hero subject feel displayed like a precious museum piece.',
-                'monochrome-premium': 'Style refinement: use restrained premium tones and minimalist luxury polish.',
+                'silent-wealth': 'silent-wealth',
+                'museum-piece': 'museum-piece',
+                'monochrome-premium': 'monochrome-premium',
               },
               'ugc': {
-                'phone-capture': 'Style refinement: make it feel like a naturally captured social post with authentic immediacy.',
-                'creator-post': 'Style refinement: lean into native creator energy, believable framing, and social familiarity.',
-                'real-feed': 'Style refinement: keep it real, spontaneous, and at home in a social feed.',
+                'phone-capture': 'phone-capture',
+                'creator-post': 'creator-post',
+                'real-feed': 'real-feed',
               },
-            };
-
-            const ctaInstructions: Record<string, string> = {
-              'download-now': 'Include the text "Download now" near the bottom as a bold poster CTA callout. It should feel like designed poster typography, not a real app button.',
-              'get-started': 'Include the text "Get started" near the bottom as a bold poster CTA callout. Inviting and clear, but still poster text, not a tappable UI button.',
-              'shop-now': 'Include the text "Shop now" near the bottom as a bold poster CTA callout. Punchy and high energy, but presented as poster text, not UI.',
-              'learn-more': 'Include the text "Learn more" near the bottom as a clean poster CTA callout. Softer tone, well spaced, not a tappable UI button.',
-              'book-now': 'Include the text "Book now" near the bottom as a bold poster CTA callout. Urgent and clear, but not a real interactive button.',
-              'start-free': 'Include the text "Start free" near the bottom as a bold poster CTA callout. Welcoming and clear, but still poster text, not UI.',
-              'try-today': 'Include the text "Try it today" near the bottom as a bold poster CTA callout. Friendly and easy, but not a real button.',
-              'join-now': 'Include the text "Join now" near the bottom as a bold poster CTA callout. Warm and community-forward, but not a real interactive button.',
-              'subscribe': 'Include the text "Subscribe" near the bottom as a clean poster CTA callout. Reliable and trust-building, not a tappable UI button.',
             };
 
             const normalizeShortValue = (value?: string | null) => (value || '').replace(/\s+/g, ' ').trim();
             const customTopic = normalizeShortValue(visualState.creativeSoul.customMainMessage);
             const customCta = normalizeShortValue(visualState.creativeSoul.customCta);
             const customStyle = normalizeShortValue(visualState.creativeSoul.customStyle);
-            const topicVariantStr = topicVariantPrompts[visualState.creativeSoul.mainMessage]?.[visualState.creativeSoul.mainMessageVariant] || '';
-            const styleVariantStr = styleVariantPrompts[visualState.creativeSoul.style]?.[visualState.creativeSoul.styleVariant] || '';
-
-            const topicStr = visualState.creativeSoul.mainMessage === 'custom'
-              ? (customTopic ? `The core narrative and central focus of the poster is: "${customTopic}". Design the entire composition, lighting, and mood to elevate and communicate this specific theme.` : '')
-              : (topicPrompts[visualState.creativeSoul.mainMessage] || '');
-            const styleStr = visualState.creativeSoul.style === 'custom'
-              ? (customStyle ? `Execute the following elite visual style and art direction: "${customStyle}". Ensure textures, shadows, and color grading perfectly match this aesthetic.` : '')
-              : (stylePrompts[visualState.creativeSoul.style] || '');
-            const ctaStr = visualState.creativeSoul.cta === 'custom'
-              ? (customCta ? `Integrate the text "${customCta}" elegantly near the bottom as a clear, readable poster CTA callout. Treat it as high-end poster typography, not a cheap UI button.` : '')
-              : (ctaInstructions[visualState.creativeSoul.cta] || '');
 
             const MAX_VISUAL_AD_IMAGES = 14;
-            const ASSET_PRIORITY: Record<string, number> = {
-              logo: 0, product: 1, person: 2, screenshot: 3,
-              mascot: 4, icon: 5, prop: 6, illustration: 7, texture: 8, background: 9,
-            };
             const assetEntries = (visualState.assets || [])
               .filter((asset) => asset.image)
-              .sort((a, b) => (ASSET_PRIORITY[a.type || ''] ?? 99) - (ASSET_PRIORITY[b.type || ''] ?? 99))
               .slice(0, 6) as Array<NonNullable<VisualAdsState['assets']>[number]>;
 
             if (!assetEntries.length) {
@@ -1440,6 +1390,39 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               return compressImage(originalImage, false);
             };
 
+            const preUploadImageToStorage = async (dataUri: string): Promise<string> => {
+              if (!dataUri.startsWith('data:image/')) return dataUri;
+              if (!user?.id) return dataUri;
+              try {
+                const res = await fetch(dataUri);
+                const blob = await res.blob();
+                const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+                const fileName = `${user.id}/visual-ads-input/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+                
+                const { error: uploadErr } = await supabase.storage
+                  .from('message_attachments')
+                  .upload(fileName, blob, { contentType: blob.type, upsert: true });
+                  
+                if (uploadErr) {
+                  console.error('Storage upload error:', uploadErr);
+                  return dataUri;
+                }
+                
+                const { data: signedData, error: signErr } = await supabase.storage
+                  .from('message_attachments')
+                  .createSignedUrl(fileName, 60 * 60 * 6);
+                  
+                if (signErr || !signedData?.signedUrl) {
+                  return dataUri;
+                }
+                
+                return signedData.signedUrl;
+              } catch (e) {
+                console.error('Failed to pre-upload image:', e);
+                return dataUri;
+              }
+            };
+
             setIsGenerating(true);
             setResultError(null);
             setResultImageUrl(null);
@@ -1460,11 +1443,15 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               };
 
               const sentAssets: VisualAdsPreparedAsset[] = await Promise.all(
-                assetEntries.slice(0, MAX_VISUAL_AD_IMAGES).map(async (asset) => ({
-                  asset,
-                  preparedImage: await prepareAssetImage(asset),
-                  types: asset.type ? [asset.type] : [],
-                }))
+                assetEntries.slice(0, MAX_VISUAL_AD_IMAGES).map(async (asset) => {
+                  const preparedDataUri = await prepareAssetImage(asset);
+                  const finalUrlOrDataUri = await preUploadImageToStorage(preparedDataUri);
+                  return {
+                    asset,
+                    preparedImage: finalUrlOrDataUri,
+                    types: asset.type ? [asset.type] : [],
+                  };
+                })
               );
 
               if (!sentAssets.length) {
@@ -1472,18 +1459,6 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               }
 
               const taggedAssets = sentAssets.filter((item) => item.types.length > 0);
-              const taggedAssetsWithIndex = taggedAssets.map((item, index) => ({ item, index }));
-              const backgroundInstruction = taggedAssetsWithIndex
-                .filter(({ item }) => item.types.includes('background'))
-                .map(({ item, index }) => item.instructionOverride || getAssetInstruction(item.asset, index))
-                .join(' ');
-
-              const otherInstructions = taggedAssetsWithIndex
-                .filter(({ item }) => !item.types.includes('background'))
-                .map(({ item, index }) => item.instructionOverride || getAssetInstruction(item.asset, index))
-                .join(' ');
-
-              const assetInstructions = [backgroundInstruction, otherInstructions].filter(Boolean).join(' ');
               const taggedTypes = taggedAssets.flatMap((item) => item.types);
               const hasPerson = taggedTypes.includes('person');
               const hasScreenshot = taggedTypes.includes('screenshot');
@@ -1492,57 +1467,274 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               const hasLogo = taggedTypes.includes('logo');
               const exactPersonAssets = taggedAssets.filter((item) => item.types.includes('person') && (item.asset.personMode || 'exact') === 'exact');
               const hasExactPerson = exactPersonAssets.length > 0;
-              const hasSamePoseExactPerson = exactPersonAssets.some((item) => item.asset.exactPersonStyle === 'same-pose' || !item.asset.exactPersonStyle);
-              let sceneDirection = '';
+
+              const toBool = (value: boolean) => value ? 'true' : 'false';
+              const toQuoted = (value: string) => `"${value.replace(/"/g, '\\"')}"`;
+              const buildSection = (title: string, lines: string[]) => [title, ...lines].join('\n');
+
+              const imageSourceLines = taggedAssets.flatMap((item, index) => {
+                const sourceId = getSourceId(index);
+                const lines = [
+                  `- ${sourceId}:`,
+                  `    image_ref: Image ${index + 1}`,
+                  `    role: ${getAssetLabel(item.asset)}`,
+                ];
+                if (item.asset.type === 'person') {
+                  lines.push(`    person_mode: ${(item.asset.personMode || 'exact')}`);
+                  if ((item.asset.personMode || 'exact') === 'exact') {
+                    lines.push(`    pose_mode: ${(item.asset.exactPersonStyle || 'same-pose')}`);
+                  }
+                  if (item.asset.personMode === 'reference' && item.asset.referenceStyle) {
+                    lines.push(`    reference_style: ${item.asset.referenceStyle}`);
+                  }
+                }
+                if (item.asset.type === 'logo') {
+                  lines.push(`    logo_mode: ${(item.asset.logoMode || 'transparent')}`);
+                }
+                if (item.asset.type === 'screenshot') {
+                  lines.push(`    device: ${getScreenshotDevice(item.asset)}`);
+                }
+                return lines;
+              });
+
+              const assetDirectiveLines = taggedAssets.flatMap((item, index) => {
+                const sourceId = getSourceId(index);
+                const role = getAssetLabel(item.asset);
+                if (item.asset.type === 'background') {
+                  return [
+                    `- background:`,
+                    `    source: ${sourceId}`,
+                    `    preserve_core_identity: true`,
+                    `    use_as_real_background_foundation: true`,
+                    `    replace_environment: false`,
+                    `    allow_color_grading: true`,
+                    `    allow_depth_of_field: true`,
+                    `    allow_cinematic_styling: true`,
+                  ];
+                }
+                if (item.asset.type === 'person') {
+                  if (item.asset.personMode === 'reference') {
+                    return [
+                      `- person:`,
+                      `    source: ${sourceId}`,
+                      `    role: person`,
+                      `    person_mode: reference`,
+                      `    reference_style: ${(item.asset.referenceStyle || 'realistic')}`,
+                      `    preserve_identity_direction: true`,
+                      `    exact_match_required: false`,
+                      `    stylize_into_character: ${toBool((item.asset.referenceStyle || 'realistic') === 'character')}`,
+                    ];
+                  }
+                  return [
+                    `- person:`,
+                    `    source: ${sourceId}`,
+                    `    role: person`,
+                    `    person_mode: exact`,
+                    `    pose_mode: ${(item.asset.exactPersonStyle || 'same-pose')}`,
+                    `    preserve_core_identity: true`,
+                    `    exact_match_required: true`,
+                    `    allow_new_pose: ${toBool(item.asset.exactPersonStyle === 'adapted-pose')}`,
+                    `    keep_pose_close: ${toBool((item.asset.exactPersonStyle || 'same-pose') === 'same-pose')}`,
+                    `    face_visibility_required: true`,
+                    `    framing: ${item.asset.exactPersonStyle === 'upper-body' ? 'upper-body' : 'flexible'}`,
+                    `    beautify: false`,
+                    `    recast: false`,
+                    `    stylize_into_character: false`,
+                  ];
+                }
+                if (item.asset.type === 'logo') {
+                  const logoMode = item.asset.logoMode || 'transparent';
+                  return [
+                    `- logo:`,
+                    `    source: ${sourceId}`,
+                    `    role: logo`,
+                    `    logo_mode: ${logoMode}`,
+                    `    preserve_core_identity: true`,
+                    `    preserve_design: true`,
+                    `    remove_plain_surrounding_background_only_if_needed: ${toBool(logoMode === 'transparent')}`,
+                    `    preserve_original_background_treatment: ${toBool(logoMode === 'as-is')}`,
+                    `    redraw: false`,
+                    `    distort: false`,
+                    `    crop: false`,
+                    `    restyle: false`,
+                    `    put_in_container: false`,
+                    `    put_in_badge: false`,
+                    `    put_in_app_icon_frame: false`,
+                  ];
+                }
+                if (item.asset.type === 'screenshot') {
+                  return [
+                    `- screenshot:`,
+                    `    source: ${sourceId}`,
+                    `    role: screenshot`,
+                    `    preserve_core_identity: true`,
+                    `    preserve_ui: true`,
+                    `    keep_readable: true`,
+                    `    device: ${getScreenshotDevice(item.asset)}`,
+                    `    use_inside_device_mockup: true`,
+                    `    reuse_names_from_ui_as_copy: false`,
+                    `    reuse_usernames_from_ui_as_copy: false`,
+                  ];
+                }
+                if (item.asset.type === 'product') {
+                  return [
+                    `- product:`,
+                    `    source: ${sourceId}`,
+                    `    role: product`,
+                    `    preserve_core_identity: true`,
+                    `    must_remain_recognizable: true`,
+                    `    use_as_hero: true`,
+                    `    premium_lighting: true`,
+                    `    redesign_product: false`,
+                  ];
+                }
+                if (item.asset.type === 'icon') {
+                  return [`- icon:`, `    source: ${sourceId}`, `    role: icon`, `    use_as_supporting_element: true`, `    overpower_main_subjects: false`];
+                }
+                if (item.asset.type === 'prop') {
+                  return [`- prop:`, `    source: ${sourceId}`, `    role: prop`, `    use_as_supporting_scene_element: true`, `    overpower_main_subjects: false`];
+                }
+                if (item.asset.type === 'mascot') {
+                  return [`- mascot:`, `    source: ${sourceId}`, `    role: mascot`, `    preserve_core_identity: true`, `    must_remain_recognizable: true`, `    use_as_brand_character: true`, `    redesign: false`];
+                }
+                if (item.asset.type === 'texture') {
+                  return [`- texture:`, `    source: ${sourceId}`, `    role: texture`, `    use_as_surface_or_background_texture: true`, `    overpower_main_subjects: false`, `    preserve_exact_layout: false`];
+                }
+                if (item.asset.type === 'illustration') {
+                  return [`- illustration:`, `    source: ${sourceId}`, `    role: illustration`, `    preserve_core_identity: true`, `    use_as_supporting_graphic_element: true`, `    overpower_main_subjects: false`];
+                }
+                return [`- ${role}:`, `    source: ${sourceId}`, `    role: ${role}`];
+              });
+
+              let layoutType = 'general_composite_ad';
+              const primarySubjects: string[] = [];
+              const secondarySubjects: string[] = [];
+              const backgroundAsset = taggedAssets.find((item) => item.asset.type === 'background');
+              const logoAsset = taggedAssets.find((item) => item.asset.type === 'logo');
+              const personAsset = taggedAssets.find((item) => item.asset.type === 'person');
+              const screenshotAsset = taggedAssets.find((item) => item.asset.type === 'screenshot');
+              const productAsset = taggedAssets.find((item) => item.asset.type === 'product');
 
               if (hasPerson && hasScreenshot && hasBackground) {
-                sceneDirection = 'Composition: lifestyle app ad. Place the person slightly off-center — they are the human anchor. Position the phone in front of or beside them at a natural angle, as if they are using it. The person\'s face and upper body must stay clearly visible — do NOT let the phone overlap or block their face. The uploaded background must remain the real environment behind them, with only tasteful cinematic grading or depth-of-field added. Warm, aspirational, real — not a flat product sheet.';
+                layoutType = 'lifestyle_app_ad';
               } else if (hasPerson && hasProduct && hasBackground) {
-                sceneDirection = 'Composition: lifestyle product ad. Person is natural in the environment, holding or interacting with the product. Face clearly visible, not blocked. Product prominent. The uploaded background stays as the actual environment. Warm natural lighting.';
+                layoutType = 'lifestyle_product_ad';
               } else if (hasPerson && hasBackground && !hasScreenshot && !hasProduct) {
-                sceneDirection = 'Composition: brand lifestyle moment. Person is the full hero. Off-center, natural stance in the uploaded environment. Cinematic lighting, genuine and aspirational.';
+                layoutType = 'brand_lifestyle_moment';
               } else if (hasPerson && hasScreenshot && !hasBackground) {
-                sceneDirection = 'Composition: app lifestyle ad. Person beside the phone naturally. Face visible and unobstructed. Clean or gradient backdrop, premium feel.';
+                layoutType = 'app_ad_without_background';
               } else if (!hasPerson && hasScreenshot && hasBackground && hasLogo) {
-                sceneDirection = 'Composition: pure app product poster. Phone mockup centered or slightly tilted, screenshot on screen. Logo clean at the top. The uploaded background is the real atmospheric stage and must stay recognizable. Professional product photography, no clutter.';
+                layoutType = 'pure_app_product_poster';
               } else if (!hasPerson && hasProduct && hasBackground) {
-                sceneDirection = 'Composition: product hero shot. Product is the star, prominent with dramatic commercial lighting. The uploaded background wraps behind and remains recognizable. Premium and clean.';
+                layoutType = 'product_hero_shot';
               }
 
-              const creativeDirectorGuardrails = [
-                'You are one of the best advertising poster creators and art directors in the world.',
-                'Deliver an amazing poster that feels premium, intentional, and visually unified.',
-                'Combine all uploaded assets intelligently instead of treating them like separate stickers.',
-                'Do not reuse names or usernames seen inside screenshot UI as poster copy unless the user explicitly typed them in the prompt.',
-                'Only add poster text or slogans if the user explicitly typed them in the prompt. Do not invent headlines, taglines, or quotes unless instructed.',
-                'Do not add community badges, review quotes, testimonial bubbles, or social-proof copy unless the chosen preset explicitly requires it.',
-                'If an uploaded image is tagged as background, you must keep that specific uploaded environment as the actual background instead of inventing a different one.',
-                ...(hasExactPerson ? [
-                  'CRITICAL IDENTITY RULE: The uploaded person is a real specific individual — NOT a character, NOT an illustration, NOT an anime, NOT a stylized render. Reproduce them as a photorealistic real human.',
-                  'Do NOT turn the person into a cartoon, character, drawing, illustration, or stylized art under any circumstances.',
-                  'Preserve their exact real face, skin tone, facial hair, glasses, clothing, and overall identity from the photo.',
-                  'Do not beautify, recast, or substitute them with a different person.',
-                  'Face identity is the single highest priority. Simplify composition if needed rather than changing the person.',
-                ] : []),
-                ...(hasSamePoseExactPerson ? [
-                  'Keep the person in the closest possible pose and framing to the original photo.',
-                  'Do not change the face or body to match a new pose — adapt the scene around the person instead.',
-                ] : []),
-              ].join(' ');
+              if (personAsset) primarySubjects.push(getSourceId(taggedAssets.indexOf(personAsset)));
+              if (screenshotAsset) primarySubjects.push(getSourceId(taggedAssets.indexOf(screenshotAsset)));
+              if (!primarySubjects.length && productAsset) primarySubjects.push(getSourceId(taggedAssets.indexOf(productAsset)));
+              if (logoAsset) secondarySubjects.push(getSourceId(taggedAssets.indexOf(logoAsset)));
 
-              const promptParts = [
-                'Create a world-class advertising poster.',
-                creativeDirectorGuardrails,
-                topicStr,
-                topicVariantStr,
-                styleStr,
-                styleVariantStr,
-                assetInstructions,
-                sceneDirection,
-                ctaStr,
-                visualState.creativeSoul.prompt?.trim() || '',
-              ].filter(Boolean);
-              const finalPromptForKie = promptParts.join(' ').replace(/\s+/g, ' ').trim();
+              const allowedText = visualState.creativeSoul.cta === 'custom'
+                ? (customCta ? [customCta] : [])
+                : (visualState.creativeSoul.cta ? [
+                  {
+                    'download-now': 'Download now',
+                    'get-started': 'Get started',
+                    'shop-now': 'Shop now',
+                    'learn-more': 'Learn more',
+                    'book-now': 'Book now',
+                    'start-free': 'Start free',
+                    'try-today': 'Try it today',
+                    'join-now': 'Join now',
+                    'subscribe': 'Subscribe',
+                  }[visualState.creativeSoul.cta] || ''
+                ].filter(Boolean) : []);
+
+              const roleAndRules = buildSection('ROLE_AND_RULES', [
+                `- task: Create one premium advertising poster using the uploaded assets and selected settings.`,
+                `- must_follow_tagged_roles: true`,
+                `- must_preserve_exact_person_identity: ${toBool(hasExactPerson)}`,
+                `- must_preserve_logo_fidelity: ${toBool(hasLogo)}`,
+                `- must_preserve_screenshot_fidelity: ${toBool(hasScreenshot)}`,
+                `- must_preserve_background_identity: ${toBool(hasBackground)}`,
+                `- allow_invented_text: false`,
+                `- allow_invented_names: false`,
+                `- allow_invented_testimonials: false`,
+                `- hard_constraints_override_style: true`,
+                `- priority_order:`,
+                `  1. exact_person_identity`,
+                `  2. logo_fidelity`,
+                `  3. screenshot_fidelity`,
+                `  4. background_identity`,
+                `  5. composition_clarity`,
+                `  6. campaign_message`,
+                `  7. style_polish`,
+              ]);
+
+              const outputTarget = buildSection('OUTPUT_TARGET', [
+                `- format: ${visualState.campaignDNA.platform || '1:1'}`,
+                `- output_count: 1`,
+                `- output_type: advertising_poster`,
+                `- composition_goal: one_unified_composition`,
+                `- collage_look_allowed: false`,
+                `- quality_level: premium`,
+              ]);
+
+              const imageSources = buildSection('IMAGE_SOURCES', imageSourceLines);
+              const assetDirectives = buildSection('ASSET_DIRECTIVES', assetDirectiveLines);
+
+              const campaignLines = [
+                `- campaign:`,
+                `    main_message: ${visualState.creativeSoul.mainMessage === 'custom' ? 'custom' : (topicLabels[visualState.creativeSoul.mainMessage] || 'none')}`,
+                ...(visualState.creativeSoul.mainMessage === 'custom' && customTopic ? [`    main_message_custom_text: ${toQuoted(customTopic)}`] : []),
+                ...(visualState.creativeSoul.mainMessage !== 'custom' && visualState.creativeSoul.mainMessageVariant ? [`    main_message_detail: ${topicVariantLabels[visualState.creativeSoul.mainMessage]?.[visualState.creativeSoul.mainMessageVariant] || visualState.creativeSoul.mainMessageVariant}`] : []),
+                ...(allowedText.length ? [`    cta_text: ${toQuoted(allowedText[0])}`] : []),
+              ];
+
+              const compositionLines = [
+                `- composition:`,
+                `    layout_type: ${layoutType}`,
+                `    primary_subjects: ${primarySubjects.length ? `[${primarySubjects.join(', ')}]` : '[]'}`,
+                `    secondary_subjects: ${secondarySubjects.length ? `[${secondarySubjects.join(', ')}]` : '[]'}`,
+                `    background_source: ${backgroundAsset ? getSourceId(taggedAssets.indexOf(backgroundAsset)) : 'none'}`,
+                `    logo_source: ${logoAsset ? getSourceId(taggedAssets.indexOf(logoAsset)) : 'none'}`,
+                `    face_must_remain_visible: ${toBool(Boolean(personAsset))}`,
+                `    device_must_not_block_face: ${toBool(Boolean(personAsset && screenshotAsset))}`,
+                `    must_feel_unified: true`,
+              ];
+
+              const styleLines = [
+                `- style:`,
+                `    primary_style: ${visualState.creativeSoul.style === 'custom' ? 'custom' : (styleLabels[visualState.creativeSoul.style] || 'none')}`,
+                ...(visualState.creativeSoul.style === 'custom' && customStyle ? [`    style_custom_text: ${toQuoted(customStyle)}`] : []),
+                ...(visualState.creativeSoul.style !== 'custom' && visualState.creativeSoul.styleVariant ? [`    style_detail: ${styleVariantLabels[visualState.creativeSoul.style]?.[visualState.creativeSoul.styleVariant] || visualState.creativeSoul.styleVariant}`] : []),
+                `    style_can_affect: [lighting, color, typography_mood, graphic_energy]`,
+                `    style_cannot_override: [exact_person_identity, logo_fidelity, screenshot_fidelity, background_identity]`,
+              ];
+
+              const textLines = [
+                `- text:`,
+                `    allowed_text: ${allowedText.length ? `[${allowedText.map(toQuoted).join(', ')}]` : '[]'}`,
+                `    allow_generated_headline: false`,
+                `    allow_generated_tagline: false`,
+                `    allow_generated_social_proof_copy: false`,
+                `    allow_generated_testimonials: false`,
+              ];
+
+              const scenePlan = buildSection('SCENE_PLAN', [
+                ...campaignLines,
+                ...compositionLines,
+                ...styleLines,
+                ...textLines,
+              ]);
+
+              const finalPromptForKie = [
+                roleAndRules,
+                outputTarget,
+                imageSources,
+                assetDirectives,
+                scenePlan,
+              ].join('\n\n');
               const validImages = sentAssets.map((item) => item.preparedImage);
 
               const { data: { session } } = await supabase.auth.getSession();
@@ -1573,7 +1765,6 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 stopProgress();
                 setResultImageUrl(taskData.videoUrl);
                 setResultUrls([taskData.videoUrl]);
-                persistGeneratedImage(taskData.videoUrl, { showSuccessToast: false, showAlreadySavedToast: false, triggerSaveSuccess: false }).catch(() => {});
               } else if (taskData.task_id) {
                 const taskId = taskData.task_id;
 
@@ -1583,7 +1774,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                   const TIMEOUT_MS = 30 * 60 * 1000;
                   let settled = false;
 
-                  const settle = (fn: () => void) => {
+                  let settle = (fn: () => void) => {
                     if (settled) return;
                     settled = true;
                     clearTimeout(timeoutId);
@@ -1599,7 +1790,6 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                           stopProgress();
                           setResultImageUrl(finalUrl);
                           setResultUrls(row.result_urls || [finalUrl]);
-                          persistGeneratedImage(finalUrl, { showSuccessToast: false, showAlreadySavedToast: false, triggerSaveSuccess: false }).catch(() => {});
                           resolve();
                         });
                       } else {
@@ -1613,6 +1803,25 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                   const timeoutId = setTimeout(() => {
                     settle(() => reject(new Error('Ad generation timed out. Please try again.')));
                   }, TIMEOUT_MS);
+
+                  // Fallback polling in case WebSocket drops on mobile/background
+                  const pollInterval = setInterval(async () => {
+                    if (settled) {
+                      clearInterval(pollInterval);
+                      return;
+                    }
+                    try {
+                      const supabaseJobs: any = supabase;
+                      const { data } = await supabaseJobs
+                        .from('visual_ads_jobs')
+                        .select('status, result_urls, error_msg')
+                        .eq('task_id', taskId)
+                        .maybeSingle();
+                      if (data) handleRow(data as any);
+                    } catch (e) {
+                      // ignore polling errors
+                    }
+                  }, 10000); // Poll every 10 seconds
 
                   const channel = supabase
                     .channel(`visual-ads-job-${taskId}`)
@@ -1632,6 +1841,13 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                         .maybeSingle();
                       if (data) handleRow(data as any);
                     });
+
+                  // Ensure polling cleanup on settle
+                  const originalSettle = settle;
+                  settle = (fn) => {
+                    clearInterval(pollInterval);
+                    originalSettle(fn);
+                  };
                 });
               } else {
                 throw new Error('Failed to start task: no task_id returned');

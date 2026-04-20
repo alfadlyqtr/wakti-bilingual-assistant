@@ -406,13 +406,13 @@ function getBrowserLocation(timeoutMs: number = 10000): Promise<NativeLocationRe
 }
 
 /**
- * Get current location — Browser GPS first, Natively SDK fallback.
+ * Get current location — races Browser geolocation and Natively SDK in parallel.
+ * First valid result wins. If neither resolves within `timeoutMs`, returns null.
  *
- * Flow (Option A — most accurate):
+ * Flow:
  * 1. Check cache (unless skipCache)
- * 2. ATTEMPT 1: Browser geolocation (device GPS via WebView — most reliable)
- * 3. ATTEMPT 2: Natively SDK (permission check → foreground tracking or current())
- * 4. If all fail: return null
+ * 2. Fire browser + native requests at the same time
+ * 3. Resolve with the first truthy winner, or null if both fail / time out
  */
 export function getNativeLocation(options?: {
   timeoutMs?: number;
@@ -462,60 +462,83 @@ async function _doGetNativeLocation(options?: {
     }
   }
 
-  // ── ATTEMPT 1: Browser geolocation (device GPS via WebView — most reliable) ──
-  console.log('[NativelyLocation] 🌐 ATTEMPT 1: Browser geolocation (device GPS)...');
-  const browserResult = await getBrowserLocation(timeoutMs);
-  if (browserResult) {
-    console.log('[NativelyLocation] ✅ Browser GPS succeeded:', browserResult.latitude, browserResult.longitude);
-    return browserResult;
-  }
-  console.warn('[NativelyLocation] Browser geolocation failed or denied');
+  console.log(`[NativelyLocation] � Racing browser + native (budget: ${timeoutMs}ms, first valid wins)`);
 
-  // ── ATTEMPT 2: Natively SDK (native bridge GPS) ──
-  console.log('[NativelyLocation] 🛰️ ATTEMPT 2: Natively SDK...');
-  const bridgeReady = await waitForNativeBridge();
-  if (bridgeReady) {
-    const instance = getInstance();
-    if (instance) {
-      // Check permission first (per docs)
-      const perm = await checkPermission(instance);
-      console.log('[NativelyLocation] Permission:', perm);
+  // ── Fire BOTH location sources in parallel ──
+  const browserPromise: Promise<NativeLocationResult | null> = getBrowserLocation(timeoutMs).catch((err) => {
+    console.warn('[NativelyLocation] Browser geolocation threw:', err);
+    return null;
+  });
 
-      if (perm === 'IN_USE' || perm === 'ALWAYS') {
-        let result: NativeLocationResult | null = null;
-
-        if (skipCache) {
-          // Fresh GPS needed (search/near-me) → foreground tracking (WhatsApp-style)
-          console.log('[NativelyLocation] Using foreground tracking for fresh GPS...');
-          result = await getForegroundLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
-        }
-
-        if (!result) {
-          console.log('[NativelyLocation] Using current() one-shot...');
-          result = await getCurrentLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
-        }
-
-        if (result) {
-          return result;
-        }
-        console.warn('[NativelyLocation] SDK returned no usable coordinates');
-      } else if (perm === 'DENIED') {
-        console.warn('[NativelyLocation] ⚠️ Location permission DENIED — trying current() with fallbackToSettings=true');
-        const result = await getCurrentLocation(instance, minAccuracy, accuracyType, priority, true, timeoutMs);
-        if (result) return result;
-      } else {
-        console.log('[NativelyLocation] Permission unknown — trying current() anyway...');
-        const result = await getCurrentLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
-        if (result) return result;
-      }
-    } else {
-      console.warn('[NativelyLocation] SDK instance creation failed');
+  const nativePromise: Promise<NativeLocationResult | null> = (async () => {
+    const bridgeReady = await waitForNativeBridge(Math.min(BRIDGE_READY_TIMEOUT, timeoutMs));
+    if (!bridgeReady) {
+      console.warn('[NativelyLocation] Native bridge not available');
+      return null;
     }
-  } else {
-    console.warn('[NativelyLocation] Native bridge not available');
+    const instance = getInstance();
+    if (!instance) {
+      console.warn('[NativelyLocation] SDK instance creation failed');
+      return null;
+    }
+    const perm = await checkPermission(instance);
+    console.log('[NativelyLocation] Permission:', perm);
+
+    if (perm === 'IN_USE' || perm === 'ALWAYS') {
+      let result: NativeLocationResult | null = null;
+      if (skipCache) {
+        console.log('[NativelyLocation] Using foreground tracking for fresh GPS...');
+        result = await getForegroundLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
+      }
+      if (!result) {
+        console.log('[NativelyLocation] Using current() one-shot...');
+        result = await getCurrentLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
+      }
+      return result;
+    }
+    if (perm === 'DENIED') {
+      console.warn('[NativelyLocation] ⚠️ Permission DENIED — trying current() with fallbackToSettings=true');
+      return await getCurrentLocation(instance, minAccuracy, accuracyType, priority, true, timeoutMs);
+    }
+    console.log('[NativelyLocation] Permission unknown — trying current() anyway...');
+    return await getCurrentLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
+  })().catch((err) => {
+    console.warn('[NativelyLocation] Native SDK path threw:', err);
+    return null;
+  });
+
+  // ── First-truthy race with hard timeout ──
+  const winner = await new Promise<NativeLocationResult | null>((resolve) => {
+    let settled = false;
+    let remaining = 2;
+    const done = (v: NativeLocationResult | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(v);
+    };
+    const onResult = (r: NativeLocationResult | null) => {
+      if (settled) return;
+      if (r && typeof r.latitude === 'number' && typeof r.longitude === 'number') {
+        done(r);
+        return;
+      }
+      remaining--;
+      if (remaining <= 0) done(null);
+    };
+
+    browserPromise.then(onResult);
+    nativePromise.then(onResult);
+
+    setTimeout(() => done(null), timeoutMs);
+  });
+
+  if (winner) {
+    console.log('[NativelyLocation] ✅ Race winner:', winner.source, winner.latitude, winner.longitude);
+    setCachedLocation(winner);
+    return winner;
   }
 
-  console.warn('[NativelyLocation] ❌ All location methods failed — returning null');
+  console.warn('[NativelyLocation] ❌ Race ended with no winner — returning null');
   return null;
 }
 

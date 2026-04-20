@@ -10,7 +10,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
  *   media_type:      "image" | "video" | "reel"
  *   media_url:       publicly reachable HTTPS URL
  *   caption:         optional caption string
- *   publish_target:  "feed" | "reel" (default: "feed")
+ *   publish_target:  "feed" | "story" | "reel" (default: "feed")
  *
  * Returns:
  *   { success, job_id, instagram_media_id, status }
@@ -57,19 +57,26 @@ async function createMediaContainer(params: {
 
   const body: Record<string, string> = {
     access_token: accessToken,
-    caption,
   };
 
-  if (mediaType === "image") {
-    // Standard image post
+  if (publishTarget !== "story" && caption) {
+    body.caption = caption;
+  }
+
+  if (publishTarget === "story") {
+    body.media_type = "STORIES";
+    if (mediaType === "image") {
+      body.image_url = mediaUrl;
+    } else {
+      body.video_url = mediaUrl;
+    }
+  } else if (mediaType === "image") {
     body.image_url = mediaUrl;
     body.media_type = "IMAGE";
   } else if (mediaType === "reel" || (mediaType === "video" && publishTarget === "reel")) {
-    // Reel
     body.video_url = mediaUrl;
     body.media_type = "REELS";
   } else {
-    // Regular video post
     body.video_url = mediaUrl;
     body.media_type = "VIDEO";
   }
@@ -144,6 +151,9 @@ Deno.serve(async (req: Request) => {
   if (!media_type || !["image", "video", "reel"].includes(media_type)) {
     return jsonResponse({ error: "media_type must be image, video, or reel" }, 400);
   }
+  if (!["feed", "story", "reel"].includes(publish_target)) {
+    return jsonResponse({ error: "publish_target must be feed, story, or reel" }, 400);
+  }
   if (!media_url || !media_url.startsWith("https://")) {
     return jsonResponse({ error: "media_url must be a public HTTPS URL" }, 400);
   }
@@ -166,6 +176,20 @@ Deno.serve(async (req: Request) => {
     if (Date.now() > expiresAt) {
       return jsonResponse({ error: "Instagram token expired. Please reconnect your Instagram account." }, 400);
     }
+  }
+
+  const accountInfoResp = await fetch(
+    `https://graph.instagram.com/${IG_GRAPH_VERSION}/me?fields=id,account_type&access_token=${igAccount.access_token}`
+  );
+  const accountInfo = await accountInfoResp.json().catch(() => ({})) as Record<string, unknown>;
+  const accountType = String(accountInfo.account_type || "").toUpperCase();
+
+  if (publish_target === "story" && accountType !== "BUSINESS") {
+    return jsonResponse({ error: "Story publishing is currently available only for connected Instagram Business accounts." }, 400);
+  }
+
+  if (publish_target === "story" && media_type === "reel") {
+    return jsonResponse({ error: "Story publishing does not accept media_type reel. Use image or video." }, 400);
   }
 
   // Create publish job record
@@ -207,7 +231,7 @@ Deno.serve(async (req: Request) => {
       .update({ instagram_creation_id: creationId, status: "processing", updated_at: new Date().toISOString() })
       .eq("id", jobId);
 
-    // ── Step 2: For images, publish immediately. For video/Reel, check status first.
+    // ── Step 2: For images, publish immediately. For video/Reel/Story video, check status first.
     if (media_type === "image") {
       // Images are usually ready immediately
       const mediaId = await publishContainer(igAccount.instagram_user_id, creationId, igAccount.access_token);

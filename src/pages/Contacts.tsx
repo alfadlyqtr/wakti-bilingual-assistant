@@ -46,13 +46,16 @@ export function ContactsContent({
   activeTab, 
   setActiveTab,
   openChatUserId = null,
-  clearOpenChat = () => {}
+  clearOpenChat = () => {},
+  embedded = false,
 }: { 
   language: string; 
   activeTab: string;
   setActiveTab: (tab: string) => void;
   openChatUserId?: string | null;
   clearOpenChat?: () => void;
+  /** When true, the inner ContactList keeps chat in a modal instead of navigating away. */
+  embedded?: boolean;
 }) {
   // Fetch pending requests count for the badge
   const { data: pendingRequestsCount = 0 } = useQuery({
@@ -112,6 +115,7 @@ export function ContactsContent({
             refetchUnreadCounts={refetchUnreadCounts}
             openChatUserId={openChatUserId}
             clearOpenChat={clearOpenChat}
+            embedded={embedded}
           />
         </TabsContent>
         

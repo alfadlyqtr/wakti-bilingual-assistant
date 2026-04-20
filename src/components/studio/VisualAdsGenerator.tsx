@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { Plus, Smartphone, Square, Monitor, Wand2, Globe, Loader2, ArrowLeft, Sparkles, Image as ImageIcon } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { Plus, Smartphone, Square, Monitor, Wand2, Globe, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { SavedImagesPicker } from '@/components/dashboard/SavedImagesPicker';
 
@@ -42,9 +41,6 @@ export interface VisualAdsState {
     style: string;
     customStyle: string;
     styleVariant: string;
-    magicEnhance: boolean;
-    promptNotes: string;
-    prompt: string;
   };
 }
 
@@ -372,13 +368,12 @@ export default function VisualAdsGenerator({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedAssetIndex, setSelectedAssetIndex] = useState(0);
   const [openBriefSection, setOpenBriefSection] = useState<1 | 4 | null>(1);
-  const [isAmping, setIsAmping] = useState(false);
   const [visibleSlotCount, setVisibleSlotCount] = useState(INITIAL_VISIBLE_SLOTS);
 
   const [state, setState] = useState<VisualAdsState>({
     brandAsset: { image: null, type: null },
     campaignDNA: { platform: null, objective: '' },
-    creativeSoul: { mainMessage: '', customMainMessage: '', mainMessageVariant: '', cta: '', customCta: '', style: '', customStyle: '', styleVariant: '', magicEnhance: false, promptNotes: '', prompt: '' },
+    creativeSoul: { mainMessage: '', customMainMessage: '', mainMessageVariant: '', cta: '', customCta: '', style: '', customStyle: '', styleVariant: '' },
     assets: [],
   });
 
@@ -393,10 +388,7 @@ export default function VisualAdsGenerator({
     }));
   }, []);
   const updateCreativeSoul = useCallback((updates: Partial<VisualAdsState['creativeSoul']>) => {
-    updateState('creativeSoul', {
-      ...updates,
-      magicEnhance: updates.magicEnhance ?? false,
-    });
+    updateState('creativeSoul', updates);
   }, [updateState]);
 
   const normalizeWordLimitedValue = useCallback((value: string) => value.replace(/\s+/g, ' ').trim(), []);
@@ -524,194 +516,64 @@ export default function VisualAdsGenerator({
     if (assetType === 'illustration') return `Image ${index + 1} should be used as an illustration element in the layout.`;
     return `Image ${index + 1} should be used according to its tagged role.`;
   }, [language]);
-  const promptSelectionBadges = useMemo(() => {
-    const badges: string[] = [];
-    if (selectedTopicMeta.label) badges.push(selectedTopicMeta.label);
-    if (selectedTopicVariantMeta.label) badges.push(selectedTopicVariantMeta.label);
-    if (selectedCtaLabel) badges.push(selectedCtaLabel);
-    if (selectedStyleMeta.label) badges.push(selectedStyleMeta.label);
-    if (selectedStyleVariantMeta.label) badges.push(selectedStyleVariantMeta.label);
-    (state.assets || []).forEach((asset, index) => {
-      if (!asset.type) return;
-      const tagLabel = assetTypeOptions.find((option) => option.value === asset.type)?.label || asset.type;
-      badges.push(language === 'ar' ? `الصورة ${index + 1}: ${tagLabel}` : `Image ${index + 1}: ${tagLabel}`);
-    });
-    return badges;
-  }, [selectedTopicMeta.label, selectedTopicVariantMeta.label, selectedCtaLabel, selectedStyleMeta.label, selectedStyleVariantMeta.label, state.assets, assetTypeOptions, language]);
-  const autoPromptPreview = useMemo(() => {
-    const lines: string[] = [];
-    if (language === 'ar') {
-      lines.push('أنشئ بوستر إعلان عالمي المستوى. فكّر كأنك من أفضل مخرجي ومصممي البوسترات الإعلانية، وادمج كل العناصر في تكوين واحد مبهر ومتماسك.');
-      if (state.campaignDNA.platform) {
-        lines.push(`المقاس المطلوب: ${state.campaignDNA.platform}.`);
-      }
-      if (selectedTopicMeta.label || selectedTopicMeta.prompt) {
-        lines.push(`الرسالة الرئيسية: ${selectedTopicMeta.label || selectedTopicMeta.prompt}. اجعل التكوين يخدم هذا المعنى بوضوح.`);
-      }
-      if (selectedTopicVariantMeta.label || selectedTopicVariantMeta.prompt) {
-        lines.push(`تفصيل الرسالة: ${selectedTopicVariantMeta.label || selectedTopicVariantMeta.prompt}. اجعل هذا التفصيل يدعم الرسالة الرئيسية بدلاً من منافستها.`);
-      }
-      const assets = state.assets || [];
-      const taggedAssets = assets
-        .map((asset, index) => asset.type ? getAssetPromptSummary(asset.type, index) : '')
-        .filter(Boolean);
-      if (taggedAssets.length > 0) {
-        lines.push('استخدم الصور المرفوعة بهذه الأدوار:');
-        taggedAssets.forEach((line) => lines.push(`- ${line}`));
-      }
-      assets
-        .filter((asset) => asset.type === 'person')
-        .forEach((asset, index) => {
-          const originalIndex = assets.findIndex((candidate) => candidate === asset) + 1;
-          lines.push(`تعامل مع الصورة ${originalIndex} بهذا الأسلوب: ${getPersonModeLabel(asset)}`);
+  const generationSummary = useMemo(() => {
+    const assetLines = (state.assets || [])
+      .map((asset, index) => {
+        if (!asset.type) return null;
+        const tagLabel = assetTypeOptions.find((option) => option.value === asset.type)?.label || asset.type;
+        const details: string[] = [];
+        if (asset.type === 'person') {
+          details.push((asset.personMode || 'exact') === 'exact'
+            ? (language === 'ar' ? 'مطابق' : 'Exact')
+            : (language === 'ar' ? 'مرجع' : 'Reference'));
           if ((asset.personMode || 'exact') === 'exact') {
-            lines.push(`الأولوية للصورة ${originalIndex}: ثبّت هوية الشخص أولاً. إذا تعارض الأسلوب أو التكوين مع ملامحه الحقيقية، فخفّف الإبداع وحافظ على الشخص.`);
+            if ((asset.exactPersonStyle || 'same-pose') === 'same-pose') details.push(language === 'ar' ? 'أقرب وضعية' : 'Closest');
+            if (asset.exactPersonStyle === 'adapted-pose') details.push(language === 'ar' ? 'وضعية جديدة' : 'New pose');
+            if (asset.exactPersonStyle === 'upper-body') details.push(language === 'ar' ? 'علوي' : 'Upper');
+          } else if (asset.referenceStyle) {
+            details.push(asset.referenceStyle === 'character'
+              ? (language === 'ar' ? 'شخصية' : 'Character')
+              : (language === 'ar' ? 'واقعي' : 'Realistic'));
           }
-        });
-      assets
-        .filter((asset) => asset.type === 'screenshot')
-        .forEach((asset) => {
-          const originalIndex = assets.findIndex((candidate) => candidate === asset) + 1;
-          lines.push(`اعرض لقطة الشاشة من الصورة ${originalIndex} داخل ${getScreenshotDeviceLabel(asset.screenshotDevice)} بشكل واضح ومميز.`);
-        });
-      if (assets.some((asset) => asset.type === 'screenshot')) {
-        lines.push('إذا ظهرت أسماء أو أسماء مستخدمين داخل لقطة الشاشة، فلا تعِد استخدامها كنص إعلاني في البوستر إلا إذا كتبها المستخدم بنفسه داخل البرومبت.');
-      }
-      assets
-        .filter((asset) => asset.type === 'logo')
-        .forEach((asset) => {
-          const originalIndex = assets.findIndex((candidate) => candidate === asset) + 1;
-          if (asset.logoMode === 'as-is') {
-            lines.push(`ضع الشعار من الصورة ${originalIndex} كما هو بخلفيته الأصلية، أكبر قليلاً وواضحاً كمرساة بصرية للعلامة قرب أعلى البوستر.`);
-          } else {
-            lines.push(`ضع الشعار من الصورة ${originalIndex} كما هو تماماً، وقم بدمجه في التصميم بدون أي مربع أبيض حوله.`);
-          }
-        });
-      if (selectedStyleMeta.label || selectedStyleMeta.prompt) {
-        if (state.creativeSoul.style === 'custom') {
-          lines.push(`الأسلوب البصري المطلوب بدقة هو: "${selectedStyleMeta.prompt}". اجعل الإضاءة والألوان والملمس تعكس هذا الاتجاه بشكل مثالي.`);
-        } else {
-          lines.push(`الأسلوب البصري: ${selectedStyleMeta.label || selectedStyleMeta.prompt}. اجعل البوستر يعكس هذا الاتجاه بشكل واضح.`);
         }
-      }
-      if (selectedStyleVariantMeta.label || selectedStyleVariantMeta.prompt) {
-        lines.push(`تفصيل الأسلوب: ${selectedStyleVariantMeta.label || selectedStyleVariantMeta.prompt}. ليكن هذا التفصيل مكملاً للاتجاه البصري لا بديلاً عنه.`);
-      }
-      if (selectedCtaLabel) {
-        if (state.creativeSoul.cta === 'custom') {
-          lines.push(`أدمج عبارة "${selectedCtaLabel}" بأناقة قرب أسفل البوستر. عاملها كنص إعلاني فاخر وليس كزر تطبيق رخيص.`);
-        } else {
-          lines.push(`أضف عبارة "${selectedCtaLabel}" كعنصر دعائي واضح قرب أسفل البوستر، بصيغة تصميم بوستر وليست زر تطبيق فعلي.`);
+        if (asset.type === 'logo') {
+          details.push((asset.logoMode || 'transparent') === 'as-is'
+            ? (language === 'ar' ? 'كما هو' : 'As-is')
+            : (language === 'ar' ? 'شفاف' : 'Transparent'));
         }
-      }
-    } else {
-      lines.push('Create a world-class advertising poster. Think like one of the best poster art directors in the world and combine everything into one cohesive, visually stunning final composition.');
-      if (state.campaignDNA.platform) {
-        lines.push(`Target format: ${state.campaignDNA.platform}.`);
-      }
-      if (selectedTopicMeta.label || selectedTopicMeta.prompt) {
-        if (state.creativeSoul.mainMessage === 'custom') {
-          lines.push(`The core narrative and central focus of the poster is: "${selectedTopicMeta.prompt}". Design the entire composition, lighting, and mood to elevate and communicate this specific theme.`);
-        } else {
-          lines.push(`Main message: ${selectedTopicMeta.label || selectedTopicMeta.prompt}. Let the composition clearly support this campaign angle.`);
+        if (asset.type === 'screenshot') {
+          details.push(getScreenshotDeviceLabel(asset.screenshotDevice));
         }
-      }
-      if (selectedTopicVariantMeta.label || selectedTopicVariantMeta.prompt) {
-        lines.push(`Main message detail: ${selectedTopicVariantMeta.label || selectedTopicVariantMeta.prompt}. This should support the core campaign angle, not compete with it.`);
-      }
-      const assets = state.assets || [];
-      const taggedAssets = assets
-        .map((asset, index) => asset.type ? getAssetPromptSummary(asset.type, index) : '')
-        .filter(Boolean);
-      if (taggedAssets.length > 0) {
-        lines.push('Use the uploaded images with these roles:');
-        taggedAssets.forEach((line) => lines.push(`- ${line}`));
-      }
-      assets
-        .filter((asset) => asset.type === 'person')
-        .forEach((asset) => {
-          const originalIndex = assets.findIndex((candidate) => candidate === asset) + 1;
-          lines.push(`Handle Image ${originalIndex} like this: ${getPersonModeLabel(asset)}`);
-          if ((asset.personMode || 'exact') === 'exact') {
-            lines.push(`Priority for Image ${originalIndex}: lock the real identity first. If style, beauty, or composition conflicts with the person, reduce the creative change and keep the person.`);
-          }
-        });
-      assets
-        .filter((asset) => asset.type === 'screenshot')
-        .forEach((asset) => {
-          const originalIndex = assets.findIndex((candidate) => candidate === asset) + 1;
-          lines.push(`Show the screenshot from Image ${originalIndex} inside a clear ${getScreenshotDeviceLabel(asset.screenshotDevice)} mockup.`);
-        });
-      if (assets.some((asset) => asset.type === 'screenshot')) {
-        lines.push('If names or usernames appear inside the screenshot UI, do not reuse them as poster headline, quote, testimonial, or community text unless the user explicitly typed that name in the prompt.');
-      }
-      assets
-        .filter((asset) => asset.type === 'logo')
-        .forEach((asset) => {
-          const originalIndex = assets.findIndex((candidate) => candidate === asset) + 1;
-          if (asset.logoMode === 'as-is') {
-            lines.push(`Place the logo from Image ${originalIndex} exactly as uploaded, slightly bigger, clearly visible, as a top brand anchor with breathing room around it.`);
-          } else {
-            lines.push(`Place the logo from Image ${originalIndex} exactly as designed, integrated cleanly into the layout without any white background box.`);
-          }
-        });
-      // Scene intelligence: detect asset combination and inject creative director composition
-      const hasPerson = assets.some(a => a.type === 'person');
-      const hasScreenshot = assets.some(a => a.type === 'screenshot');
-      const hasBackground = assets.some(a => a.type === 'background');
-      const hasProduct = assets.some(a => a.type === 'product');
-      const hasLogo = assets.some(a => a.type === 'logo');
-      if (hasPerson && hasScreenshot && hasBackground) {
-        lines.push('Composition direction: This is a lifestyle app ad. Place the person slightly off-center to the left or right — they are the human anchor of the scene. Position the phone in front of or beside them at a natural angle, as if they are using it. The person\'s face and upper body must remain clearly visible — do NOT let the phone overlap or block their face. The background city scene should wrap atmospherically behind both. Apply depth of field: person and phone are sharp, background has a soft cinematic blur. The overall feel should be real, warm, and aspirational — not a flat product sheet.');
-      } else if (hasPerson && hasProduct && hasBackground) {
-        lines.push('Composition direction: Lifestyle product ad. Place the person naturally in the environment, holding or interacting with the product. Keep the person\'s face clearly visible. Product should be prominent but not blocking the subject. Background wraps the scene. Use warm natural lighting.');
-      } else if (hasPerson && hasBackground && !hasScreenshot && !hasProduct) {
-        lines.push('Composition direction: Brand lifestyle moment. The person is the full hero of the scene. Place them confidently in the environment — off-center, natural stance. The background sets the atmosphere behind them. Cinematic lighting, genuine and aspirational feel.');
-      } else if (hasPerson && hasScreenshot && !hasBackground) {
-        lines.push('Composition direction: App lifestyle ad without background. Place the person beside the phone naturally. Keep the person\'s face visible and unobstructed. Use a clean or gradient backdrop that feels premium.');
-      } else if (!hasPerson && hasScreenshot && hasBackground && hasLogo) {
-        lines.push('Composition direction: Pure product/app poster. Center or slightly tilt the phone mockup with the screenshot visible on screen. Place the logo clean at the top. Background is the atmospheric stage behind the phone. Professional product photography feel — no clutter.');
-      } else if (!hasPerson && hasProduct && hasBackground) {
-        lines.push('Composition direction: Product hero shot. The product is the star. Place it prominently with dramatic commercial lighting. Background wraps behind it. Premium and clean.');
-      }
-      if (selectedStyleMeta.label || selectedStyleMeta.prompt) {
-        lines.push(`Visual style: ${selectedStyleMeta.label || selectedStyleMeta.prompt}. Make the poster clearly follow this art direction.`);
-      }
-      if (selectedStyleVariantMeta.label || selectedStyleVariantMeta.prompt) {
-        lines.push(`Visual style detail: ${selectedStyleVariantMeta.label || selectedStyleVariantMeta.prompt}. This should refine the chosen look, not fight it.`);
-      }
-      if (selectedCtaLabel) {
-        lines.push(`Include the text "${selectedCtaLabel}" as a strong poster CTA callout near the bottom, not as a real interactive UI button.`);
-      }
-    }
-    return lines.join('\n');
-  }, [language, state.campaignDNA.platform, state.assets, state.creativeSoul.mainMessage, state.creativeSoul.style, state.creativeSoul.cta, selectedTopicMeta.label, selectedTopicMeta.prompt, selectedTopicVariantMeta.label, selectedTopicVariantMeta.prompt, selectedStyleMeta.label, selectedStyleMeta.prompt, selectedStyleVariantMeta.label, selectedStyleVariantMeta.prompt, selectedCtaLabel, getAssetPromptSummary, getPersonModeLabel, getScreenshotDeviceLabel]);
-  const composedPromptText = useMemo(() => {
-    return [autoPromptPreview.trim(), state.creativeSoul.promptNotes.trim()].filter(Boolean).join('\n\n').trim();
-  }, [autoPromptPreview, state.creativeSoul.promptNotes]);
-  const promptTextareaValue = state.creativeSoul.magicEnhance
-    ? state.creativeSoul.prompt
-    : composedPromptText;
-  const handlePromptTextareaChange = useCallback((value: string) => {
-    if (state.creativeSoul.magicEnhance) {
-      updateState('creativeSoul', { prompt: value, magicEnhance: true });
-      return;
-    }
+        const suffix = details.length ? ` · ${details.join(' · ')}` : '';
+        return language === 'ar'
+          ? `الصورة ${index + 1}: ${tagLabel}${suffix}`
+          : `Image ${index + 1}: ${tagLabel}${suffix}`;
+      })
+      .filter((line): line is string => Boolean(line));
 
-    const autoText = autoPromptPreview.trim();
-    if (!autoText) {
-      updateCreativeSoul({ promptNotes: value });
-      return;
-    }
+    const campaignLines = [
+      state.campaignDNA.platform
+        ? (language === 'ar' ? `المقاس: ${state.campaignDNA.platform}` : `Format: ${state.campaignDNA.platform}`)
+        : null,
+      selectedTopicMeta.label
+        ? (language === 'ar' ? `الرسالة: ${selectedTopicMeta.label}` : `Main message: ${selectedTopicMeta.label}`)
+        : null,
+      selectedTopicVariantMeta.label
+        ? (language === 'ar' ? `تفصيل الرسالة: ${selectedTopicVariantMeta.label}` : `Message detail: ${selectedTopicVariantMeta.label}`)
+        : null,
+      selectedStyleMeta.label
+        ? (language === 'ar' ? `النمط: ${selectedStyleMeta.label}` : `Style: ${selectedStyleMeta.label}`)
+        : null,
+      selectedStyleVariantMeta.label
+        ? (language === 'ar' ? `تفصيل النمط: ${selectedStyleVariantMeta.label}` : `Style detail: ${selectedStyleVariantMeta.label}`)
+        : null,
+      selectedCtaLabel
+        ? (language === 'ar' ? `الدعوة للإجراء: ${selectedCtaLabel}` : `CTA: ${selectedCtaLabel}`)
+        : null,
+    ].filter((line): line is string => Boolean(line));
 
-    if (value.startsWith(autoText)) {
-      const remainder = value.slice(autoText.length).replace(/^\s+/, '');
-      updateCreativeSoul({ promptNotes: remainder });
-      return;
-    }
-
-    updateState('creativeSoul', { prompt: value, magicEnhance: true });
-  }, [state.creativeSoul.magicEnhance, autoPromptPreview, updateCreativeSoul, updateState]);
+    return { assetLines, campaignLines };
+  }, [state.assets, state.campaignDNA.platform, assetTypeOptions, language, getScreenshotDeviceLabel, selectedTopicMeta.label, selectedTopicVariantMeta.label, selectedStyleMeta.label, selectedStyleVariantMeta.label, selectedCtaLabel]);
   const customFieldToastShownRef = useRef<Record<'customMainMessage' | 'customCta' | 'customStyle', boolean>>({
     customMainMessage: false,
     customCta: false,
@@ -801,7 +663,6 @@ export default function VisualAdsGenerator({
       },
       creativeSoul: {
         ...prev.creativeSoul,
-        magicEnhance: false,
       },
       assets: allImages,
     }));
@@ -855,7 +716,6 @@ export default function VisualAdsGenerator({
             },
             creativeSoul: {
               ...prev.creativeSoul,
-              magicEnhance: false,
             },
             assets: allImages,
           }));
@@ -904,7 +764,6 @@ export default function VisualAdsGenerator({
         },
         creativeSoul: {
           ...prevState.creativeSoul,
-          magicEnhance: false,
         },
         assets: next,
       }));
@@ -950,7 +809,6 @@ export default function VisualAdsGenerator({
         },
         creativeSoul: {
           ...prevState.creativeSoul,
-          magicEnhance: false,
         },
         assets: next,
       }));
@@ -979,7 +837,6 @@ export default function VisualAdsGenerator({
         },
         creativeSoul: {
           ...prevState.creativeSoul,
-          magicEnhance: false,
         },
         assets: next,
       }));
@@ -1011,7 +868,6 @@ export default function VisualAdsGenerator({
         },
         creativeSoul: {
           ...prevState.creativeSoul,
-          magicEnhance: false,
         },
         assets: next,
       }));
@@ -1041,7 +897,6 @@ export default function VisualAdsGenerator({
         },
         creativeSoul: {
           ...prevState.creativeSoul,
-          magicEnhance: false,
         },
         assets: next,
       }));
@@ -1070,7 +925,6 @@ export default function VisualAdsGenerator({
         },
         creativeSoul: {
           ...prevState.creativeSoul,
-          magicEnhance: false,
         },
         assets: next,
       }));
@@ -1115,112 +969,6 @@ export default function VisualAdsGenerator({
     }
     await onGenerate(state);
   }, [state, onGenerate, language, uploadedImages, normalizeWordLimitedValue]);
-
-  const handleAmp = useCallback(async () => {
-    const combinedPromptSource = promptTextareaValue.trim();
-    if (!combinedPromptSource || isAmping) {
-      if (!combinedPromptSource) {
-        toast.error(language === 'ar' ? 'اختر العناصر أو اكتب وصفاً أولاً' : 'Choose some settings or add notes first');
-      }
-      return;
-    }
-
-    const tags = uploadedImages
-      .map((asset, index) => {
-        if (!asset.type) return null;
-        const tagLabel = assetTypeOptions.find((option) => option.value === asset.type)?.label;
-        return `Image ${index + 1}: ${tagLabel}`;
-      })
-      .filter((tag): tag is string => Boolean(tag));
-    const exactPersonImages = uploadedImages
-      .map((asset, index) => asset.type === 'person' && (asset.personMode || 'exact') === 'exact' ? index + 1 : null)
-      .filter((index): index is number => index !== null);
-
-    try {
-      setIsAmping(true);
-      const { data, error } = await supabase.functions.invoke('prompt-amp', {
-        body: {
-          mode: 'visual-ads',
-          text: combinedPromptSource,
-          assets_count: uploadedImages.length,
-          tag_list: tags,
-          topic_label: selectedTopicMeta.label || '',
-          topic_prompt: selectedTopicMeta.prompt || '',
-          cta_text: selectedCtaLabel,
-          style_label: selectedStyleMeta.label || '',
-          style_prompt: selectedStyleMeta.prompt || '',
-          topic_variant_label: selectedTopicVariantMeta.label || '',
-          topic_variant_prompt: selectedTopicVariantMeta.prompt || '',
-          style_variant_label: selectedStyleVariantMeta.label || '',
-          style_variant_prompt: selectedStyleVariantMeta.prompt || '',
-          exact_person_images: exactPersonImages,
-          platform: state.campaignDNA.platform,
-        },
-      });
-
-      if (error || !data?.text) {
-        console.error('Visual Ads AMP failed:', error || data);
-        toast.error(language === 'ar' ? 'فشل تحسين الوصف' : 'Failed to enhance prompt');
-        return;
-      }
-
-      const improvedText = String(data.text).trim();
-      const originalRoleLines = (combinedPromptSource.match(/^- Image \d+/gm) || []).length;
-      const improvedRoleLines = (improvedText.match(/^- Image \d+/gm) || []).length;
-      const originalHasTargetFormat = /Target format:/i.test(combinedPromptSource);
-      const improvedHasTargetFormat = /Target format:/i.test(improvedText);
-      const originalHasIdentityLock = /exact same person|exact intended human subject|lock the real identity/i.test(combinedPromptSource);
-      const improvedHasIdentityLock = /exact same person|exact intended human subject|lock the real identity|same real individual/i.test(improvedText);
-      const improvedHasDoNotReplace = /do not replace|do not turn them into a different person|keep the person first/i.test(improvedText);
-
-      if ((originalRoleLines > 0 && improvedRoleLines < originalRoleLines) || (originalHasTargetFormat && !improvedHasTargetFormat)) {
-        console.error('Visual Ads AMP returned a flattened prompt:', { combinedPromptSource, improvedText });
-        toast.error(language === 'ar' ? 'تحسين الوصف أزال بنية البرومبت، لذلك أبقينا النسخة الأصلية.' : 'Enhance removed the prompt structure, so I kept your original version.');
-        return;
-      }
-      if (exactPersonImages.length > 0 && originalHasIdentityLock && (!improvedHasIdentityLock || !improvedHasDoNotReplace)) {
-        console.error('Visual Ads AMP weakened exact-person protection:', { combinedPromptSource, improvedText, exactPersonImages });
-        toast.error(language === 'ar' ? 'تحسين الوصف أضعف حماية هوية الشخص، لذلك أبقينا النسخة الأصلية.' : 'Enhance weakened the exact-person identity lock, so I kept your original version.');
-        return;
-      }
-
-      updateState('creativeSoul', { prompt: improvedText, magicEnhance: true });
-      toast.success(language === 'ar' ? 'تم تحسين الوصف' : 'Prompt enhanced');
-    } catch (err) {
-      console.error('Visual Ads AMP exception:', err);
-      toast.error(language === 'ar' ? 'تعذر تحسين الوصف' : 'Unable to enhance prompt');
-    } finally {
-      setIsAmping(false);
-    }
-  }, [promptTextareaValue, uploadedImages, isAmping, language, updateState, assetTypeOptions, selectedTopicMeta.label, selectedTopicMeta.prompt, selectedTopicVariantMeta.label, selectedTopicVariantMeta.prompt, selectedCtaLabel, selectedStyleMeta.label, selectedStyleMeta.prompt, selectedStyleVariantMeta.label, selectedStyleVariantMeta.prompt, state.campaignDNA.platform]);
-
-  // Segmented control component
-  const SegmentedControl = <T extends string>({
-    options,
-    value,
-    onChange,
-  }: {
-    options: { value: T; label: string; emoji: string }[];
-    value: T;
-    onChange: (val: T) => void;
-  }) => (
-    <div className="flex rounded-xl bg-white/50 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 p-1">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-lg text-xs font-semibold transition-all duration-200 min-h-[44px] ${
-            value === opt.value
-              ? 'bg-[#060541] text-white dark:bg-[#f2f2f2] dark:text-[#060541] shadow-md'
-              : 'text-[#858384] hover:bg-white/50 dark:hover:bg-white/10'
-          }`}
-        >
-          <span>{opt.emoji}</span>
-          <span>{opt.label}</span>
-        </button>
-      ))}
-    </div>
-  );
 
   useEffect(() => {
     if (resultUrl) {
@@ -1909,7 +1657,7 @@ export default function VisualAdsGenerator({
             {/* Main brief */}
             {(() => {
               const isOpen = openBriefSection === 4;
-              const hasText = promptTextareaValue.trim().length > 0;
+              const hasSummary = generationSummary.assetLines.length > 0 || generationSummary.campaignLines.length > 0;
               return (
                 <div className="rounded-xl border border-[#606062]/20 dark:border-[#858384]/20 overflow-visible">
                   <button
@@ -1919,9 +1667,9 @@ export default function VisualAdsGenerator({
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-foreground">
-                        {language === 'ar' ? '٢. مساحة البرومبت' : '2. Prompt area'}
+                        {language === 'ar' ? '٢. ملخص الإنشاء' : '2. Generation summary'}
                       </span>
-                      {hasText && !isOpen && (
+                      {hasSummary && !isOpen && (
                         <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] text-[10px] font-semibold">
                           ✓
                         </span>
@@ -1931,43 +1679,39 @@ export default function VisualAdsGenerator({
                   </button>
                   {isOpen && (
                     <div className="relative z-10 px-4 pb-4 pt-2" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-                      <div className="mb-3 space-y-1">
+                      <div className="space-y-3">
                         <p className="text-[11px] text-[#858384]">
-                          {language === 'ar' ? 'كل ما اخترته يظهر داخل مساحة البرومبت نفسها. أضف ملاحظاتك هناك مباشرة ثم ولّد أو حسّن.' : 'Everything you picked appears inside the prompt area itself. Add your notes there directly, then generate or enhance.'}
-                        </p>
-                        <p className="text-[11px] text-[#858384]">
-                          {language === 'ar' ? 'إذا عدّلت النص بالكامل فسنعتبره البرومبت النهائي الذي تريد العمل عليه.' : 'If you rewrite the full text, we will treat that as your final working prompt.'}
+                          {language === 'ar'
+                            ? 'سنستخدم هذا الملخص لبناء برومبت منظم تلقائياً. لا حاجة لكتابة أو تعديل البرومبت يدوياً.'
+                            : 'We will use this summary to build a structured prompt automatically. No manual prompt writing is needed.'}
                         </p>
                       </div>
-                      <div className="mb-3 flex items-center justify-between gap-2">
-                        <p className="text-[11px] text-[#858384]">
-                          {language === 'ar' ? 'يمكنك إضافة ملاحظاتك الخاصة هنا' : 'Add your own notes here'}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleAmp}
-                          disabled={isAmping}
-                          className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-3 py-2 text-xs font-bold text-white shadow-[0_4px_18px_rgba(249,115,22,0.28)] transition-all hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {isAmping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
-                          <span>{language === 'ar' ? 'حسّن الوصف' : 'Enhance Brief'}</span>
-                        </button>
+                      <div className="rounded-xl border border-[#606062]/15 bg-white/25 p-3 space-y-3 dark:border-[#858384]/20 dark:bg-white/[0.03]">
+                        <div className="space-y-2">
+                          <p className="text-[11px] font-semibold text-foreground/90">{language === 'ar' ? 'الأصول' : 'Assets'}</p>
+                          {generationSummary.assetLines.length > 0 ? (
+                            <div className="space-y-1.5">
+                              {generationSummary.assetLines.map((line) => (
+                                <p key={line} className="text-[11px] text-[#858384]">{line}</p>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-[#858384]">{language === 'ar' ? 'لم يتم تحديد أصول بعد.' : 'No tagged assets yet.'}</p>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[11px] font-semibold text-foreground/90">{language === 'ar' ? 'الإعدادات' : 'Settings'}</p>
+                          {generationSummary.campaignLines.length > 0 ? (
+                            <div className="space-y-1.5">
+                              {generationSummary.campaignLines.map((line) => (
+                                <p key={line} className="text-[11px] text-[#858384]">{line}</p>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-[#858384]">{language === 'ar' ? 'لم يتم اختيار إعدادات إضافية بعد.' : 'No extra settings selected yet.'}</p>
+                          )}
+                        </div>
                       </div>
-                      <textarea
-                        value={promptTextareaValue}
-                        onChange={(e) => handlePromptTextareaChange(e.target.value)}
-                        placeholder={language === 'ar'
-                          ? 'سيظهر البرومبت الكامل هنا تلقائياً بمجرد اختيار الصور والتاجات والشرائح.'
-                          : 'The full prompt will appear here automatically once you choose your images, tags, and chips.'}
-                        rows={12}
-                        onClick={(e) => e.stopPropagation()}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onFocus={(e) => e.stopPropagation()}
-                        autoCorrect="on"
-                        autoCapitalize="sentences"
-                        spellCheck={true}
-                        className="relative z-10 w-full px-4 py-3 rounded-xl bg-[#0f131a] dark:bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 text-sm text-white resize-none focus:outline-none focus:border-[#060541]/50 dark:focus:border-[#f2f2f2]/50 transition-colors"
-                      />
                     </div>
                   )}
                 </div>

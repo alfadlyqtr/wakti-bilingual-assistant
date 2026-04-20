@@ -39,12 +39,26 @@ interface UserProfile {
   language?: string | null;
 }
 
+// ── Item #7 (Stage 7A): single source of truth for access decisions ──
+// These types are exported so ProtectedRoute / Account.tsx / CustomPaywallModal
+// can eventually swap their local math for a single read from this context.
+export type PaywallVariantName = 'new_user' | 'cancelled' | 'trial_expired';
+export type AccessState =
+  | 'loading'
+  | 'subscribed'
+  | 'admin_gifted'
+  | 'trial_active'
+  | 'paywall:new_user'
+  | 'paywall:cancelled'
+  | 'paywall:trial_expired';
+
 interface UserProfileContextValue {
   profile: UserProfile | null;
   loading: boolean;
   error: string | null;
   refetch: () => void;
   createProfileIfMissing: (userId: string) => Promise<UserProfile>;
+  applyFreshProfile: (data: UserProfile) => void;
   isSubscribed: boolean;
   isAdminGifted: boolean;
   isGracePeriod: boolean;
@@ -53,6 +67,10 @@ interface UserProfileContextValue {
   isAccessExpired: boolean;
   isNewUser: boolean;
   wasSubscribed: boolean;
+  // ── Item #7 Stage 7A: new derived values (read-only, no consumer yet) ──
+  hasBillingGrace: boolean;
+  paywallVariant: PaywallVariantName | null;
+  accessState: AccessState;
 }
 
 export const UserProfileContext = createContext<UserProfileContextValue | undefined>(undefined);
@@ -96,6 +114,14 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
     setProfile(p);
     if (p && user?.id) writeCachedProfile(user.id, p);
   };
+
+  const applyFreshProfile = useCallback((data: UserProfile) => {
+    profileRef.current = data;
+    setProfile(data);
+    if (user?.id) writeCachedProfile(user.id, data);
+    setLoading(false);
+    setError(null);
+  }, [user?.id]);
 
   const normalizeAvatarUrl = (url: string | null | undefined) => {
     const raw = (url || '').trim();
@@ -248,10 +274,47 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     fetchProfile();
 
+    // Listen for BOTH events directly here (Stage 7C).
+    // No re-dispatch chain needed — both events simply trigger a profile refetch.
     const handleProfileUpdate = () => fetchProfile();
     window.addEventListener('wakti-profile-updated', handleProfileUpdate);
-    return () => window.removeEventListener('wakti-profile-updated', handleProfileUpdate);
+    window.addEventListener('wakti-subscription-updated', handleProfileUpdate);
+    return () => {
+      window.removeEventListener('wakti-profile-updated', handleProfileUpdate);
+      window.removeEventListener('wakti-subscription-updated', handleProfileUpdate);
+    };
   }, [fetchProfile]);
+
+  // ── Item #7 Stage 7C: RevenueCat sync lives here now (moved from AuthContext) ──
+  // Fires once per logged-in user. Syncs profiles.is_subscribed with RC, then lets
+  // the existing realtime listener propagate any DB changes to consumers.
+  // Why here: it's a profile-level concern (it writes to the profile row), so it
+  // belongs next to the code that owns the profile.
+  const rcSyncedUserRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!user?.id) {
+      rcSyncedUserRef.current = null;
+      return;
+    }
+    if (rcSyncedUserRef.current === user.id) return; // already synced this user
+    rcSyncedUserRef.current = user.id;
+
+    if (IS_DEV) console.log('[UserProfileContext] Checking subscription status with RevenueCat...');
+    supabase.functions.invoke('check-subscription', { body: { userId: user.id } })
+      .then(({ data, error }) => {
+        if (error) {
+          console.warn('[UserProfileContext] Subscription check failed:', error);
+          return;
+        }
+        if (IS_DEV) console.log('[UserProfileContext] Subscription check result:', data);
+        // If RC confirmed subscribed, refetch the profile so any DB update lands in UI.
+        // (Realtime will usually fire too; refetch is belt-and-suspenders.)
+        if (data?.isSubscribed) fetchProfile();
+      })
+      .catch((err) => {
+        console.warn('[UserProfileContext] Subscription check error:', err);
+      });
+  }, [user?.id, IS_DEV, fetchProfile]);
 
   // Single Realtime channel for profile changes — one per app lifetime
   useEffect(() => {
@@ -326,12 +389,71 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
 
   const wasSubscribed = !profile?.is_subscribed && !!profile?.plan_name;
 
+  // ── Item #7 Stage 7A: new derived values (observational, no consumer yet) ──
+  // Observational flag: paid user whose next_billing_date passed within the last 24h.
+  // Does NOT affect access today (isSubscribed=true already grants access via
+  // the 4-Keys gate). Kept here so ProtectedRoute/Account can see the billing
+  // state at a glance, and so logs/analytics can flag "renewal is slow".
+  const hasBillingGrace = (() => {
+    if (!profile?.is_subscribed) return false;
+    if (!profile?.next_billing_date) return false;
+    const nextBilling = new Date(profile.next_billing_date);
+    const now = new Date();
+    if (now <= nextBilling) return false;
+    const graceEnd = new Date(nextBilling);
+    graceEnd.setDate(graceEnd.getDate() + 1);
+    return now <= graceEnd;
+  })();
+
+  // Paywall variant selection — priority: cancelled > trial_expired > new_user.
+  // Returns null when the user has access (no paywall needed).
+  // Matches the existing priority used in ProtectedRoute.tsx and Account.tsx.
+  const paywallVariant: PaywallVariantName | null = (() => {
+    if (isSubscribed || isAdminGifted || isGracePeriod) return null;
+    if (wasSubscribed) return 'cancelled';
+    if (isAccessExpired) return 'trial_expired';
+    if (isNewUser) return 'new_user';
+    return null;
+  })();
+
+  // Single access-state enum — the "one brain" output.
+  // Packages existing booleans into a clean value ProtectedRoute can consume
+  // in Stage 7B. Adds no new behavior: same inputs, same decisions.
+  const accessState: AccessState = (() => {
+    if (!profile) return 'loading';
+    if (isSubscribed) return 'subscribed';
+    if (isAdminGifted) return 'admin_gifted';
+    if (isGracePeriod) return 'trial_active';
+    if (paywallVariant === 'cancelled') return 'paywall:cancelled';
+    if (paywallVariant === 'trial_expired') return 'paywall:trial_expired';
+    if (paywallVariant === 'new_user') return 'paywall:new_user';
+    return 'loading';
+  })();
+
+  // DEV-only: log accessState transitions so Stage 7A can be verified
+  // in the wild before Stage 7B starts consuming it.
+  const lastAccessStateRef = useRef<AccessState | null>(null);
+  useEffect(() => {
+    if (!IS_DEV) return;
+    if (lastAccessStateRef.current !== accessState) {
+      lastAccessStateRef.current = accessState;
+      console.log('[UserProfileContext] accessState →', accessState, {
+        paywallVariant,
+        hasBillingGrace,
+        isSubscribed,
+        isAdminGifted,
+        isGracePeriod,
+      });
+    }
+  }, [accessState, paywallVariant, hasBillingGrace, isSubscribed, isAdminGifted, isGracePeriod]);
+
   const value: UserProfileContextValue = {
     profile,
     loading,
     error,
     refetch: fetchProfile,
     createProfileIfMissing,
+    applyFreshProfile,
     isSubscribed,
     isAdminGifted,
     isGracePeriod,
@@ -340,6 +462,9 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
     isAccessExpired,
     isNewUser,
     wasSubscribed,
+    hasBillingGrace,
+    paywallVariant,
+    accessState,
   };
 
   return (
