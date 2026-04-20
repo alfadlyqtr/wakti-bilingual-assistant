@@ -370,9 +370,10 @@ export default function InstagramPublishButton({
   // Published state
   if (published) {
     return (
-      <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-pink-500/20 to-purple-500/20 border border-pink-500/30 text-pink-400 text-sm font-semibold">
+      <div className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-green-500/12 border border-green-500/30 text-green-400 text-sm font-semibold">
+        <Instagram className="h-4 w-4" />
         <Check className="h-4 w-4" />
-        {ar ? 'تم النشر!' : 'Posted!'}
+        {ar ? 'تم النشر على Instagram!' : 'Posted to Instagram!'}
       </div>
     );
   }
