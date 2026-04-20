@@ -27,55 +27,12 @@ function buildVisualizerPlugin(): any {
   }
 }
 
-// ─── Manual vendor chunking strategy ─────────────────────────────────────────
-// Goal: keep the initial (landing-page) chunk small by splitting heavy libs into
-// their own chunks. Dynamic-imported libs (pptxgenjs, @ffmpeg, tesseract) still
-// get their own code-split chunk — manualChunks just gives those chunks
-// predictable names and groups related packages together for better caching.
-function manualChunks(id: string): string | undefined {
-  if (!id.includes('node_modules')) return undefined;
-  const p = id.replace(/\\/g, '/');
-
-  // Core runtime — shared by every page, keep tiny and bundled together.
-  if (p.includes('/node_modules/react/') ||
-      p.includes('/node_modules/react-dom/') ||
-      p.includes('/node_modules/scheduler/')) return 'react-vendor';
-  if (p.includes('/react-router')) return 'router';
-
-  // Backend + data layer
-  if (p.includes('/@supabase/')) return 'supabase';
-  if (p.includes('/@tanstack/')) return 'query';
-
-  // UI primitives used across the app
-  if (p.includes('/@radix-ui/')) return 'radix';
-  if (p.includes('/lucide-react/')) return 'icons';
-
-  // i18n (used app-wide)
-  if (p.includes('/i18next') || p.includes('/react-i18next')) return 'i18n';
-
-  // ── Heavy, feature-specific libs (mostly dynamic-imported) ──
-  if (p.includes('/pdfjs-dist/') || p.includes('/pdf-lib/') ||
-      p.includes('/jspdf')) return 'pdf';
-  if (p.includes('/pptxgenjs/') || p.includes('/mammoth/') ||
-      p.includes('/arabic-reshaper/')) return 'office';
-  if (p.includes('/@ffmpeg/') || p.includes('/html2canvas/') ||
-      p.includes('/html-to-image/')) return 'media';
-  if (p.includes('/pixi.js/') || p.includes('/ogl/')) return 'gl';
-  if (p.includes('/@codesandbox/sandpack')) return 'sandpack';
-  if (p.includes('/@walletpass/') || p.includes('/node-forge/')) return 'wallet';
-  if (p.includes('/recharts/')) return 'charts';
-  if (p.includes('/chess.js/') || p.includes('/react-chessboard/')) return 'games';
-  if (p.includes('/tesseract.js/')) return 'ocr';
-  if (p.includes('/@xyflow/react/')) return 'flow';
-  if (p.includes('/framer-motion/')) return 'motion';
-  if (p.includes('/@dnd-kit/')) return 'dnd';
-  if (p.includes('/gridjs')) return 'grid';
-  if (p.includes('/date-fns/')) return 'date';
-  if (p.includes('/zod/')) return 'zod';
-
-  // Everything else — small or infrequently-changed utilities
-  return 'vendor';
-}
+// ─── Chunking strategy ───────────────────────────────────────────────────────
+// We rely on Vite's default automatic vendor splitting. Previous manual
+// chunking split React and Radix into separate chunks, which caused Radix to
+// sometimes load before React and crash with "Cannot read properties of
+// undefined (reading 'forwardRef')" — white screen of death. Vite's default
+// handles React/Radix interdependencies correctly out of the box.
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -114,9 +71,6 @@ export default defineConfig(({ mode }) => {
       // Raise the default 500 KB warning only for chunks we deliberately allow to grow
       // (e.g., sandpack, pdf). Not a hard limit — just silences noise.
       chunkSizeWarningLimit: 1500,
-      rollupOptions: {
-        output: { manualChunks },
-      },
     },
   };
 });
