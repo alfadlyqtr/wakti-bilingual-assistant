@@ -1,5 +1,21 @@
-// @ts-nocheck
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { sanitizeUserInput, withUserInputGuard } from "../_shared/promptSafety.ts";
+
+declare const Deno: {
+  env: { get(key: string): string | undefined };
+  serve(handler: (req: Request) => Response | Promise<Response>): void;
+};
+
+interface EnhanceRequest {
+  prompt?: unknown;
+  theme?: unknown;
+  themeInstructions?: unknown;
+  hasAssets?: unknown;
+}
+
+interface OpenAIChatResponse {
+  choices?: Array<{ message?: { content?: string } }>;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -41,14 +57,21 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { prompt, theme, themeInstructions, hasAssets } = await req.json();
+    const body = (await req.json()) as EnhanceRequest;
+    const rawPrompt = body.prompt;
+    const theme = typeof body.theme === "string" ? body.theme : "";
+    const themeInstructions = typeof body.themeInstructions === "string" ? body.themeInstructions : "";
+    const hasAssets = Boolean(body.hasAssets);
 
-    if (!prompt || typeof prompt !== "string") {
+    if (!rawPrompt || typeof rawPrompt !== "string") {
       return new Response(
         JSON.stringify({ ok: false, error: "Missing prompt" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // 🛡️ Sanitize untrusted user input at the boundary.
+    const prompt = sanitizeUserInput(rawPrompt, { label: "prompt", maxLength: 4000 });
 
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) {
@@ -79,7 +102,7 @@ Deno.serve(async (req: Request) => {
         messages: [
           {
             role: "system",
-            content: `You are an expert prompt enhancer for an AI web developer. Your job is to take a user's simple request and enhance it into a detailed, specific prompt that will result in a stunning website.
+            content: withUserInputGuard(`You are an expert prompt enhancer for an AI web developer. Your job is to take a user's simple request and enhance it into a detailed, specific prompt that will result in a stunning website.
 
 CRITICAL RULES:
 1. NEVER remove or change the user's core request - only ADD details
@@ -97,7 +120,7 @@ Example:
 User: "restaurant menu"
 Enhanced: "Create a modern restaurant menu website with a ${themeDesc || 'clean design'}. Include an animated hero section with a featured dish, a glassmorphism menu grid with hover effects, smooth scroll navigation, and a sticky header with the restaurant logo."
 
-Now enhance the user's prompt:`
+Now enhance the user's prompt:`)
           },
           {
             role: "user",
@@ -115,7 +138,7 @@ Now enhance the user's prompt:`
       );
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as OpenAIChatResponse;
     const enhancedPrompt = data.choices?.[0]?.message?.content?.trim();
 
     if (!enhancedPrompt) {

@@ -32,6 +32,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // 🧠 Three-layer prompt architecture — on-demand capability doc loader for Agent/Execute mode.
 import { getCapabilityDoc, listCapabilityNames } from "./prompts/capabilities/index.ts";
+// 🧩 Template-token resolver (Phase A — Item A5) — replaces {{PROJECT_ID}} at DB save.
+import { resolveProjectPlaceholders } from "../_shared/projectFileTemplates.ts";
 
 // ALLOWED TABLES - These are the ONLY tables the agent can access
 const ALLOWED_TABLES = [
@@ -1099,10 +1101,13 @@ export async function smartSearchReplace(
     };
   }
   
+  // 🧩 Resolve {{PROJECT_ID}} placeholder so the preview works immediately (Phase A — Item A5).
+  const resolvedMerged = resolveProjectPlaceholders(morphResult.mergedCode, projectId);
+
   // Write the Morph-merged content
   const { error: writeError } = await supabase
     .from('project_files')
-    .update({ content: morphResult.mergedCode })
+    .update({ content: resolvedMerged })
     .eq('project_id', projectId)
     .eq('path', path);
   
@@ -1190,10 +1195,13 @@ export async function morphEditFile(
         console.warn(`[MorphEdit] Large change detected: ${lineDiff} lines diff (${Math.round(lineDiff/originalLines*100)}% of file)`);
       }
       
+      // 🧩 Resolve {{PROJECT_ID}} placeholder so the preview works immediately (Phase A — Item A5).
+      const resolvedMergedCode = resolveProjectPlaceholders(morphResult.mergedCode, projectId);
+
       // Write merged content
       const { error: writeError } = await supabase
         .from('project_files')
-        .update({ content: morphResult.mergedCode })
+        .update({ content: resolvedMergedCode })
         .eq('project_id', projectId)
         .eq('path', filepath);
       
@@ -3725,7 +3733,10 @@ export async function executeToolCall(
       }
       
       assertNoHtml(path, content);
-      
+
+      // 🧩 Resolve {{PROJECT_ID}} placeholder so the preview works immediately (Phase A — Item A5).
+      const resolvedContent = resolveProjectPlaceholders(content, projectId);
+
       console.log(`[Agent] write_file UPSERTING to DB: project_id=${projectId}, path=${path}`);
       
       const { data, error } = await supabase
@@ -3733,7 +3744,7 @@ export async function executeToolCall(
         .upsert({
           project_id: projectId,
           path: path,
-          content: content
+          content: resolvedContent
         }, { onConflict: 'project_id,path' })
         .select('id, path');
       
@@ -3889,11 +3900,14 @@ export async function executeToolCall(
           hint: 'Check for missing brackets, unclosed tags, or malformed code in your replacement.'
         };
       }
-      
+
+      // 🧩 Resolve {{PROJECT_ID}} placeholder so the preview works immediately (Phase A — Item A5).
+      const resolvedNewContent = resolveProjectPlaceholders(newContent, projectId);
+
       // Write updated content
       const { error: writeError } = await supabase
         .from('project_files')
-        .update({ content: newContent })
+        .update({ content: resolvedNewContent })
         .eq('project_id', projectId)
         .eq('path', path);
       
@@ -4000,11 +4014,14 @@ export async function executeToolCall(
       }
       
       assertNoHtml(path, newContent);
-      
+
+      // 🧩 Resolve {{PROJECT_ID}} placeholder so the preview works immediately (Phase A — Item A5).
+      const resolvedInsertContent = resolveProjectPlaceholders(newContent, projectId);
+
       // Write updated content
       const { error: writeError } = await supabase
         .from('project_files')
-        .update({ content: newContent })
+        .update({ content: resolvedInsertContent })
         .eq('project_id', projectId)
         .eq('path', path);
       

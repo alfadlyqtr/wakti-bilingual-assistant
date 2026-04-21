@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ContactSearch } from "@/components/contacts/ContactSearch";
@@ -7,14 +7,10 @@ import { ContactList } from "@/components/contacts/ContactList";
 import { BlockedUsers } from "@/components/contacts/BlockedUsers";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { Badge } from "@/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
 import { Contact, Bell, ShieldCheck } from "lucide-react";
 import { getPendingRequestsCount } from "@/services/contactsService";
 import { getAllUnreadCounts } from "@/services/messageService";
-
-// Create a client
-const queryClient = new QueryClient();
 
 export default function Contacts() {
   const { language } = useTheme();
@@ -25,18 +21,16 @@ export default function Contacts() {
   const openChatUserId = searchParams.get('openChat');
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ContactsContent 
-        language={language} 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab}
-        openChatUserId={openChatUserId}
-        clearOpenChat={() => {
-          searchParams.delete('openChat');
-          setSearchParams(searchParams);
-        }}
-      />
-    </QueryClientProvider>
+    <ContactsContent 
+      language={language} 
+      activeTab={activeTab} 
+      setActiveTab={setActiveTab}
+      openChatUserId={openChatUserId}
+      clearOpenChat={() => {
+        searchParams.delete('openChat');
+        setSearchParams(searchParams);
+      }}
+    />
   );
 }
 

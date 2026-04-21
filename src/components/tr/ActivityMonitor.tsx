@@ -64,6 +64,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const [replyContent, setReplyContent] = useState('');
   const [selectedVisitor, setSelectedVisitor] = useState<string | null>(null);
   const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
+  const scheduledRefreshRef = useRef<NodeJS.Timeout | null>(null);
   
   // Collapsible state for task cards — starts with ALL collapsed, user toggles persist
   const [collapsedCards, setCollapsedCards] = useState<Set<string>>(() =>
@@ -199,6 +200,17 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     }
   }, [sharedTasks]);
 
+  const scheduleRefresh = useCallback((delay = 0) => {
+    if (scheduledRefreshRef.current) {
+      clearTimeout(scheduledRefreshRef.current);
+    }
+
+    scheduledRefreshRef.current = setTimeout(() => {
+      scheduledRefreshRef.current = null;
+      loadAllData(true);
+    }, delay);
+  }, [loadAllData]);
+
   // Initial load and real-time subscriptions
   useEffect(() => {
     loadAllData();
@@ -212,24 +224,35 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     
     sharedTasks.forEach(task => {
       const channel = TRSharedService.subscribeToTaskUpdates(task.id, () => {
-        // Add a small delay to ensure database changes are committed
-        setTimeout(() => {
-          loadAllData(true);
-        }, 500);
+        scheduleRefresh(500);
       });
       channels.push(channel);
     });
 
-    // Auto-refresh every 30 seconds as fallback
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        scheduleRefresh(0);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     const interval = setInterval(() => {
-      loadAllData(true);
-    }, 30000);
+      if (document.visibilityState === 'visible') {
+        scheduleRefresh(0);
+      }
+    }, 60000);
 
     return () => {
       channels.forEach(channel => channel.unsubscribe());
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (scheduledRefreshRef.current) {
+        clearTimeout(scheduledRefreshRef.current);
+        scheduledRefreshRef.current = null;
+      }
       clearInterval(interval);
     };
-  }, [sharedTasks.length, loadAllData]);
+  }, [sharedTasks.length, loadAllData, scheduleRefresh]);
 
   // Set default active view for each task
   useEffect(() => {
@@ -368,7 +391,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       setReplyContent('');
       setReplyingTo(null);
       toast.success(language === 'ar' ? 'تم إرسال الرسالة' : 'Message sent');
-      loadAllData(true);
+      scheduleRefresh(0);
     } catch (error) {
       console.error('Error replying to comment:', error);
       toast.error(language === 'ar' ? 'فشل إرسال الرسالة' : 'Failed to send message');
@@ -376,7 +399,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   };
 
   const handleRefresh = () => {
-    loadAllData(true);
+    scheduleRefresh(0);
   };
 
   const handleViewChange = (taskId: string, view: string) => {
@@ -407,10 +430,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         });
       }
       
-      // Force immediate refresh with a delay to ensure database changes are committed
-      setTimeout(() => {
-        loadAllData(true);
-      }, 1000);
+      scheduleRefresh(1000);
       
     } catch (error) {
       console.error(`Error ${action} snooze request:`, error);
@@ -453,10 +473,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         });
       }
       
-      // Force immediate refresh with a delay to ensure database changes are committed
-      setTimeout(() => {
-        loadAllData(true);
-      }, 1000);
+      scheduleRefresh(1000);
       
     } catch (error) {
       console.error(`Error ${action} completion request:`, error);
@@ -486,7 +503,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         : (language === 'ar' ? 'تم رفض الطلب' : 'Join request denied'),
         { duration: 3000, position: 'bottom-center' }
       );
-      setTimeout(() => loadAllData(true), 500);
+      scheduleRefresh(500);
     } catch (error) {
       console.error('Error handling join request:', error);
       toast.error('Failed to process join request');
@@ -1581,6 +1598,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                             <button 
                               onClick={() => handleReply(task.id)} 
                               disabled={!replyContent.trim()}
+                              title={language === 'ar' ? 'إرسال الرسالة' : 'Send message'}
+                              aria-label={language === 'ar' ? 'إرسال الرسالة' : 'Send message'}
                               className="absolute right-0 bottom-1 p-1.5 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
                             >
                               <Send className="h-4 w-4" />

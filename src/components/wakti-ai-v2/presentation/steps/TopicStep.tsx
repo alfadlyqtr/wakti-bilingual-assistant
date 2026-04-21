@@ -110,7 +110,7 @@ const TopicStep: React.FC<TopicStepProps> = ({
                   : 'border-border bg-background text-muted-foreground hover:border-primary/40'
               }`}
             >
-              🇬🇧 English
+              English
             </button>
             <button
               type="button"
@@ -121,7 +121,7 @@ const TopicStep: React.FC<TopicStepProps> = ({
                   : 'border-border bg-background text-muted-foreground hover:border-primary/40'
               }`}
             >
-              🇸🇦 العربية
+              العربية
             </button>
           </div>
           <p className="text-xs text-muted-foreground">

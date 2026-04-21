@@ -1,5 +1,31 @@
-// @ts-nocheck
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { sanitizeUserInput, withUserInputGuard } from "../_shared/promptSafety.ts";
+
+declare const Deno: {
+  env: { get(key: string): string | undefined };
+  serve(handler: (req: Request) => Response | Promise<Response>): void;
+};
+
+interface ContextDetectRequest {
+  prompt?: unknown;
+}
+
+interface GeminiResponse {
+  candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+}
+
+interface DetectedField {
+  id: string;
+  label: string;
+  placeholder: string;
+  type: string;
+}
+
+interface DetectedForm {
+  siteType?: string;
+  heading?: string;
+  fields?: DetectedField[];
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,14 +38,18 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { prompt } = await req.json();
+    const body = (await req.json()) as ContextDetectRequest;
+    const rawPrompt = body.prompt;
 
-    if (!prompt || typeof prompt !== "string") {
+    if (!rawPrompt || typeof rawPrompt !== "string") {
       return new Response(
         JSON.stringify({ ok: false, error: "Missing prompt" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // 🛡️ Sanitize untrusted user input at the boundary.
+    const prompt = sanitizeUserInput(rawPrompt, { label: "prompt", maxLength: 4000 });
 
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
     if (!GEMINI_API_KEY) {
@@ -60,6 +90,8 @@ JSON FORMAT:
 Field type options: "text", "textarea", "tel", "email", "url"
 Use "textarea" only for descriptions or bios. Max 1 textarea per form.`;
 
+    const guardedSystemPrompt = withUserInputGuard(systemPrompt);
+
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
@@ -69,7 +101,7 @@ Use "textarea" only for descriptions or bios. Max 1 textarea per form.`;
           contents: [
             {
               role: "user",
-              parts: [{ text: `${systemPrompt}\n\nUser prompt: ${prompt}` }]
+              parts: [{ text: `${guardedSystemPrompt}\n\nUser prompt: ${prompt}` }]
             }
           ],
           generationConfig: {
@@ -90,7 +122,7 @@ Use "textarea" only for descriptions or bios. Max 1 textarea per form.`;
       );
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as GeminiResponse;
     const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
     if (!rawText) {
@@ -100,9 +132,9 @@ Use "textarea" only for descriptions or bios. Max 1 textarea per form.`;
       );
     }
 
-    let parsed: any;
+    let parsed: DetectedForm;
     try {
-      parsed = JSON.parse(rawText);
+      parsed = JSON.parse(rawText) as DetectedForm;
     } catch {
       console.error("[ContextDetect] JSON parse failed:", rawText.substring(0, 200));
       return new Response(

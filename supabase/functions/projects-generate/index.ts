@@ -17,6 +17,10 @@ import { formatPackagesForPrompt } from "../_shared/sandpackPackages.ts";
 // Split modules (Item 5 — safe, pure-data extractions)
 import { THEME_PRESETS } from "./prompts/themes.ts";
 import { FIXER_SYSTEM_PROMPT } from "./prompts/fixer.ts";
+// 🛡️ Prompt-injection defenses (Phase A — Item A4)
+import { sanitizeUserInput, withUserInputGuard } from "../_shared/promptSafety.ts";
+// 🧩 Template-token resolver (Phase A — Item A5) — replaces {{PROJECT_ID}} at DB save.
+import { resolveProjectPlaceholdersInFiles } from "../_shared/projectFileTemplates.ts";
 // 🧠 Three-layer prompt architecture — capability registry (slims ~323 lines off the base prompt).
 import {
   CAPABILITY_MANIFEST,
@@ -716,7 +720,11 @@ async function callGeminiWithModel(
 ): Promise<string> {
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
-  
+
+  // 🛡️ Prompt-injection defense: always append the untrusted-input guard
+  // to the system prompt. Idempotent — no-op if already applied.
+  systemPrompt = withUserInputGuard(systemPrompt);
+
   let lastError: Error | null = null;
   let activeModel = model;
   
@@ -914,6 +922,10 @@ async function callGemini25ProWithImages(
 ): Promise<string> {
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
+
+  // 🛡️ Prompt-injection defense: always append the untrusted-input guard
+  // to the system prompt. Idempotent — no-op if already applied.
+  systemPrompt = withUserInputGuard(systemPrompt);
 
   // Use Gemini 2.5 Pro (vision-capable)
   const model = "gemini-2.5-pro";
@@ -1789,7 +1801,10 @@ async function replaceProjectFiles(supabase: SupabaseAdminClient, projectId: str
     .eq("project_id", projectId);
   if (delErr) throw new Error(`DB_FILES_DELETE_FAILED: ${delErr.message}`);
 
-  const rows = Object.entries(files).map(([path, content]) => ({
+  // 🧩 Resolve {{PROJECT_ID}} placeholder so the preview works immediately (Phase A — Item A5).
+  const resolved = resolveProjectPlaceholdersInFiles(files, projectId);
+
+  const rows = Object.entries(resolved).map(([path, content]) => ({
     project_id: projectId,
     path: normalizeFilePath(path),
     content,
@@ -1804,7 +1819,10 @@ async function replaceProjectFiles(supabase: SupabaseAdminClient, projectId: str
 }
 
 async function upsertProjectFiles(supabase: SupabaseAdminClient, projectId: string, files: Record<string, string>) {
-  const rows = Object.entries(files).map(([path, content]) => ({
+  // 🧩 Resolve {{PROJECT_ID}} placeholder so the preview works immediately (Phase A — Item A5).
+  const resolved = resolveProjectPlaceholdersInFiles(files, projectId);
+
+  const rows = Object.entries(resolved).map(([path, content]) => ({
     project_id: projectId,
     path: normalizeFilePath(path),
     content,
@@ -3142,6 +3160,9 @@ function findMissingReferencedFiles(params: {
 async function callGPT4oMini(systemPrompt: string, userPrompt: string): Promise<string> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY missing");
+
+  // 🛡️ Prompt-injection defense: always append the untrusted-input guard.
+  systemPrompt = withUserInputGuard(systemPrompt);
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { 
@@ -3181,6 +3202,9 @@ async function callClaudeOpus4Fixer(
 ): Promise<{ content: string; toolCalls?: any[] }> {
   const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
   if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY missing");
+
+  // 🛡️ Prompt-injection defense: always append the untrusted-input guard.
+  systemPrompt = withUserInputGuard(systemPrompt);
 
 
   // Convert Gemini-style tools to Claude format
@@ -3287,6 +3311,9 @@ async function callClaudeOpus4Fixer(
 async function callClaudeStreaming(systemPrompt: string, userPrompt: string, images: ImageAttachment[] | undefined): Promise<string> {
   const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
   if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY missing");
+
+  // 🛡️ Prompt-injection defense: always append the untrusted-input guard.
+  systemPrompt = withUserInputGuard(systemPrompt);
 
   // Build content array (text + optional images for vision)
   const contentBlocks: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
@@ -3499,10 +3526,13 @@ serve(async (req: Request) => {
     // MODE HANDLING: create | edit | plan | execute | chat
     // ========================================================================
     const mode = body.mode || 'create';
-    const prompt = (body.prompt || '').toString();
+    // 🛡️ Sanitize untrusted user input at the boundary (Phase A — Item A4).
+    // Strips role-marker smuggling, jailbreak directives, control chars, and
+    // caps length. Arabic / RTL text is preserved.
+    const prompt = sanitizeUserInput(body.prompt, { label: 'prompt', maxLength: 16000 });
     const theme = (body.theme || 'none').toString();
     const assets = Array.isArray(body.assets) ? body.assets : [];
-    const userInstructions = (body.userInstructions || '').toString();
+    const userInstructions = sanitizeUserInput(body.userInstructions, { label: 'userInstructions', maxLength: 8000 });
     const images = body.images;
     const planToExecute = (body.planToExecute || '').toString();
     const uploadedAssets = Array.isArray(body.uploadedAssets) ? body.uploadedAssets : [];

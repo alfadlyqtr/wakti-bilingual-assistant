@@ -1,5 +1,10 @@
-// @ts-nocheck
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { sanitizeUserInput, withUserInputGuard } from "../_shared/promptSafety.ts";
+
+declare const Deno: {
+  env: { get(key: string): string | undefined };
+  serve(handler: (req: Request) => Response | Promise<Response>): void;
+};
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,20 +12,36 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-Deno.serve(async (req) => {
+interface AmpRequest {
+  prompt?: unknown;
+  mode?: unknown;
+  files?: unknown;
+}
+
+interface OpenAIChatResponse {
+  choices?: Array<{ message?: { content?: string } }>;
+}
+
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { prompt, mode, files } = await req.json();
+    const body = (await req.json()) as AmpRequest;
+    const rawPrompt = body.prompt;
+    const mode = typeof body.mode === "string" ? body.mode : "";
+    const files = body.files;
 
-    if (!prompt || typeof prompt !== "string") {
+    if (!rawPrompt || typeof rawPrompt !== "string") {
       return new Response(
         JSON.stringify({ error: "Missing or invalid prompt" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // 🛡️ Sanitize untrusted user input at the boundary.
+    const prompt = sanitizeUserInput(rawPrompt, { label: "prompt", maxLength: 4000 });
 
     const openaiKey = Deno.env.get("OPENAI_API_KEY");
     if (!openaiKey) {
@@ -102,7 +123,7 @@ Output ONLY the reformatted message, nothing else.`;
       // Scan files for matches
       const fileMatches: Array<{ path: string; score: number; matches: string[] }> = [];
       
-      for (const [filePath, content] of Object.entries(files)) {
+      for (const [filePath, content] of Object.entries(files as Record<string, unknown>)) {
         if (typeof content !== 'string') continue;
         const contentLower = content.toLowerCase();
         let score = 0;
@@ -144,7 +165,7 @@ Output ONLY the reformatted message, nothing else.`;
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: systemPrompt },
+          { role: "system", content: withUserInputGuard(systemPrompt) },
           { role: "user", content: `Original request: "${prompt}"\n\nAmplified version:` }
         ],
         max_tokens: 500,
@@ -161,7 +182,7 @@ Output ONLY the reformatted message, nothing else.`;
       );
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as OpenAIChatResponse;
     let amplified = data.choices?.[0]?.message?.content?.trim();
     
     // Append LIKELY FILES if we found matches (code mode only)
@@ -181,10 +202,11 @@ Output ONLY the reformatted message, nothing else.`;
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error in projects-amp-prompt:", error);
+    const message = error instanceof Error ? error.message : "Internal server error";
     return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

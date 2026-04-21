@@ -17,6 +17,8 @@ import {
   Loader2, 
   ChevronRight, 
   ChevronLeft,
+  Copy,
+  ExternalLink,
   FileDown,
   RefreshCw,
   Check,
@@ -47,6 +49,67 @@ import {
  import TopicStep from '@/components/wakti-ai-v2/presentation/steps/TopicStep';
  import { getThemeAccent } from '@/components/wakti-ai-v2/presentation/themeHelpers';
  import type { Brief, ImageFocusX, ImageFocusY, ImageTransform, InputMode, InputModeFlags, LayoutVariant, Slide, SlideOutline, Step, TextStyle, ThemeKey } from '@/components/wakti-ai-v2/presentation/types';
+
+const normalizeTextForEnhancementCheck = (value: string): string => (
+  value
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+);
+
+const extractTextFromEnhancedHtml = (html: string): string => {
+  if (!html) return '';
+  const fallback = () => normalizeTextForEnhancementCheck(html.replace(/<[^>]+>/g, ' '));
+  if (typeof DOMParser === 'undefined') return fallback();
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return normalizeTextForEnhancementCheck(doc.body?.textContent || '');
+  } catch {
+    return fallback();
+  }
+};
+
+const getTextCoverageRatio = (source: string, targetText: string): number => {
+  const tokens = Array.from(new Set(
+    normalizeTextForEnhancementCheck(source)
+      .split(' ')
+      .filter(token => token.length >= 2)
+  ));
+  if (tokens.length === 0) return 1;
+  return tokens.filter(token => targetText.includes(token)).length / tokens.length;
+};
+
+const isEnhancementSafeForSlide = (slide: Slide, html: string): boolean => {
+  const enhancedText = extractTextFromEnhancedHtml(html);
+  const bullets = (slide.bullets || []).filter(Boolean);
+  const bodyText = [slide.subtitle || '', ...bullets].join(' ');
+  const sourceText = [slide.title || '', bodyText].join(' ').trim();
+  const sourceNormalized = normalizeTextForEnhancementCheck(sourceText);
+  if (!sourceNormalized) return true;
+
+  const titleCoverage = slide.title ? getTextCoverageRatio(slide.title, enhancedText) : 1;
+  const bodyCoverage = bodyText ? getTextCoverageRatio(bodyText, enhancedText) : 1;
+  const totalCoverage = getTextCoverageRatio(sourceText, enhancedText);
+  const coveredBullets = bullets.filter(bullet => getTextCoverageRatio(bullet, enhancedText) >= 0.34).length;
+  const lengthRatio = enhancedText.length > 0 ? Math.min(1, enhancedText.length / Math.max(sourceNormalized.length, 1)) : 0;
+
+  return totalCoverage >= 0.42
+    && titleCoverage >= 0.45
+    && bodyCoverage >= (bullets.length > 0 ? 0.35 : 0.25)
+    && (bullets.length === 0 || coveredBullets >= Math.max(1, Math.ceil(bullets.length / 2)))
+    && lengthRatio >= 0.32;
+};
+
+const buildShareContentFingerprint = (args: {
+  slides: Slide[];
+  selectedTheme: ThemeKey;
+  presentationName: string;
+  showEnhanced: boolean;
+  savedEnhancedMap: Record<number, string>;
+  enhancedHtmlMap: Record<number, string>;
+}) => JSON.stringify(args);
 
 const PresentationTab: React.FC = () => {
   const { language } = useTheme();
@@ -153,6 +216,8 @@ const PresentationTab: React.FC = () => {
   const [isUpdatingEnhancement, setIsUpdatingEnhancement] = useState(false); // separate from isEnhancing to avoid overlay
   const [showEnhanced, setShowEnhanced] = useState(false);
   const [enhanceScale, setEnhanceScale] = useState(0.25);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [isShareCapturingPreview, setIsShareCapturingPreview] = useState(false);
   // Enhance popup state
   const [showEnhancePopup, setShowEnhancePopup] = useState(false);
   const [enhanceMood, setEnhanceMood] = useState<string>('dark'); // dark, light, colorful, professional
@@ -202,6 +267,19 @@ const PresentationTab: React.FC = () => {
     }
   }, [enhancedTemplateMap, enhancedStorageKey]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(max-width: 767px)');
+    const update = () => setIsMobileViewport(media.matches);
+    update();
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update);
+      return () => media.removeEventListener('change', update);
+    }
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
+
   // Load/save presentationName per presentation (keyed by storage key)
   useEffect(() => {
     if (enhancedStorageKey === 'wakti-enhanced-empty') return;
@@ -227,8 +305,10 @@ const PresentationTab: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState({ current: 0, total: 0 });
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exportMenuPosition, setExportMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [generatedShareUrl, setGeneratedShareUrl] = useState<string | null>(null);
   const [generatedThumbnailUrl, setGeneratedThumbnailUrl] = useState<string | null>(null);
+  const [lastSharedFingerprint, setLastSharedFingerprint] = useState<string | null>(null);
   const [isSavingPresentation, setIsSavingPresentation] = useState(false);
   const [deletePresentationId, setDeletePresentationId] = useState<string | null>(null);
 
@@ -799,6 +879,7 @@ const PresentationTab: React.FC = () => {
   
   // Ref for the slide preview element (used for html2canvas capture)
   const slidePreviewRef = useRef<HTMLDivElement>(null);
+  const exportButtonRef = useRef<HTMLButtonElement>(null);
 
   // Keep enhanceScale in sync with actual container width
   useEffect(() => {
@@ -813,6 +894,27 @@ const PresentationTab: React.FC = () => {
     ro.observe(el);
     return () => ro.disconnect();
   }, [slidePreviewRef.current]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!showExportMenu) return;
+
+    const updatePosition = () => {
+      const rect = exportButtonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setExportMenuPosition({
+        top: rect.bottom + 6,
+        right: Math.max(12, window.innerWidth - rect.right),
+      });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [showExportMenu]);
 
   const waitForNextPaint = useCallback(async (): Promise<void> => {
     await new Promise<void>((resolve) => {
@@ -1006,27 +1108,17 @@ const PresentationTab: React.FC = () => {
 
   const handleCreateShareLink = useCallback(async () => {
     if (slides.length === 0) return;
-    
-    // If we already have a share link AND no slides have been AI-enhanced, just copy it again
-    const hasEnhancedSlides = Object.keys(enhancedHtmlMap).length > 0;
-    if (generatedShareUrl && !hasEnhancedSlides) {
-      try {
-        await navigator.clipboard.writeText(generatedShareUrl);
-        toast.success(language === 'ar' ? 'تم نسخ رابط المشاركة' : 'Share link copied');
-        toast.success(generatedShareUrl);
-      } catch {
-        toast.error(language === 'ar' ? 'فشل في نسخ الرابط' : 'Failed to copy link');
-      }
-      setShowExportMenu(false);
-      return;
-    }
-    
+
     if (!slidePreviewRef.current) {
       toast.error(language === 'ar' ? 'خطأ: لم يتم العثور على الشريحة' : 'Error: Slide preview not found');
       return;
     }
 
+    const mergedEnhancedMap: Record<number, string> = { ...savedEnhancedMap, ...enhancedHtmlMap };
+    const shouldShareUseEnhanced = showEnhanced && !isMobileViewport;
+
     setIsExporting(true);
+    setIsShareCapturingPreview(true);
     setShowExportMenu(false);
 
     toast.dismiss();
@@ -1241,7 +1333,7 @@ const PresentationTab: React.FC = () => {
       if (audioUploadErr) throw audioUploadErr;
 
       // Step 5: Write manifest.json (v2: data-driven slides)
-      const title = brief?.subject || topic || (language === 'ar' ? 'عرض تقديمي' : 'Presentation');
+      const title = presentationName || brief?.subject || topic || (language === 'ar' ? 'عرض تقديمي' : 'Presentation');
       const manifest: ShareManifestV2 = {
         version: 2,
         createdAt: new Date().toISOString(),
@@ -1288,7 +1380,7 @@ const PresentationTab: React.FC = () => {
             imageFocusY: s.imageFocusY,
             slideBg: s.slideBg,
             voiceGender: s.voiceGender,
-            enhancedHtml: enhancedHtmlMap[idx] || undefined,
+            enhancedHtml: shouldShareUseEnhanced ? (mergedEnhancedMap[idx] || undefined) : undefined,
             slideImageUrl: slideImageUrls[idx] || undefined,
           },
         })),
@@ -1307,6 +1399,14 @@ const PresentationTab: React.FC = () => {
           ? 'http://localhost:8080'
           : window.location.origin;
       const shareUrl = `${shareBaseUrl}/p/${shareToken}`;
+      setLastSharedFingerprint(buildShareContentFingerprint({
+        slides,
+        selectedTheme,
+        presentationName,
+        showEnhanced: showEnhanced && !isMobileViewport,
+        savedEnhancedMap,
+        enhancedHtmlMap,
+      }));
       setGeneratedShareUrl(shareUrl);
       try {
         await navigator.clipboard.writeText(shareUrl);
@@ -1323,9 +1423,10 @@ const PresentationTab: React.FC = () => {
       toast.dismiss(toastId);
       toast.error(language === 'ar' ? 'فشل في إنشاء رابط المشاركة' : 'Failed to create share link');
     } finally {
+      setIsShareCapturingPreview(false);
       setIsExporting(false);
     }
-  }, [bakeImageTransform, brief, enhancedHtmlMap, generatedShareUrl, language, selectedSlideIndex, selectedTheme, slides, topic, waitForNextPaint, waitForSlideAssetsReady]);
+  }, [bakeImageTransform, brief, enhancedHtmlMap, isMobileViewport, language, presentationName, savedEnhancedMap, selectedSlideIndex, selectedTheme, showEnhanced, slides, topic, waitForNextPaint, waitForSlideAssetsReady]);
 
   // Load saved presentations
   const loadSavedPresentations = useCallback(async () => {
@@ -1454,6 +1555,15 @@ const PresentationTab: React.FC = () => {
     }, delayMs);
   }, [slides.length, upsertPresentation, user?.id]);
 
+  const shareContentFingerprint = useMemo(() => buildShareContentFingerprint({
+    slides,
+    selectedTheme,
+    presentationName,
+    showEnhanced: showEnhanced && !isMobileViewport,
+    savedEnhancedMap,
+    enhancedHtmlMap,
+  }), [enhancedHtmlMap, isMobileViewport, presentationName, savedEnhancedMap, selectedTheme, showEnhanced, slides]);
+
   // Auto-save whenever slides exist and the user is on the slides step.
   useEffect(() => {
     if (currentStep !== 'slides') return;
@@ -1462,6 +1572,13 @@ const PresentationTab: React.FC = () => {
     queueAutoSave();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slides, currentStep, user?.id]);
+
+  // Initialize lastSharedFingerprint on load
+  useEffect(() => {
+    if (generatedShareUrl && !lastSharedFingerprint) {
+      setLastSharedFingerprint(shareContentFingerprint);
+    }
+  }, [generatedShareUrl, lastSharedFingerprint, shareContentFingerprint]);
 
   // Auto-save when share link is generated/updated.
   useEffect(() => {
@@ -1572,6 +1689,7 @@ const PresentationTab: React.FC = () => {
       setSelectedTheme(data.theme as ThemeKey);
       setGeneratedShareUrl(data.share_url);
       const loadedSlides = Array.isArray(data.slides_data) ? (data.slides_data as unknown as Slide[]) : [];
+      setLastSharedFingerprint(null);
       setSlides(loadedSlides);
       setCurrentStep('slides');
       setActiveTab('create');
@@ -1748,6 +1866,11 @@ const PresentationTab: React.FC = () => {
       if (!response?.success || !response?.html) {
         throw new Error(response?.error || 'Enhancement failed');
       }
+      if (!isEnhancementSafeForSlide(slide, response.html)) {
+        throw new Error(language === 'ar'
+          ? 'التصميم الذكي أخفى الكثير من محتوى الشريحة. سنبقي الشريحة الأصلية.'
+          : 'AI enhancement removed too much slide content. Keeping the original slide.');
+      }
       setEnhancedHtmlMap(prev => ({ ...prev, [selectedSlideIndex]: response.html! }));
       setEnhancedTemplateMap(prev => ({ ...prev, [selectedSlideIndex]: response.template ?? variationToUse }));
       setSavedEnhancedMap(prev => { const next = { ...prev }; delete next[selectedSlideIndex]; return next; });
@@ -1809,6 +1932,11 @@ const PresentationTab: React.FC = () => {
         retryDelay: 1000,
       });
       if (response?.success && response?.html) {
+        if (!isEnhancementSafeForSlide(slide, response.html)) {
+          throw new Error(language === 'ar'
+            ? 'التحديث الذكي أخفى الكثير من محتوى الشريحة. سنبقي النسخة الحالية.'
+            : 'AI update removed too much slide content. Keeping the current version.');
+        }
         setEnhancedHtmlMap(prev => ({ ...prev, [selectedSlideIndex]: response.html! }));
         if (savedEnhancedMap[selectedSlideIndex]) {
           setSavedEnhancedMap(prev => ({ ...prev, [selectedSlideIndex]: response.html! }));
@@ -2261,6 +2389,54 @@ const PresentationTab: React.FC = () => {
     );
   };
 
+  const getPreviewFontSizeClass = (
+    size: 'small' | 'medium' | 'large' | undefined,
+    type: 'title' | 'bullet' = 'bullet'
+  ) => {
+    if (!isMobileViewport) return getFontSizeClass(size, type);
+    if (type === 'title') {
+      switch (size) {
+        case 'small':
+          return 'text-[13px] sm:text-xl md:text-2xl';
+        case 'large':
+          return 'text-[17px] sm:text-3xl md:text-4xl';
+        default:
+          return 'text-[15px] sm:text-2xl md:text-3xl';
+      }
+    }
+
+    switch (size) {
+      case 'small':
+        return 'text-[10px] sm:text-sm md:text-base';
+      case 'large':
+        return 'text-[12px] sm:text-lg md:text-xl';
+      default:
+        return 'text-[11px] sm:text-base md:text-lg';
+    }
+  };
+
+  const getPreviewAccentWordClass = (slide: Slide) => {
+    const sizeClass = !isMobileViewport
+      ? slide.accentFontSize === 'small'
+        ? 'text-[0.85em]'
+        : slide.accentFontSize === 'large'
+          ? 'text-[1.15em]'
+          : ''
+      : '';
+
+    return `${sizeClass} ${slide.accentFontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${slide.accentFontStyle === 'italic' ? 'italic' : ''}`.trim();
+  };
+
+  const getPreviewSideImageWidthClass = (imageSize?: Slide['imageSize']) => {
+    if (isMobileViewport) return 'w-[42%]';
+    return imageSize === 'small' ? 'w-1/3' : imageSize === 'large' ? 'w-2/3' : 'w-1/2';
+  };
+
+  const getPreviewImageMaxWidthClass = (imageSize?: Slide['imageSize']) => {
+    if (isMobileViewport) return 'max-w-full';
+    return imageSize === 'small' ? 'max-w-[70%]' : imageSize === 'large' ? 'max-w-full' : imageSize === 'full' ? 'max-w-full' : 'max-w-[85%]';
+  };
+
   const renderTopicStep = () => (
     <TopicStep
       language={language as 'en' | 'ar'}
@@ -2312,150 +2488,226 @@ const PresentationTab: React.FC = () => {
   const renderSlidesStep = () => {
     const currentSlide = slides[selectedSlideIndex];
     const theme = THEMES.find(t => t.key === selectedTheme);
+    const isCompactPreview = isMobileViewport && !isShareCapturingPreview;
+    const hasSlideEnhancement = Boolean(savedEnhancedMap[selectedSlideIndex] || enhancedHtmlMap[selectedSlideIndex]);
+    const displayEnhancedHtml = showEnhanced && !isMobileViewport
+      ? (enhancedHtmlMap[selectedSlideIndex] || savedEnhancedMap[selectedSlideIndex] || null)
+      : null;
+    const showLiveEnhancedPreview = Boolean(displayEnhancedHtml && !isEnhancing);
+    const isShareStale = lastSharedFingerprint !== null && shareContentFingerprint !== lastSharedFingerprint;
 
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={() => setCurrentStep('outline')}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            {language === 'ar' ? 'رجوع' : 'Back'}
-          </button>
-          {isEditingName ? (
-            <input
-              autoFocus
-              value={presentationName}
-              onChange={e => setPresentationName(e.target.value)}
-              onBlur={() => setIsEditingName(false)}
-              onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setIsEditingName(false); }}
-              aria-label={language === 'ar' ? 'اسم العرض التقديمي' : 'Presentation name'}
-              placeholder={language === 'ar' ? 'اسم العرض...' : 'Presentation name...'}
-              className="text-base font-semibold bg-transparent border-b border-amber-400 outline-none text-center w-48 max-w-[200px]"
-            />
-          ) : (
+        <div className="mb-4 space-y-3">
+          <div className="flex items-center gap-3">
             <button
-              onClick={() => setIsEditingName(true)}
-              className="flex items-center gap-1.5 text-base font-semibold hover:text-amber-400 transition-colors max-w-[200px] truncate"
+              onClick={() => setCurrentStep('outline')}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
             >
-              <span className="truncate">{presentationName || (language === 'ar' ? 'عرض الشرائح' : 'Slide Preview')}</span>
-              <Pencil className="w-3 h-3 opacity-60 flex-shrink-0" />
+              <ChevronLeft className="w-4 h-4" />
+              {language === 'ar' ? 'رجوع' : 'Back'}
             </button>
-          )}
-          <div className="flex items-center gap-2">
-            {/* Start New button */}
-            <button
-              onClick={handleStartNew}
-              className="p-2 rounded-lg border hover:bg-muted transition-colors"
-              title={language === 'ar' ? 'عرض جديد' : 'New Presentation'}
-            >
-              <FilePlus2 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleAddSlideAfterCurrent}
-              disabled={slides.length === 0}
-              className="p-2 rounded-lg border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title={language === 'ar' ? 'إضافة شريحة بعد الحالية' : 'Add slide after current'}
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleDeleteCurrentSlide}
-              disabled={slides.length === 0 || isLockedSlide(slides[selectedSlideIndex])}
-              className="p-2 rounded-lg border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title={language === 'ar' ? 'حذف الشريحة الحالية' : 'Delete current slide'}
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setIsEditMode(!isEditMode)}
-              className={`p-2 rounded-lg border transition-colors ${isEditMode ? 'bg-primary text-white' : 'hover:bg-muted'}`}
-              title={language === 'ar' ? 'تعديل' : 'Edit'}
-            >
-              <Edit2 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setSelectedTheme(THEMES[(THEMES.findIndex(t => t.key === selectedTheme) + 1) % THEMES.length].key)}
-              className="p-2 rounded-lg border hover:bg-muted transition-colors"
-              title={language === 'ar' ? 'تغيير السمة' : 'Change Theme'}
-            >
-              <Palette className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => {
-                if (showEnhanced && (savedEnhancedMap[selectedSlideIndex] || enhancedHtmlMap[selectedSlideIndex])) {
-                  setShowEnhanced(false);
-                } else {
-                  setEnhanceNote('');
-                  setShowEnhancePopup(true);
-                }
-              }}
-              disabled={isEnhancing || slides.length === 0}
-              className={`p-2 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${(showEnhanced && (savedEnhancedMap[selectedSlideIndex] || enhancedHtmlMap[selectedSlideIndex])) ? 'bg-amber-500 text-white border-amber-500' : 'hover:bg-muted'}`}
-              title={(showEnhanced && (savedEnhancedMap[selectedSlideIndex] || enhancedHtmlMap[selectedSlideIndex])) ? (language === 'ar' ? 'العرض العادي' : 'Normal View') : (language === 'ar' ? '✨ تحسين بالذكاء الاصطناعي' : '✨ AI Enhance')}
-            >
-              {isEnhancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
-            </button>
-            {/* Export dropdown */}
-            <div className="relative">
+            {isEditingName ? (
+              <input
+                autoFocus
+                value={presentationName}
+                onChange={e => setPresentationName(e.target.value)}
+                onBlur={() => setIsEditingName(false)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setIsEditingName(false); }}
+                aria-label={language === 'ar' ? 'اسم العرض التقديمي' : 'Presentation name'}
+                placeholder={language === 'ar' ? 'اسم العرض...' : 'Presentation name...'}
+                className="min-w-0 flex-1 text-base font-semibold bg-transparent border-b border-amber-400 outline-none text-center w-full"
+              />
+            ) : (
               <button
-                onClick={() => setShowExportMenu(!showExportMenu)}
-                disabled={isExporting}
-                className="p-2 rounded-lg border hover:bg-muted transition-colors flex items-center gap-1"
-                title={language === 'ar' ? 'تصدير' : 'Export'}
+                onClick={() => setIsEditingName(true)}
+                className="min-w-0 flex-1 flex items-center justify-center gap-1.5 text-base font-semibold hover:text-amber-400 transition-colors truncate"
               >
-                {isExporting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <FileDown className="w-4 h-4" />
-                )}
+                <span className="truncate">{presentationName || (language === 'ar' ? 'عرض الشرائح' : 'Slide Preview')}</span>
+                <Pencil className="w-3 h-3 opacity-60 flex-shrink-0" />
               </button>
-              
-              {/* Export menu dropdown */}
-              {showExportMenu && (
-                <div className="absolute right-0 top-full mt-1 bg-card border rounded-lg shadow-lg z-50 min-w-[140px] py-1">
-                  <button
-                    onClick={handleExportPDF}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 transition-colors"
-                  >
-                    <FileText className="w-4 h-4 text-red-500" />
-                    PDF
-                  </button>
-                  <button
-                    onClick={handleExportPPTX}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 transition-colors"
-                  >
-                    <FileSpreadsheet className="w-4 h-4 text-orange-500" />
-                    PowerPoint
-                  </button>
-                  <button
-                    onClick={handleCreateShareLink}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 transition-colors"
-                  >
-                    <Share2 className="w-4 h-4 text-blue-500" />
-                    {language === 'ar' ? 'رابط مشاركة' : 'Share Link'}
-                  </button>
-                  <div className="border-t border-border my-1" />
-                  <button
-                    onClick={() => {
-                      setShowExportMenu(false);
-                      savePresentation();
-                    }}
-                    disabled={isSavingPresentation}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 transition-colors disabled:opacity-50"
-                  >
-                    {isSavingPresentation ? (
-                      <Loader2 className="w-4 h-4 text-green-500 animate-spin" />
-                    ) : (
-                      <FilePlus2 className="w-4 h-4 text-green-500" />
-                    )}
-                    {language === 'ar' ? 'حفظ العرض' : 'Save Presentation'}
-                  </button>
-                </div>
-              )}
+            )}
+            <div className="w-10 flex-shrink-0" />
+          </div>
+
+          <div className="-mx-1 overflow-x-auto pb-1">
+            <div className="flex items-center gap-2 min-w-max px-1">
+              {/* Start New button */}
+              <button
+                onClick={handleStartNew}
+                className="p-2 rounded-lg border hover:bg-muted transition-colors flex-shrink-0"
+                title={language === 'ar' ? 'عرض جديد' : 'New Presentation'}
+              >
+                <FilePlus2 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleAddSlideAfterCurrent}
+                disabled={slides.length === 0}
+                className="p-2 rounded-lg border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                title={language === 'ar' ? 'إضافة شريحة بعد الحالية' : 'Add slide after current'}
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleDeleteCurrentSlide}
+                disabled={slides.length === 0 || isLockedSlide(slides[selectedSlideIndex])}
+                className="p-2 rounded-lg border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                title={language === 'ar' ? 'حذف الشريحة الحالية' : 'Delete current slide'}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setIsEditMode(!isEditMode)}
+                className={`p-2 rounded-lg border transition-colors flex-shrink-0 ${isEditMode ? 'bg-primary text-white' : 'hover:bg-muted'}`}
+                title={language === 'ar' ? 'تعديل' : 'Edit'}
+              >
+                <Edit2 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setSelectedTheme(THEMES[(THEMES.findIndex(t => t.key === selectedTheme) + 1) % THEMES.length].key)}
+                className="p-2 rounded-lg border hover:bg-muted transition-colors flex-shrink-0"
+                title={language === 'ar' ? 'تغيير السمة' : 'Change Theme'}
+              >
+                <Palette className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => {
+                  if (hasSlideEnhancement) {
+                    setShowEnhanced(prev => !prev);
+                  } else {
+                    setEnhanceNote('');
+                    setShowEnhancePopup(true);
+                  }
+                }}
+                disabled={isEnhancing || slides.length === 0}
+                className={`p-2 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 ${(showEnhanced && hasSlideEnhancement) ? 'bg-amber-500 text-white border-amber-500' : 'hover:bg-muted'}`}
+                title={hasSlideEnhancement
+                  ? (showEnhanced
+                    ? (language === 'ar' ? 'العرض العادي' : 'Normal View')
+                    : (language === 'ar' ? 'عرض النسخة المحسّنة' : 'Show enhanced view'))
+                  : (language === 'ar' ? '✨ تحسين بالذكاء الاصطناعي' : '✨ AI Enhance')}
+              >
+                {isEnhancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+              </button>
+              {/* Export dropdown */}
+              <div className="relative flex-shrink-0">
+                <button
+                  ref={exportButtonRef}
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  disabled={isExporting}
+                  className="p-2 rounded-lg border hover:bg-muted transition-colors flex items-center gap-1"
+                  title={language === 'ar' ? 'تصدير' : 'Export'}
+                >
+                  {isExporting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FileDown className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
+
+          {showExportMenu && exportMenuPosition && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
+              <div
+                className="fixed bg-card border rounded-lg shadow-lg z-50 min-w-[140px] py-1"
+                style={{ top: exportMenuPosition.top, right: exportMenuPosition.right }}
+              >
+                <button
+                  onClick={handleExportPDF}
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 transition-colors"
+                >
+                  <FileText className="w-4 h-4 text-red-500" />
+                  PDF
+                </button>
+                <button
+                  onClick={handleExportPPTX}
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 transition-colors"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-orange-500" />
+                  PowerPoint
+                </button>
+                <button
+                  onClick={handleCreateShareLink}
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 transition-colors"
+                >
+                  <Share2 className="w-4 h-4 text-blue-500" />
+                  {language === 'ar' ? 'رابط مشاركة' : 'Share Link'}
+                </button>
+                <div className="border-t border-border my-1" />
+                <button
+                  onClick={() => {
+                    setShowExportMenu(false);
+                    savePresentation();
+                  }}
+                  disabled={isSavingPresentation}
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 transition-colors disabled:opacity-50"
+                >
+                  {isSavingPresentation ? (
+                    <Loader2 className="w-4 h-4 text-green-500 animate-spin" />
+                  ) : (
+                    <FilePlus2 className="w-4 h-4 text-green-500" />
+                  )}
+                  {language === 'ar' ? 'حفظ العرض' : 'Save Presentation'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {generatedShareUrl && (
+            <div className={`mt-3 mx-1 rounded-xl border p-3 ${isShareStale ? 'border-amber-500/30 bg-amber-500/10' : 'border-emerald-500/30 bg-emerald-500/10'}`}>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className={`text-sm font-medium ${isShareStale ? 'text-amber-300' : 'text-emerald-300'}`}>
+                  {isShareStale 
+                    ? (language === 'ar' ? 'توجد تغييرات غير منشورة' : 'Unpublished changes') 
+                    : (language === 'ar' ? 'رابط المشاركة' : 'Share Link')}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {isShareStale ? (
+                    <button
+                      onClick={handleCreateShareLink}
+                      disabled={isExporting}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 transition-colors disabled:opacity-50"
+                    >
+                      {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                      {language === 'ar' ? 'تحديث الرابط' : 'Update Link'}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(generatedShareUrl);
+                            toast.success(language === 'ar' ? 'تم نسخ رابط المشاركة' : 'Share link copied');
+                          } catch {
+                            toast.error(language === 'ar' ? 'فشل في نسخ الرابط' : 'Failed to copy link');
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-400/30 text-xs text-emerald-200 hover:bg-emerald-400/10 transition-colors"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        {language === 'ar' ? 'نسخ' : 'Copy'}
+                      </button>
+                      <a
+                        href={generatedShareUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-400/30 text-xs text-emerald-200 hover:bg-emerald-400/10 transition-colors"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        {language === 'ar' ? 'فتح' : 'Open'}
+                      </a>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className={`rounded-lg bg-black/20 border border-white/10 px-3 py-2 text-xs break-all select-all ${isShareStale ? 'text-amber-100/50' : 'text-emerald-100'}`}>
+                {generatedShareUrl}
+              </div>
+            </div>
+          )}
         </div>
 
 
@@ -2895,14 +3147,13 @@ const PresentationTab: React.FC = () => {
 
             {/* Enhanced AI overlay - rendered in sandboxed iframe so AI styles don't leak into the app */}
             {(() => {
-              const displayHtml = savedEnhancedMap[selectedSlideIndex] || (showEnhanced ? enhancedHtmlMap[selectedSlideIndex] : null);
-              if (!displayHtml || isEnhancing) return null;
+              if (!showLiveEnhancedPreview || !displayEnhancedHtml) return null;
               return (
                 <div className="absolute inset-0 z-10 overflow-hidden animate-in fade-in duration-700">
                   <iframe
                     title="Enhanced slide preview"
                     sandbox="allow-same-origin"
-                    srcDoc={displayHtml}
+                    srcDoc={displayEnhancedHtml}
                     style={{
                       width: '1920px',
                       height: '1080px',
@@ -2920,15 +3171,15 @@ const PresentationTab: React.FC = () => {
             })()}
 
             {/* Content area - better mobile padding */}
-            <div className={`relative h-full p-4 sm:p-6 md:p-8 lg:p-10 flex flex-col overflow-hidden ${(savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && !isEnhancing ? 'invisible' : ''}`}>
+            <div className={`relative h-full p-3 sm:p-6 md:p-8 lg:p-10 flex flex-col overflow-hidden ${showLiveEnhancedPreview ? 'invisible' : ''}`}>
               {currentSlide && (
                 <>
                   {/* Stat Highlight slide - big numbers layout */}
                   {currentSlide.role === 'stat_highlight' && (
                     <div className="flex-1 flex flex-col min-h-0">
-                      <div className="mb-3 flex-shrink-0">
+                      <div className="mb-2 flex-shrink-0">
                         <h2
-                          className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} font-bold mb-1`}
+                          className={`${getPreviewFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} font-bold mb-0.5 leading-tight break-words`}
                           style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}
                         >
                           {currentSlide.title}
@@ -2939,20 +3190,20 @@ const PresentationTab: React.FC = () => {
                           <div className={`w-2 h-2 rounded-full ${getThemeAccent(selectedTheme).bg}`} />
                         </div>
                       </div>
-                      <div className={`flex-1 flex ${currentSlide.imageUrl ? 'gap-4 items-center' : ''} min-h-0`}>
+                      <div className={`flex-1 flex ${currentSlide.imageUrl ? (isCompactPreview ? 'gap-2 items-center' : 'gap-4 items-center') : ''} min-h-0`}>
                         <div className={currentSlide.imageUrl ? 'flex-1' : 'flex-1'}>
                           {currentSlide.highlightedStats && currentSlide.highlightedStats.length > 0 ? (
-                            <div className={`grid gap-3 items-center ${currentSlide.highlightedStats.length <= 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                            <div className={`grid ${isCompactPreview ? 'gap-1.5' : 'gap-3'} items-center ${currentSlide.highlightedStats.length <= 2 ? 'grid-cols-2' : isCompactPreview ? 'grid-cols-2' : 'grid-cols-3'}`}>
                               {currentSlide.highlightedStats.map((stat, i) => {
-                                const parts = stat.split(/\\n|\n/);
+                                const parts = stat.split(/\n|\n/);
                                 const bigNum = parts[0] || stat;
                                 const label = parts[1] || '';
                                 return (
-                                  <div key={i} className="rounded-xl p-3 flex flex-col items-center justify-center text-center border border-white/10" style={{ background: 'rgba(255,255,255,0.07)' }}>
-                                    <span className="text-2xl sm:text-3xl font-bold leading-tight" style={{ color: getThemeAccent(selectedTheme).hex }}>
+                                  <div key={i} className={`${isCompactPreview ? 'rounded-lg p-1.5' : 'rounded-xl p-3'} flex flex-col items-center justify-center text-center border border-white/10`} style={{ background: 'rgba(255,255,255,0.07)' }}>
+                                    <span className={`${isCompactPreview ? 'text-[15px] sm:text-3xl' : 'text-2xl sm:text-3xl'} font-bold leading-tight`} style={{ color: getThemeAccent(selectedTheme).hex }}>
                                       {renderBoldText(bigNum, selectedTheme)}
                                     </span>
-                                    {label && <span className="text-xs mt-1 opacity-70 text-white">{label}</span>}
+                                    {label && <span className={`${isCompactPreview ? 'text-[8px] leading-tight' : 'text-xs'} mt-1 opacity-70 text-white`}>{label}</span>}
                                   </div>
                                 );
                               })}
@@ -2962,14 +3213,14 @@ const PresentationTab: React.FC = () => {
                               {currentSlide.bullets?.slice(0, 4).map((b, i) => (
                                 <li key={i} className="flex items-start gap-2">
                                   <span className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${getThemeAccent(selectedTheme).bg}`} />
-                                  <span className="text-sm leading-snug text-slate-200">{renderBoldText(b, selectedTheme)}</span>
+                                  <span className={`${isCompactPreview ? 'text-[11px] leading-[1.25]' : 'text-sm leading-snug'} text-slate-200`}>{renderBoldText(b, selectedTheme)}</span>
                                 </li>
                               ))}
                             </ul>
                           )}
                         </div>
                         {currentSlide.imageUrl && (
-                          <div className="w-2/5 aspect-[16/9] flex-shrink-0">
+                          <div className={`${isCompactPreview ? 'w-[39%] aspect-[4/3]' : 'w-2/5 aspect-[16/9]'} flex-shrink-0`}>
                             {renderSlideImage(currentSlide, { className: 'w-full h-full', enableDrag: true, onPointerDown: onImagePointerDown, onPointerMove: onImagePointerMove, onPointerUp: onImagePointerCancelOrUp, onPointerCancel: onImagePointerCancelOrUp })}
                           </div>
                         )}
@@ -2980,9 +3231,9 @@ const PresentationTab: React.FC = () => {
                   {/* Big Quote slide - centered quote layout */}
                   {currentSlide.role === 'big_quote' && (
                     <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
-                      <div className={`text-5xl sm:text-6xl font-bold mb-3 opacity-40 leading-none ${getThemeAccent(selectedTheme).text}`}>"</div>
+                      <div className={`${isCompactPreview ? 'text-3xl sm:text-6xl mb-2' : 'text-5xl sm:text-6xl mb-3'} font-bold opacity-40 leading-none ${getThemeAccent(selectedTheme).text}`}>"</div>
                       <p
-                        className="text-lg sm:text-xl font-medium leading-relaxed max-w-[85%] mb-4"
+                        className={`${isCompactPreview ? 'text-[13px] leading-snug max-w-[92%] mb-3' : 'text-lg sm:text-xl leading-relaxed max-w-[85%] mb-4'} font-medium`}
                         style={{ color: currentSlide.subtitleStyle?.color || '#f1f5f9' }}
                       >
                         {currentSlide.subtitle || currentSlide.title}
@@ -3000,15 +3251,15 @@ const PresentationTab: React.FC = () => {
                   {currentSlide.role === 'cover' && !currentSlide.imageUrl && (
                     <div className="flex-1 flex flex-col items-center justify-center text-center">
                       <h1 
-                        className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''} mb-4 leading-tight`}
+                        className={`${getPreviewFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''} ${isCompactPreview ? 'mb-2' : 'mb-4'} leading-tight break-words`}
                         style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}
                       >
                         {currentSlide.title}
                       </h1>
                       {currentSlide.subtitle && (
-                        <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)} mb-4`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>
+                        <p className={`${getPreviewFontSizeClass(currentSlide.subtitleStyle?.fontSize)} ${isCompactPreview ? 'mb-2 leading-snug' : 'mb-4'}`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>
                       )}
-                      <div className={`w-24 h-1 rounded-full mt-4 ${getThemeAccent(selectedTheme).bg}`} />
+                      <div className={`${isCompactPreview ? 'w-16 mt-2' : 'w-24 mt-4'} h-1 rounded-full ${getThemeAccent(selectedTheme).bg}`} />
                     </div>
                   )}
 
@@ -3017,52 +3268,52 @@ const PresentationTab: React.FC = () => {
                     <>
                       {/* Image Left */}
                       {currentSlide.layoutVariant === 'image_left' && (
-                        <div className="flex-1 flex gap-4 items-center">
-                          <div className={`${currentSlide.imageSize === 'small' ? 'w-1/3' : currentSlide.imageSize === 'large' ? 'w-2/3' : 'w-1/2'} aspect-[16/9]`}>
+                        <div className={`flex-1 flex ${isCompactPreview ? 'gap-2' : 'gap-4'} items-center`}>
+                          <div className={`${getPreviewSideImageWidthClass(currentSlide.imageSize)} aspect-[16/9]`}>
                             {renderSlideImage(currentSlide, { className: 'w-full h-full', enableDrag: true, onPointerDown: onImagePointerDown, onPointerMove: onImagePointerMove, onPointerUp: onImagePointerCancelOrUp, onPointerCancel: onImagePointerCancelOrUp })}
                           </div>
                           <div className="flex-1 flex flex-col justify-center">
-                            <h1 className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} mb-2`} style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}>{currentSlide.title}</h1>
-                            {currentSlide.subtitle && <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)}`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
-                            <div className={`w-16 h-1 rounded-full mt-3 ${getThemeAccent(selectedTheme).bg}`} />
+                            <h1 className={`${getPreviewFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} mb-1 leading-tight break-words`} style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}>{currentSlide.title}</h1>
+                            {currentSlide.subtitle && <p className={`${getPreviewFontSizeClass(currentSlide.subtitleStyle?.fontSize)} leading-snug`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
+                            <div className={`w-16 h-1 rounded-full ${isCompactPreview ? 'mt-2' : 'mt-3'} ${getThemeAccent(selectedTheme).bg}`} />
                           </div>
                         </div>
                       )}
                       {/* Image Right (default) */}
                       {(currentSlide.layoutVariant === 'text_left' || !currentSlide.layoutVariant || currentSlide.layoutVariant === 'text_only') && (
-                        <div className="flex-1 flex gap-4 items-center">
+                        <div className={`flex-1 flex ${isCompactPreview ? 'gap-2' : 'gap-4'} items-center`}>
                           <div className="flex-1 flex flex-col justify-center">
-                            <h1 className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} mb-2`} style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}>{currentSlide.title}</h1>
-                            {currentSlide.subtitle && <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)}`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
-                            <div className={`w-16 h-1 rounded-full mt-3 ${getThemeAccent(selectedTheme).bg}`} />
+                            <h1 className={`${getPreviewFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} mb-1 leading-tight break-words`} style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}>{currentSlide.title}</h1>
+                            {currentSlide.subtitle && <p className={`${getPreviewFontSizeClass(currentSlide.subtitleStyle?.fontSize)} leading-snug`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
+                            <div className={`w-16 h-1 rounded-full ${isCompactPreview ? 'mt-2' : 'mt-3'} ${getThemeAccent(selectedTheme).bg}`} />
                           </div>
-                          <div className={`${currentSlide.imageSize === 'small' ? 'w-1/3' : currentSlide.imageSize === 'large' ? 'w-2/3' : 'w-1/2'} aspect-[16/9]`}>
+                          <div className={`${getPreviewSideImageWidthClass(currentSlide.imageSize)} aspect-[16/9]`}>
                             {renderSlideImage(currentSlide, { className: 'w-full h-full', enableDrag: true, onPointerDown: onImagePointerDown, onPointerMove: onImagePointerMove, onPointerUp: onImagePointerCancelOrUp, onPointerCancel: onImagePointerCancelOrUp })}
                           </div>
                         </div>
                       )}
                       {/* Image Top */}
                       {currentSlide.layoutVariant === 'image_top' && (
-                        <div className="flex-1 flex flex-col gap-3">
-                          <div className={`w-full ${currentSlide.imageSize === 'small' ? 'max-w-[70%]' : currentSlide.imageSize === 'large' ? 'max-w-full' : 'max-w-[85%]'} mx-auto aspect-[16/9]`}>
+                        <div className={`flex-1 flex flex-col ${isCompactPreview ? 'gap-2' : 'gap-3'}`}>
+                          <div className={`w-full ${getPreviewImageMaxWidthClass(currentSlide.imageSize)} mx-auto aspect-[16/9]`}>
                             {renderSlideImage(currentSlide, { className: 'w-full h-full', enableDrag: true, onPointerDown: onImagePointerDown, onPointerMove: onImagePointerMove, onPointerUp: onImagePointerCancelOrUp, onPointerCancel: onImagePointerCancelOrUp })}
                           </div>
                           <div className="flex-1 flex flex-col items-center justify-center text-center">
-                            <h1 className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} mb-2`} style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}>{currentSlide.title}</h1>
-                            {currentSlide.subtitle && <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)}`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
-                            <div className={`w-16 h-1 rounded-full mt-3 ${getThemeAccent(selectedTheme).bg}`} />
+                            <h1 className={`${getPreviewFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} mb-1 leading-tight break-words`} style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}>{currentSlide.title}</h1>
+                            {currentSlide.subtitle && <p className={`${getPreviewFontSizeClass(currentSlide.subtitleStyle?.fontSize)} leading-snug`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
+                            <div className={`w-16 h-1 rounded-full ${isCompactPreview ? 'mt-2' : 'mt-3'} ${getThemeAccent(selectedTheme).bg}`} />
                           </div>
                         </div>
                       )}
                       {/* Image Bottom */}
                       {currentSlide.layoutVariant === 'image_bottom' && (
-                        <div className="flex-1 flex flex-col gap-3">
+                        <div className={`flex-1 flex flex-col ${isCompactPreview ? 'gap-2' : 'gap-3'}`}>
                           <div className="flex-1 flex flex-col items-center justify-center text-center">
-                            <h1 className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} mb-2`} style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}>{currentSlide.title}</h1>
-                            {currentSlide.subtitle && <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)}`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
-                            <div className={`w-16 h-1 rounded-full mt-3 ${getThemeAccent(selectedTheme).bg}`} />
+                            <h1 className={`${getPreviewFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} mb-1 leading-tight break-words`} style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}>{currentSlide.title}</h1>
+                            {currentSlide.subtitle && <p className={`${getPreviewFontSizeClass(currentSlide.subtitleStyle?.fontSize)} leading-snug`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
+                            <div className={`w-16 h-1 rounded-full ${isCompactPreview ? 'mt-2' : 'mt-3'} ${getThemeAccent(selectedTheme).bg}`} />
                           </div>
-                          <div className={`w-full ${currentSlide.imageSize === 'small' ? 'max-w-[70%]' : currentSlide.imageSize === 'large' ? 'max-w-full' : 'max-w-[85%]'} mx-auto aspect-[16/9]`}>
+                          <div className={`w-full ${getPreviewImageMaxWidthClass(currentSlide.imageSize)} mx-auto aspect-[16/9]`}>
                             {renderSlideImage(currentSlide, { className: 'w-full h-full', enableDrag: true, onPointerDown: onImagePointerDown, onPointerMove: onImagePointerMove, onPointerUp: onImagePointerCancelOrUp, onPointerCancel: onImagePointerCancelOrUp })}
                           </div>
                         </div>
@@ -3074,14 +3325,14 @@ const PresentationTab: React.FC = () => {
                   {currentSlide.role === 'thank_you' && !currentSlide.imageUrl && (
                     <div className="flex-1 flex flex-col items-center justify-center text-center">
                       <h1 
-                        className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''} mb-4`}
+                        className={`${getPreviewFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''} ${isCompactPreview ? 'mb-2 leading-tight break-words' : 'mb-4'}`}
                         style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}
                       >
                         {currentSlide.title}
                       </h1>
                       {currentSlide.subtitle && (
                         <p 
-                          className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)} mb-6`}
+                          className={`${getPreviewFontSizeClass(currentSlide.subtitleStyle?.fontSize)} ${isCompactPreview ? 'mb-3 leading-snug' : 'mb-6'}`}
                           style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}
                         >
                           {currentSlide.subtitle}
@@ -3096,52 +3347,52 @@ const PresentationTab: React.FC = () => {
                     <>
                       {/* Image Left layout */}
                       {currentSlide.layoutVariant === 'image_left' && (
-                        <div className="flex-1 flex gap-4 items-center">
-                          <div className={`${currentSlide.imageSize === 'small' ? 'w-1/3' : currentSlide.imageSize === 'large' ? 'w-2/3' : 'w-1/2'} aspect-[16/9]`}>
+                        <div className={`flex-1 flex ${isCompactPreview ? 'gap-2' : 'gap-4'} items-center`}>
+                          <div className={`${getPreviewSideImageWidthClass(currentSlide.imageSize)} aspect-[16/9]`}>
                             {renderSlideImage(currentSlide, { className: 'w-full h-full', enableDrag: true, onPointerDown: onImagePointerDown, onPointerMove: onImagePointerMove, onPointerUp: onImagePointerCancelOrUp, onPointerCancel: onImagePointerCancelOrUp })}
                           </div>
                           <div className="flex-1 flex flex-col justify-center">
-                            <h1 className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} mb-2`} style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}>{currentSlide.title}</h1>
-                            {currentSlide.subtitle && <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)}`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
-                            <div className={`w-16 h-1 rounded-full mt-3 ${getThemeAccent(selectedTheme).bg}`} />
+                            <h1 className={`${getPreviewFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} mb-1 leading-tight break-words`} style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}>{currentSlide.title}</h1>
+                            {currentSlide.subtitle && <p className={`${getPreviewFontSizeClass(currentSlide.subtitleStyle?.fontSize)} leading-snug`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
+                            <div className={`w-16 h-1 rounded-full ${isCompactPreview ? 'mt-2' : 'mt-3'} ${getThemeAccent(selectedTheme).bg}`} />
                           </div>
                         </div>
                       )}
                       {/* Image Right layout (default for thank you with image) */}
                       {(currentSlide.layoutVariant === 'text_left' || !currentSlide.layoutVariant || currentSlide.layoutVariant === 'text_only') && (
-                        <div className="flex-1 flex gap-4 items-center">
+                        <div className={`flex-1 flex ${isCompactPreview ? 'gap-2' : 'gap-4'} items-center`}>
                           <div className="flex-1 flex flex-col justify-center">
-                            <h1 className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} mb-2`} style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}>{currentSlide.title}</h1>
-                            {currentSlide.subtitle && <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)}`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
-                            <div className={`w-16 h-1 rounded-full mt-3 ${getThemeAccent(selectedTheme).bg}`} />
+                            <h1 className={`${getPreviewFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} mb-1 leading-tight break-words`} style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}>{currentSlide.title}</h1>
+                            {currentSlide.subtitle && <p className={`${getPreviewFontSizeClass(currentSlide.subtitleStyle?.fontSize)} leading-snug`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
+                            <div className={`w-16 h-1 rounded-full ${isCompactPreview ? 'mt-2' : 'mt-3'} ${getThemeAccent(selectedTheme).bg}`} />
                           </div>
-                          <div className={`${currentSlide.imageSize === 'small' ? 'w-1/3' : currentSlide.imageSize === 'large' ? 'w-2/3' : 'w-1/2'} aspect-[16/9]`}>
+                          <div className={`${getPreviewSideImageWidthClass(currentSlide.imageSize)} aspect-[16/9]`}>
                             {renderSlideImage(currentSlide, { className: 'w-full h-full', enableDrag: true, onPointerDown: onImagePointerDown, onPointerMove: onImagePointerMove, onPointerUp: onImagePointerCancelOrUp, onPointerCancel: onImagePointerCancelOrUp })}
                           </div>
                         </div>
                       )}
                       {/* Image Top layout */}
                       {currentSlide.layoutVariant === 'image_top' && (
-                        <div className="flex-1 flex flex-col gap-3">
-                          <div className={`w-full ${currentSlide.imageSize === 'small' ? 'max-w-[70%]' : currentSlide.imageSize === 'large' ? 'max-w-full' : 'max-w-[85%]'} mx-auto aspect-[16/9]`}>
+                        <div className={`flex-1 flex flex-col ${isCompactPreview ? 'gap-2' : 'gap-3'}`}>
+                          <div className={`w-full ${getPreviewImageMaxWidthClass(currentSlide.imageSize)} mx-auto aspect-[16/9]`}>
                             {renderSlideImage(currentSlide, { className: 'w-full h-full', enableDrag: true, onPointerDown: onImagePointerDown, onPointerMove: onImagePointerMove, onPointerUp: onImagePointerCancelOrUp, onPointerCancel: onImagePointerCancelOrUp })}
                           </div>
                           <div className="flex-1 flex flex-col items-center justify-center text-center">
-                            <h1 className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} mb-2`} style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}>{currentSlide.title}</h1>
-                            {currentSlide.subtitle && <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)}`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
-                            <div className={`w-16 h-1 rounded-full mt-3 ${getThemeAccent(selectedTheme).bg}`} />
+                            <h1 className={`${getPreviewFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} mb-1 leading-tight break-words`} style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}>{currentSlide.title}</h1>
+                            {currentSlide.subtitle && <p className={`${getPreviewFontSizeClass(currentSlide.subtitleStyle?.fontSize)} leading-snug`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
+                            <div className={`w-16 h-1 rounded-full ${isCompactPreview ? 'mt-2' : 'mt-3'} ${getThemeAccent(selectedTheme).bg}`} />
                           </div>
                         </div>
                       )}
                       {/* Image Bottom layout */}
                       {currentSlide.layoutVariant === 'image_bottom' && (
-                        <div className="flex-1 flex flex-col gap-3">
+                        <div className={`flex-1 flex flex-col ${isCompactPreview ? 'gap-2' : 'gap-3'}`}>
                           <div className="flex-1 flex flex-col items-center justify-center text-center">
-                            <h1 className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} mb-2`} style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}>{currentSlide.title}</h1>
-                            {currentSlide.subtitle && <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)}`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
-                            <div className={`w-16 h-1 rounded-full mt-3 ${getThemeAccent(selectedTheme).bg}`} />
+                            <h1 className={`${getPreviewFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} mb-1 leading-tight break-words`} style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}>{currentSlide.title}</h1>
+                            {currentSlide.subtitle && <p className={`${getPreviewFontSizeClass(currentSlide.subtitleStyle?.fontSize)} leading-snug`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
+                            <div className={`w-16 h-1 rounded-full ${isCompactPreview ? 'mt-2' : 'mt-3'} ${getThemeAccent(selectedTheme).bg}`} />
                           </div>
-                          <div className={`w-full ${currentSlide.imageSize === 'small' ? 'max-w-[70%]' : currentSlide.imageSize === 'large' ? 'max-w-full' : 'max-w-[85%]'} mx-auto aspect-[16/9]`}>
+                          <div className={`w-full ${getPreviewImageMaxWidthClass(currentSlide.imageSize)} mx-auto aspect-[16/9]`}>
                             {renderSlideImage(currentSlide, { className: 'w-full h-full', enableDrag: true, onPointerDown: onImagePointerDown, onPointerMove: onImagePointerMove, onPointerUp: onImagePointerCancelOrUp, onPointerCancel: onImagePointerCancelOrUp })}
                           </div>
                         </div>
@@ -3153,9 +3404,9 @@ const PresentationTab: React.FC = () => {
                   {currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && currentSlide.columns && currentSlide.columns.length > 0 && !currentSlide.imageUrl && currentSlide.layoutVariant !== 'text_only' && (
                     <div className="flex-1 flex flex-col">
                       {/* Title with accent - with full edit support */}
-                      <div className="mb-6">
+                      <div className={`${isCompactPreview ? 'mb-3' : 'mb-6'}`}>
                         <h2 
-                          className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''} mb-2`}
+                          className={`${getPreviewFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''} mb-1 leading-tight break-words`}
                           style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}
                         >
                           {currentSlide.title}
@@ -3168,13 +3419,13 @@ const PresentationTab: React.FC = () => {
                       </div>
                       
                       {/* 3-column cards */}
-                      <div className="flex-1 grid grid-cols-3 gap-4">
+                      <div className={`flex-1 grid ${isCompactPreview ? 'grid-cols-2 gap-2' : 'grid-cols-3 gap-4'}`}>
                         {currentSlide.columns.map((col, i) => (
-                          <div key={i} className="bg-slate-800/80 backdrop-blur rounded-xl p-4 border border-slate-700 flex flex-col">
-                            <div className="text-3xl mb-3 text-center">{col.icon || '📌'}</div>
-                            <h3 className="font-bold text-white text-center mb-2">{col.title}</h3>
+                          <div key={i} className={`bg-slate-800/80 backdrop-blur ${isCompactPreview ? 'rounded-lg p-2.5' : 'rounded-xl p-4'} border border-slate-700 flex flex-col`}>
+                            <div className={`${isCompactPreview ? 'text-xl mb-2' : 'text-3xl mb-3'} text-center`}>{col.icon || '📌'}</div>
+                            <h3 className={`font-bold text-white text-center ${isCompactPreview ? 'mb-1 text-[11px] leading-tight' : 'mb-2'}`}>{col.title}</h3>
                             {col.description && (
-                              <p className="text-slate-300 text-sm text-center">{col.description}</p>
+                              <p className={`text-slate-300 text-center ${isCompactPreview ? 'text-[10px] leading-tight' : 'text-sm'}`}>{col.description}</p>
                             )}
                           </div>
                         ))}
@@ -3188,14 +3439,14 @@ const PresentationTab: React.FC = () => {
                       {/* Title - with custom styling */}
                       <div className="mb-2 flex-shrink-0">
                         <h2 
-                          className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''}`}
+                          className={`${getPreviewFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''} leading-tight break-words`}
                           style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}
                         >
                           {currentSlide.title.split(' ').map((word, i) => 
                             i === 1 ? (
                               <span 
                                 key={i} 
-                                className={`${currentSlide.accentFontSize === 'small' ? 'text-[0.85em]' : currentSlide.accentFontSize === 'large' ? 'text-[1.15em]' : ''} ${currentSlide.accentFontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.accentFontStyle === 'italic' ? 'italic' : ''}`}
+                                className={getPreviewAccentWordClass(currentSlide)}
                                 style={{ color: currentSlide.accentColor || getThemeAccent(selectedTheme).hex }}
                               >
                                 {word}{' '}
@@ -3204,7 +3455,7 @@ const PresentationTab: React.FC = () => {
                           )}
                         </h2>
                         {currentSlide.subtitle && (
-                          <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)} mt-2`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>
+                          <p className={`${getPreviewFontSizeClass(currentSlide.subtitleStyle?.fontSize)} mt-1 leading-snug`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>
                             {currentSlide.subtitle}
                           </p>
                         )}
@@ -3217,17 +3468,17 @@ const PresentationTab: React.FC = () => {
                       
                       {/* Layout: Image Top */}
                       {currentSlide.layoutVariant === 'image_top' && currentSlide.imageUrl && (
-                        <div className="flex-1 flex flex-col gap-4 min-h-0">
-                          <div className={`w-full ${currentSlide.imageSize === 'small' ? 'max-w-[70%]' : currentSlide.imageSize === 'large' ? 'max-w-full' : currentSlide.imageSize === 'full' ? 'max-w-full' : 'max-w-[85%]'} mx-auto aspect-[16/9]`}>
+                        <div className={`flex-1 flex flex-col ${isCompactPreview ? 'gap-2' : 'gap-4'} min-h-0`}>
+                          <div className={`w-full ${getPreviewImageMaxWidthClass(currentSlide.imageSize)} mx-auto aspect-[16/9]`}>
                             {renderSlideImage(currentSlide, { className: 'w-full h-full', enableDrag: true, onPointerDown: onImagePointerDown, onPointerMove: onImagePointerMove, onPointerUp: onImagePointerCancelOrUp, onPointerCancel: onImagePointerCancelOrUp })}
                           </div>
                           <div className="flex-1">
-                            <ul className="space-y-1">
+                            <ul className={isCompactPreview ? 'space-y-0.5' : 'space-y-1'}>
                               {currentSlide.bullets?.slice(0, 4).map((b, i) => (
                                 <li key={i} className="flex items-start gap-1.5">
                                   {renderBulletShape(currentSlide.bulletDotShape, i, currentSlide.bulletDotSize, currentSlide.bulletDotColor || currentSlide.accentColor || getThemeAccent(selectedTheme).hex)}
                                   <span 
-                                    className={`${getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-tight ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''} ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'italic' : ''}`} 
+                                    className={`${getPreviewFontSizeClass(currentSlide.bulletStyle?.fontSize)} ${isCompactPreview ? 'leading-[1.2]' : 'leading-tight'} ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''} ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'italic' : ''}`} 
                                     style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}
                                   >
                                     {renderBoldText(b, selectedTheme)}
@@ -3239,22 +3490,19 @@ const PresentationTab: React.FC = () => {
                         </div>
                       )}
                       {currentSlide.layoutVariant === 'image_left' && currentSlide.imageUrl && (
-                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 min-h-0">
+                        <div className={`flex-1 grid ${isCompactPreview ? 'grid-cols-[0.72fr_1.28fr] gap-1.5 items-center' : 'grid-cols-1 md:grid-cols-2 gap-3 md:gap-4'} min-h-0`}>
                           <div className={`flex items-center justify-center w-full ${
-                            currentSlide.imageSize === 'small' ? 'max-w-[70%]' :
-                            currentSlide.imageSize === 'large' ? 'max-w-full' :
-                            currentSlide.imageSize === 'full' ? 'max-w-full' :
-                            'max-w-[85%]'
+                            getPreviewImageMaxWidthClass(currentSlide.imageSize)
                           } mx-auto aspect-[16/9]`}>
                             {renderSlideImage(currentSlide, { className: 'w-full h-full', enableDrag: true, onPointerDown: onImagePointerDown, onPointerMove: onImagePointerMove, onPointerUp: onImagePointerCancelOrUp, onPointerCancel: onImagePointerCancelOrUp })}
                           </div>
-                          <div className="flex-1 pl-2">
-                            <ul className="space-y-1">
+                          <div className={`flex-1 ${isCompactPreview ? 'pl-1' : 'pl-2'}`}>
+                            <ul className={isCompactPreview ? 'space-y-0.5' : 'space-y-1'}>
                               {currentSlide.bullets?.slice(0, 4).map((b, i) => (
                                 <li key={i} className="flex items-start gap-1.5">
                                   {renderBulletShape(currentSlide.bulletDotShape, i, currentSlide.bulletDotSize, currentSlide.bulletDotColor || currentSlide.accentColor || getThemeAccent(selectedTheme).hex)}
                                   <span 
-                                    className={`${getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-tight ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''} ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'italic' : ''}`} 
+                                    className={`${getPreviewFontSizeClass(currentSlide.bulletStyle?.fontSize)} ${isCompactPreview ? 'leading-[1.2]' : 'leading-tight'} ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''} ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'italic' : ''}`} 
                                     style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}
                                   >
                                     {renderBoldText(b, selectedTheme)}
@@ -3268,14 +3516,14 @@ const PresentationTab: React.FC = () => {
 
                       {/* Layout: Image Bottom */}
                       {currentSlide.layoutVariant === 'image_bottom' && currentSlide.imageUrl && (
-                        <div className="flex-1 flex flex-col gap-3 min-h-0">
+                        <div className={`flex-1 flex flex-col ${isCompactPreview ? 'gap-2' : 'gap-3'} min-h-0`}>
                           <div className="flex-1">
-                            <ul className="space-y-1">
+                            <ul className={isCompactPreview ? 'space-y-0.5' : 'space-y-1'}>
                               {currentSlide.bullets?.slice(0, 4).map((b, i) => (
                                 <li key={i} className="flex items-start gap-1.5">
                                   {renderBulletShape(currentSlide.bulletDotShape, i, currentSlide.bulletDotSize, currentSlide.bulletDotColor || currentSlide.accentColor || getThemeAccent(selectedTheme).hex)}
                                   <span 
-                                    className={`${getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-tight ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''} ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'italic' : ''}`} 
+                                    className={`${getPreviewFontSizeClass(currentSlide.bulletStyle?.fontSize)} ${isCompactPreview ? 'leading-[1.2]' : 'leading-tight'} ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''} ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'italic' : ''}`} 
                                     style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}
                                   >
                                     {renderBoldText(b, selectedTheme)}
@@ -3284,7 +3532,7 @@ const PresentationTab: React.FC = () => {
                               ))}
                             </ul>
                           </div>
-                          <div className={`w-full ${currentSlide.imageSize === 'small' ? 'max-w-[70%]' : currentSlide.imageSize === 'large' ? 'max-w-full' : currentSlide.imageSize === 'full' ? 'max-w-full' : 'max-w-[85%]'} mx-auto aspect-[16/9]`}>
+                          <div className={`w-full ${getPreviewImageMaxWidthClass(currentSlide.imageSize)} mx-auto aspect-[16/9]`}>
                             {renderSlideImage(currentSlide, { className: 'w-full h-full', enableDrag: true, onPointerDown: onImagePointerDown, onPointerMove: onImagePointerMove, onPointerUp: onImagePointerCancelOrUp, onPointerCancel: onImagePointerCancelOrUp })}
                           </div>
                         </div>
@@ -3293,12 +3541,12 @@ const PresentationTab: React.FC = () => {
                       {/* Layout: Text Only */}
                       {currentSlide.layoutVariant === 'text_only' && (
                         <div className="flex-1">
-                          <ul className="space-y-1.5">
+                          <ul className={isCompactPreview ? 'space-y-1' : 'space-y-1.5'}>
                             {currentSlide.bullets?.slice(0, 5).map((b, i) => (
-                              <li key={i} className="flex items-start gap-2">
+                                <li key={i} className="flex items-start gap-2">
                                 {renderBulletShape(currentSlide.bulletDotShape, i, currentSlide.bulletDotSize, currentSlide.bulletDotColor || currentSlide.accentColor || getThemeAccent(selectedTheme).hex)}
                                 <span 
-                                  className={`${getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-snug ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''} ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'italic' : ''}`} 
+                                  className={`${getPreviewFontSizeClass(currentSlide.bulletStyle?.fontSize)} ${isCompactPreview ? 'leading-[1.2]' : 'leading-snug'} ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''} ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'italic' : ''}`} 
                                   style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}
                                 >
                                   {renderBoldText(b, selectedTheme)}
@@ -3313,15 +3561,15 @@ const PresentationTab: React.FC = () => {
                       {!currentSlide.imageUrl && currentSlide.layoutVariant && currentSlide.layoutVariant !== 'text_only' && (
                         <div className="flex-1">
                           {currentSlide.subtitle && (
-                            <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)} mb-3`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>
+                            <p className={`${getPreviewFontSizeClass(currentSlide.subtitleStyle?.fontSize)} mb-2 leading-snug`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>
                               {currentSlide.subtitle}
                             </p>
                           )}
-                          <ul className="space-y-1.5">
+                          <ul className={isCompactPreview ? 'space-y-1' : 'space-y-1.5'}>
                             {currentSlide.bullets?.slice(0, 5).map((b, i) => (
                               <li key={i} className="flex items-start gap-2">
                                 {renderBulletShape(currentSlide.bulletDotShape, i, currentSlide.bulletDotSize, currentSlide.bulletDotColor || currentSlide.accentColor || getThemeAccent(selectedTheme).hex)}
-                                <span className={`${getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-snug`} style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}>
+                                <span className={`${getPreviewFontSizeClass(currentSlide.bulletStyle?.fontSize)} ${isCompactPreview ? 'leading-[1.2]' : 'leading-snug'}`} style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}>
                                   {renderBoldText(b, selectedTheme)}
                                 </span>
                               </li>
@@ -3332,14 +3580,14 @@ const PresentationTab: React.FC = () => {
 
                       {/* Layout: Text Left (default) - responsive */}
                       {(!currentSlide.layoutVariant || currentSlide.layoutVariant === 'text_left') && currentSlide.imageUrl && (
-                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 items-center min-h-0">
-                          <div className="flex flex-col pr-2 min-h-0">
-                            <ul className="space-y-1.5">
+                        <div className={`flex-1 grid ${isCompactPreview ? 'grid-cols-[1.34fr_0.66fr] gap-1.5' : 'grid-cols-1 md:grid-cols-2 gap-3 md:gap-4'} items-center min-h-0`}>
+                          <div className={`flex flex-col ${isCompactPreview ? 'pr-1' : 'pr-2'} min-h-0`}>
+                            <ul className={isCompactPreview ? 'space-y-0.5' : 'space-y-1.5'}>
                               {currentSlide.bullets?.slice(0, 5).map((b, i) => (
                                 <li key={i} className="flex items-start gap-1.5">
                                   {renderBulletShape(currentSlide.bulletDotShape, i, currentSlide.bulletDotSize, currentSlide.bulletDotColor || currentSlide.accentColor || getThemeAccent(selectedTheme).hex)}
                                   <span 
-                                    className={`${(currentSlide.bullets?.length || 0) > 3 ? 'text-sm' : getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-snug ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''} ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'italic' : ''}`} 
+                                    className={`${(currentSlide.bullets?.length || 0) > 3 ? (isCompactPreview ? 'text-[9px]' : 'text-sm') : getPreviewFontSizeClass(currentSlide.bulletStyle?.fontSize)} ${isCompactPreview ? 'leading-[1.15]' : 'leading-snug'} ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''} ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'italic' : ''}`} 
                                     style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}
                                   >
                                     {renderBoldText(b, selectedTheme)}
@@ -3348,7 +3596,7 @@ const PresentationTab: React.FC = () => {
                               ))}
                             </ul>
                           </div>
-                          <div className={`w-full ${currentSlide.imageSize === 'small' ? 'max-w-[70%]' : currentSlide.imageSize === 'large' ? 'max-w-full' : currentSlide.imageSize === 'full' ? 'max-w-full' : 'max-w-[85%]'} mx-auto aspect-[16/9]`}>
+                          <div className={`w-full ${getPreviewImageMaxWidthClass(currentSlide.imageSize)} mx-auto aspect-[16/9]`}>
                             {renderSlideImage(currentSlide, { className: 'w-full h-full', enableDrag: true, onPointerDown: onImagePointerDown, onPointerMove: onImagePointerMove, onPointerUp: onImagePointerCancelOrUp, onPointerCancel: onImagePointerCancelOrUp })}
                           </div>
                         </div>
@@ -3360,13 +3608,13 @@ const PresentationTab: React.FC = () => {
                   {currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && currentSlide.role !== 'stat_highlight' && currentSlide.role !== 'big_quote' && !currentSlide.imageUrl && (!currentSlide.columns || currentSlide.columns.length === 0) && (!currentSlide.bullets || currentSlide.bullets.length === 0) && !currentSlide.layoutVariant && (
                     <div className="flex-1 flex flex-col items-center justify-center text-center">
                       <h2
-                        className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''} mb-2 leading-tight`}
+                        className={`${getPreviewFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''} mb-2 leading-tight break-words`}
                         style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}
                       >
                         {currentSlide.title}
                       </h2>
                       {currentSlide.subtitle && (
-                        <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)} mb-4`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>
+                        <p className={`${getPreviewFontSizeClass(currentSlide.subtitleStyle?.fontSize)} mb-3 leading-snug`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>
                           {currentSlide.subtitle}
                         </p>
                       )}
@@ -3382,15 +3630,15 @@ const PresentationTab: React.FC = () => {
                   {currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && currentSlide.role !== 'stat_highlight' && currentSlide.role !== 'big_quote' && !currentSlide.imageUrl && (!currentSlide.columns || currentSlide.columns.length === 0) && currentSlide.bullets && currentSlide.bullets.length > 0 && !currentSlide.layoutVariant && (
                     <div className="flex-1 flex flex-col min-h-0">
                       {/* Title - with full edit support */}
-                      <div className="mb-3 flex-shrink-0">
+                      <div className="mb-2 flex-shrink-0">
                         <h2 
-                          className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''} mb-1`}
+                          className={`${getPreviewFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''} mb-1 leading-tight break-words`}
                           style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}
                         >
                           {currentSlide.title}
                         </h2>
                         {currentSlide.subtitle && (
-                          <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)} mb-1`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>
+                          <p className={`${getPreviewFontSizeClass(currentSlide.subtitleStyle?.fontSize)} mb-1 leading-snug`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>
                             {currentSlide.subtitle}
                           </p>
                         )}
@@ -3402,12 +3650,12 @@ const PresentationTab: React.FC = () => {
                       </div>
                       
                       {/* Bullets - auto-scaling spacing based on count */}
-                      <ul className={`${currentSlide.bullets.length > 5 ? 'space-y-1' : currentSlide.bullets.length > 3 ? 'space-y-1.5' : 'space-y-2'} flex-1 min-h-0 overflow-hidden`}>
+                      <ul className={`${isCompactPreview ? 'space-y-1' : currentSlide.bullets.length > 5 ? 'space-y-1' : currentSlide.bullets.length > 3 ? 'space-y-1.5' : 'space-y-2'} flex-1 min-h-0 overflow-hidden`}>
                         {currentSlide.bullets.map((b, i) => (
                           <li key={i} className="flex items-start gap-2">
                             <span className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${getThemeAccent(selectedTheme).bg}`} />
                             <span 
-                              className={`${currentSlide.bullets.length > 4 ? 'text-sm' : getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-snug ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''} ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'italic' : ''}`}
+                              className={`${currentSlide.bullets.length > 4 ? (isCompactPreview ? 'text-[10px]' : 'text-sm') : getPreviewFontSizeClass(currentSlide.bulletStyle?.fontSize)} ${isCompactPreview ? 'leading-[1.2]' : 'leading-snug'} ${currentSlide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''} ${currentSlide.bulletStyle?.fontStyle === 'italic' ? 'italic' : ''}`}
                               style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}
                             >
                               {renderBoldText(b, selectedTheme)}
@@ -3421,14 +3669,14 @@ const PresentationTab: React.FC = () => {
               )}
               
               {/* Footer */}
-              <div className="flex items-center justify-between pt-4 border-t border-slate-700/50">
+              <div className={`flex items-center justify-between ${isCompactPreview ? 'pt-2.5' : 'pt-4'} border-t border-slate-700/50`}>
                 <div className="flex items-center gap-2">
                   <div className={`w-3 h-3 rounded-full ${getThemeAccent(selectedTheme).bg}`} />
-                  <span className="text-xs text-slate-400 font-medium">
+                  <span className={`${isCompactPreview ? 'text-[10px]' : 'text-xs'} text-slate-400 font-medium`}>
                     {brief?.subject?.substring(0, 25) || 'Wakti AI'}
                   </span>
                 </div>
-                <span className="text-xs text-slate-500 font-medium">
+                <span className={`${isCompactPreview ? 'text-[10px]' : 'text-xs'} text-slate-500 font-medium`}>
                   {String(currentSlide?.slideNumber || 1).padStart(2, '0')}
                 </span>
               </div>
@@ -3437,7 +3685,7 @@ const PresentationTab: React.FC = () => {
         </div>
 
         {/* AI Enhanced badge - shown below slide when enhanced view is active */}
-        {!isEnhancing && (savedEnhancedMap[selectedSlideIndex] || (showEnhanced && enhancedHtmlMap[selectedSlideIndex])) && (
+        {!isEnhancing && showEnhanced && hasSlideEnhancement && (
           <div className="flex justify-center mt-2">
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[11px] font-bold shadow-lg shadow-amber-500/30">
               ✨ {language === 'ar' ? 'محسّن بالذكاء الاصطناعي' : 'AI Enhanced'}

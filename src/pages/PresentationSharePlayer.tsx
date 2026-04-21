@@ -374,7 +374,7 @@ export default function PresentationSharePlayer(): React.ReactElement {
                     );
                   })
                 : state.manifest.slides.map((s, i) => {
-                    const thumbUrl = s.data?.imageUrl || null;
+                    const thumbUrl = s.data?.slideImageUrl || s.data?.imageUrl || null;
 
                     return (
                       <button

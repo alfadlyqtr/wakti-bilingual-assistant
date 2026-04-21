@@ -1,5 +1,9 @@
 // Capability doc: FREEPIK STOCK IMAGES
 // Loaded when the project needs any image (most projects).
+//
+// Phase A — Item A6 (token diet): verbose React helper code trimmed; only
+// the API contract and rules remain. Modern models synthesize the React
+// boilerplate from the schema.
 
 export const STOCK_IMAGES_CAPABILITY = `
 ## 🖼️ STOCK IMAGES (FREEPIK API — MANDATORY)

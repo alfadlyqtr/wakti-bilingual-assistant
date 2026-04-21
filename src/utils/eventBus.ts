@@ -38,6 +38,9 @@ type EventMap = {
   'wakti-audio-session-changed': { sessionId?: string };
   'wakti-music-share-status-changed': unknown;
   'wakti-music-tracks-reload-requested': void;
+  'wakti-calendar-manual-update': { userId: string };
+  'wakti-calendar-data-update': { userId: string };
+  'wakti-calendar-extras-update': { userId: string };
 };
 
 type EventName = keyof EventMap;
