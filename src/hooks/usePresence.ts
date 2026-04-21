@@ -85,71 +85,97 @@ export function usePresence(currentUserId?: string | null) {
   useEffect(() => {
     if (!currentUserId) return;
 
-    const channel = supabase.channel(channelName, {
-      config: {
-        presence: {
-          key: currentUserId,
-        },
-      },
-    });
-    channelRef.current = channel;
-    isSubscribedRef.current = false;
+    // Item #8 hotfix: a lingering channel with the same topic from a previous
+    // mount (or React StrictMode double-invoke, or two simultaneous hook
+    // consumers) can cause `supabase.channel(name)` to return an already-
+    // subscribed instance. Adding `.on()` to such a channel throws
+    // "cannot add 'presence' callbacks for realtime:<topic> after 'subscribe()'".
+    // Pre-clean any existing channel with this topic before creating a fresh one.
+    try {
+      const existing = supabase.getChannels().filter(c => c.topic === `realtime:${channelName}`);
+      existing.forEach(c => {
+        try { supabase.removeChannel(c); } catch {}
+      });
+    } catch {}
 
-    const handlePresenceState = () => {
-      const state = channel.presenceState<PresencePayload>();
-      const ids = new Set<string>();
-      const lastSeenTimes: Record<string, string> = {};
-      
-      Object.values(state).forEach((presences) => {
-        presences?.forEach((presence) => {
-          if (presence?.user_id) {
-            ids.add(presence.user_id);
-            if (presence.last_seen) {
-              lastSeenTimes[presence.user_id] = presence.last_seen;
+    let channel: RealtimeChannel | null = null;
+    try {
+      channel = supabase.channel(channelName, {
+        config: {
+          presence: {
+            key: currentUserId,
+          },
+        },
+      });
+      channelRef.current = channel;
+      isSubscribedRef.current = false;
+
+      const handlePresenceState = () => {
+        if (!channel) return;
+        const state = channel.presenceState<PresencePayload>();
+        const ids = new Set<string>();
+        const lastSeenTimes: Record<string, string> = {};
+
+        Object.values(state).forEach((presences) => {
+          presences?.forEach((presence) => {
+            if (presence?.user_id) {
+              ids.add(presence.user_id);
+              if (presence.last_seen) {
+                lastSeenTimes[presence.user_id] = presence.last_seen;
+              }
             }
+          });
+        });
+
+        setOnlineUserIds(ids);
+        setLastSeen(prev => ({ ...prev, ...lastSeenTimes }));
+      };
+
+      const handleTypingEvent = (event: { event: string; payload: { user_id: string; typing: boolean } }) => {
+        setTypingUsers(prev => {
+          const next = new Set(prev);
+          if (event.payload.typing) {
+            next.add(event.payload.user_id);
+          } else {
+            next.delete(event.payload.user_id);
+          }
+          return next;
+        });
+      };
+
+      channel
+        .on('presence', { event: 'sync' }, handlePresenceState)
+        .on('presence', { event: 'join' }, handlePresenceState)
+        .on('presence', { event: 'leave' }, handlePresenceState)
+        .on('broadcast', { event: 'typing' }, handleTypingEvent)
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED' && channel) {
+            isSubscribedRef.current = true;
+            try {
+              await channel.track({
+                user_id: currentUserId,
+                typing: false,
+                last_seen: new Date().toISOString()
+              } as PresencePayload);
+            } catch { /* track can fail if socket closes mid-flight */ }
           }
         });
-      });
-      
-      setOnlineUserIds(ids);
-      setLastSeen(prev => ({ ...prev, ...lastSeenTimes }));
-    };
-
-    const handleTypingEvent = (event: { event: string; payload: { user_id: string; typing: boolean } }) => {
-      setTypingUsers(prev => {
-        const next = new Set(prev);
-        if (event.payload.typing) {
-          next.add(event.payload.user_id);
-        } else {
-          next.delete(event.payload.user_id);
-        }
-        return next;
-      });
-    };
-
-    channel
-      .on('presence', { event: 'sync' }, handlePresenceState)
-      .on('presence', { event: 'join' }, handlePresenceState)
-      .on('presence', { event: 'leave' }, handlePresenceState)
-      .on('broadcast', { event: 'typing' }, handleTypingEvent)
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          isSubscribedRef.current = true;
-          await channel.track({
-            user_id: currentUserId,
-            typing: false,
-            last_seen: new Date().toISOString()
-          } as PresencePayload);
-        }
-      });
+    } catch (err) {
+      // Presence is a *nice-to-have* for online dot + typing indicator.
+      // If something goes wrong setting it up, degrade gracefully — do NOT
+      // let it bubble to the root ErrorBoundary and white-screen the app.
+      console.error('[usePresence] channel setup failed, presence disabled:', err);
+      channelRef.current = null;
+      isSubscribedRef.current = false;
+    }
 
     // Cleanup
     return () => {
       isSubscribedRef.current = false;
       channelRef.current = null;
-      try {
-        supabase.removeChannel(channel);
-      } catch (_) {}
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch {}
+      }
     };
   }, [channelName, currentUserId]);
 
