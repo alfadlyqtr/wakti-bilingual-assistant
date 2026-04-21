@@ -30,7 +30,7 @@ type IconComponent = React.ComponentType<{
 import { t } from "@/utils/translations";
 import { Logo3D } from "@/components/Logo3D";
 import { UnreadBadge } from "./UnreadBadge";
-import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useUnreadContext } from "@/contexts/UnreadContext";
 import { QuickActionsPanel } from "./wakti-ai-v2/QuickActionsPanel";
 
 interface NavItemProps {
@@ -46,7 +46,7 @@ export function DesktopSidebar() {
   const location = useLocation();
   const { language } = useTheme();
   const { user } = useAuth();
-  const { maw3dEventCount, contactCount } = useUnreadMessages();
+  const { maw3dEventCount, contactCount } = useUnreadContext();
 
   const navItems: NavItemProps[] = [
     { icon: Home, label: "dashboard", path: "/dashboard" },

@@ -26,10 +26,41 @@ const BASE_FEATURE_TABS = [
   { id: 'uploads', icon: Upload, label: 'Media', labelAr: 'الوسائط', color: 'from-blue-500 to-cyan-500', bgColor: 'bg-blue-500/10', textColor: 'text-blue-500' },
   { id: 'inbox', icon: Mail, label: 'Inbox', labelAr: 'الرسائل', color: 'from-amber-500 to-orange-500', bgColor: 'bg-amber-500/10', textColor: 'text-amber-500' },
   { id: 'shop', icon: ShoppingCart, label: 'Shop', labelAr: 'المتجر', color: 'from-pink-500 to-rose-500', bgColor: 'bg-pink-500/10', textColor: 'text-pink-500' },
+  { id: 'blog', icon: FileText, label: 'Blog', labelAr: 'المدونة', color: 'from-indigo-500 to-violet-500', bgColor: 'bg-indigo-500/10', textColor: 'text-indigo-500' },
   { id: 'accounts', icon: Users, label: 'Accounts', labelAr: 'الحسابات', color: 'from-violet-500 to-purple-500', bgColor: 'bg-violet-500/10', textColor: 'text-violet-500' },
 ];
 
 const ADVANCED_FEATURE_TAB = { id: 'advanced', icon: Database, label: 'Advanced', labelAr: 'متقدم', color: 'from-emerald-500 to-green-500', bgColor: 'bg-emerald-500/10', textColor: 'text-emerald-500' };
+
+const COLLECTION_SCHEMA_SEEDS: Record<string, { display_name: string; schema: { fields: Array<{ name: string; type: string; required?: boolean }> } }> = {
+  posts: {
+    display_name: 'Posts',
+    schema: {
+      fields: [
+        { name: 'title', type: 'string', required: true },
+        { name: 'slug', type: 'string', required: true },
+        { name: 'excerpt', type: 'text' },
+        { name: 'content', type: 'text' },
+        { name: 'featured_image_url', type: 'string' },
+        { name: 'category', type: 'string' },
+        { name: 'tags', type: 'array' },
+        { name: 'author', type: 'string' },
+        { name: 'published', type: 'boolean' },
+        { name: 'published_at', type: 'datetime' },
+      ],
+    },
+  },
+  post_categories: {
+    display_name: 'Categories',
+    schema: {
+      fields: [
+        { name: 'name', type: 'string', required: true },
+        { name: 'slug', type: 'string', required: true },
+        { name: 'description', type: 'text' },
+      ],
+    },
+  },
+};
 
 const isAdvancedEnabled = () => {
   try {
@@ -199,6 +230,8 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
       if (!grouped['customer_data']) grouped['customer_data'] = [];
       if (!grouped['products']) grouped['products'] = [];
       if (!grouped['categories']) grouped['categories'] = [];
+      if (!grouped['posts']) grouped['posts'] = [];
+      if (!grouped['post_categories']) grouped['post_categories'] = [];
       setCollections(grouped);
       
       // Fetch collection schemas
@@ -356,6 +389,23 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
     const user = s2?.user;
     if (!user) return;
 
+    const schemaSeed = COLLECTION_SCHEMA_SEEDS[collectionName];
+    if (schemaSeed && !collectionSchemas[collectionName]) {
+      const { error: schemaError } = await supabase
+        .from('project_collection_schemas')
+        .insert({
+          project_id: projectId,
+          user_id: user.id,
+          collection_name: collectionName,
+          display_name: schemaSeed.display_name,
+          schema: schemaSeed.schema,
+        });
+
+      if (schemaError) {
+        console.error('Error creating collection schema:', schemaError);
+      }
+    }
+
     const { error } = await supabase
       .from('project_collections')
       .insert({
@@ -482,9 +532,10 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
   const pendingBookingsCount = bookings.filter(b => b.status === 'pending').length;
   const reviewsCount = (collections['reviews'] || []).length;
   const inboxBadgeCount = unreadCount + pendingBookingsCount + reviewsCount + chatRooms.length + comments.length;
-  const customersCount = (collections['customer_data'] || []).length;
+  const customersCount = collections['customer_data']?.length || 0;
   const rolesCount = siteUsers.filter(u => u.role && u.role !== 'customer').length;
   const accountsBadgeCount = siteUsers.length + customersCount + rolesCount;
+  const blogBadgeCount = (collections['posts']?.length || 0) + (collections['post_categories']?.length || 0);
 
   // Get badge count for each tab
   const getBadgeCount = (tabId: string) => {
@@ -492,6 +543,7 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
       case 'uploads': return uploads.length;
       case 'inbox': return inboxBadgeCount;
       case 'shop': return orders.length;
+      case 'blog': return blogBadgeCount;
       case 'accounts': return accountsBadgeCount;
       case 'advanced': return collectionsCount;
       default: return 0;
@@ -819,6 +871,25 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
                 />
               )}
             </div>
+          )}
+
+          {activeTab === 'blog' && (
+            <BackendDataTab
+              collections={{
+                posts: collections['posts'] || [],
+                post_categories: collections['post_categories'] || [],
+              }}
+              schemas={{
+                posts: collectionSchemas['posts'],
+                post_categories: collectionSchemas['post_categories'],
+              }}
+              projectId={projectId}
+              isRTL={isRTL}
+              onAdd={handleAddItem}
+              onEdit={handleEditItem}
+              onDelete={handleDeleteItem}
+              onExport={handleExport}
+            />
           )}
 
           {activeTab === 'accounts' && (

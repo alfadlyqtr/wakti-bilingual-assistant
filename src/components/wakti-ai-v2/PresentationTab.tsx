@@ -48,7 +48,7 @@ import {
  import OutlineStep from '@/components/wakti-ai-v2/presentation/steps/OutlineStep';
  import TopicStep from '@/components/wakti-ai-v2/presentation/steps/TopicStep';
  import { getThemeAccent } from '@/components/wakti-ai-v2/presentation/themeHelpers';
- import type { Brief, ImageFocusX, ImageFocusY, ImageTransform, InputMode, InputModeFlags, LayoutVariant, Slide, SlideOutline, Step, TextStyle, ThemeKey } from '@/components/wakti-ai-v2/presentation/types';
+import type { Brief, Column, ImageFocusX, ImageFocusY, ImageTransform, InputMode, InputModeFlags, LayoutVariant, Slide, SlideOutline, Step, TextStyle, ThemeKey } from '@/components/wakti-ai-v2/presentation/types';
 
 const normalizeTextForEnhancementCheck = (value: string): string => (
   value
@@ -111,6 +111,24 @@ const buildShareContentFingerprint = (args: {
   enhancedHtmlMap: Record<number, string>;
 }) => JSON.stringify(args);
 
+const extractShareTokenFromUrl = (shareUrl: string | null | undefined): string | null => {
+  if (!shareUrl) return null;
+  const match = shareUrl.match(/\/p\/([^/?#]+)/);
+  return match?.[1] || null;
+};
+
+const getCanonicalEnhancementState = (slideList: Slide[]) => {
+  const savedMap: Record<number, string> = {};
+  const templateMap: Record<number, number> = {};
+
+  slideList.forEach((slide, index) => {
+    if (slide.enhancedHtml) savedMap[index] = slide.enhancedHtml;
+    if (typeof slide.enhancedTemplate === 'number') templateMap[index] = slide.enhancedTemplate;
+  });
+
+  return { savedMap, templateMap };
+};
+
 const PresentationTab: React.FC = () => {
   const { language } = useTheme();
   const { user } = useAuth();
@@ -153,6 +171,7 @@ const PresentationTab: React.FC = () => {
   }>>([]);
   const [isLoadingPresentations, setIsLoadingPresentations] = useState(false);
   const [currentPresentationId, setCurrentPresentationId] = useState<string | null>(null);
+  const [currentShareToken, setCurrentShareToken] = useState<string | null>(null);
   const autoSaveTimerRef = useRef<number | null>(null);
   const hasAttemptedLegacyMigrationRef = useRef(false);
 
@@ -243,13 +262,19 @@ const PresentationTab: React.FC = () => {
   // Reload savedEnhancedMap and enhancedTemplateMap when the presentation changes (key changes)
   useEffect(() => {
     if (enhancedStorageKey === 'wakti-enhanced-empty') return;
+    const canonicalState = getCanonicalEnhancementState(slides);
+    if (currentPresentationId) {
+      setSavedEnhancedMap(canonicalState.savedMap);
+      setEnhancedTemplateMap(canonicalState.templateMap);
+      return;
+    }
     try {
       const stored = localStorage.getItem(enhancedStorageKey);
       setSavedEnhancedMap(stored ? JSON.parse(stored) : {});
       const storedTemplates = localStorage.getItem(`${enhancedStorageKey}-templates`);
       setEnhancedTemplateMap(storedTemplates ? JSON.parse(storedTemplates) : {});
     } catch { setSavedEnhancedMap({}); setEnhancedTemplateMap({}); }
-  }, [enhancedStorageKey]);
+  }, [currentPresentationId, enhancedStorageKey, slides]);
 
   // Persist savedEnhancedMap to localStorage
   useEffect(() => {
@@ -720,7 +745,10 @@ const PresentationTab: React.FC = () => {
 
       // New generation = new record in "My Presentations"
       setCurrentPresentationId(null);
+      setCurrentShareToken(null);
       setGeneratedShareUrl(null);
+      setGeneratedThumbnailUrl(null);
+      setLastSharedFingerprint(null);
     } catch (e: any) {
       console.error('Slides generation error:', e);
       setError(e?.message || 'Failed to generate slides');
@@ -1115,7 +1143,10 @@ const PresentationTab: React.FC = () => {
     }
 
     const mergedEnhancedMap: Record<number, string> = { ...savedEnhancedMap, ...enhancedHtmlMap };
-    const shouldShareUseEnhanced = showEnhanced && !isMobileViewport;
+    slides.forEach((slide, index) => {
+      if (slide.enhancedHtml) mergedEnhancedMap[index] = slide.enhancedHtml;
+    });
+    const shouldShareUseEnhanced = showEnhanced;
 
     setIsExporting(true);
     setIsShareCapturingPreview(true);
@@ -1131,7 +1162,8 @@ const PresentationTab: React.FC = () => {
       const token = session.data.session?.access_token;
       if (!token) throw new Error('Not authenticated');
 
-      const shareToken = generateShareToken(12);
+      const shareToken = currentShareToken || extractShareTokenFromUrl(generatedShareUrl) || generateShareToken(12);
+      setCurrentShareToken(shareToken);
       const bucket = 'ai-temp-images';
       const basePath = `presentation-share/${shareToken}`;
 
@@ -1358,7 +1390,7 @@ const PresentationTab: React.FC = () => {
             subtitle: s.subtitle,
             bullets: s.bullets,
             highlightedStats: s.highlightedStats,
-            columns: s.columns as unknown[] | undefined,
+            columns: s.columns as Column[] | undefined,
             imageUrl: s.imageUrl,
             imageMeta: s.imageMeta,
             footer: s.footer,
@@ -1380,7 +1412,7 @@ const PresentationTab: React.FC = () => {
             imageFocusY: s.imageFocusY,
             slideBg: s.slideBg,
             voiceGender: s.voiceGender,
-            enhancedHtml: shouldShareUseEnhanced ? (mergedEnhancedMap[idx] || undefined) : undefined,
+            enhancedHtml: shouldShareUseEnhanced ? (mergedEnhancedMap[idx] || s.enhancedHtml || undefined) : undefined,
             slideImageUrl: slideImageUrls[idx] || undefined,
           },
         })),
@@ -1403,7 +1435,7 @@ const PresentationTab: React.FC = () => {
         slides,
         selectedTheme,
         presentationName,
-        showEnhanced: showEnhanced && !isMobileViewport,
+        showEnhanced: showEnhanced,
         savedEnhancedMap,
         enhancedHtmlMap,
       }));
@@ -1426,7 +1458,7 @@ const PresentationTab: React.FC = () => {
       setIsShareCapturingPreview(false);
       setIsExporting(false);
     }
-  }, [bakeImageTransform, brief, enhancedHtmlMap, isMobileViewport, language, presentationName, savedEnhancedMap, selectedSlideIndex, selectedTheme, showEnhanced, slides, topic, waitForNextPaint, waitForSlideAssetsReady]);
+  }, [bakeImageTransform, brief, currentShareToken, enhancedHtmlMap, generatedShareUrl, language, presentationName, savedEnhancedMap, selectedSlideIndex, selectedTheme, showEnhanced, slides, topic, waitForNextPaint, waitForSlideAssetsReady]);
 
   // Load saved presentations
   const loadSavedPresentations = useCallback(async () => {
@@ -1459,10 +1491,20 @@ const PresentationTab: React.FC = () => {
     const title = presentationName || brief?.subject || topic || (language === 'ar' ? 'عرض تقديمي' : 'Presentation');
 
     try {
+      const mergedEnhancedMap: Record<number, string> = { ...savedEnhancedMap, ...enhancedHtmlMap };
+      slides.forEach((slide, index) => {
+        if (slide.enhancedHtml) mergedEnhancedMap[index] = slide.enhancedHtml;
+      });
       const slidesData = slides.map(s => ({
         ...s,
         imageUrl: s.imageUrl || null,
+        enhancedHtml: mergedEnhancedMap[slides.indexOf(s)] || s.enhancedHtml || null,
+        enhancedTemplate: enhancedTemplateMap[slides.indexOf(s)] ?? s.enhancedTemplate ?? null,
       }));
+      const shareTokenToPersist = currentShareToken || extractShareTokenFromUrl(generatedShareUrl);
+      const shareUrlToPersist = generatedShareUrl || (shareTokenToPersist
+        ? `${window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8080' : window.location.origin}/p/${shareTokenToPersist}`
+        : null);
 
       // Use thumbnail from share link generation if available, otherwise capture on manual save
       let thumbnailUrl: string | null = generatedThumbnailUrl;
@@ -1500,7 +1542,8 @@ const PresentationTab: React.FC = () => {
           theme: selectedTheme,
           language,
           slides_data: slidesData,
-          share_url: generatedShareUrl,
+          share_url: shareUrlToPersist,
+          share_token: shareTokenToPersist,
           updated_at: new Date().toISOString(),
         };
         if (thumbnailUrl) updatePayload.thumbnail_url = thumbnailUrl;
@@ -1521,7 +1564,8 @@ const PresentationTab: React.FC = () => {
             theme: selectedTheme,
             language,
             slides_data: slidesData as unknown as import('@/integrations/supabase/types').Json,
-            share_url: generatedShareUrl,
+            share_url: shareUrlToPersist,
+            share_token: shareTokenToPersist,
             thumbnail_url: thumbnailUrl || null,
           })
           .select('id')
@@ -1539,7 +1583,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       if (!silent) setIsSavingPresentation(false);
     }
-  }, [user?.id, slides, brief, topic, language, selectedTheme, currentPresentationId, generatedShareUrl, generatedThumbnailUrl, loadSavedPresentations, presentationName]);
+  }, [user?.id, slides, brief, topic, language, selectedTheme, currentPresentationId, currentShareToken, enhancedHtmlMap, enhancedTemplateMap, generatedShareUrl, generatedThumbnailUrl, loadSavedPresentations, presentationName, savedEnhancedMap]);
 
   // Save current presentation (manual, with toasts)
   const savePresentation = useCallback(async () => {
@@ -1559,7 +1603,7 @@ const PresentationTab: React.FC = () => {
     slides,
     selectedTheme,
     presentationName,
-    showEnhanced: showEnhanced && !isMobileViewport,
+    showEnhanced: showEnhanced,
     savedEnhancedMap,
     enhancedHtmlMap,
   }), [enhancedHtmlMap, isMobileViewport, presentationName, savedEnhancedMap, selectedTheme, showEnhanced, slides]);
@@ -1686,9 +1730,14 @@ const PresentationTab: React.FC = () => {
       
       // Restore state
       setCurrentPresentationId(data.id);
+      setCurrentShareToken(data.share_token || extractShareTokenFromUrl(data.share_url));
       setSelectedTheme(data.theme as ThemeKey);
       setGeneratedShareUrl(data.share_url);
       const loadedSlides = Array.isArray(data.slides_data) ? (data.slides_data as unknown as Slide[]) : [];
+      const canonicalState = getCanonicalEnhancementState(loadedSlides);
+      setEnhancedHtmlMap({});
+      setSavedEnhancedMap(canonicalState.savedMap);
+      setEnhancedTemplateMap(canonicalState.templateMap);
       setLastSharedFingerprint(null);
       setSlides(loadedSlides);
       setCurrentStep('slides');
@@ -1716,6 +1765,10 @@ const PresentationTab: React.FC = () => {
       setSavedPresentations(prev => prev.filter(p => p.id !== presentationId));
       if (currentPresentationId === presentationId) {
         setCurrentPresentationId(null);
+        setCurrentShareToken(null);
+        setGeneratedShareUrl(null);
+        setGeneratedThumbnailUrl(null);
+        setLastSharedFingerprint(null);
       }
       toast.success(language === 'ar' ? 'تم حذف العرض' : 'Presentation deleted');
     } catch (err) {
@@ -2212,6 +2265,15 @@ const PresentationTab: React.FC = () => {
     setOutline([]);
     setSlides([]);
     setSelectedSlideIndex(0);
+    setCurrentPresentationId(null);
+    setCurrentShareToken(null);
+    setGeneratedShareUrl(null);
+    setGeneratedThumbnailUrl(null);
+    setLastSharedFingerprint(null);
+    setEnhancedHtmlMap({});
+    setSavedEnhancedMap({});
+    setEnhancedTemplateMap({});
+    setShowEnhanced(false);
     setIsEditMode(false);
     setError('');
   }, []);
@@ -2488,9 +2550,15 @@ const PresentationTab: React.FC = () => {
   const renderSlidesStep = () => {
     const currentSlide = slides[selectedSlideIndex];
     const theme = THEMES.find(t => t.key === selectedTheme);
+    
+    // CRITICAL FIX: If we are capturing for share, absolutely force desktop metrics. 
+    // No compact layouts, no responsive wrappers. Act 100% like a desktop monitor.
     const isCompactPreview = isMobileViewport && !isShareCapturingPreview;
+    
     const hasSlideEnhancement = Boolean(savedEnhancedMap[selectedSlideIndex] || enhancedHtmlMap[selectedSlideIndex]);
-    const displayEnhancedHtml = showEnhanced && !isMobileViewport
+    
+    // Also allow enhanced view during capture even if on mobile
+    const displayEnhancedHtml = showEnhanced && (!isMobileViewport || isShareCapturingPreview)
       ? (enhancedHtmlMap[selectedSlideIndex] || savedEnhancedMap[selectedSlideIndex] || null)
       : null;
     const showLiveEnhancedPreview = Boolean(displayEnhancedHtml && !isEnhancing);
@@ -3075,8 +3143,19 @@ const PresentationTab: React.FC = () => {
         <div className="relative max-w-4xl mx-auto">
           <div 
             ref={slidePreviewRef}
-            className={`aspect-video rounded-2xl overflow-hidden ${theme?.cardShadow || 'shadow-2xl'} relative`}
-            style={currentSlide?.slideBg ? getColorStyle(currentSlide.slideBg, 'background') : undefined}
+            className={`aspect-video overflow-hidden relative ${isShareCapturingPreview ? '' : `rounded-2xl ${theme?.cardShadow || 'shadow-2xl'}`}`}
+            style={{
+              ...(currentSlide?.slideBg ? getColorStyle(currentSlide.slideBg, 'background') : {}),
+              ...(isShareCapturingPreview ? {
+                width: '1920px',
+                height: '1080px',
+                position: 'fixed',
+                top: '-9999px', // render off-screen but unscaled
+                left: '-9999px',
+                transform: 'none',
+                zoom: 1,
+              } : {})
+            }}
           >
             {/* Gradient background fallback when not using custom color */}
             {!currentSlide?.slideBg && (
@@ -3171,7 +3250,7 @@ const PresentationTab: React.FC = () => {
             })()}
 
             {/* Content area - better mobile padding */}
-            <div className={`relative h-full p-3 sm:p-6 md:p-8 lg:p-10 flex flex-col overflow-hidden ${showLiveEnhancedPreview ? 'invisible' : ''}`}>
+            <div className={`relative h-full ${isShareCapturingPreview ? 'p-16' : 'p-3 sm:p-6 md:p-8 lg:p-10'} flex flex-col overflow-hidden ${showLiveEnhancedPreview ? 'invisible' : ''}`}>
               {currentSlide && (
                 <>
                   {/* Stat Highlight slide - big numbers layout */}

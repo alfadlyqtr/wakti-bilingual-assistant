@@ -5,6 +5,7 @@ import { PersonalTouchManager } from './PersonalTouchManager';
 import { ConversationsList } from './ConversationsList';
 import { AIConversation } from '@/services/WaktiAIV2Service';
 import { TalkBackSettings } from './TalkBackSettings';
+import { HelpfulMemoryManager } from './HelpfulMemoryManager';
 
 interface ExtraPanelProps {
   conversations: AIConversation[];
@@ -51,6 +52,9 @@ export function ExtraPanel({
               <TabsTrigger className="h-8 !min-h-0 !min-w-0 !gap-0 px-3 rounded-xl text-sm font-medium border border-white/25 bg-white/70 hover:bg-white data-[state=active]:bg-white data-[state=active]:!text-slate-900 data-[state=inactive]:!text-slate-700 shadow-sm data-[state=active]:shadow" value="personal">
                 {language === 'ar' ? 'الشخصية' : 'Personal'}
               </TabsTrigger>
+              <TabsTrigger className="h-8 !min-h-0 !min-w-0 !gap-0 px-3 rounded-xl text-sm font-medium border border-white/25 bg-white/70 hover:bg-white data-[state=active]:bg-white data-[state=active]:!text-slate-900 data-[state=inactive]:!text-slate-700 shadow-sm data-[state=active]:shadow" value="memory">
+                {language === 'ar' ? 'الذاكرة' : 'Memory'}
+              </TabsTrigger>
               <TabsTrigger className="h-8 !min-h-0 !min-w-0 !gap-0 px-3 rounded-xl text-sm font-medium border border-white/25 bg-white/70 hover:bg-white data-[state=active]:bg-white data-[state=active]:!text-slate-900 data-[state=inactive]:!text-slate-700 shadow-sm data-[state=active]:shadow" value="conversations">
                 {language === 'ar' ? 'المحادثات' : 'Convos'}
               </TabsTrigger>
@@ -66,6 +70,10 @@ export function ExtraPanel({
             <div className="mt-2 rounded-2xl border border-white/10 bg-white/5 p-3">
               <PersonalTouchManager compact />
             </div>
+          </TabsContent>
+
+          <TabsContent value="memory" className="md:flex-1 mt-2">
+            <HelpfulMemoryManager currentConversationId={currentConversationId} />
           </TabsContent>
 
           {/* Conversations tab content: natural height on mobile, full on desktop */}

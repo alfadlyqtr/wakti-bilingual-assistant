@@ -11,13 +11,15 @@ import { STOCK_IMAGES_CAPABILITY } from "./stockImages.ts";
 import { FORMS_CAPABILITY } from "./forms.ts";
 import { BOOKING_CAPABILITY } from "./booking.ts";
 import { ECOMMERCE_CAPABILITY } from "./ecommerce.ts";
+import { BLOG_CAPABILITY } from "./blog.ts";
 
 export type CapabilityName =
   | "phaser_game"
   | "stock_images"
   | "forms"
   | "booking"
-  | "ecommerce";
+  | "ecommerce"
+  | "blog";
 
 // The short menu — always sent to the AI so it knows what's available.
 export const CAPABILITY_MANIFEST = `
@@ -33,6 +35,7 @@ auto-injected when the user's request matches.
 | forms           | Contact, quote, newsletter, feedback, waitlist forms.                 |
 | booking         | Appointments, scheduling, services (barber, salon, spa, clinic).      |
 | ecommerce       | Shop, store, products, cart.                                          |
+| blog            | Blog, CMS, articles, posts, news, magazine content.                   |
 | phaser_game     | 2D games (racing, shooter, puzzle, platformer, arcade).               |
 
 Rules:
@@ -48,6 +51,7 @@ const DOCS: Record<CapabilityName, string> = {
   forms: FORMS_CAPABILITY,
   booking: BOOKING_CAPABILITY,
   ecommerce: ECOMMERCE_CAPABILITY,
+  blog: BLOG_CAPABILITY,
 };
 
 export function getCapabilityDoc(name: string): string | null {
@@ -81,6 +85,12 @@ const RULES: DetectionRule[] = [
     capability: "ecommerce",
     keywords: [
       /\b(shop|store|e-?commerce|ecommerce|products?|product\s*catalog|cart|checkout|marketplace|buy|sell|inventory|sku|catalog)\b/i,
+    ],
+  },
+  {
+    capability: "blog",
+    keywords: [
+      /\b(blog|cms|content\s*management|article|articles|post|posts|news|newsletter\s*site|magazine|editorial|journal|stories)\b/i,
     ],
   },
   {

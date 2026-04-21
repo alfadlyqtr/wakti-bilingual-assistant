@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+﻿import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -17,11 +17,13 @@ import { formatPackagesForPrompt } from "../_shared/sandpackPackages.ts";
 // Split modules (Item 5 — safe, pure-data extractions)
 import { THEME_PRESETS } from "./prompts/themes.ts";
 import { FIXER_SYSTEM_PROMPT } from "./prompts/fixer.ts";
-// 🛡️ Prompt-injection defenses (Phase A — Item A4)
+import { BASE_SYSTEM_PROMPT } from "./prompts/base.ts";
+import { buildGeminiExecuteSystemPrompt } from "./prompts/geminiExecute.ts";
+// Prompt-injection defenses (Phase A — Item A4)
 import { sanitizeUserInput, withUserInputGuard } from "../_shared/promptSafety.ts";
-// 🧩 Template-token resolver (Phase A — Item A5) — replaces {{PROJECT_ID}} at DB save.
+// Template-token resolver (Phase A — Item A5) — replaces {{PROJECT_ID}} at DB save.
 import { resolveProjectPlaceholdersInFiles } from "../_shared/projectFileTemplates.ts";
-// 🧠 Three-layer prompt architecture — capability registry (slims ~323 lines off the base prompt).
+// Three-layer prompt architecture — capability registry (slims ~323 lines off the base prompt).
 import {
   CAPABILITY_MANIFEST,
   assembleCapabilityDocs,
@@ -610,6 +612,7 @@ interface RequestBody {
   theme?: string;
   userInstructions?: string;
   images?: ImageAttachment[];
+  assetIntent?: 'layout' | 'style' | 'content';
   planToExecute?: string;
   uploadedAssets?: UploadedAsset[];
   backendContext?: BackendContext;
@@ -627,6 +630,26 @@ interface RequestBody {
   };
   lang?: 'ar' | 'en';  // Language for generated content
 }
+
+const normalizeAssetIntent = (value: unknown): 'layout' | 'style' | 'content' | undefined => {
+  return value === 'layout' || value === 'style' || value === 'content' ? value : undefined;
+};
+
+const buildAssetIntentPrompt = (assetIntent?: 'layout' | 'style' | 'content'): string => {
+  if (assetIntent === 'layout') {
+    return 'ATTACHMENT INTENT: Copy layout. Prioritize section structure, hierarchy, spacing, and arrangement from the attached references. Do not promise pixel-perfect cloning.';
+  }
+
+  if (assetIntent === 'style') {
+    return 'ATTACHMENT INTENT: Use style. Prioritize colors, mood, typography, and visual feel from the attached references. Treat them as inspiration, not exact structure.';
+  }
+
+  if (assetIntent === 'content') {
+    return 'ATTACHMENT INTENT: Extract content. Prioritize reading text, items, prices, headings, and structured information from the attached references, then turn that into real site content.';
+  }
+
+  return '';
+};
 
 type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
 
@@ -1192,7 +1215,8 @@ ${relevantContext}`;
   // Smart model selection for execute mode
   const modelSelection = selectOptimalModel(planToExecute, false, 'execute', fileCount);
 
-  const systemPrompt = GEMINI_EXECUTE_SYSTEM_PROMPT.replace("{{ALLOWED_PACKAGES_LIST}}", formatPackagesForPrompt());
+  const systemPrompt = buildGeminiExecuteSystemPrompt(FOUNDATION_BRICKS)
+    .replace("{{ALLOWED_PACKAGES_LIST}}", formatPackagesForPrompt());
 
   const userMessage = `CURRENT CODEBASE:
 ${fileContext}
@@ -1236,6 +1260,7 @@ async function callGeminiFullRewriteEdit(
   currentFiles: Record<string, string>,
   userInstructions: string = "",
   images?: string[], // Support for images/PDFs
+  assetIntent?: 'layout' | 'style' | 'content',
   uploadedAssets?: UploadedAsset[], // User uploaded assets from backend
   backendContext?: BackendContext, // Backend context for AI awareness
   extractedDocumentContent?: string, // Extracted text from PDFs/DOCX
@@ -1245,12 +1270,14 @@ async function callGeminiFullRewriteEdit(
     .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
     .join("\n\n");
 
-  const systemPrompt = GEMINI_EXECUTE_SYSTEM_PROMPT.replace("{{ALLOWED_PACKAGES_LIST}}", formatPackagesForPrompt());
+  const systemPrompt = buildGeminiExecuteSystemPrompt(FOUNDATION_BRICKS)
+    .replace("{{ALLOWED_PACKAGES_LIST}}", formatPackagesForPrompt());
 
   // Build image context if provided
   let imageContext = '';
   let pdfTextContent = '';
   let screenshotAnchorsContext = '';
+  const assetIntentPrompt = buildAssetIntentPrompt(assetIntent);
   
   if (images && images.length > 0) {
     // STEP 1: Analyze screenshots to extract visible text anchors
@@ -1364,6 +1391,9 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
     if (pdfTextContent) {
       imageContext = `\n\n🖼️ ATTACHED FILES:\n${pdfTextContent}\nUSE THE INFORMATION FROM THESE ATTACHMENTS TO BUILD THE PROJECT.\n`;
     }
+  }
+  if (assetIntentPrompt) {
+    imageContext += `\n\n🧭 ${assetIntentPrompt}`;
   }
   
   // Build uploaded assets context with extracted content
@@ -2500,214 +2530,6 @@ function extractThemeFromPrompt(prompt: string): string {
 // Layer 1 (CORE): identity + output format + defensive coding + theme wiring
 // Layer 2 (MANIFEST): short capability menu
 // Layer 3 (DOCS): injected via {{CAPABILITY_DOCS}} — only when detected
-const BASE_SYSTEM_PROMPT = `
-🚨 CRITICAL: YOU ARE A REACT CODE GENERATOR — NOT AN HTML GENERATOR
-
-⛔ FORBIDDEN OUTPUT (will cause instant failure):
-- <!DOCTYPE html>, <html>, <head>, <body>, <script> tags
-- Any standalone HTML document
-- Any response that is NOT a JSON object
-
-✅ REQUIRED OUTPUT — a valid JSON object like:
-{
-  "/App.js": "import React from 'react';\\n\\nexport default function App() {\\n  return (\\n    <div>...</div>\\n  );\\n}",
-  "/components/Example.jsx": "import React from 'react';\\n..."
-}
-
-CRITICAL RULES:
-1. /App.js MUST start with: import React from 'react';
-2. /App.js MUST have: export default function App() { return (...) }
-3. Return ONLY a JSON object — no markdown, no explanation, no HTML
-4. All file paths must start with /
-5. All code must be valid React/JSX, not HTML
-
-### MANDATORY FILE STRUCTURE
-ALWAYS start with these files based on project complexity:
-
-**SIMPLE (landing page, single page):**
-- /App.js (main component with all sections)
-- /styles.css (if custom styles needed)
-
-**MEDIUM (multiple sections, modals, CTAs):**
-- /App.js (main with state management)
-- /components/Modal.jsx (reusable modal)
-- /components/Card.jsx (reusable cards)
-
-**COMPLEX (multi-page, dashboard, SaaS):**
-- /App.js (router/navigation state)
-- /components/Navbar.jsx
-- /components/Sidebar.jsx (if dashboard)
-- /pages/Home.jsx or /pages/LandingPage.jsx
-- /pages/Dashboard.jsx (if dashboard)
-- /utils/mockData.js (sample data)
-
-**IF USER ASKS FOR LANGUAGES:**
-- /i18n.js (translations setup)
-
-**🎮 GAME (if the user asks for one):** Full Phaser setup is provided in the loaded game capability doc below. Put EVERYTHING in /App.js. If no phaser_game capability is loaded, the user is NOT asking for a game — do not use Phaser at all.
-
-You are an elite React Expert creating premium UI applications.
-
-### PART 1: AESTHETICS & DESIGN
-1.  **Theme Compliance**: {{THEME_INSTRUCTIONS}}
-2.  **Layout**: Use "Bento Box" grids, asymmetrical layouts, and generous whitespace.
-3.  **Visual Depth**: Use advanced glassmorphism (backdrop-blur-2xl bg-white/[0.02] border-white/[0.05]), multi-layered shadows, and mesh gradients.
-4.  **Micro-interactions**: Every button and card must have hover effects (scale, glow, border-color change). Use Framer Motion. Buttons need "active:scale-95".
-5.  **Theme Wiring (MANDATORY - NON-NEGOTIABLE)**: When applying ANY color theme:
-    - ALWAYS define ALL theme colors as CSS variables in styles.css \`:root { --primary: #hex; --secondary: #hex; --accent: #hex; --bg: #hex; --bg-card: #hex; --text: #hex; --text-muted: #hex; }\`
-    - EVERY color in the entire project MUST reference these variables: \`background-color: var(--bg)\`, \`color: var(--text)\`, \`border-color: var(--primary)\`, etc.
-    - For Tailwind classes use arbitrary values with variables: \`bg-[var(--bg)]\`, \`text-[var(--text)]\`, \`border-[var(--primary)]\`
-    - Gradients MUST use variables: \`background: linear-gradient(135deg, var(--primary), var(--secondary))\`
-    - Glows/shadows MUST derive from variables: \`box-shadow: 0 0 20px var(--primary)\`
-    - Scrollbar colors, hover states, active states — ALL must use var(--...)
-    - ⛔ NEVER define CSS variables in :root and then use hardcoded hex colors elsewhere. If you write \`--primary: #ec4899\` then every pink element MUST use \`var(--primary)\`, NOT \`#ec4899\` directly.
-    - When the user asks to "change colors" or "change theme", update ONLY the :root variables — the entire UI must automatically reflect the change.
-
-### PART 2: ARCHITECTURE
-1.  **Frontend-as-Backend**: Create \`/utils/mockData.js\` for data. Use \`useEffect\` with simulated latency for realism.
-2.  **In-Memory CRUD**: Make "Add", "Edit", and "Delete" work in React state.
-3.  **No External Routing**: Use state-based navigation: \`const [page, setPage] = useState('home');\`.
-
-### 🛡️ DEFENSIVE CODING (CRITICAL - PREVENTS RUNTIME CRASHES)
-ALWAYS use defensive patterns to prevent "Cannot read properties of undefined" errors:
-
-1. **Data Access with i18n**: ALWAYS use fallback pattern:
-   \`\`\`jsx
-   const lang = i18n.language?.substring(0, 2) || 'en';
-   const data = portfolioData[lang] || portfolioData.en || {};
-   \`\`\`
-
-2. **Array Operations**: ALWAYS use optional chaining + fallback:
-   \`\`\`jsx
-   {(data?.items || []).map((item, i) => ...)}
-   {(data?.skills || []).map((skill, i) => ...)}
-   \`\`\`
-
-3. **Property Access**: ALWAYS use optional chaining:
-   \`\`\`jsx
-   {data?.name || 'Default Name'}
-   {data?.title || ''}
-   {item?.description || ''}
-   \`\`\`
-
-4. **NEVER do this** (causes crashes):
-   \`\`\`jsx
-   // BAD - will crash if data is undefined
-   {data.name}
-   {data.items.map(...)}
-   
-   // GOOD - safe with fallbacks
-   {data?.name || 'Name'}
-   {(data?.items || []).map(...)}
-   \`\`\`
-
-### REACT ROUTER RULES (CRITICAL - PREVENTS CRASHES)
-If you MUST use react-router-dom (Link, Route, Routes, useNavigate, useLocation, useParams):
-1. **ALWAYS wrap App with BrowserRouter** - Either in index.js OR inside App.js itself
-2. **NEVER call useLocation/useNavigate outside Router context** - These hooks MUST be inside a component wrapped by BrowserRouter
-3. **PREFERRED PATTERN**: Keep Router inside App.js to avoid context issues:
-   \`\`\`jsx
-   // App.js - SAFE pattern
-   import { BrowserRouter, Routes, Route } from 'react-router-dom';
-   
-   function AppContent() {
-     const location = useLocation(); // Safe - inside Router
-     return <div>...</div>;
-   }
-   
-   export default function App() {
-     return (
-       <BrowserRouter>
-         <AppContent />
-       </BrowserRouter>
-     );
-   }
-   \`\`\`
-4. **AVOID**: Putting BrowserRouter in index.js and useLocation in App.js top-level - this can cause race conditions in Sandpack.
-
-### PART 3: ALLOWED PACKAGES (CRITICAL)
-You may ONLY import from packages in this list. These are the EXACT packages pre-installed in the Sandpack preview. Everything else WILL crash with "DependencyNotFoundError".
-
-{{ALLOWED_PACKAGES_LIST}}
-
-⛔ IF A PACKAGE YOU WANT IS NOT IN THIS LIST:
-1. Do NOT import it — the Sandpack preview cannot fetch unlisted packages.
-2. Use an allowed alternative from the same category above.
-3. If no alternative exists, fall back to vanilla React + Tailwind CSS / plain CSS animations.
-4. NEVER invent a package name.
-
-DO NOT use heroicons or any other icon library beyond the icons category above. ONLY use lucide-react (react-icons is allowed as fallback but prefer lucide-react).
-Example: import { Mail, Phone, Linkedin, Instagram, ChevronDown, Menu, X } from 'lucide-react';
-
-⚠️ CRITICAL - LUCIDE ICON NAMES (ONLY USE ICONS FROM THIS LIST - NEVER INVENT ICON NAMES):
-Layout/Nav: Menu, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Home, Search, Settings, Bell, User, Users, LogIn, LogOut, Shield
-Actions: Plus, Minus, Edit, Trash2, Copy, Download, Upload, Share2, Send, Save, RefreshCw, RotateCcw, Check, CheckCircle, CheckCircle2, XCircle, AlertTriangle, AlertCircle, Info
-Media: Play, Pause, Volume2, VolumeX, Image, Camera, Video, Music, Mic, MicOff
-Commerce: ShoppingBag, ShoppingCart, Package, Tag, CreditCard, DollarSign, Star, Heart, Bookmark
-Communication: Mail, Phone, MessageSquare, MessageCircle, Globe, Link, ExternalLink
-Files: File, FileText, Folder, FolderOpen, Clipboard, ClipboardList
-Time: Calendar, Clock, Timer
-Nature/Places: MapPin, Map, Navigation, Building, Building2, Briefcase, Coffee, Utensils, Car, Plane, Flower2, Leaf, Sun, Moon, Cloud, Wind, Droplets, Flame, Zap
-Tech: Code, Terminal, Database, Server, Wifi, Bluetooth, Monitor, Smartphone, Laptop, Cpu
-Misc: Loader2, Sparkles, Award, Gift, Key, Lock, Unlock, Eye, EyeOff, Filter, Grid, List, BarChart, PieChart, TrendingUp, Layers, Sliders, ToggleLeft, ToggleRight, Maximize, Minimize, HelpCircle, ThumbsUp, ThumbsDown, Flag, Paperclip, Scissors, Printer, QrCode, ScanLine, Instagram, Facebook, Twitter, Youtube, Linkedin, Github, Twitch
-
-⛔ NEVER use: Spa, Wellness, Beauty, Salon, Massage, or ANY icon name you are not 100% sure exists in the list above.
-
-### PART 4: i18n SETUP (ONLY IF USER ASKS)
-DO NOT add i18n/translations unless the user EXPLICITLY asks for:
-- Multiple languages
-- Arabic support
-- Language toggle
-- Bilingual
-- RTL support
-
-If user does NOT mention any of the above, just use plain English strings directly in the JSX.
-NO useTranslation hook unless explicitly requested. Just simple English text.
-
-### PART 5: SMART PROJECT NAMING
-Extract a meaningful project name from the user's request and use it in document.title and any header branding.
-Examples: "landing page for wife moza" → "MoziLove", "portfolio for photographer" → "PhotoPortfolio"
-
-### PART 6: STOCK IMAGES (handled via capability doc)
-See the stock_images capability doc (auto-loaded when images are needed). One-line rule: never hardcode external image URLs.
-
-
-{{CAPABILITY_DOCS}}
-
-
-### OUTPUT FORMAT:
-Return ONLY a valid JSON object. No markdown fences. No explanation.
-Structure:
-{
-  "/App.js": "...",
-  "/components/Navbar.jsx": "...",
-  "/utils/mockData.js": "..."
-}
-
-CRITICAL RULES:
-1. Every opening JSX tag must be closed.
-2. All string values must have properly escaped quotes (use \\" for quotes inside strings).
-3. NEWLINES MUST BE ESCAPED AS \\n inside JSON strings. NO ACTUAL NEWLINES.
-4. Output must be a single parseable JSON object.
-5. ONLY use lucide-react for icons. NEVER use react-icons or heroicons.
-6. ALWAYS include /i18n.js in new projects when user asks for multiple languages.
-7. App.js must be a valid React functional component, NOT an HTML document.
-
-### CSS INHERITANCE SAFETY (CRITICAL - ICONS VISIBILITY)
-1. NEVER put icons inside text-transparent elements - Icons using currentColor will become INVISIBLE
-   - ❌ BAD: <span className="text-transparent bg-clip-text ..."><Heart fill="currentColor" />Title</span>
-   - ✅ GOOD: <span className="flex gap-2"><Heart className="text-pink-400" fill="currentColor" /><span className="text-transparent bg-clip-text ...">Title</span></span>
-2. Always give icons explicit color classes when parent uses gradients or text-transparent
-3. Only TEXT should be inside text-transparent bg-clip-text - separate icons from gradient text spans
-
-
-### CRITICAL: NO SUPABASE CLIENT IN USER PROJECTS
-1. NEVER import or use @supabase/supabase-js in generated user projects.
-2. NEVER add supabaseUrl or supabaseAnonKey to frontend code.
-3. ALWAYS use the project-backend-api endpoint for products, items, orders, cart, forms, and data.
-4. If the user asks for a shop/products/items page, fetch via project-backend-api with projectId.
-6. The backend already has sample products seeded - they will appear automatically
-`;
 
 // Foundation bricks: pre-configured backend building blocks (not limiting templates)
 const FOUNDATION_BRICKS = [
@@ -2736,240 +2558,6 @@ const FOUNDATION_BRICKS = [
 // ============================================================================
 // SYSTEM PROMPTS
 // ============================================================================
-
-const GEMINI_EXECUTE_SYSTEM_PROMPT = `You are a Senior React Engineer who ACTUALLY IMPLEMENTS what users ask for.
-
-🚨 CRITICAL: DO WHAT THE USER ASKS. If they want colors, add colors. If they want animations, add animations. If they want gradients, add gradients. NO EXCUSES.
-
-### SCREENSHOT ANALYSIS (CRITICAL - READ FIRST)
-When the user attaches a screenshot:
-1. **ANALYZE THE IMAGE FIRST** - Identify exactly what UI element/section is visible
-2. **MATCH TO CODE** - Find the EXACT component/section in the codebase that matches what's shown
-3. **VERIFY BEFORE ACTING** - Do NOT guess. If the screenshot shows "Get In Touch" section, find that exact text in the code
-4. **FOLLOW EXACT REQUEST** - If user says "remove this section", remove the EXACT section shown in the screenshot, not a different one
-
-### IMPORTANT: DO NOT INVENT TEXT FROM SCREENSHOTS
-- The user's typed message is the SOURCE OF TRUTH (e.g., "remove this section").
-- The screenshot is ONLY a locator to identify WHICH section they mean.
-- Do NOT fabricate quoted strings like "Click me" from OCR/guessing.
-- Only reference text that is CLEARLY visible AND RELEVANT (e.g., headings/buttons like "Get In Touch", "Contact Me").
-- If you cannot confidently identify a matching section in code, do NOT guess or ask for unrelated clarification.
-- In removal requests, prefer matching by the MOST UNIQUE visible anchor first:
-  1) Section heading text
-  2) Unique button labels within that section
-  3) Nearby nav link labels if it clearly maps to that section
-
-🚨 COMMON MISTAKE TO AVOID:
-- User shows screenshot of "Get In Touch" section and says "remove this"
-- ❌ WRONG: Remove "Our Commitment" section (different section!)
-- ✅ CORRECT: Remove the "Get In Touch" section that matches the screenshot
-
-**HOW TO IDENTIFY THE CORRECT SECTION:**
-1. Look at the screenshot - note the exact text, buttons, layout
-2. Search the codebase for that exact text (e.g., "Get In Touch", "Contact Me")
-3. Remove/modify ONLY that matching code block
-4. If you can't find an exact match, tell the user - don't guess
-
-### YOUR JOB
-1. READ the user's request carefully
-2. If screenshot attached, ANALYZE it to identify the exact element
-3. IMPLEMENT exactly what they asked for - don't be conservative
-4. Return FULL FILE REWRITES (no patches, no diffs)
-
-### VISUAL CHANGES (IMPORTANT)
-When users ask for visual improvements, ACTUALLY ADD THEM:
-- **Gradients**: Use Tailwind gradient classes (bg-gradient-to-r, from-purple-500, to-pink-500, etc.)
-- **Animations**: Use framer-motion (motion.div with animate, whileHover, transition props)
-- **Floating elements**: Create animated background elements with absolute positioning
-- **Shadows**: Use Tailwind shadow classes (shadow-lg, shadow-xl, shadow-2xl)
-- **Glow effects**: Use box-shadow with colored shadows (style={{ boxShadow: '0 0 30px rgba(168,85,247,0.5)' }})
-- **Colors**: Use the theme colors provided, not black/white
-
-### AVAILABLE PACKAGES (authoritative list — everything else WILL crash)
-{{ALLOWED_PACKAGES_LIST}}
-
-⛔ If the package you need is NOT listed: use an alternative from the same category, or fall back to vanilla React + Tailwind/CSS. NEVER invent a package name.
-
-### ANIMATION EXAMPLES (USE THESE)
-\`\`\`jsx
-// Fade in on load
-<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-
-// Floating animation
-<motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 3, repeat: Infinity }}>
-
-// Hover effect
-<motion.div whileHover={{ scale: 1.05, boxShadow: '0 0 30px rgba(168,85,247,0.5)' }}>
-
-// Gradient text
-<span className="bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
-\`\`\`
-
-### JSON OUTPUT FORMAT
-Return ONLY valid JSON:
-{
-  "files": {
-    "/App.js": "import React from 'react';\\nimport { motion } from 'framer-motion';\\n..."
-  },
-  "summary": "Added gradient background, floating animations, and glow effects"
-}
-
-ESCAPING: Newlines=\\n, Quotes=\\", Backslashes=\\\\
-
-ONLY return files that changed. Do NOT return unchanged files.
-
-### CSS INHERITANCE SAFETY (CRITICAL - ICONS VISIBILITY)
-1. NEVER put icons inside text-transparent elements - Icons using currentColor will become INVISIBLE
-2. Always give icons explicit color classes (e.g., text-pink-400) when parent uses gradients
-3. Only TEXT should be inside text-transparent bg-clip-text spans - separate icons from them
-
-### WAKTI BACKEND API (OPTIONAL - USE WHEN USER NEEDS BACKEND FEATURES)
-The project has access to a simple backend API. Use it when users need:
-- Contact forms / Newsletter signups
-- Dynamic data (products, blog posts, testimonials, etc.)
-- File uploads
-- Simple user authentication for their site
-
-**API Endpoint:** https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
-
-**FOUNDATION BRICKS (ALWAYS AVAILABLE):**
-- Collections you can use anytime: ${FOUNDATION_BRICKS.join(', ')}
-- You may create new collections if the user asks for something else
-
-**⚠️ CRITICAL - PROJECT ID:**
-- The projectId placeholder is: {{PROJECT_ID}}
-- It will be AUTO-REPLACED with the real project ID after generation
-- DO NOT extract IDs from image URLs, storage paths, or any other source!
-- NEVER use user_id as projectId - they are different!
-
-**1. Form Submission (Contact/Newsletter):**
-\`\`\`javascript
-const submitForm = async (formData) => {
-  const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      projectId: '{{PROJECT_ID}}', // AUTO-INJECTED - do not change
-      action: 'submit',
-      formName: 'contact', // or 'newsletter'
-      data: formData
-    })
-  });
-  return response.json();
-};
-\`\`\`
-
-**2. Fetch Collection Data (Products, Blog Posts, etc.):**
-\`\`\`javascript
-const getProducts = async () => {
-  const response = await fetch(
-    'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api' +
-    '?projectId={{PROJECT_ID}}&action=collection/products'
-  );
-  // Returns: { items: [{ id, data, created_at, ... }] }
-  const data = await response.json();
-  return data.items;
-};
-\`\`\`
-
-**3. Create Collection Item:**
-\`\`\`javascript
-const createProduct = async (productData) => {
-  const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      projectId: '{{PROJECT_ID}}', // AUTO-INJECTED - do not change
-      action: 'collection/products',
-      data: productData
-    })
-  });
-  return response.json();
-};
-\`\`\`
-
-**4. PRODUCTS PAGE TEMPLATE (USE THIS EXACT PATTERN):**
-When creating a products/shop page, ALWAYS fetch from the backend API. NEVER use placeholder data.
-\`\`\`jsx
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { ShoppingBag, Loader2 } from 'lucide-react';
-
-const BACKEND_URL = 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api';
-const PROJECT_ID = '{{PROJECT_ID}}'; // AUTO-INJECTED
-
-export default function Products() {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const response = await fetch(
-          BACKEND_URL + '?projectId=' + PROJECT_ID + '&action=collection/products'
-        );
-        const data = await response.json();
-        // project-backend-api returns: { items: [{ id, data }] }
-        if (data && Array.isArray(data.items)) {
-          setProducts(data.items);
-        } else {
-          setError('Failed to load products');
-        }
-      } catch (err) {
-        setError('Failed to load products');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchProducts();
-  }, []);
-
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin" /></div>;
-  if (error) return <div className="text-center py-20 text-red-500">{error}</div>;
-  if (products.length === 0) return <div className="text-center py-20">No products available</div>;
-
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">Our Products</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {products.map((product, index) => (
-          <motion.div
-            key={product.id || index}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden"
-          >
-            {product.data?.image_url && (
-              <img src={product.data.image_url} alt={product.data?.name} className="w-full h-48 object-cover" />
-            )}
-            <div className="p-4">
-              <h3 className="text-lg font-semibold">{product.data?.name}</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">{product.data?.description}</p>
-              <div className="flex justify-between items-center mt-4">
-                <span className="text-xl font-bold">{product.data?.price}</span>
-                <button className="bg-primary text-white px-4 py-2 rounded-lg flex items-center gap-2">
-                  <ShoppingBag className="w-4 h-4" /> Add to Cart
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-}
-\`\`\`
-
-🚨 CRITICAL: When user asks for products page:
-- ALWAYS use the template above
-- ALWAYS fetch from backend API (not hardcoded data)
-- ALWAYS display product.image_url, product.name, product.description, product.price
-- NEVER show "No description available" or "Price: $N/A" placeholders
-
-Only use the backend API when users explicitly ask for backend functionality like forms, data storage, or authentication.
-Do NOT add backend calls unless the user requests it.`;
 
 // Dead prompt `_GEMINI_EDIT_FULL_REWRITE_PROMPT` deleted (Item 5). It was
 // unused (prefix `_`) and not referenced anywhere. Git history preserves it.
@@ -3534,6 +3122,7 @@ serve(async (req: Request) => {
     const assets = Array.isArray(body.assets) ? body.assets : [];
     const userInstructions = sanitizeUserInput(body.userInstructions, { label: 'userInstructions', maxLength: 8000 });
     const images = body.images;
+    const assetIntent = normalizeAssetIntent(body.assetIntent);
     const planToExecute = (body.planToExecute || '').toString();
     const uploadedAssets = Array.isArray(body.uploadedAssets) ? body.uploadedAssets : [];
     const backendContext = body.backendContext;
@@ -3560,6 +3149,7 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
 
 🚨 **CRITICAL INSTRUCTION**: You MUST fix these errors in your response. The previous code had bugs that broke the preview. Analyze the errors above and ensure your code changes resolve them.
 ` : '';
+    const assetIntentPrompt = buildAssetIntentPrompt(assetIntent);
     
     // ========================================================================
     // PROCESS UPLOADED ASSETS - Extract text from PDFs/DOCX, analyze images
@@ -4039,6 +3629,10 @@ ${visionInspirationStr ? `
 ${visionInspirationStr}
 
 Apply the visual style, colors, and design elements described above.` : ''}
+${assetIntentPrompt ? `
+
+### 🧭 ATTACHMENT INTENT
+${assetIntentPrompt}` : ''}
 
 Current project files:
 ${filesStr}`;
@@ -6388,6 +5982,9 @@ Call task_complete when finished.`;
         }
         
         let textPrompt = `CREATE NEW PROJECT.\n\nREQUEST: ${prompt}\n\n${userInstructions || ""}`;
+        if (assetIntentPrompt) {
+          textPrompt += `\n\n🧭 ${assetIntentPrompt}`;
+        }
         
         // Add pre-fetched images to the prompt so AI uses them directly
         if (preFetchedImages.length > 0) {
@@ -6650,7 +6247,7 @@ Return ONLY the JSON object. No explanation.`;
       // USE FULL REWRITE - NO PATCHES (now with image support + uploaded assets + backend context + extracted content)
       const imageArray = Array.isArray(images) ? images as unknown as string[] : undefined;
       const editStartTime = Date.now();
-      const result = await callGeminiFullRewriteEdit(userPrompt, existingFiles, userInstructions, imageArray, uploadedAssets, backendContext, documentContentStr, visionInspirationStr);
+      const result = await callGeminiFullRewriteEdit(userPrompt, existingFiles, userInstructions, imageArray, assetIntent, uploadedAssets, backendContext, documentContentStr, visionInspirationStr);
       const editDuration = Date.now() - editStartTime;
       const changedFiles = result.files || {};
       

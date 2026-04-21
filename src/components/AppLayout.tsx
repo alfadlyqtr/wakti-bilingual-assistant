@@ -1,13 +1,13 @@
-﻿import React, { createContext, useContext, useState, useEffect, lazy, Suspense } from "react";
+﻿import React, { useState, useEffect, lazy, Suspense } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { AppHeader } from "@/components/AppHeader";
 import { DesktopLayout } from "@/components/layouts/DesktopLayout";
 import { TabletLayout } from "@/components/layouts/TabletLayout";
-import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useNotificationHistory } from "@/hooks/useNotificationHistory";
 import { useIsMobile, useIsTablet, useIsDesktop } from "@/hooks/use-mobile";
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { UnreadProvider, useUnreadContext } from "@/contexts/UnreadContext";
 import { PresenceBeacon } from "@/components/PresenceBeacon";
 import { useLocation, useNavigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,33 +22,16 @@ const CustomPaywallModal = lazy(() => import("@/components/paywall/CustomPaywall
 interface AppLayoutProps {
   children?: React.ReactNode;
 }
-
-interface UnreadContextType {
-  unreadTotal: number;
-  taskCount: number;
-  maw3dEventCount: number;
-  contactCount: number;
-  sharedTaskCount: number;
-  perContactUnread: Record<string, number>;
-  refetch: () => void;
+export function AppLayout({ children }: AppLayoutProps) {
+  return (
+    <UnreadProvider>
+      <AppLayoutInner>{children}</AppLayoutInner>
+    </UnreadProvider>
+  );
 }
 
-const UnreadContext = createContext<UnreadContextType>({
-  unreadTotal: 0,
-  taskCount: 0,
-  maw3dEventCount: 0,
-  contactCount: 0,
-  sharedTaskCount: 0,
-  perContactUnread: {},
-  refetch: () => {}
-});
-
-export const useUnreadContext = () => useContext(UnreadContext);
-
-
-export function AppLayout({ children }: AppLayoutProps) {
-  // Single instance of useUnreadMessages hook - the only one in the entire app
-  const unreadData = useUnreadMessages();
+function AppLayoutInner({ children }: AppLayoutProps) {
+  const unreadData = useUnreadContext();
   const { user } = useAuth();
 
   const { language } = useTheme();
@@ -138,7 +121,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   if (isMobile) {
     return (
-      <UnreadContext.Provider value={unreadData}>
+      <>
         {/* When paywall is open, disable header interactions and keep it under the modal */}
         <style>
           {`
@@ -154,13 +137,13 @@ export function AppLayout({ children }: AppLayoutProps) {
             <PresenceBeacon />
           </div>
         </ProtectedRoute>
-      </UnreadContext.Provider>
+      </>
     );
   }
 
   if (isTablet) {
     return (
-      <UnreadContext.Provider value={unreadData}>
+      <>
         <style>
           {`body.paywall-open [data-radix-popper-content-wrapper]{z-index:1200 !important;}`}
         </style>
@@ -168,13 +151,13 @@ export function AppLayout({ children }: AppLayoutProps) {
           <PresenceBeacon />
           <TabletLayout>{content}</TabletLayout>
         </ProtectedRoute>
-      </UnreadContext.Provider>
+      </>
     );
   }
 
   // Desktop
   return (
-    <UnreadContext.Provider value={unreadData}>
+    <>
       <style>
         {`
           body.paywall-open .app-header-fixed{pointer-events:none !important; z-index:0 !important;}
@@ -184,6 +167,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         <PresenceBeacon />
         <DesktopLayout>{content}</DesktopLayout>
       </ProtectedRoute>
-    </UnreadContext.Provider>
+    </>
   );
 }

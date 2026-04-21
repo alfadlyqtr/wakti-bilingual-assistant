@@ -24,7 +24,7 @@ export function SideSheet({
   const [mounted, setMounted] = useState(false);
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
   const [lastOpenedAt, setLastOpenedAt] = useState<number>(0);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
   useEffect(() => {
     setMounted(true);
     setPortalEl(typeof document !== 'undefined' ? document.body : null);
@@ -36,8 +36,8 @@ export function SideSheet({
   // Track viewport for mobile-specific sizing
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(max-width: 767px)');
-    const apply = () => setIsMobile(mq.matches);
+    const mq = window.matchMedia('(max-width: 1023px)');
+    const apply = () => setIsCompactViewport(mq.matches);
     try { mq.addEventListener('change', apply); } catch { /* safari */ }
     apply();
     return () => { try { mq.removeEventListener('change', apply); } catch {} };
@@ -67,7 +67,7 @@ export function SideSheet({
         style={{ 
           backdropFilter: 'blur(16px) saturate(150%)', 
           WebkitBackdropFilter: 'blur(16px) saturate(150%)',
-          left: isMobile ? 0 : 'calc(var(--current-sidebar-width, 70px) + 0.5rem)'
+          left: isCompactViewport ? 0 : 'calc(var(--current-sidebar-width, 70px) + 0.5rem)'
         }}
         onPointerDown={() => {
           // Prevent the tap that opened the sheet from immediately closing it
@@ -90,7 +90,7 @@ export function SideSheet({
           // Positioning: mobile uses offsets so height is not full; desktop stays full
           'top-[var(--app-header-h)] bottom-0',
           'md:top-0 md:bottom-0',
-          side === 'right' ? 'right-0' : 'left-0 md:left-[var(--current-sidebar-width,0px)]',
+          side === 'right' ? 'right-0' : 'left-0',
           // Force horizontal slide only
           'translate-y-0',
           open
@@ -101,15 +101,19 @@ export function SideSheet({
           'transition-transform duration-300 ease-out',
           className,
         )}
-        style={isMobile ? { 
-          top: 'calc(var(--app-header-h) + 8px)',
-          bottom: 'auto',
-          maxHeight: 'calc(100dvh - var(--app-header-h) - 8px - 16px)'
-        } : undefined}
+        style={isCompactViewport
+          ? {
+              top: 'calc(var(--app-header-h) + 8px)',
+              bottom: 'auto',
+              maxHeight: 'calc(100dvh - var(--app-header-h) - 8px - 16px)'
+            }
+          : side === 'left'
+            ? { left: 'calc(var(--current-sidebar-width, 70px) + 0.5rem)' }
+            : undefined}
       >
         <div
           className="overflow-y-auto px-3 sm:px-4 pt-3 pb-0 md:pb-2 md:flex-1"
-          style={isMobile ? { maxHeight: 'inherit' } : undefined}
+          style={isCompactViewport ? { maxHeight: 'inherit' } : undefined}
         >
           {children}
         </div>

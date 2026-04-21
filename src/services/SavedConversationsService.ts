@@ -26,15 +26,21 @@ export interface ConversationListItem {
 
 function normalizeMessages(messages: any[]): any[] {
   const safe = Array.isArray(messages) ? messages.filter(Boolean) : [];
-  return safe.slice(-50).map((m: any) => ({
-    id: m?.id,
-    role: m?.role || 'assistant',
-    content: typeof m?.content === 'string' ? m.content : '',
-    timestamp: typeof m?.timestamp === 'string' ? m.timestamp : (m?.timestamp instanceof Date ? m.timestamp.toISOString() : new Date().toISOString()),
-    intent: m?.intent,
-    imageUrl: typeof m?.imageUrl === 'string' ? m.imageUrl : undefined,
-    browsingUsed: m?.browsingUsed === true ? true : undefined,
-  }));
+  return safe.slice(-50).map((m: any) => {
+    const base: any = {
+      id: m?.id,
+      role: m?.role || 'assistant',
+      content: typeof m?.content === 'string' ? m.content : '',
+      timestamp: typeof m?.timestamp === 'string' ? m.timestamp : (m?.timestamp instanceof Date ? m.timestamp.toISOString() : new Date().toISOString()),
+      intent: m?.intent,
+      imageUrl: typeof m?.imageUrl === 'string' ? m.imageUrl : undefined,
+      browsingUsed: m?.browsingUsed === true ? true : undefined,
+    };
+    // Preserve UI-critical metadata so search cards and reminder cards survive save/reload
+    if (m?.metadata?.searchConfirmation) base.metadata = { searchConfirmation: m.metadata.searchConfirmation };
+    else if (m?.metadata?.reminderScheduled) base.metadata = { reminderScheduled: m.metadata.reminderScheduled };
+    return base;
+  });
 }
 
 function generateTitle(messages: any[]): string {

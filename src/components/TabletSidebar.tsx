@@ -22,7 +22,7 @@ import {
 import { t } from "@/utils/translations";
 import { Logo3D } from "@/components/Logo3D";
 import { UnreadBadge } from "./UnreadBadge";
-import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useUnreadContext } from "@/contexts/UnreadContext";
 
 interface NavItemProps {
   icon: React.ComponentType<{ className?: string }>;
@@ -36,7 +36,7 @@ export function TabletSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { language } = useTheme();
-  const { maw3dEventCount, contactCount } = useUnreadMessages();
+  const { maw3dEventCount, contactCount } = useUnreadContext();
 
   const navItems: NavItemProps[] = [
     { icon: Calendar, label: "calendar", path: "/calendar" },

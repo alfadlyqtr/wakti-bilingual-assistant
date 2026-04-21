@@ -10,7 +10,7 @@ import {
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { UnreadBadge } from "./UnreadBadge";
-import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useUnreadContext } from "@/contexts/UnreadContext";
 
 interface NavItemProps {
   icon: React.ComponentType<{ className?: string }>;
@@ -24,7 +24,7 @@ export function TabletBottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const { language } = useTheme();
-  const { maw3dEventCount, contactCount } = useUnreadMessages();
+  const { maw3dEventCount, contactCount } = useUnreadContext();
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   useEffect(() => {

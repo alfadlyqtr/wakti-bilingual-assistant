@@ -60,6 +60,29 @@ interface Project {
 const WaktiAssistant = lazy(() => import('./WaktiAssistant'));
 
 const MAX_PROJECTS = 3;
+type ScreenshotIntent = 'layout' | 'style' | 'content';
+
+const SCREENSHOT_INTENT_OPTIONS: Array<{
+  value: ScreenshotIntent;
+  label: { en: string; ar: string };
+}> = [
+  { value: 'layout', label: { en: 'Copy layout', ar: 'انسخ التخطيط' } },
+  { value: 'style', label: { en: 'Use style', ar: 'استخدم الأسلوب' } },
+  { value: 'content', label: { en: 'Extract content', ar: 'استخرج المحتوى' } },
+];
+
+const inferScreenshotIntent = (files: File[]): ScreenshotIntent => {
+  const hasDocument = files.some((file) => {
+    const lowerName = file.name.toLowerCase();
+    return file.type === 'application/pdf'
+      || file.type.includes('word')
+      || lowerName.endsWith('.pdf')
+      || lowerName.endsWith('.doc')
+      || lowerName.endsWith('.docx');
+  });
+
+  return hasDocument ? 'content' : 'style';
+};
 
 // Project Preview Thumbnail Component - premium fallback card
 const ProjectPreviewThumbnail = ({ project, isRTL }: { project: Project; isRTL: boolean }) => {
@@ -909,6 +932,7 @@ export default function Projects() {
   const [displayedPlaceholder, setDisplayedPlaceholder] = useState('');
   const [isTyping, setIsTyping] = useState(true);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [screenshotIntent, setScreenshotIntent] = useState<ScreenshotIntent>('style');
   const [isUploading, setIsUploading] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [activeTab, setActiveTab] = useState<'coder' | 'assistant'>('coder');
@@ -1108,13 +1132,22 @@ export default function Projects() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length > 0) {
+      if (attachedFiles.length === 0) {
+        setScreenshotIntent(inferScreenshotIntent(files));
+      }
       setAttachedFiles(prev => [...prev, ...files]);
       toast.success(isRTL ? `تم إرفاق ${files.length} ملف` : `${files.length} file(s) attached`);
     }
   };
 
   const removeAttachment = (index: number) => {
-    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+    setAttachedFiles(prev => {
+      const nextFiles = prev.filter((_, i) => i !== index);
+      if (nextFiles.length === 0) {
+        setScreenshotIntent('style');
+      }
+      return nextFiles;
+    });
   };
 
   // Generate AI instructions from custom theme settings
@@ -1609,10 +1642,11 @@ Apply these styles consistently throughout the entire design.`;
 
       // Step 3: Navigate to editor immediately
       const assetParams = assetUrls.length > 0 ? `&assets=${encodeURIComponent(JSON.stringify(assetUrls))}` : '';
+      const assetIntentParam = attachedFiles.length > 0 ? `&assetIntent=${encodeURIComponent(screenshotIntent)}` : '';
       const themeInstructions = getSelectedThemeInstructions();
       const instructionsParam = themeInstructions ? `&themeInstructions=${encodeURIComponent(themeInstructions)}` : '';
       const langParam = `&lang=${language}`;
-      navigate(`/projects/${projectData.id}?generating=true&prompt=${encodeURIComponent(finalUserPrompt)}&theme=${selectedTheme}${assetParams}${instructionsParam}${langParam}`);
+      navigate(`/projects/${projectData.id}?generating=true&prompt=${encodeURIComponent(finalUserPrompt)}&theme=${selectedTheme}${assetParams}${instructionsParam}${langParam}${assetIntentParam}`);
 
     } catch (err: any) {
       console.error('[createProject] FAILED:', err);
@@ -1956,91 +1990,110 @@ Apply these styles consistently throughout the entire design.`;
                       {isRTL ? 'وصلت للحد الأقصى' : 'Limit Reached'}
                     </span>
                   </div>
-                  <p className="text-white/90 text-sm font-medium">
-                    {isRTL 
-                      ? 'لديك 3 مشاريع نشطة. احذف مشروعًا لإنشاء جديد.'
-                      : 'You have 3 active projects. Delete one to create a new one.'}
+                  <p className="text-sm text-white/80">
+                    {isRTL ? `الحد الأقصى هو ${MAX_PROJECTS} مشاريع` : `Maximum ${MAX_PROJECTS} projects`}
                   </p>
                 </div>
               </div>
             )}
-            
+
             <div className="p-4">
-                <textarea
-                  id="projectPrompt"
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey && !generating) {
-                      e.preventDefault();
-                      createProject();
-                    }
-                  }}
-                  placeholder={`${isRTL ? 'اطلب من Wakti إنشاء ' : 'Ask Wakti to create '}${displayedPlaceholder}`}
-                  className="w-full bg-transparent text-base outline-none placeholder:text-muted-foreground/50 resize-none min-h-[100px] max-h-[300px] overflow-y-auto"
-                  disabled={generating || projects.length >= MAX_PROJECTS}
-                  rows={4}
-                  title={isRTL ? 'صف ما تريد بناءه' : 'Describe what you want to build'}
-                />
-                
-                {/* Theme Injection Preview - INSIDE the prompt area */}
-                {selectedTheme && selectedTheme !== 'none' && (() => {
-                  const theme = THEMES.find(t => t.id === selectedTheme);
-                  const customTheme = customThemes.find((t: any) => t.id === selectedTheme);
-                  const themeInstructions = getSelectedThemeInstructions();
-                  const themeName = theme ? (isRTL ? theme.nameAr : theme.name) : (customTheme as any)?.name || selectedTheme;
-                  
-                  return (
-                    <div className="mt-3 pt-3 border-t border-border/30">
-                      <div className="flex items-start gap-2">
-                        <span className="text-[11px] text-muted-foreground font-medium shrink-0">
-                          {isRTL ? '🎨 الثيم:' : '🎨 Theme:'}
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !generating) {
+                    e.preventDefault();
+                    createProject();
+                  }
+                }}
+                placeholder={`${isRTL ? 'اطلب من Wakti إنشاء ' : 'Ask Wakti to create '}${displayedPlaceholder}`}
+                className="w-full min-h-[140px] resize-none rounded-2xl border border-border/50 bg-background/60 px-4 py-3 text-sm outline-none transition-colors focus:border-[#060541]/40 focus:ring-2 focus:ring-[#060541]/10"
+                disabled={generating || projects.length >= MAX_PROJECTS}
+              />
+
+              {(() => {
+                const theme = THEMES.find(t => t.id === selectedTheme);
+                const customTheme = customThemes.find((t: any) => t.id === selectedTheme);
+                const themeInstructions = getSelectedThemeInstructions();
+                const themeName = theme ? (isRTL ? theme.nameAr : theme.name) : (customTheme as any)?.name || selectedTheme;
+
+                return (
+                  <div className="mt-3 pt-3 border-t border-border/30">
+                    <div className="flex items-start gap-2">
+                      <span className="text-[11px] text-muted-foreground font-medium shrink-0">
+                        {isRTL ? '🎨 الثيم:' : '🎨 Theme:'}
+                      </span>
+                      <div className="flex-1">
+                        <span className="text-[12px] font-semibold text-indigo-600 dark:text-indigo-400">
+                          {themeName}
                         </span>
-                        <div className="flex-1">
-                          <span className="text-[12px] font-semibold text-indigo-600 dark:text-indigo-400">
-                            {themeName}
-                          </span>
-                          {themeInstructions && (
-                            <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed line-clamp-2">
-                              {themeInstructions.slice(0, 150)}{themeInstructions.length > 150 ? '...' : ''}
-                            </p>
-                          )}
-                        </div>
+                        {themeInstructions && (
+                          <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed line-clamp-2">
+                            {themeInstructions.slice(0, 150)}{themeInstructions.length > 150 ? '...' : ''}
+                          </p>
+                        )}
                       </div>
                     </div>
-                  );
-                })()}
+                  </div>
+                );
+              })()}
             </div>
 
-            {/* Attached Files Preview */}
             {attachedFiles.length > 0 && (
-              <div className="px-4 pb-2 flex flex-wrap gap-2">
-                {attachedFiles.map((file, i) => {
-                  // Determine icon based on file type
-                  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-                  const isDoc = file.type.includes('word') || file.name.toLowerCase().endsWith('.doc') || file.name.toLowerCase().endsWith('.docx');
-                  
-                  return (
-                    <div key={i} className="flex items-center gap-1 px-2 py-1 bg-muted rounded-lg text-xs">
-                      {isPdf ? (
-                        <FileText className="h-3 w-3 text-red-500" />
-                      ) : isDoc ? (
-                        <FileText className="h-3 w-3 text-blue-500" />
-                      ) : (
-                        <ImageIcon className="h-3 w-3" />
-                      )}
-                      <span className="max-w-[100px] truncate">{file.name}</span>
-                      <button onClick={() => removeAttachment(i)} className="text-red-500 hover:text-red-600">×</button>
-                    </div>
-                  );
-                })}
+              <div className="px-4 pb-2 space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  {attachedFiles.map((file, i) => {
+                    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                    const isDoc = file.type.includes('word') || file.name.toLowerCase().endsWith('.doc') || file.name.toLowerCase().endsWith('.docx');
+
+                    return (
+                      <div key={i} className="flex items-center gap-1 px-2 py-1 bg-muted rounded-lg text-xs">
+                        {isPdf ? (
+                          <FileText className="h-3 w-3 text-red-500" />
+                        ) : isDoc ? (
+                          <FileText className="h-3 w-3 text-blue-500" />
+                        ) : (
+                          <ImageIcon className="h-3 w-3" />
+                        )}
+                        <span className="max-w-[100px] truncate">{file.name}</span>
+                        <button onClick={() => removeAttachment(i)} className="text-red-500 hover:text-red-600">×</button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="rounded-xl border border-border/50 bg-muted/40 p-2.5">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-[11px] text-muted-foreground">
+                      {isRTL ? 'كيف تريد من وكتي أن يستخدم هذه الملفات؟' : 'How should Wakti use these files?'}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/80">
+                      {isRTL ? 'صور، لقطات شاشة، PDF، أو Word' : 'Screenshots, images, PDF, or Word'}
+                    </p>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {SCREENSHOT_INTENT_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setScreenshotIntent(option.value)}
+                        className={cn(
+                          'px-3 py-1.5 rounded-full text-[11px] font-medium transition-all border active:scale-95',
+                          screenshotIntent === option.value
+                            ? 'bg-[#060541] text-white border-[#060541]'
+                            : 'bg-background/80 text-muted-foreground border-border/60 hover:text-foreground hover:border-border'
+                        )}
+                      >
+                        {isRTL ? option.label.ar : option.label.en}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
-            
-            {/* Action Bar */}
+
             <div className="flex items-center justify-between px-4 py-3 border-t border-border/50 bg-muted/30 relative z-50">
               <div className="flex items-center gap-1">
-                {/* Hidden file input - accepts images, PDF, and DOCX */}
                 <input
                   id="projectAssetUpload"
                   ref={fileInputRef}
@@ -2051,11 +2104,10 @@ Apply these styles consistently throughout the entire design.`;
                   className="hidden"
                   title={isRTL ? 'رفع ملفات (صور، PDF، Word)' : 'Upload files (images, PDF, Word)'}
                 />
-                
-                {/* Attach Button */}
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+
+                <Button
+                  variant="ghost"
+                  size="sm"
                   className="gap-1.5 text-muted-foreground hover:text-foreground"
                   onClick={handleAttachClick}
                   disabled={generating || projects.length >= MAX_PROJECTS}
@@ -2064,14 +2116,12 @@ Apply these styles consistently throughout the entire design.`;
                   <span className="text-xs hidden sm:inline">{isRTL ? 'إرفاق' : 'Attach'}</span>
                 </Button>
 
-                {/* EMP - Enhance My Prompt Button with Pulsing Dot & Tooltip */}
                 <div className="relative">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     className="gap-1.5 text-muted-foreground hover:text-foreground hover:bg-purple-500/10 relative"
                     onClick={() => {
-                      // Dismiss tooltip on first click
                       if (showEmpTooltip) {
                         setShowEmpTooltip(false);
                         localStorage.setItem('wakti_emp_tooltip_seen', 'true');
@@ -2086,7 +2136,6 @@ Apply these styles consistently throughout the entire design.`;
                     ) : (
                       <>
                         <Sparkles className="h-4 w-4 text-purple-500" />
-                        {/* Pulsing dot indicator */}
                         {prompt.trim() && !generating && (
                           <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>

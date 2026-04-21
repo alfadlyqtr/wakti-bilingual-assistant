@@ -5,7 +5,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
 import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2, NotebookPen, Music, Aperture, AudioLines, Shield, Code2, FolderOpen, Gift } from "lucide-react";
 import { WaktiIcon } from "@/components/icons/WaktiIcon";
-import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useUnreadContext } from "@/contexts/UnreadContext";
 import { waktiBadges } from "@/services/waktiBadges";
 import { motion } from "framer-motion";
 import { t } from "@/utils/translations";
@@ -20,7 +20,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { language } = useTheme();
-  const { taskCount, maw3dEventCount, contactCount, sharedTaskCount } = useUnreadMessages();
+  const { taskCount, maw3dEventCount, contactCount, sharedTaskCount } = useUnreadContext();
   const [badgeStates, setBadgeStates] = useState<Record<string, any>>({});
   const [animationStage, setAnimationStage] = useState<'closed' | 'sliding' | 'icons'>('closed');
 

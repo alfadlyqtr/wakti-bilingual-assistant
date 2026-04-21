@@ -73,7 +73,6 @@ import type {
 import { 
   useProjectData,
   useChatMessages,
-  useSandpackFiles,
   useVisualEditMode,
   useConversationMemory,
   useEditHistory
@@ -165,9 +164,62 @@ interface ChatMessage {
   snapshot?: any; // To store project files snapshot for reverting
 }
 
+const getSnapshotFiles = (snapshot: unknown): Record<string, string> | null => {
+  if (!snapshot) return null;
+
+  let parsedSnapshot = snapshot;
+  if (typeof parsedSnapshot === 'string') {
+    try {
+      parsedSnapshot = JSON.parse(parsedSnapshot);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!parsedSnapshot || typeof parsedSnapshot !== 'object' || Array.isArray(parsedSnapshot)) {
+    return null;
+  }
+
+  const normalized = Object.entries(parsedSnapshot as Record<string, unknown>).reduce<Record<string, string>>((acc, [path, content]) => {
+    if (typeof content === 'string') {
+      acc[path] = content;
+    }
+    return acc;
+  }, {});
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+};
+
+const hasSnapshotFiles = (snapshot: unknown) => {
+  const normalized = getSnapshotFiles(snapshot);
+  return !!normalized && Object.keys(normalized).length > 0;
+};
+
 type DeviceView = 'desktop' | 'tablet' | 'mobile';
 type LeftPanelMode = 'chat' | 'code';
 type MainTab = 'builder' | 'server';
+type ScreenshotIntent = 'layout' | 'style' | 'content';
+
+const SCREENSHOT_INTENT_OPTIONS: Array<{
+  value: ScreenshotIntent;
+  label: { en: string; ar: string };
+}> = [
+  { value: 'layout', label: { en: 'Copy layout', ar: 'انسخ التخطيط' } },
+  { value: 'style', label: { en: 'Use style', ar: 'استخدم الأسلوب' } },
+  { value: 'content', label: { en: 'Extract content', ar: 'استخرج المحتوى' } },
+];
+
+const inferScreenshotIntentFromFiles = (files: File[]): ScreenshotIntent => {
+  const hasDocument = files.some((file) => {
+    const lowerName = file.name.toLowerCase();
+    return file.type === 'application/pdf'
+      || lowerName.endsWith('.pdf')
+      || lowerName.endsWith('.doc')
+      || lowerName.endsWith('.docx');
+  });
+
+  return hasDocument ? 'content' : 'style';
+};
 
 // Lovable-style Thinking Timer Component - Amber/Gold badge style
 const ThinkingTimerDisplay: React.FC<{ startTime: number; isRTL: boolean }> = ({ startTime, isRTL }) => {
@@ -239,6 +291,7 @@ export default function ProjectDetail() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [aiEditing, setAiEditing] = useState(false);
   const [attachedImages, setAttachedImages] = useState<Array<{ file: File; preview: string; pdfDataUrl?: string }>>([]);
+  const [attachmentIntent, setAttachmentIntent] = useState<ScreenshotIntent>('style');
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const autoCaptureTimeoutRef = useRef<number | null>(null);
@@ -918,6 +971,7 @@ export default function ProjectDetail() {
       const theme = searchParams.get('theme');
       const assetsParam = searchParams.get('assets');
       const themeInstructionsParam = searchParams.get('themeInstructions');
+      const assetIntentParam = searchParams.get('assetIntent');
       
       fetchProject(); // Always fetch project files
       fetchChatHistory(); // Always fetch chat history
@@ -961,7 +1015,7 @@ export default function ProjectDetail() {
         });
         
         setSearchParams({}, { replace: true });
-        runGeneration(prompt, themeId, assets, customInstructions);
+        runGeneration(prompt, themeId, assets, customInstructions, assetIntentParam === 'layout' || assetIntentParam === 'style' || assetIntentParam === 'content' ? assetIntentParam : undefined);
       }
     }
   }, [user, id]);
@@ -979,8 +1033,12 @@ export default function ProjectDetail() {
         console.error('Error fetching chat history:', error);
       } else if (data && data.length > 0) {
         console.log('[ProjectDetail] Loaded', data.length, 'chat messages');
-        setChatMessages(data as any);
-        const typedData = data as unknown as Array<{ id: string; role: string; content: string; snapshot?: string }>;
+        const normalizedMessages = data.map((msg: any) => ({
+          ...msg,
+          snapshot: getSnapshotFiles(msg.snapshot),
+        }));
+        setChatMessages(normalizedMessages as any);
+        const typedData = normalizedMessages as Array<{ id: string; role: string; content: string; snapshot?: Record<string, string> | null }>;
         const latestCard = [...typedData].reverse().find((msg) => {
           try {
             const parsed = JSON.parse(msg.content);
@@ -1220,8 +1278,9 @@ export default function ProjectDetail() {
     console.log('[Revert] Target message:', messageId, targetMessage);
     console.log('[Revert] Snapshot:', targetMessage?.snapshot);
     console.log('[Revert] Snapshot keys:', targetMessage?.snapshot ? Object.keys(targetMessage.snapshot) : 'none');
+    const snapshot = getSnapshotFiles(targetMessage?.snapshot);
     
-    if (!targetMessage || !targetMessage.snapshot) {
+    if (!targetMessage || !snapshot) {
       toast.error(isRTL ? 'لا توجد نسخة احتياطية متاحة' : 'No snapshot available for this point');
       return;
     }
@@ -1249,16 +1308,12 @@ export default function ProjectDetail() {
 
     try {
       setIsGenerating(true);
-      
-      // Parse snapshot if it's a string (from DB)
-      let snapshot = targetMessage.snapshot;
-      if (typeof snapshot === 'string') {
-        try {
-          snapshot = JSON.parse(snapshot);
-        } catch (e) {
-          console.error('[Revert] Failed to parse snapshot string:', e);
-        }
-      }
+      const currentSnapshot = Object.keys(generatedFiles).length > 0
+        ? {
+            ...generatedFiles,
+            ...(codeContent ? { '/App.js': codeContent } : {}),
+          }
+        : {};
       
       console.log('[Revert] Final snapshot to apply:', snapshot);
       console.log('[Revert] HeroSection content preview:', snapshot['/components/HeroSection.js']?.substring(0, 200));
@@ -1298,14 +1353,21 @@ export default function ProjectDetail() {
         .insert({ 
           project_id: id, 
           role: 'assistant', 
-          content: revertMsg
-          // NO snapshot here - this is just a status message
+          content: revertMsg,
+          snapshot: Object.keys(currentSnapshot).length > 0 ? currentSnapshot : null,
         } as any)
         .select()
         .single();
 
       if (!msgError && newMsg) {
         setChatMessages(prev => [...prev, newMsg as any]);
+      } else {
+        setChatMessages(prev => [...prev, {
+          id: `revert-${Date.now()}`,
+          role: 'assistant',
+          content: revertMsg,
+          snapshot: Object.keys(currentSnapshot).length > 0 ? currentSnapshot : null,
+        }]);
       }
 
       toast.success(isRTL ? 'تم استعادة الحالة بنجاح!' : 'Successfully restored state!');
@@ -1384,7 +1446,7 @@ export default function ProjectDetail() {
 
   const thinkingBoxRef = useRef<HTMLDivElement>(null);
 
-  const runGeneration = async (prompt: string, theme: string, assets: string[] = [], customThemeInstructions: string = '') => {
+  const runGeneration = async (prompt: string, theme: string, assets: string[] = [], customThemeInstructions: string = '', assetIntent?: ScreenshotIntent) => {
     setIsGenerating(true);
     setLeftPanelMode('code'); // Start in Code mode so user sees the preview building
     
@@ -1494,6 +1556,7 @@ export default function ProjectDetail() {
             theme,
             assets,
             images: imagesForBackend,
+            assetIntent,
             uploadedAssets: uploadedAssetsForCreate, // PDFs/docs/images with filename+url+file_type for extraction
             userInstructions: customThemeInstructions,
             backendContext: backendContextForCreate || undefined,
@@ -1842,17 +1905,21 @@ export default function ProjectDetail() {
     }
   };
 
-  const saveCode = async () => {
+  const saveCode = async (nextFiles?: Record<string, string>) => {
     try {
       setSaving(true);
 
       const filesToSave: Record<string, string> =
-        Object.keys(generatedFiles).length > 0
+        nextFiles
+          ? { ...nextFiles }
+          : Object.keys(generatedFiles).length > 0
           ? { ...generatedFiles }
           : { "/App.js": codeContent };
 
-      // Ensure /App.js reflects editor text
-      filesToSave["/App.js"] = codeContent;
+      if (!nextFiles) {
+        // Ensure /App.js reflects editor text for the legacy single-file save path
+        filesToSave["/App.js"] = codeContent;
+      }
 
       const rows = Object.entries(filesToSave).map(([path, content]) => ({
         project_id: id,
@@ -1877,6 +1944,9 @@ export default function ProjectDetail() {
         }
         return Array.from(byPath.values());
       });
+
+      setGeneratedFiles(filesToSave);
+      setCodeContent(filesToSave['/App.js'] || Object.values(filesToSave)[0] || '');
       
       toast.success(isRTL ? 'تم الحفظ!' : 'Saved!');
       refreshPreview();
@@ -3692,6 +3762,10 @@ ${fixInstructions}
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.currentTarget.files;
     if (!files) return;
+    const selectedFiles = Array.from(files);
+    if (attachedImages.length === 0 && selectedFiles.length > 0) {
+      setAttachmentIntent(inferScreenshotIntentFromFiles(selectedFiles));
+    }
     
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -3750,7 +3824,13 @@ ${fixInstructions}
   };
 
   const removeAttachedImage = (index: number) => {
-    setAttachedImages(prev => prev.filter((_, i) => i !== index));
+    setAttachedImages(prev => {
+      const nextImages = prev.filter((_, i) => i !== index);
+      if (nextImages.length === 0) {
+        setAttachmentIntent('style');
+      }
+      return nextImages;
+    });
   };
   
   // Helper: Find and replace image URL across ALL generatedFiles (not just App.js)
@@ -5135,9 +5215,10 @@ ${fixInstructions}
     
     // SMART UPLOAD: Only save to storage if image will actually be USED in the project
     // Don't save for "inspiration only" requests (colors, style reference, etc.)
-    const isInspirationOnly = /\b(color|colors|colour|colours|palette|scheme|inspiration|inspired|match|style|reference|للإلهام|الألوان|لون|ألوان)\s*(only|for|from)?/i.test(userMessage) ||
+    const inferredInspirationOnly = /\b(color|colors|colour|colours|palette|scheme|inspiration|inspired|match|style|reference|للإلهام|الألوان|لون|ألوان)\s*(only|for|from)?/i.test(userMessage) ||
       /\b(use|get|extract)\s+(the\s+)?(colors?|colours?|palette)\s*(from|of|only)?/i.test(userMessage) ||
       /\b(for\s+)?(inspiration|reference)\s*only/i.test(userMessage);
+    const isInspirationOnly = attachedImages.length > 0 ? attachmentIntent === 'style' : inferredInspirationOnly;
     
     let userImages: string[] = [];
     if (attachedImages.length > 0) {
@@ -5233,6 +5314,7 @@ ${fixInstructions}
             prompt: userMessage,
             currentFiles: latestFiles,
             images: userImages.length > 0 ? userImages : undefined,
+            assetIntent: userImages.length > 0 ? attachmentIntent : undefined,
             uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
             backendContext: backendContext || undefined,
             debugContext: debugContext?.getDebugContextForAgent?.(),
@@ -5337,6 +5419,7 @@ ${fixInstructions}
             prompt: userMessage,
             userInstructions: userInstructions,
             images: codeImages, // NOW SENDING IMAGES TO AI
+            assetIntent: codeImages ? attachmentIntent : undefined,
             uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
             backendContext: backendContext || undefined,
             debugContext: debugContext?.getDebugContextForAgent?.(),
@@ -6365,6 +6448,12 @@ ${fixInstructions}
                                   onClick={async () => {
                                     // Send a follow-up message with the selected asset
                                     const selectionMsg = `Use ${asset.filename} (${asset.url}) for: ${assetPicker.originalRequest || 'my request'}`;
+                                    const beforeAssetSelectionSnapshot = Object.keys(generatedFiles).length > 0
+                                      ? {
+                                          ...generatedFiles,
+                                          ...(codeContent ? { '/App.js': codeContent } : {}),
+                                        }
+                                      : {};
                                     
                                     // Add user message
                                     const { data: userMsgData } = await supabase
@@ -6424,7 +6513,7 @@ ${fixInstructions}
                                             project_id: id, 
                                             role: 'assistant', 
                                             content: successMsg,
-                                            snapshot: newFiles
+                                            snapshot: Object.keys(beforeAssetSelectionSnapshot).length > 0 ? beforeAssetSelectionSnapshot : null
                                           } as any)
                                           .select()
                                           .single();
@@ -6453,7 +6542,7 @@ ${fixInstructions}
                                             project_id: id, 
                                             role: 'assistant', 
                                             content: successMsg,
-                                            snapshot: newFiles
+                                            snapshot: Object.keys(beforeAssetSelectionSnapshot).length > 0 ? beforeAssetSelectionSnapshot : null
                                           } as any)
                                           .select()
                                           .single();
@@ -7237,6 +7326,12 @@ ${fixInstructions}
                                 ]);
                                 
                                 try {
+                                  const beforePlanExecutionSnapshot = Object.keys(generatedFiles).length > 0
+                                    ? {
+                                        ...generatedFiles,
+                                        ...(codeContent ? { '/App.js': codeContent } : {}),
+                                      }
+                                    : {};
                                   // 🚀 STEP 2: KILL THE POLLING LOOP.
                                   // We now await the execution directly. Execute mode returns {ok: true, filesChanged: [...]} synchronously.
                                   // No more waiting for the 'project_generation_jobs' database table to update!
@@ -7310,7 +7405,7 @@ ${fixInstructions}
                                       project_id: id, 
                                       role: 'assistant', 
                                       content: successMsg,
-                                      snapshot: newFiles 
+                                      snapshot: Object.keys(beforePlanExecutionSnapshot).length > 0 ? beforePlanExecutionSnapshot : null 
                                     } as any)
                                     .select()
                                     .single();
@@ -7476,7 +7571,7 @@ ${fixInstructions}
                       uniqueFiles = [...new Set(fileMatches)].slice(0, 3) as string[];
                     }
                     
-                    const hasSnapshotForApplied = msg.snapshot && Object.keys(msg.snapshot).length > 0;
+                    const hasSnapshotForApplied = hasSnapshotFiles(msg.snapshot);
                     
                     return (
                       <div key={i} className={cn(
@@ -7688,7 +7783,7 @@ ${fixInstructions}
                             isExecutionResult = parsed?.type === 'execution_result';
                           } catch { /* not JSON */ }
                           
-                          const hasSnapshot = msg.snapshot && Object.keys(msg.snapshot).length > 0;
+                          const hasSnapshot = hasSnapshotFiles(msg.snapshot);
                           
                           if (hasSnapshot || isExecutionResult) {
                             return (
@@ -8035,7 +8130,7 @@ ${fixInstructions}
                           {/* Revert to last working version */}
                           <button 
                             onClick={() => {
-                              const lastWorkingMsg = [...chatMessages].reverse().find(m => m.snapshot && Object.keys(m.snapshot).length > 0);
+                              const lastWorkingMsg = [...chatMessages].reverse().find(m => hasSnapshotFiles(m.snapshot));
                               if (lastWorkingMsg) {
                                 handleRevert(lastWorkingMsg.id);
                                 setAutoFixExhausted(false);
@@ -8264,47 +8359,75 @@ ${fixInstructions}
                   <div className="relative flex flex-col gap-2">
                     {/* Attached Images Preview */}
                     {attachedImages.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-2 px-2">
-                        {attachedImages.map((img, idx) => (
-                          <div key={idx} className="relative group">
-                            <img 
-                              src={img.preview} 
-                              alt={`Attached ${idx + 1}`}
-                              className="h-16 w-16 rounded-lg object-cover border border-indigo-500/30 bg-muted"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeAttachedImage(idx)}
-                              className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                              title={isRTL ? 'إزالة' : 'Remove'}
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
+                      <div className="space-y-2 px-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {attachedImages.map((img, idx) => (
+                            <div key={idx} className="relative group">
+                              <img 
+                                src={img.preview} 
+                                alt={`Attached ${idx + 1}`}
+                                className="h-16 w-16 rounded-lg object-cover border border-indigo-500/30 bg-muted"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeAttachedImage(idx)}
+                                className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title={isRTL ? 'إزالة' : 'Remove'}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                          <div className={cn(
+                            "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full transition-all",
+                            isUploadingAttachedImages 
+                              ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                              : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                          )}>
+                            {isUploadingAttachedImages ? (
+                              <>
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                <span>{isRTL ? 'جاري الرفع...' : 'Uploading...'}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Check className="h-3 w-3" />
+                                <span>
+                                  {attachedImages.length} {isRTL 
+                                    ? (attachedImages.length === 1 ? 'صورة جاهزة' : 'صور جاهزة') 
+                                    : (attachedImages.length === 1 ? 'image ready' : 'images ready')
+                                  }
+                                </span>
+                              </>
+                            )}
                           </div>
-                        ))}
-                        {/* Smart "Images ready" indicator */}
-                        <div className={cn(
-                          "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full transition-all",
-                          isUploadingAttachedImages 
-                            ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                            : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                        )}>
-                          {isUploadingAttachedImages ? (
-                            <>
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              <span>{isRTL ? 'جاري الرفع...' : 'Uploading...'}</span>
-                            </>
-                          ) : (
-                            <>
-                              <Check className="h-3 w-3" />
-                              <span>
-                                {attachedImages.length} {isRTL 
-                                  ? (attachedImages.length === 1 ? 'صورة جاهزة' : 'صور جاهزة') 
-                                  : (attachedImages.length === 1 ? 'image ready' : 'images ready')
-                                }
-                              </span>
-                            </>
-                          )}
+                        </div>
+                        <div className="rounded-xl border border-indigo-500/20 bg-muted/40 p-2.5">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-[11px] text-muted-foreground">
+                              {isRTL ? 'كيف تريد من وكتي أن يستخدم هذه الملفات؟' : 'How should Wakti use these files?'}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground/80">
+                              {isRTL ? 'لقطة شاشة أو PDF أو صورة مرجعية' : 'Screenshot, PDF, or reference image'}
+                            </p>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {SCREENSHOT_INTENT_OPTIONS.map((option) => (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => setAttachmentIntent(option.value)}
+                                className={cn(
+                                  'px-3 py-1.5 rounded-full text-[11px] font-medium transition-all border active:scale-95',
+                                  attachmentIntent === option.value
+                                    ? 'bg-indigo-600 text-white border-indigo-600'
+                                    : 'bg-background/80 text-muted-foreground border-border/60 hover:text-foreground hover:border-border'
+                                )}
+                              >
+                                {isRTL ? option.label.ar : option.label.en}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -8585,10 +8708,23 @@ ${fixInstructions}
                   )}>
                     <SandpackStudio 
                       key={`sandpack-studio-${sandpackKey}`}
+                      projectId={id}
                       files={generatedFiles}
                       onRuntimeError={handleRuntimeCrash}
                       elementSelectMode={elementSelectMode}
                       isLoading={isGenerating}
+                      onSave={(liveFiles) => {
+                        const currentProjectPaths = new Set(Object.keys(generatedFiles));
+                        const filteredFiles = Object.entries(liveFiles).reduce<Record<string, string>>((acc, [path, content]) => {
+                          if (currentProjectPaths.has(path)) {
+                            acc[path] = content;
+                          }
+                          return acc;
+                        }, {});
+
+                        void saveCode(Object.keys(filteredFiles).length > 0 ? filteredFiles : undefined);
+                      }}
+                      isSaving={saving}
                       deviceView={deviceView}
                       onDeviceViewChange={setDeviceView}
                       onRefresh={refreshPreview}

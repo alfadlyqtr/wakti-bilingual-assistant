@@ -8,6 +8,13 @@ export type ShareSlide = {
   imagePath: string;
 };
 
+export type ShareSlideColumn = {
+  title: string;
+  description: string;
+  icon?: string;
+  bullets?: string[];
+};
+
 export type ShareSlideDataV2 = {
   id: string;
   slideNumber: number;
@@ -18,7 +25,7 @@ export type ShareSlideDataV2 = {
   subtitle?: string;
   bullets: string[];
   highlightedStats?: string[];
-  columns?: unknown[];
+  columns?: ShareSlideColumn[];
   imageUrl?: string;
   imageMeta?: {
     photographer?: string;

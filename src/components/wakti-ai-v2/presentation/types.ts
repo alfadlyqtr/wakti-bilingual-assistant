@@ -94,6 +94,8 @@ export interface Slide {
   slideBg?: string;
   // Narration voice (for MP4 export)
   voiceGender?: 'male' | 'female';
+  enhancedHtml?: string | null;
+  enhancedTemplate?: number | null;
 }
 
 export type Step = 'topic' | 'brief' | 'outline' | 'slides';

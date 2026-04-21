@@ -14,10 +14,39 @@ interface UseSandpackFilesReturn {
   activeFile: string;
   openTabs: string[];
   setActiveFile: (path: string) => void;
+  setOpenTabs: (paths: string[]) => void;
   openFile: (path: string) => void;
   closeTab: (path: string) => void;
   updateFileIncrementally: (path: string, content: string) => void;
 }
+
+const ENTRY_FILE_CANDIDATES = [
+  '/src/App.tsx',
+  '/src/App.jsx',
+  '/src/App.js',
+  '/App.tsx',
+  '/App.jsx',
+  '/App.js',
+  '/src/main.tsx',
+  '/src/main.jsx',
+  '/src/main.js',
+  '/index.js',
+] as const;
+
+const getPreferredFile = (files: GeneratedFiles) => {
+  for (const path of ENTRY_FILE_CANDIDATES) {
+    if (files[path] !== undefined) return path;
+  }
+
+  const availablePaths = Object.keys(files);
+  return availablePaths[0] || '/App.js';
+};
+
+const normalizeTabs = (paths: string[], files: GeneratedFiles, fallbackPath: string) => {
+  const unique = Array.from(new Set(paths)).filter(path => files[path] !== undefined);
+  if (unique.length > 0) return unique;
+  return files[fallbackPath] !== undefined ? [fallbackPath] : [];
+};
 
 /**
  * Custom hook for managing Sandpack file state with persistence
@@ -32,21 +61,34 @@ export function useSandpackFiles({ projectId, files }: UseSandpackFilesOptions):
       const saved = localStorage.getItem(getStorageKey('activeFile'));
       if (saved && files[saved]) return saved;
     }
-    return '/App.js';
+    return getPreferredFile(files);
   });
 
-  const [openTabs, setOpenTabs] = useState<string[]>(() => {
+  const [openTabs, setOpenTabsState] = useState<string[]>(() => {
+    const fallbackFile = getPreferredFile(files);
     if (typeof window !== 'undefined' && projectId) {
       try {
         const saved = localStorage.getItem(getStorageKey('openTabs'));
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) return parsed.filter(tab => files[tab]);
+          if (Array.isArray(parsed)) return normalizeTabs(parsed, files, fallbackFile);
         }
       } catch {}
     }
-    return ['/App.js'];
+    return normalizeTabs([fallbackFile], files, fallbackFile);
   });
+
+  useEffect(() => {
+    const fallbackFile = getPreferredFile(files);
+    if (files[activeFile] === undefined && fallbackFile !== activeFile) {
+      setActiveFileState(fallbackFile);
+    }
+  }, [activeFile, files]);
+
+  useEffect(() => {
+    const fallbackFile = files[activeFile] !== undefined ? activeFile : getPreferredFile(files);
+    setOpenTabsState(prev => normalizeTabs(prev, files, fallbackFile));
+  }, [activeFile, files]);
 
   // Persist state to localStorage
   useEffect(() => {
@@ -58,13 +100,22 @@ export function useSandpackFiles({ projectId, files }: UseSandpackFilesOptions):
 
   // Set active file with persistence
   const setActiveFile = useCallback((path: string) => {
+    setOpenTabsState(prev => {
+      if (prev.includes(path)) return prev;
+      return [...prev, path];
+    });
     setActiveFileState(path);
   }, []);
+
+  const setOpenTabs = useCallback((paths: string[]) => {
+    const fallbackFile = files[activeFile] !== undefined ? activeFile : getPreferredFile(files);
+    setOpenTabsState(normalizeTabs(paths, files, fallbackFile));
+  }, [activeFile, files]);
 
   // Open a file (add to tabs if not already open)
   const openFile = useCallback((path: string) => {
     setActiveFileState(path);
-    setOpenTabs(prev => {
+    setOpenTabsState(prev => {
       if (prev.includes(path)) return prev;
       return [...prev, path];
     });
@@ -72,15 +123,18 @@ export function useSandpackFiles({ projectId, files }: UseSandpackFilesOptions):
 
   // Close a tab
   const closeTab = useCallback((path: string) => {
-    setOpenTabs(prev => {
+    setOpenTabsState(prev => {
       const newTabs = prev.filter(p => p !== path);
+      const fallbackFile = getPreferredFile(files);
       // If we're closing the active tab, switch to another
       if (activeFile === path && newTabs.length > 0) {
         setActiveFileState(newTabs[0]);
+      } else if (activeFile === path) {
+        setActiveFileState(fallbackFile);
       }
-      return newTabs.length > 0 ? newTabs : ['/App.js'];
+      return normalizeTabs(newTabs, files, fallbackFile);
     });
-  }, [activeFile]);
+  }, [activeFile, files]);
 
   // Placeholder for incremental file update (will be implemented in SandpackWrapper)
   const updateFileIncrementally = useCallback((path: string, content: string) => {
@@ -93,6 +147,7 @@ export function useSandpackFiles({ projectId, files }: UseSandpackFilesOptions):
     activeFile,
     openTabs,
     setActiveFile,
+    setOpenTabs,
     openFile,
     closeTab,
     updateFileIncrementally,

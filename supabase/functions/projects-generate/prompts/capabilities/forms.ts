@@ -1,50 +1,43 @@
 // Capability doc: CONTACT / QUOTE / NEWSLETTER / WAITLIST FORMS
+//
+// Phase A — Item A6 (token diet): the 20-line handleSubmit snippet was
+// replaced with a schema + requirements list; the model writes the React
+// boilerplate from its own training.
 
 export const FORMS_CAPABILITY = `
-## 📝 BACKEND FORMS (CONTACT / QUOTE / NEWSLETTER / WAITLIST)
+## 📝 BACKEND FORMS (CONTACT / QUOTE / NEWSLETTER / WAITLIST / FEEDBACK)
 
-When the user asks for any submittable form (contact, quote, newsletter, feedback, waitlist):
+For any submittable form, build the UI with React state + client-side validation, then POST to the backend.
 
-1. Build the form UI normally with React state + validation
-2. On submit, POST to the WAKTI Backend API:
-
-\`\`\`jsx
-const BACKEND_URL = "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api";
-
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setError(null);
-  try {
-    const response = await fetch(BACKEND_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        projectId: "{{PROJECT_ID}}",
-        action: "submit",
-        formName: "contact", // or "quote", "newsletter", "waitlist", "feedback"
-        data: { name, email, message }
-      })
-    });
-    if (response.ok) {
-      setSuccess(true);
-      setName(''); setEmail(''); setMessage('');
-    } else {
-      throw new Error('Failed to submit');
-    }
-  } catch (err) {
-    setError("Failed to send message. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
+### BACKEND CONTRACT
+\`\`\`
+POST https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
+Body: {
+  projectId: "{{PROJECT_ID}}",
+  action: "submit",
+  formName: "contact" | "quote" | "newsletter" | "waitlist" | "feedback",
+  data: { /* whatever fields the form collects */ }
+}
+Response: 200 OK on success, non-200 on failure.
 \`\`\`
 
-### FORM REQUIREMENTS
-- Loading state (disabled button, spinner) while submitting
-- Success message / animation after submission
-- Error handling with user-friendly feedback
-- Client-side validation (required fields, email format) before submit
-- Clear fields after successful submission
-- formName describes purpose: "contact", "quote", "newsletter", "feedback", "waitlist"
+### SUBMIT HANDLER REQUIREMENTS
+- \`async (e) => { e.preventDefault(); ... }\`
+- Disable the submit button + show a spinner while the request is in-flight.
+- On 200: show success feedback (message or animation) and clear the form fields.
+- On non-200 / thrown: show user-friendly error feedback (toast / inline), do NOT clear fields.
+- Wrap in try/catch/finally; always re-enable the button in \`finally\`.
+
+### CLIENT-SIDE VALIDATION (BEFORE SUBMIT)
+- Required fields must be non-empty.
+- Email fields must match a basic email regex.
+- Phone fields should strip non-digits before submit where relevant.
+- Show inline error messages near the offending field.
+
+### formName MAPPING
+- "contact"    — general contact forms
+- "quote"      — request-a-quote forms
+- "newsletter" — email signup
+- "waitlist"   — early-access lists
+- "feedback"   — product/service feedback
 `;

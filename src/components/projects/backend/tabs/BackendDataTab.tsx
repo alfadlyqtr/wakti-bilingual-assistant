@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Database, Plus, Edit2, Trash2, Download, ChevronDown, FolderOpen, Table } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -33,8 +33,66 @@ interface CollectionItem {
 interface CollectionSchema {
   collection_name: string;
   display_name: string | null;
-  schema: Record<string, { type: string; required?: boolean }>;
+  schema: Record<string, unknown>;
 }
+
+type FieldSchema = { type: string; required?: boolean };
+
+const COLLECTION_SCHEMA_PRESETS: Record<string, { displayName: string; schema: Record<string, FieldSchema> }> = {
+  posts: {
+    displayName: 'Posts',
+    schema: {
+      title: { type: 'string', required: true },
+      slug: { type: 'string', required: true },
+      excerpt: { type: 'text' },
+      content: { type: 'text' },
+      featured_image_url: { type: 'string' },
+      category: { type: 'string' },
+      tags: { type: 'array' },
+      author: { type: 'string' },
+      published: { type: 'boolean' },
+      published_at: { type: 'datetime' },
+    },
+  },
+  post_categories: {
+    displayName: 'Categories',
+    schema: {
+      name: { type: 'string', required: true },
+      slug: { type: 'string', required: true },
+      description: { type: 'text' },
+    },
+  },
+};
+
+const normalizeSchemaShape = (schema: unknown): Record<string, FieldSchema> => {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return {};
+
+  const raw = schema as Record<string, unknown>;
+  if (Array.isArray(raw.fields)) {
+    return raw.fields.reduce<Record<string, FieldSchema>>((acc, field) => {
+      if (!field || typeof field !== 'object') return acc;
+      const candidate = field as Record<string, unknown>;
+      const name = typeof candidate.name === 'string' ? candidate.name : '';
+      const type = typeof candidate.type === 'string' ? candidate.type : 'string';
+      if (!name) return acc;
+      acc[name] = {
+        type,
+        required: candidate.required === true,
+      };
+      return acc;
+    }, {});
+  }
+
+  return Object.entries(raw).reduce<Record<string, FieldSchema>>((acc, [key, value]) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return acc;
+    const candidate = value as Record<string, unknown>;
+    acc[key] = {
+      type: typeof candidate.type === 'string' ? candidate.type : 'string',
+      required: candidate.required === true,
+    };
+    return acc;
+  }, {});
+};
 
 interface BackendDataTabProps {
   collections: Record<string, CollectionItem[]>;
@@ -63,17 +121,25 @@ export function BackendDataTab({
   const [isAddMode, setIsAddMode] = useState(false);
   const [formData, setFormData] = useState<Record<string, any>>({});
 
+  useEffect(() => {
+    if (!selectedCollection || !collections[selectedCollection]) {
+      setSelectedCollection(collectionNames[0] || '');
+    }
+  }, [collectionNames, collections, selectedCollection]);
+
   const currentItems = collections[selectedCollection] || [];
-  const currentSchema = schemas[selectedCollection]?.schema || {};
-  const displayName = schemas[selectedCollection]?.display_name || selectedCollection;
+  const preset = COLLECTION_SCHEMA_PRESETS[selectedCollection];
+  const currentSchema = normalizeSchemaShape(schemas[selectedCollection]?.schema);
+  const displayName = schemas[selectedCollection]?.display_name || preset?.displayName || selectedCollection;
 
   // Infer schema from existing items if no schema defined
   const inferredSchema = React.useMemo(() => {
     if (Object.keys(currentSchema).length > 0) return currentSchema;
+    if (preset && Object.keys(preset.schema).length > 0) return preset.schema;
     if (currentItems.length === 0) return {};
     
     const firstItem = currentItems[0].data;
-    const inferred: Record<string, { type: string }> = {};
+    const inferred: Record<string, FieldSchema> = {};
     Object.entries(firstItem).forEach(([key, value]) => {
       let type = 'string';
       if (typeof value === 'number') type = 'number';
@@ -115,7 +181,7 @@ export function BackendDataTab({
     setFormData(prev => ({ ...prev, [key]: value }));
   };
 
-  const renderFieldInput = (key: string, fieldSchema: { type: string }) => {
+  const renderFieldInput = (key: string, fieldSchema: FieldSchema) => {
     const value = formData[key] ?? '';
     
     switch (fieldSchema.type) {
@@ -147,6 +213,23 @@ export function BackendDataTab({
             onChange={(e) => handleFieldChange(key, e.target.value.split('\n').filter(Boolean))}
             placeholder={isRTL ? 'عنصر واحد في كل سطر' : 'One item per line'}
             rows={3}
+          />
+        );
+      case 'datetime':
+        return (
+          <Input
+            type="datetime-local"
+            value={value}
+            onChange={(e) => handleFieldChange(key, e.target.value)}
+            className="h-10"
+          />
+        );
+      case 'text':
+        return (
+          <Textarea
+            value={value}
+            onChange={(e) => handleFieldChange(key, e.target.value)}
+            rows={key === 'content' ? 8 : 4}
           />
         );
       default:
@@ -354,6 +437,7 @@ export function BackendDataTab({
                 <div key={key} className="space-y-2">
                   <Label className="text-sm font-medium capitalize">
                     {key.replace(/_/g, ' ')}
+                    {fieldSchema.required && <span className="text-destructive"> *</span>}
                   </Label>
                   {renderFieldInput(key, fieldSchema)}
                 </div>

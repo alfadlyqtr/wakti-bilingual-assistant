@@ -10,6 +10,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const SCHEDULED_DELIVERY_GRACE_MS = 2 * 60 * 1000;
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -52,6 +54,7 @@ serve(async (req) => {
     console.log(`[process-scheduled-reminders] Found ${dueReminders.length} due reminders`);
 
     let processedCount = 0;
+    let skippedCount = 0;
     let failedCount = 0;
     const results: { id: string; success: boolean; error?: string }[] = [];
 
@@ -59,6 +62,18 @@ serve(async (req) => {
     for (const reminder of dueReminders) {
       try {
         console.log(`[process-scheduled-reminders] Processing reminder ${reminder.id} for user ${reminder.user_id}`);
+
+        const reminderData = (reminder.data && typeof reminder.data === 'object') ? reminder.data as Record<string, unknown> : null;
+        const hasScheduledDelivery = reminderData?.scheduled_delivery === true;
+        const scheduledAtMs = reminder.scheduled_for ? new Date(reminder.scheduled_for).getTime() : NaN;
+        const ageMs = Number.isFinite(scheduledAtMs) ? (Date.now() - scheduledAtMs) : Number.POSITIVE_INFINITY;
+
+        if (hasScheduledDelivery && ageMs < SCHEDULED_DELIVERY_GRACE_MS) {
+          skippedCount++;
+          results.push({ id: reminder.id, success: true, error: 'scheduled_delivery_grace_window' });
+          console.log(`[process-scheduled-reminders] Skipping ${reminder.id} during scheduled-delivery grace window`);
+          continue;
+        }
 
         // Call wakti-send-push to send the notification
         const pushResponse = await fetch(
@@ -95,12 +110,13 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[process-scheduled-reminders] Completed: ${processedCount} sent, ${failedCount} failed`);
+    console.log(`[process-scheduled-reminders] Completed: ${processedCount} sent, ${skippedCount} skipped, ${failedCount} failed`);
 
     return new Response(
       JSON.stringify({
         success: true,
         processed: processedCount,
+        skipped: skippedCount,
         failed: failedCount,
         total: dueReminders.length,
         results,

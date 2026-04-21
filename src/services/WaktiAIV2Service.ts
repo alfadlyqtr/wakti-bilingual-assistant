@@ -67,12 +67,25 @@ type UserLocationContext = {
   updatedAt?: number;
 };
 
+type DurableMemoryType = 'identity_context' | 'project_context' | 'recurring_goal' | 'working_style' | 'priority';
+
+type DurableMemoryItem = {
+  key: string;
+  type: DurableMemoryType;
+  text: string;
+  confidence: 'high' | 'medium';
+  evidenceCount: number;
+  keywords: string[];
+  source: 'conversation';
+};
+
 const LOCATION_CACHE_TTL = 30 * 60 * 1000; // 30 minutes - people move around!
 
 class WaktiAIV2ServiceClass {
   private personalTouchCache: any = null;
   private conversationStorage = new Map<string, AIMessage[]>();
   private locationCache: UserLocationContext | null = null;
+  private locationWarmupPromise: Promise<UserLocationContext> | null = null;
   private lastPTFetchAt: number | null = null;
 
   constructor() {
@@ -264,31 +277,59 @@ class WaktiAIV2ServiceClass {
 
   // Fetch user's location context once and cache (localStorage + memory)
   // If forceFresh is true, skip cache and get fresh location (for "near me" queries)
+  private getCachedUserLocation(now: number = Date.now()): UserLocationContext | null {
+    if (this.locationCache?.updatedAt && (now - this.locationCache.updatedAt) < LOCATION_CACHE_TTL) {
+      return this.locationCache;
+    }
+
+    try {
+      const raw = localStorage.getItem('wakti_user_location');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return null;
+      parsed.timezone = parsed.timezone || this.getClientTimezone();
+      parsed.updatedAt = parsed.updatedAt || now;
+      const isFresh = parsed.updatedAt && (now - parsed.updatedAt) < LOCATION_CACHE_TTL;
+      if (!isFresh) return null;
+      this.locationCache = parsed;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  private queueLocationWarmup(userId: string, forceFresh: boolean = false): Promise<UserLocationContext> {
+    if (!forceFresh && this.locationWarmupPromise) {
+      return this.locationWarmupPromise;
+    }
+
+    const promise = this.getUserLocation(userId, forceFresh).finally(() => {
+      if (this.locationWarmupPromise === promise) {
+        this.locationWarmupPromise = null;
+      }
+    });
+
+    this.locationWarmupPromise = promise;
+    return promise;
+  }
+
+  async prewarmUserLocation(userId?: string, forceFresh: boolean = false) {
+    if (!userId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      const resolvedUserId = session?.user?.id;
+      if (!resolvedUserId) return;
+      userId = resolvedUserId;
+    }
+
+    await this.queueLocationWarmup(userId, forceFresh);
+  }
+
   private async getUserLocation(userId: string, forceFresh: boolean = false): Promise<UserLocationContext> {
     const now = Date.now();
-    
-    // Skip cache if forceFresh is requested (e.g., "near me" queries)
-    if (!forceFresh) {
-      if (this.locationCache && this.locationCache.updatedAt && now - this.locationCache.updatedAt < LOCATION_CACHE_TTL) {
-        return this.locationCache;
-      }
 
-      // LocalStorage fallback with TTL validation
-      try {
-        const raw = localStorage.getItem('wakti_user_location');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed && typeof parsed === 'object') {
-            parsed.timezone = parsed.timezone || this.getClientTimezone();
-            parsed.updatedAt = parsed.updatedAt || now;
-            const isFresh = parsed.updatedAt && (now - parsed.updatedAt) < LOCATION_CACHE_TTL;
-            if (isFresh) {
-              this.locationCache = parsed;
-              return this.locationCache;
-            }
-          }
-        }
-      } catch {}
+    if (!forceFresh) {
+      const cached = this.getCachedUserLocation(now);
+      if (cached) return cached;
     } else {
       clearLocationCache();
     }
@@ -309,7 +350,7 @@ class WaktiAIV2ServiceClass {
     // If forceFresh, request fresh location with skipCache
     let hasDeviceGPS = false;
     try {
-      const nativeLoc = await getNativeLocation({ skipCache: forceFresh, timeoutMs: 1500 });
+      const nativeLoc = await getNativeLocation({ skipCache: forceFresh, timeoutMs: forceFresh ? 3500 : 1800 });
       if (nativeLoc && typeof nativeLoc.latitude === 'number' && typeof nativeLoc.longitude === 'number') {
         hasDeviceGPS = true;
         resolved = {
@@ -579,8 +620,8 @@ class WaktiAIV2ServiceClass {
       return ta - tb;
     });
     
-    // Apply smart filtering and return last 100 for better context retention
-    return this.smartFilterMessages(uniqueMessages).slice(-100);
+    // Apply smart filtering and return a leaner context window.
+    return this.smartFilterMessages(uniqueMessages).slice(-60);
   }
 
   private smartFilterMessages(messages: AIMessage[]): AIMessage[] {
@@ -593,8 +634,8 @@ class WaktiAIV2ServiceClass {
     ];
     
     return messages.filter((msg, index) => {
-      // Always keep the last 100 messages to maintain extended context
-      if (index >= messages.length - 100) return true;
+      // Always keep the most recent working window intact.
+      if (index >= messages.length - 60) return true;
       
       // Filter out very short redundant responses
       if (msg.content && msg.content.length < 20) {
@@ -657,6 +698,250 @@ class WaktiAIV2ServiceClass {
     }
     
     return summary.trim();
+  }
+
+  private normalizeConversationSummary(summary?: string | null, maxLength: number = 1200): string {
+    if (!summary || typeof summary !== 'string') return '';
+    return summary.replace(/\s+/g, ' ').trim().slice(0, maxLength);
+  }
+
+  private pickConversationSummary(...candidates: Array<string | null | undefined>): string {
+    for (const candidate of candidates) {
+      const normalized = this.normalizeConversationSummary(candidate);
+      if (normalized) return normalized;
+    }
+    return '';
+  }
+
+  private normalizeDurableMemoryText(input: unknown, maxLength: number = 180): string {
+    if (typeof input !== 'string') return '';
+    return input.replace(/\s+/g, ' ').trim().slice(0, maxLength);
+  }
+
+  private extractDurableMemoryKeywords(...inputs: string[]): string[] {
+    const stopwords = new Set([
+      'about', 'after', 'again', 'being', 'could', 'doing', 'from', 'have', 'just', 'like', 'make', 'more', 'need',
+      'only', 'really', 'should', 'that', 'their', 'them', 'then', 'they', 'this', 'want', 'with', 'would', 'your',
+      'there', 'while', 'into', 'over', 'under', 'plain', 'english', 'stage', 'stages', 'audit', 'report'
+    ]);
+
+    return Array.from(new Set(
+      inputs
+        .join(' ')
+        .toLowerCase()
+        .split(/[^\p{L}\p{N}]+/u)
+        .map((word) => word.trim())
+        .filter((word) => word.length >= 4 && !stopwords.has(word))
+    )).slice(0, 8);
+  }
+
+  private buildDurableMemoryCandidates(
+    messages: AIMessage[],
+    conversationSummary: string,
+    personalTouch: any
+  ): DurableMemoryItem[] {
+    const userMessages = (Array.isArray(messages) ? messages : [])
+      .filter((msg) => msg?.role === 'user' && typeof msg.content === 'string')
+      .map((msg) => this.normalizeDurableMemoryText(msg.content, 320))
+      .filter(Boolean)
+      .slice(-30);
+
+    if (userMessages.length === 0) return [];
+
+    const summaryLower = this.normalizeConversationSummary(conversationSummary, 700).toLowerCase();
+    const ptInstruction = this.normalizeDurableMemoryText(personalTouch?.instruction || '', 220).toLowerCase();
+    const candidates = new Map<string, DurableMemoryItem>();
+
+    const addCandidate = (
+      key: string,
+      type: DurableMemoryType,
+      text: string,
+      evidenceCount: number,
+      confidence: 'high' | 'medium' = 'medium',
+      extraKeywords: string[] = []
+    ) => {
+      const normalizedText = this.normalizeDurableMemoryText(text, 180);
+      if (!normalizedText || evidenceCount <= 0) return;
+      const existing = candidates.get(key);
+      const mergedKeywords = this.extractDurableMemoryKeywords(normalizedText, key, ...extraKeywords, ...(existing?.keywords || []));
+      const next: DurableMemoryItem = {
+        key,
+        type,
+        text: normalizedText,
+        confidence: existing?.confidence === 'high' || confidence === 'high' ? 'high' : 'medium',
+        evidenceCount: Math.max(existing?.evidenceCount || 0, evidenceCount),
+        keywords: mergedKeywords,
+        source: 'conversation'
+      };
+      candidates.set(key, next);
+    };
+
+    const explicitProjectPatterns = [
+      /\b(?:i am|i'm|we are|we're)\s+(?:building|creating|developing|working on|launching|shipping|improving|refining)\s+([^.!?\n]{4,90})/i,
+      /\b(?:building|creating|developing|working on|improving|refining)\s+(wakti ai|wakti|the app|our app|our product|the product)\b/i
+    ];
+
+    for (const text of userMessages) {
+      for (const pattern of explicitProjectPatterns) {
+        const match = pattern.exec(text);
+        const rawSubject = this.normalizeDurableMemoryText(match?.[1] || '', 90);
+        if (!rawSubject) continue;
+        if (/wakti/i.test(rawSubject)) {
+          addCandidate('project_wakti_ai', 'project_context', 'User is building and refining Wakti AI.', 3, 'high', ['wakti', 'product', 'app', 'chat']);
+        } else if (rawSubject.length >= 6) {
+          addCandidate(`project_${rawSubject.toLowerCase().replace(/[^a-z0-9]+/gi, '_').slice(0, 32)}`, 'project_context', `User is working on ${rawSubject}.`, 2, 'medium', [rawSubject]);
+        }
+      }
+    }
+
+    const categoryRules: Array<{
+      key: string;
+      type: DurableMemoryType;
+      text: string;
+      minCount: number;
+      patterns: RegExp[];
+      keywords: string[];
+      skip?: () => boolean;
+    }> = [
+      {
+        key: 'priority_speed_quality',
+        type: 'priority',
+        text: 'Speed, low token waste, and strong answer quality are top priorities.',
+        minCount: 2,
+        patterns: [/\bspeed\b|fast|faster|fastest|performance|latency|lightning fast|token waste|token taxation|lean/i],
+        keywords: ['speed', 'performance', 'latency', 'quality', 'tokens']
+      },
+      {
+        key: 'workflow_pm_audit',
+        type: 'working_style',
+        text: 'User prefers staged, audit-driven work with PM-style guidance and self-checks.',
+        minCount: 2,
+        patterns: [/\baudit\b|report back|self-audit|project manager|\bpm\b|\bstage\b|staged/i],
+        keywords: ['audit', 'stage', 'pm', 'workflow', 'report']
+      },
+      {
+        key: 'workflow_plain_english',
+        type: 'working_style',
+        text: 'User prefers plain-English explanations with low jargon.',
+        minCount: 1,
+        patterns: [/plain english|simple english|avoid jargon|clear and human/i],
+        keywords: ['plain', 'english', 'clarity', 'simple'],
+        skip: () => ptInstruction.includes('plain english')
+      },
+      {
+        key: 'project_ai_chat_quality',
+        type: 'project_context',
+        text: 'User is actively improving Wakti AI chat quality, continuity, and prompt behavior.',
+        minCount: 2,
+        patterns: [/\bwakti ai\b|\bai chat\b|conversation summary|continuity|stay hot|prompt|routing|search mode|semantic memory/i],
+        keywords: ['wakti', 'chat', 'continuity', 'prompts', 'routing']
+      },
+      {
+        key: 'goal_reliability_actions',
+        type: 'recurring_goal',
+        text: 'User wants reminders, location, and action reliability to be strong and trustworthy.',
+        minCount: 2,
+        patterns: [/\breminder\b|location|gps|notification|schedule|reliable|reliability/i],
+        keywords: ['reminders', 'location', 'reliability', 'actions']
+      }
+    ];
+
+    for (const rule of categoryRules) {
+      if (rule.skip?.()) continue;
+      let count = userMessages.reduce((total, text) => total + (rule.patterns.some((pattern) => pattern.test(text)) ? 1 : 0), 0);
+      if (summaryLower && rule.patterns.some((pattern) => pattern.test(summaryLower))) {
+        count += 1;
+      }
+      if (count >= rule.minCount) {
+        addCandidate(rule.key, rule.type, rule.text, count, count >= rule.minCount + 1 ? 'high' : 'medium', rule.keywords);
+      }
+    }
+
+    return Array.from(candidates.values()).slice(0, 8);
+  }
+
+  private scoreDurableMemoryRelevance(
+    item: DurableMemoryItem,
+    message: string,
+    activeTrigger: string,
+    chatSubmode: 'chat' | 'study' = 'chat'
+  ): number {
+    const query = this.normalizeDurableMemoryText(message, 240).toLowerCase();
+    let score = item.evidenceCount * 12 + (item.confidence === 'high' ? 10 : 4);
+
+    const overlaps = item.keywords.filter((keyword) => query.includes(keyword.toLowerCase())).length;
+    score += overlaps * 12;
+
+    if (item.type === 'project_context' && /project|product|app|build|feature|fix|chat|wakti|prompt|memory|route|routing/i.test(query)) score += 10;
+    if (item.type === 'recurring_goal' && /need|goal|improve|fix|make|solve|reliable|better/i.test(query)) score += 8;
+    if (item.type === 'working_style' && /explain|plan|audit|report|stage|help|walk me through/i.test(query)) score += 8;
+    if (item.type === 'priority' && /speed|fast|performance|latency|quality|lean|token/i.test(query)) score += 10;
+    if (activeTrigger === 'search' && item.type === 'working_style') score -= 6;
+    if (chatSubmode === 'study' && item.type === 'project_context') score -= 4;
+
+    return score;
+  }
+
+  private buildDurableMemoryTransport(
+    message: string,
+    messages: AIMessage[],
+    conversationSummary: string,
+    personalTouch: any,
+    activeTrigger: string,
+    chatSubmode: 'chat' | 'study' = 'chat'
+  ): DurableMemoryItem[] {
+    const candidates = this.buildDurableMemoryCandidates(messages, conversationSummary, personalTouch);
+    if (candidates.length === 0) return [];
+
+    const limit = activeTrigger === 'search' ? 2 : 3;
+    return [...candidates]
+      .map((item) => ({ item, score: this.scoreDurableMemoryRelevance(item, message, activeTrigger, chatSubmode) }))
+      .filter((entry) => entry.score >= 18)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map(({ item }) => ({
+        key: item.key,
+        type: item.type,
+        text: item.text,
+        confidence: item.confidence,
+        evidenceCount: item.evidenceCount,
+        keywords: item.keywords.slice(0, 6),
+        source: item.source
+      }));
+  }
+
+  private buildTransportRecentMessages(
+    messages: AIMessage[],
+    activeTrigger: string,
+    chatSubmode: 'chat' | 'study' = 'chat'
+  ): Array<{ role: 'user' | 'assistant'; content: string }> {
+    if (!Array.isArray(messages) || messages.length === 0) return [];
+
+    const limit = activeTrigger === 'search'
+      ? 10
+      : chatSubmode === 'study'
+        ? 12
+        : 16;
+
+    const clipped = messages
+      .filter((msg) => msg && (msg.role === 'user' || msg.role === 'assistant') && typeof msg.content === 'string')
+      .slice(-limit)
+      .map((msg, index, arr) => {
+        const isLast = index === arr.length - 1;
+        const maxLength = activeTrigger === 'search'
+          ? (msg.role === 'assistant' ? 500 : 700)
+          : chatSubmode === 'study'
+            ? (msg.role === 'assistant' ? 900 : 1100)
+            : (isLast ? 1200 : (msg.role === 'assistant' ? 700 : 900));
+
+        return {
+          role: msg.role,
+          content: msg.content.replace(/\s+/g, ' ').trim().slice(0, maxLength)
+        };
+      })
+      .filter((msg) => msg.content.length > 0);
+
+    return clipped;
   }
 
   private loadStoredMessages(): AIMessage[] {
@@ -786,12 +1071,19 @@ class WaktiAIV2ServiceClass {
       //    This eliminates the 30-second GPS wait on every search request.
       const needsLocation = activeTrigger === 'search' || queryNeedsFreshLocation(message);
       const forceFreshLocation = queryNeedsFreshLocation(message); // only true for "near me" type queries
+      const cachedLocation = needsLocation ? this.getCachedUserLocation() : null;
       const locationPromise: Promise<UserLocationContext | null> = needsLocation
-        ? Promise.race([
-            this.getUserLocation(userId || '', forceFreshLocation),
-            new Promise<null>(r => setTimeout(() => r(null), 200))
-          ])
+        ? (cachedLocation
+            ? Promise.resolve(cachedLocation)
+            : Promise.race([
+                this.getUserLocation(userId || '', forceFreshLocation),
+                new Promise<null>(r => setTimeout(() => r(null), forceFreshLocation ? 1600 : 900))
+              ]))
         : Promise.resolve(null);
+
+      if (needsLocation && userId) {
+        this.queueLocationWarmup(userId, forceFreshLocation || !cachedLocation).catch(() => {});
+      }
 
       // 4) Fire-and-forget: personal touch refresh (background, never blocks)
       if (userId) this.maybeRefreshPersonalTouchFromServer(userId).catch(() => {});
@@ -828,8 +1120,10 @@ class WaktiAIV2ServiceClass {
       });
       const generatedSummary = this.generateConversationSummary(enhancedMessages);
       const localSummary = conversationId ? (localStorage.getItem(`wakti_local_summary_${conversationId}`) || null) : null;
-      const pieces = [conversationSummary, localSummary, generatedSummary].filter((s) => !!(s && s.trim())) as string[];
-      let finalSummary = pieces.join(' ').slice(0, 1200);
+      let finalSummary = this.pickConversationSummary(conversationSummary, localSummary, generatedSummary);
+      const pt = this.ensurePersonalTouch();
+      const durableMemory = this.buildDurableMemoryTransport(message, enhancedMessages, finalSummary, pt, activeTrigger, chatSubmode);
+      const transportMessages = this.buildTransportRecentMessages(enhancedMessages, activeTrigger, chatSubmode);
 
       // 6) RESOLVE ALL PARALLEL TRACKS (auth + session + location)
       const [resolvedUserId, session, location] = await Promise.all([
@@ -838,6 +1132,9 @@ class WaktiAIV2ServiceClass {
         locationPromise
       ]);
       userId = resolvedUserId || userId;
+      if (needsLocation && userId && !location) {
+        this.queueLocationWarmup(userId, forceFreshLocation).catch(() => {});
+      }
       if (!userId) throw new Error('Authentication required');
       if (!session?.access_token) throw new Error('No valid session for streaming');
 
@@ -856,7 +1153,6 @@ class WaktiAIV2ServiceClass {
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
           try {
-            const pt = this.ensurePersonalTouch();
             const pt_version = pt?.pt_version ?? null;
             const pt_updated_at = pt?.pt_updated_at ?? null;
             const pt_hash = this.hashPersonalTouch(pt);
@@ -879,8 +1175,9 @@ class WaktiAIV2ServiceClass {
                 activeTrigger,
                 chatSubmode,
                 attachedFiles,
-                recentMessages: enhancedMessages,
+                recentMessages: transportMessages,
                 conversationSummary: finalSummary,
+                durableMemory,
                 personalTouch: pt,
                 pt_version,
                 pt_updated_at,
@@ -917,8 +1214,9 @@ class WaktiAIV2ServiceClass {
                       language,
                       conversationId,
                       activeTrigger,
-                      recentMessages: enhancedMessages,
+                      recentMessages: transportMessages,
                       conversationSummary: finalSummary,
+                      durableMemory,
                       personalTouch: pt,
                       location,
                       clientTimezone
@@ -959,8 +1257,9 @@ class WaktiAIV2ServiceClass {
                       language,
                       conversationId,
                       activeTrigger,
-                      recentMessages: enhancedMessages,
+                      recentMessages: transportMessages,
                       conversationSummary: finalSummary,
+                      durableMemory,
                       personalTouch: this.ensurePersonalTouch()
                     })
                   });
@@ -1687,8 +1986,7 @@ class WaktiAIV2ServiceClass {
         }
       } catch {}
 
-      const pieces = [conversationSummary, storedSummary, generatedSummary].filter((s) => !!(s && (s as string).trim())) as string[];
-      let finalSummary = pieces.join(' ').slice(0, 1200);
+      let finalSummary = this.pickConversationSummary(conversationSummary, storedSummary, generatedSummary);
 
       // Follow-up anchoring: if the user message is very short/ambiguous, attach the previous assistant message
       // so questions like "since when?" don't lose context.

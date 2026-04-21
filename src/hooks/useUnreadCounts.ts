@@ -1,6 +1,5 @@
 
-import { useState, useEffect } from 'react';
-import { useUnreadMessages } from '@/hooks/useUnreadMessages';
+import { useUnreadContext } from '@/contexts/UnreadContext';
 
 export function useUnreadCounts() {
   // Use the unified notification system instead of waktiBadges
@@ -10,7 +9,7 @@ export function useUnreadCounts() {
     maw3dEventCount: eventCount,
     taskCount: totalTaskCount,
     sharedTaskCount
-  } = useUnreadMessages();
+  } = useUnreadContext();
 
   // Combine task counts for compatibility
   const taskCount = totalTaskCount + sharedTaskCount;

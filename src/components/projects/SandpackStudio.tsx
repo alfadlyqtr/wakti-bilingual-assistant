@@ -13,6 +13,7 @@ import { atomDark } from "@codesandbox/sandpack-themes";
 import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, MousePointer2, Monitor, Tablet, Smartphone, ExternalLink, RefreshCw, Download, Upload, Loader2, Settings, Share2, Save, Terminal, PanelLeftClose, PanelLeft } from "lucide-react";
 import { SandpackSkeleton } from '@/pages/ProjectDetail/components/PreviewPanel/SandpackSkeleton';
 import { useIncrementalFileUpdater } from '@/pages/ProjectDetail/hooks/useIncrementalFileUpdater';
+import { useSandpackFiles } from '@/pages/ProjectDetail/hooks/useSandpackFiles';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -197,6 +198,68 @@ const InspectablePreview = ({
 const IncrementalFileUpdaterComponent = ({ files }: { files: Record<string, string> }) => {
   useIncrementalFileUpdater(files);
   return null; // This component only runs the hook, renders nothing
+};
+
+const SandpackWorkspaceSync = ({
+  activeFile,
+  openTabs,
+  onActiveFileChange,
+  onOpenTabsChange,
+}: {
+  activeFile: string;
+  openTabs: string[];
+  onActiveFileChange: (path: string) => void;
+  onOpenTabsChange: (paths: string[]) => void;
+}) => {
+  const { sandpack } = useSandpack();
+
+  const sandpackApi = sandpack as any;
+  const sandpackActiveFile = sandpackApi.activeFile as string | undefined;
+  const sandpackVisibleFiles = Array.isArray(sandpackApi.visibleFiles)
+    ? sandpackApi.visibleFiles.filter((path: unknown): path is string => typeof path === 'string')
+    : [];
+
+  useEffect(() => {
+    if (!activeFile) return;
+
+    const availableFiles = Object.keys(sandpack.files || {});
+    if (!availableFiles.includes(activeFile)) return;
+
+    openTabs.forEach((path) => {
+      if (availableFiles.includes(path) && !sandpackVisibleFiles.includes(path)) {
+        sandpackApi.openFile?.(path);
+      }
+    });
+
+    sandpackVisibleFiles
+      .filter((path) => !openTabs.includes(path))
+      .forEach((path) => {
+        sandpackApi.closeFile?.(path);
+      });
+
+    if (sandpackActiveFile !== activeFile) {
+      if (sandpackVisibleFiles.includes(activeFile)) {
+        sandpackApi.setActiveFile?.(activeFile);
+      } else {
+        sandpackApi.openFile?.(activeFile);
+      }
+    }
+  }, [activeFile, openTabs, sandpack.files, sandpackActiveFile, sandpackApi, sandpackVisibleFiles]);
+
+  useEffect(() => {
+    if (sandpackActiveFile && sandpackActiveFile !== activeFile) {
+      onActiveFileChange(sandpackActiveFile);
+    }
+
+    if (
+      sandpackVisibleFiles.length > 0 &&
+      (sandpackVisibleFiles.length !== openTabs.length || sandpackVisibleFiles.some((path, index) => path !== openTabs[index]))
+    ) {
+      onOpenTabsChange(sandpackVisibleFiles);
+    }
+  }, [activeFile, onActiveFileChange, onOpenTabsChange, openTabs, sandpackActiveFile, sandpackVisibleFiles]);
+
+  return null;
 };
 
 // --- 5. MAIN STUDIO COMPONENT ---
@@ -460,6 +523,16 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
     return next;
   }, [files, sandpackI18nBundle]);
 
+  const {
+    activeFile,
+    openTabs,
+    setActiveFile,
+    setOpenTabs,
+  } = useSandpackFiles({
+    projectId,
+    files: formattedFiles,
+  });
+
   const Header = () => {
     const { sandpack } = useSandpack();
 
@@ -628,7 +701,8 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
       files={formattedFiles}
       options={{
         externalResources: ["https://cdn.tailwindcss.com"],
-        activeFile: "/App.js",
+        activeFile,
+        visibleFiles: openTabs,
         classes: {
           "sp-wrapper": "h-full w-full block min-h-0",
           "sp-layout": "h-full w-full flex min-h-0",
@@ -651,6 +725,13 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
       <div className="h-full w-full flex flex-col bg-[#0c0f14] border border-white/10 rounded-xl overflow-hidden shadow-2xl">
         {/* HEADER - STICKY */}
         <Header />
+
+        <SandpackWorkspaceSync
+          activeFile={activeFile}
+          openTabs={openTabs}
+          onActiveFileChange={setActiveFile}
+          onOpenTabsChange={setOpenTabs}
+        />
 
         {/* SANDPACK ENGINE */}
         <div className="flex-1 relative min-h-0 overflow-hidden flex flex-col">

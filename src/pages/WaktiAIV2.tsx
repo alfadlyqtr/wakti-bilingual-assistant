@@ -5,7 +5,7 @@ import { SavedConversationsService } from '@/services/SavedConversationsService'
 import { EnhancedFrontendMemory, ConversationMetadata } from '@/services/EnhancedFrontendMemory';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useAuth } from '@/contexts/AuthContext';
-import { onEvent } from '@/utils/eventBus';
+import { emitEvent, onEvent } from '@/utils/eventBus';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { supabase } from '@/integrations/supabase/client';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
@@ -219,6 +219,12 @@ const WaktiAIV2 = () => {
         handleRefreshConversations();
       });
   }, [handleRefreshConversations]);
+
+  useEffect(() => {
+    const userId = authUser?.id || userProfile?.id;
+    if (!userId) return;
+    WaktiAIV2Service.prewarmUserLocation(userId).catch(() => {});
+  }, [authUser?.id, userProfile?.id]);
 
   // Always portal to document.body to avoid iOS fixed-inside-scroller bugs
   useEffect(() => {
@@ -586,6 +592,7 @@ const WaktiAIV2 = () => {
         setSessionMessages(prev => {
           const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
           setTimeout(() => autoSaveActiveConversation(finalMessages, convId), 0);
+          setTimeout(() => emitEvent('wakti-ai-stream-finished'), 0);
           return finalMessages;
         });
         return; // Done (skip streaming path)
@@ -635,6 +642,7 @@ const WaktiAIV2 = () => {
           setSessionMessages(prev => {
             const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
             setTimeout(() => autoSaveActiveConversation(finalMessages, convId), 0);
+            setTimeout(() => emitEvent('wakti-ai-stream-finished'), 0);
             return finalMessages;
           });
           return; // Done (skip streaming path)
@@ -743,7 +751,7 @@ const WaktiAIV2 = () => {
         const cleanedStreamed = stripTrailingActionJSON(streamed);
         const finalAssistantMessage: AIMessage = {
           ...assistantPlaceholder,
-          content: streamedResp?.response ?? cleanedStreamed,
+          content: (streamedResp?.response || cleanedStreamed),
           metadata: { 
             loading: false, 
             ...streamMeta,
@@ -761,6 +769,7 @@ const WaktiAIV2 = () => {
         setSessionMessages(prev => {
           const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
           setTimeout(() => autoSaveActiveConversation(finalMessages, convId), 0);
+          setTimeout(() => emitEvent('wakti-ai-stream-finished'), 0);
           return finalMessages;
         });
       }
@@ -808,6 +817,7 @@ const WaktiAIV2 = () => {
           };
         });
         setTimeout(() => autoSaveActiveConversation(finalMessages, convId), 0);
+        setTimeout(() => emitEvent('wakti-ai-stream-finished'), 0);
         return finalMessages;
       });
     } finally {

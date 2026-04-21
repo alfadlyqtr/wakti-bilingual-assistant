@@ -7,7 +7,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
-import { stripReminderBlocks, parseReminderFromResponse } from '@/services/ReminderService';
+import { stripReminderBlocks, parseReminderFromResponse, formatReminderTime } from '@/services/ReminderService';
 
 import { Badge } from '@/components/ui/badge';
 import { ImageModal } from './ImageModal';
@@ -1617,6 +1617,13 @@ export function ChatMessages({
       const rawContent = message.content || '';
       const cleanedContent = stripReminderBlocks(rawContent);
       const hadReminderBlock = cleanedContent !== rawContent;
+      const reminderScheduled = (message as any)?.metadata?.reminderScheduled as {
+        id?: string;
+        time?: string;
+        scheduledFor?: string;
+        text?: string;
+        deliveryMode?: 'scheduled' | 'fallback_only';
+      } | undefined;
       const fallbackReminderReply = language === 'ar'
         ? 'تم ضبط التذكير. هل تريد أي شيء آخر؟'
         : 'Got it — reminder set. Anything else you need?';
@@ -1867,6 +1874,38 @@ export function ChatMessages({
           {/* Item #8 Batch B1b: memoized markdown renderer — skips re-parse
               on streaming-text updates when bubble content is unchanged. */}
           <MessageMarkdown content={content} isStudyMode={isStudyMode} language={language} />
+          {reminderScheduled && (
+            <div className="mt-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 dark:bg-emerald-500/15 p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                  <Bell className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>{language === 'ar' ? 'تم حفظ التذكير' : 'Reminder saved'}</span>
+                  </div>
+                  {reminderScheduled.text && (
+                    <p className="mt-1 text-sm text-foreground/90 break-words">
+                      {reminderScheduled.text}
+                    </p>
+                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5" />
+                      {formatReminderTime(reminderScheduled.scheduledFor || reminderScheduled.time || '', language)}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5" />
+                      {(reminderScheduled.deliveryMode === 'scheduled')
+                        ? (language === 'ar' ? 'تمت جدولته للدفع' : 'Scheduled for push')
+                        : (language === 'ar' ? 'محفوظ مع مسار احتياطي' : 'Saved with fallback delivery')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {(() => {
             const chip = (message as any)?.metadata?.helpGuideChip as { label?: string; route?: string } | undefined;
             if (!chip?.label || !chip?.route) return null;

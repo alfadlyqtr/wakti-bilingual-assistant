@@ -3,7 +3,6 @@ import { onEvent } from "@/utils/eventBus";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { DesktopHeader } from "@/components/DesktopHeader";
 import { DesktopSidebar } from "@/components/DesktopSidebar";
-import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useLocation } from "react-router-dom";
 
 interface DesktopLayoutProps {
@@ -11,7 +10,6 @@ interface DesktopLayoutProps {
 }
 
 export function DesktopLayout({ children }: DesktopLayoutProps) {
-  useUnreadMessages();
   const location = useLocation();
   const [dashboardLook, setDashboardLook] = useState<string>(
     () => localStorage.getItem('wakti_dashboard_look') || 'homescreen'

@@ -93,6 +93,9 @@ export default function PresentationSlideReadOnly(props: {
 }): React.ReactElement {
   const { slide, theme, language, slideIndex, totalSlides } = props;
   const accentHex = slide.accentColor || getThemeAccentHex(theme);
+  const highlightedStats = Array.isArray(slide.highlightedStats) ? slide.highlightedStats : [];
+  const hasHighlightedStats = highlightedStats.length > 0;
+  const hasColumns = Array.isArray(slide.columns) && slide.columns.length > 0;
 
   const bgStyle = slide.slideBg ? getColorStyle(slide.slideBg, 'background') : undefined;
 
@@ -155,7 +158,65 @@ export default function PresentationSlideReadOnly(props: {
               )}
             </div>
 
-            {slide.imageUrl ? (
+            {hasColumns && !slide.imageUrl && slide.layoutVariant !== 'text_only' ? (
+              <div className="flex-1 grid grid-cols-3 gap-4">
+                {slide.columns?.map((column, index) => (
+                  <div key={index} className="bg-slate-800/80 backdrop-blur rounded-xl p-4 border border-slate-700 flex flex-col justify-start">
+                    <div className="text-3xl mb-3 text-center">{column.icon || '📌'}</div>
+                    <h3 className="font-bold text-white text-center mb-2">{column.title}</h3>
+                    {column.description && (
+                      <p className="text-slate-300 text-center text-sm leading-snug">{column.description}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : hasHighlightedStats ? (
+              <div className={`flex-1 flex ${slide.imageUrl ? 'gap-4 items-center' : ''} min-h-0`}>
+                <div className="flex-1">
+                  <div className={`grid gap-3 items-center ${highlightedStats.length <= 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                    {highlightedStats.map((stat, index) => {
+                      const parts = stat.split(/\n|\n/);
+                      const bigNumber = parts[0] || stat;
+                      const label = parts[1] || '';
+
+                      return (
+                        <div
+                          key={index}
+                          className="rounded-xl p-3 flex flex-col items-center justify-center text-center border border-white/10"
+                          style={{ background: 'rgba(255,255,255,0.07)' }}
+                        >
+                          <span className="text-2xl md:text-3xl font-bold leading-tight" style={{ color: accentHex }}>
+                            {bigNumber.replace(/\*\*/g, '')}
+                          </span>
+                          {label && <span className="text-xs mt-1 opacity-70 text-white">{label.replace(/\*\*/g, '')}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {!slide.imageUrl && slide.bullets && slide.bullets.length > 0 && (
+                    <ul className="space-y-2 mt-4">
+                      {slide.bullets.slice(0, 4).map((bullet, index) => (
+                        <li key={index} className="flex items-start gap-2">
+                          <span className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: slide.bulletDotColor || accentHex }} />
+                          <span
+                            className={`${getFontSizeClass(slide.bulletStyle?.fontSize)} leading-snug ${slide.bulletStyle?.fontWeight === 'bold' ? 'font-bold' : ''}`}
+                            style={{ color: slide.bulletStyle?.color || '#e2e8f0' }}
+                          >
+                            {bullet.replace(/\*\*/g, '')}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {slide.imageUrl && (
+                  <div className="w-2/5 aspect-[16/9] flex-shrink-0">
+                    {renderSlideImage(slide)}
+                  </div>
+                )}
+              </div>
+            ) : slide.imageUrl ? (
               <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 items-center">
                 <div className="flex flex-col pr-2">
                   <ul className="space-y-1">

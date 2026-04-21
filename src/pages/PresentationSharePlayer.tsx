@@ -265,14 +265,6 @@ export default function PresentationSharePlayer(): React.ReactElement {
                     }}
                   />
                 </div>
-              ) : activeSlideDataV2.slideImageUrl ? (
-                <div className="aspect-video rounded-xl overflow-hidden relative w-full bg-black">
-                  <img
-                    src={activeSlideDataV2.slideImageUrl}
-                    alt={activeSlideDataV2.title}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
               ) : (
                 <PresentationSlideReadOnly
                   slide={activeSlideDataV2}

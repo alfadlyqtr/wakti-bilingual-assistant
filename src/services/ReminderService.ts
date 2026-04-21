@@ -252,6 +252,64 @@ export async function getPendingReminders(userId: string): Promise<any[]> {
  */
 export async function cancelReminder(reminderId: string, userId: string): Promise<boolean> {
   try {
+    const { data: reminder, error: fetchError } = await supabase
+      .from('notification_history')
+      .select('id, data')
+      .eq('id', reminderId)
+      .eq('user_id', userId)
+      .eq('type', 'ai_reminder')
+      .eq('push_sent', false)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('[ReminderService] Failed to load reminder before cancel:', fetchError);
+      return false;
+    }
+
+    if (!reminder) {
+      console.warn('[ReminderService] Reminder not found or already sent:', reminderId);
+      return false;
+    }
+
+    const reminderData = (reminder.data && typeof reminder.data === 'object') ? reminder.data as Record<string, any> : null;
+    const onesignalNotificationId = typeof reminderData?.onesignal_notification_id === 'string'
+      ? reminderData.onesignal_notification_id
+      : null;
+
+    if (onesignalNotificationId) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        console.error('[ReminderService] Missing auth token for OneSignal cancel');
+        return false;
+      }
+
+      const response = await fetch(
+        'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/cancel-onesignal-notification',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            notification_id: reminderId,
+            onesignal_notification_id: onesignalNotificationId,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        console.error('[ReminderService] Failed to cancel OneSignal reminder:', errText);
+        return false;
+      }
+
+      console.log('[ReminderService] ✅ Reminder cancelled via OneSignal:', reminderId);
+      return true;
+    }
+
     const { error } = await supabase
       .from('notification_history')
       .delete()

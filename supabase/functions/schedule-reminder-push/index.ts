@@ -84,17 +84,26 @@ serve(async (req) => {
     if (response.ok && result.id) {
       console.log(`[schedule-reminder-push] ✅ Scheduled successfully: OneSignal ID ${result.id}`);
 
-      // Update notification_history to mark as scheduled (not sent yet, but queued)
+      // Update notification_history to mark as scheduled (still pending until actual delivery)
       if (notification_id) {
+        const { data: existing } = await supabase
+          .from("notification_history")
+          .select("data")
+          .eq("id", notification_id)
+          .maybeSingle();
+
+        const mergedData = {
+          ...(((existing?.data as Record<string, unknown> | null) || {})),
+          onesignal_notification_id: result.id,
+          scheduled_delivery: true,
+          scheduled_delivery_requested_at: new Date().toISOString(),
+          scheduled_delivery_provider: "onesignal",
+        };
+
         await supabase
           .from("notification_history")
           .update({ 
-            push_sent: true, // Mark as handled (OneSignal will deliver it)
-            push_sent_at: new Date().toISOString(),
-            data: { 
-              onesignal_notification_id: result.id,
-              scheduled_delivery: true 
-            }
+            data: mergedData
           })
           .eq("id", notification_id);
       }

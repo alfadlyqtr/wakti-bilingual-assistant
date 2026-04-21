@@ -19,7 +19,7 @@ import { Logo3D } from "@/components/Logo3D";
 import { t } from "@/utils/translations";
 import { Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut } from "lucide-react";
 import { UnreadBadge } from "./UnreadBadge";
-import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useUnreadContext } from "@/contexts/UnreadContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { WeatherButton } from "@/components/WeatherButton";
 import { VoiceAssistant } from "@/components/voice/VoiceAssistant";
@@ -30,7 +30,7 @@ export function TabletHeader() {
   const { profile, refetch: refetchProfile } = useUserProfile();
   const navigate = useNavigate();
   const location = useLocation();
-  const { unreadTotal } = useUnreadMessages();
+  const { unreadTotal } = useUnreadContext();
   const [avatarKey, setAvatarKey] = useState(Date.now());
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   // Local override for immediate avatar display before refetch completes

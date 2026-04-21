@@ -181,12 +181,17 @@ async function lookupIpGeo(ip: string): Promise<IpGeoLite | null> {
   }
 }
 
+function normalizeContinuityText(input: unknown, maxLength: number): string {
+  if (typeof input !== 'string') return '';
+  return input.replace(/\s+/g, ' ').trim().slice(0, maxLength);
+}
+
 function buildStayHotSummary(recentMessages: unknown[]): string {
   try {
     if (!Array.isArray(recentMessages) || recentMessages.length === 0) return '';
     const msgs = recentMessages
       .filter((m) => m && typeof m === 'object')
-      .slice(-12)
+      .slice(-8)
       .map((m) => m as Record<string, unknown>);
 
     const texts: Array<{ role: string; content: string; idx: number }> = [];
@@ -196,7 +201,7 @@ function buildStayHotSummary(recentMessages: unknown[]): string {
       const content = typeof m.content === 'string' ? m.content : '';
       if (!content) continue;
       if (role !== 'user' && role !== 'assistant') continue;
-      texts.push({ role, content: content.slice(0, 600), idx: idx++ });
+      texts.push({ role, content: content.slice(0, 280), idx: idx++ });
     }
     if (texts.length === 0) return '';
 
@@ -276,9 +281,9 @@ function buildStayHotSummary(recentMessages: unknown[]): string {
 
     const userMsgs = texts.filter(t => t.role === 'user');
     const recentUserRequests: string[] = [];
-    for (let i = 0; i < Math.min(userMsgs.length, 6); i++) {
+    for (let i = 0; i < Math.min(userMsgs.length, 3); i++) {
       const msg = userMsgs[userMsgs.length - 1 - i];
-      if (msg && msg.content.length > 4) recentUserRequests.push(msg.content.slice(0, 220));
+      if (msg && msg.content.length > 4) recentUserRequests.push(msg.content.slice(0, 140));
     }
 
     let intent = 'General Chat';
@@ -298,15 +303,34 @@ function buildStayHotSummary(recentMessages: unknown[]): string {
 
     const locationLine = bracketedEntities.find(e => e.startsWith('[User Location:')) || '';
 
-    // CRITICAL: Detect current conversation topic from last exchange
     const lastAssistant = [...texts].reverse().find((t) => t.role === 'assistant')?.content || '';
     let currentTopic = 'General conversation';
     let userGoal = 'Not specified';
     
-    // Analyze last assistant message to understand what user is working on
-    if (lastAssistant) {
+    if (lastUser) {
+      if (/\b(remind|reminder|alert|notify|calendar|schedule|تذكير|ذكرني|ذكّرني|نبهني|نبهني)\b/i.test(lastUserLower)) {
+        currentTopic = 'Reminder & Scheduling';
+        userGoal = 'Set, review, or manage a reminder';
+      } else if (/\b(search|find|look up|google|near me|nearest|closest)\b/i.test(lastUserLower)) {
+        currentTopic = 'Search & Discovery';
+        userGoal = 'Find specific, relevant information quickly';
+      } else if (/\b(image|photo|document|resume|cv|certificate|id|passport|invoice|receipt)\b/i.test(lastUserLower)) {
+        currentTopic = 'Image/Document Analysis';
+        userGoal = 'Analyze or extract information from an uploaded file';
+      } else if (/\b(explain|learn|understand|study|teach|what is|how does|compare|pros and cons)\b/i.test(lastUserLower)) {
+        currentTopic = 'Learning & Research';
+        userGoal = 'Understand a concept clearly';
+      } else if (/\b(create|generate|write|design|build|make)\b/i.test(lastUserLower)) {
+        currentTopic = 'Content Creation';
+        userGoal = 'Create or generate something useful';
+      } else if (/\b(fix|debug|error|problem|issue|help)\b/i.test(lastUserLower)) {
+        currentTopic = 'Problem Solving';
+        userGoal = 'Resolve a problem or unblock progress';
+      }
+    }
+
+    if (currentTopic === 'General conversation' && lastAssistant) {
       const assistLower = lastAssistant.toLowerCase();
-      // Document/Image analysis patterns
       if (/\b(image|photo|document|resume|cv|certificate|id|passport|invoice|receipt)\b/i.test(assistLower)) {
         if (/\b(resume|cv)\b/i.test(assistLower)) {
           currentTopic = 'Resume/CV Analysis';
@@ -349,35 +373,28 @@ function buildStayHotSummary(recentMessages: unknown[]): string {
     }
 
     const lines: string[] = [];
-    
-    // NEW: Add current topic section at the top (most important)
     lines.push('🎯 CURRENT CONVERSATION TOPIC (CRITICAL - USE THIS FOR CONTEXT)');
     lines.push(`- TOPIC: ${currentTopic}`);
     lines.push(`- USER GOAL: ${userGoal}`);
     if (lastUser.length > 0) {
-      lines.push(`- LAST USER MESSAGE: ${lastUser.slice(0, 200)}`);
+      lines.push(`- LAST USER MESSAGE: ${lastUser.slice(0, 140)}`);
     }
-    lines.push('');
-    
-    lines.push('KEY ENTITIES DETECTED');
-    const keyEntitiesOut = [...bracketedEntities];
-    for (const c of topCaps) keyEntitiesOut.push(`[Entity: ${c}]`);
-    if (keyEntitiesOut.length > 0) lines.push(`- ${keyEntitiesOut.slice(0, 14).join('\n- ')}`);
-    else lines.push('- [None]');
 
     lines.push('USER INTENT (BEST GUESS)');
     lines.push(`- [User Intent: ${intent}]`);
 
-    lines.push('USER LOCATION (BEST AVAILABLE)');
-    lines.push(`- ${locationLine || '[User Location: Unknown]'}`);
-
     lines.push('FACTS THE USER STATED (HIGH VALUE)');
-    if (facts.length > 0) lines.push(`- ${facts.join('\n- ')}`);
+    if (facts.length > 0) lines.push(`- ${facts.slice(0, 4).join('\n- ')}`);
+    else if (locationLine) lines.push(`- ${locationLine}`);
     else lines.push('- [None]');
 
-    lines.push('ACTIVE TOPICS / KEYWORDS');
-    if (topKeywords.length > 0) lines.push(`- ${topKeywords.slice(0, 10).join(', ')}`);
-    else lines.push('- [None]');
+    const keyEntitiesOut = [...bracketedEntities];
+    for (const c of topCaps) keyEntitiesOut.push(`[Entity: ${c}]`);
+    if (keyEntitiesOut.length > 0 || topKeywords.length > 0) {
+      lines.push('KEY ENTITIES / KEYWORDS');
+      if (keyEntitiesOut.length > 0) lines.push(`- ${keyEntitiesOut.slice(0, 6).join('\n- ')}`);
+      if (topKeywords.length > 0) lines.push(`- Keywords: ${topKeywords.slice(0, 5).join(', ')}`);
+    }
 
     lines.push('RECENT USER REQUESTS (NEWEST FIRST)');
     if (recentUserRequests.length > 0) lines.push(`- ${recentUserRequests.map((t, i) => `[${i + 1}] ${t}`).join('\n- ')}`);
@@ -389,6 +406,438 @@ function buildStayHotSummary(recentMessages: unknown[]): string {
   } catch {
     return '';
   }
+}
+
+function buildContinuityContext(options: {
+  conversationSummary?: string;
+  stayHotSummary?: string;
+  locationContext?: string;
+  includeLocation?: boolean;
+}): string {
+  const parts: string[] = [];
+  const conversationSummary = normalizeContinuityText(options.conversationSummary, 700);
+  const stayHotSummary = normalizeContinuityText(options.stayHotSummary, 900);
+  const locationContext = normalizeContinuityText(options.locationContext, 220);
+
+  if (conversationSummary) {
+    parts.push(`EARLIER CONVERSATION SUMMARY:\n${conversationSummary}`);
+  }
+  if (stayHotSummary) {
+    parts.push(stayHotSummary);
+  }
+  if (options.includeLocation && locationContext) {
+    parts.push(locationContext);
+  }
+
+  return parts.join('\n\n').trim();
+}
+
+type DurableMemoryItem = {
+  key: string;
+  type: 'identity_context' | 'project_context' | 'recurring_goal' | 'working_style' | 'priority';
+  text: string;
+  confidence: 'high' | 'medium';
+  evidenceCount: number;
+  keywords: string[];
+  source: 'conversation';
+};
+
+type HelpfulMemorySettings = {
+  helpful_memory_enabled: boolean;
+};
+
+type HelpfulMemoryItem = {
+  id: string;
+  scope: 'all_chats' | 'this_chat';
+  conversation_id: string | null;
+  category: 'preference' | 'project' | 'goal' | 'saved_context';
+  memory_text: string;
+  source: 'user_added' | 'auto_saved' | 'user_confirmed' | 'conversation';
+  status: 'active' | 'disabled' | 'deleted' | 'replaced';
+  sensitivity: 'normal' | 'careful';
+  confidence: 'high' | 'medium';
+  evidence_count: number;
+  keywords: string[];
+};
+
+function normalizeHelpfulMemoryText(input: unknown, maxLength = 180): string {
+  return normalizeContinuityText(input, maxLength);
+}
+
+function extractHelpfulMemoryKeywords(...inputs: string[]): string[] {
+  const stopwords = new Set([
+    'about', 'after', 'again', 'being', 'could', 'doing', 'from', 'have', 'just', 'like', 'make', 'more', 'need',
+    'only', 'really', 'should', 'that', 'their', 'them', 'then', 'they', 'this', 'want', 'with', 'would', 'your',
+    'there', 'while', 'into', 'over', 'under', 'plain', 'english', 'stage', 'stages', 'audit', 'report'
+  ]);
+
+  return Array.from(new Set(
+    inputs
+      .join(' ')
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .map((word) => word.trim())
+      .filter((word) => word.length >= 4 && !stopwords.has(word))
+  )).slice(0, 8);
+}
+
+function classifyHelpfulMemorySensitivity(text: string): 'normal' | 'careful' {
+  const value = normalizeHelpfulMemoryText(text, 220).toLowerCase();
+  if (!value) return 'normal';
+  if (/\bwife\b|\bhusband\b|\bson\b|\bdaughter\b|\bfamily\b|\bhealth\b|\bmedical\b|\bdoctor\b|\bbank\b|\bsalary\b|\bdebt\b|\bprayer\b|\breligion\b|زوجتي|زوجي|أطفالي|عائلتي|صحتي|طبيب|راتب|دين|صلاة|دين/i.test(value)) {
+    return 'careful';
+  }
+  return 'normal';
+}
+
+function normalizeHelpfulMemoryItems(input: unknown): HelpfulMemoryItem[] {
+  if (!Array.isArray(input)) return [];
+  const out: HelpfulMemoryItem[] = [];
+
+  for (const raw of input) {
+    if (!raw || typeof raw !== 'object') continue;
+    const item = raw as Record<string, unknown>;
+    const id = normalizeHelpfulMemoryText(item.id, 64);
+    const scope = item.scope === 'this_chat' ? 'this_chat' : 'all_chats';
+    const category = item.category === 'project' || item.category === 'goal' || item.category === 'saved_context'
+      ? item.category
+      : 'preference';
+    const memory_text = normalizeHelpfulMemoryText(item.memory_text, 180);
+    const source = item.source === 'auto_saved' || item.source === 'user_confirmed' || item.source === 'conversation'
+      ? item.source
+      : 'user_added';
+    const status = item.status === 'disabled' || item.status === 'deleted' || item.status === 'replaced'
+      ? item.status
+      : 'active';
+    const confidence = item.confidence === 'high' ? 'high' : 'medium';
+    const evidence_count = typeof item.evidence_count === 'number'
+      ? Math.max(1, Math.min(8, Math.round(item.evidence_count)))
+      : 1;
+    const conversation_id = typeof item.conversation_id === 'string' && item.conversation_id.trim()
+      ? item.conversation_id.trim().slice(0, 120)
+      : null;
+    const sensitivity = item.sensitivity === 'careful' ? 'careful' : classifyHelpfulMemorySensitivity(memory_text);
+    const keywords = Array.isArray(item.keywords)
+      ? item.keywords
+          .filter((value) => typeof value === 'string')
+          .map((value) => normalizeHelpfulMemoryText(value, 24).toLowerCase())
+          .filter(Boolean)
+          .slice(0, 8)
+      : extractHelpfulMemoryKeywords(memory_text, category, scope);
+
+    if (!id || !memory_text) continue;
+
+    out.push({
+      id,
+      scope,
+      conversation_id,
+      category,
+      memory_text,
+      source,
+      status,
+      sensitivity,
+      confidence,
+      evidence_count,
+      keywords
+    });
+  }
+
+  return out.slice(0, 50);
+}
+
+function scoreHelpfulMemoryRelevance(
+  item: HelpfulMemoryItem,
+  message: string,
+  activeTrigger: string,
+  chatSubmode: string
+): number {
+  const query = normalizeHelpfulMemoryText(message, 240).toLowerCase();
+  let score = item.evidence_count * 10 + (item.confidence === 'high' ? 8 : 3);
+  const overlaps = item.keywords.filter((keyword) => query.includes(keyword)).length;
+  score += overlaps * 12;
+
+  if (item.category === 'project' && /project|product|build|feature|chat|wakti|prompt|memory|route|routing|app/i.test(query)) score += 10;
+  if (item.category === 'goal' && /goal|need|improve|fix|better|solve|reliable|quality|speed|fast|performance/i.test(query)) score += 9;
+  if (item.category === 'preference' && /explain|plan|audit|report|stage|help|walk me through|style|prefer/i.test(query)) score += 8;
+  if (item.category === 'saved_context' && /remember|context|card|gift|study|thread|this chat/i.test(query)) score += 7;
+  if (item.scope === 'this_chat') score += 5;
+  if (activeTrigger === 'search' && item.category === 'preference') score -= 4;
+  if (chatSubmode === 'study' && item.category === 'project') score -= 4;
+
+  return score;
+}
+
+function selectRelevantHelpfulMemory(
+  items: HelpfulMemoryItem[],
+  message: string,
+  activeTrigger: string,
+  chatSubmode: string
+): HelpfulMemoryItem[] {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const limit = activeTrigger === 'search' ? 2 : 3;
+
+  return [...items]
+    .map((item) => ({ item, score: scoreHelpfulMemoryRelevance(item, message, activeTrigger, chatSubmode) }))
+    .filter((entry) => entry.score >= 16)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((entry) => entry.item);
+}
+
+function buildPromptMemoryContext(lines: string[]): string {
+  const normalizedLines = Array.from(new Set(
+    lines
+      .map((line) => normalizeHelpfulMemoryText(line, 180))
+      .filter(Boolean)
+  )).slice(0, 4);
+
+  if (normalizedLines.length === 0) return '';
+
+  return [
+    'HELPFUL MEMORY',
+    'Use this only when relevant. Do not let it override Personal Touch, the current request, or fresh conversation context.',
+    ...normalizedLines.map((line) => `- ${line}`)
+  ].join('\n').trim();
+}
+
+function buildCombinedHelpfulMemoryContext(
+  helpfulMemoryItems: HelpfulMemoryItem[],
+  durableMemoryItems: DurableMemoryItem[]
+): string {
+  const lines = [
+    ...helpfulMemoryItems.map((item) => item.memory_text),
+    ...durableMemoryItems.map((item) => item.text)
+  ];
+  return buildPromptMemoryContext(lines);
+}
+
+async function getHelpfulMemorySettings(
+  supabaseAdmin: any,
+  userId?: string
+): Promise<HelpfulMemorySettings> {
+  if (!userId) return { helpful_memory_enabled: false };
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('user_helpful_memory_settings')
+      .select('helpful_memory_enabled')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('helpful memory settings fetch failed', error);
+      return { helpful_memory_enabled: true };
+    }
+
+    return {
+      helpful_memory_enabled: data?.helpful_memory_enabled !== false
+    };
+  } catch (error) {
+    console.warn('helpful memory settings exception', error);
+    return { helpful_memory_enabled: true };
+  }
+}
+
+async function fetchHelpfulMemoryItems(
+  supabaseAdmin: any,
+  userId: string,
+  conversationId: string | null
+): Promise<HelpfulMemoryItem[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('user_helpful_memory')
+      .select('id, scope, conversation_id, category, memory_text, source, status, sensitivity, confidence, evidence_count, keywords')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .order('updated_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      console.warn('helpful memory fetch failed', error);
+      return [];
+    }
+
+    return normalizeHelpfulMemoryItems(data).filter((item) => item.scope === 'all_chats' || (!!conversationId && item.conversation_id === conversationId));
+  } catch (error) {
+    console.warn('helpful memory fetch exception', error);
+    return [];
+  }
+}
+
+async function touchHelpfulMemoryItems(
+  supabaseAdmin: any,
+  ids: string[]
+): Promise<void> {
+  const safeIds = Array.from(new Set(ids.filter(Boolean))).slice(0, 6);
+  if (safeIds.length === 0) return;
+
+  try {
+    await supabaseAdmin
+      .from('user_helpful_memory')
+      .update({ last_used_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .in('id', safeIds);
+  } catch (error) {
+    console.warn('helpful memory touch failed', error);
+  }
+}
+
+async function upsertAutoHelpfulMemory(
+  supabaseAdmin: any,
+  userId: string,
+  durableMemoryItems: DurableMemoryItem[]
+): Promise<void> {
+  if (!Array.isArray(durableMemoryItems) || durableMemoryItems.length === 0) return;
+
+  const categoryByType: Record<DurableMemoryItem['type'], HelpfulMemoryItem['category']> = {
+    identity_context: 'saved_context',
+    project_context: 'project',
+    recurring_goal: 'goal',
+    working_style: 'preference',
+    priority: 'goal'
+  };
+
+  for (const item of durableMemoryItems.slice(0, 4)) {
+    const memoryText = normalizeHelpfulMemoryText(item.text, 180);
+    if (!memoryText) continue;
+    if (item.type === 'identity_context') continue;
+    const sensitivity = classifyHelpfulMemorySensitivity(memoryText);
+    if (sensitivity === 'careful') continue;
+
+    const category = categoryByType[item.type];
+    const keywords = extractHelpfulMemoryKeywords(memoryText, category, ...(Array.isArray(item.keywords) ? item.keywords : []));
+
+    try {
+      const { data: existing } = await supabaseAdmin
+        .from('user_helpful_memory')
+        .select('id, evidence_count, confidence, keywords')
+        .eq('user_id', userId)
+        .eq('scope', 'all_chats')
+        .eq('category', category)
+        .eq('memory_text', memoryText)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (existing?.id) {
+        const mergedKeywords = extractHelpfulMemoryKeywords(memoryText, ...(Array.isArray(existing.keywords) ? existing.keywords : []), ...keywords);
+        await supabaseAdmin
+          .from('user_helpful_memory')
+          .update({
+            confidence: existing.confidence === 'high' || item.confidence === 'high' ? 'high' : 'medium',
+            evidence_count: Math.max(Number(existing.evidence_count || 1), Number(item.evidenceCount || 1)),
+            keywords: mergedKeywords,
+            updated_at: new Date().toISOString(),
+            last_confirmed_at: new Date().toISOString()
+          })
+          .eq('id', existing.id);
+      } else {
+        await supabaseAdmin
+          .from('user_helpful_memory')
+          .insert({
+            user_id: userId,
+            scope: 'all_chats',
+            conversation_id: null,
+            category,
+            memory_text: memoryText,
+            source: 'auto_saved',
+            status: 'active',
+            sensitivity,
+            confidence: item.confidence,
+            evidence_count: Math.max(1, Number(item.evidenceCount || 1)),
+            keywords,
+            updated_at: new Date().toISOString(),
+            last_confirmed_at: new Date().toISOString()
+          });
+      }
+    } catch (error) {
+      console.warn('auto helpful memory upsert failed', error);
+    }
+  }
+}
+
+function normalizeDurableMemoryItems(input: unknown): DurableMemoryItem[] {
+  if (!Array.isArray(input)) return [];
+
+  const allowedTypes = new Set(['identity_context', 'project_context', 'recurring_goal', 'working_style', 'priority']);
+  const out: DurableMemoryItem[] = [];
+
+  for (const raw of input) {
+    if (!raw || typeof raw !== 'object') continue;
+    const item = raw as Record<string, unknown>;
+    const key = normalizeContinuityText(item.key, 64).replace(/[^a-z0-9_\-]/gi, '_');
+    const type = typeof item.type === 'string' && allowedTypes.has(item.type)
+      ? item.type as DurableMemoryItem['type']
+      : null;
+    const text = normalizeContinuityText(item.text, 180);
+    const confidence = item.confidence === 'high' ? 'high' : 'medium';
+    const evidenceCount = typeof item.evidenceCount === 'number'
+      ? Math.max(1, Math.min(6, Math.round(item.evidenceCount)))
+      : 1;
+    const keywords = Array.isArray(item.keywords)
+      ? item.keywords
+          .filter((value) => typeof value === 'string')
+          .map((value) => normalizeContinuityText(value, 24).toLowerCase())
+          .filter(Boolean)
+          .slice(0, 6)
+      : [];
+
+    if (!key || !type || !text) continue;
+    if (out.some((existing) => existing.key === key || existing.text === text)) continue;
+
+    out.push({
+      key,
+      type,
+      text,
+      confidence,
+      evidenceCount,
+      keywords,
+      source: 'conversation'
+    });
+  }
+
+  return out.slice(0, 6);
+}
+
+function scoreDurableMemoryItem(
+  item: DurableMemoryItem,
+  message: string,
+  activeTrigger: string,
+  chatSubmode: string
+): number {
+  const query = normalizeContinuityText(message, 240).toLowerCase();
+  let score = item.evidenceCount * 10 + (item.confidence === 'high' ? 8 : 3);
+  const overlaps = item.keywords.filter((keyword) => query.includes(keyword)).length;
+  score += overlaps * 12;
+
+  if (item.type === 'project_context' && /project|product|build|feature|chat|wakti|prompt|memory|route|routing|app/i.test(query)) score += 10;
+  if (item.type === 'recurring_goal' && /goal|need|improve|fix|better|solve|reliable|quality/i.test(query)) score += 8;
+  if (item.type === 'working_style' && /explain|plan|audit|report|stage|help|walk me through/i.test(query)) score += 8;
+  if (item.type === 'priority' && /speed|fast|performance|latency|token|lean|quality/i.test(query)) score += 10;
+  if (activeTrigger === 'search' && item.type === 'working_style') score -= 5;
+  if (chatSubmode === 'study' && item.type === 'project_context') score -= 4;
+
+  return score;
+}
+
+function selectRelevantDurableMemory(
+  items: DurableMemoryItem[],
+  message: string,
+  activeTrigger: string,
+  chatSubmode: string
+): DurableMemoryItem[] {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const limit = activeTrigger === 'search' ? 2 : 3;
+
+  return [...items]
+    .map((item) => ({ item, score: scoreDurableMemoryItem(item, message, activeTrigger, chatSubmode) }))
+    .filter((entry) => entry.score >= 16)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((entry) => entry.item);
+}
+
+function messageRequestsReminder(message: string): boolean {
+  if (!message || typeof message !== 'string') return false;
+  return /\b(remind(?:er)?|alert|notify|notification|remember to|don't let me forget|dont let me forget|wake me|ping me|nudge me|set (?:a )?reminder|set (?:a )?note|tell me (?:at|in|tomorrow|later)|mark my calendar)\b|تذكير|ذكّرني|ذكرني|تذكرني|لا تخليني أنسى|نبّهني|نبهني|صحيني|ذكرني\s+(?:في|بكرة|غداً|غدا|بعد|الساعة)/i.test(message);
 }
 
 
@@ -675,26 +1124,26 @@ function buildSearchFollowupContents(
     const u = lastTurns[i];
     const a = lastTurns[i + 1];
     if (!u || u.role !== 'user') continue;
-    const uText = u.content.replace(/\s+/g, ' ').trim().slice(0, 1000);
+    const uText = u.content.replace(/\s+/g, ' ').trim().slice(0, 450);
     let aText = a && a.role === 'assistant' ? a.content.replace(/\s+/g, ' ').trim() : '';
-    aText = aText.slice(0, 1000);
+    aText = aText.slice(0, 450);
     if (aText) summaryLines.push(`- User: ${uText}\n  Assistant: ${aText}`);
     else summaryLines.push(`- User: ${uText}`);
   }
 
-  const compactSummary = summaryLines.join('\n').slice(0, 1200);
+  const compactSummary = summaryLines.join('\n').slice(0, 700);
 
   if (compactSummary || lastUser || lastAssistant) {
     const ctx =
       `CONTEXT (last turns, for continuity only):\n` +
       `${compactSummary ? compactSummary + '\n\n' : ''}` +
-      `${lastUser ? `Last user message: ${lastUser.slice(0, 5000)}\n` : ''}` +
-      `${lastAssistant ? `Last assistant answer: ${lastAssistant.slice(0, 2000)}\n` : ''}` +
+      `${lastUser ? `Last user message: ${lastUser.slice(0, 400)}\n` : ''}` +
+      `${lastAssistant ? `Last assistant answer: ${lastAssistant.slice(0, 500)}\n` : ''}` +
       `\nNow answer the user's new request using google_search.`;
 
     contents.push({ role: 'user', parts: [{ text: ctx }] });
     if (lastAssistant) {
-      contents.push({ role: 'model', parts: [{ text: lastAssistant.slice(0, 2000) }] });
+      contents.push({ role: 'model', parts: [{ text: lastAssistant.slice(0, 500) }] });
     }
   }
 
@@ -706,22 +1155,32 @@ function buildSearchFollowupContents(
 const chatSearchCache = new Map<string, { result: string; ts: number }>();
 const CHAT_SEARCH_CACHE_TTL_MS = 60_000;
 
+function isKnowledgeOrCreativeQuery(query: string): boolean {
+  return /\b(explain|teach|study|summari[sz]e|summary|analy[sz]e|compare|pros?\s+and\s+cons|definition|define|meaning|history|why does|how does|tutorial|guide|essay|write|rewrite|improve|translate|brainstorm|idea|ideas|debug|fix this code|code review|refactor|math|equation|solve|proof)\b|اشرح|لخص|حلل|قارن|عرّف|عرف|المعنى|التاريخ|ليش|لماذا|كيف|دليل|مقال|اكتب|ترجم|افكار|أفكار|صحح|برمجة|معادلة|حل/i.test(query);
+}
+
+function isUserLocalClockQuestion(query: string): boolean {
+  return /\b(what time is it|current time|local time|time now)\b|الساعة كم|كم الساعة|الوقت الآن|الوقت الان/i.test(query);
+}
+
 // Brain-First hard router: returns true ONLY for explicit live-data queries.
 // Everything else (math, history, science, creative, general knowledge) → pure brain.
 function chatNeedsSearch(query: string): boolean {
-  const q = query.toLowerCase();
-  // Explicit live-data keywords that require grounding
-  const livePatterns = [
-    /\b(weather|forecast|temperature|rain|snow|humid|wind speed)\b/,
-    /\b(stock price|share price|market cap|nasdaq|nyse|crypto price|bitcoin price|eth price)\b/,
-    /\b(current score|live score|match result|final score|halftime|standings today)\b/,
-    /\b(breaking news|latest news|news today|headlines today)\b/,
-    /\b(right now|as of today|this moment|current time|what time is it)\b/,
-    /\b(today's|tonight's|this week's).{0,30}(news|price|score|weather|result)\b/,
-    /\b(exchange rate|usd to|eur to|currency today)\b/,
-    /\b(earthquake|tsunami|hurricane|cyclone|flood).{0,20}(today|now|latest|current)\b/,
-  ];
-  return livePatterns.some((p) => p.test(q));
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return false;
+  if (isUserLocalClockQuestion(q)) return false;
+  if (isKnowledgeOrCreativeQuery(q)) return false;
+
+  const hasTimeCue = /\b(today|tonight|now|right now|latest|current|live|this week|this month|as of today|breaking)\b|اليوم|الآن|الان|مباشر|حالي|أحدث|اخر/i.test(q);
+
+  if (/\b(weather|forecast|temperature|rain|snow|humid|wind speed)\b|طقس|درجة الحرارة|توقعات/i.test(q)) return true;
+  if (/\b(breaking news|latest news|news today|headline|headlines today)\b|أخبار عاجلة|آخر الأخبار|اخر الأخبار/i.test(q)) return true;
+  if (/\b(current score|live score|match result|final score|halftime|fulltime|standings today|table today)\b|نتيجة مباشرة|ترتيب اليوم|مباراة اليوم/i.test(q)) return true;
+  if (/\b(stock price|share price|market cap|nasdaq|nyse|crypto price|bitcoin price|eth price|exchange rate|usd to|eur to|gbp to|currency today)\b|سعر السهم|سعر البيتكوين|سعر العملة|سعر الصرف/i.test(q)) return true;
+  if (/\b(earthquake|tsunami|hurricane|cyclone|flood)\b|زلزال|تسونامي|إعصار|فيضان/i.test(q) && hasTimeCue) return true;
+  if (/\b(today's|tonight's|this week's).{0,30}(news|price|score|weather|result)\b/.test(q)) return true;
+
+  return false;
 }
 
 // Chat mode: model is determined by engineTier at the call site
@@ -742,7 +1201,7 @@ async function streamGemini3FlashChat(
     if (Array.isArray(recentMessages) && recentMessages.length > 0) {
       const msgs = recentMessages
         .filter((m) => m && typeof m === 'object')
-        .slice(-12)
+        .slice(-10)
         .map((m) => m as Record<string, unknown>);
 
       for (let i = 0; i < msgs.length; i++) {
@@ -753,9 +1212,11 @@ async function streamGemini3FlashChat(
         if (r !== 'user' && r !== 'assistant') continue;
         const role: 'user' | 'model' = r === 'assistant' ? 'model' : 'user';
         
-        // Conditional slicing: historical messages get 1500 char limit, current message gets 15000
+        // Keep historical replay compact — the current query is added separately in full below.
         const isLastMessage = i === msgs.length - 1;
-        const charLimit = isLastMessage ? 15000 : 1500;
+        const charLimit = role === 'model'
+          ? 700
+          : (isLastMessage ? 1000 : 800);
         contents.push({ role, parts: [{ text: c.slice(0, charLimit) }] });
       }
     }
@@ -795,7 +1256,7 @@ async function streamGemini3FlashChat(
   const body: Record<string, unknown> = {
     contents,
     // When grounding: limit to 3 snippets + 2000 tokens for a fast fact-check, not a research paper
-    generationConfig: { temperature: 0.4, maxOutputTokens: useSearch ? 4000 : 6000 },
+    generationConfig: { temperature: 0.4, maxOutputTokens: useSearch ? 2800 : 4500 },
   };
   if (useSearch) {
     body.tools = [{ google_search: {} }];
@@ -1149,9 +1610,11 @@ async function interceptAndScheduleReminder(
         if (insertError) {
           console.error('⚠️ REMINDER INTERCEPT: Failed to insert notification_history row', insertError.message);
         } else {
+          // Reminder row saved successfully; delivery scheduling continues below.
         }
 
         const notificationId = inserted?.id || null;
+        let reminderDeliveryMode: 'scheduled' | 'fallback_only' = 'fallback_only';
 
         const scheduleUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/schedule-reminder-push`;
         const schedResp = await fetch(scheduleUrl, {
@@ -1170,12 +1633,16 @@ async function interceptAndScheduleReminder(
           }),
         });
         if (schedResp.ok) {
-          try {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ reminderScheduled: { time: timeStr, text: reminderText } })}\n\n`));
-          } catch { /* stream may be closing */ }
+          reminderDeliveryMode = 'scheduled';
         } else {
           const errBody = await schedResp.text();
           console.error(`⚠️ REMINDER INTERCEPT: Schedule failed ${schedResp.status}`, errBody);
+        }
+
+        if (notificationId) {
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ reminderScheduled: { id: notificationId, time: timeStr, scheduledFor: validTimeStr, text: reminderText, deliveryMode: reminderDeliveryMode } })}\n\n`));
+          } catch { /* stream may be closing */ }
         }
       } catch (err) {
         console.error('⚠️ REMINDER INTERCEPT: Fetch error', err);
@@ -2190,13 +2657,24 @@ serve(async (req) => {
           message, 
           language = 'en', 
           recentMessages = [], 
+          conversationId = null,
+          conversationSummary = '',
+          durableMemory = [],
           personalTouch = null, 
           activeTrigger = 'general',
           chatSubmode = 'chat', // 'chat' or 'study'
           location = null,
           clientTimezone = 'UTC',
           attachedFiles = [] // Images for Study mode OCR→Wolfram pipeline
-        } = body as { message?: string; language?: string; recentMessages?: unknown[]; personalTouch?: unknown; activeTrigger?: string; chatSubmode?: string; location?: unknown; clientTimezone?: string; attachedFiles?: unknown[] };
+        } = body as { message?: string; language?: string; recentMessages?: unknown[]; conversationId?: string | null; conversationSummary?: string; durableMemory?: unknown[]; personalTouch?: unknown; activeTrigger?: string; chatSubmode?: string; location?: unknown; clientTimezone?: string; attachedFiles?: unknown[] };
+        const requestLocation = (location && typeof location === 'object')
+          ? location as { city?: string; country?: string; latitude?: number; longitude?: number }
+          : null;
+        const normalizedConversationId = typeof conversationId === 'string' && conversationId.trim()
+          ? conversationId.trim().slice(0, 120)
+          : null;
+        const rollingConversationSummary = normalizeContinuityText(conversationSummary, 700);
+        const normalizedDurableMemory = normalizeDurableMemoryItems(durableMemory);
 
         // Resolve engineTier from personalTouch payload ('speed' | 'intelligence', default 'speed')
         const engineTier: 'speed' | 'intelligence' =
@@ -2249,12 +2727,21 @@ serve(async (req) => {
         // Device GPS (via Natively SDK) is the source of truth for city/coordinates.
         const clientIp = extractClientIp(req);
         // clientTimezone from browser is always authoritative — only fall back to IP geo if it is absent or UTC
-        const needsIpGeo = (!clientTimezone || clientTimezone === 'UTC') && effectiveTrigger !== 'chat';
+        const needsIpGeo = !clientTimezone || clientTimezone === 'UTC';
         const ipGeo = needsIpGeo
           ? await lookupIpGeo(clientIp)
           : null;
 
         const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        const helpfulMemorySettings = await getHelpfulMemorySettings(supabaseAdmin, userId);
+        const helpfulMemoryItems = helpfulMemorySettings.helpful_memory_enabled && userId
+          ? await fetchHelpfulMemoryItems(supabaseAdmin, userId, normalizedConversationId)
+          : [];
+        if (helpfulMemorySettings.helpful_memory_enabled && userId && normalizedDurableMemory.length > 0) {
+          upsertAutoHelpfulMemory(supabaseAdmin, userId, normalizedDurableMemory).catch((error) => {
+            console.warn('helpful memory auto-capture failed', error);
+          });
+        }
 
         const getProfileTimezone = async (uid?: string): Promise<string | null> => {
           try {
@@ -2294,7 +2781,7 @@ serve(async (req) => {
 
         // Skip DB timezone lookup when frontend already sent a valid timezone.
         // This eliminates 2 sequential Supabase queries on every chat message.
-        const profileTimezone = (!clientTimezone || clientTimezone === 'UTC') && effectiveTrigger !== 'chat'
+        const profileTimezone = (!clientTimezone || clientTimezone === 'UTC')
           ? await getProfileTimezone(userId)
           : null;
 
@@ -2319,10 +2806,10 @@ serve(async (req) => {
         // Device GPS only — no IP geo fallback for city/coordinates
         let fullLocationContext = '';
         {
-          let userCity = location?.city || '';
-          let userCountry = location?.country || '';
-          const userLat = location?.latitude;
-          const userLng = location?.longitude;
+          let userCity = requestLocation?.city || '';
+          let userCountry = requestLocation?.country || '';
+          const userLat = requestLocation?.latitude;
+          const userLng = requestLocation?.longitude;
           
           // Reverse geocode only on search path — chat doesn't need precise city/coords
           if (userLat && userLng && !userCity && effectiveTrigger !== 'chat') {
@@ -2395,7 +2882,7 @@ serve(async (req) => {
         // Active reminders: fire-and-forget fetch — never blocks the stream.
         // Result is passed into system prompt only when it resolves before buildSystemPrompt is called.
         // For chat mode with no reminder keywords, skip entirely.
-        const messageHasReminderKeyword = /remind|reminder|alert|notify|don.{0,5}forget|تذكير|ذكّرني|تذكرني/i.test(message || '');
+        const messageHasReminderKeyword = messageRequestsReminder(message || '');
         let activeRemindersContext = '';
         const remindersPromise: Promise<string> = (userId && messageHasReminderKeyword)
           ? (async () => {
@@ -2404,7 +2891,7 @@ serve(async (req) => {
                   .from('notification_history')
                   .select('reminder_content, scheduled_for')
                   .eq('user_id', userId)
-                  .eq('type', 'reminder')
+                  .eq('type', 'ai_reminder')
                   .eq('push_sent', false)
                   .gt('scheduled_for', new Date().toISOString())
                   .order('scheduled_for', { ascending: true })
@@ -2444,7 +2931,25 @@ serve(async (req) => {
 
         // Lazy-load: determine useSearch now so buildSystemPrompt can conditionally include blocks
         const chatUsesSearch = (effectiveTrigger === 'chat') && chatNeedsSearch(message || '');
-        const systemPrompt = buildSystemPrompt(
+        const selectedDurableMemory = selectRelevantDurableMemory(normalizedDurableMemory, message || '', effectiveTrigger, chatSubmode);
+        const selectedHelpfulMemory = helpfulMemorySettings.helpful_memory_enabled
+          ? selectRelevantHelpfulMemory(helpfulMemoryItems, message || '', effectiveTrigger, chatSubmode)
+          : [];
+        const helpfulMemoryContext = helpfulMemorySettings.helpful_memory_enabled
+          ? buildCombinedHelpfulMemoryContext(selectedHelpfulMemory, selectedDurableMemory)
+          : '';
+        if (selectedHelpfulMemory.length > 0) {
+          touchHelpfulMemoryItems(supabaseAdmin, selectedHelpfulMemory.map((item) => item.id)).catch((error) => {
+            console.warn('helpful memory touch failed', error);
+          });
+        }
+        const continuityContext = buildContinuityContext({
+          conversationSummary: rollingConversationSummary,
+          stayHotSummary,
+          locationContext: fullLocationContext,
+          includeLocation: effectiveTrigger === 'chat'
+        });
+        const systemPromptBase = buildSystemPrompt(
           language,
           currentDate,
           localTime,
@@ -2452,7 +2957,8 @@ serve(async (req) => {
           effectiveTrigger,
           chatSubmode,
           { useSearch: chatUsesSearch, hasReminders: !!activeRemindersContext, isReminderTrigger: messageHasReminderKeyword, formattedOffset }
-        ) + (activeRemindersContext || '');
+        );
+        const systemPrompt = `${helpfulMemoryContext ? helpfulMemoryContext + '\n\n' : ''}${continuityContext ? continuityContext + '\n\n' : ''}${systemPromptBase}${activeRemindersContext || ''}`;
 
         const messages = [
           { role: 'system', content: systemPrompt }
@@ -2504,8 +3010,8 @@ serve(async (req) => {
             // Always reverse-geocode from GPS to avoid Doha/profile anchoring.
             let userCity = '';
             let userCountry = '';
-            if (location?.latitude && location?.longitude) {
-              const geocoded = await reverseGeocode(location.latitude, location.longitude);
+            if (requestLocation?.latitude && requestLocation?.longitude) {
+              const geocoded = await reverseGeocode(requestLocation.latitude, requestLocation.longitude);
               if (geocoded.city) userCity = geocoded.city;
               if (geocoded.country) userCountry = geocoded.country;
             }
@@ -2516,8 +3022,8 @@ serve(async (req) => {
             if (userCity && userCountry) parts.push(`City: ${userCity}, ${userCountry}`);
             else if (userCity) parts.push(`City: ${userCity}`);
             else if (userCountry) parts.push(`Country: ${userCountry}`);
-            if (location?.latitude && location?.longitude) {
-              parts.push(`Coordinates: ${location.latitude.toFixed(4)}°N, ${location.longitude.toFixed(4)}°E`);
+            if (requestLocation?.latitude && requestLocation?.longitude) {
+              parts.push(`Coordinates: ${requestLocation.latitude.toFixed(4)}°N, ${requestLocation.longitude.toFixed(4)}°E`);
             }
             if (parts.length > 0) {
               locationContext = `\n\nUSER LOCATION CONTEXT:\n${parts.join('\n')}`;
@@ -2540,13 +3046,19 @@ serve(async (req) => {
 
             const personalSection = _promptPersonalSection((personalTouch || {}) as Record<string, unknown>);
 
-            const searchSystemPrompt = `${stayHotSummary ? stayHotSummary + "\n\n" : ''}${ipLocationLine ? ipLocationLine + "\n\n" : ''}You are WAKTI AI — an elite, hyper-intelligent Search Intelligence.
+            const searchLocationContext = locationContext || (ipLocationLine ? `USER LOCATION CONTEXT:\n${ipLocationLine}` : '');
+            const searchHelpfulMemoryContext = helpfulMemoryContext;
+            const searchContinuityContext = buildContinuityContext({
+              conversationSummary: rollingConversationSummary,
+              stayHotSummary
+            });
+            const searchSystemPrompt = `${searchHelpfulMemoryContext ? searchHelpfulMemoryContext + "\n\n" : ''}${searchContinuityContext ? searchContinuityContext + "\n\n" : ''}You are WAKTI AI — an elite, hyper-intelligent Search Intelligence.
 You are the Al Jazeera of news (deep context), the ESPN of sports (real-time stakes), and the Oxford of research (academic rigor).
 You perform REAL-TIME SYNTHESIS. You are a digital strategist with the brain of a researcher and the style of a high-end concierge.${personalSection}
 
 ### 🌐 THE WORLD SENSOR (LIVE CONTEXT)
 - CURRENT TIME: ${localTime} (${userTimeZone})
-- LOCATION: ${locationContext}
+- LOCATION: ${searchLocationContext || 'Unknown'}
 
 ### 🧠 PERSONALIZATION SETTINGS
 ${userNick ? `- USER NICKNAME: "${userNick}" (use naturally once in the intro).` : '- Use an elite, professional greeting.'}
@@ -2776,8 +3288,8 @@ If you are running out of space, keep this order and drop the rest:
             let groundingMetadata: Gemini3SearchResult['groundingMetadata'] | null = null;
 
             // Prepare device GPS location for search query injection (all queries, not just business)
-            const userLocationForSearch = (location?.latitude && location?.longitude) 
-              ? { latitude: location.latitude, longitude: location.longitude, city: userCity || '', country: userCountry || '' }
+            const userLocationForSearch = (requestLocation?.latitude && requestLocation?.longitude) 
+              ? { latitude: requestLocation.latitude, longitude: requestLocation.longitude, city: userCity || '', country: userCountry || '' }
               : null;
 
             // Stream tokens to client

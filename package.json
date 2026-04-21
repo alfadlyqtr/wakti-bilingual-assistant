@@ -9,6 +9,7 @@
     "build:dev": "vite build --mode development",
     "build:analyze": "cross-env ANALYZE=true vite build",
     "lint": "eslint .",
+    "qa:projects-generate-prompts": "node scripts/qa-projects-generate-prompts.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
