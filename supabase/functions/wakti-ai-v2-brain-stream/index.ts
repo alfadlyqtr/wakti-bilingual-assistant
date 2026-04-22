@@ -1443,21 +1443,125 @@ async function streamGemini3WithSearch(
   return fullText;
 }
 
+ function buildLeanSearchSystemPrompt(params: {
+  language: string;
+  localTime: string;
+  userTimeZone: string;
+  personalSection: string;
+  searchLocationContext: string;
+  searchIntent: string;
+  userNick: string;
+  userDisplayName: string;
+  aiNick: string;
+  toneVal: string;
+  styleVal: string;
+  customNote: string;
+  introRule: string;
+}): string {
+  const {
+    language,
+    localTime,
+    userTimeZone,
+    personalSection,
+    searchLocationContext,
+    searchIntent,
+    userNick,
+    userDisplayName,
+    aiNick,
+    toneVal,
+    styleVal,
+    customNote,
+    introRule,
+  } = params;
+
+  return `You are WAKTI AI Search. Use live grounded results first, then answer clearly and accurately.${personalSection}
+
+ LIVE CONTEXT:
+ - Current time: ${localTime} (${userTimeZone})
+ - Location: ${searchLocationContext || 'Unknown'}
+ - Intent hint: ${searchIntent}
+ - Language: ${language === 'ar' ? 'Arabic' : 'English'}
+ ${userNick ? `- User nickname: "${userNick}"` : userDisplayName ? `- User display name: "${userDisplayName}"` : ''}
+ ${aiNick ? `- Your name: "${aiNick}"` : ''}
+ ${toneVal !== 'neutral' ? `- Tone: ${toneVal}` : ''}
+ ${styleVal ? `- Style: ${styleVal}` : ''}
+ ${customNote ? `- Extra instruction: ${customNote}` : ''}
+
+ INTRO:
+ - Open with one short personal line when natural.
+ - Use this pattern as guidance, not as a rigid script: ${introRule}
+ - Keep the intro short. Do not force weather or local events unless confidently verified and truly useful.
+
+ CORE RULES:
+ 1. Search first, then answer. Never guess live facts.
+ 2. If a detail is not verified in grounded results, omit it.
+ 3. Prefer the newest trustworthy result and check dates against the current time.
+ 4. Explain why a live result matters, not just the raw number.
+ 5. Write fully in the selected language.
+
+ LOCATION RULES:
+ 1. For any near-me or location-dependent query, start by acknowledging the user's current location.
+ 2. Never name a neighborhood, district, compound, tower, street, or sub-area as if it is the user's exact location.
+ 3. You may mention the city or country only if it exists in the location context above.
+ 4. If exact area is uncertain, say "near your current coordinates" instead of guessing.
+ 5. Keep recommendations tightly scoped to the user's current area.
+
+ FORMAT:
+ - Place or business queries: return 4-6 best options max, each with name, area, short reason, vibe, must-try, open or closed if verified, verified contact details only, and a Google Maps link.
+ - Live data queries: lead with the latest result, then explain the stakes. Use a valid markdown table only when it truly helps.
+ - Research queries: give a short executive summary, 2-4 key insights, and 2-3 high-quality sources.
+ - URL analysis: summarize the page first, then key evidence, then any reliability or bias note if relevant.
+
+ OUTPUT RULES:
+ - Keep place descriptions to 3 sentences max.
+ - All links must be clickable markdown.
+ - Phone numbers must use tel: links.
+ - WhatsApp must use wa.me only when explicitly verified.
+ - Never invent emails, social handles, hours, scores, prices, or sources.
+ - If space is tight, keep the most useful facts first and drop extras.`;
+}
+
 // ─── LAZY-LOAD PROMPT BUILDING BLOCKS ───────────────────────────────────────
 
 function _promptPersonalSection(pt: Record<string, unknown>): string {
   const userNick = ((pt.nickname as string | undefined) || '').toString().trim();
   const aiNick = ((pt.aiNickname as string | undefined) || (pt.ai_nickname as string | undefined) || '').toString().trim();
   const tone = ((pt.tone as string | undefined) || '').toString().trim();
-  let style = ((pt.style as string | undefined) || '').toString().trim();
+  const styleRaw = ((pt.style as string | undefined) || '').toString().trim();
+  const instruction = ((pt.instruction as string | undefined) || '').toString().trim();
 
-  if (!userNick && !aiNick && !tone && !style) return '';
+  if (!userNick && !aiNick && !tone && !styleRaw && !instruction) return '';
+
+  // Per-value Tone enforcement (mirror of vision/search logic so behaviour is consistent across modes)
+  const toneLower = tone.toLowerCase();
+  let toneLine = '';
+  if (tone) {
+    if (toneLower.includes('funny'))            toneLine = `Tone — FUNNY (mandatory): include light humour, wordplay or amusing observations. Keep content accurate.`;
+    else if (toneLower.includes('encourag'))    toneLine = `Tone — ENCOURAGING (mandatory): use positive, supportive language; celebrate wins; be warm.`;
+    else if (toneLower.includes('serious'))     toneLine = `Tone — SERIOUS (mandatory): formal and professional. No humour or emoji.`;
+    else if (toneLower.includes('casual'))      toneLine = `Tone — CASUAL (mandatory): relaxed, friendly, plain language — like a helpful buddy.`;
+    else if (toneLower.includes('neutral'))     toneLine = ''; // neutral = no extra instruction
+    else                                        toneLine = `Tone — ${tone} (mandatory): keep this tone consistently.`;
+  }
+
+  // Per-value Style enforcement
+  const styleLower = styleRaw.toLowerCase();
+  let styleLine = '';
+  if (styleRaw) {
+    if (styleLower.includes('short'))           styleLine = `Style — SHORT ANSWERS (mandatory): keep every reply direct and concise, max 3-4 sentences unless absolutely necessary. No fluff. Go straight to the point.`;
+    else if (styleLower.includes('detailed'))   styleLine = `Style — DETAILED (mandatory): give thorough explanations with examples and clear structure. Break topics into organised sections.`;
+    else if (styleLower.includes('bullet'))     styleLine = `Style — BULLET POINTS (mandatory): organise answers as • bullet lists whenever possible.`;
+    else if (styleLower.includes('step'))       styleLine = `Style — STEP BY STEP (mandatory): organise answers as numbered steps (Step 1, Step 2, ...).`;
+    else if (styleLower.includes('conversational')) styleLine = `Style — CONVERSATIONAL (mandatory): reply like a natural back-and-forth chat. No headings, no bullet dumps.`;
+    else                                        styleLine = `Style — ${styleRaw} (mandatory): apply this style in every reply.`;
+  }
 
   let s = `\nPERSONAL TOUCH:`;
   if (userNick) s += ` Call user "${userNick}".`;
   if (aiNick)   s += ` You are "${aiNick}".`;
-  if (tone)     s += ` Tone: ${tone}.`;
-  if (style)    s += ` Style: ${style}.`;
+  if (toneLine)  s += `\n${toneLine}`;
+  if (styleLine) s += `\n${styleLine}`;
+  if (instruction) s += `\nUser's extra instructions (follow on every reply): ${instruction}`;
   return s + '\n';
 }
 
@@ -2829,7 +2933,20 @@ serve(async (req) => {
               parts.push(`Coordinates: ${userLat.toFixed(4)}°N, ${userLng.toFixed(4)}°E`);
             }
             if (parts.length > 0) {
-              fullLocationContext = `USER LOCATION CONTEXT:\n${parts.join('\n')}`;
+              fullLocationContext = `USER LOCATION CONTEXT (from device GPS — INTERNAL USE ONLY):
+${parts.join('\n')}
+
+LOCATION PHRASING RULES — STRICT (mandatory for any "near me", "nearby", "around me", "closest", or location-dependent query):
+1. ALWAYS start your answer by acknowledging the user's CURRENT LOCATION. Use phrases like:
+   - "Based on your current location…"
+   - "From where you are right now…"
+   - "Near you right now…"
+   - (Arabic) "استناداً إلى موقعك الحالي…" / "حسب موقعك الآن…"
+2. NEVER name the user's neighborhood, district, compound, tower, street, or sub-area as if you just knew it (examples of forbidden phrasing: "you are positioned in Fox Hills district", "since you're in Lusail Marina", "as you are at West Bay"). Even if web search results contain a neighborhood name, DO NOT attribute it to the user.
+3. You MAY name the broad city or country in a neutral way (e.g. "here in <City>") ONLY after opener rule #1, and only if the city is present in LOCATION CONTEXT above. Do not invent one.
+4. If the user's exact area is uncertain, say "near your current coordinates" — never guess a neighborhood.
+5. Keep all recommendations tightly scoped to this location. Do not list places from unrelated cities or countries.
+6. These rules override any tone/style preferences when they conflict.`;
             }
           }
         }
@@ -2984,6 +3101,7 @@ serve(async (req) => {
             // Build search-specific system prompt with Personal Touch
             const pt = (personalTouch || {}) as Record<string, unknown>;
             const userNick = ((pt.nickname as string | undefined) || '').toString().trim();
+            const userDisplayName = ((pt.displayName as string | undefined) || (pt.display_name as string | undefined) || '').toString().trim();
             const aiNick = ((pt.aiNickname as string | undefined) || (pt.ai_nickname as string | undefined) || '').toString().trim();
             const toneVal = ((pt.tone as string | undefined) || 'neutral').toString().trim();
             let styleVal = ((pt.style as string | undefined) || '').toString().trim();
@@ -3003,18 +3121,13 @@ serve(async (req) => {
               day: 'numeric',
               hour: 'numeric',
               minute: '2-digit',
-              hour12: true
+             hour12: true
             });
 
             // GPS ONLY: ignore client/profile city/country when coords exist
             // Always reverse-geocode from GPS to avoid Doha/profile anchoring.
-            let userCity = '';
-            let userCountry = '';
-            if (requestLocation?.latitude && requestLocation?.longitude) {
-              const geocoded = await reverseGeocode(requestLocation.latitude, requestLocation.longitude);
-              if (geocoded.city) userCity = geocoded.city;
-              if (geocoded.country) userCountry = geocoded.country;
-            }
+            const userCity = ((requestLocation?.city as string | undefined) || '').toString().trim();
+            const userCountry = ((requestLocation?.country as string | undefined) || '').toString().trim();
 
             // Build location context string (GPS-only)
             let locationContext = '';
@@ -3032,13 +3145,13 @@ serve(async (req) => {
             const eliteIntroRule = (() => {
               if (language === 'ar') {
                 const variants = [
-                  `ابدأ دائماً بتحية عربية رسمية بهذا النمط بالضبط:\n"تحياتي يا ${userNick || 'صديقي'} — أنا ${aiNick || 'وقتي'}. ${localTime} (بتوقيت الدوحة). جهّزت لك أحدث النتائج — [ثم أكمل]."`,
-                  `ابدأ دائماً بتحية عربية ودّية (خليجية) بهذا النمط بالضبط:\n"هلا ${userNick || 'صديقي'} — أنا ${aiNick || 'وقتي'}. ${localTime} (بتوقيت الدوحة). جبت لك أحدث النتائج — [ثم أكمل]."`,
+                  `ابدأ دائماً بتحية عربية رسمية بهذا النمط بالضبط:\n"تحياتي يا ${userNick || userDisplayName || 'صديقي'} — أنا ${aiNick || 'وقتي'}. ${localTime} (${userTimeZone}). جهّزت لك أحدث النتائج — [ثم أكمل]."`,
+                  `ابدأ دائماً بتحية عربية ودّية (خليجية) بهذا النمط بالضبط:\n"هلا ${userNick || userDisplayName || 'صديقي'} — أنا ${aiNick || 'وقتي'}. ${localTime} (${userTimeZone}). جبت لك أحدث النتائج — [ثم أكمل]."`,
                 ];
                 const pick = variants[Math.floor(Math.random() * variants.length)];
                 return pick;
               }
-              return `ALWAYS start with a personalized greeting using this EXACT pattern:\n"Greetings, ${userNick || 'friend'} — ${aiNick || 'Wakti'} here. ${localTime} (Doha time). I've pulled the latest for you — [then continue]."`;
+              return `ALWAYS start with a personalized greeting using this EXACT pattern:\n"Greetings, ${userNick || userDisplayName || 'friend'} — ${aiNick || 'Wakti'} here. ${localTime} (${userTimeZone}). I've pulled the latest for you — [then continue]."`;
             })();
 
             // Intent detection is now built into the system prompt itself
@@ -3052,7 +3165,7 @@ serve(async (req) => {
               conversationSummary: rollingConversationSummary,
               stayHotSummary
             });
-            const searchSystemPrompt = `${searchHelpfulMemoryContext ? searchHelpfulMemoryContext + "\n\n" : ''}${searchContinuityContext ? searchContinuityContext + "\n\n" : ''}You are WAKTI AI — an elite, hyper-intelligent Search Intelligence.
+            let searchSystemPrompt = `${searchHelpfulMemoryContext ? searchHelpfulMemoryContext + "\n\n" : ''}${searchContinuityContext ? searchContinuityContext + "\n\n" : ''}You are WAKTI AI — an elite, hyper-intelligent Search Intelligence.
 You are the Al Jazeera of news (deep context), the ESPN of sports (real-time stakes), and the Oxford of research (academic rigor).
 You perform REAL-TIME SYNTHESIS. You are a digital strategist with the brain of a researcher and the style of a high-end concierge.${personalSection}
 
@@ -3283,6 +3396,22 @@ If you are running out of space, keep this order and drop the rest:
 6) WhatsApp + Email
 7) Social links
 8) Extra commentary / sources`;
+
+            searchSystemPrompt = `${searchHelpfulMemoryContext ? searchHelpfulMemoryContext + "\n\n" : ''}${searchContinuityContext ? searchContinuityContext + "\n\n" : ''}${buildLeanSearchSystemPrompt({
+              language,
+              localTime,
+              userTimeZone,
+              personalSection,
+              searchLocationContext,
+              searchIntent,
+              userNick,
+              userDisplayName,
+              aiNick,
+              toneVal,
+              styleVal,
+              customNote,
+              introRule: eliteIntroRule,
+            })}`;
 
             let fullResponseText = '';
             let groundingMetadata: Gemini3SearchResult['groundingMetadata'] | null = null;

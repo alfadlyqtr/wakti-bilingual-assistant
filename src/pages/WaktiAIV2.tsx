@@ -18,15 +18,30 @@ import { createPortal } from 'react-dom';
 import { useIsDesktop } from '@/hooks/use-mobile';
 
 /** Strip trailing action JSON block (e.g. {"action":"schedule_reminder",...}) from AI responses.
- *  Only removes the LAST occurrence so mid-response mentions of '{"action"' don't nuke content. */
+ *  Only removes the LAST occurrence so mid-response mentions of '{"action"' don't nuke content.
+ *  Whitelists known action values so legitimate JSON like OCR output containing the word
+ *  "action" is NOT stripped. */
+const KNOWN_ACTIONS = new Set([
+  'schedule_reminder',
+  'create_task',
+  'create_event',
+  'create_reminder',
+  'search_web',
+  'set_reminder',
+  'add_task',
+  'add_reminder',
+]);
 function stripTrailingActionJSON(text: string): string {
   const idx = text.lastIndexOf('{"action"');
   if (idx === -1) return text.trim();
   const after = text.slice(idx).trim();
-  // Only strip if the tail is actually a valid JSON object with an "action" key
+  // Only strip if the tail is actually a valid JSON object with a KNOWN action value.
   try {
     const parsed = JSON.parse(after);
-    if (parsed && typeof parsed === 'object' && 'action' in parsed) {
+    const actionVal = (parsed && typeof parsed === 'object' && typeof parsed.action === 'string')
+      ? parsed.action.toLowerCase().trim()
+      : '';
+    if (actionVal && KNOWN_ACTIONS.has(actionVal)) {
       return text.slice(0, idx).trim();
     }
   } catch {
@@ -532,10 +547,11 @@ const WaktiAIV2 = () => {
               setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, metadata: { ...(m.metadata || {}), loading: false } } : m));
             }
             // ZERO React re-renders: write accumulated text directly to DOM via ref
-            // Invisibility cloak: strip reminder JSON + [BOX] block (complete or in-progress)
+            // Strip only BALANCED [BOX]...[/BOX] blocks. Never the greedy `[BOX].*$`
+            // fallback — it silently wiped everything after a stray [BOX] token and
+            // caused the "responses cut off" bug.
             const displayContent = stripTrailingActionJSON(streamed)
               .replace(/\[BOX\][\s\S]*?\[\/BOX\]/g, '')
-              .replace(/\[BOX\][\s\S]*$/g, '')
               .trim();
             if (!rafPending) {
               rafPending = true;
@@ -571,7 +587,9 @@ const WaktiAIV2 = () => {
         const cleanedStreamed = stripTrailingActionJSON(streamed);
         const finalAssistantMessage: AIMessage = {
           ...assistantPlaceholder,
-          content: streamedResp?.response ?? cleanedStreamed,
+          // Use || (not ??) so an empty backend response ('') doesn't overwrite the
+          // fully-streamed content. Matches the chat-path fix already applied below.
+          content: (streamedResp?.response || cleanedStreamed),
           metadata: { 
             loading: false, 
             ...streamMeta,
@@ -685,7 +703,6 @@ const WaktiAIV2 = () => {
                 rafPending = false;
                 const latest = stripTrailingActionJSON(streamedContentRef.current)
                   .replace(/\[BOX\][\s\S]*?\[\/BOX\]/g, '')
-                  .replace(/\[BOX\][\s\S]*$/g, '')
                   .trim();
                 streamingBubbleRef.current?.setContent(latest);
               });

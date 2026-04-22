@@ -42,6 +42,9 @@ Create order:
 2. Show loading skeletons while fetching; show a friendly empty state if no products.
 3. Products have \`image_url\` — use it. Fall back to the stock-images placeholder.
 4. Use a client-side \`sessionId\` (e.g., \`guest-<random>\`) stored in localStorage for cart operations.
+5. If the backend returns zero products, DO NOT leave the shop, featured products, collections, or category sections blank.
+6. For zero-product states, render a real empty state with a headline, helper text, and optional placeholder cards/skeleton cards labeled as coming soon — but NEVER fake real product names, prices, reviews, or inventory.
+7. Backend-driven sections must still preserve layout when empty so the page does not look broken or unfinished.
 
 ### NO SUPABASE CLIENT IN GENERATED PROJECTS
 - ❌ NEVER \`import { createClient } from '@supabase/supabase-js'\`

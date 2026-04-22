@@ -110,7 +110,7 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh,
   // Stats
   const totalRevenue = orders.filter(o => o.status === 'completed').reduce((sum, o) => sum + (o.total_amount || 0), 0);
   const pendingOrders = orders.filter(o => o.status === 'pending').length;
-  const lowStockItems = inventory.filter(i => (i.data?.stock_quantity || 0) < 10).length;
+  const lowStockItems = inventory.filter(i => typeof i.data?.stock_quantity === 'number' && i.data.stock_quantity < 10).length;
 
   useEffect(() => {
     fetchCategories();
@@ -642,7 +642,7 @@ function InventoryTab({ products, categories, searchQuery, setSearchQuery, statu
   // Stats
   const totalProducts = products.length;
   const activeProducts = products.filter((p: Product) => p.status === 'active').length;
-  const lowStockProducts = products.filter((p: Product) => (p.stock_quantity || 0) < 10 && (p.stock_quantity || 0) > 0).length;
+  const lowStockProducts = products.filter((p: Product) => typeof p.stock_quantity === 'number' && p.stock_quantity < 10 && p.stock_quantity > 0).length;
   const outOfStock = products.filter((p: Product) => (p.stock_quantity || 0) === 0).length;
   const totalValue = products.reduce((sum: number, p: Product) => sum + ((p.price || 0) * (p.stock_quantity || 0)), 0);
 

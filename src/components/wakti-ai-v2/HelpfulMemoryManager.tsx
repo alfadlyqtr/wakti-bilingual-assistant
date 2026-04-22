@@ -37,6 +37,8 @@ export function HelpfulMemoryManager({ currentConversationId }: HelpfulMemoryMan
   const [draft, setDraft] = useState(emptyDraft);
   const loadInFlightRef = useRef(false);
   const hasLoadedOnceRef = useRef(false);
+  const showErrorRef = useRef(showError);
+  useEffect(() => { showErrorRef.current = showError; }, [showError]);
 
   const labels = useMemo(() => ({
     title: language === 'ar' ? 'Helpful Memory' : 'Helpful Memory',
@@ -108,17 +110,16 @@ export function HelpfulMemoryManager({ currentConversationId }: HelpfulMemoryMan
     } catch (error) {
       console.error('Helpful memory load failed', error);
       if (!silent) {
-        showError(language === 'ar' ? 'تعذر تحميل Helpful Memory' : 'Failed to load Helpful Memory');
+        showErrorRef.current(language === 'ar' ? 'تعذر تحميل Helpful Memory' : 'Failed to load Helpful Memory');
       }
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
       loadInFlightRef.current = false;
     }
-  }, [currentConversationId, language, showError]);
+  }, [currentConversationId, language]);
 
   useEffect(() => {
-    hasLoadedOnceRef.current = false;
     loadData();
   }, [loadData]);
 

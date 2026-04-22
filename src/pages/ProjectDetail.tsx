@@ -890,6 +890,12 @@ export default function ProjectDetail() {
   
   // Celebratory modal for project completion
   const [showProjectCompleteModal, setShowProjectCompleteModal] = useState(false);
+  const [projectCompletionCta, setProjectCompletionCta] = useState<{
+    title: string;
+    message: string;
+    notes: string[];
+    actions: Array<{ id: 'shop_inventory' | 'bookings_services' | 'inbox_submissions'; label: string }>;
+  } | null>(null);
 
   // Element selection mode - for "Send Element" feature (Visual Inspector)
   // On mobile, auto-enable so users can tap elements immediately
@@ -1640,6 +1646,11 @@ export default function ProjectDetail() {
 
       setGeneratedFiles(generatedFilesData);
       setCodeContent(generatedCode);
+      setSandpackKey(prev => prev + 1);
+      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+        setMobileTab('preview');
+      }
+      await delay(900);
 
       const backendCtaLines: string[] = [];
       if (backendContextForCreate?.enabled) {
@@ -1664,19 +1675,65 @@ export default function ProjectDetail() {
       const assistantMsg = isRTL 
         ? `لقد انتهيت من بناء مشروعك! ألقِ نظرة على المعاينة. ✨ يمكنك الآن تعديله أو نشره.${backendCta}` 
         : `I've finished building your project! Take a look at the preview. ✨ You can now edit or publish it.${backendCta}`;
-      
-      // Show celebratory modal with confetti
+
+      const isShopProject = /shop|store|e-?commerce|product|catalog|abaya|fashion|boutique|متجر|منتج|عباية|أزياء/i.test(prompt);
+      const isBookingProject = /booking|appointment|service|schedule|salon|spa|clinic|حجز|موعد|خدمة|صالون|سبا|عيادة/i.test(prompt);
+      const hasContactIntent = /contact|get in touch|message us|quote|newsletter|waitlist|feedback|form|اتصل|تواصل|رسالة|نموذج/.test(prompt.toLowerCase());
+
+      const modalNotes: string[] = [];
+      const modalActions: Array<{ id: 'shop_inventory' | 'bookings_services' | 'inbox_submissions'; label: string }> = [];
+
+      if (isShopProject) {
+        modalNotes.push(
+          isRTL
+            ? 'الأقسام المرتبطة بالمنتجات ستعرض حالات فارغة/إرشادية حتى تضيف منتجاتك الحقيقية من الخلفية.'
+            : 'Product-driven sections will stay in guided empty states until you add your real products in the backend.'
+        );
+        modalActions.push({
+          id: 'shop_inventory',
+          label: isRTL ? 'إضافة منتجات الآن' : 'Add Products Now',
+        });
+      }
+
+      if (isBookingProject) {
+        modalNotes.push(
+          isRTL
+            ? 'إذا كان المشروع يعتمد على الخدمات أو الحجوزات، أضف خدماتك أولًا من الخلفية.'
+            : 'If this project uses services or bookings, add your real services first in the backend.'
+        );
+        modalActions.push({
+          id: 'bookings_services',
+          label: isRTL ? 'إضافة خدمات' : 'Add Services',
+        });
+      }
+
+      if (hasContactIntent) {
+        modalNotes.push(
+          isRTL
+            ? 'نماذج التواصل يجب أن تُرسل إلى الخلفية، ويمكنك مراجعة الرسائل من الخلفية ← البريد ← الطلبات.'
+            : 'Contact forms should submit into the backend, and you can review new messages in Backend → Inbox → Submissions.'
+        );
+        modalActions.push({
+          id: 'inbox_submissions',
+          label: isRTL ? 'فتح الرسائل' : 'Open Inbox',
+        });
+      }
+
+      setProjectCompletionCta({
+        title: isRTL ? '🎉 مشروعك جاهز' : '🎉 Project Ready',
+        message: isRTL
+          ? 'المعاينة جاهزة الآن. الخطوة التالية هي توصيل المحتوى الحقيقي من الخلفية بدل الاعتماد على عناصر فارغة.'
+          : 'Your preview is now ready. The next step is connecting real backend content instead of relying on empty placeholders.',
+        notes: modalNotes,
+        actions: modalActions,
+      });
       setShowProjectCompleteModal(true);
       confetti({
         particleCount: 100,
         spread: 70,
         origin: { y: 0.6 }
       });
-      
-      // Auto-dismiss after 3 seconds
-      setTimeout(() => {
-        setShowProjectCompleteModal(false);
-      }, 3000);
+
       const { data: assistantMsgData, error: assistError } = await supabase
         .from('project_chat_messages' as any)
         .insert({ 
@@ -1716,9 +1773,7 @@ export default function ProjectDetail() {
       
       // Sandpack auto-updates when codeContent changes
       console.log('Code updated - Sandpack will refresh automatically');
-      
-      // Check if this was a shop/store request to show appropriate CTA
-      const isShopProject = /shop|store|e-?commerce|product|متجر|منتج/i.test(prompt);
+
       const readyMsg = isShopProject
         ? (isRTL 
             ? 'تم إنشاء متجرك! ✓\n\n**الخطوة التالية:** أضف منتجاتك من **الخادم ← المتجر ← المخزون**'
@@ -1745,24 +1800,7 @@ export default function ProjectDetail() {
           snapshot: generatedFilesData
         }]);
       }
-      
-      // For shop projects, also show a toast with CTA
-      if (isShopProject) {
-        toast.success(isRTL ? 'تم إنشاء المتجر! أضف منتجاتك من الخادم' : 'Store created! Add products in Backend tab', {
-          duration: 5000,
-          action: {
-            label: isRTL ? 'إضافة منتجات' : 'Add Products',
-            onClick: () => {
-              setMainTab('server');
-              setBackendInitialTab('shop');
-              setBackendInitialShopTab('inventory');
-            }
-          }
-        });
-      } else {
-        toast.success(isRTL ? 'تم إنشاء المشروع!' : 'Project created!');
-      }
-      
+
     } catch (err: any) {
       console.error('Generation error:', err);
       
@@ -1905,6 +1943,33 @@ export default function ProjectDetail() {
     }
   };
 
+  const refreshPreview = () => {
+    setSandpackKey(prev => prev + 1);
+  };
+
+  const closeProjectCompleteModal = () => {
+    setShowProjectCompleteModal(false);
+    setProjectCompletionCta(null);
+  };
+
+  const openProjectCompletionAction = (actionId: 'shop_inventory' | 'bookings_services' | 'inbox_submissions') => {
+    setMainTab('server');
+
+    if (actionId === 'shop_inventory') {
+      setBackendInitialTab('shop');
+      setBackendInitialShopTab('inventory');
+    } else if (actionId === 'bookings_services') {
+      setBackendInitialTab('bookings');
+      setBackendInitialShopTab(undefined);
+    } else {
+      setBackendInitialTab('submissions');
+      setBackendInitialShopTab(undefined);
+    }
+
+    setBackendRefreshKey(prev => prev + 1);
+    closeProjectCompleteModal();
+  };
+
   const saveCode = async (nextFiles?: Record<string, string>) => {
     try {
       setSaving(true);
@@ -2041,18 +2106,11 @@ export default function ProjectDetail() {
     return filesMap;
   };
 
-  const refreshPreview = () => {
-    // Force Sandpack to fully re-mount (picks up new inspector code, etc.)
-    setSandpackKey(prev => prev + 1);
-  };
-
-  // ============================================
-  // FLATTENER/BUNDLER: BRUTE FORCE - Include EVERYTHING
-  // ============================================
-  const flattenProjectFiles = (files: Record<string, string>): string => {
+  const bundleProjectFiles = (files: Record<string, string>): string => {
     const allCss: string[] = [];
     const allJs: string[] = [];
     const processedFiles = new Set<string>();
+
     
     // ============================================
     // STEP 1: BRUTE FORCE CSS - Collect ALL .css files
@@ -6033,16 +6091,60 @@ ${fixInstructions}
       {/* Celebratory Modal for Project Completion */}
       {showProjectCompleteModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl p-8 shadow-2xl shadow-indigo-500/30 animate-in zoom-in-95 duration-500 max-w-sm mx-4 text-center">
-            <div className="w-20 h-20 mx-auto mb-4 bg-white/20 rounded-full flex items-center justify-center">
-              <Check className="w-10 h-10 text-white" />
+          <div className="w-full max-w-md mx-4 rounded-2xl border border-white/10 bg-[#0c0f14] shadow-2xl shadow-black/60 animate-in zoom-in-95 duration-500 overflow-hidden">
+            <div className="bg-[linear-gradient(135deg,#0c0f14_0%,hsl(235_25%_8%)_35%,hsl(260_15%_10%)_100%)] px-6 py-6 border-b border-white/10 text-center relative">
+              <button
+                onClick={closeProjectCompleteModal}
+                title={isRTL ? 'إغلاق' : 'Close'}
+                aria-label={isRTL ? 'إغلاق' : 'Close'}
+                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4 text-white/70" />
+              </button>
+              <div className="w-16 h-16 mx-auto mb-4 bg-white/10 rounded-full flex items-center justify-center shadow-[0_0_30px_hsla(210,100%,65%,0.25)]">
+                <Check className="w-8 h-8 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-2">
+                {projectCompletionCta?.title || (isRTL ? '🎉 مشروعك جاهز!' : '🎉 Project Ready!')}
+              </h2>
+              <p className="text-sm text-white/70 leading-6">
+                {projectCompletionCta?.message || (isRTL ? 'يمكنك الآن تعديله أو نشره' : 'You can now edit or publish it')}
+              </p>
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">
-              {isRTL ? '🎉 مشروعك جاهز!' : '🎉 Project Ready!'}
-            </h2>
-            <p className="text-white/80 text-sm">
-              {isRTL ? 'يمكنك الآن تعديله أو نشره' : 'You can now edit or publish it'}
-            </p>
+
+            <div className="px-6 py-5 space-y-4">
+              {(projectCompletionCta?.notes || []).length > 0 && (
+                <div className="space-y-2">
+                  {(projectCompletionCta?.notes || []).map((note, index) => (
+                    <div key={`${note}-${index}`} className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80 leading-6">
+                      {note}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(projectCompletionCta?.actions || []).length > 0 ? (
+                <div className="grid gap-3">
+                  {(projectCompletionCta?.actions || []).map((action) => (
+                    <Button
+                      key={action.id}
+                      onClick={() => openProjectCompletionAction(action.id)}
+                      className="w-full h-11 bg-[linear-gradient(135deg,hsl(210_100%_65%),hsl(280_70%_65%))] hover:opacity-95 text-white border-0 shadow-[0_0_24px_hsla(210,100%,65%,0.22)]"
+                    >
+                      {action.label}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
+
+              <Button
+                variant="outline"
+                onClick={closeProjectCompleteModal}
+                className="w-full h-11 border-white/15 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+              >
+                {isRTL ? 'متابعة التحرير' : 'Continue Editing'}
+              </Button>
+            </div>
           </div>
         </div>
       )}

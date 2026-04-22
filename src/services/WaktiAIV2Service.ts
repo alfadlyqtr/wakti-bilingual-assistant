@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { supabase, ensurePassport, getCurrentUserId } from '@/integrations/supabase/client';
+import { supabase, ensurePassport, getCurrentUserId, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
 import { getNativeLocation, queryNeedsFreshLocation, clearLocationCache } from '@/integrations/natively/locationBridge';
 import { parseReminderFromResponse, createScheduledReminder, cancelRecentPendingReminders } from '@/services/ReminderService';
 import { emitEvent } from '@/utils/eventBus';
@@ -171,6 +171,53 @@ class WaktiAIV2ServiceClass {
     }
   }
 
+  // Resolve the Supabase anon key via a single source of truth.
+  // Priority: runtime window global (for Natively / webview injection) -> canonical
+  // SUPABASE_ANON_KEY exported by client.ts (which itself reads from Vite env or
+  // falls back to the project-default anon key). No new baked secrets here.
+  private getAnonKey(): string {
+    const fromWindow = (typeof window !== 'undefined' && (window as { __SUPABASE_ANON_KEY?: string }).__SUPABASE_ANON_KEY) || '';
+    return (fromWindow || SUPABASE_ANON_KEY || '').toString();
+  }
+
+  // Read display_name / username from the cached UserProfile (set by UserProfileContext).
+  // Used as a fallback AFTER nickname in greetings. Returns null if nothing usable.
+  private getCachedDisplayName(): string | null {
+    try {
+      if (typeof localStorage === 'undefined') return null;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i) || '';
+        if (!key.startsWith('wakti_profile_')) continue;
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        try {
+          const parsed = JSON.parse(raw);
+          const p = parsed?.data || parsed;
+          const candidate = (p?.display_name || p?.first_name || p?.username || '').toString().trim();
+          if (candidate) return candidate;
+        } catch { /* ignore bad entries */ }
+      }
+    } catch { /* no-op */ }
+    return null;
+  }
+
+  // Async variant: if the local PT is missing a nickname, await a DB refresh BEFORE returning.
+  // This ensures the FIRST chat/vision message of a session uses the correct nickname from DB,
+  // instead of firing with an empty PT and getting a 'friend' fallback on the backend.
+  private async ensurePersonalTouchAwaitingDB(userId?: string): Promise<any> {
+    try {
+      let current: any = null;
+      try { current = this.getPersonalTouch(); } catch {}
+      const hasNickname = !!(current && typeof current === 'object' && (current.nickname || '').toString().trim());
+      if (!hasNickname && userId) {
+        // Bypass 2-minute throttle for the first-session load by resetting lastPTFetchAt
+        this.lastPTFetchAt = 0;
+        await this.maybeRefreshPersonalTouchFromServer(userId);
+      }
+    } catch { /* non-fatal */ }
+    return this.ensurePersonalTouch();
+  }
+
   // Ensure PT object exists with safe defaults and minimal normalization
   private ensurePersonalTouch(): any {
     const allowedTones = ['funny', 'serious', 'casual', 'encouraging', 'neutral'];
@@ -179,7 +226,8 @@ class WaktiAIV2ServiceClass {
     let pt: any = null;
     try { pt = this.getPersonalTouch(); } catch {}
 
-    if (!pt || typeof pt !== 'object') {
+    const wasDefaulted = !pt || typeof pt !== 'object';
+    if (wasDefaulted) {
       pt = {
         nickname: '',
         aiNickname: '',
@@ -218,14 +266,24 @@ class WaktiAIV2ServiceClass {
       if (!pt.pt_updated_at) pt.pt_updated_at = new Date().toISOString();
     }
 
+    // Attach display_name / username from cached profile as fallback for greeting (after nickname).
+    // This lets the backend build greetings like: nickname || displayName || 'friend' (last-resort).
+    try {
+      const displayName = this.getCachedDisplayName();
+      if (displayName) pt.displayName = displayName;
+    } catch {}
+
     // Attach hash for transport
     try { pt.pt_hash = this.hashPersonalTouch(pt); } catch {}
 
-    // Persist back and cache
-    try {
-      localStorage.setItem('wakti_personal_touch', JSON.stringify(pt));
-      this.personalTouchCache = pt;
-    } catch {}
+    // Persist back and cache — but NEVER poison localStorage with a defaulted empty PT,
+    // otherwise subsequent reads keep returning the empty object and DB sync never wins.
+    if (!wasDefaulted) {
+      try {
+        localStorage.setItem('wakti_personal_touch', JSON.stringify(pt));
+      } catch {}
+    }
+    this.personalTouchCache = pt;
 
     return pt;
   }
@@ -1121,8 +1179,6 @@ class WaktiAIV2ServiceClass {
       const generatedSummary = this.generateConversationSummary(enhancedMessages);
       const localSummary = conversationId ? (localStorage.getItem(`wakti_local_summary_${conversationId}`) || null) : null;
       let finalSummary = this.pickConversationSummary(conversationSummary, localSummary, generatedSummary);
-      const pt = this.ensurePersonalTouch();
-      const durableMemory = this.buildDurableMemoryTransport(message, enhancedMessages, finalSummary, pt, activeTrigger, chatSubmode);
       const transportMessages = this.buildTransportRecentMessages(enhancedMessages, activeTrigger, chatSubmode);
 
       // 6) RESOLVE ALL PARALLEL TRACKS (auth + session + location)
@@ -1138,13 +1194,15 @@ class WaktiAIV2ServiceClass {
       if (!userId) throw new Error('Authentication required');
       if (!session?.access_token) throw new Error('No valid session for streaming');
 
-      // Fire-and-forget: refresh PT now that we have confirmed userId
-      if (!resolvedUserId) this.maybeRefreshPersonalTouchFromServer(userId).catch(() => {});
+      // Build Personal Touch AFTER auth resolves. If local PT has no nickname, await DB refresh.
+      // This guarantees the FIRST message of a session sends the correct nickname instead of
+      // falling back to 'friend' on the backend.
+      const pt = await this.ensurePersonalTouchAwaitingDB(userId);
+      const durableMemory = this.buildDurableMemoryTransport(message, enhancedMessages, finalSummary, pt, activeTrigger, chatSubmode);
 
       const clientTimezone = location?.timezone || this.getClientTimezone();
 
-      const maybeAnonKey = (typeof window !== 'undefined' && (window as any).__SUPABASE_ANON_KEY)
-        || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
+      const maybeAnonKey = this.getAnonKey();
 
       // Inner attempt function: parameterize primary provider and stream
       const attemptStream = async (primary: 'gemini-brain' | 'claude' | 'openai') => {
@@ -1512,15 +1570,10 @@ class WaktiAIV2ServiceClass {
         if (!session?.access_token) {
           throw new Error('No valid session for vision');
         }
-        let maybeAnonKey;
-        try {
-          maybeAnonKey = (typeof window !== 'undefined' && (window as any).__SUPABASE_ANON_KEY)
-            || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
-        } catch (e) {
-          maybeAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
-        }
+        const maybeAnonKey = this.getAnonKey();
 
-        const pt = this.ensurePersonalTouch();
+        // Await DB refresh if local PT has no nickname (prevents 'friend' fallback on first vision call).
+        const pt = await this.ensurePersonalTouchAwaitingDB(userId);
         const supabaseUrl = ((import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL)
           || 'https://hxauxozopvpzpdygoqwf.supabase.co';
 
@@ -1611,10 +1664,12 @@ class WaktiAIV2ServiceClass {
               language,
               personalTouch: pt,
               provider: primary,
-              model: primary === 'claude' ? 'claude-3-5-haiku-20241022' : 'gpt-4o',
+              // NOTE: `model` is intentionally NOT sent here. The edge function picks
+              // its own model per provider (Claude 3.5 Sonnet / GPT-4o) and ignores any
+              // client hint. Sending one caused confusing client/server disagreements.
               stream: true,
               images: payloadImages,
-              options: { ocr: true, max_tokens: 2000 },
+              options: { ocr: true, max_tokens: 4000 },
               chatSubmode: chatSubmode, // Pass Study mode to Vision for tutor-style responses
               visionCategory // Pass the UI dropdown category for intent-based prompt routing
             };
@@ -1912,6 +1967,107 @@ class WaktiAIV2ServiceClass {
 
       const pt = this.ensurePersonalTouch();
 
+      // FAST-PATH: YouTube Search via 'yt:' or 'yt ' prefix — short-circuit BEFORE any location fetch,
+      // PT assembly, message enhancement, or LLM streaming. YouTube search does not need geolocation.
+      if (activeTrigger === 'search') {
+        const ytPrefixMatchEarly = /^(?:\s*yt:\s*|\s*yt\s+)(.*)$/i.exec(message || '');
+        if (ytPrefixMatchEarly) {
+          const query = (ytPrefixMatchEarly[1] || '').trim();
+          if (!query) {
+            return {
+              response: language === 'ar' ? 'يرجى إدخال عبارة للبحث في يوتيوب.' : 'Please enter a query to search YouTube.',
+              error: false,
+              intent: 'search'
+            } as any;
+          }
+
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) {
+            throw new Error('No valid session for YouTube search');
+          }
+          const anonKey = this.getAnonKey();
+          const supabaseUrl = ((import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL)
+            || 'https://hxauxozopvpzpdygoqwf.supabase.co';
+
+          try {
+            console.log(`📺 YOUTUBE FAST-PATH: query="${query}"`);
+            const resp = await fetch(`${supabaseUrl}/functions/v1/youtube-search`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`,
+                'apikey': anonKey
+              },
+              body: JSON.stringify({ query }),
+              signal
+            });
+
+            if (!resp.ok) {
+              return {
+                response: language === 'ar' ? 'تعذر الوصول إلى بحث يوتيوب حالياً.' : 'Unable to reach YouTube search right now.',
+                error: true,
+                intent: 'search',
+                metadata: { youtubeError: 'network' }
+              } as any;
+            }
+
+            const data = await resp.json();
+            if (data?.error === 'quota_exceeded') {
+              return {
+                response: language === 'ar' ? 'تم استهلاك حصة واجهة برمجة تطبيقات يوتيوب لهذا اليوم. حاول لاحقًا.' : 'YouTube API quota is exhausted for today. Please try again later.',
+                error: false,
+                intent: 'search',
+                metadata: { youtubeError: 'quota' }
+              } as any;
+            }
+            if (data?.message === 'no_results' || (Array.isArray(data?.results) && data.results.length === 0)) {
+              return {
+                response: language === 'ar' ? 'لا توجد نتائج فيديو مطابقة لبحثك.' : 'No YouTube results matched your query.',
+                error: false,
+                intent: 'search',
+                metadata: { youtubeError: 'no_results' }
+              } as any;
+            }
+
+            const results = Array.isArray(data?.results) ? data.results.filter((r: any) => r?.videoId) : [];
+            if (results.length === 0) {
+              return {
+                response: language === 'ar' ? 'لم يتم العثور على نتائج صالحة.' : 'No valid results found.',
+                error: false,
+                intent: 'search',
+                metadata: { youtubeError: 'invalid' }
+              } as any;
+            }
+
+            const youtubeResults = results.map((r: any) => ({
+              videoId: String(r.videoId),
+              title: r.title ? String(r.title) : '',
+              description: r.description ? String(r.description) : '',
+              thumbnail: r.thumbnail ? String(r.thumbnail) : '',
+              publishedAt: r.publishedAt ? String(r.publishedAt) : '',
+            }));
+
+            console.log(`📺 YOUTUBE FAST-PATH: got ${youtubeResults.length} results`);
+            return {
+              response: language === 'ar' ? 'إليك نتائج يوتيوب' : 'Here are the YouTube results',
+              error: false,
+              intent: 'search',
+              modelUsed: 'youtube-search',
+              browsingUsed: true,
+              metadata: { youtubeResults }
+            } as any;
+          } catch (ytErr: any) {
+            console.error('📺 YOUTUBE FAST-PATH error:', ytErr);
+            return {
+              response: language === 'ar' ? 'تعذر الوصول إلى بحث يوتيوب حالياً.' : 'Unable to reach YouTube search right now.',
+              error: true,
+              intent: 'search',
+              metadata: { youtubeError: 'exception' }
+            } as any;
+          }
+        }
+      }
+
       // Compute client local hour and welcome-back flag
       const clientLocalHour = new Date().getHours();
       let isWelcomeBack = false;
@@ -2006,101 +2162,7 @@ class WaktiAIV2ServiceClass {
         }
       } catch {}
 
-      // Special-case: YouTube Search via Edge Function when in Search mode and message is prefixed with 'yt:' or 'yt '
-      if (activeTrigger === 'search') {
-        const ytPrefixMatch = /^(?:\s*yt:\s*|\s*yt\s+)(.*)$/i.exec(message || '');
-        if (ytPrefixMatch) {
-          const query = (ytPrefixMatch[1] || '').trim();
-          if (!query) {
-            return {
-              response: language === 'ar' ? 'يرجى إدخال عبارة للبحث في يوتيوب.' : 'Please enter a query to search YouTube.',
-              error: false,
-              intent: 'search'
-            } as any;
-          }
-
-          // Auth headers required for calling Edge Functions (mirror existing calls)
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session?.access_token) {
-            throw new Error('No valid session for YouTube search');
-          }
-          let maybeAnonKey;
-          try {
-            maybeAnonKey = (typeof window !== 'undefined' && (window as any).__SUPABASE_ANON_KEY)
-              || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
-          } catch (e) {
-            maybeAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
-          }
-          // Fallback to hosted project URL if local env var is missing
-          const supabaseUrl = ((import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL)
-            || 'https://hxauxozopvpzpdygoqwf.supabase.co';
-
-          const resp = await fetch(`${supabaseUrl}/functions/v1/youtube-search`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`,
-              'apikey': maybeAnonKey
-            },
-            body: JSON.stringify({ query }),
-            signal
-          });
-
-          if (!resp.ok) {
-            return {
-              response: language === 'ar' ? 'تعذر الوصول إلى بحث يوتيوب حالياً.' : 'Unable to reach YouTube search right now.',
-              error: true,
-              intent: 'search',
-              metadata: { youtubeError: 'network' }
-            } as any;
-          }
-
-          const data = await resp.json();
-          if (data?.error === 'quota_exceeded') {
-            return {
-              response: language === 'ar' ? 'تم استهلاك حصة واجهة برمجة تطبيقات يوتيوب لهذا اليوم. حاول لاحقًا.' : 'YouTube API quota is exhausted for today. Please try again later.',
-              error: false,
-              intent: 'search',
-              metadata: { youtubeError: 'quota' }
-            } as any;
-          }
-          if (data?.message === 'no_results' || (Array.isArray(data?.results) && data.results.length === 0)) {
-            return {
-              response: language === 'ar' ? 'لا توجد نتائج فيديو مطابقة لبحثك.' : 'No YouTube results matched your query.',
-              error: false,
-              intent: 'search',
-              metadata: { youtubeError: 'no_results' }
-            } as any;
-          }
-
-          const results = Array.isArray(data?.results) ? data.results.filter((r: any) => r?.videoId) : [];
-          if (results.length === 0) {
-            return {
-              response: language === 'ar' ? 'لم يتم العثور على نتائج صالحة.' : 'No valid results found.',
-              error: false,
-              intent: 'search',
-              metadata: { youtubeError: 'invalid' }
-            } as any;
-          }
-
-          const youtubeResults = results.map((r: any) => ({
-            videoId: String(r.videoId),
-            title: r.title ? String(r.title) : '',
-            description: r.description ? String(r.description) : '',
-            thumbnail: r.thumbnail ? String(r.thumbnail) : '',
-            publishedAt: r.publishedAt ? String(r.publishedAt) : '',
-          }));
-
-          return {
-            response: language === 'ar' ? 'إليك نتائج يوتيوب' : 'Here are the YouTube results',
-            error: false,
-            intent: 'search',
-            modelUsed: 'youtube-search',
-            browsingUsed: true,
-            metadata: { youtubeResults }
-          } as any;
-        }
-      }
+      // YouTube search is handled by the fast-path above (before location fetch). No duplicate here.
 
       // Vision/chat/search accumulation via streaming method under the hood
       // Allow callers to stream tokens by optionally providing callbacks on the "attachedFiles" arg using a convention

@@ -3,10 +3,33 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 // ============================================================================
 // WAKTI VISION STREAM - Isolated Provider Architecture
-// Primary: Gemini 3.1 Pro Preview → Fallback 1: GPT-4o → Fallback 2: Claude 3.5 Sonnet
+// Primary: Gemini 2.5 Flash → Fallback 1: GPT-4o → Fallback 2: Claude 3.5 Sonnet
+// (Fast by default. Deep-reasoning model reserved for explicit forensic requests.)
 // ============================================================================
 
 // --- 1. INTENT-BASED VISION PROMPTS (loaded lazily by buildSystemPrompt) ---
+
+// LEAN default for everyday images. No forensic overhead.
+// Kept intentionally short so Flash models don't leak system-prompt fragments into answers.
+function getGeneralPrompt(): string {
+  return `
+### GENERAL VISION PROTOCOL
+Role: You are Wakti Vision. Look at the image(s) and answer the user's question directly.
+
+Rules:
+1. COMPLETENESS — If the image has multiple questions or a numbered list, answer EVERY item. Never skip any, never stop halfway. Keep the same numbering/order as the image.
+2. LENGTH — Follow the user's Personal Touch "Style" setting:
+   - "Short answers" → one line per item (just the answer, no justification).
+   - "Detailed" / "Step by step" / "Bullet points" → follow that structure.
+   - If no style is set, default to concise (one short paragraph or list).
+   Never pad. Never lecture about the image itself.
+3. Read text (signs, menus, documents, screens, homework, etc.) accurately. Quote important parts verbatim only when needed.
+4. If the user asked a specific question, answer THAT question first.
+5. Documents/forms (ID, receipt, invoice, etc.) → render the key fields as a compact Markdown table.
+6. Do NOT invent facts. If something is unclear, mark it [unclear] and ask ONE clarifying question at the end.
+7. Do NOT print internal labels like "Verdict:", "Evidence:", "Protocol:", or the word "Forensic".
+`;
+}
 
 function getForensicPrompt(): string {
   return `
@@ -244,8 +267,14 @@ async function fetchImageAsBase64(url: string): Promise<{ base64: string; mimeTy
 
 interface PersonalTouch {
   nickname?: string;
+  aiNickname?: string;
+  ai_nickname?: string;
+  displayName?: string;
+  display_name?: string;
   tone?: string;
   style?: string;
+  instruction?: string;
+  engineTier?: 'speed' | 'intelligence';
 }
 
 function buildSystemPrompt(
@@ -262,24 +291,36 @@ function buildSystemPrompt(
     : 'CRITICAL: Respond ONLY in English. Do NOT use Arabic.';
 
   const ptNick = (pt.nickname || '').toString().trim();
+  const ptDisplay = ((pt.displayName || pt.display_name) || '').toString().trim();
+  const ptAiNick = ((pt.aiNickname || pt.ai_nickname) || '').toString().trim();
   const ptTone = (pt.tone || '').toString().trim();
   const ptStyle = (pt.style || '').toString().trim();
+  const ptInstruction = (pt.instruction || '').toString().trim();
+
+  // Name used when the AI wants to address the user (nickname → display name).
+  // Do NOT inject a hardcoded "friend" fallback into the prompt — let the model
+  // greet generically when nothing is known.
+  const addressName = ptNick || ptDisplay;
 
   const PT_ENFORCEMENT = `
 CRITICAL PERSONAL TOUCH ENFORCEMENT ===
-- Nickname: ${ptNick ? `Use the user's nickname "${ptNick}" frequently.` : 'No nickname provided.'}
+- Address the user as: ${addressName ? `"${addressName}"` : 'no specific name (greet generically, do NOT invent a name)'}.
+- Your own name: ${ptAiNick ? `"${ptAiNick}"` : '"Wakti Vision"'}.
 - Tone: ${ptTone ? `Maintain a ${ptTone} tone consistently.` : 'Default to neutral tone.'}
-- Style: ${ptStyle ? `Shape your structure as ${ptStyle}.` : 'Keep answers concise and clear.'}
+- Style: ${ptStyle ? `Shape your structure as ${ptStyle}. THIS USER STYLE PREFERENCE OVERRIDES any category-specific formatting (OCR tables, forensic verdicts, food breakdowns, etc.). Keep required content, but follow the user's length/shape preference.` : 'Keep answers concise and clear.'}
+${ptInstruction ? `- User's extra instructions (follow on every reply): ${ptInstruction}` : ''}
 `;
 
-  const GREETING_RULE = `
-GREETING (MANDATORY):
-- Do NOT place the greeting before the verdict line.
-- The greeting may appear immediately AFTER the verdict line (same paragraph), using the user's nickname if provided.
-- If tone is Formal: use "Greetings <nickname>".
-- If tone is Encouraging: use "Hello <nickname>!".
-- Otherwise: use a short friendly greeting.
-`;
+  // Greeting rule is ONLY injected when we actually have a name to use.
+  // Otherwise the model was literally printing the placeholder "Hi friend." back.
+  const GREETING_RULE = addressName ? `
+GREETING (OPTIONAL):
+- You MAY place a short greeting immediately AFTER the verdict line (same paragraph).
+- If tone is Formal: use "Greetings ${addressName}".
+- If tone is Encouraging: use "Hello ${addressName}!".
+- Otherwise: use a short friendly greeting that includes "${addressName}".
+- Never invent a placeholder name.
+` : '';
 
   const VISION_CAPS = `ENHANCED VISION CAPABILITIES ===
 - Analyze images and describe their content in detail
@@ -336,9 +377,13 @@ Act as a friendly, patient tutor who helps the user learn from this image.
         break;
       case 'photos':
       case 'photos & people':
+        // Explicit deep-analysis request: keep forensic intelligence protocol.
+        categoryPrompt = getForensicPrompt();
+        break;
       case 'general':
       default:
-        categoryPrompt = getForensicPrompt();
+        // Lean default: fast, direct answer. No forensic overhead for everyday images.
+        categoryPrompt = getGeneralPrompt();
         break;
     }
   }
@@ -362,7 +407,8 @@ ${VISION_CAPS}
 ${TABLE_ENFORCEMENT}
 
 Personal Touch:
-- Nickname: ${ptNick || 'N/A'}
+- Nickname: ${ptNick || ptDisplay || 'N/A'}
+- AI Name: ${ptAiNick || 'Wakti Vision'}
 - Tone: ${ptTone || 'neutral'}
 - Style: ${ptStyle || 'short answers'}
 - Language: ${language}`;
@@ -381,15 +427,19 @@ async function tryGemini(
   personalTouch: PersonalTouch | null,
   maxTokens: number,
   controller: ReadableStreamDefaultController,
-  encoder: TextEncoder
+  encoder: TextEncoder,
+  chatSubmode: string = 'chat'
 ): Promise<void> {
   const key = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
   if (!key) throw new Error("No Gemini API Key configured");
 
-  // PRIMARY "ELITE" ENGINE: Gemini 3.1 Pro Preview — frontier multimodal reasoning, OCR, document analysis
-  // NOTE: Some Gemini variants reject `system_instruction` (400 schema mismatch).
-  // We embed the full system protocol as the first user text part instead.
-  const GEMINI_MODEL = "gemini-3.1-pro-preview";
+  // PRIMARY ENGINE: Gemini 2.5 Flash — fast, low-latency multimodal, strong OCR.
+  // EXCEPTION: if the user is in STUDY submode AND has AI Engine = Intelligence,
+  // upgrade to the stronger (slower) Pro model for deeper tutoring.
+  // Regular Vision stays fast regardless of the engine toggle — per product decision.
+  const wantsStudyIntelligence =
+    chatSubmode === 'study' && (personalTouch?.engineTier === 'intelligence');
+  const GEMINI_MODEL = wantsStudyIntelligence ? "gemini-3.1-pro-preview" : "gemini-2.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${key}`;
 
   const enableGrounding = (Deno.env.get("GEMINI_ENABLE_GROUNDING") || "").toLowerCase() === "true";
@@ -403,16 +453,26 @@ async function tryGemini(
   const pt = personalTouch || {};
   const ptNick = (pt.nickname || '').toString().trim();
   const ptTone = (pt.tone || '').toString().trim().toLowerCase();
-  const nameForGreeting = ptNick || (language === 'ar' ? 'صديقي' : 'friend');
-  const greetingLine = ptTone === 'formal'
+  // Fallback chain: nickname → displayName → (last-resort) 'friend' / 'صديقي'.
+  // The last-resort string should almost never fire now that the client awaits DB refresh
+  // and passes displayName, but we keep it as a final safety net.
+  const ptDisplay = ((pt.displayName || pt.display_name) || '').toString().trim();
+  const nameForGreeting = ptNick || ptDisplay || (language === 'ar' ? 'صديقي' : 'friend');
+  // Only produce a greeting line at all if we have a real name. Otherwise leave empty
+  // so the model doesn't print a placeholder like "Hi friend.".
+  const haveRealName = !!(ptNick || ptDisplay);
+  const greetingLine = !haveRealName ? '' : (ptTone === 'formal'
     ? (language === 'ar' ? `تحياتي ${nameForGreeting}.` : `Greetings ${nameForGreeting}.`)
     : ptTone === 'encouraging'
       ? (language === 'ar' ? `مرحباً ${nameForGreeting}!` : `Hello ${nameForGreeting}!`)
-      : (language === 'ar' ? `أهلاً ${nameForGreeting}.` : `Hi ${nameForGreeting}.`);
+      : (language === 'ar' ? `أهلاً ${nameForGreeting}.` : `Hi ${nameForGreeting}.`));
 
   const groundingInstruction = `\n\nGROUNDING (GOOGLE SEARCH) — MANDATORY WHEN AN ENTITY OR LANDMARK IS DETECTED:\n- You have access to Google Search grounding (google_search tool).\n- Vision first, then Search, then Answer. No skipping.\n- Build a Visual Fingerprint from ALL clues (name, logo, uniform, watch, signage language/font, equipment brand, lighting, role keywords, landmark shape/material).\n- Then run EXACTLY ONE deep, high-resolution query that contains multiple fingerprint tokens.\n- Deep search phrases (use these patterns, do NOT use only the name):\n  - Person: "[Name] career history legacy highlights achievements [Location]"\n  - Organization/brand: "[Brand] logo history era evolution timeline"\n  - Venue/building: "[Place] history significance decade era"\n  - Landmark/architecture (when applicable): "[distinctive shape/material/lighting] landmark [city/country candidates]"\n- Use the search result to upgrade: job title ➜ legacy/impact title AND to confirm/adjust the decade/era estimate and location.\n- Do NOT show sources or links in the user output.\n- If results are weak/conflicting: downgrade confidence, state 1–2 candidates, and ask for ONE missing clue.`;
 
-  const integratedProtocol = `SYSTEM PROTOCOL (OBEY RIGIDLY)\n${systemInstruction}\n\nLANGUAGE CODE (HINT): ${languageCode}\n\nGREETING TO USE (DO NOT PLACE BEFORE VERDICT LINE): ${greetingLine}\n\n${langPrefix}${groundingInstruction}\n\nUSER QUESTION:\n${(prompt || '').trim()}`.trim();
+  const greetingBlock = greetingLine
+    ? `\n\nGREETING TO USE (DO NOT PLACE BEFORE VERDICT LINE): ${greetingLine}`
+    : '';
+  const integratedProtocol = `SYSTEM PROTOCOL (OBEY RIGIDLY)\n${systemInstruction}\n\nLANGUAGE CODE (HINT): ${languageCode}${greetingBlock}\n\n${langPrefix}${groundingInstruction}\n\nUSER QUESTION:\n${(prompt || '').trim()}`.trim();
 
   const contents = [{
     role: "user",
@@ -430,7 +490,16 @@ async function tryGemini(
     body: JSON.stringify({
       contents,
       ...(enableGrounding ? { tools: [{ google_search: {} }] } : {}),
-      generationConfig: { temperature: 0.1, maxOutputTokens: maxTokens }
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: maxTokens,
+        // CRITICAL: Disable internal "thinking" on Gemini 2.5 Flash.
+        // Without this, the model can spend 15-20 seconds "thinking" AND burn
+        // most of maxOutputTokens on thinking tokens, leaving only a few hundred
+        // chars of actual answer (truncated mid-sentence). With thinkingBudget=0
+        // the model answers directly = fast first token + complete response.
+        thinkingConfig: { thinkingBudget: 0 }
+      }
     })
   });
 
@@ -707,11 +776,11 @@ serve((req) => {
         const resolvedCategory = (visionCategory || 'general').toString().trim().toLowerCase();
         console.log(`VISION: category=${resolvedCategory} submode=${chatSubmode}`);
         const systemPrompt = buildSystemPrompt(language as string, now, todayISO, personalTouch, chatSubmode as string, resolvedCategory);
-        const maxTokens = options?.max_tokens || 4000;
+        const maxTokens = options?.max_tokens || 2000;
 
         // STRICT FALLBACK: Gemini → OpenAI → Claude
         try {
-          await tryGemini(normalizedImages, systemPrompt, prompt as string, language as string, personalTouch, maxTokens, controller, encoder);
+          await tryGemini(normalizedImages, systemPrompt, prompt as string, language as string, personalTouch, maxTokens, controller, encoder, chatSubmode as string);
         } catch (geminiErr) {
           console.error("VISION: Gemini Failed:", (geminiErr as Error).message);
           try {

@@ -3,9 +3,6 @@ import { Play, ExternalLink } from 'lucide-react';
 import { YouTubePreview } from './YouTubePreview';
 import { useTheme } from '@/providers/ThemeProvider';
 
-const isLocalhost = typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
 const YT_ICON = (
   <svg className="h-4 w-4 fill-current flex-shrink-0" viewBox="0 0 24 24">
     <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
@@ -35,10 +32,6 @@ export const YouTubeResultsCard: React.FC<YouTubeResultsCardProps> = ({ results 
   const selectedVideo = capped.find(r => r.videoId === selectedVideoId);
 
   const handleCardClick = (result: YouTubeResult) => {
-    if (isLocalhost) {
-      window.open(`https://www.youtube.com/watch?v=${result.videoId}`, '_blank', 'noopener');
-      return;
-    }
     const isSame = selectedVideoId === result.videoId;
     setSelectedVideoId(isSame ? null : result.videoId);
     if (!isSame) {
@@ -46,6 +39,11 @@ export const YouTubeResultsCard: React.FC<YouTubeResultsCardProps> = ({ results 
         playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 80);
     }
+  };
+
+  const handleOpenOnYouTube = (e: React.MouseEvent, videoId: string) => {
+    e.stopPropagation();
+    window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank', 'noopener');
   };
 
   return (
@@ -57,16 +55,10 @@ export const YouTubeResultsCard: React.FC<YouTubeResultsCardProps> = ({ results 
         <span className="ml-1 text-[11px] text-muted-foreground font-normal">
           ({capped.length})
         </span>
-        {isLocalhost && (
-          <span className="ml-auto text-[10px] text-muted-foreground font-normal flex items-center gap-1">
-            <ExternalLink className="h-3 w-3" />
-            {language === 'ar' ? 'يفتح في يوتيوب' : 'Opens on YouTube'}
-          </span>
-        )}
       </div>
 
-      {/* Player — production only, shown when a video is selected */}
-      {!isLocalhost && selectedVideo && (
+      {/* Player — shown when a video is selected */}
+      {selectedVideo && (
         <div
           ref={playerRef}
           className="rounded-xl overflow-hidden border border-red-300/50 dark:border-red-800/40 bg-black/5 dark:bg-black/20"
@@ -137,6 +129,19 @@ export const YouTubeResultsCard: React.FC<YouTubeResultsCardProps> = ({ results 
                   </span>
                 )}
               </div>
+
+              {/* Open on YouTube (external) */}
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => handleOpenOnYouTube(e, result.videoId)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpenOnYouTube(e as unknown as React.MouseEvent, result.videoId); } }}
+                className="flex-shrink-0 self-start p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                title={language === 'ar' ? 'فتح في يوتيوب' : 'Open on YouTube'}
+                aria-label={language === 'ar' ? 'فتح في يوتيوب' : 'Open on YouTube'}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </span>
             </button>
           );
         })}

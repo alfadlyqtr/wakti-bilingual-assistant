@@ -36,9 +36,24 @@ function normalizeMessages(messages: any[]): any[] {
       imageUrl: typeof m?.imageUrl === 'string' ? m.imageUrl : undefined,
       browsingUsed: m?.browsingUsed === true ? true : undefined,
     };
-    // Preserve UI-critical metadata so search cards and reminder cards survive save/reload
-    if (m?.metadata?.searchConfirmation) base.metadata = { searchConfirmation: m.metadata.searchConfirmation };
-    else if (m?.metadata?.reminderScheduled) base.metadata = { reminderScheduled: m.metadata.reminderScheduled };
+    // Preserve UI-critical metadata so cards, vision results, tool calls and timing
+    // survive save/reload. Size-guarded to avoid bloating saved_conversations rows.
+    const src = m?.metadata || {};
+    const kept: any = {};
+    if (src.searchConfirmation) kept.searchConfirmation = src.searchConfirmation;
+    if (src.reminderScheduled)  kept.reminderScheduled  = src.reminderScheduled;
+    if (src.visionJson)         kept.visionJson         = src.visionJson;
+    if (Array.isArray(src.toolCalls)) kept.toolCalls = src.toolCalls;
+    if (typeof src.toolsUsed === 'number') kept.toolsUsed = src.toolsUsed;
+    if (typeof src.thinkingDuration === 'number') kept.thinkingDuration = src.thinkingDuration;
+    if (src.browsingUsed === true) kept.browsingUsed = true;
+    if (src.browsingData) kept.browsingData = src.browsingData;
+    if (Object.keys(kept).length > 0) {
+      try {
+        const asStr = JSON.stringify(kept);
+        if (asStr.length <= 8000) base.metadata = kept;
+      } catch { /* ignore */ }
+    }
     return base;
   });
 }

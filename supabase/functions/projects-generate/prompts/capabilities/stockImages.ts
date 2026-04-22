@@ -34,11 +34,31 @@ Response: { images: [{ url: string }, ...] }
 - Static (no API call): \`<img src={getStaticPlaceholder('haircut', 400, 300)} />\`
 
 ### QUERY RULES (CRITICAL FOR RELEVANCE)
-Extract KEY ENTITIES from the user's prompt (team, location, business type) and include them in every query.
+Extract KEY ENTITIES from the user's prompt (product category, location, business type) and use them in every Freepik query.
 
-✅ "Qatar national football team" → "Qatar national team", "Qatar football maroon jersey"
-✅ "barber shop in Dubai" → "Dubai barber shop", "luxury barber interior"
-❌ Generic "team", "business", "people" — ignores user context
+✅ "Abayas & Fashion" → hero: "elegant abaya fashion model", products: "luxury abaya collection", about: "modest fashion designer"
+✅ "barber shop" → hero: "barber shop interior modern", services: "haircut barber chair", team: "professional barber"
+✅ "perfumes & oud" → hero: "luxury perfume bottle oud", products: "arabic oud perfume collection"
+✅ "jewelry" → hero: "luxury gold jewelry display", products: "gold ring necklace bracelet"
+✅ "restaurant" → hero: "restaurant interior elegant", menu: "food dish presentation gourmet"
+✅ "fitness" → hero: "gym workout fitness", services: "personal trainer exercise"
+
+❌ Generic "store", "products", "business", "people", "laptop", "technology" — NEVER use these for physical product stores
+❌ NEVER use laptop/computer/phone images for fashion, food, or physical product sites
+
+### MODEST FASHION / ABAYA RULES (MANDATORY)
+- If the prompt mentions abaya, modest fashion, hijab fashion, jalabiya, or similar, the query MUST include the exact clothing category term (for example: "abaya").
+- Prefer queries like "black abaya fashion model", "modest fashion boutique interior", "luxury abaya fabric detail", "elegant abaya collection rack".
+- For hero sections, prefer people actually wearing the garment or boutique scenes that clearly show modest-fashion clothing.
+- For product/category sections, prefer clothing racks, folded garments, fabric texture, tailoring, and product displays relevant to abayas/modest wear.
+- NEVER drift into generic luxury gift boxes, handbags, perfume bottles, jewelry-only shots, laptops, phones, or abstract office imagery when the business is specifically abayas/modest fashion.
+
+### CRITICAL: Match image to product type
+- Fashion/clothing stores → models wearing the product, fabric textures, boutique interior
+- Food/restaurant → actual food dishes, restaurant atmosphere, ingredients
+- Beauty/salon → salon interior, beauty treatments, cosmetic products
+- Fitness → gym equipment, workout sessions, healthy lifestyle
+- Jewelry → close-up product shots, display cases, luxury styling
 
 ### STRICT RULES
 1. ALWAYS create /utils/stockImages.js FIRST before any image-using component.

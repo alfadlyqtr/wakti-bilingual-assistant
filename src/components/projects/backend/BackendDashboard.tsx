@@ -120,7 +120,7 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
   const resolveTab = (tab?: string) => {
     if (!tab) return 'uploads';
     if (FEATURE_TABS.some(t => t.id === tab)) return tab;
-    if (tab === 'bookings' || tab === 'chat' || tab === 'comments' || tab === 'reviews') return 'inbox';
+    if (tab === 'submissions' || tab === 'bookings' || tab === 'chat' || tab === 'comments' || tab === 'reviews') return 'inbox';
     if (tab === 'users' || tab === 'customers' || tab === 'roles') return 'accounts';
     if (tab === 'data') return advancedEnabled ? 'advanced' : 'uploads';
     return 'uploads';
@@ -158,6 +158,7 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
   useEffect(() => {
     if (initialTab) {
       setActiveTab(resolveTab(initialTab));
+      if (initialTab === 'submissions') setInboxInnerTab('submissions');
       if (initialTab === 'bookings') setInboxInnerTab('bookings');
       if (initialTab === 'chat') setInboxInnerTab('messages');
       if (initialTab === 'comments') setInboxInnerTab('comments');

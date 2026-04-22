@@ -84,6 +84,67 @@ const inferScreenshotIntent = (files: File[]): ScreenshotIntent => {
   return hasDocument ? 'content' : 'style';
 };
 
+const buildFallbackContextForm = (
+  rawPrompt: string,
+  isRTL: boolean,
+): { siteType: string; heading: string; fields: ContextField[] } | null => {
+  const prompt = (rawPrompt || '').toLowerCase();
+
+  if (/shop|store|e-?commerce|abaya|fashion|boutique|clothing|products?|متجر|عباية|أزياء|ملابس/.test(prompt)) {
+    return {
+      siteType: isRTL ? 'متجر إلكتروني' : 'Online Store',
+      heading: isRTL ? 'أخبرنا عن متجرك' : 'Tell us about your store',
+      fields: [
+        { id: 'store_name', label: isRTL ? 'اسم المتجر' : 'Store Name', placeholder: isRTL ? 'أماني' : 'Amani', type: 'text' },
+        { id: 'brand_tagline', label: isRTL ? 'الشعار' : 'Tagline', placeholder: isRTL ? 'أناقة محتشمة عصرية' : 'Modern modest elegance', type: 'text' },
+        { id: 'whatsapp_number', label: isRTL ? 'واتساب' : 'WhatsApp', placeholder: isRTL ? '+974 5555 5555' : '+974 5555 5555', type: 'tel' },
+        { id: 'store_description', label: isRTL ? 'وصف المتجر' : 'Store Description', placeholder: isRTL ? 'متجر عبايات راقٍ للنساء في قطر والخليج' : 'A premium abaya boutique for women in Qatar and the Gulf', type: 'textarea' },
+        { id: 'featured_collection', label: isRTL ? 'مجموعة مميزة' : 'Featured Collection', placeholder: isRTL ? 'مجموعة العيد' : 'Eid Collection', type: 'text' },
+      ],
+    };
+  }
+
+  if (/restaurant|cafe|coffee|menu|food|مطعم|مقهى|قهوة|طعام/.test(prompt)) {
+    return {
+      siteType: isRTL ? 'مطعم' : 'Restaurant',
+      heading: isRTL ? 'أخبرنا عن مطعمك' : 'Tell us about your restaurant',
+      fields: [
+        { id: 'restaurant_name', label: isRTL ? 'اسم المطعم' : 'Restaurant Name', placeholder: isRTL ? 'دار النكهة' : 'Dar Al Nakha', type: 'text' },
+        { id: 'cuisine_type', label: isRTL ? 'نوع المطبخ' : 'Cuisine', placeholder: isRTL ? 'خليجي معاصر' : 'Modern Gulf cuisine', type: 'text' },
+        { id: 'phone_number', label: isRTL ? 'الهاتف' : 'Phone', placeholder: isRTL ? '+974 4444 4444' : '+974 4444 4444', type: 'tel' },
+        { id: 'address', label: isRTL ? 'العنوان' : 'Address', placeholder: isRTL ? 'الدوحة، قطر' : 'Doha, Qatar', type: 'text' },
+        { id: 'brand_story', label: isRTL ? 'القصة' : 'Story', placeholder: isRTL ? 'مطعم دافئ يجمع بين النكهات المحلية والتجربة الحديثة' : 'A warm dining concept blending local flavors with a modern experience', type: 'textarea' },
+      ],
+    };
+  }
+
+  if (/booking|appointment|salon|spa|clinic|service|حجز|موعد|صالون|سبا|عيادة|خدمة/.test(prompt)) {
+    return {
+      siteType: isRTL ? 'خدمات وحجوزات' : 'Bookings',
+      heading: isRTL ? 'أخبرنا عن نشاطك' : 'Tell us about your business',
+      fields: [
+        { id: 'business_name', label: isRTL ? 'اسم النشاط' : 'Business Name', placeholder: isRTL ? 'استوديو ليا' : 'Lia Studio', type: 'text' },
+        { id: 'specialty', label: isRTL ? 'التخصص' : 'Specialty', placeholder: isRTL ? 'عناية وجمال' : 'Beauty & wellness', type: 'text' },
+        { id: 'phone_number', label: isRTL ? 'الهاتف' : 'Phone', placeholder: isRTL ? '+974 6666 6666' : '+974 6666 6666', type: 'tel' },
+        { id: 'location', label: isRTL ? 'الموقع' : 'Location', placeholder: isRTL ? 'لوسيل، قطر' : 'Lusail, Qatar', type: 'text' },
+        { id: 'business_description', label: isRTL ? 'وصف النشاط' : 'Description', placeholder: isRTL ? 'خدمات راقية بمواعيد سهلة وسريعة' : 'Premium services with a smooth booking experience', type: 'textarea' },
+      ],
+    };
+  }
+
+  return {
+    siteType: isRTL ? 'مشروع جديد' : 'New Project',
+    heading: isRTL ? 'أخبرنا عن مشروعك' : 'Tell us about your project',
+    fields: [
+      { id: 'project_name', label: isRTL ? 'اسم المشروع' : 'Project Name', placeholder: isRTL ? 'اسم مشروعك' : 'Your project name', type: 'text' },
+      { id: 'tagline', label: isRTL ? 'الشعار' : 'Tagline', placeholder: isRTL ? 'وصف قصير وجذاب' : 'A short memorable tagline', type: 'text' },
+      { id: 'contact_email', label: isRTL ? 'البريد' : 'Email', placeholder: isRTL ? 'hello@example.com' : 'hello@example.com', type: 'email' },
+      { id: 'location', label: isRTL ? 'الموقع' : 'Location', placeholder: isRTL ? 'الدوحة، قطر' : 'Doha, Qatar', type: 'text' },
+      { id: 'project_description', label: isRTL ? 'الوصف' : 'Description', placeholder: isRTL ? 'اشرح ما تريد بناءه باختصار' : 'Briefly explain what you want to build', type: 'textarea' },
+    ],
+  };
+};
+
 // Project Preview Thumbnail Component - premium fallback card
 const ProjectPreviewThumbnail = ({ project, isRTL }: { project: Project; isRTL: boolean }) => {
   return (
@@ -212,7 +273,7 @@ FEATURES:
 - Wishlist functionality
 - Size/color variant selection where applicable
 
-Create 6-8 sample products with realistic names and prices for the {PRODUCT} category.`,
+IMPORTANT: Products are fetched from the backend — do NOT hardcode any product names, prices, or mock data. Show a loading skeleton while fetching and a friendly empty state if no products exist yet.`,
       ar: `أنشئ متجر إلكتروني فاخر لـ{PRODUCT}.
 
 التصميم: تصميم تجارة إلكترونية عصري وأنيق مع حركات سلسة. ألوان تناسب فئة المنتجات.
@@ -241,7 +302,7 @@ Create 6-8 sample products with realistic names and prices for the {PRODUCT} cat
 - قائمة المفضلة
 - اختيار المقاس/اللون حيث ينطبق
 
-أنشئ 6-8 منتجات نموذجية بأسماء وأسعار واقعية لفئة {PRODUCT}.`
+مهم: يتم جلب المنتجات من الخلفية — لا تضع أي بيانات وهمية. أظهر هيكل تحميل أثناء الجلب وحالة فارغة مناسبة إذا لم تكن هناك منتجات بعد.`
     },
     options: [
       { en: 'Abayas & Fashion', ar: 'عبايات وأزياء' },
@@ -311,7 +372,7 @@ FEATURES:
 - WhatsApp order button
 - Dietary filters (vegetarian, gluten-free, etc.)
 
-Create 10-15 sample menu items with realistic names and prices for a {PRODUCT}.`,
+IMPORTANT: Menu items are fetched from the backend — do NOT hardcode any item names, prices, or mock data. Show a loading skeleton while fetching and a friendly empty state if no items exist yet.`,
       ar: `أنشئ موقع قائمة طعام رقمية تفاعلية لـ{PRODUCT}.
 
 التصميم: تصميم شهي مع صور طعام مغرية. ثيم يناسب نوع المطبخ.
@@ -344,7 +405,7 @@ Create 10-15 sample menu items with realistic names and prices for a {PRODUCT}.`
 - زر طلب واتساب
 - فلاتر غذائية (نباتي، خالي من الجلوتين، إلخ)
 
-أنشئ 10-15 صنف نموذجي بأسماء وأسعار واقعية لـ{PRODUCT}.`
+مهم: يتم جلب أصناف القائمة من الخلفية — لا تضع أي بيانات وهمية. أظهر هيكل تحميل أثناء الجلب وحالة فارغة مناسبة إذا لم تكن هناك أصناف بعد.`
     },
     options: [
       { en: 'Restaurant', ar: 'مطعم' },
@@ -494,7 +555,7 @@ FEATURES:
 - WhatsApp quick inquiry button
 - Staff selection (if multiple providers)
 
-Create 6-10 sample services with realistic names, durations, and prices for a {PRODUCT}.`,
+IMPORTANT: Services are fetched from the backend — do NOT hardcode any service names, prices, or durations. Show a loading skeleton while fetching and a friendly empty state if no services exist yet.`,
       ar: `أنشئ موقع حجز مواعيد احترافي لـ{PRODUCT}.
 
 التصميم: تصميم نظيف وموثوق بألوان مريحة. تدفق حجز بسيط وبديهي.
@@ -522,7 +583,7 @@ Create 6-10 sample services with realistic names, durations, and prices for a {P
 - زر استفسار واتساب سريع
 - اختيار الموظف (إذا تعدد المقدمين)
 
-أنشئ 6-10 خدمات نموذجية بأسماء ومدد وأسعار واقعية لـ{PRODUCT}.`
+مهم: يتم جلب الخدمات من الخلفية — لا تضع أي بيانات وهمية. أظهر هيكل تحميل أثناء الجلب وحالة فارغة إذا لم تكن هناك خدمات بعد.`
     },
     options: [
       { en: 'Beauty Salon', ar: 'صالون تجميل' },
@@ -581,7 +642,7 @@ FEATURES:
 - Mobile-optimized layout
 - Clear, action-oriented CTAs throughout
 
-Create compelling copy specific to a {PRODUCT} with realistic details.`,
+Create compelling copy and placeholder sections specific to {PRODUCT}. Use descriptive text and icons — do not invent fake prices, testimonials, or product listings.`,
       ar: `أنشئ صفحة هبوط واحدة عالية التحويل لـ{PRODUCT}.
 
 التصميم: جريء، عصري، يركز على التحويل. تسلسل بصري قوي مع ألوان CTA متباينة.
@@ -608,7 +669,7 @@ Create compelling copy specific to a {PRODUCT} with realistic details.`,
 - تخطيط محسّن للموبايل
 - CTAs واضحة وموجهة للإجراء
 
-أنشئ نصوص مقنعة خاصة بـ{PRODUCT} مع تفاصيل واقعية.`
+أنشئ نصوصاً مقنعة وأقساماً خاصة بـ{PRODUCT}. استخدم نصاً وصفياً وأيقونات — لا تخترع أسعاراً أو شهادات أو قوائم منتجات وهمية.`
     },
     options: [
       { en: 'Mobile App', ar: 'تطبيق موبايل' },
@@ -1396,18 +1457,11 @@ Apply these styles consistently throughout the entire design.`;
       return isRTL ? 'مشروعي' : 'My Project';
     }
 
-    const lower = p.toLowerCase();
     const leadingPatterns: RegExp[] = [
-      /^build\s+(a|an|the)?\s*/i,
-      /^create\s+(a|an|the)?\s*/i,
-      /^make\s+(a|an|the)?\s*/i,
-      /^generate\s+(a|an|the)?\s*/i,
-      /^design\s+(a|an|the)?\s*/i,
-      /^develop\s+(a|an|the)?\s*/i,
-      /^i\s+want\s+(a|an|the)?\s*/i,
-      /^i\s+need\s+(a|an|the)?\s*/i,
-      /^please\s+(build|create|make|generate|design|develop)\s+(a|an|the)?\s*/i,
-      /^you\s+to\s+(build|create|make|generate|design|develop)\s+(a|an|the)?\s*/i,
+      /^(?:build|create|make|generate|design|develop)\s+(?:(?:an|a|the)\s+)?/i,
+      /^i\s+(?:want|need)\s+(?:(?:an|a|the)\s+)?/i,
+      /^please\s+(?:build|create|make|generate|design|develop)\s+(?:(?:an|a|the)\s+)?/i,
+      /^you\s+to\s+(?:build|create|make|generate|design|develop)\s+(?:(?:an|a|the)\s+)?/i,
     ];
 
     let cleaned = p;
@@ -1468,6 +1522,15 @@ Apply these styles consistently throughout the entire design.`;
       } catch (e) {
         console.warn('[ContextDetect] Failed, proceeding without form:', e);
       }
+
+      const fallbackContextForm = buildFallbackContextForm(finalUserPrompt, isRTL);
+      if (fallbackContextForm?.fields?.length) {
+        console.log('[ContextDetect] Using local fallback form:', fallbackContextForm.siteType);
+        setContextFormData(fallbackContextForm);
+        setIsDetectingContext(false);
+        return;
+      }
+
       setIsDetectingContext(false);
     }
 
