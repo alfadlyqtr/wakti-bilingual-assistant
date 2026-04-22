@@ -256,14 +256,12 @@ const ThinkingTimerDisplay: React.FC<{ startTime: number; isRTL: boolean }> = ({
 };
 
 export default function ProjectDetail() {
-  console.log('[ProjectDetail] Component mounting...');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { language } = useTheme();
   const { user, session } = useAuth();
   const debugContext = useDebugContext();
-  console.log('[ProjectDetail] Hooks initialized, id:', id);
   const isRTL = language === 'ar';
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -1327,7 +1325,6 @@ export default function ProjectDetail() {
       // Update local state and force Sandpack re-render
       setGeneratedFiles(snapshot);
       setCodeContent(snapshot["/App.js"] || Object.values(snapshot)[0] || "");
-      setSandpackKey(prev => prev + 1); // Force Sandpack to re-mount with new files
 
       // Save to database - delete old files and insert new ones from snapshot
       // First delete all existing files for this project
@@ -1646,7 +1643,6 @@ export default function ProjectDetail() {
 
       setGeneratedFiles(generatedFilesData);
       setCodeContent(generatedCode);
-      setSandpackKey(prev => prev + 1);
       if (typeof window !== 'undefined' && window.innerWidth < 768) {
         setMobileTab('preview');
       }
@@ -4071,7 +4067,6 @@ ${fixInstructions}
         
         if (success && targetFile) {
           setGeneratedFiles(updatedFiles);
-          setSandpackKey(prev => prev + 1);
           // Update codeContent if the target file is the current active file
           if (targetFile === '/App.js' || Object.keys(updatedFiles).length === 1) {
             setCodeContent(updatedFiles[targetFile] || updatedFiles['/App.js'] || '');
@@ -4344,7 +4339,6 @@ ${fixInstructions}
         
         if (success) {
           setGeneratedFiles(updatedFiles);
-          setSandpackKey(prev => prev + 1);
           toast.success(
             language === 'ar' 
               ? `تم تحديث ${imageUrls.length} صور في الكاروسيل` 
@@ -5553,9 +5547,6 @@ ${fixInstructions}
           snapshotToSave = beforeSnapshot;
           setGeneratedFiles(newFiles);
           setCodeContent(newCode);
-          
-          // 🔒 FIX: Force Sandpack to fully re-mount after agent edits to ensure preview updates
-          setSandpackKey(prev => prev + 1);
 
           // Get files changed from agent result
           const changedFilesList: string[] = agentResult.result.filesChanged || [];
@@ -5712,9 +5703,6 @@ ${fixInstructions}
           snapshotToSave = beforeSnapshot;
           setGeneratedFiles(newFiles);
           setCodeContent(newCode);
-          
-          // 🔒 FIX: Force Sandpack to fully re-mount after async agent edits to ensure preview updates
-          setSandpackKey(prev => prev + 1);
 
           const changedFilesList: string[] = [];
           for (const [path, content] of Object.entries(newFiles)) {
@@ -6009,9 +5997,8 @@ ${fixInstructions}
       setThinkingStartTime(null);
       releaseAgentLock('user-chat'); // 🔒 Release lock when chat completes
       releaseAgentLock('auto-fix'); // 🔒 Also release auto-fix lock (in case this was triggered by auto-fix)
-      // On mobile: auto-switch to preview and force refresh so changes show immediately
+      // On mobile: auto-switch to preview so changes show immediately
       if (window.innerWidth < 768) {
-        setSandpackKey(prev => prev + 1);
         setMobileTab('preview');
       }
     }
@@ -6239,11 +6226,12 @@ ${fixInstructions}
       <div className="flex-1 min-h-0 flex overflow-hidden relative h-full">
         {/* Left Panel - Cascade-style Control Center */}
         <div className={cn(
-          "flex flex-col border-r transition-all duration-300 relative",
+          "flex flex-col border-r transition-all duration-300",
           "bg-background dark:bg-[#0c0f14]",
-          "shrink-0",
-          mobileTab === 'preview' ? "hidden md:flex" : "flex w-full",
-          "h-full max-h-full overflow-hidden"
+          "shrink-0 h-full max-h-full overflow-hidden",
+          mobileTab === 'preview'
+            ? "absolute inset-0 z-0 w-full pointer-events-none opacity-0 md:relative md:inset-auto md:z-auto md:flex md:w-auto md:pointer-events-auto md:opacity-100"
+            : "relative z-10 flex w-full opacity-100 pointer-events-auto md:w-auto",
         )}
         style={{
           width: typeof window !== 'undefined' && window.innerWidth >= 768 ? `${leftPanelWidth}px` : undefined,
@@ -6602,7 +6590,6 @@ ${fixInstructions}
                                         
                                         setGeneratedFiles(newFiles);
                                         setCodeContent(newFiles["/App.js"] || Object.values(newFiles)[0] || "");
-                                        setSandpackKey(prev => prev + 1);
                                         
                                         // Add success message
                                         const successMsg = isRTL 
@@ -6632,7 +6619,6 @@ ${fixInstructions}
                                         
                                         setGeneratedFiles(newFiles);
                                         setCodeContent(newFiles["/App.js"] || Object.values(newFiles)[0] || "");
-                                        setSandpackKey(prev => prev + 1);
                                         
                                         const successMsg = isRTL 
                                           ? `✓ تم استخدام ${asset.filename} بنجاح!`
@@ -8420,7 +8406,6 @@ ${fixInstructions}
                           const newMode = !elementSelectMode;
                           setElementSelectMode(newMode);
                           if (newMode) {
-                            setSandpackKey(prev => prev + 1);
                             // Auto-switch to preview on mobile when enabling Visual Editor
                             // Mobile is defined as < 768px (md breakpoint)
                             if (window.innerWidth < 768 && mobileTab !== 'preview') {
@@ -8703,9 +8688,10 @@ ${fixInstructions}
 
         {/* Right Panel - Studio Canvas */}
         <div className={cn(
-          "flex-1 flex flex-col bg-[#0c0f14] relative",
-          mobileTab === 'chat' ? "hidden md:flex" : "flex w-full",
-          "h-full max-h-full overflow-hidden"
+          "flex-1 flex flex-col bg-[#0c0f14] h-full max-h-full overflow-hidden",
+          mobileTab === 'chat'
+            ? "absolute inset-0 z-0 w-full pointer-events-none opacity-0 md:relative md:inset-auto md:z-auto md:flex md:w-auto md:pointer-events-auto md:opacity-100"
+            : "relative z-10 flex w-full opacity-100 pointer-events-auto md:w-auto"
         )}>
           {/* Project Info Bar - Back, Name, Status - STICKY at top */}
           <div className="flex items-center gap-3 px-4 py-0 h-[56px] bg-gradient-to-r from-zinc-900 to-zinc-900/90 border-b border-white/10 shrink-0 sticky top-0 z-[100]">

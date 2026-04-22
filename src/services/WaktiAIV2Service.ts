@@ -68,10 +68,17 @@ type UserLocationContext = {
 };
 
 type DurableMemoryType = 'identity_context' | 'project_context' | 'recurring_goal' | 'working_style' | 'priority';
+type DurableMemoryLayer = 'always_use' | 'routine' | 'project' | 'candidate';
+type DurableMemorySensitivity = 'normal' | 'careful';
+
+type DurableMemoryAction = 'remember' | 'forget';
 
 type DurableMemoryItem = {
   key: string;
   type: DurableMemoryType;
+  layer?: DurableMemoryLayer;
+  sensitivity?: DurableMemorySensitivity;
+  action?: DurableMemoryAction;
   text: string;
   confidence: 'high' | 'medium';
   evidenceCount: number;
@@ -810,9 +817,21 @@ class WaktiAIV2ServiceClass {
     const ptInstruction = this.normalizeDurableMemoryText(personalTouch?.instruction || '', 220).toLowerCase();
     const candidates = new Map<string, DurableMemoryItem>();
 
+    // FORBIDDEN: financial, children's private info, credentials — never silently saved
+    const forbiddenPatterns = [
+      /\b(bank|iban|swift|account\s+number|credit\s+card|debit\s+card|cvv|pin\s+code|password|otp|salary|income|debt|loan|mortgage|net\s+worth|paycheck|wage)\b/i,
+      /بنك|آيبان|حساب\s+رقم|بطاقة\s+ائتمان|كلمة\s+السر|رقم\s+سري|راتب|دخل|دين|قرض/,
+      /\bmy\s+(son|daughter|kid|child)\s+(?:is\s+\d|goes\s+to|attends|studies\s+at)/i
+    ];
+    const isForbidden = (t: string) => forbiddenPatterns.some((p) => p.test(t));
+
+    const keySlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9\u0600-\u06FF]+/g, '_').slice(0, 40);
+
     const addCandidate = (
       key: string,
       type: DurableMemoryType,
+      layer: DurableMemoryLayer,
+      sensitivity: DurableMemorySensitivity,
       text: string,
       evidenceCount: number,
       confidence: 'high' | 'medium' = 'medium',
@@ -820,11 +839,14 @@ class WaktiAIV2ServiceClass {
     ) => {
       const normalizedText = this.normalizeDurableMemoryText(text, 180);
       if (!normalizedText || evidenceCount <= 0) return;
+      if (isForbidden(normalizedText)) return;
       const existing = candidates.get(key);
       const mergedKeywords = this.extractDurableMemoryKeywords(normalizedText, key, ...extraKeywords, ...(existing?.keywords || []));
       const next: DurableMemoryItem = {
         key,
         type,
+        layer,
+        sensitivity,
         text: normalizedText,
         confidence: existing?.confidence === 'high' || confidence === 'high' ? 'high' : 'medium',
         evidenceCount: Math.max(existing?.evidenceCount || 0, evidenceCount),
@@ -834,27 +856,296 @@ class WaktiAIV2ServiceClass {
       candidates.set(key, next);
     };
 
+    // FORGET intent — captured on the *latest* user message only. The backend
+    // matches these against existing memories and removes / rewrites them.
+    const latestUserMessage = userMessages[userMessages.length - 1] || '';
+    const forgetPatterns: RegExp[] = [
+      /\bi\s+no\s+longer\s+(?:like|love|enjoy|play|watch|eat|drink|listen\s+to|follow|support|root\s+for|cheer\s+for|work\s+(?:as|at|in)|live\s+in|study\s+at|go\s+to|attend|do|use|want|need|have|own)\s+([^.!?\n]{2,80})/i,
+      /\bi\s+don'?t\s+(?:like|love|enjoy|play|watch|eat|drink|listen\s+to|follow|support|root\s+for|cheer\s+for|do|use|want|need|have|own)\s+([^.!?\n]{2,80}?)\s+anymore\b/i,
+      /\b(?:please\s+)?forget\s+(?:that\s+|about\s+)?([^.!?\n]{2,80})/i,
+      /\bstop\s+remembering\s+(?:that\s+|about\s+)?([^.!?\n]{2,80})/i,
+      /\bremove\s+(?:the\s+)?memory\s+(?:that\s+|about\s+)?([^.!?\n]{2,80})/i,
+      /لم\s+أعد\s+([^.!?\n]{2,80})/,
+      /انسى?\s+(?:أن\s+|عن\s+)?([^.!?\n]{2,80})/,
+      /احذف\s+(?:ذكرى\s+)?([^.!?\n]{2,80})/
+    ];
+    const cleanForgetSubject = (raw: string): string => {
+      let s = this.normalizeDurableMemoryText(raw || '', 120);
+      // Strip leading filler
+      s = s.replace(/^(that\s+i\s+|i\s+|about\s+)/i, '');
+      // Cut at trailing noise words that signal end-of-intent
+      s = s.split(/\s+(?:forget(?:\s+(?:that|it))?|please|pls|thanks|thank\s+you|okay|ok|now|already|anymore)\b/i)[0] || s;
+      // Strip trailing punctuation/fillers
+      s = s.replace(/[.,;:!?\-\s]+$/, '').trim();
+      return s;
+    };
+    const trivialSubjects = /^(please|pls|thanks|thank\s+you|it|that|this|them|you|me|ok|okay|yes|no|sure|fine|now)$/i;
+
+    for (const pattern of forgetPatterns) {
+      const match = pattern.exec(latestUserMessage);
+      const subject = cleanForgetSubject(match?.[1] || '');
+      if (!subject || subject.length < 2) continue;
+      if (trivialSubjects.test(subject)) continue;
+      const key = `forget_${keySlug(subject)}`;
+      if (candidates.has(key)) continue;
+      candidates.set(key, {
+        key,
+        type: 'identity_context',
+        layer: 'always_use',
+        sensitivity: 'normal',
+        action: 'forget',
+        text: subject,
+        confidence: 'high',
+        evidenceCount: 1,
+        keywords: ['forget', subject.toLowerCase()],
+        source: 'conversation'
+      });
+    }
+
+    // Emoji-usage preference: if the user uses ≥3 emojis across their recent
+    // messages, capture a style hint so the assistant mirrors their vibe.
+    // Uses a conservative property escape for emoji presentation characters.
+    try {
+      const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F000}-\u{1F2FF}]/gu;
+      let emojiCount = 0;
+      let messagesWithEmoji = 0;
+      for (const text of userMessages) {
+        const matches = text.match(emojiRegex);
+        if (matches && matches.length > 0) {
+          emojiCount += matches.length;
+          messagesWithEmoji += 1;
+        }
+      }
+      if (emojiCount >= 3 && messagesWithEmoji >= 2) {
+        addCandidate(
+          'style_emoji_friendly',
+          'working_style',
+          'always_use',
+          'normal',
+          'Uses emojis often — prefers replies that include emojis naturally.',
+          2,
+          'high',
+          ['emoji', 'style', 'playful']
+        );
+      }
+    } catch {
+      // Emoji detection is best-effort; never block capture.
+    }
+
+    // Explicit "remember this" — highest-priority capture
+    const rememberPatterns = [
+      /\b(?:please\s+)?remember\s+(?:that\s+)?([^.!?\n]{6,140})/i,
+      /\balways\s+remember\s+(?:that\s+)?([^.!?\n]{6,140})/i,
+      /\bdon'?t\s+forget\s+(?:that\s+)?([^.!?\n]{6,140})/i,
+      /\bsave\s+(?:that|this)\s+([^.!?\n]{6,140})/i,
+      /تذكر\s+(?:أن\s+)?([^.!?\n]{6,140})/,
+      /احفظ\s+([^.!?\n]{6,140})/,
+      /لا\s+تنسى\s+(?:أن\s+)?([^.!?\n]{6,140})/
+    ];
+    for (const text of userMessages) {
+      for (const pattern of rememberPatterns) {
+        const match = pattern.exec(text);
+        const subject = this.normalizeDurableMemoryText(match?.[1] || '', 140);
+        if (!subject || isForbidden(subject)) continue;
+        addCandidate(`remember_${keySlug(subject)}`, 'identity_context', 'always_use', 'normal', subject, 3, 'high', ['remember']);
+      }
+    }
+
+    // Projects (subject extraction, widened with AR)
     const explicitProjectPatterns = [
       /\b(?:i am|i'm|we are|we're)\s+(?:building|creating|developing|working on|launching|shipping|improving|refining)\s+([^.!?\n]{4,90})/i,
-      /\b(?:building|creating|developing|working on|improving|refining)\s+(wakti ai|wakti|the app|our app|our product|the product)\b/i
+      /\b(?:my|our)\s+(?:current\s+)?project\s+is\s+([^.!?\n]{4,90})/i,
+      /\b(?:building|creating|developing|working on|improving|refining)\s+(wakti ai|wakti|the app|our app|our product|the product)\b/i,
+      /أعمل\s+على\s+([^.!?\n]{4,90})/,
+      /مشروعي\s+(?:الحالي\s+)?(?:هو\s+)?([^.!?\n]{4,90})/
     ];
-
     for (const text of userMessages) {
       for (const pattern of explicitProjectPatterns) {
         const match = pattern.exec(text);
         const rawSubject = this.normalizeDurableMemoryText(match?.[1] || '', 90);
-        if (!rawSubject) continue;
+        if (!rawSubject || isForbidden(rawSubject)) continue;
         if (/wakti/i.test(rawSubject)) {
-          addCandidate('project_wakti_ai', 'project_context', 'User is building and refining Wakti AI.', 3, 'high', ['wakti', 'product', 'app', 'chat']);
+          addCandidate('project_wakti_ai', 'project_context', 'project', 'normal', 'User is building and refining Wakti AI.', 3, 'high', ['wakti', 'product', 'app', 'chat']);
         } else if (rawSubject.length >= 6) {
-          addCandidate(`project_${rawSubject.toLowerCase().replace(/[^a-z0-9]+/gi, '_').slice(0, 32)}`, 'project_context', `User is working on ${rawSubject}.`, 2, 'medium', [rawSubject]);
+          addCandidate(`project_${keySlug(rawSubject)}`, 'project_context', 'project', 'normal', `User is working on ${rawSubject}.`, 2, 'medium', [rawSubject]);
         }
       }
     }
 
+    // Identity: grade
+    for (const text of userMessages) {
+      const m = /\b(?:i(?:'m| am)?\s+in\s+)?(?:grade|year)\s+(\d{1,2})\b|\b(\d{1,2})(?:st|nd|rd|th)\s+grade\b|في\s+الصف\s+(\d{1,2})/i.exec(text);
+      const grade = m?.[1] || m?.[2] || m?.[3];
+      const g = grade ? parseInt(grade, 10) : NaN;
+      if (g >= 1 && g <= 13) {
+        addCandidate(`identity_grade_${g}`, 'identity_context', 'always_use', 'normal', `User is in Grade ${g}.`, 3, 'high', ['grade', 'school', 'student']);
+      }
+    }
+
+    // Identity: favorite subject
+    for (const text of userMessages) {
+      const m = /\b(?:my\s+)?favorite\s+subject\s+is\s+([a-z\u0600-\u06FF][a-z\u0600-\u06FF\s-]{2,30})/i.exec(text)
+            || /\b(?:i\s+love|i\s+enjoy)\s+(math|maths|science|biology|chemistry|physics|history|geography|english|arabic|islamic\s+studies|art|music|pe|computer\s+science)\b/i.exec(text)
+            || /مادتي\s+المفضلة\s+(?:هي\s+)?([^.!?\n]{2,30})/.exec(text);
+      const subject = this.normalizeDurableMemoryText(m?.[1] || '', 40);
+      if (subject && !isForbidden(subject)) {
+        addCandidate(`identity_subject_${keySlug(subject)}`, 'identity_context', 'always_use', 'normal', `Favorite subject is ${subject}.`, 2, 'high', ['subject', 'favorite', 'study']);
+      }
+    }
+
+    // Identity: location (I live in X / I'm from X / I'm based in X)
+    for (const text of userMessages) {
+      const m = /\b(?:i\s+live\s+in|i['\u2019]?m\s+(?:from|based\s+in)|i\s+reside\s+in)\s+([a-z\u0600-\u06FF][a-z\u0600-\u06FF\s,'-]{2,60})/i.exec(text)
+            || /\b(?:glad|happy|lucky)\s+(?:i\s+)?live\s+in\s+([a-z\u0600-\u06FF][a-z\u0600-\u06FF\s,'-]{2,60})/i.exec(text)
+            || /أنا\s+(?:من|أعيش\s+في|أسكن\s+في)\s+([^.!?\n,]{2,60})/.exec(text);
+      const place = this.normalizeDurableMemoryText(m?.[1] || '', 60);
+      if (place && !isForbidden(place) && place.length >= 3) {
+        addCandidate(`identity_location_${keySlug(place)}`, 'identity_context', 'always_use', 'normal', `Lives in ${place}.`, 3, 'high', ['location', 'home', 'city']);
+      }
+    }
+
+    // Identity: favorite team / sport / game / food / show / band / movie / song
+    for (const text of userMessages) {
+      // "X is my favorite <thing>" and "my favorite <thing> is X"
+      const themePattern = /\b(?:my\s+)?favorite\s+(team|sport(?:s)?(?:\s+team)?|game|food|dish|show|tv\s+show|series|movie|film|song|band|artist|singer|book|author|drink|color|colour|place)\s+(?:is|are)\s+([a-z\u0600-\u06FF][a-z\u0600-\u06FF\s&,'-]{1,60})/i;
+      const reversePattern = /\b(?:the\s+)?([a-z\u0600-\u06FF][a-z\u0600-\u06FF\s&'-]{1,40})\s+(?:is|are)\s+my\s+(?:favorite|favourite|#?1)\s+(team|sport(?:s)?(?:\s+team)?|game|food|dish|show|tv\s+show|series|movie|film|song|band|artist|singer|book|author|drink|color|colour|place)/i;
+      const arPattern = /\bفريقي\s+المفضل\s+(?:هو\s+)?([^.!?\n]{2,40})/;
+      const m = themePattern.exec(text) || reversePattern.exec(text) || arPattern.exec(text);
+      if (m) {
+        const kind = (m[1] || 'favorite').toString().toLowerCase().trim();
+        const value = this.normalizeDurableMemoryText((reversePattern.exec(text) ? m[1] : m[2]) || m[1] || '', 60);
+        if (value && !isForbidden(value) && value.length >= 2) {
+          const key = `fav_${keySlug(kind)}_${keySlug(value)}`;
+          const isTeam = /team|sport/i.test(kind);
+          addCandidate(key, 'identity_context', 'always_use', 'normal', `Favorite ${kind}: ${value}.`, isTeam ? 3 : 2, 'high', ['favorite', kind.replace(/\s+/g, '_'), value.toLowerCase()]);
+        }
+      }
+      // "I'm a fan of X" / "I love X" (team/artist style) / "I support X"
+      const fanMatch = /\b(?:i['\u2019]?m\s+a\s+(?:huge\s+|big\s+)?fan\s+of|i\s+support|i\s+root\s+for|i\s+cheer\s+for)\s+(?:the\s+)?([a-z\u0600-\u06FF][a-z\u0600-\u06FF\s&'-]{2,50})/i.exec(text)
+                  || /\bأشجع\s+([^.!?\n]{2,50})/.exec(text);
+      const fanOf = this.normalizeDurableMemoryText(fanMatch?.[1] || '', 50);
+      if (fanOf && !isForbidden(fanOf) && fanOf.length >= 3) {
+        addCandidate(`fan_of_${keySlug(fanOf)}`, 'identity_context', 'always_use', 'normal', `Fan of ${fanOf}.`, 2, 'high', ['fan', fanOf.toLowerCase()]);
+      }
+    }
+
+    // Identity: profession / work
+    for (const text of userMessages) {
+      const m = /\b(?:i\s+work\s+as\s+(?:an?\s+)?|i['\u2019]?m\s+(?:an?\s+)|my\s+job\s+is\s+(?:an?\s+)?)([a-z][a-z\s-]{2,40}?)(?=[.!?\n,]|\s+(?:in|at|for|and|but)\b|$)/i.exec(text)
+            || /\bأعمل\s+(?:ك)?([^.!?\n]{2,40})/.exec(text);
+      const raw = this.normalizeDurableMemoryText(m?.[1] || '', 40).toLowerCase();
+      // filter common non-profession fits that the loose regex may grab
+      const blocklist = /\b(fan|bit|little|lot|huge|big|good|bad|tired|happy|sad|glad|sure|right|fine|old|new|late|early|busy|free|here|there)\b/;
+      if (raw && raw.length >= 4 && !blocklist.test(raw) && !isForbidden(raw)) {
+        addCandidate(`profession_${keySlug(raw)}`, 'identity_context', 'always_use', 'normal', `Works as ${raw}.`, 2, 'medium', ['profession', 'work', 'job']);
+      }
+    }
+
+    // Identity: pet
+    for (const text of userMessages) {
+      const m = /\b(?:i\s+have|we\s+have|i\s+own)\s+(?:an?\s+|two\s+|three\s+)?(dog|cat|bird|parrot|rabbit|hamster|fish|turtle|horse|cow|sheep|goat|chicken|chickens|falcon)s?\b(?:\s+(?:named|called)\s+([a-z\u0600-\u06FF][a-z\u0600-\u06FF\s'-]{1,30}))?/i.exec(text)
+            || /\bعندي\s+(كلب|قطة|قط|طير|ببغاء|أرنب|سمك|صقر)\b(?:\s+اسمه\s+([^.!?\n]{1,30}))?/.exec(text);
+      if (m) {
+        const animal = this.normalizeDurableMemoryText(m[1] || '', 30);
+        const name = this.normalizeDurableMemoryText(m[2] || '', 30);
+        const descriptor = name ? `${animal} named ${name}` : `${animal}`;
+        if (animal && !isForbidden(descriptor)) {
+          addCandidate(`pet_${keySlug(animal)}_${keySlug(name || 'unnamed')}`, 'identity_context', 'always_use', 'normal', `Has a ${descriptor}.`, 2, 'high', ['pet', animal.toLowerCase()]);
+        }
+      }
+    }
+
+    // Routines: every weekday + every week
+    const weekdayMap: Record<string, string> = {
+      monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday',
+      thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday'
+    };
+    for (const text of userMessages) {
+      const m = /\bevery\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b\s+([^.!?\n]{4,140})/i.exec(text)
+            || /كل\s+(اثنين|ثلاثاء|أربعاء|خميس|جمعة|سبت|أحد)\s+([^.!?\n]{4,140})/.exec(text);
+      if (m) {
+        const day = (m[1] || '').toLowerCase();
+        const normalizedDay = weekdayMap[day] || m[1];
+        const action = this.normalizeDurableMemoryText(m[2] || '', 140);
+        if (action && !isForbidden(action)) {
+          const careful = /\b(wife|husband|son|daughter|kids?|children|family)\b|زوجتي|زوجي|ابني|ابنتي|أطفالي/i.test(action);
+          addCandidate(`routine_${keySlug(day)}_${keySlug(action)}`, 'recurring_goal', 'routine', careful ? 'careful' : 'normal', `Every ${normalizedDay}: ${action}`, 2, 'high', ['routine', 'every', normalizedDay.toLowerCase()]);
+        }
+      }
+      const weekly = /\bevery\s+week\s+([^.!?\n]{4,140})/i.exec(text);
+      if (weekly) {
+        const action = this.normalizeDurableMemoryText(weekly[1] || '', 140);
+        if (action && !isForbidden(action)) {
+          addCandidate(`routine_weekly_${keySlug(action)}`, 'recurring_goal', 'routine', 'normal', `Every week: ${action}`, 2, 'medium', ['routine', 'weekly']);
+        }
+      }
+    }
+
+    // Preferences: language + brevity + step-by-step
+    for (const text of userMessages) {
+      if (/\b(?:reply|respond|talk)\s+(?:to\s+me\s+)?in\s+arabic\b|أجبني\s+بالعربية/i.test(text)) {
+        addCandidate('pref_reply_arabic', 'working_style', 'always_use', 'normal', 'Prefers replies in Arabic.', 2, 'medium', ['arabic', 'language']);
+      }
+      if (/\b(?:reply|respond|talk)\s+(?:to\s+me\s+)?in\s+english\b|أجبني\s+بالإنجليزية/i.test(text)) {
+        addCandidate('pref_reply_english', 'working_style', 'always_use', 'normal', 'Prefers replies in English.', 2, 'medium', ['english', 'language']);
+      }
+      if (/\b(keep it|make it)\s+(short|brief|concise)\b|اختصر|باختصار/i.test(text)) {
+        addCandidate('pref_concise', 'working_style', 'always_use', 'normal', 'Prefers concise replies.', 1, 'medium', ['concise', 'short']);
+      }
+      if (/\bstep[\s-]?by[\s-]?step\b|خطوة\s+بخطوة/i.test(text)) {
+        addCandidate('pref_step_by_step', 'working_style', 'always_use', 'normal', 'Prefers step-by-step explanations.', 1, 'medium', ['steps']);
+      }
+    }
+
+    // Health: allergies + dietary
+    for (const text of userMessages) {
+      const allergy = /\b(?:i'?m|i am)\s+allergic\s+to\s+([a-z\u0600-\u06FF][a-z\u0600-\u06FF\s,-]{2,50})|\ballergy\s+to\s+([a-z\u0600-\u06FF][a-z\u0600-\u06FF\s,-]{2,50})|لدي\s+حساسية\s+من\s+([^.!?\n]{2,60})/i.exec(text);
+      const subject = this.normalizeDurableMemoryText(allergy?.[1] || allergy?.[2] || allergy?.[3] || '', 50);
+      if (subject) {
+        addCandidate(`health_allergy_${keySlug(subject)}`, 'identity_context', 'always_use', 'normal', `User is allergic to ${subject}.`, 2, 'high', ['allergy', 'health']);
+      }
+      const diet = /\b(?:i'?m|i am)\s+(vegetarian|vegan|pescatarian)\b/i.exec(text);
+      if (diet?.[1]) {
+        addCandidate(`diet_${diet[1].toLowerCase()}`, 'identity_context', 'always_use', 'normal', `User is ${diet[1].toLowerCase()}.`, 1, 'high', ['diet', 'food']);
+      }
+      const needs = /\b(halal\s+only|no\s+pork|gluten[-\s]?free|lactose\s+intolerant|diabetic)\b/i.exec(text);
+      if (needs?.[1]) {
+        addCandidate(`diet_${keySlug(needs[1])}`, 'identity_context', 'always_use', 'normal', `Dietary need: ${needs[1]}.`, 1, 'high', ['diet', 'food']);
+      }
+    }
+
+    // Religion (allowed per user direction, flagged careful)
+    for (const text of userMessages) {
+      const m = /\b(?:i'?m|i am)\s+(muslim|christian|jewish|hindu|buddhist|catholic|orthodox)\b|أنا\s+(مسلم|مسيحي|يهودي)/i.exec(text);
+      const faith = this.normalizeDurableMemoryText(m?.[1] || m?.[2] || '', 30);
+      if (faith) {
+        addCandidate(`religion_${keySlug(faith)}`, 'identity_context', 'always_use', 'careful', `User is ${faith}.`, 2, 'high', ['religion']);
+      }
+      if (/\bi\s+fast\s+during\s+ramadan\b|أصوم\s+رمضان/i.test(text)) {
+        addCandidate('religion_fasts_ramadan', 'identity_context', 'always_use', 'careful', 'Fasts during Ramadan.', 1, 'high', ['religion', 'ramadan', 'fasting']);
+      }
+    }
+
+    // Relationship helper (careful — only when user is explicit)
+    for (const text of userMessages) {
+      const wife = /\bmy\s+wife'?s\s+(?:nickname|name)\s+is\s+([a-z\u0600-\u06FF][a-z\u0600-\u06FF\s'-]{1,30})|زوجتي\s+(?:اسمها|كنيتها)\s+([^.!?\n]{1,30})/i.exec(text);
+      const husband = /\bmy\s+husband'?s\s+(?:nickname|name)\s+is\s+([a-z\u0600-\u06FF][a-z\u0600-\u06FF\s'-]{1,30})|زوجي\s+(?:اسمه|كنيته)\s+([^.!?\n]{1,30})/i.exec(text);
+      const wifeName = this.normalizeDurableMemoryText(wife?.[1] || wife?.[2] || '', 30);
+      const husbandName = this.normalizeDurableMemoryText(husband?.[1] || husband?.[2] || '', 30);
+      if (wifeName) {
+        addCandidate('rel_wife_name', 'identity_context', 'always_use', 'careful', `User's wife is called ${wifeName}.`, 1, 'high', ['family', 'wife']);
+      }
+      if (husbandName) {
+        addCandidate('rel_husband_name', 'identity_context', 'always_use', 'careful', `User's husband is called ${husbandName}.`, 1, 'high', ['family', 'husband']);
+      }
+    }
+
+    // Legacy PM/product rules (kept, now layer-tagged)
     const categoryRules: Array<{
       key: string;
       type: DurableMemoryType;
+      layer: DurableMemoryLayer;
+      sensitivity: DurableMemorySensitivity;
       text: string;
       minCount: number;
       patterns: RegExp[];
@@ -864,6 +1155,8 @@ class WaktiAIV2ServiceClass {
       {
         key: 'priority_speed_quality',
         type: 'priority',
+        layer: 'always_use',
+        sensitivity: 'normal',
         text: 'Speed, low token waste, and strong answer quality are top priorities.',
         minCount: 2,
         patterns: [/\bspeed\b|fast|faster|fastest|performance|latency|lightning fast|token waste|token taxation|lean/i],
@@ -872,6 +1165,8 @@ class WaktiAIV2ServiceClass {
       {
         key: 'workflow_pm_audit',
         type: 'working_style',
+        layer: 'always_use',
+        sensitivity: 'normal',
         text: 'User prefers staged, audit-driven work with PM-style guidance and self-checks.',
         minCount: 2,
         patterns: [/\baudit\b|report back|self-audit|project manager|\bpm\b|\bstage\b|staged/i],
@@ -880,6 +1175,8 @@ class WaktiAIV2ServiceClass {
       {
         key: 'workflow_plain_english',
         type: 'working_style',
+        layer: 'always_use',
+        sensitivity: 'normal',
         text: 'User prefers plain-English explanations with low jargon.',
         minCount: 1,
         patterns: [/plain english|simple english|avoid jargon|clear and human/i],
@@ -889,6 +1186,8 @@ class WaktiAIV2ServiceClass {
       {
         key: 'project_ai_chat_quality',
         type: 'project_context',
+        layer: 'project',
+        sensitivity: 'normal',
         text: 'User is actively improving Wakti AI chat quality, continuity, and prompt behavior.',
         minCount: 2,
         patterns: [/\bwakti ai\b|\bai chat\b|conversation summary|continuity|stay hot|prompt|routing|search mode|semantic memory/i],
@@ -897,6 +1196,8 @@ class WaktiAIV2ServiceClass {
       {
         key: 'goal_reliability_actions',
         type: 'recurring_goal',
+        layer: 'always_use',
+        sensitivity: 'normal',
         text: 'User wants reminders, location, and action reliability to be strong and trustworthy.',
         minCount: 2,
         patterns: [/\breminder\b|location|gps|notification|schedule|reliable|reliability/i],
@@ -911,11 +1212,11 @@ class WaktiAIV2ServiceClass {
         count += 1;
       }
       if (count >= rule.minCount) {
-        addCandidate(rule.key, rule.type, rule.text, count, count >= rule.minCount + 1 ? 'high' : 'medium', rule.keywords);
+        addCandidate(rule.key, rule.type, rule.layer, rule.sensitivity, rule.text, count, count >= rule.minCount + 1 ? 'high' : 'medium', rule.keywords);
       }
     }
 
-    return Array.from(candidates.values()).slice(0, 8);
+    return Array.from(candidates.values()).slice(0, 12);
   }
 
   private scoreDurableMemoryRelevance(
@@ -952,20 +1253,31 @@ class WaktiAIV2ServiceClass {
     if (candidates.length === 0) return [];
 
     const limit = activeTrigger === 'search' ? 2 : 3;
-    return [...candidates]
+
+    // Forget items MUST bypass relevance scoring — they are imperative user
+    // instructions, not contextual context. Keep them all, transport them all.
+    const forgetItems = candidates.filter((c) => c.action === 'forget');
+    const rememberItems = candidates.filter((c) => c.action !== 'forget');
+
+    const selectedRemember = rememberItems
       .map((item) => ({ item, score: this.scoreDurableMemoryRelevance(item, message, activeTrigger, chatSubmode) }))
       .filter((entry) => entry.score >= 18)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
-      .map(({ item }) => ({
-        key: item.key,
-        type: item.type,
-        text: item.text,
-        confidence: item.confidence,
-        evidenceCount: item.evidenceCount,
-        keywords: item.keywords.slice(0, 6),
-        source: item.source
-      }));
+      .map(({ item }) => item);
+
+    return [...forgetItems, ...selectedRemember].map((item) => ({
+      key: item.key,
+      type: item.type,
+      layer: item.layer,
+      sensitivity: item.sensitivity,
+      action: item.action,
+      text: item.text,
+      confidence: item.confidence,
+      evidenceCount: item.evidenceCount,
+      keywords: item.keywords.slice(0, 6),
+      source: item.source
+    }));
   }
 
   private buildTransportRecentMessages(

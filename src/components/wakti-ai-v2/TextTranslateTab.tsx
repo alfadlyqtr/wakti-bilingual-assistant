@@ -1,8 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Loader2, PenLine, Trash2 } from 'lucide-react';
-import mammoth from 'mammoth';
-import * as pdfjsLib from 'pdfjs-dist';
-import pdfjsWorker from 'pdfjs-dist/build/pdf.worker?url';
 import html2canvas from 'html2canvas';
 import ArabicReshaper from 'arabic-reshaper';
 import type { jsPDF as JsPDFType } from 'jspdf';
@@ -37,7 +34,24 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+let _pdfjsLib: any = null;
+async function loadPdfjs() {
+  if (!_pdfjsLib) {
+    const [lib, workerUrl] = await Promise.all([
+      import('pdfjs-dist'),
+      import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
+    ]);
+    lib.GlobalWorkerOptions.workerSrc = workerUrl.default;
+    _pdfjsLib = lib;
+  }
+  return _pdfjsLib;
+}
+
+let _mammoth: any = null;
+async function loadMammoth() {
+  if (!_mammoth) _mammoth = (await import('mammoth')).default;
+  return _mammoth;
+}
 
 export default function TextTranslateTab() {
   const { language } = useTheme();
@@ -402,6 +416,7 @@ export default function TextTranslateTab() {
 
   const extractTextFromPDF = async (file: File): Promise<string> => {
     const buf = await readFileAsArrayBuffer(file);
+    const pdfjsLib = await loadPdfjs();
     const loadingTask = pdfjsLib.getDocument({ data: buf });
     const pdf = await loadingTask.promise;
     if (pdf.numPages > TT_MAX_PDF_PAGES) {
@@ -423,6 +438,7 @@ export default function TextTranslateTab() {
 
   const extractTextFromDOCX = async (file: File): Promise<string> => {
     const buf = await readFileAsArrayBuffer(file);
+    const mammoth = await loadMammoth();
     const result = await mammoth.extractRawText({ arrayBuffer: buf });
     return (result.value || '').trim();
   };

@@ -12,6 +12,7 @@ import { FORMS_CAPABILITY } from "./forms.ts";
 import { BOOKING_CAPABILITY } from "./booking.ts";
 import { ECOMMERCE_CAPABILITY } from "./ecommerce.ts";
 import { BLOG_CAPABILITY } from "./blog.ts";
+import { SPORTS_CAPABILITY } from "./sports.ts";
 
 export type CapabilityName =
   | "phaser_game"
@@ -19,7 +20,8 @@ export type CapabilityName =
   | "forms"
   | "booking"
   | "ecommerce"
-  | "blog";
+  | "blog"
+  | "sports";
 
 // The short menu — always sent to the AI so it knows what's available.
 export const CAPABILITY_MANIFEST = `
@@ -36,6 +38,7 @@ auto-injected when the user's request matches.
 | booking         | Appointments, scheduling, services (barber, salon, spa, clinic).      |
 | ecommerce       | Shop, store, products, cart.                                          |
 | blog            | Blog, CMS, articles, posts, news, magazine content.                   |
+| sports          | Sports fan sites, rosters, standings, fixtures, team news.            |
 | phaser_game     | 2D games (racing, shooter, puzzle, platformer, arcade).               |
 
 Rules:
@@ -52,6 +55,7 @@ const DOCS: Record<CapabilityName, string> = {
   booking: BOOKING_CAPABILITY,
   ecommerce: ECOMMERCE_CAPABILITY,
   blog: BLOG_CAPABILITY,
+  sports: SPORTS_CAPABILITY,
 };
 
 export function getCapabilityDoc(name: string): string | null {
@@ -91,6 +95,13 @@ const RULES: DetectionRule[] = [
     capability: "blog",
     keywords: [
       /\b(blog|cms|content\s*management|article|articles|post|posts|news|newsletter\s*site|magazine|editorial|journal|stories)\b/i,
+    ],
+  },
+  {
+    capability: "sports",
+    keywords: [
+      /\b(sport|sports|football|soccer|fifa|afc|uefa|club|team|national\s+team|squad|roster|lineup|standings|table|fixtures?|matches?|results?|fans?|supporters?)\b/i,
+      /qatar|qatari|القطري|قطر|العنابي/i,
     ],
   },
   {

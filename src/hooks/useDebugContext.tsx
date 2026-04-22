@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, useMemo, useEffect } from 'react';
 
 // ============================================================================
 // WAKTI AI CODER DEBUG CONTEXT
@@ -115,6 +115,56 @@ export const DebugContextProvider: React.FC<DebugContextProviderProps> = ({
 
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+  // Ref-based buffers so high-frequency iframe events (console spam, CDN timeouts)
+  // don't trigger a setState on every event. Flushed on interval below.
+  const consoleLogBufferRef = useRef<CapturedConsoleLog[]>([]);
+  const networkErrorBufferRef = useRef<CapturedNetworkError[]>([]);
+  const errorBufferRef = useRef<CapturedError[]>([]);
+  const flushScheduledRef = useRef(false);
+  const flushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleFlush = useCallback(() => {
+    if (flushScheduledRef.current) return;
+    flushScheduledRef.current = true;
+    flushTimeoutRef.current = setTimeout(() => {
+      flushScheduledRef.current = false;
+      const pendingLogs = consoleLogBufferRef.current;
+      const pendingNetwork = networkErrorBufferRef.current;
+      const pendingErrors = errorBufferRef.current;
+      if (pendingLogs.length === 0 && pendingNetwork.length === 0 && pendingErrors.length === 0) return;
+      consoleLogBufferRef.current = [];
+      networkErrorBufferRef.current = [];
+      errorBufferRef.current = [];
+      setSession(prev => {
+        const base: DebugSession = prev ?? {
+          id: generateId(),
+          startedAt: new Date(),
+          errors: [],
+          networkErrors: [],
+          consoleLogs: [],
+          autoFixAttempts: 0,
+          maxAutoFixAttempts,
+          status: 'capturing'
+        };
+        const mergedLogs = [...base.consoleLogs, ...pendingLogs];
+        // Cap to last 100 to avoid unbounded memory
+        const cappedLogs = mergedLogs.length > 100 ? mergedLogs.slice(-100) : mergedLogs;
+        return {
+          ...base,
+          errors: pendingErrors.length ? [...base.errors, ...pendingErrors] : base.errors,
+          networkErrors: pendingNetwork.length ? [...base.networkErrors, ...pendingNetwork] : base.networkErrors,
+          consoleLogs: cappedLogs,
+        };
+      });
+    }, 500); // Flush at most twice per second — smooths out iframe spam
+  }, [maxAutoFixAttempts]);
+
+  useEffect(() => {
+    return () => {
+      if (flushTimeoutRef.current) clearTimeout(flushTimeoutRef.current);
+    };
+  }, []);
+
   const startSession = useCallback(() => {
     console.log('[DebugContext] Starting new debug session');
     setSession({
@@ -142,89 +192,41 @@ export const DebugContextProvider: React.FC<DebugContextProviderProps> = ({
   }, []);
 
   const captureError = useCallback((error: Omit<CapturedError, 'id' | 'timestamp'>) => {
-    console.log('[DebugContext] Captured error:', error.type, error.message);
-    setSession(prev => {
-      if (!prev) {
-        // Auto-start session on first error
-        return {
-          id: generateId(),
-          startedAt: new Date(),
-          errors: [{ ...error, id: generateId(), timestamp: new Date() }],
-          networkErrors: [],
-          consoleLogs: [],
-          autoFixAttempts: 0,
-          maxAutoFixAttempts,
-          status: 'capturing'
-        };
-      }
-      
-      // Deduplicate: don't add same error message twice in 2 seconds
-      const recentDupe = prev.errors.find(
-        e => e.message === error.message && 
-        new Date().getTime() - e.timestamp.getTime() < 2000
-      );
-      if (recentDupe) return prev;
-      
-      return {
-        ...prev,
-        errors: [...prev.errors, { ...error, id: generateId(), timestamp: new Date() }]
-      };
-    });
-  }, [maxAutoFixAttempts]);
+    // Deduplicate: drop if same message already pending in buffer or seen recently
+    const now = Date.now();
+    const dupeInBuffer = errorBufferRef.current.find(
+      e => e.message === error.message && now - e.timestamp.getTime() < 2000
+    );
+    if (dupeInBuffer) return;
+    errorBufferRef.current.push({ ...error, id: generateId(), timestamp: new Date() });
+    scheduleFlush();
+  }, [scheduleFlush]);
 
   const captureNetworkError = useCallback((error: Omit<CapturedNetworkError, 'id' | 'timestamp'>) => {
-    console.log('[DebugContext] Captured network error:', error.url, error.status);
-    setSession(prev => {
-      if (!prev) {
-        return {
-          id: generateId(),
-          startedAt: new Date(),
-          errors: [],
-          networkErrors: [{ ...error, id: generateId(), timestamp: new Date() }],
-          consoleLogs: [],
-          autoFixAttempts: 0,
-          maxAutoFixAttempts,
-          status: 'capturing'
-        };
-      }
-      return {
-        ...prev,
-        networkErrors: [...prev.networkErrors, { ...error, id: generateId(), timestamp: new Date() }]
-      };
-    });
-  }, [maxAutoFixAttempts]);
+    // Deduplicate identical URL+status within 2s (handles CDN retry storms)
+    const now = Date.now();
+    const dupeInBuffer = networkErrorBufferRef.current.find(
+      e => e.url === error.url && e.status === error.status && now - e.timestamp.getTime() < 2000
+    );
+    if (dupeInBuffer) return;
+    networkErrorBufferRef.current.push({ ...error, id: generateId(), timestamp: new Date() });
+    scheduleFlush();
+  }, [scheduleFlush]);
 
   const captureConsoleLog = useCallback((log: Omit<CapturedConsoleLog, 'id' | 'timestamp'>) => {
-    // Capture ALL console logs for agent mode (not just errors/warnings)
-    setSession(prev => {
-      if (!prev) {
-        // Auto-start session on first log
-        return {
-          id: generateId(),
-          startedAt: new Date(),
-          errors: [],
-          networkErrors: [],
-          consoleLogs: [{ ...log, id: generateId(), timestamp: new Date() }],
-          autoFixAttempts: 0,
-          maxAutoFixAttempts,
-          status: 'capturing'
-        };
-      }
-      
-      // Deduplicate: don't add same log message twice in 1 second
-      const recentDupe = prev.consoleLogs.find(
-        l => l.message === log.message && 
-        new Date().getTime() - l.timestamp.getTime() < 1000
-      );
-      if (recentDupe) return prev;
-      
-      // Limit console logs to last 100
-      const newLogs = [...prev.consoleLogs, { ...log, id: generateId(), timestamp: new Date() }];
-      if (newLogs.length > 100) newLogs.shift();
-      
-      return { ...prev, consoleLogs: newLogs };
-    });
-  }, [maxAutoFixAttempts]);
+    // Deduplicate identical message within 1s
+    const now = Date.now();
+    const dupeInBuffer = consoleLogBufferRef.current.find(
+      l => l.message === log.message && now - l.timestamp.getTime() < 1000
+    );
+    if (dupeInBuffer) return;
+    consoleLogBufferRef.current.push({ ...log, id: generateId(), timestamp: new Date() });
+    // Cap buffer to avoid runaway growth between flushes
+    if (consoleLogBufferRef.current.length > 200) {
+      consoleLogBufferRef.current = consoleLogBufferRef.current.slice(-100);
+    }
+    scheduleFlush();
+  }, [scheduleFlush]);
 
   const hasErrors = useCallback(() => {
     return (session?.errors.length ?? 0) > 0 || (session?.networkErrors.length ?? 0) > 0;
@@ -363,7 +365,11 @@ export const DebugContextProvider: React.FC<DebugContextProviderProps> = ({
     onAutoFixRequestedRef.current = callback;
   }, []);
 
-  const value: DebugContextValue = {
+  // CRITICAL: Memoize the context value so consumers (e.g. ProjectDetail) don't
+  // re-render on every DebugContextProvider render. Previously this object
+  // literal was rebuilt each render, invalidating every consumer and causing
+  // the SandpackStudio flicker storm.
+  const value = useMemo<DebugContextValue>(() => ({
     session,
     captureError,
     captureNetworkError,
@@ -382,8 +388,25 @@ export const DebugContextProvider: React.FC<DebugContextProviderProps> = ({
     setOnAutoFixRequested,
     incrementAutoFixAttempt,
     isDebugPanelOpen,
-    setDebugPanelOpen
-  };
+    setDebugPanelOpen,
+  }), [
+    session,
+    captureError,
+    captureNetworkError,
+    captureConsoleLog,
+    startSession,
+    endSession,
+    clearSession,
+    getDebugContextForAI,
+    getDebugContextForAgent,
+    hasErrors,
+    getErrorCount,
+    enableAutoFix,
+    triggerAutoFix,
+    setOnAutoFixRequested,
+    incrementAutoFixAttempt,
+    isDebugPanelOpen,
+  ]);
 
   return (
     <DebugContext.Provider value={value}>

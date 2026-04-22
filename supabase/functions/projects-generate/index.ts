@@ -321,10 +321,28 @@ Return the extracted text in a clean, structured format. Include all sections, h
   }
 }
 
+// Fix C: request-scoped circuit-breaker for Vision. Once we see a 429 from Gemini
+// Vision for a single request, stop calling it for the rest of that request — a
+// burst of sequential 429 retries was eating 30+ seconds of our 150s edge budget
+// before the agent loop even started.
+let _visionRateLimitedUntil = 0;
+function isVisionRateLimited(): boolean {
+  return Date.now() < _visionRateLimitedUntil;
+}
+function markVisionRateLimited(): void {
+  // Block further vision calls for 60 seconds (covers a full request lifecycle)
+  _visionRateLimitedUntil = Date.now() + 60_000;
+}
+
 /**
  * Analyze an image using Gemini Vision to extract design inspiration
  */
 async function analyzeImageForInspiration(url: string, apiKey: string): Promise<string> {
+  // Short-circuit if Vision is rate-limited in this request window
+  if (isVisionRateLimited()) {
+    console.warn('[Vision] Skipping analysis — circuit breaker open (recent 429)');
+    return '';
+  }
   try {
     // Download the image
     const response = await fetch(url);
@@ -391,6 +409,11 @@ Be specific and actionable so the AI can recreate a similar style.`
     
     if (!geminiResponse.ok) {
       console.error(`[Vision] Gemini API error: ${geminiResponse.status}`);
+      // Fix C: trip the circuit breaker on rate-limit / quota so subsequent
+      // image analyses in the same request don't burn the edge budget.
+      if (geminiResponse.status === 429 || geminiResponse.status === 503) {
+        markVisionRateLimited();
+      }
       return '';
     }
     
@@ -739,7 +762,8 @@ async function callGeminiWithModel(
   systemPrompt: string,
   userPrompt: string,
   jsonMode: boolean = true,
-  maxRetries: number = 3
+  maxRetries: number = 3,
+  options: { enableGoogleSearch?: boolean } = {}
 ): Promise<string> {
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
@@ -771,6 +795,7 @@ async function callGeminiWithModel(
             body: JSON.stringify({
               contents: [{ role: "user", parts: [{ text: userPrompt }] }],
               systemInstruction: { parts: [{ text: systemPrompt }] },
+              ...(options.enableGoogleSearch ? { tools: [{ google_search: {} }] } : {}),
               generationConfig: {
                 temperature: 0.1,
                 maxOutputTokens: 65536,
@@ -825,12 +850,36 @@ async function callGeminiWithModel(
 }
 
 // Legacy wrapper for backward compatibility - always uses Pro
-async function callGemini25Pro(
+function callGemini25Pro(
   systemPrompt: string,
   userPrompt: string,
-  jsonMode: boolean = true
+  jsonMode: boolean = true,
+  options: { enableGoogleSearch?: boolean } = {}
 ): Promise<string> {
-  return callGeminiWithModel('gemini-2.5-pro', systemPrompt, userPrompt, jsonMode);
+  return callGeminiWithModel('gemini-2.5-pro', systemPrompt, userPrompt, jsonMode, 3, options);
+}
+
+function shouldUseGoogleSearchGrounding(prompt: string): boolean {
+  const sportsIntent = /\b(sport|sports|football|soccer|fifa|afc|uefa|team|club|national\s+team|squad|roster|lineup|standings|table|fixtures?|results?|match|matches|fan\s+site|supporters?)\b/i.test(prompt);
+  const qatarIntent = /qatar|qatari|القطري|قطر|العنابي/i.test(prompt);
+  const freshnessIntent = /\b(current|latest|live|today|recent|breaking|news|standings|table|roster|squad|lineup|fixtures?|results?)\b/i.test(prompt);
+  return freshnessIntent && (sportsIntent || qatarIntent);
+}
+
+function buildGroundedFreshnessInstructions(prompt: string): string {
+  if (!shouldUseGoogleSearchGrounding(prompt)) {
+    return "";
+  }
+
+  return `
+
+🔎 FRESHNESS REQUIREMENT:
+- This request requires current real-world sports information.
+- Use grounded Google Search results for current news, standings, roster, fixtures, and recent results.
+- Do NOT invent or guess current facts.
+- If a fact cannot be verified, render a clear unavailable/empty state instead of fake content.
+- News cards must open a real article detail view or expanded detail state.
+- If player headshots cannot be verified, use a neutral placeholder instead of random photos.`;
 }
 
 // ============================================================================
@@ -3762,7 +3811,7 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
       let chatResponse: Response | null = null;
       let lastError: Error | null = null;
       const maxRetries = 2;
-      const chatTimeout = 90000; // 90 seconds (increased from 60s)
+      const chatTimeout = 140000; // 140 seconds (stays under edge function 150s limit)
       
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
@@ -3780,7 +3829,7 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
                   systemInstruction: { parts: [{ text: chatSystemPrompt }] },
                   generationConfig: {
                     temperature: 0.7,
-                    maxOutputTokens: 8192,
+                    maxOutputTokens: 4096,
                     responseMimeType: "application/json", // Add JSON MIME type for consistent format handling
                   },
                 }),
@@ -3789,12 +3838,21 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
             chatTimeout,
             'GEMINI_CHAT'
           );
+          // Retry on rate-limit (429) and transient 5xx as well
+          if (chatResponse && !chatResponse.ok && (chatResponse.status === 429 || chatResponse.status >= 500) && attempt < maxRetries) {
+            lastError = new Error(`Gemini HTTP ${chatResponse.status}`);
+            console.warn(`[Chat Mode] Attempt ${attempt} got ${chatResponse.status}, retrying...`);
+            await new Promise(r => setTimeout(r, 2000));
+            chatResponse = null;
+            continue;
+          }
           break; // Success, exit retry loop
         } catch (err) {
           lastError = err instanceof Error ? err : new Error(String(err));
           console.warn(`[Chat Mode] Attempt ${attempt} failed: ${lastError.message}`);
-          if (attempt < maxRetries && lastError.message.includes('TIMEOUT')) {
-            await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
+          const retriable = lastError.message.includes('TIMEOUT') || lastError.message.includes('429') || lastError.message.includes('fetch');
+          if (attempt < maxRetries && retriable) {
+            await new Promise(r => setTimeout(r, 2000)); // Wait 2s before retry
           } else {
             throw lastError;
           }
@@ -4429,7 +4487,7 @@ ${agentPdfExtractedContent}
 🚨 **CRITICAL**: The above content was extracted from the user's uploaded PDF (CV/Resume/etc).
 USE THIS REAL DATA to update the website - names, experience, skills, education, contact info, etc.
 DO NOT make up fake information. Use EXACTLY what is in the extracted content above.
-Update mockData.js or the relevant data files with this REAL information.`;
+Update the relevant content/data files with this REAL information.`;
       }
       
       // Add debug context if there are errors
@@ -4592,32 +4650,78 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
       let totalInputText = systemPromptWithProjectId + userMessageContent;
       let totalOutputText = '';
       
+      // Hard wall-clock budget guard — edge functions die ~150s. Leave headroom to return gracefully.
+      const AGENT_BUDGET_MS = 130000;
+      
       for (let iteration = 0; iteration < maxIterations; iteration++) {
-        // Call Gemini with smart model selection
-        // Pro for complex/vision, Flash for standard, Flash-Lite for simple
-        const geminiResponse = await withTimeout(
-          fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${agentModelSelection.model}:generateContent`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-goog-api-key": GEMINI_API_KEY,
-              },
-              body: JSON.stringify({
-                contents: messages,
-                systemInstruction: { parts: [{ text: systemPromptWithProjectId }] },
-                tools: [getGeminiToolsConfig()],
-                generationConfig: {
-                  temperature: 0.2,
-                  maxOutputTokens: 8192,
-                },
-              }),
+        // Budget check: bail out cleanly before the edge function gets killed
+        const elapsedMs = Date.now() - agentStartTime;
+        if (elapsedMs > AGENT_BUDGET_MS) {
+          console.warn(`[Agent Mode] Budget exceeded at iteration ${iteration} (${elapsedMs}ms). Returning partial progress.`);
+          break;
+        }
+        
+        // Call Gemini with smart model selection + per-call retry on 429/5xx/timeout.
+        // Fix B: on retry, drop to MODEL_FALLBACK[model] if available (e.g. 3.1-pro-preview → 2.5-pro)
+        // so we never stack two failures on the same flaky preview model.
+        let geminiResponse: Response | null = null;
+        let iterLastError: Error | null = null;
+        const iterMaxRetries = 2;
+        for (let iterAttempt = 1; iterAttempt <= iterMaxRetries; iterAttempt++) {
+          const modelForAttempt = iterAttempt === 1
+            ? agentModelSelection.model
+            : (MODEL_FALLBACK[agentModelSelection.model] || agentModelSelection.model);
+          if (iterAttempt > 1 && modelForAttempt !== agentModelSelection.model) {
+            console.warn(`[Agent Mode] Falling back to ${modelForAttempt} for retry`);
+          }
+          try {
+            geminiResponse = await withTimeout(
+              fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${modelForAttempt}:generateContent`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": GEMINI_API_KEY,
+                  },
+                  body: JSON.stringify({
+                    contents: messages,
+                    systemInstruction: { parts: [{ text: systemPromptWithProjectId }] },
+                    tools: [getGeminiToolsConfig()],
+                    generationConfig: {
+                      temperature: 0.2,
+                      maxOutputTokens: 4096,
+                    },
+                  }),
+                }
+              ),
+              75000,
+              'GEMINI_AGENT'
+            );
+            // Retry on transient HTTP errors
+            if (geminiResponse && !geminiResponse.ok && (geminiResponse.status === 429 || geminiResponse.status >= 500) && iterAttempt < iterMaxRetries) {
+              iterLastError = new Error(`Gemini HTTP ${geminiResponse.status}`);
+              console.warn(`[Agent Mode] Iter ${iteration} attempt ${iterAttempt} got ${geminiResponse.status}, retrying...`);
+              await new Promise(r => setTimeout(r, 1500));
+              geminiResponse = null;
+              continue;
             }
-          ),
-          120000,
-          'GEMINI_AGENT'
-        );
+            break;
+          } catch (err) {
+            iterLastError = err instanceof Error ? err : new Error(String(err));
+            console.warn(`[Agent Mode] Iter ${iteration} attempt ${iterAttempt} failed: ${iterLastError.message}`);
+            const retriable = iterLastError.message.includes('TIMEOUT') || iterLastError.message.includes('429') || iterLastError.message.includes('fetch');
+            if (iterAttempt < iterMaxRetries && retriable) {
+              await new Promise(r => setTimeout(r, 1500));
+            } else {
+              throw iterLastError;
+            }
+          }
+        }
+        
+        if (!geminiResponse) {
+          throw iterLastError || new Error('Agent Gemini call failed after retries');
+        }
         
         if (!geminiResponse.ok) {
           const errorText = await geminiResponse.text();
@@ -6027,6 +6131,11 @@ When user mentions "my photo", "my image", "uploaded image", use the appropriate
         }
         
         if (assets && assets.length > 0) textPrompt += `\n\nUSE THESE ASSETS: ${assets.join(", ")}`;
+
+        const groundedFreshnessInstructions = buildGroundedFreshnessInstructions(prompt);
+        if (groundedFreshnessInstructions) {
+          textPrompt += groundedFreshnessInstructions;
+        }
         
         // 🔧 FIX: Extract PDF content from images array (attached PDFs in chat)
         // This handles PDFs attached via the attach button, not just uploadedAssets
@@ -6122,7 +6231,13 @@ If this is a portfolio/CV website, use the person's REAL name, REAL experience, 
 
         // Use Gemini 2.5 Pro for creation
         const createStartTime = Date.now();
-        let aiText = await callGemini25Pro(finalSystemPrompt, textPrompt, true);
+        const shouldEnableGoogleSearch = shouldUseGoogleSearchGrounding(prompt);
+        if (shouldEnableGoogleSearch) {
+          console.log(`[CreateMode] Google Search grounding enabled for freshness-sensitive sports prompt.`);
+        }
+        let aiText = await callGemini25Pro(finalSystemPrompt, textPrompt, true, {
+          enableGoogleSearch: shouldEnableGoogleSearch,
+        });
         const createDuration = Date.now() - createStartTime;
         // Log AI usage for project creation
         await logAIFromRequest(req, {

@@ -230,6 +230,6 @@ export default function Products() {
 - ALWAYS display product.image_url, product.name, product.description, product.price
 - NEVER show "No description available" or "Price: $N/A" placeholders
 
-Only use the backend API when users explicitly ask for backend functionality like forms, data storage, or authentication.
-Do NOT add backend calls unless the user requests it.`;
+If the user asks for backend-backed content like products, posts, forms, bookings, or persisted data, use the backend contracts above.
+Do NOT replace requested backend content with hardcoded placeholder collections.`;
 }

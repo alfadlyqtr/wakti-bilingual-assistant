@@ -10,19 +10,20 @@ import DiagramsTab from './DiagramsTab';
 import PresentationTab from './PresentationTab';
 import TextTranslateTab from './TextTranslateTab';
 import SavedItemsTab from './SavedItemsTab';
+import A4Tab from './a4/A4Tab';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 
 interface TextGeneratorPopupProps {
   isOpen?: boolean;
   onClose: () => void;
   onTextGenerated: (text: string, mode: 'compose' | 'reply') => void;
-  onTabChange?: (tab: 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate') => void;
+  onTabChange?: (tab: 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate' | 'a4') => void;
   renderAsPage?: boolean;
-  initialTab?: 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate';
+  initialTab?: 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate' | 'a4';
 }
 
 type Mode = 'compose' | 'reply';
-type Tab = 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate';
+type Tab = 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate' | 'a4';
 type Language = 'en' | 'ar';
 type ModelPreference = 'gpt-4o' | 'gpt-4o-mini' | 'auto';
 type RegenerateIntentKey = 'shorter' | 'longer' | 'more_human' | 'more_professional' | 'more_polite' | 'stronger' | 'simpler' | 'fix_grammar' | 'better_flow' | 'better_ending' | 'keep_meaning';
@@ -563,9 +564,9 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   }, []);
 
   useEffect(() => {
-    if (initialTab && ['compose', 'reply', 'generated', 'diagrams', 'presentation', 'translate'].includes(initialTab)) {
+    if (initialTab && ['compose', 'reply', 'generated', 'diagrams', 'presentation', 'translate', 'a4'].includes(initialTab)) {
       setActiveTab(initialTab as Tab);
-      if (initialTab !== 'diagrams') {
+      if (initialTab !== 'diagrams' && initialTab !== 'a4') {
         setMode(initialTab === 'reply' ? 'reply' : 'compose');
       }
     }
@@ -1275,6 +1276,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     'presentation': { key: '',         limit: 0, en: '',               ar: '' }, // PresentationTab has its own gate
     'translate':    { key: '',         limit: 0, en: '',               ar: '' }, // 250 char limit handled separately
     'generated':    { key: '',         limit: 0, en: '',               ar: '' }, // viewing only
+    'a4':           { key: '',         limit: 0, en: '',               ar: '' }, // A4Tab has its own UI/gating
   };
   const activeTextTrial = textTabTrialMap[activeTab];
 
@@ -2237,11 +2239,15 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             </div>
           </div>
 
-          {error && activeTab !== 'diagrams' && activeTab !== 'presentation' && activeTab !== 'translate' && (
+          <div className={activeTab === 'a4' ? '' : 'hidden'}>
+            <A4Tab />
+          </div>
+
+          {error && activeTab !== 'diagrams' && activeTab !== 'presentation' && activeTab !== 'translate' && activeTab !== 'a4' && (
             <div className="mt-4 text-sm text-destructive">{error}</div>
           )}
           {/* Inline generate button at end of content (not sticky) - hide for diagrams and presentation */}
-          {activeTab !== 'diagrams' && activeTab !== 'presentation' && activeTab !== 'translate' && activeTab !== 'generated' && (
+          {activeTab !== 'diagrams' && activeTab !== 'presentation' && activeTab !== 'translate' && activeTab !== 'generated' && activeTab !== 'a4' && (
           <div className="mt-6 flex justify-end">
               <button
                 className={`px-5 py-2.5 rounded-full text-sm font-medium shadow-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 hover:shadow-xl transition-all ${canGenerate ? '' : 'opacity-60 cursor-not-allowed'}`}
@@ -2274,7 +2280,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
         {/* Tabs */}
         <div className="px-6 pt-4">
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-7 gap-2 mb-4">
             <button
               onClick={() => { setActiveTab('compose'); setMode('compose'); }}
               className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'compose' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
@@ -2312,6 +2318,10 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               onClick={() => setActiveTab('translate')}
               className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'translate' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
             >{language === 'ar' ? 'مترجم النص' : 'Text Translator'}</button>
+            <button
+              onClick={() => setActiveTab('a4')}
+              className={`px-3 py-2 rounded-md border text-sm bg-gradient-to-r ${activeTab === 'a4' ? 'from-indigo-600 to-purple-600 text-white border-purple-600' : 'from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 hover:from-indigo-100 hover:to-purple-100 dark:hover:from-indigo-900/40 dark:hover:to-purple-900/40 text-indigo-700 dark:text-indigo-300'}`}
+            >{language === 'ar' ? 'مستند A4' : 'A4 Document'}</button>
           </div>
         </div>
 

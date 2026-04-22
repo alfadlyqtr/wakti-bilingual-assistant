@@ -128,6 +128,79 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const isStoppingRef = useRef(false); // Guard against multiple stopRecording calls
   const isHoldingRef = useRef(false); // Track holding state for audio processor callback
   const personalTouchRef = useRef<any>(null);
+  // Helpful Memory is loaded read-only when the Talk bubble opens. It is NOT
+  // captured/forgotten in Talk (by design) — forget/capture happens in Chat.
+  const helpfulMemoryBlockRef = useRef<string>('');
+
+  // Fetch the user's active helpful memory and format a compact block for the
+  // Realtime instructions. Honors the master helpful_memory_enabled toggle.
+  // Filters out stale routines tied to a weekday that isn't today.
+  const loadHelpfulMemoryForTalk = useCallback(async (): Promise<void> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) { helpfulMemoryBlockRef.current = ''; return; }
+
+      // Fetch settings + memories in parallel.
+      const [settingsRes, memoryRes] = await Promise.all([
+        supabase
+          .from('user_helpful_memory_settings')
+          .select('helpful_memory_enabled')
+          .eq('user_id', userId)
+          .maybeSingle(),
+        supabase
+          .from('user_helpful_memory')
+          .select('memory_text, layer, confidence, evidence_count, last_confirmed_at')
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .in('layer', ['always_use', 'routine', 'project'])
+          .order('last_confirmed_at', { ascending: false })
+          .limit(20)
+      ]);
+
+      if (settingsRes.data?.helpful_memory_enabled === false) {
+        helpfulMemoryBlockRef.current = '';
+        return;
+      }
+      const rows = Array.isArray(memoryRes.data) ? memoryRes.data : [];
+      if (rows.length === 0) { helpfulMemoryBlockRef.current = ''; return; }
+
+      // Routine filter: only keep routines tied to today's weekday.
+      const weekdays = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+      const todayName = weekdays[new Date().getDay()];
+      const dayWordRe = /\bevery\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i;
+      const arDayMap: Record<string, string> = {
+        'الأحد':'sunday','الاثنين':'monday','الثلاثاء':'tuesday','الأربعاء':'wednesday','الخميس':'thursday','الجمعة':'friday','السبت':'saturday'
+      };
+
+      const kept: string[] = [];
+      for (const r of rows) {
+        const txt = (r?.memory_text || '').toString().trim();
+        if (!txt) continue;
+        if (r.layer === 'routine') {
+          const m = dayWordRe.exec(txt);
+          if (m) {
+            if (m[1].toLowerCase() !== todayName) continue;
+          } else {
+            const arMatch = Object.keys(arDayMap).find((k) => txt.includes(k));
+            if (arMatch && arDayMap[arMatch] !== todayName) continue;
+          }
+        }
+        kept.push(txt);
+        if (kept.length >= 6) break;
+      }
+      if (kept.length === 0) { helpfulMemoryBlockRef.current = ''; return; }
+
+      const bullets = kept.map((line) => `- ${line}`).join('\n');
+      // Bilingual-friendly single block. OpenAI Realtime reads both fine; we
+      // keep rules honest about Talk being read-only for forget.
+      helpfulMemoryBlockRef.current =
+        `HELPFUL MEMORY (use only when relevant; never overrides the current request):\n${bullets}\n\nMEMORY RULES:\n- If asked "what do you remember about me?" / "ماذا تتذكر عني؟", list the items above plainly and mention the Helpful Memory panel in Chat for edits.\n- If the user says they no longer do X / forget X / لم أعد / انسى: acknowledge warmly ("Got it — I'll keep that in mind next time." / "تمام، راح أنتبه لها في المرة الجاية."). In Talk mode the memory is read-only, so tell them to say the same thing in Chat to remove it permanently. Do NOT claim it has been deleted.\n- Never invent a memory that is not listed above.`;
+    } catch (e) {
+      console.warn('[Talk] loadHelpfulMemoryForTalk failed:', e);
+      helpfulMemoryBlockRef.current = '';
+    }
+  }, []);
 
   // Build Personal Touch enforcement block
   const buildPersonalTouchSection = useCallback(() => {
@@ -462,6 +535,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
 
         const memoryContext = buildMemoryContext(language === 'ar' ? 'ar' : 'en');
         const personalTouchSection = buildPersonalTouchSection();
+        const helpfulMemoryBlock = helpfulMemoryBlockRef.current;
 
         const instructions = t(
           `You are WAKTI, a smart voice assistant. ${personalTouch}
@@ -475,7 +549,7 @@ Style rules (important):
 
 ${waktiQuickRules}
 ${personalTouchSection}
-
+${helpfulMemoryBlock ? '\n' + helpfulMemoryBlock + '\n' : ''}
 ${memoryContext ? memoryContext : ''}`,
           `أنت مساعد WAKTI الصوتي الذكي. ${personalTouch}
 ${locationContext}
@@ -490,7 +564,7 @@ ${locationContext}
 
 ${waktiQuickRules}
 ${personalTouchSection}
-
+${helpfulMemoryBlock ? '\n' + helpfulMemoryBlock + '\n' : ''}
 ${memoryContext ? memoryContext : ''}`
         );
         
@@ -584,16 +658,21 @@ ${memoryContext ? memoryContext : ''}`
   // Initialize connection when Talk bubble opens or engine changes
   useEffect(() => {
     if (isOpen) {
+      // Kick off helpful-memory fetch in parallel — it's read-only in Talk and
+      // non-blocking: if it resolves before session.update, great; if not, the
+      // block is simply empty for the first turn and refreshed on later turns.
+      loadHelpfulMemoryForTalk().catch(() => { /* silent — best-effort */ });
       // Small delay to allow userName fetch to complete
       const timer = setTimeout(() => {
         initializeConnection();
       }, 100);
       return () => clearTimeout(timer);
     } else {
+      helpfulMemoryBlockRef.current = '';
       cleanup();
     }
     return () => cleanup();
-  }, [isOpen, initializeConnection, cleanup]);
+  }, [isOpen, initializeConnection, cleanup, loadHelpfulMemoryForTalk]);
 
   // Handle realtime events from OpenAI
   const handleRealtimeEvent = useCallback((msg: any) => {
@@ -785,6 +864,7 @@ ${memoryContext ? memoryContext : ''}`
       );
 
       const memoryContext = buildMemoryContext(activeLang);
+      const helpfulMemoryBlock = helpfulMemoryBlockRef.current;
 
       // Build location context for weather/local queries
       const loc = userLocationRef.current;
@@ -830,7 +910,7 @@ Style rules (important):
 ${waktiQuickRules}${searchInstructions}${locationContext}${followUpContext}
 
 ${personalTouchSection}
-
+${helpfulMemoryBlock ? '\n' + helpfulMemoryBlock + '\n' : ''}
 ${memoryContext ? memoryContext : ''}`,
         `أنت مساعد WAKTI الصوتي الذكي. ${personalTouch}
 
@@ -843,7 +923,7 @@ ${memoryContext ? memoryContext : ''}`,
 ${waktiQuickRules}${searchInstructions}${locationContext}${followUpContext}
 
 ${personalTouchSection}
-
+${helpfulMemoryBlock ? '\n' + helpfulMemoryBlock + '\n' : ''}
 ${memoryContext ? memoryContext : ''}`
       );
 

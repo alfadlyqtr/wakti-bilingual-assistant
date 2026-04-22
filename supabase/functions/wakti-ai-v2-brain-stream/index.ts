@@ -432,9 +432,17 @@ function buildContinuityContext(options: {
   return parts.join('\n\n').trim();
 }
 
+type DurableMemoryType = 'identity_context' | 'project_context' | 'recurring_goal' | 'working_style' | 'priority';
+type DurableMemoryLayer = 'always_use' | 'routine' | 'project' | 'candidate';
+type DurableMemorySensitivity = 'normal' | 'careful';
+type DurableMemoryAction = 'remember' | 'forget';
+
 type DurableMemoryItem = {
   key: string;
-  type: 'identity_context' | 'project_context' | 'recurring_goal' | 'working_style' | 'priority';
+  type: DurableMemoryType;
+  layer?: DurableMemoryLayer;
+  sensitivity?: DurableMemorySensitivity;
+  action?: DurableMemoryAction;
   text: string;
   confidence: 'high' | 'medium';
   evidenceCount: number;
@@ -444,6 +452,7 @@ type DurableMemoryItem = {
 
 type HelpfulMemorySettings = {
   helpful_memory_enabled: boolean;
+  capture_paused: boolean;
 };
 
 type HelpfulMemoryItem = {
@@ -451,6 +460,7 @@ type HelpfulMemoryItem = {
   scope: 'all_chats' | 'this_chat';
   conversation_id: string | null;
   category: 'preference' | 'project' | 'goal' | 'saved_context';
+  layer?: DurableMemoryLayer;
   memory_text: string;
   source: 'user_added' | 'auto_saved' | 'user_confirmed' | 'conversation';
   status: 'active' | 'disabled' | 'deleted' | 'replaced';
@@ -459,6 +469,35 @@ type HelpfulMemoryItem = {
   evidence_count: number;
   keywords: string[];
 };
+
+// Defense-in-depth: never store financial, children's private info, or credentials
+// even if a stale client forgot to filter them. Allergies and religion are allowed per product rules.
+function isForbiddenMemoryContent(text: string): boolean {
+  if (!text) return true;
+  const forbidden = [
+    /\b(bank|iban|swift|account\s+number|credit\s+card|debit\s+card|cvv|pin\s+code|password|otp|salary|income|debt|loan|mortgage|net\s+worth|paycheck|wage)\b/i,
+    /بنك|آيبان|حساب\s+رقم|بطاقة\s+ائتمان|كلمة\s+السر|رقم\s+سري|راتب|دخل|دين|قرض/,
+    /\bmy\s+(son|daughter|kid|child)\s+(?:is\s+\d|goes\s+to|attends|studies\s+at)/i
+  ];
+  return forbidden.some((p) => p.test(text));
+}
+
+function resolveMemoryLayer(item: Pick<DurableMemoryItem, 'layer' | 'type' | 'text'>): DurableMemoryLayer {
+  if (item.layer && ['always_use', 'routine', 'project', 'candidate'].includes(item.layer)) return item.layer;
+  if (item.type === 'project_context') return 'project';
+  if (item.type === 'recurring_goal' && /^\s*every\b/i.test(item.text || '')) return 'routine';
+  return 'always_use';
+}
+
+function categoryForLayer(layer: DurableMemoryLayer, type: DurableMemoryType): HelpfulMemoryItem['category'] {
+  if (layer === 'project') return 'project';
+  if (layer === 'routine') return 'goal';
+  if (type === 'working_style') return 'preference';
+  if (type === 'priority') return 'goal';
+  if (type === 'project_context') return 'project';
+  if (type === 'recurring_goal') return 'goal';
+  return 'saved_context';
+}
 
 function normalizeHelpfulMemoryText(input: unknown, maxLength = 180): string {
   return normalizeContinuityText(input, maxLength);
@@ -502,6 +541,9 @@ function normalizeHelpfulMemoryItems(input: unknown): HelpfulMemoryItem[] {
     const category = item.category === 'project' || item.category === 'goal' || item.category === 'saved_context'
       ? item.category
       : 'preference';
+    const layer = item.layer === 'routine' || item.layer === 'project' || item.layer === 'candidate' || item.layer === 'always_use'
+      ? item.layer as DurableMemoryLayer
+      : undefined;
     const memory_text = normalizeHelpfulMemoryText(item.memory_text, 180);
     const source = item.source === 'auto_saved' || item.source === 'user_confirmed' || item.source === 'conversation'
       ? item.source
@@ -532,6 +574,7 @@ function normalizeHelpfulMemoryItems(input: unknown): HelpfulMemoryItem[] {
       scope,
       conversation_id,
       category,
+      layer,
       memory_text,
       source,
       status,
@@ -561,6 +604,10 @@ function scoreHelpfulMemoryRelevance(
   if (item.category === 'preference' && /explain|plan|audit|report|stage|help|walk me through|style|prefer/i.test(query)) score += 8;
   if (item.category === 'saved_context' && /remember|context|card|gift|study|thread|this chat/i.test(query)) score += 7;
   if (item.scope === 'this_chat') score += 5;
+  // Layer-aware boosts
+  if (item.layer === 'routine' && /every|weekly|monday|tuesday|wednesday|thursday|friday|saturday|sunday|each|always|usually|flower|gift|card/i.test(query)) score += 10;
+  if (item.layer === 'project') score += 4;
+  if (item.layer === 'always_use') score += 2;
   if (activeTrigger === 'search' && item.category === 'preference') score -= 4;
   if (chatSubmode === 'study' && item.category === 'project') score -= 4;
 
@@ -594,9 +641,14 @@ function buildPromptMemoryContext(lines: string[]): string {
   if (normalizedLines.length === 0) return '';
 
   return [
-    'HELPFUL MEMORY',
-    'Use this only when relevant. Do not let it override Personal Touch, the current request, or fresh conversation context.',
-    ...normalizedLines.map((line) => `- ${line}`)
+    'HELPFUL MEMORY (use only when relevant; never overrides the current request):',
+    ...normalizedLines.map((line) => `- ${line}`),
+    '',
+    'MEMORY RULES:',
+    '- If asked "what do you remember about me?" / "ماذا تتذكر عني؟", list the items above plainly and mention the Helpful Memory panel for edits.',
+    '- If the user says they no longer do X / forget X / لم أعد / انسى: just acknowledge briefly ("Done, I\'ve forgotten that." / "تمّ، نسيتها."). Do NOT ask for confirmation and do NOT tell them to open a panel — the system removes the matching memory automatically.',
+    '- Never invent a memory that is not listed above.',
+    '- Routines tied to a specific day/season ("Every Thursday...", "During Ramadan...") — act on them only when today actually matches; otherwise just acknowledge, do not pre-prepare.'
   ].join('\n').trim();
 }
 
@@ -615,26 +667,27 @@ async function getHelpfulMemorySettings(
   supabaseAdmin: any,
   userId?: string
 ): Promise<HelpfulMemorySettings> {
-  if (!userId) return { helpful_memory_enabled: false };
+  if (!userId) return { helpful_memory_enabled: false, capture_paused: false };
 
   try {
     const { data, error } = await supabaseAdmin
       .from('user_helpful_memory_settings')
-      .select('helpful_memory_enabled')
+      .select('helpful_memory_enabled, capture_paused')
       .eq('user_id', userId)
       .maybeSingle();
 
     if (error) {
       console.warn('helpful memory settings fetch failed', error);
-      return { helpful_memory_enabled: true };
+      return { helpful_memory_enabled: true, capture_paused: false };
     }
 
     return {
-      helpful_memory_enabled: data?.helpful_memory_enabled !== false
+      helpful_memory_enabled: data?.helpful_memory_enabled !== false,
+      capture_paused: data?.capture_paused === true,
     };
   } catch (error) {
     console.warn('helpful memory settings exception', error);
-    return { helpful_memory_enabled: true };
+    return { helpful_memory_enabled: true, capture_paused: false };
   }
 }
 
@@ -646,9 +699,10 @@ async function fetchHelpfulMemoryItems(
   try {
     const { data, error } = await supabaseAdmin
       .from('user_helpful_memory')
-      .select('id, scope, conversation_id, category, memory_text, source, status, sensitivity, confidence, evidence_count, keywords')
+      .select('id, scope, conversation_id, category, layer, memory_text, source, status, sensitivity, confidence, evidence_count, keywords')
       .eq('user_id', userId)
       .eq('status', 'active')
+      .neq('layer', 'candidate')
       .order('updated_at', { ascending: false })
       .limit(50);
 
@@ -672,9 +726,10 @@ async function touchHelpfulMemoryItems(
   if (safeIds.length === 0) return;
 
   try {
+    const now = new Date().toISOString();
     await supabaseAdmin
       .from('user_helpful_memory')
-      .update({ last_used_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .update({ last_used_at: now, last_injected_at: now, updated_at: now })
       .in('id', safeIds);
   } catch (error) {
     console.warn('helpful memory touch failed', error);
@@ -688,43 +743,48 @@ async function upsertAutoHelpfulMemory(
 ): Promise<void> {
   if (!Array.isArray(durableMemoryItems) || durableMemoryItems.length === 0) return;
 
-  const categoryByType: Record<DurableMemoryItem['type'], HelpfulMemoryItem['category']> = {
-    identity_context: 'saved_context',
-    project_context: 'project',
-    recurring_goal: 'goal',
-    working_style: 'preference',
-    priority: 'goal'
-  };
-
-  for (const item of durableMemoryItems.slice(0, 4)) {
+  for (const item of durableMemoryItems.slice(0, 6)) {
     const memoryText = normalizeHelpfulMemoryText(item.text, 180);
     if (!memoryText) continue;
-    if (item.type === 'identity_context') continue;
-    const sensitivity = classifyHelpfulMemorySensitivity(memoryText);
-    if (sensitivity === 'careful') continue;
+    // Defense-in-depth: never save forbidden content (financial, children's private info, credentials)
+    if (isForbiddenMemoryContent(memoryText)) continue;
 
-    const category = categoryByType[item.type];
+    const resolvedLayer = resolveMemoryLayer({ layer: item.layer, type: item.type, text: memoryText });
+    const category = categoryForLayer(resolvedLayer, item.type);
+    // Trust client sensitivity when provided; fall back to heuristic classifier.
+    const sensitivity: DurableMemorySensitivity = item.sensitivity === 'careful' || item.sensitivity === 'normal'
+      ? item.sensitivity
+      : classifyHelpfulMemorySensitivity(memoryText);
+
+    // Careful items are NOT silently auto-saved; route to the candidate queue for explicit user review.
+    const targetLayer: DurableMemoryLayer = sensitivity === 'careful' ? 'candidate' : resolvedLayer;
+    const sourceTag: HelpfulMemoryItem['source'] = 'auto_saved';
+
     const keywords = extractHelpfulMemoryKeywords(memoryText, category, ...(Array.isArray(item.keywords) ? item.keywords : []));
 
     try {
+      // Dedupe by (user_id, memory_text) across layers; we prefer upgrading existing rows over duplicating.
       const { data: existing } = await supabaseAdmin
         .from('user_helpful_memory')
-        .select('id, evidence_count, confidence, keywords')
+        .select('id, evidence_count, confidence, keywords, layer, status, sensitivity')
         .eq('user_id', userId)
-        .eq('scope', 'all_chats')
-        .eq('category', category)
         .eq('memory_text', memoryText)
-        .eq('status', 'active')
         .maybeSingle();
 
       if (existing?.id) {
+        // If the row was already promoted out of candidate (user approved it), don't demote it back.
+        const nextLayer = existing.layer && existing.layer !== 'candidate' ? existing.layer : targetLayer;
         const mergedKeywords = extractHelpfulMemoryKeywords(memoryText, ...(Array.isArray(existing.keywords) ? existing.keywords : []), ...keywords);
         await supabaseAdmin
           .from('user_helpful_memory')
           .update({
+            layer: nextLayer,
+            category: categoryForLayer(nextLayer as DurableMemoryLayer, item.type),
             confidence: existing.confidence === 'high' || item.confidence === 'high' ? 'high' : 'medium',
-            evidence_count: Math.max(Number(existing.evidence_count || 1), Number(item.evidenceCount || 1)),
+            evidence_count: Math.max(Number(existing.evidence_count || 1), Number(item.evidenceCount || 1)) + 1,
             keywords: mergedKeywords,
+            sensitivity: existing.sensitivity === 'careful' ? 'careful' : sensitivity,
+            status: existing.status === 'deleted' || existing.status === 'replaced' ? existing.status : 'active',
             updated_at: new Date().toISOString(),
             last_confirmed_at: new Date().toISOString()
           })
@@ -737,10 +797,12 @@ async function upsertAutoHelpfulMemory(
             scope: 'all_chats',
             conversation_id: null,
             category,
+            layer: targetLayer,
             memory_text: memoryText,
-            source: 'auto_saved',
+            source: sourceTag,
             status: 'active',
             sensitivity,
+            sensitivity_reviewed: targetLayer !== 'candidate',
             confidence: item.confidence,
             evidence_count: Math.max(1, Number(item.evidenceCount || 1)),
             keywords,
@@ -754,10 +816,130 @@ async function upsertAutoHelpfulMemory(
   }
 }
 
+// --- Forget flow ----------------------------------------------------------
+// When the user says "I no longer X", "forget X", "لم أعد X", etc., the
+// frontend emits a DurableMemoryItem with action='forget' and text=<phrase>.
+// This function fuzzy-matches the phrase against existing active memories
+// for the user and either:
+//   - rewrites a list-style memory (e.g. "Hobbies: a, b, c" -> "Hobbies: a, c")
+//   - or soft-deletes the whole memory if the phrase covers most of it.
+function normalizeForMatch(value: string): string {
+  return (value || '')
+    .toLowerCase()
+    .replace(/[\p{P}\p{S}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function splitListMemory(text: string): { label: string; items: string[]; separator: string } | null {
+  // Matches patterns like "Label: a, b, c" (English or Arabic)
+  const m = /^([^:\n]{2,40}):\s*(.+)$/.exec(text || '');
+  if (!m) return null;
+  const raw = m[2] || '';
+  if (!/[,،]/.test(raw)) return null;
+  const separator = raw.includes('،') ? '، ' : ', ';
+  const items = raw.split(/\s*[,،]\s*/).map((p) => p.trim()).filter(Boolean);
+  if (items.length < 2) return null;
+  return { label: m[1].trim(), items, separator };
+}
+
+async function processForgetItems(
+  // deno-lint-ignore no-explicit-any
+  supabaseAdmin: any,
+  userId: string,
+  forgetItems: DurableMemoryItem[]
+): Promise<void> {
+  if (!Array.isArray(forgetItems) || forgetItems.length === 0) return;
+
+  try {
+    const { data: rows, error } = await supabaseAdmin
+      .from('user_helpful_memory')
+      .select('id, memory_text, status')
+      .eq('user_id', userId)
+      .eq('status', 'active');
+
+    if (error || !Array.isArray(rows) || rows.length === 0) return;
+
+    const activeMemories = rows as Array<{ id: string; memory_text: string; status: string }>;
+
+    for (const forget of forgetItems) {
+      const needle = normalizeForMatch(forget.text);
+      if (!needle || needle.length < 2) continue;
+
+      for (const mem of activeMemories) {
+        const haystack = normalizeForMatch(mem.memory_text || '');
+        if (!haystack.includes(needle)) continue;
+
+        // Case 1: list-style memory — try surgical removal of the matching item
+        const listed = splitListMemory(mem.memory_text);
+        if (listed) {
+          const kept = listed.items.filter((it) => {
+            const n = normalizeForMatch(it);
+            return n && n !== needle && !n.includes(needle) && !needle.includes(n);
+          });
+          if (kept.length !== listed.items.length && kept.length > 0) {
+            const rebuilt = `${listed.label}: ${kept.join(listed.separator)}`.slice(0, 180);
+            try {
+              await supabaseAdmin
+                .from('user_helpful_memory')
+                .update({
+                  memory_text: rebuilt,
+                  updated_at: new Date().toISOString(),
+                  last_confirmed_at: new Date().toISOString()
+                })
+                .eq('id', mem.id);
+              // Reflect the rewrite locally so a second forget item in the same
+              // request sees the up-to-date text.
+              mem.memory_text = rebuilt;
+              continue;
+            } catch (e) {
+              console.warn('forget rewrite failed', e);
+            }
+          }
+          if (kept.length === 0) {
+            // Removed everything in the list — soft-delete the whole memory
+            try {
+              await supabaseAdmin
+                .from('user_helpful_memory')
+                .update({ status: 'deleted', updated_at: new Date().toISOString() })
+                .eq('id', mem.id);
+              mem.status = 'deleted';
+              continue;
+            } catch (e) {
+              console.warn('forget list-empty delete failed', e);
+            }
+          }
+        }
+
+        // Case 2: forget phrase covers most of the memory text — soft-delete
+        const coverage = needle.length / Math.max(haystack.length, 1);
+        if (coverage >= 0.5 || haystack === needle) {
+          try {
+            await supabaseAdmin
+              .from('user_helpful_memory')
+              .update({ status: 'deleted', updated_at: new Date().toISOString() })
+              .eq('id', mem.id);
+            mem.status = 'deleted';
+          } catch (e) {
+            console.warn('forget soft-delete failed', e);
+          }
+          continue;
+        }
+
+        // Otherwise: leave it alone — too risky to mutate partial matches
+      }
+    }
+  } catch (error) {
+    console.warn('processForgetItems exception', error);
+  }
+}
+
 function normalizeDurableMemoryItems(input: unknown): DurableMemoryItem[] {
   if (!Array.isArray(input)) return [];
 
   const allowedTypes = new Set(['identity_context', 'project_context', 'recurring_goal', 'working_style', 'priority']);
+  const allowedLayers = new Set(['always_use', 'routine', 'project', 'candidate']);
+  const allowedActions = new Set(['remember', 'forget']);
   const out: DurableMemoryItem[] = [];
 
   for (const raw of input) {
@@ -765,8 +947,17 @@ function normalizeDurableMemoryItems(input: unknown): DurableMemoryItem[] {
     const item = raw as Record<string, unknown>;
     const key = normalizeContinuityText(item.key, 64).replace(/[^a-z0-9_\-]/gi, '_');
     const type = typeof item.type === 'string' && allowedTypes.has(item.type)
-      ? item.type as DurableMemoryItem['type']
+      ? item.type as DurableMemoryType
       : null;
+    const layer = typeof item.layer === 'string' && allowedLayers.has(item.layer)
+      ? item.layer as DurableMemoryLayer
+      : undefined;
+    const sensitivity = item.sensitivity === 'careful' || item.sensitivity === 'normal'
+      ? item.sensitivity as DurableMemorySensitivity
+      : undefined;
+    const action = typeof item.action === 'string' && allowedActions.has(item.action)
+      ? item.action as DurableMemoryAction
+      : 'remember';
     const text = normalizeContinuityText(item.text, 180);
     const confidence = item.confidence === 'high' ? 'high' : 'medium';
     const evidenceCount = typeof item.evidenceCount === 'number'
@@ -781,11 +972,17 @@ function normalizeDurableMemoryItems(input: unknown): DurableMemoryItem[] {
       : [];
 
     if (!key || !type || !text) continue;
-    if (out.some((existing) => existing.key === key || existing.text === text)) continue;
+    // Forget items are NOT subject to the forbidden-content filter — the user is
+    // instructing removal, not adding new content.
+    if (action !== 'forget' && isForbiddenMemoryContent(text)) continue;
+    if (out.some((existing) => existing.key === key || (existing.text === text && existing.action === action))) continue;
 
     out.push({
       key,
       type,
+      layer,
+      sensitivity,
+      action,
       text,
       confidence,
       evidenceCount,
@@ -794,7 +991,7 @@ function normalizeDurableMemoryItems(input: unknown): DurableMemoryItem[] {
     });
   }
 
-  return out.slice(0, 6);
+  return out.slice(0, 8);
 }
 
 function scoreDurableMemoryItem(
@@ -1576,6 +1773,12 @@ function _promptBase(
   const pt = (personalTouch || {}) as Record<string, unknown>;
   const personalSection = _promptPersonalSection(pt);
   return `You are ${aiNick || 'WAKTI AI'}, a proprietary intelligence developed by the WAKTI team in Qatar led by Alfadly; you must refer to yourself ONLY as WAKTI AI and never mention Google, Gemini, or other creators. Date: ${currentDate}. Local time: ${localTime}.
+
+TIME AUTHORITY (NON-NEGOTIABLE):
+- The "Date" and "Local time" above are the user's ACTUAL current date and local clock. Treat them as ground truth.
+- Do NOT drift past midnight, do NOT assume a different day, do NOT say "by now it must be tomorrow" or "it's officially past midnight now". If the clock above says it is Wednesday afternoon, it is Wednesday afternoon.
+- When deciding whether to act on day-specific routines (e.g. "every Thursday..."), compare against the date above. If today is not that day, acknowledge the routine exists but wait — do NOT act on it pre-emptively.
+- If the user corrects you about the day/time, trust the user and the clock above, not your instincts.
 
 MEMORY: Use the conversation history fully. Never ask about something the user already told you. Reference prior context naturally. Treat the whole conversation as one continuous discussion.
 
@@ -2837,14 +3040,32 @@ serve(async (req) => {
           : null;
 
         const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-        const helpfulMemorySettings = await getHelpfulMemorySettings(supabaseAdmin, userId);
-        const helpfulMemoryItems = helpfulMemorySettings.helpful_memory_enabled && userId
-          ? await fetchHelpfulMemoryItems(supabaseAdmin, userId, normalizedConversationId)
-          : [];
+        // Parallel fetch: settings + memory items together. We always fetch memory
+        // speculatively when we have a userId; if settings disable it, we just drop
+        // the result. This trades a tiny extra query on the (rare) disabled case for
+        // ~50-100ms saved on the common path.
+        const [helpfulMemorySettings, helpfulMemoryRaw] = await Promise.all([
+          getHelpfulMemorySettings(supabaseAdmin, userId),
+          userId ? fetchHelpfulMemoryItems(supabaseAdmin, userId, normalizedConversationId) : Promise.resolve([] as HelpfulMemoryItem[])
+        ]);
+        const helpfulMemoryItems = helpfulMemorySettings.helpful_memory_enabled ? helpfulMemoryRaw : [];
         if (helpfulMemorySettings.helpful_memory_enabled && userId && normalizedDurableMemory.length > 0) {
-          upsertAutoHelpfulMemory(supabaseAdmin, userId, normalizedDurableMemory).catch((error) => {
-            console.warn('helpful memory auto-capture failed', error);
-          });
+          const forgetItems = normalizedDurableMemory.filter((it) => it.action === 'forget');
+          const rememberItems = normalizedDurableMemory.filter((it) => it.action !== 'forget');
+
+          // Forget always runs — users must always be able to remove memories even when capture is paused.
+          if (forgetItems.length > 0) {
+            processForgetItems(supabaseAdmin, userId, forgetItems).catch((error) => {
+              console.warn('helpful memory forget processing failed', error);
+            });
+          }
+
+          // Auto-capture of new memories still respects the pause flag.
+          if (!helpfulMemorySettings.capture_paused && rememberItems.length > 0) {
+            upsertAutoHelpfulMemory(supabaseAdmin, userId, rememberItems).catch((error) => {
+              console.warn('helpful memory auto-capture failed', error);
+            });
+          }
         }
 
         const getProfileTimezone = async (uid?: string): Promise<string | null> => {

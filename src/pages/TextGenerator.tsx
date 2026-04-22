@@ -8,11 +8,11 @@ export default function TextGenerator() {
   const { language } = useTheme();
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate'>('compose');
+  const [activeTab, setActiveTab] = useState<'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate' | 'a4'>('compose');
 
   useEffect(() => {
     const tabParam = (searchParams.get('tab') || '').toLowerCase();
-    if (tabParam === 'compose' || tabParam === 'reply' || tabParam === 'generated' || tabParam === 'diagrams' || tabParam === 'presentation' || tabParam === 'translate') {
+    if (tabParam === 'compose' || tabParam === 'reply' || tabParam === 'generated' || tabParam === 'diagrams' || tabParam === 'presentation' || tabParam === 'translate' || tabParam === 'a4') {
       setActiveTab(tabParam as any);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -28,7 +28,7 @@ export default function TextGenerator() {
         </div>
 
         <div className="mb-3">
-          <div className="flex md:grid md:grid-cols-6 gap-1.5 p-1 rounded-2xl border border-border/70 bg-white/60 dark:bg-white/5 shadow-sm overflow-x-auto scrollbar-none" role="tablist" aria-label={language === 'ar' ? 'التبويبات' : 'Tabs'}>
+          <div className="flex md:grid md:grid-cols-7 gap-1.5 p-1 rounded-2xl border border-border/70 bg-white/60 dark:bg-white/5 shadow-sm overflow-x-auto scrollbar-none" role="tablist" aria-label={language === 'ar' ? 'التبويبات' : 'Tabs'}>
             {[
               { key: 'compose',      labelEn: 'Compose',         labelAr: 'تأليف',         activeClass: 'bg-gradient-primary text-primary-foreground shadow-lg border-primary ring-1 ring-primary/60' },
               { key: 'reply',        labelEn: 'Reply',           labelAr: 'رد',            activeClass: 'bg-gradient-primary text-primary-foreground shadow-lg border-primary ring-1 ring-primary/60' },
@@ -36,6 +36,7 @@ export default function TextGenerator() {
               { key: 'diagrams',     labelEn: 'Diagrams',        labelAr: 'المخططات',      activeClass: 'bg-white text-foreground shadow-lg border-foreground/20 ring-1 ring-foreground/20' },
               { key: 'presentation', labelEn: 'Presentations',   labelAr: 'العروض',        activeClass: 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg' },
               { key: 'translate',    labelEn: 'Text Translator',  labelAr: 'مترجم النص',   activeClass: 'bg-white text-foreground shadow-lg border-foreground/20 ring-1 ring-foreground/20' },
+              { key: 'a4',           labelEn: 'A4 Document',     labelAr: 'مستند A4',     activeClass: 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg' },
             ].map(({ key, labelEn, labelAr, activeClass }) => (
               <button
                 key={key}

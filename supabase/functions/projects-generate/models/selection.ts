@@ -34,11 +34,14 @@ export const MODEL_PRICING: Record<string, { input: number; output: number }> = 
 // ============================================================================
 // GEMINI 3.x MODEL SELECTION (env-driven, auto-fallback to 2.5)
 // ============================================================================
-export const GEMINI_MODEL_CREATE = Deno.env.get('GEMINI_MODEL_CREATE') || 'gemini-3.1-pro-preview';
-export const GEMINI_MODEL_AGENT  = Deno.env.get('GEMINI_MODEL_AGENT')  || 'gemini-3.1-pro-preview';
-export const GEMINI_MODEL_PLAN   = Deno.env.get('GEMINI_MODEL_PLAN')   || 'gemini-3-flash-preview';
-export const GEMINI_MODEL_SIMPLE = Deno.env.get('GEMINI_MODEL_SIMPLE') || 'gemini-3-flash-preview';
-export const GEMINI_MODEL_VISION = Deno.env.get('GEMINI_MODEL_VISION') || 'gemini-3-flash-preview';
+// Default to stable 2.5 models. Preview 3.x models are too slow/rate-limited for the
+// agent loop (150s edge-function budget) and cause GEMINI_AGENT_TIMEOUT failures.
+// Opt-in to preview models via env vars when Google stabilises them.
+export const GEMINI_MODEL_CREATE = Deno.env.get('GEMINI_MODEL_CREATE') || 'gemini-2.5-pro';
+export const GEMINI_MODEL_AGENT  = Deno.env.get('GEMINI_MODEL_AGENT')  || 'gemini-2.5-flash';
+export const GEMINI_MODEL_PLAN   = Deno.env.get('GEMINI_MODEL_PLAN')   || 'gemini-2.5-flash';
+export const GEMINI_MODEL_SIMPLE = Deno.env.get('GEMINI_MODEL_SIMPLE') || 'gemini-2.5-flash-lite';
+export const GEMINI_MODEL_VISION = Deno.env.get('GEMINI_MODEL_VISION') || 'gemini-2.5-flash';
 
 /** Fallback map: if a 3.x model fails, retry with its 2.5 equivalent. */
 export const MODEL_FALLBACK: Record<string, string> = {

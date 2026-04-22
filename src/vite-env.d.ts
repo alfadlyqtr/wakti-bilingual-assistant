@@ -139,6 +139,11 @@ declare module 'pdfjs-dist/build/pdf.worker?url' {
   export default workerSrc;
 }
 
+declare module 'pdfjs-dist/build/pdf.worker.min.mjs?url' {
+  const workerSrc: string;
+  export default workerSrc;
+}
+
 declare module 'tesseract.js' {
   const Tesseract: any;
   export default Tesseract;
